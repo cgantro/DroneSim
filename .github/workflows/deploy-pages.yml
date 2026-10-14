@@ -41,12 +41,22 @@ jobs:
       - name: Build web simulator
         run: cmake --build --preset emscripten-single-thread
 
+      - name: Configure reusable threaded module
+        run: emcmake cmake --preset emscripten-web
+
+      - name: Build reusable threaded module
+        run: cmake --build --preset emscripten-web --target grasplink_embed
+
       - name: Check and prepare Pages files
         run: |
           test -s build-emscripten-single-thread/index.html
           ! grep -q 'SharedArrayBuffer\|loadWasmModuleToWorker' build-emscripten-single-thread/index.html
-          mkdir -p _site
+          test -s build-emscripten-web/grasplink-embed.js
+          grep -q 'createGraspLink' build-emscripten-web/grasplink-embed.js
+          mkdir -p _site/embed
           cp build-emscripten-single-thread/index.html _site/index.html
+          cp build-emscripten-web/grasplink-embed.* _site/embed/
+          printf '{"revision":"%s","bundle":"/GraspLink/embed/grasplink-embed.js"}\\n' "$GITHUB_SHA" > _site/embed/manifest.json
           touch _site/.nojekyll
 
       - name: Configure GitHub Pages
