@@ -56,7 +56,7 @@ jobs:
           mkdir -p _site/embed
           cp build-emscripten-single-thread/index.html _site/index.html
           cp build-emscripten-web/grasplink-embed.* _site/embed/
-          printf '{"revision":"%s","bundle":"/GraspLink/embed/grasplink-embed.js"}\\n' "$GITHUB_SHA" > _site/embed/manifest.json
+          printf '{"revision":"%s","bundle":"/GraspLink/embed/grasplink-embed.js"}\n' "$GITHUB_SHA" > _site/embed/manifest.json
           touch _site/.nojekyll
 
       - name: Configure GitHub Pages
