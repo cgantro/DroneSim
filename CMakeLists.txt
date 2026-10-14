@@ -66,6 +66,35 @@ if(BUILD_TESTING)
     GIT_SHALLOW TRUE
   )
   FetchContent_MakeAvailable(googletest)
+  # Reusable browser module. This bundle is served by GraspLink Pages and
+  # loaded directly by the Portfolio canvas (same origin, different paths).
+  # Keep the standalone HTML target above for independent simulator use.
+  if(EMSCRIPTEN AND GRASPLINK_WEB_PTHREADS)
+    add_executable(grasplink_embed ${GRASPLINK_APP_SOURCES})
+    set_target_properties(grasplink_embed PROPERTIES
+      OUTPUT_NAME grasplink-embed
+      SUFFIX .js
+    )
+    target_include_directories(grasplink_embed PRIVATE apps/simulator)
+    target_link_libraries(grasplink_embed PRIVATE
+      grasplink_gui
+      grasplink_application
+      grasplink_simulation
+      grasplink_rendering
+      grasplink_robotics
+      grasplink_physics
+      grasplink_diagnostics
+    )
+    target_compile_definitions(grasplink_embed PRIVATE GRASPLINK_ENABLE_TRACY=0)
+    target_link_options(grasplink_embed PRIVATE
+      "-sMODULARIZE=1"
+      "-sEXPORT_NAME=createGraspLink"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@/shaders"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/HCR12A_2F-85.glb@/HCR12A_2F-85.glb"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/plane.glb@/plane.glb"
+    )
+  endif()
+
 endif()
 
 if(GRASPLINK_BUILD_BENCHMARKS)
@@ -160,8 +189,10 @@ if(BUILD_TESTING)
   include(GoogleTest)
 
   function(grasplink_add_test target name source)
-    cmake_parse_arguments(TEST "GTEST_DISCOVERY" "TIMEOUT;WORKING_DIRECTORY" "" ${ARGN})
+    cmake_parse_arguments(TEST "GTEST_DISCOVERY" "TIMEOUT;WORKING_DIRECTORY;CATEGORY" "" ${ARGN})
     add_executable(${target} ${source})
+    # Keep shared test fixtures available after splitting test sources by module.
+    target_include_directories(${target} PRIVATE "${CMAKE_SOURCE_DIR}/tests")
     if(TEST_GTEST_DISCOVERY)
       target_link_libraries(${target} PRIVATE ${TEST_UNPARSED_ARGUMENTS} GTest::gtest_main)
       set(discovery_options)
@@ -171,10 +202,16 @@ if(BUILD_TESTING)
       if(TEST_WORKING_DIRECTORY)
         list(APPEND discovery_options PROPERTIES WORKING_DIRECTORY "${TEST_WORKING_DIRECTORY}")
       endif()
+      if(TEST_CATEGORY)
+        list(APPEND discovery_options PROPERTIES LABELS "${TEST_CATEGORY}")
+      endif()
       gtest_discover_tests(${target} TEST_PREFIX "${name}." DISCOVERY_TIMEOUT 60 ${discovery_options})
     else()
       target_link_libraries(${target} PRIVATE ${TEST_UNPARSED_ARGUMENTS})
       add_test(NAME ${name} COMMAND ${target})
+      if(TEST_CATEGORY)
+        set_tests_properties(${name} PROPERTIES LABELS "${TEST_CATEGORY}")
+      endif()
       if(TEST_TIMEOUT)
         set_tests_properties(${name} PROPERTIES TIMEOUT "${TEST_TIMEOUT}")
       endif()
@@ -184,16 +221,16 @@ if(BUILD_TESTING)
     endif()
   endfunction()
 
-  grasplink_add_test(grasplink_physics_tests PhysicsWorld tests/PhysicsWorldTests.cpp grasplink_physics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_control_tests ControlRuntime tests/ControlRuntimeTests.cpp grasplink_robotics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_kinematics_tests RobotKinematics tests/RobotKinematicsTests.cpp grasplink_robotics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_inverse_kinematics_tests RobotInverseKinematics tests/RobotInverseKinematicsTests.cpp grasplink_robotics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_robot_motion_tests RobotMotion tests/RobotMotionTests.cpp grasplink_robotics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_linear_path_planner_tests LinearPathPlanner tests/LinearPathPlannerTests.cpp grasplink_robotics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_joint_path_planner_tests JointPathPlanner tests/JointPathPlannerTests.cpp grasplink_robotics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_robot_panel_motion_tests RobotPanelMotion tests/RobotPanelMotionTests.cpp grasplink_robotics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_gripper_runtime_tests GripperRuntime tests/GripperRuntimeTests.cpp grasplink_robotics GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_gripper_kinematics_tests GripperKinematics tests/GripperKinematicsTests.cpp grasplink_robotics GTEST_DISCOVERY)
+  grasplink_add_test(grasplink_physics_tests PhysicsWorld tests/physics/PhysicsWorldTests.cpp grasplink_physics GTEST_DISCOVERY CATEGORY physics)
+  grasplink_add_test(grasplink_control_tests ControlRuntime tests/robotics/ControlRuntimeTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
+  grasplink_add_test(grasplink_kinematics_tests RobotKinematics tests/robotics/RobotKinematicsTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
+  grasplink_add_test(grasplink_inverse_kinematics_tests RobotInverseKinematics tests/robotics/RobotInverseKinematicsTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
+  grasplink_add_test(grasplink_robot_motion_tests RobotMotion tests/robotics/RobotMotionTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
+  grasplink_add_test(grasplink_linear_path_planner_tests LinearPathPlanner tests/robotics/LinearPathPlannerTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
+  grasplink_add_test(grasplink_joint_path_planner_tests JointPathPlanner tests/robotics/JointPathPlannerTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
+  grasplink_add_test(grasplink_robot_panel_motion_tests RobotPanelMotion tests/robotics/RobotPanelMotionTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
+  grasplink_add_test(grasplink_gripper_runtime_tests GripperRuntime tests/robotics/GripperRuntimeTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
+  grasplink_add_test(grasplink_gripper_kinematics_tests GripperKinematics tests/robotics/GripperKinematicsTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
 endif()
 
 # ============================================================
@@ -256,22 +293,22 @@ target_link_libraries(grasplink_application PUBLIC grasplink_robotics glm::glm)
 target_compile_definitions(grasplink_application PRIVATE GLM_ENABLE_EXPERIMENTAL)
 
 if(BUILD_TESTING)
-  grasplink_add_test(grasplink_pick_place_mission_tests PickPlaceMission tests/PickPlaceMissionTests.cpp grasplink_application GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_pick_place_sampler_tests PickPlaceScenarioSampler tests/RandomScenarioTests.cpp grasplink_application GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_gltf_tests GltfLoader tests/GltfLoaderTests.cpp grasplink_model GTEST_DISCOVERY)
+  grasplink_add_test(grasplink_pick_place_mission_tests PickPlaceMission tests/application/PickPlaceMissionTests.cpp grasplink_application GTEST_DISCOVERY CATEGORY application)
+  grasplink_add_test(grasplink_pick_place_sampler_tests PickPlaceScenarioSampler tests/application/RandomScenarioTests.cpp grasplink_application GTEST_DISCOVERY CATEGORY application)
+  grasplink_add_test(grasplink_gltf_tests GltfLoader tests/model/GltfLoaderTests.cpp grasplink_model GTEST_DISCOVERY CATEGORY model)
   target_compile_definitions(grasplink_gltf_tests PRIVATE GRASPLINK_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
 
-  grasplink_add_test(grasplink_physics_ecs_tests PhysicsEcsIntegration tests/PhysicsEcsIntegrationTests.cpp grasplink_simulation GTEST_DISCOVERY)
-  grasplink_add_test(grasplink_collision_tests RobotCollisionGeometry tests/RobotCollisionGeometryTests.cpp grasplink_simulation GTEST_DISCOVERY WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+  grasplink_add_test(grasplink_physics_ecs_tests PhysicsEcsIntegration tests/integration/PhysicsEcsIntegrationTests.cpp grasplink_simulation GTEST_DISCOVERY CATEGORY integration)
+  grasplink_add_test(grasplink_collision_tests RobotCollisionGeometry tests/integration/RobotCollisionGeometryTests.cpp grasplink_simulation GTEST_DISCOVERY CATEGORY integration WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
   target_compile_definitions(grasplink_collision_tests PRIVATE GRASPLINK_TEST_SCENE_SUPPORT)
 
-  grasplink_add_test(grasplink_gripper_collision_tests GripperCollisionIntegration tests/GripperCollisionIntegrationTests.cpp grasplink_simulation GTEST_DISCOVERY WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" TIMEOUT 60)
+  grasplink_add_test(grasplink_gripper_collision_tests GripperCollisionIntegration tests/integration/GripperCollisionIntegrationTests.cpp grasplink_simulation GTEST_DISCOVERY CATEGORY integration WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" TIMEOUT 60)
   target_compile_definitions(grasplink_gripper_collision_tests PRIVATE GRASPLINK_TEST_SCENE_SUPPORT)
 
-  grasplink_add_test(grasplink_gripper_pose_tests GripperPoseIntegration tests/GripperPoseIntegrationTests.cpp grasplink_simulation GTEST_DISCOVERY WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" TIMEOUT 60)
+  grasplink_add_test(grasplink_gripper_pose_tests GripperPoseIntegration tests/integration/GripperPoseIntegrationTests.cpp grasplink_simulation GTEST_DISCOVERY CATEGORY integration WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" TIMEOUT 60)
   target_compile_definitions(grasplink_gripper_pose_tests PRIVATE GRASPLINK_TEST_SCENE_SUPPORT)
 
-  grasplink_add_test(grasplink_gripper_grasp_tests GripperGraspIntegration tests/GripperGraspIntegrationTests.cpp grasplink_simulation GTEST_DISCOVERY WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" TIMEOUT 60)
+  grasplink_add_test(grasplink_gripper_grasp_tests GripperGraspIntegration tests/integration/GripperGraspIntegrationTests.cpp grasplink_simulation GTEST_DISCOVERY CATEGORY integration WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" TIMEOUT 60)
   target_compile_definitions(grasplink_gripper_grasp_tests PRIVATE GRASPLINK_TEST_SCENE_SUPPORT)
 endif()
 
@@ -487,15 +524,15 @@ if(GRASPLINK_BUILD_GRAPHICS)
   endif()
 
   if(BUILD_TESTING)
-  grasplink_add_test(grasplink_gui_composition_tests GuiComposition tests/GuiCompositionTests.cpp grasplink_gui GTEST_DISCOVERY)
-    grasplink_add_test(grasplink_quaternion_transform_tests QuaternionTransforms tests/QuaternionTransformTests.cpp grasplink_scene GTEST_DISCOVERY)
-    grasplink_add_test(grasplink_graphics_tests GraphicsResources tests/GraphicsResourceTests.cpp grasplink_graphics GTEST_DISCOVERY TIMEOUT 60)
+  grasplink_add_test(grasplink_gui_composition_tests GuiComposition tests/gui/GuiCompositionTests.cpp grasplink_gui GTEST_DISCOVERY CATEGORY gui)
+    grasplink_add_test(grasplink_quaternion_transform_tests QuaternionTransforms tests/scene/QuaternionTransformTests.cpp grasplink_scene GTEST_DISCOVERY CATEGORY scene)
+    grasplink_add_test(grasplink_graphics_tests GraphicsResources tests/viewer/GraphicsResourceTests.cpp grasplink_graphics GTEST_DISCOVERY CATEGORY viewer TIMEOUT 60)
 
-    grasplink_add_test(grasplink_robot_pose_integration_tests RobotPoseIntegration tests/RobotPoseIntegrationTests.cpp grasplink_simulation grasplink_rendering GTEST_DISCOVERY WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    grasplink_add_test(grasplink_robot_pose_integration_tests RobotPoseIntegration tests/integration/RobotPoseIntegrationTests.cpp grasplink_simulation grasplink_rendering GTEST_DISCOVERY CATEGORY integration WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
     add_test(NAME ViewerSmoke COMMAND grasplink_simulator --smoke-test)
     set_tests_properties(ViewerSmoke PROPERTIES
-      WORKING_DIRECTORY "$<TARGET_FILE_DIR:grasplink_simulator>" TIMEOUT 60 RUN_SERIAL TRUE)
+      WORKING_DIRECTORY "$<TARGET_FILE_DIR:grasplink_simulator>" TIMEOUT 60 RUN_SERIAL TRUE LABELS "e2e")
 
   endif()
 
@@ -514,7 +551,7 @@ if(GRASPLINK_BUILD_BENCHMARKS)
       "--benchmark_filter=^(FK|DLS_IK|LinearPathPlanner|JoltMoveJCollisionPath)$")
     set_tests_properties(RoboticsBenchmarks PROPERTIES
       WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-      TIMEOUT 30
+      TIMEOUT 30 LABELS "benchmark"
       FAIL_REGULAR_EXPRESSION "ERROR OCCURRED;inf/s;nan/s;NaN")
   endif()
 endif()
