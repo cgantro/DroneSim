@@ -66,35 +66,6 @@ if(BUILD_TESTING)
     GIT_SHALLOW TRUE
   )
   FetchContent_MakeAvailable(googletest)
-  # Reusable browser module. This bundle is served by GraspLink Pages and
-  # loaded directly by the Portfolio canvas (same origin, different paths).
-  # Keep the standalone HTML target above for independent simulator use.
-  if(EMSCRIPTEN AND GRASPLINK_WEB_PTHREADS)
-    add_executable(grasplink_embed ${GRASPLINK_APP_SOURCES})
-    set_target_properties(grasplink_embed PROPERTIES
-      OUTPUT_NAME grasplink-embed
-      SUFFIX .js
-    )
-    target_include_directories(grasplink_embed PRIVATE apps/simulator)
-    target_link_libraries(grasplink_embed PRIVATE
-      grasplink_gui
-      grasplink_application
-      grasplink_simulation
-      grasplink_rendering
-      grasplink_robotics
-      grasplink_physics
-      grasplink_diagnostics
-    )
-    target_compile_definitions(grasplink_embed PRIVATE GRASPLINK_ENABLE_TRACY=0)
-    target_link_options(grasplink_embed PRIVATE
-      "-sMODULARIZE=1"
-      "-sEXPORT_NAME=createGraspLink"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@/shaders"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/HCR12A_2F-85.glb@/HCR12A_2F-85.glb"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/plane.glb@/plane.glb"
-    )
-  endif()
-
 endif()
 
 if(GRASPLINK_BUILD_BENCHMARKS)
@@ -490,6 +461,34 @@ if(GRASPLINK_BUILD_GRAPHICS)
     grasplink_physics
     grasplink_diagnostics
   )
+
+  # BUILD_TESTING is disabled for Emscripten; keep the reusable web module
+  # available independently of the native test targets.
+  if(EMSCRIPTEN AND GRASPLINK_WEB_PTHREADS)
+    add_executable(grasplink_embed ${GRASPLINK_APP_SOURCES})
+    set_target_properties(grasplink_embed PROPERTIES
+      OUTPUT_NAME grasplink-embed
+      SUFFIX .js
+    )
+    target_include_directories(grasplink_embed PRIVATE apps/simulator)
+    target_link_libraries(grasplink_embed PRIVATE
+      grasplink_gui
+      grasplink_application
+      grasplink_simulation
+      grasplink_rendering
+      grasplink_robotics
+      grasplink_physics
+      grasplink_diagnostics
+    )
+    target_compile_definitions(grasplink_embed PRIVATE GRASPLINK_ENABLE_TRACY=0)
+    target_link_options(grasplink_embed PRIVATE
+      "-sMODULARIZE=1"
+      "-sEXPORT_NAME=createGraspLink"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@/shaders"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/HCR12A_2F-85.glb@/HCR12A_2F-85.glb"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/plane.glb@/plane.glb"
+    )
+  endif()
   target_compile_definitions(grasplink_simulator PRIVATE
     GRASPLINK_ENABLE_TRACY=$<BOOL:${GRASPLINK_ENABLE_TRACY}>
   )
