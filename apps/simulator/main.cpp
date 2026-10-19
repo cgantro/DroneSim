@@ -1,8 +1,6 @@
 #include "ViewerApp.h"
 
 #include <iostream>
-#include <charconv>
-#include <cstdint>
 #include <string>
 
 int main(int argc, char** argv)
@@ -14,29 +12,9 @@ int main(int argc, char** argv)
         {
             const std::string argument = argv[i];
             if (argument == "--smoke-test") options.smokeTest = true;
-            else if (argument == "--pick-place-stress" && i + 1 < argc)
-            {
-                const std::string value = argv[++i];
-                const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), options.pickPlaceStressRuns);
-                if (error != std::errc{} || end != value.data() + value.size() || options.pickPlaceStressRuns == 0)
-                {
-                    std::cerr << "--pick-place-stress requires a positive attempt count\n";
-                    return 2;
-                }
-            }
-            else if (argument == "--seed" && i + 1 < argc)
-            {
-                const std::string value = argv[++i];
-                const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), options.pickPlaceStressSeed);
-                if (error != std::errc{} || end != value.data() + value.size())
-                {
-                    std::cerr << "--seed requires a 32-bit unsigned integer\n";
-                    return 2;
-                }
-            }
             else if (argument == "--help")
             {
-                std::cout << "Usage: grasplink_simulator [--smoke-test] [--pick-place-stress COUNT] [--seed UINT32]\n";
+                std::cout << "Usage: grasplink_simulator [--smoke-test]\n";
                 return 0;
             }
             else

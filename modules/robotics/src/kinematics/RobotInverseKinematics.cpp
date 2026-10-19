@@ -24,14 +24,14 @@ constexpr double kSingularSystemDampingGrowth = 10.0;
 constexpr double kRejectedStepDampingGrowth = 4.0;
 constexpr double kAcceptedStepDampingDecay = 0.5;
 constexpr double kMinimumDampingRatio = 0.01;
-// 6×6 DLS normal equation에서 pivot이 이보다 작으면 double 정밀도에서 불안정한 나눗셈으로 본다.
+// 계산 중 가장 큰 수가 이 값보다 작으면 거의 0으로 나누는 셈이므로 풀이를 멈춘다.
 constexpr double kNormalEquationPivotCutoff = 1e-24;
 
 bool Positive(double value) { return std::isfinite(value) && value > 0.0; }
 
 bool SolveSystem(SixMatrix matrix, SixVector right, SixVector& answer)
 {
-    // 6개의 TCP 오차 성분에 대한 작은 선형 연립방정식을 부분 피벗 소거법으로 푼다. 큰 피벗 행을 고르면 작은 수로 나눌 때의 수치 오차를 줄일 수 있다.
+    // 가장 큰 값을 피벗으로 골라 나눗셈 오차를 줄이며 TCP의 6개 오차를 푼다.
     for (std::size_t column = 0; column < 6; ++column)
     {
         std::size_t pivot = column;
@@ -322,8 +322,8 @@ IkSessionState DampedLeastSquaresIk::StepSingleSeed(SessionId session, std::size
 
         for (auto& column : columns)
             column.fill(0.0);
-        // Jacobian은 관절각을 조금 바꿨을 때 TCP 위치와 방향이 얼마나 변하는지 나타내는 변화율 표다.
-        // 회전 관절의 위치 열은 axis × (TCP - pivot) [m/rad]이고 방향 열은 base 축이다. ToolFrame 대신 offset을 더한 TCP를 쓰므로 길이가 긴 공구도 반영된다.
+    // Jacobian은 관절을 조금 돌렸을 때 TCP의 위치와 방향이 얼마나 바뀌는지 적은 표다.
+    // 관절마다 표의 열 하나를 만들므로 관절 수가 달라도 같은 계산을 쓴다. TCP offset도 계산에 포함한다.
         for (std::size_t i = 0; i < columns.size(); ++i)
         {
             const Vec3 axis = state.jointAxesInBaseFrame[i];
@@ -436,9 +436,8 @@ IkSessionState DampedLeastSquaresIk::StepSingleSeed(SessionId session, std::size
                 if (next.cost < error.cost)
                 {
                     angles.swap(candidate);
-                    // 오차가 실제로 줄었으면 damping을 낮춰 특이 자세 근처의 작은 변화율도 더 정확히 따른다.
-                    // 초기값을 항상 하한으로 쓰면 홈 자세의 손목처럼 거의 겹친 축에서 필요한 관절 변화가 지나치게 억제되어 도달 가능한 목표도 반복 한도에 막힐 수 있다.
-                    // 초기값의 1%를 하한으로 남기고 maxJointStepRadians와 오차 감소 검사를 유지해 큰 관절 변화는 계속 제한한다.
+    // 오차가 줄면 damping을 낮춰 더 잘 따라가고, 오차가 줄지 않으면 damping을 높여 관절 변화가 튀지 않게 한다.
+    // damping을 너무 낮추면 한 번에 움직이는 관절각이 커질 수 있어 별도의 최대 관절 변화량도 적용한다.
                     sessionDamping_ = std::max(sessionOptions_.damping * kMinimumDampingRatio,
                         sessionDamping_ * kAcceptedStepDampingDecay);
                     double largestAcceptedStep = 0.0;

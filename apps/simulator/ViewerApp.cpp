@@ -48,11 +48,9 @@
 #include <imgui.h>
 #include <chrono>
 #include <cstdint>
-#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <limits>
-#include <sstream>
 #include <stdexcept>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -195,13 +193,6 @@ int ViewerApp::Run()
             return -1;
         }
 
-        if (m_Options.pickPlaceStressRuns > 0)
-        {
-            const int result = RunPickPlaceStress();
-            Shutdown();
-            return result;
-        }
-
         MainLoop();
         Shutdown();
         return 0;
@@ -265,8 +256,7 @@ bool ViewerApp::InitViewer()
     // Window가 OpenGL Context를 소유한다. Renderer와 AssetManager의 GPU 자원은 이 Context 안에서 만든다.
     m_Window = std::make_unique<Window>(
         Window::Properties{kWindowWidth, kWindowHeight, kWindowTitle,
-            !m_Options.smokeTest && m_Options.pickPlaceStressRuns == 0,
-            !m_Options.smokeTest && m_Options.pickPlaceStressRuns == 0});
+            !m_Options.smokeTest, !m_Options.smokeTest});
 
     int framebufferWidth = 0;
     int framebufferHeight = 0;
@@ -420,8 +410,6 @@ void ViewerApp::InitPhysics(const Entity& robotRoot, Entity& floorEntity)
     m_GraspBox = pick_place::CreateGraspBox(*m_Scene, m_RobotShader);
     m_PlacementArea = pick_place::CreatePlacementArea(*m_Scene, m_RobotShader);
     m_ScenarioSampler = std::make_unique<grasplink::application::PickPlaceScenarioSampler>();
-    if (m_Options.pickPlaceStressRuns > 0)
-        m_ScenarioSampler->Seed(m_Options.pickPlaceStressSeed);
     pick_place::RandomizePickPlaceScene(m_GraspBox, m_PlacementArea, *m_ScenarioSampler);
     // Physics Body를 만들기 전에 첫 FK 자세와 계층 World 행렬을 계산해 화면 Entity와 Kinematic 목표를 같은 위치에 맞춘다.
     ApplyControllerPoses();
@@ -501,143 +489,6 @@ void ViewerApp::RandomizeScenario()
     const glm::quat boxRotation = RotationFromWorldMatrix(boxTransform);
     m_PhysicsWorld->SetBodyTransform(boxHandle, grasplink::physics::Transform{
         glm::vec3(boxTransform[3]), boxRotation});
-}
-
-bool ViewerApp::ResetStressEpisode()
-{
-    m_GripperGraspAdapter->Release();
-    m_GripperController->Disconnect();
-    m_RobotController->Disconnect();
-    if (!m_RobotController->Connect() || !m_GripperController->Connect() ||
-        !m_GripperController->Activate())
-        return false;
-
-    m_ControlLoop.Reset();
-    ApplyControllerPoses();
-    TransformSystemModule::UpdateWorldTransforms(m_World);
-    RandomizeScenario();
-    m_PickPlaceMission.PrepareNextTask();
-
-    const auto boxPose = ToRobotBasePose(m_RobotRoot, m_GraspBox.GetWorldMatrix(), 0.0F);
-    const auto placementPose = ToRobotBasePose(m_RobotRoot, m_PlacementArea.GetWorldMatrix(),
-        grasplink::application::pick_place::config::boxSideMeters * 0.5F);
-    m_PickPlaceMission.Update(m_RobotController->GetStateView(), *m_RobotController,
-        *m_GripperController, false, boxPose, placementPose);
-    grasplink::application::PickPlaceMissionActions actions;
-    actions.start = true;
-    m_PickPlaceMission.ApplyActions(
-        actions,
-        m_RobotController->GetStateView(), *m_RobotController, false, boxPose);
-    return m_PickPlaceMission.Snapshot().lastRequestAccepted &&
-        m_PickPlaceMission.Snapshot().stageLabel != "Failed";
-}
-
-int ViewerApp::RunPickPlaceStress()
-{
-    using Clock = std::chrono::steady_clock;
-    constexpr std::size_t maxIterationsPerScenario = 100000;
-    const double fixedDeltaSeconds = m_ControlLoop.GetFixedDeltaSeconds();
-    std::size_t successes = 0;
-    std::size_t failures = 0;
-    std::size_t timeouts = 0;
-    const auto totalStart = Clock::now();
-
-    const auto beginMission = [this]()
-    {
-        const auto boxPose = ToRobotBasePose(m_RobotRoot, m_GraspBox.GetWorldMatrix(), 0.0F);
-        const auto placementPose = ToRobotBasePose(m_RobotRoot, m_PlacementArea.GetWorldMatrix(),
-            grasplink::application::pick_place::config::boxSideMeters * 0.5F);
-        m_PickPlaceMission.Update(m_RobotController->GetStateView(), *m_RobotController,
-            *m_GripperController, m_GripperGraspAdapter->GetState().grasped, boxPose, placementPose);
-        grasplink::application::PickPlaceMissionActions actions;
-        actions.start = true;
-        m_PickPlaceMission.ApplyActions(
-            actions,
-            m_RobotController->GetStateView(), *m_RobotController,
-            m_GripperGraspAdapter->GetState().grasped, boxPose);
-        return m_PickPlaceMission.Snapshot().lastRequestAccepted &&
-            m_PickPlaceMission.Snapshot().stageLabel != "Failed";
-    };
-
-    if (!beginMission())
-    {
-        std::cerr << "PickPlaceStress: could not start the first mission\n";
-        return 2;
-    }
-
-    for (std::size_t attempt = 0; attempt < m_Options.pickPlaceStressRuns; ++attempt)
-    {
-        const auto attemptStart = Clock::now();
-        const auto boxStart = ToRobotBasePose(m_RobotRoot, m_GraspBox.GetWorldMatrix(), 0.0F);
-        const auto goalStart = ToRobotBasePose(m_RobotRoot, m_PlacementArea.GetWorldMatrix(),
-            grasplink::application::pick_place::config::boxSideMeters * 0.5F);
-        bool completed = false;
-        std::size_t iterations = 0;
-
-        for (; iterations < maxIterationsPerScenario; ++iterations)
-        {
-            if (!AdvancePlanningBudget())
-                AdvanceSimulationTick(fixedDeltaSeconds);
-
-            const bool succeeded = UpdateMission();
-            if (succeeded)
-            {
-                completed = true;
-                break;
-            }
-            m_PickPlaceMission.ApplyActions({}, m_RobotController->GetStateView(),
-                *m_RobotController, m_GripperGraspAdapter->GetState().grasped,
-                ToRobotBasePose(m_RobotRoot, m_GraspBox.GetWorldMatrix(), 0.0F));
-            if (m_PickPlaceMission.Snapshot().stageLabel == "Failed")
-                break;
-        }
-
-        const double elapsedMilliseconds = std::chrono::duration<double, std::milli>(
-            Clock::now() - attemptStart).count();
-        if (completed)
-        {
-            ++successes;
-            std::cout << "attempt=" << (attempt + 1) << " result=success"
-                << " elapsed_ms=" << std::fixed << std::setprecision(1) << elapsedMilliseconds << std::endl;
-        }
-        else
-        {
-            const auto mission = m_PickPlaceMission.Snapshot();
-            if (iterations == maxIterationsPerScenario)
-                ++timeouts;
-            else
-                ++failures;
-            std::cout << "attempt=" << (attempt + 1)
-                << " result=" << (iterations == maxIterationsPerScenario ? "timeout" : "failed")
-                << " seed=" << m_Options.pickPlaceStressSeed
-                << " box_xz=(" << boxStart.positionMeters[0] << ',' << boxStart.positionMeters[2] << ')'
-                << " goal_xz=(" << goalStart.positionMeters[0] << ',' << goalStart.positionMeters[2] << ')'
-                << " box_q=(" << boxStart.orientationXyzw[0] << ',' << boxStart.orientationXyzw[1]
-                << ',' << boxStart.orientationXyzw[2] << ',' << boxStart.orientationXyzw[3] << ')'
-                << " goal_q=(" << goalStart.orientationXyzw[0] << ',' << goalStart.orientationXyzw[1]
-                << ',' << goalStart.orientationXyzw[2] << ',' << goalStart.orientationXyzw[3] << ')'
-                << " error=\"" << mission.lastMessage << '\"'
-                << " elapsed_ms=" << std::fixed << std::setprecision(1) << elapsedMilliseconds << std::endl;
-        }
-
-        if (attempt + 1 < m_Options.pickPlaceStressRuns && !completed && !ResetStressEpisode())
-        {
-            std::cerr << "PickPlaceStress: could not reset after attempt " << (attempt + 1) << '\n';
-            return 2;
-        }
-    }
-
-    const double elapsedSeconds = std::chrono::duration<double>(Clock::now() - totalStart).count();
-    std::cout << "PickPlaceStressSummary seed=" << m_Options.pickPlaceStressSeed
-        << " attempts=" << m_Options.pickPlaceStressRuns
-        << " successes=" << successes
-        << " failures=" << failures
-        << " timeouts=" << timeouts
-        << " success_rate=" << std::fixed << std::setprecision(4)
-        << (m_Options.pickPlaceStressRuns == 0 ? 0.0 :
-            static_cast<double>(successes) / static_cast<double>(m_Options.pickPlaceStressRuns))
-        << " elapsed_seconds=" << std::setprecision(2) << elapsedSeconds << '\n';
-    return failures == 0 && timeouts == 0 ? 0 : 1;
 }
 
 void ViewerApp::MainLoop()

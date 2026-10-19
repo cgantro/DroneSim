@@ -10,7 +10,6 @@
 
 #include <flecs.h>
 #include <cstddef>
-#include <cstdint>
 #include <chrono>
 #include <memory>
 
@@ -81,19 +80,16 @@ namespace grasplink::simulation::robotics { class RobotEnvironmentCollisionGuard
 
 namespace grasplink::simulator
 {
-/** @brief Viewer 실행 시 자동 smoke test 동작을 선택한다. */
+/** @brief Viewer를 자동 테스트용으로 짧게 실행할지 정한다. */
 struct ViewerOptions
 {
     bool smokeTest = false;
-    std::size_t pickPlaceStressRuns = 0;
-    std::uint32_t pickPlaceStressSeed = 1;
 };
 
 /**
- * @brief 그래픽 창, Scene, 로봇 제어, 물리와 GUI를 조립하고 종료 순서를 관리한다.
- * @details OpenGL context는 Renderer와 GPU 자원이 동작하는 창 환경이다. Scene의 Entity는 물체를 가리키고 Flecs World가 실제 물체와 Component를 보관하므로 이 앱은 두 수명을 맞춘다.
- * 초기화는 창과 World를 준비한 뒤 Scene, 모델, 제어기와 물리를 연결한다. 정기구학은 관절 각도에서 링크와 도구 끝의 위치·방향을 계산하고, 앱은 그 결과를 화면 모델과 충돌용 단순 형상에 적용한다.
- * 종료할 때는 Scene 삭제 observer가 Jolt Body를 정리하도록 World와 PhysicsWorld를 유지하고, GPU 자원이 해제될 때까지 OpenGL context를 열어 둔다.
+ * @brief 화면, 로봇 제어, 물리, GUI를 연결해 시뮬레이터를 실행한다.
+ * @details Scene과 Flecs World는 화면 속 물체를 보관하고, PhysicsWorld는 충돌 물체를 관리한다. ViewerApp은 이 객체들이 서로 참조하는 동안 수명을 유지한다.
+ * 관절각에서 계산한 로봇 자세는 화면 모델과 충돌용 모양에 함께 적용한다. 종료할 때는 물리와 화면 자원을 의존 관계에 맞춰 정리한 뒤 창을 닫는다.
  */
 class ViewerApp
 {
@@ -130,12 +126,10 @@ private:
     // 입력, 누적 Fixed Update, 렌더 프레임 처리를 서로 다른 주기로 반복한다.
     void MainLoop();
     void MainLoopFrame();
-    int RunPickPlaceStress();
     void AdvanceSimulationTick(double fixedDeltaSeconds);
     bool AdvancePlanningBudget();
     bool UpdateMission();
     void RandomizeScenario();
-    bool ResetStressEpisode();
 
     // 초기화가 일부만 성공한 경우에도 호출된다. ECS observer가 Body를 정리하고 GPU 자원이 해제될 수 있도록 World와 OpenGL Context 수명을 고려해 정리한다.
     void Shutdown();
