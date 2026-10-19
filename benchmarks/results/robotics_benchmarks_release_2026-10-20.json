@@ -1,0 +1,497 @@
+﻿{
+    "measured_at_local":  "2026-10-20 Asia/Seoul",
+    "purpose":  "Release algorithm and collision benchmark sample; one Google Benchmark run per registered case",
+    "build":  {
+                  "preset":  "ninja-release",
+                  "configuration":  "Release",
+                  "compiler":  "MSVC 19.50.35717",
+                  "flags":  "/O2 /Ob2 /DNDEBUG",
+                  "google_benchmark":  "1.9.5",
+                  "tracy":  false,
+                  "repetitions":  1,
+                  "benchmark_binary_sha256":  "eb79cd0e7d811389f34f64d4054fcf9f948806198d1eebd7e2c25a5c9711c19f",
+                  "simulator_binary_sha256":  "f8962e7d5c959e9fce5e11bff8eb30f0bb5adfc10fabc43ea780e052b0f39549",
+                  "working_tree_source_inventory_sha256":  "4ac0c55fcd1c536da7f0b258184a3ae917da2de53eaaaf4ba3d8f110bdb97ffe",
+                  "source_head_commit":  "a65ab7c"
+              },
+    "machine":  {
+                    "cpu":  "13th Gen Intel(R) Core(TM) i5-13600KF",
+                    "physical_cores":  14,
+                    "logical_processors":  20,
+                    "memory_bytes":  34130567168
+                },
+    "fixed_joint_start_seed":  "six zero radians for algorithm benchmarks; generated endpoints as registered per case",
+    "results":  [
+                    {
+                        "name":  "MoveJCompletion/64",
+                        "repetitions":  1,
+                        "iterations":  13,
+                        "real_time":  10695115.385505442,
+                        "cpu_time":  10817307.692307692,
+                        "time_unit":  "ns",
+                        "label":  null,
+                        "counters":  [
+                                         {
+                                             "name":  "environment_collision_checks",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "fk_generated_reachable_endpoints",
+                                             "value":  832
+                                         },
+                                         {
+                                             "name":  "items_per_second",
+                                             "value":  5916.4444444444443
+                                         },
+                                         {
+                                             "name":  "movej_completed",
+                                             "value":  832
+                                         },
+                                         {
+                                             "name":  "movej_completion_rate",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "movej_rejected",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "movej_runtime_faults",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "movej_timeouts",
+                                             "value":  0
+                                         }
+                                     ],
+                        "source_json":  "robotics_release_2026-10-20.json",
+                        "raw_stdout":  "robotics_release_2026-10-20.txt"
+                    },
+                    {
+                        "name":  "JoltMoveJCollisionPath",
+                        "repetitions":  1,
+                        "iterations":  896,
+                        "real_time":  136052.12058921877,
+                        "cpu_time":  139508.92857142858,
+                        "time_unit":  "ns",
+                        "label":  null,
+                        "counters":  [
+                                         {
+                                             "name":  "items_per_second",
+                                             "value":  7168
+                                         },
+                                         {
+                                             "name":  "jolt_environment_overlap_queries",
+                                             "value":  423808
+                                         },
+                                         {
+                                             "name":  "jolt_movej_completed",
+                                             "value":  896
+                                         },
+                                         {
+                                             "name":  "jolt_movej_failed",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "jolt_movej_planner_runs",
+                                             "value":  896
+                                         },
+                                         {
+                                             "name":  "jolt_movej_success_rate",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "jolt_overlap_queries_per_run",
+                                             "value":  473
+                                         },
+                                         {
+                                             "name":  "planner_validity_checks_per_completed_run",
+                                             "value":  473
+                                         },
+                                         {
+                                             "name":  "rrt_iterations_per_completed_run",
+                                             "value":  41
+                                         },
+                                         {
+                                             "name":  "waypoints_per_completed_run",
+                                             "value":  3
+                                         }
+                                     ],
+                        "source_json":  "robotics_release_2026-10-20.json",
+                        "raw_stdout":  "robotics_release_2026-10-20.txt"
+                    },
+                    {
+                        "name":  "RuntimeLinearPathStress/64",
+                        "repetitions":  1,
+                        "iterations":  1,
+                        "real_time":  877809199.97021556,
+                        "cpu_time":  875000000,
+                        "time_unit":  "ns",
+                        "label":  "case 61 start_deg=[0.000000,0.000000,0.000000,0.000000,0.000000,0.000000] endpoint_seed_deg=[-115.537851,44.698312,8.446399,-120.554249,88.051049,83.545016]; SimRobotController: TCP straightness error remains above tolerance at sample 111/203 after 12 refinements; largest rejected-branch probe 635.497173 mm / 1078.680436 mrad, tolerance 1.000000 mm / 1.000000 mrad",
+                        "counters":  [
+                                         {
+                                             "name":  "cases",
+                                             "value":  64
+                                         },
+                                         {
+                                             "name":  "collision_benchmark_mode_dummy_always_valid",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "completed",
+                                             "value":  51
+                                         },
+                                         {
+                                             "name":  "dummy_state_validity_callback_calls",
+                                             "value":  156867
+                                         },
+                                         {
+                                             "name":  "dummy_state_validity_callback_calls_per_case",
+                                             "value":  2451.046875
+                                         },
+                                         {
+                                             "name":  "environment_collision_checks",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "items_per_second",
+                                             "value":  73.142857142857139
+                                         },
+                                         {
+                                             "name":  "moveL_completed",
+                                             "value":  51
+                                         },
+                                         {
+                                             "name":  "moveL_completion_rate",
+                                             "value":  0.796875
+                                         },
+                                         {
+                                             "name":  "moveL_max_tcp_orientation_error_radians",
+                                             "value":  2.4148194918420732E-05
+                                         },
+                                         {
+                                             "name":  "moveL_max_tcp_position_error_meters",
+                                             "value":  4.8867104604532952E-06
+                                         },
+                                         {
+                                             "name":  "moveL_planning_accepted",
+                                             "value":  51
+                                         },
+                                         {
+                                             "name":  "moveL_rejections_with_endpoint_ik_success_from_start_seed",
+                                             "value":  4
+                                         },
+                                         {
+                                             "name":  "moveL_rejections_with_fk_generated_reachable_endpoints",
+                                             "value":  13
+                                         },
+                                         {
+                                             "name":  "moveL_rejections_with_joint_limit_valid_movej_segments",
+                                             "value":  13
+                                         },
+                                         {
+                                             "name":  "planner_ik_limit_stalls",
+                                             "value":  2
+                                         },
+                                         {
+                                             "name":  "planner_ik_rejections",
+                                             "value":  11
+                                         },
+                                         {
+                                             "name":  "planner_joint_limit_statuses",
+                                             "value":  2
+                                         },
+                                         {
+                                             "name":  "planner_rejections",
+                                             "value":  13
+                                         },
+                                         {
+                                             "name":  "planner_verified_joint_limit_violations",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "runtime_faults",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "runtime_ik_faults",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "timeouts",
+                                             "value":  0
+                                         }
+                                     ],
+                        "source_json":  "robotics_release_2026-10-20.json",
+                        "raw_stdout":  "robotics_release_2026-10-20.txt"
+                    },
+                    {
+                        "name":  "DLS_IK",
+                        "repetitions":  1,
+                        "iterations":  29867,
+                        "real_time":  4353.8453828048378,
+                        "cpu_time":  4185.2211470854118,
+                        "time_unit":  "ns",
+                        "label":  null,
+                        "counters":  [
+
+                                     ],
+                        "source_json":  "ik_release_2026-10-20.json",
+                        "raw_stdout":  "ik_release_2026-10-20.txt"
+                    },
+                    {
+                        "name":  "LinearPathPlanner",
+                        "repetitions":  1,
+                        "iterations":  2987,
+                        "real_time":  46675.761603193117,
+                        "cpu_time":  47079.009039169738,
+                        "time_unit":  "ns",
+                        "label":  null,
+                        "counters":  [
+                                         {
+                                             "name":  "ik_iterations_per_path",
+                                             "value":  12
+                                         },
+                                         {
+                                             "name":  "ik_solves_per_path",
+                                             "value":  6
+                                         },
+                                         {
+                                             "name":  "items_per_second",
+                                             "value":  148686.22222222222
+                                         },
+                                         {
+                                             "name":  "planner_state_checks_per_path",
+                                             "value":  6
+                                         },
+                                         {
+                                             "name":  "tcp_refinements_per_path",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "tcp_straightness_checks_per_path",
+                                             "value":  18
+                                         }
+                                     ],
+                        "source_json":  "planner_release_2026-10-20.json",
+                        "raw_stdout":  "planner_release_2026-10-20.txt"
+                    },
+                    {
+                        "name":  "IncrementalLinearPathPlanner",
+                        "repetitions":  1,
+                        "iterations":  2016,
+                        "real_time":  62643.898773886678,
+                        "cpu_time":  62003.968253968254,
+                        "time_unit":  "ns",
+                        "label":  null,
+                        "counters":  [
+                                         {
+                                             "name":  "estimated_latency_ms_at_60hz",
+                                             "value":  16.666666666666668
+                                         },
+                                         {
+                                             "name":  "estimated_latency_ms_at_60hz_max",
+                                             "value":  16.666666666666668
+                                         },
+                                         {
+                                             "name":  "estimated_latency_ms_at_60hz_p50",
+                                             "value":  16.666666666666668
+                                         },
+                                         {
+                                             "name":  "estimated_latency_ms_at_60hz_p95",
+                                             "value":  16.666666666666668
+                                         },
+                                         {
+                                             "name":  "estimated_latency_ms_at_60hz_p99",
+                                             "value":  16.666666666666668
+                                         },
+                                         {
+                                             "name":  "max_fk_tcp_orientation_error_mrad",
+                                             "value":  0.13532714046030017
+                                         },
+                                         {
+                                             "name":  "max_fk_tcp_position_error_mm",
+                                             "value":  0.018146644136716204
+                                         },
+                                         {
+                                             "name":  "planner_state_checks_per_path",
+                                             "value":  6
+                                         },
+                                         {
+                                             "name":  "slice_max_us",
+                                             "value":  178.8
+                                         },
+                                         {
+                                             "name":  "slice_p50_us",
+                                             "value":  45.3
+                                         },
+                                         {
+                                             "name":  "slice_p95_us",
+                                             "value":  46.5
+                                         },
+                                         {
+                                             "name":  "slice_p99_us",
+                                             "value":  80.4
+                                         },
+                                         {
+                                             "name":  "success_rate",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "work_frames",
+                                             "value":  2016
+                                         },
+                                         {
+                                             "name":  "work_frames_max",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "work_frames_p50",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "work_frames_p95",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "work_frames_p99",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "work_frames_per_path",
+                                             "value":  1
+                                         }
+                                     ],
+                        "source_json":  "planner_release_2026-10-20.json",
+                        "raw_stdout":  "planner_release_2026-10-20.txt"
+                    },
+                    {
+                        "name":  "PosePlanEndpointStress/64/iterations:1/real_time",
+                        "repetitions":  1,
+                        "iterations":  1,
+                        "real_time":  9903200.08713752,
+                        "cpu_time":  15625000,
+                        "time_unit":  "ns",
+                        "label":  "PTP endpoint planning; 1.5 ms frame budget; dummy always-valid callback",
+                        "counters":  [
+                                         {
+                                             "name":  "collision_benchmark_mode_dummy_always_valid",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "completed_plan_frames_p50",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "completed_plan_frames_p95",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "completed_plan_frames_p99",
+                                             "value":  4
+                                         },
+                                         {
+                                             "name":  "completed_plan_p50_ms",
+                                             "value":  0.0625
+                                         },
+                                         {
+                                             "name":  "completed_plan_p95_ms",
+                                             "value":  0.2173
+                                         },
+                                         {
+                                             "name":  "completed_plan_p99_ms",
+                                             "value":  4.6085
+                                         },
+                                         {
+                                             "name":  "dummy_always_valid_callback_calls",
+                                             "value":  2191
+                                         },
+                                         {
+                                             "name":  "dummy_always_valid_callback_calls_per_request",
+                                             "value":  34.234375
+                                         },
+                                         {
+                                             "name":  "fk_generated_reachable_endpoints",
+                                             "value":  64
+                                         },
+                                         {
+                                             "name":  "frame_slice_max_us",
+                                             "value":  1501.6
+                                         },
+                                         {
+                                             "name":  "frame_slice_p50_us",
+                                             "value":  55.7
+                                         },
+                                         {
+                                             "name":  "frame_slice_p95_us",
+                                             "value":  446.9
+                                         },
+                                         {
+                                             "name":  "frame_slice_p99_us",
+                                             "value":  1501.6
+                                         },
+                                         {
+                                             "name":  "items_per_second",
+                                             "value":  6462.55750028968
+                                         },
+                                         {
+                                             "name":  "pose_plan_acceptance_rate",
+                                             "value":  1
+                                         },
+                                         {
+                                             "name":  "pose_plan_accepted",
+                                             "value":  64
+                                         },
+                                         {
+                                             "name":  "pose_plan_average_ik_seed_attempts",
+                                             "value":  1.40625
+                                         },
+                                         {
+                                             "name":  "pose_plan_average_work_frames",
+                                             "value":  1.046875
+                                         },
+                                         {
+                                             "name":  "pose_plan_begin_rejected",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "pose_plan_ik_did_not_converge",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "pose_plan_joint_limit_rejected",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "pose_plan_maximum_ik_seed_attempts",
+                                             "value":  19
+                                         },
+                                         {
+                                             "name":  "pose_plan_rejected",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "pose_plan_timeouts",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "pose_plan_unreachable",
+                                             "value":  0
+                                         },
+                                         {
+                                             "name":  "pose_plan_worst_work_frames",
+                                             "value":  4
+                                         }
+                                     ],
+                        "source_json":  "pose_plan_release_2026-10-20.json",
+                        "raw_stdout":  "pose_plan_release_2026-10-20.txt"
+                    }
+                ],
+    "interpretation_limits":  [
+                                  "DLS_IK, LinearPathPlanner, IncrementalLinearPathPlanner, and MoveJCompletion are algorithm/runtime samples; they do not include actual Jolt collision cost unless the result name explicitly identifies Jolt.",
+                                  "RuntimeLinearPathStress and PosePlanEndpointStress use always-valid dummy state-validity callbacks. Their acceptance and timing do not measure real environment collision behavior. Rejections remain in the recorded denominators.",
+                                  "JoltMoveJCollisionPath uses Jolt overlap queries during MoveJ path planning. Its per-iteration time is not a PhysicsWorld::Step duration.",
+                                  "Each benchmark case ran once as a Google Benchmark repetition. These are exploratory measurements, not stable confidence intervals or before/after optimization results.",
+                                  "No MoveL planning benchmark with actual Jolt collision queries or isolated PhysicsStep cost was run."
+                              ]
+}

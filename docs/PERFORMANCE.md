@@ -32,6 +32,12 @@ Planner 및 반복 임무 측정은 [벤치마크 실행 안내](PICK_PLACE_STRE
 
 ## 사용 가능한 과거 결과
 
+동일한 Release 빌드의 단발 Google Benchmark 표본도 기록했다. `DLS_IK`는 solve당 4.354 µs, 동기 `LinearPathPlanner`는 path당 46.676 µs, `IncrementalLinearPathPlanner`는 path당 62.644 µs였다. Incremental planner의 frame slice p95는 46.5 µs, 최댓값은 178.8 µs였다. Jolt를 실제 호출하는 `JoltMoveJCollisionPath`는 경로당 136.052 µs, 평균 Jolt overlap query 473회였고, 해당 표본에서 896/896 경로가 완료됐다.
+
+알고리즘 stress는 충돌 callback이 항상 통과하는 dummy 설정임을 결과에 표시한다. `RuntimeLinearPathStress/64`는 요청 64건 중 51건을 완료하고 13건을 거부했다. `PosePlanEndpointStress/64`는 64건을 수락했지만 둘 다 실제 환경 충돌 검사 성능이 아니다. 단발 벤치마크 결과에는 반복 간 신뢰 구간이 없으며, MoveL과 PhysicsStep의 실제 Jolt 비용은 아직 계측하지 않았다. 모든 원시 결과, callback 표시와 빌드 hash는 [Release robotics benchmark 기록](../benchmarks/results/robotics_benchmarks_release_2026-10-20.json) 및 그 파일이 참조하는 결과 파일에서 확인할 수 있다.
+
+이 algorithm/Jolt 단발 표본에도 동일 조건 최적화 전 기준선은 없으므로 개선율을 계산하지 않았다.
+
 2026-10-19 기록에는 seed 1로 50회 실행한 Pick & Place 결과가 있다. 50회 성공, 실패·timeout 0회, 총 210.76초였다. 기록된 바이너리는 2026-10-15에 만들어진 Debug 실행 파일이며 현재 소스에서 새로 만든 Release 성능 측정이 아니다. 따라서 이 값은 해당 Debug 실행의 재현 기록으로만 사용한다.
 
 현재 체크아웃 Release 빌드의 고정 tick 성능과 최적화 전후 비교는 별도 Release 측정을 실행한 뒤에만 기입한다.

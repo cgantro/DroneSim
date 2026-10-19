@@ -1,0 +1,6 @@
+﻿---------------------------------------------------------------------------------------
+Benchmark                             Time             CPU   Iterations UserCounters...
+---------------------------------------------------------------------------------------
+LinearPathPlanner                 46676 ns        47079 ns         2987 ik_iterations_per_path=12 ik_solves_per_path=6 items_per_second=148.686k/s planner_state_checks_per_path=6 tcp_refinements_per_path=0 tcp_straightness_checks_per_path=18
+IncrementalLinearPathPlanner      62644 ns        62004 ns         2016 estimated_latency_ms_at_60hz=16.6667 estimated_latency_ms_at_60hz_max=16.6667 estimated_latency_ms_at_60hz_p50=16.6667 estimated_latency_ms_at_60hz_p95=16.6667 estimated_latency_ms_at_60hz_p99=16.6667 max_fk_tcp_orientation_error_mrad=0.135327 max_fk_tcp_position_error_mm=0.0181466 planner_state_checks_per_path=6 slice_max_us=178.8 slice_p50_us=45.3 slice_p95_us=46.5 slice_p99_us=80.4 success_rate=1 work_frames=2.016k work_frames_max=1 work_frames_p50=1 work_frames_p95=1 work_frames_p99=1 work_frames_per_path=1
+
