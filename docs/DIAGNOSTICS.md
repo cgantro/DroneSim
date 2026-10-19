@@ -13,7 +13,7 @@ Logger는 기록을 크기가 제한된 큐에 복사한 뒤, 전용 작업자 �
 - [PosePlanEndpointStress](#poseplanendpointstress)
 - [오프라인 계획과 대화형 계획 비교](#오프라인-계획과-대화형-계획-비교)
 - [선형 계획 작업량](#선형-계획-작업량)
-- [JoltMoveJCollisionPath](#joltmovejcollisionpath)
+- [JoltMoveJDirectPath](#joltmovejdirectpath)
 - [그 밖의 카운터와 callback](#그-밖의-카운터와-callback)
 - [Viewer Tracy 구간](#viewer-tracy-구간)
 
@@ -91,18 +91,18 @@ build-ninja-release/grasplink_robotics_benchmarks.exe --benchmark_filter="(Runti
 
 프레임별 `slice_p50_us`, `slice_p95_us`, `slice_p99_us`, `slice_max_us`는 각 프레임에서 계획 계산에 걸린 시간을 별도로 측정한다. 한 작업 단위 자체가 예산을 넘으면 실제 slice 시간도 예산을 넘을 수 있다.
 
-## `JoltMoveJCollisionPath` 충돌 경로 계획
+## `JoltMoveJDirectPath` 직접 경로 검사
 
-`JoltMoveJCollisionPath`는 관절 공간 직선이 Environment Box와 겹치도록 만든 뒤 `JointPathPlanningJob`이 RRT-Connect 우회 경로를 찾는 시간을 잰다. 상태 검사기는 실제 `PhysicsWorld::OverlapsEnvironmentAt()`을 호출하므로 Jolt 충돌 쿼리 수와 계획 지연을 함께 확인할 수 있다.
+`JoltMoveJDirectPath`는 관절 공간 직선이 Environment Box와 겹치도록 만들고 `JointPathPlanningJob`이 이를 거부할 때까지 걸리는 시간을 잰다. 상태 검사기는 실제 `PhysicsWorld::OverlapsEnvironmentAt()`을 호출하므로 Jolt 충돌 쿼리 수와 거부 지연을 확인할 수 있다.
 
 이 벤치마크는 전체 로봇 링크의 collider 조립이나 Viewer의 Scene 통합을 측정하지 않고, HCR-12A 관절 공간에 연결한 단일 Box proxy와 고정 장애물만 사용한다. 따라서 이 결과를 전체 로봇 환경 충돌 성능으로 일반화하지 않는다.
 
-`jolt_movej_success_rate`, `jolt_environment_overlap_queries`, `rrt_iterations_per_completed_run`, `waypoints_per_completed_run`가 우회 결과와 탐색량을 보여 준다.
+`jolt_direct_movej_rejection_rate`와 `jolt_environment_overlap_queries`가 직접 경로의 거부율과 충돌 확인 횟수를 보여 준다. 이 벤치마크는 우회 경로를 찾지 않는다.
 
-기본 CTest는 `JoltMoveJCollisionPath`를 포함해 Jolt-backed 충돌 계획 벤치마크가 빌드되고 유효한 경로를 내는지 확인한다. 탐색 크기를 바꿔 직접 실행하려면 다음과 같이 한다.
+기본 CTest는 `JoltMoveJDirectPath`를 포함해 Jolt 충돌 쿼리를 연결한 직접 경로 검증 벤치마크가 실행되는지 확인한다. 직접 실행하려면 다음과 같이 한다.
 
 ```powershell
-build-ninja-release/grasplink_robotics_benchmarks.exe --benchmark_filter=JoltMoveJCollisionPath
+build-ninja-release/grasplink_robotics_benchmarks.exe --benchmark_filter=JoltMoveJDirectPath
 ```
 
 ## 그 밖의 카운터와 callback
@@ -117,4 +117,4 @@ build-ninja-release/grasplink_robotics_benchmarks.exe --benchmark_filter=JoltMov
 
 실제 Viewer에서 Tracy 캡처를 시작하면 충돌 검증 구간은 `CollisionCandidateFK`, `CollisionCheck`, `SelfCollisionCheck`, `JoltEnvironmentOverlap`, `JoltPairShapeOverlap`으로 나뉘어 표시된다. `CollisionCandidateFK`는 Scene을 수정하지 않고 FK에서 Jolt 입력 변환까지 만드는 시간이며, 두 Jolt 구간은 각각 환경 형상과 로봇 형상 쌍을 실제 검사한 시간이다. `SelfCollisionCheck`에는 허용 충돌 행렬과 각 쌍 반복 비용도 포함된다.
 
-나머지 endpoint IK, MoveJ 실행, MoveL stress 벤치마크는 Jolt 환경 충돌을 포함하지 않는다. `JoltMoveJCollisionPath`도 단순화한 한 개 proxy의 계획만 포함한다. 어느 benchmark의 완료율도 전체 Pick-and-Place 임무 성공률로 해석하면 안 된다.
+나머지 endpoint IK, MoveJ 실행, MoveL stress 벤치마크는 Jolt 환경 충돌을 포함하지 않는다. `JoltMoveJDirectPath`도 단순화한 한 개 proxy의 직접 경로 검사만 포함한다. 어느 benchmark의 결과도 전체 Pick-and-Place 임무 성공률로 해석하면 안 된다.

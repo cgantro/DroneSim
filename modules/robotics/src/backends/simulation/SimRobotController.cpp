@@ -525,9 +525,6 @@ bool SimRobotController::StartPoseCandidateJointPath()
 {
     planning::JointPathPlannerOptions options;
     options.validationPolicy = planning::kDefaultPlanningPolicy;
-    options.maximumIterations = 512;
-    options.maximumNodesPerTree = 256;
-    options.maximumShortcutAttempts = 32;
     const Result begin = poseJointPathPlanningJob_.Begin(*specification_,
         state_.jointPositionRadians, poseCandidateJoints_, jointStateValidityChecker_, options);
     if (!begin)

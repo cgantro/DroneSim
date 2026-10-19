@@ -55,7 +55,7 @@ Controller 호출 계약과 상태·오류 구분은 [Controller 인터페이스
 
 FK는 모델에 ToolFrame이 있으면 `toolFrameInBaseFrame`을 제공한다. `DampedLeastSquaresIk`는 ToolFrame에 고정 공구 변환을 더해 TCP 목표를 만드는 관절각을 계산한다.
 
-`SimRobotController::MovePose`는 현재 자세 seed의 IK 결과를 관절 공간에서 검증해 이동하며, 미션은 비동기 `BeginPosePlanning`을 사용한다. MoveJ는 직접 관절 경로가 막힐 때 제한된 RRT-Connect를 시도하지만 TCP 직선은 보장하지 않는다.
+`SimRobotController::MovePose`는 현재 자세 seed의 IK 결과를 관절 공간에서 검증해 이동하며, 미션은 비동기 `BeginPosePlanning`을 사용한다. MoveJ는 관절 사이를 직접 보간해 표본을 검사하고, 경로가 막히면 우회하지 않고 실패한다. TCP 직선은 보장하지 않는다.
 
 `MoveLinear`은 TCP의 직선 위치와 최단 회전 경로를 따라가며, 직전 표본 해를 seed로 이어갈 수 없을 때만 대체 IK 분기를 탐색한다. `tcpPoseValid=true`인 시뮬레이션 상태는 Robot base 기준 모델 FK 결과이며 실제 장치 측정값이 아니다.
 

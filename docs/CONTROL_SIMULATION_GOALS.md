@@ -29,7 +29,7 @@ Kinematics, Physics, Viewer
 | 고정 갱신 | `FixedControlLoop`가 render frame과 분리된 4 ms tick을 제공한다. Controller, kinematics, transform, physics 순서는 앱이 연결한다. | hard real-time 보장이나 별도 제어 스레드·scheduler는 없다. |
 | Physics / ECS | `PhysicsWorld`는 Jolt Body와 물리 계산을 담당하고, `PhysicsSystemModule`이 Flecs 설정과 Body 수명·변환 동기화를 연결한다. | Dynamic Body는 변환이 있는 조상 아래를 지원하지 않는다. Collider 치수는 Entity scale을 자동 반영하지 않는다. |
 | 로봇 모델 / FK | HCR-12A bind pivot과 관절 상태에서 base 기준 링크·ToolFrame 자세를 계산하고 고정 TCP offset을 적용할 수 있다. | TCP는 모델 계산값일 수 있으며 실제 장치 측정값이라고 볼 수 없다. |
-| IK와 이동 | DLS IK, MoveJ 관절 경로 검사, 제한된 RRT-Connect 우회, MoveL Cartesian 표본 검증과 증분 계획 API가 있다. | 계획은 표본 간 충돌이 없음을 수학적으로 증명하지 않는다. RRT 경로는 TCP 직선을 보장하지 않으며 MoveL은 실패 시 MoveJ로 대체되지 않는다. |
+| IK와 이동 | DLS IK, MoveJ 직접 경로 검사, MoveL Cartesian 표본 검증과 증분 계획 API가 있다. | 막힌 MoveJ 경로는 우회하지 않고 거부한다. 표본 사이는 연속 충돌 검사를 증명하지 않으며 MoveL은 실패 시 MoveJ로 대체되지 않는다. |
 | Gripper | 2F-85 자유공간 master/mimic 동작과 GLB 변환, Kinematic proxy, 접촉 정지와 양쪽 손끝 접촉 시 fixed constraint grasp가 있다. raw 위치는 `closureFraction`에 선형 대응하며 기본 master 각속도 범위는 0.1–1.0 rad/s다. | raw 위치·속도 매핑과 속도 범위는 시뮬레이션 가정이다. 실제 힘·전류, 마찰 파지 안정성, 개별 손가락 적응은 계산하지 않는다. |
 | 자가 충돌 | 후보 자세의 Base, HCR-12A 여섯 링크와 그리퍼 몸체를 환경 및 허용 충돌 표에 따라 검사한다. | 그리퍼 손가락·내부 너클 쌍은 검사 대상이 아니다. 동작 중 충돌 감시는 매 고정 tick 목표 자세 검사이며 전체 경로를 사전 회피하지 않는다. |
 | 안전 기능 | 명령·상태의 유효성 검사와 소프트웨어 `Stop()`이 있다. | Watchdog, E-Stop state model, 영점 보정 및 하드웨어 보호 회로 통합은 구현된 것으로 간주하지 않는다. 소프트웨어 Stop은 실제 E-Stop을 대신하지 않는다. |
@@ -45,7 +45,7 @@ Kinematics, Physics, Viewer
 | 고정 제어 주기 | 4 ms callback 기반 loop 구현 있음. hard real-time scheduler는 아니다. |
 | Jolt·ECS 기본 연동과 로봇 충돌 proxy | 구현 있음. Entity 설정과 Body 수명·동기화는 별도 모듈이 연결한다. |
 | HCR-12A 모델과 FK | 링크 및 ToolFrame 계산 구현 있음. |
-| IK, MoveJ, RRT-Connect, MoveL | 구현 있음. 계획의 표본·후보 한계와 충돌 간격은 정책으로 제한된다. |
+| IK, MoveJ, MoveL | 구현 있음. 경로 표본 수와 충돌 간격은 정책으로 제한된다. MoveJ는 직접 경로만 검사한다. |
 | 2F-85 자유공간 개폐와 접촉 grasp | 구현 있음. 힘 기반 파지와 손가락 적응은 계획 또는 검토 범위다. |
 | Robot self-collision | 후보 자세 검사 구현 있음. Gripper 내부 손가락 쌍은 제외된다. |
 | Watchdog, E-Stop 상태, 영점 보정 | 이 저장소에서 구현된 것으로 확인되지 않았다. |

@@ -734,7 +734,7 @@ void MoveJCompletion(benchmark::State& state)
     state.SetItemsProcessed(static_cast<std::int64_t>(totalCases));
 }
 
-void JoltMoveJCollisionPath(benchmark::State& state)
+void JoltMoveJDirectPath(benchmark::State& state)
 {
     using grasplink::physics::BodyDescription;
     using grasplink::physics::BodyMotionType;
@@ -768,17 +768,11 @@ void JoltMoveJCollisionPath(benchmark::State& state)
     goal[1] = 1.0;
 
     std::uint64_t plannerRuns = 0;
-    std::uint64_t completed = 0;
-    std::uint64_t failed = 0;
+    std::uint64_t accepted = 0;
+    std::uint64_t rejected = 0;
     std::uint64_t joltQueries = 0;
     std::uint64_t plannerValidityChecks = 0;
-    std::uint64_t rrtIterations = 0;
-    std::uint64_t plannedWaypoints = 0;
     JointPathPlannerOptions options;
-    options.maximumIterations = 2048;
-    options.maximumNodesPerTree = 1024;
-    options.maximumShortcutAttempts = 32;
-    options.randomSeed = 0x47524C4B;
 
     for (auto _ : state)
     {
@@ -802,42 +796,31 @@ void JoltMoveJCollisionPath(benchmark::State& state)
             state.SkipWithError("Jolt-backed MoveJ planner rejected valid benchmark endpoints");
             return;
         }
-        for (std::size_t work = 0;
-            work < options.maximumIterations + options.maximumShortcutAttempts + 16 &&
-            job.GetState() == JointPathPlanningState::Running;
-            ++work)
+        for (std::size_t work = 0; work < 10000 && job.GetState() == JointPathPlanningState::Running; ++work)
             job.Advance(1);
 
         ++plannerRuns;
-        if (job.GetState() != JointPathPlanningState::Completed)
+        if (job.GetState() == JointPathPlanningState::Completed)
         {
-            ++failed;
-            continue;
+            ++accepted;
+            plannerValidityChecks += job.GetPlan().validityChecks;
         }
-        ++completed;
-        plannerValidityChecks += job.GetPlan().validityChecks;
-        rrtIterations += job.GetPlan().iterations;
-        plannedWaypoints += job.GetPlan().points.size();
-        benchmark::DoNotOptimize(job.GetPlan().points.data());
+        else
+            ++rejected;
+        benchmark::DoNotOptimize(job.GetResult().code);
     }
 
-    state.counters["jolt_movej_planner_runs"] = static_cast<double>(plannerRuns);
-    state.counters["jolt_movej_completed"] = static_cast<double>(completed);
-    state.counters["jolt_movej_failed"] = static_cast<double>(failed);
-    state.counters["jolt_movej_success_rate"] = plannerRuns > 0
-        ? static_cast<double>(completed) / static_cast<double>(plannerRuns) : 0.0;
+    state.counters["jolt_direct_movej_runs"] = static_cast<double>(plannerRuns);
+    state.counters["jolt_direct_movej_accepted"] = static_cast<double>(accepted);
+    state.counters["jolt_direct_movej_rejected"] = static_cast<double>(rejected);
+    state.counters["jolt_direct_movej_rejection_rate"] = plannerRuns > 0
+        ? static_cast<double>(rejected) / static_cast<double>(plannerRuns) : 0.0;
     state.counters["jolt_environment_overlap_queries"] = static_cast<double>(joltQueries);
     state.counters["jolt_overlap_queries_per_run"] = plannerRuns > 0
         ? static_cast<double>(joltQueries) / static_cast<double>(plannerRuns) : 0.0;
-    state.counters["planner_validity_checks_per_completed_run"] = completed > 0
-        ? static_cast<double>(plannerValidityChecks) / static_cast<double>(completed) : 0.0;
-    state.counters["rrt_iterations_per_completed_run"] = completed > 0
-        ? static_cast<double>(rrtIterations) / static_cast<double>(completed) : 0.0;
-    state.counters["waypoints_per_completed_run"] = completed > 0
-        ? static_cast<double>(plannedWaypoints) / static_cast<double>(completed) : 0.0;
+    state.counters["validity_checks_per_accepted_run"] = accepted > 0
+        ? static_cast<double>(plannerValidityChecks) / static_cast<double>(accepted) : 0.0;
     state.SetItemsProcessed(static_cast<std::int64_t>(plannerRuns));
-    if (failed != 0)
-        state.SkipWithError("Jolt-backed MoveJ benchmark failed to find the validated detour");
 }
 
 void RuntimeLinearPathStress(benchmark::State& state)
@@ -1038,7 +1021,7 @@ int main(int argc, char** argv)
     benchmark::RegisterBenchmark("MoveJCompletion", MoveJCompletion)
         ->Arg(64)
         ->Arg(256);
-    benchmark::RegisterBenchmark("JoltMoveJCollisionPath", JoltMoveJCollisionPath)
+    benchmark::RegisterBenchmark("JoltMoveJDirectPath", JoltMoveJDirectPath)
         ->Unit(benchmark::kNanosecond);
     benchmark::RegisterBenchmark("RuntimeLinearPathStress", RuntimeLinearPathStress)
         ->Arg(64)

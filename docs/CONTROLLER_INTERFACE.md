@@ -142,7 +142,7 @@ Simulation이 사용하는 주요 `ErrorCode` 분류는 다음과 같다. 이 �
 `SimRobotController`는 `RobotSpecification`을 생성자에서 받고 모델의 joint count/limit/max velocity를 그대로 사용한다.
 Controller는 관절 목표를 검증하고, 관절 속도·Simulation 가속 제한과 TCP 목표 IK, 표본 기반 직선 경로 실행, Stop, 모델 기반 상태 제공을 담당한다. `MoveJoint` 가속도는 모델 사양에 없는 제조사 한계를 가정하지 않도록 최대 관절 속도에서 유도한 Simulation 정책으로 제한한다. 기본 `accelerationScale=1.0`은 최대 속도까지 0.20초 동안 가속하는 설정이다.
 
-`MovePose`는 현재 관절각을 seed로 DLS IK를 풀고 관절 공간 경로를 검사하는 MoveJ 명령이다. `BeginPosePlanning`은 같은 목표를 프레임별 작업으로 나누어 계산한다. 직접 관절 경로가 충돌하면 제한된 RRT-Connect를 시도하고, 결과 경로를 다시 검사한다. 이 경로는 TCP 직선을 보장하지 않는다. `BeginPosePlanningWithLinearContinuation`은 접근 자세와 그 뒤의 선형 continuation을 함께 검사하고, 둘 다 유효할 때만 접근 동작을 시작한다. 접근 동작이 끝난 뒤 호출자가 continuation을 요청해야 한다.
+`MovePose`는 현재 관절각을 seed로 DLS IK를 풀고 관절 공간의 직접 경로를 검사하는 MoveJ 명령이다. `BeginPosePlanning`은 같은 목표를 프레임별 작업으로 나누어 계산한다. 경로가 충돌하면 우회하지 않고 실패한다. 이 경로는 TCP 직선을 보장하지 않는다. `BeginPosePlanningWithLinearContinuation`은 접근 자세와 그 뒤의 선형 continuation을 함께 검사하고, 둘 다 유효할 때만 접근 동작을 시작한다. 접근 동작이 끝난 뒤 호출자가 continuation을 요청해야 한다.
 
 `MoveLinear`은 목표 하나를 `MoveLinearPath`로 감싼다. MoveL은 직전 표본의 IK 해를 다음 seed로 재사용하고, 이어갈 해가 없을 때만 대체 분기를 찾는다.
 

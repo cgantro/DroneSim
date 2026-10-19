@@ -29,12 +29,6 @@ JointPathPlannerOptions TestOptions()
 {
     JointPathPlannerOptions options;
     options.validationPolicy.jointCollisionSampleSpacingRadians = 0.025;
-    options.maximumIterations = 3000;
-    options.maximumNodesPerTree = 1500;
-    options.maximumShortcutAttempts = 32;
-    options.extensionStepFraction = 0.12;
-    options.goalBias = 0.18;
-    options.randomSeed = 42;
     return options;
 }
 
@@ -106,7 +100,7 @@ TEST(JointPathPlanner, AdvanceBoundsValidityCallbacksAndDirectEdgeSampling)
     EXPECT_EQ(job.GetPlan().validityChecks, callbackCalls);
 }
 
-TEST(JointPathPlanner, FindsDetourAroundJointSpaceObstacle)
+TEST(JointPathPlanner, RejectsDirectPathThroughJointSpaceObstacle)
 {
     JointPathPlanningJob job;
     JointPathPlannerOptions options = TestOptions();
@@ -114,26 +108,15 @@ TEST(JointPathPlanner, FindsDetourAroundJointSpaceObstacle)
     const JointVector goal{0.9, 0.5, 0.5, 0.5, 0.5, 0.5};
     ASSERT_TRUE(job.Begin(kSpecification, start, goal, ObstacleChecker(), options));
     ASSERT_EQ(job.GetState(), JointPathPlanningState::Running);
-    ASSERT_EQ(RunToEnd(job), JointPathPlanningState::Completed) << job.GetResult().message;
-
-    const auto& points = job.GetPlan().points;
-    ASSERT_GE(points.size(), 3u);
-    EXPECT_EQ(points.front(), start);
-    EXPECT_EQ(points.back(), goal);
-    for (std::size_t edge = 1; edge < points.size(); ++edge)
-    {
-        EXPECT_EQ(ValidateJointPath(points[edge - 1], points[edge], kSpecification,
-            ObstacleChecker(), options.validationPolicy), JointStateInvalidity::None);
-        EXPECT_FALSE(IsObstacle(points[edge]));
-    }
+    EXPECT_EQ(RunToEnd(job), JointPathPlanningState::Failed);
+    EXPECT_EQ(job.GetResult().code, ErrorCode::EnvironmentContact);
+    EXPECT_TRUE(job.GetPlan().points.empty());
 }
 
-TEST(JointPathPlanner, StopsWhenIterationBudgetIsExhausted)
+TEST(JointPathPlanner, RejectsBlockedDirectPathWithoutSearchingForDetours)
 {
     JointPathPlanningJob job;
-    JointPathPlannerOptions options = TestOptions();
-    options.maximumIterations = 3;
-    options.maximumNodesPerTree = 16;
+    const auto options = TestOptions();
     const JointVector start{0.1, 0.5, 0.5, 0.5, 0.5, 0.5};
     const JointVector goal{0.9, 0.5, 0.5, 0.5, 0.5, 0.5};
     const StateValidityChecker wall = [](const JointVector& joints)
@@ -144,7 +127,7 @@ TEST(JointPathPlanner, StopsWhenIterationBudgetIsExhausted)
     ASSERT_TRUE(job.Begin(kSpecification, start, goal, wall, options));
     EXPECT_EQ(RunToEnd(job), JointPathPlanningState::Failed);
     EXPECT_EQ(job.GetPlan().iterations, 0u);
-    EXPECT_EQ(job.GetResult().code, ErrorCode::Unreachable);
+    EXPECT_EQ(job.GetResult().code, ErrorCode::EnvironmentContact);
 }
 
 TEST(JointPathPlanner, RejectsInvalidEndpointAndCancelsRunningPlan)
@@ -182,15 +165,15 @@ TEST(JointPathPlanner, PreservesCollisionReasonForInvalidStartAndGoal)
     EXPECT_NE(job.GetResult().message.find("planned robot links overlap"), std::string::npos);
 }
 
-TEST(JointPathPlanner, FixedSeedProducesRepeatablePath)
+TEST(JointPathPlanner, DirectPathIsRepeatable)
 {
-    const JointVector start{0.1, 0.5, 0.5, 0.5, 0.5, 0.5};
-    const JointVector goal{0.9, 0.5, 0.5, 0.5, 0.5, 0.5};
+    const JointVector start{0.1, 0.1, 0.2, 0.3, 0.4, 0.5};
+    const JointVector goal{0.2, 0.15, 0.25, 0.35, 0.45, 0.55};
     JointPathPlanningJob first;
     JointPathPlanningJob second;
     const auto options = TestOptions();
-    ASSERT_TRUE(first.Begin(kSpecification, start, goal, ObstacleChecker(), options));
-    ASSERT_TRUE(second.Begin(kSpecification, start, goal, ObstacleChecker(), options));
+    ASSERT_TRUE(first.Begin(kSpecification, start, goal, {}, options));
+    ASSERT_TRUE(second.Begin(kSpecification, start, goal, {}, options));
     ASSERT_EQ(RunToEnd(first), JointPathPlanningState::Completed);
     ASSERT_EQ(RunToEnd(second), JointPathPlanningState::Completed);
     ASSERT_EQ(first.GetPlan().points.size(), second.GetPlan().points.size());

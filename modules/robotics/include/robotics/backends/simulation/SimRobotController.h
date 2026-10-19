@@ -96,7 +96,7 @@ public:
         double accelerationScale = 1.0) override;
     /**
      * @brief 목표 TCP 자세의 관절 경로를 계산하고 검증하는 작업을 시작한다.
-     * @details IK 반복, RRT-Connect 우회 탐색, 관절 경로 충돌 검사를 작은 작업 단위로 나누어 AdvanceMotionPlanning에서 진행한다.
+     * @details IK 반복과 직접 관절 경로 충돌 검사를 작은 작업 단위로 나누어 AdvanceMotionPlanning에서 진행한다. 막힌 경로는 우회하지 않고 실패한다.
      * 검증 callback은 이 Controller를 진행하는 호출 스레드에서 실행하므로 Viewer의 Jolt/ECS 객체를 다른 thread에서 호출하지 않는다.
      * 결과는 경로가 검증된 뒤 MoveJoint 궤적으로 실행하며 관절 waypoint마다 멈춘다. TCP 직선 경로는 보장하지 않는다.
      */

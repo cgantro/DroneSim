@@ -548,7 +548,7 @@ if(GRASPLINK_BUILD_BENCHMARKS)
   if(BUILD_TESTING)
     add_test(NAME RoboticsBenchmarks COMMAND grasplink_robotics_benchmarks
       --benchmark_min_time=0.01s
-      "--benchmark_filter=^(FK|DLS_IK|LinearPathPlanner|JoltMoveJCollisionPath)$")
+      "--benchmark_filter=^(FK|DLS_IK|LinearPathPlanner|JoltMoveJDirectPath)$")
     set_tests_properties(RoboticsBenchmarks PROPERTIES
       WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
       TIMEOUT 30 LABELS "benchmark"
