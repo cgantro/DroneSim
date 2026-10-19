@@ -13,6 +13,8 @@
 #include "robotics/kinematics/RobotKinematics.h"
 #include "robotics/kinematics/GripperKinematics.h"
 #include "robotics/models/hanwha/Hcr12a.h"
+#include "robotics/planning/LinearPathPlanner.h"
+#include "robotics/planning/PlanningPolicy.h"
 
 #include "simulation/robotics/RobotTransformAdapter.h"
 #include "simulation/robotics/GripperTransformAdapter.h"
@@ -211,18 +213,32 @@ void RobotEnvironmentCollisionGuard::CaptureSafeJointPose()
 
 void RobotEnvironmentCollisionGuard::RestoreSafePoseIfOverlapping()
 {
-    if (m_RobotController.GetStateView().mode != grasplink::robotics::RobotMode::Moving)
+    const auto& currentJoints = m_RobotController.GetStateView().jointPositionRadians;
+    if (m_RobotController.GetStateView().mode != grasplink::robotics::RobotMode::Moving &&
+        currentJoints == m_SafeJointPositions)
         return;
 
-    grasplink::robotics::ErrorCode collisionReason = grasplink::robotics::ErrorCode::EnvironmentContact;
-    if (!RobotAssemblyOverlapsEnvironment())
+    auto validityChecker = [this](const grasplink::robotics::JointVector& joints)
     {
-        if (!RobotAssemblyHasSelfCollision())
-            return;
-        collisionReason = grasplink::robotics::ErrorCode::SelfCollision;
+        return ValidateCandidatePose(joints);
+    };
+    auto validationPolicy = grasplink::robotics::planning::kDefaultPlanningPolicy;
+    validationPolicy.jointCollisionSampleSpacingRadians = 0.002;
+    const auto pathInvalidity = grasplink::robotics::planning::ValidateJointPath(
+        m_SafeJointPositions, currentJoints, m_RobotController.GetSpecification(),
+        validityChecker, validationPolicy);
+    if (pathInvalidity == grasplink::robotics::planning::JointStateInvalidity::None)
+    {
+        CaptureSafeJointPose();
+        return;
     }
 
-    // Jolt 접촉 callback은 Kinematic 로봇 부품과 Static 바닥의 겹침을 항상 알리지 않으므로 물리 계산 전에 직전 안전 자세를 복원한다.
+    const auto collisionReason = pathInvalidity ==
+        grasplink::robotics::planning::JointStateInvalidity::SelfCollision
+        ? grasplink::robotics::ErrorCode::SelfCollision
+        : grasplink::robotics::ErrorCode::EnvironmentContact;
+
+    // 각 고정 tick의 끝 자세뿐 아니라 직전 안전 자세부터 이번 자세까지도 검사한다. 중간 표본 하나라도 충돌하면 물리 계산 전에 되돌린다.
     if (!m_RobotController.RestoreCollisionSafeState(m_SafeJointPositions, collisionReason))
         return;
 

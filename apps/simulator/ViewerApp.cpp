@@ -50,6 +50,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <limits>
 #include <sstream>
@@ -84,6 +85,53 @@ using grasplink::scene::TransformSystemModule;
 
 namespace
 {
+
+std::string JsonEscape(const std::string& value)
+{
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (const unsigned char character : value)
+    {
+        switch (character)
+        {
+        case '"': escaped += "\\\""; break;
+        case '\\': escaped += "\\\\"; break;
+        case '\n': escaped += "\\n"; break;
+        case '\r': escaped += "\\r"; break;
+        case '\t': escaped += "\\t"; break;
+        default:
+            if (character < 0x20)
+                escaped += '?';
+            else
+                escaped += static_cast<char>(character);
+            break;
+        }
+    }
+    return escaped;
+}
+
+void WriteScenarioPoseJson(std::ostream& output, const char* name,
+    const grasplink::robotics::CartesianPose& pose)
+{
+    output << '"' << name << "\":{\"position_m\":["
+        << pose.positionMeters[0] << ',' << pose.positionMeters[1] << ',' << pose.positionMeters[2]
+        << "],\"orientation_xyzw\":["
+        << pose.orientationXyzw[0] << ',' << pose.orientationXyzw[1] << ','
+        << pose.orientationXyzw[2] << ',' << pose.orientationXyzw[3] << "]}";
+}
+
+void WriteJointVectorJson(std::ostream& output, const char* name,
+    const grasplink::robotics::JointVector& joints)
+{
+    output << '"' << name << "\":[";
+    for (std::size_t index = 0; index < joints.size(); ++index)
+    {
+        if (index != 0)
+            output << ',';
+        output << joints[index];
+    }
+    output << ']';
+}
 
 // Viewer 창은 시작할 때 이 픽셀 크기로 요청한다. 실제 렌더 대상 크기는 DPI 배율에 따라 framebuffer에서 다시 읽는다.
 constexpr int kWindowWidth = 1280;
@@ -540,6 +588,17 @@ int ViewerApp::RunPickPlaceStress()
     std::size_t successes = 0;
     std::size_t failures = 0;
     std::size_t timeouts = 0;
+    std::ofstream failureLog;
+    if (!m_Options.pickPlaceFailureLogPath.empty())
+    {
+        failureLog.open(m_Options.pickPlaceFailureLogPath, std::ios::out | std::ios::app);
+        if (!failureLog)
+        {
+            std::cerr << "PickPlaceStress: could not open failure log: "
+                << m_Options.pickPlaceFailureLogPath << '\n';
+            return 2;
+        }
+    }
     const auto totalStart = Clock::now();
 
     const auto beginMission = [this]()
@@ -568,6 +627,7 @@ int ViewerApp::RunPickPlaceStress()
     for (std::size_t attempt = 0; attempt < m_Options.pickPlaceStressRuns; ++attempt)
     {
         const auto attemptStart = Clock::now();
+        const auto startJoints = m_RobotController->GetStateView().jointPositionRadians;
         const auto boxStart = ToRobotBasePose(m_RobotRoot, m_GraspBox.GetWorldMatrix(), 0.0F);
         const auto goalStart = ToRobotBasePose(m_RobotRoot, m_PlacementArea.GetWorldMatrix(),
             grasplink::application::pick_place::config::boxSideMeters * 0.5F);
@@ -618,6 +678,28 @@ int ViewerApp::RunPickPlaceStress()
                 << ',' << goalStart.orientationXyzw[2] << ',' << goalStart.orientationXyzw[3] << ')'
                 << " error=\"" << mission.lastMessage << '\"'
                 << " elapsed_ms=" << std::fixed << std::setprecision(1) << elapsedMilliseconds << std::endl;
+            if (failureLog)
+            {
+                failureLog << std::setprecision(std::numeric_limits<double>::max_digits10)
+                    << "{\"seed\":" << m_Options.pickPlaceStressSeed
+                    << ",\"attempt\":" << (attempt + 1)
+                    << ",\"result\":\"" << (iterations == maxIterationsPerScenario ? "timeout" : "failed") << '\"'
+                    << ",\"iterations\":" << iterations << ',';
+                WriteScenarioPoseJson(failureLog, "box", boxStart);
+                failureLog << ',';
+                WriteScenarioPoseJson(failureLog, "goal", goalStart);
+                failureLog << ',';
+                WriteJointVectorJson(failureLog, "start_joints_rad", startJoints);
+                failureLog << ",\"message\":\"" << JsonEscape(mission.lastMessage)
+                    << "\",\"elapsed_ms\":" << elapsedMilliseconds << "}\n";
+                failureLog.flush();
+                if (!failureLog)
+                {
+                    std::cerr << "PickPlaceStress: failed to save scenario " << (attempt + 1)
+                        << " to " << m_Options.pickPlaceFailureLogPath << '\n';
+                    return 2;
+                }
+            }
         }
 
         if (attempt + 1 < m_Options.pickPlaceStressRuns && !completed && !ResetStressEpisode())

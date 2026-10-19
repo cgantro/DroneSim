@@ -34,9 +34,18 @@ int main(int argc, char** argv)
                     return 2;
                 }
             }
+            else if (argument == "--failure-log" && i + 1 < argc)
+            {
+                options.pickPlaceFailureLogPath = argv[++i];
+                if (options.pickPlaceFailureLogPath.empty())
+                {
+                    std::cerr << "--failure-log requires a file path\n";
+                    return 2;
+                }
+            }
             else if (argument == "--help")
             {
-                std::cout << "Usage: grasplink_simulator [--smoke-test] [--pick-place-stress COUNT] [--seed UINT32]\n";
+                std::cout << "Usage: grasplink_simulator [--smoke-test] [--pick-place-stress COUNT] [--seed UINT32] [--failure-log PATH]\n";
                 return 0;
             }
             else

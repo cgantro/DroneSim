@@ -1,37 +1,19 @@
-# Fixed 4 ms simulation tick: execution map and deadline validation
+# 시뮬레이터는 4ms 간격으로 계산하지만, 매 4ms 실행을 보장하지는 않는다
 
-**Status:** the simulator uses a **4 ms simulation time step**, not a guaranteed real-time 250 Hz scheduler.
+시뮬레이터는 로봇과 물리를 계산할 때 4ms를 한 단위로 사용한다. 초당 250번 계산하는 셈이지만, 운영체제가 실제로 4ms마다 프로그램을 깨워 준다는 뜻은 아니다. 화면이 늦게 그려지면 한 프레임에 여러 번 계산하거나, 계산할 tick이 없을 수도 있다. 화면 갱신 중에는 계획을 조금씩 계산하느라 제어와 물리 계산을 잠시 멈추기도 한다.
 
-## Current execution path
+## 한 번의 물리 계산에서 하는 일
 
-`ViewerApp::MainLoopFrame` is called by the desktop frame loop or Emscripten browser callback. When planning is active it calls `AdvancePlanningBudget` (nominal per-frame deadline 1.5 ms) and **does not advance the control loop**. Otherwise it calls `FixedControlLoop::Advance(frameDeltaSeconds, callback)`. That accumulator can execute zero or multiple 4 ms ticks per render frame. It drops accumulated time beyond 100 ms per frame; there is no 4 ms OS timer or guaranteed wall-clock period.
+먼저 그리퍼가 놓기 요청을 처리하고, 로봇의 직전 안전 관절 자세를 기록한다. 로봇과 그리퍼 제어기를 한 tick만큼 진행한 다음, 관절각으로 화면 모델과 충돌 검사 형상의 위치를 다시 계산한다.
 
-`ViewerApp::AdvanceSimulationTick(0.004)` does, in order:
+그 뒤 이번 자세와 직전 자세 사이를 관절각 기준 최대 0.002rad 간격으로 나눠 환경 및 로봇 자체와 부딪히는지 확인한다. 충돌하면 안전 자세로 되돌린다. 충돌이 없으면 Jolt가 물리 계산을 진행하고, 상자 같은 물체의 결과를 장면에 반영한다. 마지막으로 그리퍼 접촉을 확인해 물체를 잡거나 놓는다. 중간 자세를 촘촘히 검사하지만 수학적으로 모든 순간을 검사하는 연속 충돌 검사는 아니다.
 
-1. Grasp adapter `BeforePhysicsStep`: check release and body/constraint validity.
-2. Collision guard `CaptureSafeJointPose`: save last accepted robot joint positions.
-3. `RobotUpdate` zone: robot controller `Update`, gripper controller `Update`, then `ApplyControllerPoses` (FK, robot visual and physics adapter, gripper mimic and transform).
-4. `TransformSystemModule::UpdateWorldTransforms`: recompute Local→World hierarchy.
-5. `RestoreSafePoseIfOverlapping`: Jolt-backed environment and self-collision checks, restore safe joints if overlapping.
-6. `PhysicsStep` zone / `PhysicsSystemModule::Step`:
-   - PrePhysicsSync: deferred collider-body recreation, Static/Kinematic scene-to-Jolt sync.
-   - `PhysicsWorld::Step`: Jolt solver and parallel worker jobs where enabled.
-   - PostPhysicsSync: write Dynamic Jolt pose to Scene Local.
-7. Grasp adapter `AfterPhysicsStep`: contacts, finger stop, grasp constraint.
-8. Recompute World transforms for rendering.
+임무 진행, 카메라, 입력, 화면 그리기와 GUI 갱신은 이 고정 간격 계산 바깥에서 이뤄진다. 따라서 임무 전체가 고정 tick 안에서만 움직이는 구조는 아니다.
 
-Outside the fixed tick, the frame loop updates mission logic, cameras, input, world transforms, OpenGL and ImGui. The mission is **not fully a fixed-tick system**.
+## 실제 실행 속도를 확인하려면
 
-## What must be measured
+4ms가 설정돼 있다는 사실만으로 실제 실행이 초당 250번 이뤄졌다고 결론 내릴 수 없다. 이를 확인하려면 tick 하나에 걸린 시간, 연속 tick 사이의 실제 시간, 한 프레임에 처리한 tick 수, 밀린 시간을 버렸는지, 경로 계획 중 멈춘 시간을 함께 기록해야 한다. 평균만 보면 오래 걸린 일부 tick을 놓칠 수 있으므로 중앙값과 상위 지연 구간, 최댓값도 살펴야 한다.
 
-1. **Tick work duration:** monotonic start/end of `AdvanceSimulationTick`, including all eight steps, p50/p95/p99/max and count above **4.000 ms**. This detects execution-budget misses, not periodic timing guarantees.
-2. **Wall-clock tick start interval:** adjacent tick start timestamps and actual wall/simulation-time ratios. Consecutive catch-up ticks can start less than 4 ms apart despite a nominal 4 ms simulation step.
-3. **Frame and accumulator:** frame delta, ticks executed per frame, dropped/clamped time, maximum accumulator depth, and all periods with `IsMotionPlanning` true. Report simulation pauses separately.
-4. **Stage breakdown:** Tracy `Frame`, `FixedTick`, `RobotUpdate`, `CollisionCheck`, `SelfCollisionCheck`, `PhysicsStep` and `Render`, plus finer segments for grasp and ECS↔Jolt sync if needed.
-5. **Scenario and platform:** Release native build with Tracy capture; desktop idle, MoveJ, MoveL, Pick-and-Place, 10–100 Dynamic objects, and load-induced frame drops. Repeat with browser Pthreads and use browser timing/profiling, since Tracy is disabled for Emscripten by CMake.
+화면을 그리지 않는 빠른 반복 측정은 한 tick의 계산량을 비교하는 데 도움이 된다. 다만 실제 운영체제에서 정해진 간격으로 깨어난다는 증거는 아니다. Tracy의 구간별 시간도 어느 계산이 오래 걸리는지는 보여 주지만, 매 4ms 안에 끝났다는 보장은 해 주지 않는다.
 
-Useful ratios: `budget_miss_ratio = ticks_where_duration_gt_4ms / observed_ticks`, `sim_speed = advanced_simulated_seconds / elapsed_wall_seconds`, `planning_pause_seconds`, and `max_consecutive_budget_misses`.
-
-A Tracy screenshot can demonstrate how much CPU time was spent in each measured zone, but cannot by itself prove a hard real-time guarantee or that every 4 ms period was met. A deterministic headless step benchmark proves throughput, not wall-clock periodicity.
-
-**Evidence policy:** do not write “250 Hz guaranteed” in the portfolio without a separately scheduled control loop, deadline instrumentation, and representative long-running measurements.
+실시간 실행을 주장하려면 제어 루프를 화면 갱신과 분리하고, 실제 장시간 실행에서 주기와 지연을 측정해야 한다. 현재 4ms는 시뮬레이션 계산 간격이지, 장비 제어 주기의 보증이 아니다.

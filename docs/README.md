@@ -12,6 +12,7 @@
 | 그리퍼의 상태와 접촉 동작 | [그리퍼 런타임 설계](GRIPPER_RUNTIME_DESIGN.md) | [HCR-12A와 2F-85 사양](HCR12A_2F85_simulation_specs.md) |
 | GLB 모델 좌표를 맞춘 기준 | [GLB 정규화](HCR12A_GLB_NORMALIZATION.md) | [모델 데이터 출처](MODEL_DATA_PROVENANCE.md) |
 | 로그와 성능 측정 결과를 읽는 법 | [진단 도구](DIAGNOSTICS.md) | [픽앤플레이스 반복 검증](PICK_PLACE_STRESS.md) |
+| 시뮬레이션 간격과 실제 실행 주기의 차이 | [4ms 고정 간격 설명](FIXED_TICK_VALIDATION.md) | [진단 도구](DIAGNOSTICS.md) |
 | 자가 충돌 검사 범위 | [자가 충돌 검사](SELF_COLLISION.md) | [Physics와 Flecs 연결](PHYSICS_ECS_INTEGRATION.md) |
 
 ## 문서를 읽을 때 참고할 점

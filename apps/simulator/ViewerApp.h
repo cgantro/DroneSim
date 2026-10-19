@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <chrono>
 #include <memory>
+#include <string>
 
 namespace grasplink::graphics
 {
@@ -87,6 +88,7 @@ struct ViewerOptions
     bool smokeTest = false;
     std::size_t pickPlaceStressRuns = 0;
     std::uint32_t pickPlaceStressSeed = 1;
+    std::string pickPlaceFailureLogPath = "pick_place_failures.jsonl";
 };
 
 /**
