@@ -1,0 +1,8 @@
+﻿Warning: Uniform u_BaseColorFactor'doesn't exist
+Warning: Uniform u_MetallicFactor'doesn't exist
+Warning: Uniform u_RoughnessFactor'doesn't exist
+Warning: Uniform u_UseBaseColorTexture'doesn't exist
+Warning: Uniform u_CameraPosition'doesn't exist
+Warning: Uniform u_LightDirection'doesn't exist
+FixedTickProfile {"ticks":10000,"fixed_dt_ms":4.0000,"duration_ms_nearest_rank":{"p50":0.7435,"p95":0.7980,"p99":0.8825,"max":1.7962},"budget_misses_over_4ms":0,"budget_miss_ratio":0.0000,"tick_start_interval_ms_diagnostic":{"samples":9999,"p50":3.9030,"p95":4.7219,"p99":4.9726,"max":11.2802},"elapsed_seconds":39.9167,"simulated_seconds":40.0000,"simulation_speed":1.0021,"planning_pause_seconds_frame_sampled":0.0000,"planning_pause_frames":0,"frame_count":35236,"frame_delta_ms":{"p50":0.9858,"p95":1.8406,"max":82.0183},"ticks_per_frame_max":21,"dropped_frame_time_seconds":0.0000,"max_accumulator_ms":3.9998,"timed_out":false}
+

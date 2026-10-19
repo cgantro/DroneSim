@@ -262,9 +262,6 @@ void SimRobotController::Disconnect() noexcept
     state_.valid = false;
     state_.tcpPoseValid = false;
     linearPath_.clear();
-    poseContinuationCommand_.reset();
-    poseContinuationPlan_.reset();
-    poseCandidateJoints_.clear();
     std::fill(
         state_.jointVelocityRadiansPerSecond.begin(),
         state_.jointVelocityRadiansPerSecond.end(),

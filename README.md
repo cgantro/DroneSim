@@ -41,4 +41,4 @@ cmake --build --preset emscripten-single-thread
 
 ## 문서
 
-[문서 안내](docs/README.md) · [아키텍처](docs/ARCHITECTURE.md) · [Controller 인터페이스](docs/CONTROLLER_INTERFACE.md) · [이동과 파지](docs/ROBOT_MOTION_AND_GRASP.md) · [Physics와 Flecs](docs/PHYSICS_ECS_INTEGRATION.md)
+[아키텍처](docs/ARCHITECTURE.md) · [요구사항 상태](docs/REQUIREMENTS.md) · [성능 측정](docs/PERFORMANCE.md) · [Controller 인터페이스](docs/CONTROLLER_INTERFACE.md) · [이동과 파지](docs/ROBOT_MOTION_AND_GRASP.md) · [Physics와 Flecs](docs/PHYSICS_ECS_INTEGRATION.md) · [전체 문서 안내](docs/README.md)
