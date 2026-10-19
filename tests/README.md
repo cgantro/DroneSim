@@ -1,26 +1,10 @@
-# Test suites by module
+# 테스트 안내
 
-The original regression tests have been **moved without deleting assertions**. Test files are grouped by subsystem instead of being kept in one flat directory.
+테스트는 기능별 폴더에 모아 두었다. 로봇 수치와 이동은 `robotics`, 물리 연동은 `integration`, 전체 창 실행은 `ViewerSmoke`를 확인한다.
 
-| Directory | Scope | CTest label |
-| --- | --- | --- |
-| `tests/robotics/` | controllers, FK/IK, motion, path planners | `robotics` |
-| `tests/physics/` | standalone Jolt world | `physics` |
-| `tests/scene/` | transforms and quaternions | `scene` |
-| `tests/model/` | GLB parsing | `model` |
-| `tests/application/` | pick-and-place mission and scenario sampling | `application` |
-| `tests/integration/` | ECS–Jolt, robot / gripper / collision adapters | `integration` |
-| `tests/viewer/` | graphics resources | `viewer` |
-| `tests/gui/` | GUI composition | `gui` |
-| `tests/TestSupport.h` | shared integration fixtures | (shared) |
+```powershell
+ctest --test-dir build-ninja-debug -L robotics --output-on-failure
+ctest --test-dir build-ninja-debug -L integration --output-on-failure
+```
 
-Run focused regressions with `ctest --test-dir build-ninja-debug -L robotics --output-on-failure` or `ctest --test-dir build-ninja-debug -L integration --output-on-failure`.
-
-The `e2e` label contains the native Viewer smoke check. The `benchmark` label is **not a deadline test**: it verifies benchmark execution and numerical invariants.
-
-## Testing policy
-
-- Keep tests for **contracts and failures that matter**: FK/IK correctness, joint limits, collision rejection, ECS↔Jolt authority and lifetime, grasp/release, MoveJ/MoveL acceptance, and end-to-end pick-and-place.
-- Merge redundant setup into small fixtures and parameterized tests. Do **not** remove meaningful safety regression coverage to reduce the test count.
-- A deterministic algorithm unit test does not prove runtime responsiveness. Keep profiling, stress, and UI/browser integration tests distinct.
-- Test source relocation is structural only; compile/CTest must be re-run before merging this branch.
+특정 테스트 하나만 실행하려면 끝에 `-R "테스트 이름"`을 붙인다. 이 테스트들은 주요 동작을 확인하는 표본이며 모든 자세나 충돌 상황을 보장하지 않는다.

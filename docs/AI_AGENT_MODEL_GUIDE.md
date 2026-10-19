@@ -1,4 +1,4 @@
-# AI Agent Model Guide
+# Codex 모델 선택 안내
 
 ## 기본 원칙
 

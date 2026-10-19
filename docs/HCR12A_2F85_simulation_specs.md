@@ -19,7 +19,7 @@
 
 ---
 
-## 2. Hanwha HCR-12A 기본 규격 — 제조사 자료
+## 2. 한화 HCR-12A 기본 규격 — 제조사 자료
 
 | 항목 | 값 |
 |---|---:|
@@ -139,7 +139,7 @@ rPR != rad
 
 ---
 
-## 6. 2F-85 자유 공간 기구학 참조 모델
+## 6. 2F-85 자유 공간 기구학 참고 모델
 
 현재 프로젝트는 공개 2F-85 kinematic model의 master/mimic 개념을 자유 공간 자세 기준으로 사용한다.
 
@@ -285,7 +285,7 @@ Hardware Gripper backend
 Watchdog / E-Stop state / Zero Offset
 ```
 
-현재 그리퍼는 자유 공간 개폐, 물리 접촉에 따른 닫힘 정지, 같은 물체의 반대 면에 닿은 양쪽 손끝을 이용한 fixed constraint 파지를 지원한다. 이 constraint는 물체와 그리퍼 사이의 상대 자세를 유지하는 시뮬레이션 연결이며, 손끝 힘이나 마찰로 유지되는 실제 파지력을 계산하지 않는다. 실제 힘·전류 feedback, 마찰 기반 파지 안정성, 접촉 뒤 개별 손가락 적응과 Hardware backend는 구현되지 않았다. DLS IK와 TCP 자세·직선 이동 원리는 [로봇 이동과 파지](ROBOT_MOTION_AND_GRASP.md)를 참고한다.
+현재 그리퍼는 자유롭게 열고 닫을 수 있고, 물리 접촉에서 닫힘을 멈춘다. 양쪽 손끝이 같은 물체에 닿으면 constraint로 연결한다. 이 기능은 시뮬레이션에서 상대 자세를 유지하는 연결이며 실제 힘이나 마찰을 계산하지 않는다. 실제 힘·전류 feedback, 접촉 뒤 손가락별 적응과 Hardware backend는 구현하지 않았다. DLS IK와 TCP 이동은 [프로젝트 안내](ARCHITECTURE.md)를 참고한다.
 
 ---
 
@@ -311,7 +311,7 @@ GLB 관절 Local 회전 → World 변환 → 기존 7개 Kinematic proxy
 
 raw 위치에서 fraction으로의 선형 매핑은 자유공간 시뮬레이션 가정이며 실제 장치 보정식이 아니다. 연속 fraction을 관절 계산에 사용하고 raw actual position은 표시용 반올림만 한다. 기본 master 각속도 0.1..1.0 rad/s와 raw speed의 선형 대응도 프로젝트 설정이며 제조사 finger speed 사양을 환산한 값이 아니다. raw speed 0도 최소 양의 속도로 움직인다. 실제 장비 정밀 대응이 필요하면 LUT 또는 측정 기반 calibration을 검토한다.
 
-4 ms마다 두 Controller 갱신 → 팔·그리퍼 자세 적용 → World 변환 갱신 → Jolt step → World 변환 재갱신 순서로 진행한다. Stop은 현재 위치·요청 echo를 유지하고 `Stopped`로 전환하며 Reset은 현재 위치를 유지한 채 비활성화한다. GUI는 인터페이스에 요청을 보내고 상태를 표시한다. 자세한 계약은 [그리퍼 런타임 설계](GRIPPER_RUNTIME_DESIGN.md)에 정리한다.
+4 ms마다 두 Controller를 갱신하고 팔·그리퍼 자세와 World 변환을 반영한 뒤 Jolt를 실행한다. 그 후 World 변환을 다시 계산한다. Stop은 현재 위치와 요청 내용을 보존하고 `Stopped`로 바꾼다. Reset은 현재 위치를 유지하면서 제어를 비활성화한다. GUI는 요청을 보내고 상태를 표시한다.
 
 물리 모터와 힘·마찰 계산으로 개별 손가락을 적응시키는 후속 흐름이다. 현재는 양쪽 접촉 후 고정 constraint로 물체를 유지한다.
 
@@ -354,11 +354,9 @@ Controller architecture:
 
 ```text
 docs/ARCHITECTURE.md
-docs/CONTROLLER_INTERFACE.md
-docs/GRIPPER_RUNTIME_DESIGN.md
 ```
 
-## 13. 현재 Physics 구현 상태
+## 13. 현재 물리 기능 구현 상태
 
 HCR-12A GLB의 link geometry에서 만든 Convex Hull은 별도 Kinematic proxy Entity에 연결한다. Simulation adapter는 이 Entity들의 Local 자세를 World 자세로 바꾸어 Jolt에 전달하며, Robot Base에는 고정 Environment collider를, Link1~Link6에는 Kinematic collider를 둔다. Gripper collider는 별도 구성기에서 만든다.
 
@@ -374,4 +372,4 @@ Convex Hull은 원본 메시 형상의 근사이므로 얇거나 작은 부분�
 
 2F-85의 `IGripperController` contract, model specification, 자유공간 Simulation controller·기구학·GLB adapter, 메시 기반 collider proxy와 접촉 파지 adapter가 현재 구성되어 있다. force 요청은 raw 범위만 검사하며 전류와 실제 힘은 계산하지 않는다. `0.7929 rad`는 자유공간 linkage의 nominal master angle이며 실제 motor shaft angle이나 접촉 후 손가락 자세를 뜻하지 않는다.
 
-Physics/Flecs 설정, ownership, fixed-step 및 좌표 변환은 [`PHYSICS_ECS_INTEGRATION.md`](PHYSICS_ECS_INTEGRATION.md)에 정리한다.
+물리 계산 순서와 좌표 기준은 [프로젝트 안내](ARCHITECTURE.md)에 간단히 정리했다.

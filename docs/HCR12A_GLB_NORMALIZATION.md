@@ -51,7 +51,7 @@ CAD 내부의 Housing/Cover/Bolt 같은 상세 assembly hierarchy는 런타임 �
 
 ---
 
-## 3. HCR J1~J6 pivot과 회전축
+## 3. HCR J1~J6 회전 중심과 축
 
 Pivot은 mesh 중심이 아니다. STEP assembly에서 서로 맞물리는 원통형 체결 feature의 중심을 양쪽 부품에서 대조해 얻은 기계 회전 중심이다.
 원본 mm 좌표를 runtime에서 meter로 사용한다.
@@ -71,7 +71,7 @@ ToolFrame bind world position은 `(0, 1.0150, 0.9145)` m다.
 
 ---
 
-## 4. 움직이는 Joint의 bind rotation을 identity로 둔 이유
+## 4. 움직이는 관절의 초기 회전을 항등으로 두는 이유
 
 이전 중간 모델에서는 물리축을 모두 local Z처럼 다루기 위해 J1/J2/J3/J5 등에 약 ±90° bind quaternion을 넣는 방식도 사용했다.
 그 방식은 시각적으로는 맞을 수 있지만 런타임에서 다음 두 종류 회전을 동시에 이해해야 한다.
@@ -191,7 +191,7 @@ Right : 12,952 -> 12,952
 
 ---
 
-## 8. 그리퍼 animation 제거
+## 8. 그리퍼 애니메이션 제거
 
 검증 단계에서는 `Open -> Close -> Open` animation을 넣어 linkage가 실제로 접히는지 확인했지만, 현재 runtime 자산에서는 제거했다.
 
@@ -272,7 +272,7 @@ Renderer
 
 Pivot translation은 GLB hierarchy에 이미 들어 있다. `RobotTransformAdapter`가 다시 더하지 않고, `RobotKinematics`가 동일한 bind pivot을 사용해 base-frame LinkPose를 계산한다.
 
-glTF `[x,y,z,w]`는 로더에서 GLM 생성자 `(w,x,y,z)`로 옮긴다. `NodeData`·Entity는 quaternion을 보관하고 행렬 합성 전에 검증·정규화한다. 영 quaternion·NaN 등 비유한 입력은 거부하며 Euler로 왕복 변환하지 않는다. 자세 저장과 행렬은 float, 관절각은 rad 스칼라를 유지한다. 현재 계약은 [Architecture](ARCHITECTURE.md)와 [그리퍼 런타임 설계](GRIPPER_RUNTIME_DESIGN.md)를 참고한다.
+glTF `[x,y,z,w]`는 로더에서 GLM 생성자 `(w,x,y,z)`로 옮긴다. `NodeData`·Entity는 quaternion을 보관하고 행렬 합성 전에 검증·정규화한다. 영 quaternion·NaN 등 비유한 입력은 거부하며 Euler로 왕복 변환하지 않는다. 자세 저장과 행렬은 float, 관절각은 rad 스칼라를 유지한다. 화면과 물리 계산 흐름은 [프로젝트 안내](ARCHITECTURE.md)를 참고한다.
 
 ---
 

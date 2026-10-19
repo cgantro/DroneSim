@@ -58,7 +58,7 @@ rad   = deg * pi / 180
 rad/s = deg/s * pi / 180
 ```
 
-### J1~J6 pivot — CAD 기반
+### J1~J6 회전 중심 — CAD 기반
 
 Pivot은 mesh bounding-box 중심이나 임의의 회전점이 아니다.
 HCR-12A STEP assembly에서 서로 맞물리는 원통형 체결 feature의 중심을 양쪽 부품에서 대조해 결정했다.
@@ -75,7 +75,7 @@ HCR-12A STEP assembly에서 서로 맞물리는 원통형 체결 feature의 중�
 
 ToolFrame bind 위치는 `(0, 1.0150, 0.9145)` m다.
 
-### Controller에서 쓰는 축 — CAD 및 자산 기반
+### 제어기에 쓰는 축 — CAD 및 자산 기반
 
 물리 회전축 방향은 CAD에서 확인했지만, 코드의 `axis`는 현재 controller-ready GLB의 Joint local frame에서 사용하는 단위축이다.
 현재 GLB는 J1~J6 moving node의 bind rotation을 identity로 만들었으므로 physical axis와 runtime local axis가 직접 일치한다.
@@ -131,7 +131,7 @@ rFR  force request     0..255
 `masterMultiplier = ±1`도 하나의 actuator command에서 좌우 knuckle/fingertip을 연동하기 위한 free-space mimic 관계다.
 물체 접촉 이후 실제 2F-85의 under-actuated adaptive motion까지 고정 mimic으로 표현하는 값은 아니다.
 
-### pivot, local -Z, joint plane — 자산 기반
+### 회전 중심, Local -Z 축, 관절면 — 자산 기반
 
 다음 값은 현재 `assets/HCR12A_2F-85.glb`에 맞춘 프로젝트 좌표다.
 
@@ -158,7 +158,7 @@ Asset이 바뀌면 다시 검증해야 한다.
 
 ## 런타임 변환 흐름
 
-아래 흐름의 상수는 위에 연결한 model specification header에 있고, Controller 및 adapter 책임은 [Controller Interface](CONTROLLER_INTERFACE.md), [Architecture](ARCHITECTURE.md), [Physics / Flecs Integration](PHYSICS_ECS_INTEGRATION.md)에서 나눠 설명한다.
+아래 흐름의 상수는 로봇 모델 헤더에 정의되어 있다. 코드가 자세를 화면과 물리에 적용하는 순서는 [프로젝트 안내](ARCHITECTURE.md)에 정리했다.
 
 HCR-12A:
 
@@ -195,7 +195,7 @@ authored GLB 관절 -> World 변환 -> 기존 Kinematic proxies
 
 raw 위치를 fraction으로 선형 대응하는 식과 `SimGripperMotionSettings` 기본 master 속도 0.1..1.0 rad/s는 프로젝트의 시뮬레이션 가정이다. 제조사 위치 보정식이나 위 제조사 finger speed를 환산한 값이 아니다. raw speed 0..255를 이 각속도 범위에 선형 대응하며 raw 0도 양의 최소 속도다. `actualPosition`은 연속 위치의 표시용 반올림이며 관절 계산에 재입력하지 않는다.
 
-4 ms 고정 갱신과 상태 계약은 [그리퍼 런타임 설계](GRIPPER_RUNTIME_DESIGN.md)를 참고한다. 현재는 물리 접촉 뒤 개폐 정지와 양쪽 손끝 접촉에 따른 고정 constraint 파지를 제공한다. force는 범위만 검사하며 전류·실제 힘·개별 손가락 적응은 계산하지 않는다. Viewer TCP는 열린 손끝 메시의 중심 사이에서 계산한 시뮬레이션 기준이며 제조사 보정값이 아니다. [로봇 이동과 파지](ROBOT_MOTION_AND_GRASP.md)에 상세 계산 원리가 있다.
+4 ms 고정 갱신과 DLS IK 설명은 [프로젝트 안내](ARCHITECTURE.md)에서 읽을 수 있다. 현재 그리퍼는 물리 접촉 뒤 닫힘을 멈추고, 양쪽 손끝이 같은 물체에 닿으면 고정 constraint로 연결한다. force는 범위만 검사하며 전류·실제 힘·개별 손가락 적응은 계산하지 않는다. Viewer TCP는 열린 손끝 메시의 중심으로 정한 시뮬레이션 기준이며 제조사 보정값이 아니다.
 
 ## 작성 규칙
 
