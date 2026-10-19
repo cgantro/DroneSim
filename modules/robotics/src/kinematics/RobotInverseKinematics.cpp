@@ -322,8 +322,8 @@ IkSessionState DampedLeastSquaresIk::StepSingleSeed(SessionId session, std::size
 
         for (auto& column : columns)
             column.fill(0.0);
-    // Jacobian은 관절을 조금 돌렸을 때 TCP의 위치와 방향이 얼마나 바뀌는지 적은 표다.
-    // 관절마다 표의 열 하나를 만들므로 관절 수가 달라도 같은 계산을 쓴다. TCP offset도 계산에 포함한다.
+        // 야코비안은 관절을 조금 돌렸을 때 공구 끝(TCP)이 얼마나 움직이는지 나타내는 표다.
+        // 관절마다 열 하나를 만들기 때문에 관절 수가 달라도 같은 계산을 쓸 수 있다. TCP와 공구 장착점의 차이도 반영한다.
         for (std::size_t i = 0; i < columns.size(); ++i)
         {
             const Vec3 axis = state.jointAxesInBaseFrame[i];
@@ -436,8 +436,8 @@ IkSessionState DampedLeastSquaresIk::StepSingleSeed(SessionId session, std::size
                 if (next.cost < error.cost)
                 {
                     angles.swap(candidate);
-    // 오차가 줄면 damping을 낮춰 더 잘 따라가고, 오차가 줄지 않으면 damping을 높여 관절 변화가 튀지 않게 한다.
-    // damping을 너무 낮추면 한 번에 움직이는 관절각이 커질 수 있어 별도의 최대 관절 변화량도 적용한다.
+                    // 감쇠값은 한 번에 관절을 얼마나 움직일지 조절한다. 목표 오차가 줄면 낮추고, 줄지 않으면 높인다.
+                    // 감쇠값을 낮추면 관절이 크게 움직일 수 있으므로 한 번의 최대 관절 변화량도 제한한다.
                     sessionDamping_ = std::max(sessionOptions_.damping * kMinimumDampingRatio,
                         sessionDamping_ * kAcceptedStepDampingDecay);
                     double largestAcceptedStep = 0.0;
@@ -546,7 +546,7 @@ IkResult DampedLeastSquaresIk::Solve(
         return candidate.positionErrorMeters +
             options.orientationWeightMetersPerRadian * candidate.orientationErrorRadians;
     };
-    // 첫 시드가 막힌 경우에만 HCR의 어깨·팔꿈치·손목 자세를 반사해 제한된 대체 시드를 검사한다.
+    // 첫 시작 자세에서 해를 찾지 못하면 HCR-12A의 어깨·팔꿈치·손목 각도를 바꾼 몇 가지 시작 자세를 추가로 확인한다.
     for (const auto& alternate : BuildAlternativeIkSeeds(currentSeed, specification_))
     {
         IkResult candidate = SolveSingleSeed(targetInBase, alternate, options);

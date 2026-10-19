@@ -677,7 +677,7 @@ void ViewerApp::Shutdown()
     m_GripperController.reset();
 
     // Scene을 파괴하면 ECS 삭제 observer가 Jolt Body를 제거한다.
-    // Destroy the Scene while physics observers and the Jolt world are alive.
+    // Scene을 지우는 callback이 Jolt 물체를 정리하므로 PhysicsWorld가 살아 있을 때 Scene을 먼저 지운다.
     m_RobotRoot = {};
     m_GraspBox = {};
     m_PlacementArea = {};
