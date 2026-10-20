@@ -381,6 +381,14 @@ TEST(RobotInverseKinematicsTests, ReportsFailureStatusesAndStabilizesNearSingula
     EXPECT_TRUE(std::isinf(jointLimit.weightedJacobianConditionNumber))
         << "rank-deficient task-space Jacobian reports an infinite condition number";
 
+    IkOptions withoutFailureDiagnostics;
+    withoutFailureDiagnostics.collectFailureJacobianDiagnostics = false;
+    const IkResult limitWithoutDiagnostics = limited.Solve(
+        beyondJointLimit, {0.0}, withoutFailureDiagnostics);
+    EXPECT_EQ(limitWithoutDiagnostics.status, IkStatus::JointLimitReached);
+    EXPECT_DOUBLE_EQ(limitWithoutDiagnostics.weightedJacobianMinimumSingularValue, 0.0);
+    EXPECT_DOUBLE_EQ(limitWithoutDiagnostics.weightedJacobianConditionNumber, 0.0);
+
     const IkResult unreachable = limited.Solve(
         CartesianPose{{50.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}}, {0.0});
     EXPECT_EQ(unreachable.status, IkStatus::Unreachable) << "far target is classified as unreachable";

@@ -64,6 +64,8 @@ struct IkOptions
     /// 기본값 Pose는 위치와 방향을 모두 맞춘다. 위치만 요청하려면 PositionOnly를 지정한다.
     IkTaskMode taskMode = IkTaskMode::Pose;
     std::size_t maxIterations = 200;
+    /// 실패한 해의 야코비안 진단값도 계산할지 정한다. 경로 계획처럼 진단값이 필요 없는 계산에서는 false로 할 수 있다.
+    bool collectFailureJacobianDiagnostics = true;
     double positionToleranceMeters = 1e-5;
     double orientationToleranceRadians = 1e-4;
     double damping = 1e-3;
@@ -95,7 +97,7 @@ struct IkOptions
  * 실패 결과의 관절각은 진단용 후보이므로 Controller 목표로 실행하지 않는다.
  * iterations는 수행한 반복 수이며 오차는 Robot base 기준 위치 거리 [m]와 최단 회전각 [rad]다.
  * terminationReason은 관절 제한, 정체, 반복 한도, 수치 오류 중 계산을 끝낸 직접 원인을 나타낸다.
- * weightedJacobianMinimumSingularValue와 weightedJacobianConditionNumber는 실패 시 가중 Jacobian에서 계산하며 위치·방향 scaling에 따라 값이 달라진다.
+ * collectFailureJacobianDiagnostics가 true이면 weightedJacobianMinimumSingularValue와 weightedJacobianConditionNumber를 실패 시 가중 Jacobian에서 계산한다. 값은 위치·방향 scaling에 따라 달라진다.
  * 입력이나 거리 사전검사에서 반환되어 FK 오차를 계산하지 않았다면 두 오차 값은 infinity다.
  */
 struct IkResult

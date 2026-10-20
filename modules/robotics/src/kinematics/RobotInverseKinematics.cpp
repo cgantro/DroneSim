@@ -416,7 +416,8 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         sessionResult_.status = status;
         sessionResult_.message = message;
         sessionResult_.terminationReason = reason;
-        if (status != IkStatus::Success && angles.size() == specification_.jointCount)
+        if (status != IkStatus::Success && sessionOptions_.collectFailureJacobianDiagnostics &&
+            angles.size() == specification_.jointCount)
         {
             const auto& state = forward_.Update(angles);
             const Pose3 current = Compose(state.toolFrameInBaseFrame, tcpInToolFrame_);
