@@ -45,11 +45,13 @@ class RobotEnvironmentCollisionGuard final
 {
 public:
     /**
-     * @brief 그리퍼 충돌 검사가 사용할 세 참조를 한 묶음으로 제공한다.
-     * @details 그리퍼가 있는 장면에서는 제어기, 운동학 계산기, 변환 어댑터가 모두 필요하다. 참조한 객체의 소유권은 옮기지 않으며 Guard보다 오래 살아야 한다.
+     * @brief 그리퍼 충돌 검사에 필요한 기준 Entity와 계산 객체를 묶는다.
+     * @details `root`는 Scene이 소유하는 그리퍼 기준 Entity다. 나머지 세 객체는 Guard가 빌려 쓰므로 Guard보다 오래 살아야 한다.
      */
     struct GripperSupport
     {
+        /// Scene이 소유하는 그리퍼 기준 Entity다.
+        grasplink::scene::Entity root;
         grasplink::robotics::IGripperController& controller;
         grasplink::robotics::kinematics::GripperKinematics& kinematics;
         GripperTransformAdapter& transformAdapter;
@@ -120,7 +122,6 @@ private:
     std::vector<grasplink::physics::Transform> m_CandidateCollisionTransforms;
     std::vector<grasplink::physics::Transform> m_CandidateSelfCollisionTransforms;
     grasplink::scene::Entity m_RobotRoot;
-    grasplink::scene::Entity m_GripperRoot;
     mutable std::string m_LastSelfCollisionDescription;
     std::optional<EndLinkProxy> m_EndLinkProxy;
     flecs::entity m_BaseEnvironmentEntity;

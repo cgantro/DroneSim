@@ -324,6 +324,7 @@ void CheckLoadedArmPipeline(std::size_t axisCount)
     std::unique_ptr<robotics::kinematics::GripperKinematics> gripperKinematics;
     std::unique_ptr<simulation::robotics::GripperTransformAdapter> gripperTransformAdapter;
     std::optional<simulation::robotics::RobotEnvironmentCollisionGuard::GripperSupport> gripperSupport;
+    Entity gripperRoot;
     Entity gripperBodyProxy;
     if (axisCount == 6)
     {
@@ -334,7 +335,7 @@ void CheckLoadedArmPipeline(std::size_t axisCount)
         gripperKinematics = std::make_unique<robotics::kinematics::GripperKinematics>(
             kCollisionTestGripper);
 
-        Entity gripperRoot = scene.CreateEntity("Gripper");
+        gripperRoot = scene.CreateEntity("TestGripperRoot");
         gripperRoot.SetParent(robotRoot);
         const auto& toolPosition = homeKinematics.toolFrameInBaseFrame.positionMeters;
         gripperRoot.SetLocalPosition(glm::vec3{static_cast<float>(toolPosition.x),
@@ -360,7 +361,7 @@ void CheckLoadedArmPipeline(std::size_t axisCount)
         const auto& gripperState = gripperKinematics->Update(gripperController->GetState());
         gripperTransformAdapter->Apply(gripperState);
         gripperSupport.emplace(simulation::robotics::RobotEnvironmentCollisionGuard::GripperSupport{
-            *gripperController, *gripperKinematics, *gripperTransformAdapter});
+            gripperRoot, *gripperController, *gripperKinematics, *gripperTransformAdapter});
     }
     TransformSystemModule::UpdateWorldTransforms(world);
     physicsSystem.Step(0.004);

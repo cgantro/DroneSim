@@ -346,10 +346,11 @@ bool ViewerApp::InitRobot(const Entity& robotRoot)
 
 bool ViewerApp::InitGripper(const Entity& robotRoot)
 {
+    const Entity gripperRoot = robotRoot.FindChildByNameRecursive("Gripper");
     const char* requiredJoints[] = {
         "LeftOuterKnuckleJoint", "RightOuterKnuckleJoint", "LeftInnerKnuckleJoint",
         "RightInnerKnuckleJoint", "LeftFingerTipJoint", "RightFingerTipJoint"};
-    if (!robotRoot.FindChildByNameRecursive("Gripper"))
+    if (!gripperRoot)
         return true;
     for (const char* name : requiredJoints)
         if (!robotRoot.FindChildByNameRecursive(name))
@@ -368,7 +369,7 @@ bool ViewerApp::InitGripper(const Entity& robotRoot)
     }
     m_GripperKinematics = std::make_unique<grasplink::robotics::kinematics::GripperKinematics>(specification);
     m_GripperTransformAdapter = std::make_unique<grasplink::simulation::robotics::GripperTransformAdapter>(
-        robotRoot.FindChildByNameRecursive("Gripper"), specification);
+        gripperRoot, specification);
 
     // 데모와 smoke test에서는 테스트할 수 있도록 그리퍼를 실제로 닫는다. 일반 Viewer는 열린 기준 자세에서 시작한다.
     if (m_Options.smokeTest)
@@ -436,7 +437,8 @@ void ViewerApp::InitPhysics(const Entity& robotRoot, Entity& floorEntity)
     if (m_GripperController)
     {
         gripperSupport.emplace(grasplink::simulation::robotics::RobotEnvironmentCollisionGuard::GripperSupport{
-            *m_GripperController, *m_GripperKinematics, *m_GripperTransformAdapter});
+            robotRoot.FindChildByNameRecursive("Gripper"), *m_GripperController,
+            *m_GripperKinematics, *m_GripperTransformAdapter});
     }
 
     m_RobotCollisionGuard = std::make_unique<grasplink::simulation::robotics::RobotEnvironmentCollisionGuard>(

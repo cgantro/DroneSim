@@ -57,6 +57,8 @@ struct CollisionGuardMessages final
         "Robot collision proxy link identity is duplicated.";
     inline static constexpr char missingCollisionGeometry[] =
         "로봇 충돌 형상을 확인할 수 없습니다.";
+    inline static constexpr char missingGripperRoot[] =
+        "그리퍼 기준 Entity를 찾을 수 없습니다.";
     inline static constexpr char jointAnglesLabel[] = " at joints [deg]";
     inline static constexpr char missingEndJointTransform[] =
         "로봇 끝 관절의 위치를 찾지 못했습니다.";
@@ -129,7 +131,8 @@ RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
       m_PhysicsSystem(physicsSystem)
 {
     m_RobotRoot = robotRoot;
-    m_GripperRoot = robotRoot.FindChildByNameRecursive("Gripper");
+    if (m_GripperSupport && !m_GripperSupport->root)
+        throw std::invalid_argument(CollisionGuardMessages::missingGripperRoot);
 
     CollectCollisionProxies(robotRoot);
 
@@ -138,7 +141,8 @@ RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
     {
         const glm::mat4 initialEndJointWorld = robotRoot.GetWorldMatrix() *
             PoseMatrix(initialKinematics.linkPosesInBaseFrame.at(m_EndLinkProxy->jointIndex));
-        m_GripperRootInEndLink = glm::inverse(initialEndJointWorld) * m_GripperRoot.GetWorldMatrix();
+        m_GripperRootInEndLink = glm::inverse(initialEndJointWorld) *
+            m_GripperSupport->root.GetWorldMatrix();
     }
     m_CandidateCollisionTransforms.resize(m_CollisionEntities.size());
     m_CandidateSelfCollisionTransforms.resize(m_SelfCollisionProxies.size());
@@ -226,7 +230,6 @@ void RobotEnvironmentCollisionGuard::CollectCollisionProxies(const Entity& robot
     if (baseProxyCount > CollisionGuardLimits::maximumBaseProxyCount ||
         registeredLinkIndices.empty() ||
         (hasGripper && (gripperBodyCount != CollisionGuardLimits::expectedGripperBodyProxyCount ||
-            !m_GripperRoot ||
             !m_EndLinkProxy)) ||
         (!hasGripper && gripperBodyCount != CollisionGuardLimits::noGripperBodyProxyCount))
         throw std::invalid_argument(CollisionGuardMessages::missingCollisionGeometry);
