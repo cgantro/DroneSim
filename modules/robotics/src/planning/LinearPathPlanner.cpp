@@ -859,16 +859,17 @@ struct LinearPathPlanningJob::Impl
         const CartesianPose target = ToCartesian(tcpSamples[sample]);
         const std::size_t sampleNumber = sample + 1;
         const std::size_t sampleCount = tcpSamples.size();
+        Result failure;
         if (invalidity == JointStateInvalidity::EnvironmentCollision)
-            Fail(AddPathSampleContext(
-                {ErrorCode::EnvironmentContact, LinearPathPlannerMessages::noCollisionFreeIkSolution},
-                sampleNumber, sampleCount, *specification, target));
+            failure = {ErrorCode::EnvironmentContact,
+                LinearPathPlannerMessages::noCollisionFreeIkSolution};
         else if (invalidity != JointStateInvalidity::None)
-            Fail(AddPathSampleContext(MapJointStateInvalidity(invalidity), sampleNumber,
-                sampleCount, *specification, target));
+            failure = MapJointStateInvalidity(invalidity);
         else
-            Fail(AddPathSampleContext(MapIkFailure(ikFailure), sampleNumber, sampleCount,
-                *specification, target, &ikFailure));
+            failure = MapIkFailure(ikFailure);
+
+        Fail(AddPathSampleContext(std::move(failure), sampleNumber, sampleCount,
+            *specification, target, invalidity == JointStateInvalidity::None ? &ikFailure : nullptr));
         const std::string& diagnostic = invalidityDiagnostic.empty() ?
             rejectedRefinementDiagnostic : invalidityDiagnostic;
         if (!diagnostic.empty())
