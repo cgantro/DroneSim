@@ -13,13 +13,25 @@ namespace grasplink::scene
 
 namespace
 {
-using WorldTransformCache = std::unordered_map<flecs::entity_t, glm::mat4>;
+struct CachedTransform final
+{
+    glm::mat4 matrix{1.0F};
+    bool worldComputed = false;
+};
+
+struct TransformInput final
+{
+    flecs::entity entity;
+    glm::mat4 localMatrix{1.0F};
+};
+
+using WorldTransformCache = std::unordered_map<flecs::entity_t, CachedTransform>;
 using TransformQuery = flecs::query<const Position, const Rotation, const Scale,
     TransformMatrix, TransformMatrix>;
 
 struct TransformSystemScratch final
 {
-    std::vector<flecs::entity> transformedEntities;
+    std::vector<TransformInput> transformedEntities;
     WorldTransformCache worldTransforms;
     TransformQuery transformQuery;
 };
@@ -30,17 +42,27 @@ glm::mat4 UpdateEntityWorldTransform(flecs::entity entity, WorldTransformCache& 
         return glm::mat4(1.0F);
 
     const flecs::entity_t id = entity.id();
-    if (const auto cached = cache.find(id); cached != cache.end())
-        return cached->second;
-
-    const bool hasTransform = entity.has<Position, Local>() &&
-        entity.has<Rotation, Local>() && entity.has<Scale, Local>();
-    // TRS는 위치, 회전, 크기 입력을 뜻한다. 이름만 있는 grouping 부모는 이 값이 모두 없으므로 위치를 바꾸지 않고, 일부 값만 있는 부모도 불완전한 자세로 처리하지 않는다.
-    const glm::mat4 local = hasTransform ? TransformSystemModule::ComposeLocalMatrix(
-        entity.get<Position, Local>(), entity.get<Rotation, Local>(), entity.get<Scale, Local>())
-        : glm::mat4(1.0F);
-    if (hasTransform)
-        entity.set<TransformMatrix, Local>(TransformMatrix{local});
+    glm::mat4 local{1.0F};
+    const auto cached = cache.find(id);
+    if (cached != cache.end())
+    {
+        if (cached->second.worldComputed)
+            return cached->second.matrix;
+        local = cached->second.matrix;
+    }
+    else
+    {
+        const bool hasTransform = entity.has<Position, Local>() &&
+            entity.has<Rotation, Local>() && entity.has<Scale, Local>();
+        // 이름만 있는 부모는 위치 변환이 없고, TRS 일부만 가진 부모도 불완전한 자세로 취급하지 않는다.
+        if (hasTransform)
+        {
+            local = TransformSystemModule::ComposeLocalMatrix(
+                entity.get<Position, Local>(), entity.get<Rotation, Local>(), entity.get<Scale, Local>());
+            entity.set<TransformMatrix, Local>(TransformMatrix{local});
+        }
+        cache.emplace(id, CachedTransform{local, false});
+    }
 
     // 자식 위치는 부모에서 잰 Local 값이다. 부모의 누적 행렬을 먼저 적용해야 자식 점이 로봇 root 배치까지 포함한 Scene 위치로 옮겨진다.
     const flecs::entity parent = entity.parent();
@@ -50,7 +72,7 @@ glm::mat4 UpdateEntityWorldTransform(flecs::entity entity, WorldTransformCache& 
     const glm::mat4 world = parentWorld * local;
     // 중간 grouping 부모는 자기 위치를 더하지 않지만 조상의 행렬은 자식이 Scene 위치를 얻는 데 필요하므로 그대로 저장한다.
     entity.set<TransformMatrix, World>(TransformMatrix{world});
-    cache.emplace(id, world);
+    cache[id] = {world, true};
     return world;
 }
 }
@@ -92,16 +114,21 @@ void TransformSystemModule::UpdateWorldTransforms(flecs::world& world)
 
     transformedEntities.clear();
     cache.clear();
-    scratch.transformQuery.each([&](flecs::entity entity, const Position&, const Rotation&, const Scale&,
-        TransformMatrix&, TransformMatrix&)
+    scratch.transformQuery.each([&](flecs::entity entity, const Position& position,
+        const Rotation& rotation, const Scale& scale, TransformMatrix& localTransform, TransformMatrix&)
     {
-        transformedEntities.push_back(entity);
+        const glm::mat4 local = ComposeLocalMatrix(position, rotation, scale);
+        localTransform = TransformMatrix{local};
+        transformedEntities.push_back({entity, local});
     });
 
     cache.reserve(transformedEntities.size());
+    for (const TransformInput& input : transformedEntities)
+        cache.emplace(input.entity.id(), CachedTransform{input.localMatrix, false});
+
     // 같은 호출 안에서 여러 자식이 쓰는 부모 위치는 한 번만 계산해 재사용한다. 다음 물리 갱신이나 화면 그리기 전에는 바뀐 부모 기준 값을 새로 읽는다.
-    for (flecs::entity entity : transformedEntities)
-        UpdateEntityWorldTransform(entity, cache);
+    for (const TransformInput& input : transformedEntities)
+        UpdateEntityWorldTransform(input.entity, cache);
 }
 
 }
