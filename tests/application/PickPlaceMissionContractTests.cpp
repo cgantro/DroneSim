@@ -183,6 +183,40 @@ TEST(PickPlaceMission, PlanningPauseAndResumeFollowControllerContract)
     EXPECT_EQ(attachedBoxMission.Snapshot().stageLabel, "Lifting to resume height");
     EXPECT_EQ(attachedBoxController.linearPathRequests, linearPathRequestsBeforeResume + 1U);
     ASSERT_EQ(attachedBoxController.requestedLinearPath.targetPoses.size(), 1U);
+
+    const auto verifyCollisionRecovery = [&](ErrorCode collision)
+    {
+        application::PickPlaceMission collisionMission;
+        RecordingRobotController collisionController;
+        RecordingGripperController collisionGripper;
+        collisionController.state.mode = RobotMode::Idle;
+        collisionController.state.valid = true;
+        collisionController.state.tcpPoseValid = true;
+        collisionMission.Update(collisionController.state, collisionController, collisionGripper,
+            false, graspPose, placementPose);
+
+        application::PickPlaceMissionActions start;
+        start.start = true;
+        collisionMission.ApplyActions(start, collisionController.state, collisionController,
+            false, graspPose);
+        collisionController.CompletePlanning({});
+        collisionMission.Update(collisionController.state, collisionController, collisionGripper,
+            false, graspPose, placementPose);
+
+        collisionController.state.errorCode = collision;
+        collisionMission.Update(collisionController.state, collisionController, collisionGripper,
+            false, graspPose, placementPose);
+        EXPECT_EQ(collisionMission.Snapshot().stageLabel, "Retracting after collision");
+        EXPECT_EQ(collisionController.linearPathRequests, 1U);
+
+        collisionController.state.errorCode = ErrorCode::None;
+        collisionMission.Update(collisionController.state, collisionController, collisionGripper,
+            false, graspPose, placementPose);
+        EXPECT_EQ(collisionMission.Snapshot().stageLabel, "Retracting from goal");
+    };
+
+    verifyCollisionRecovery(ErrorCode::SelfCollision);
+    verifyCollisionRecovery(ErrorCode::AttachedObjectCollision);
 }
 
 TEST(PickPlaceMission, CompleteStageReportsSuccessAndRaisesOneEvent)

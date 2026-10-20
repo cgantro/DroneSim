@@ -287,11 +287,20 @@ bool PickPlaceMission::IsMissionActive() const noexcept
     return !IsStartableStage();
 }
 
-bool PickPlaceMission::IsEnvironmentCollisionStopped(const robotics::RobotState& state) const noexcept
+bool PickPlaceMission::IsCollisionStopped(const robotics::RobotState& state) const noexcept
 {
-    return state.mode == robotics::RobotMode::Idle &&
-        state.errorCode == robotics::ErrorCode::EnvironmentContact &&
-        IsMissionActive() && stage_ != Stage::Recovering;
+    if (state.mode != robotics::RobotMode::Idle || !IsMissionActive() || stage_ == Stage::Recovering)
+        return false;
+
+    switch (state.errorCode)
+    {
+    case robotics::ErrorCode::EnvironmentContact:
+    case robotics::ErrorCode::SelfCollision:
+    case robotics::ErrorCode::AttachedObjectCollision:
+        return true;
+    default:
+        return false;
+    }
 }
 
 void PickPlaceMission::Update(const robotics::RobotState& state, robotics::IRobotController& controller,
@@ -328,7 +337,7 @@ void PickPlaceMission::Update(const robotics::RobotState& state, robotics::IRobo
             gripperState.objectStatus == robotics::GripperObjectStatus::AtRequestedPosition;
     }
     // Viewer가 겹친 틱을 취소하면 Controller는 직전 관절각에서 Idle로 멈추고 충돌 원인을 남긴다. 여기서는 하강을 이어가지 않고 저장한 높이로 후퇴한다.
-    const bool collisionStopped = IsEnvironmentCollisionStopped(state);
+    const bool collisionStopped = IsCollisionStopped(state);
 
     UpdateGraspOrientation(state);
 

@@ -96,7 +96,7 @@ private:
     void UpdateRetreat(const UpdateContext& context);
     [[nodiscard]] bool IsStartableStage() const noexcept;
     [[nodiscard]] bool IsMissionActive() const noexcept;
-    [[nodiscard]] bool IsEnvironmentCollisionStopped(const robotics::RobotState& state) const noexcept;
+    [[nodiscard]] bool IsCollisionStopped(const robotics::RobotState& state) const noexcept;
     void ResumeFromPause(const robotics::RobotState& state, robotics::IRobotController& controller,
         bool boxGrasped, const robotics::CartesianPose& graspBoxPoseInBase);
     // 상자를 든 채 재개할 때는 현재 공구 자세를 기준으로 상자와의 상대 위치를 다시 맞춘다.
