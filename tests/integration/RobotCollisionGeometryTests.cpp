@@ -109,9 +109,15 @@ void CheckSyntheticGeometry()
             {0.0, 0.0, 1.0}, -3.1416, 3.1416, 1.0},
         {"tool_fixed", grasplink::model::RobotJointType::Fixed, 4, 5,
             {0.0, 0.5, 0.0}, {1.0, 0.0, 0.0, 0.0}}};
-    grasplink::simulation::robotics::RobotModelAdapter modelAdapter(model);
+    auto sourceModel = std::make_unique<RobotModel>(model);
+    sourceModel->name = "Synthetic model name owned by the adapter";
+    sourceModel->links[2].name = "Synthetic link name owned by the adapter";
+    grasplink::simulation::robotics::RobotModelAdapter modelAdapter(*sourceModel);
+    sourceModel.reset();
     const models::RobotSpecification& spec = modelAdapter.Specification();
     ASSERT_TRUE(spec.manufacturer.empty());
+    EXPECT_EQ(spec.model, "Synthetic model name owned by the adapter");
+    EXPECT_EQ(spec.links[0].name, "Synthetic link name owned by the adapter");
     const auto builtGeometry = grasplink::simulation::robotics::collision_geometry::Build(model);
     auto unsupportedShapeModel = model;
     unsupportedShapeModel.links[2].collisionGeometry[0].type =

@@ -55,24 +55,25 @@ grasplink::robotics::models::JointMotionType MotionType(RobotJointType type)
 }
 
 RobotModelAdapter::RobotModelAdapter(const grasplink::model::RobotModel& model)
-    : model_(model)
+    : modelName_(model.name)
 {
-    if (model_.toolLink >= model_.links.size() || model_.baseLink >= model_.links.size())
+    if (model.toolLink >= model.links.size() || model.baseLink >= model.links.size())
         throw std::runtime_error(RobotModelAdapterErrorMessages::invalidBaseOrToolLink);
-    if (model_.activeJoints.empty())
+    if (model.activeJoints.empty())
         throw std::runtime_error(RobotModelAdapterErrorMessages::noMovingJoint);
 
-    const auto linkBindPoses = BuildRobotLinkBindPoses(model_);
-    jointNames_.reserve(model_.activeJoints.size());
-    joints_.reserve(model_.activeJoints.size());
-    links_.reserve(model_.activeJoints.size());
+    const auto linkBindPoses = BuildRobotLinkBindPoses(model);
+    jointNames_.reserve(model.activeJoints.size());
+    linkNames_.reserve(model.activeJoints.size());
+    joints_.reserve(model.activeJoints.size());
+    links_.reserve(model.activeJoints.size());
 
-    std::size_t previousChildLink = model_.baseLink;
-    for (const std::size_t index : model_.activeJoints)
+    std::size_t previousChildLink = model.baseLink;
+    for (const std::size_t index : model.activeJoints)
     {
-        if (index >= model_.joints.size())
+        if (index >= model.joints.size())
             throw std::runtime_error(RobotModelAdapterErrorMessages::invalidActiveJointIndex);
-        const RobotJoint& source = model_.joints[index];
+        const RobotJoint& source = model.joints[index];
 
         // 관절값이 0일 때 자식 링크의 원점은 URDF 관절 원점과 같은 위치와 방향이다.
         const Pose3& jointPoseInBase = linkBindPoses[source.childLink];
@@ -90,13 +91,14 @@ RobotModelAdapter::RobotModelAdapter(const grasplink::model::RobotModel& model)
             source.maximumVelocity,
             jointOriginInPreviousLink,
             MotionType(source.type)});
-        links_.push_back({model_.links[source.childLink].name, joints_.size() - 1});
+        linkNames_.push_back(model.links[source.childLink].name);
+        links_.push_back({linkNames_.back(), joints_.size() - 1});
         previousChildLink = source.childLink;
     }
 
     const Pose3 toolFrame = RelativeRobotPose(
-        linkBindPoses[previousChildLink], linkBindPoses[model_.toolLink]);
-    specification_ = {{}, model_.name, joints_.data(), joints_.size(), links_.data(), links_.size(),
+        linkBindPoses[previousChildLink], linkBindPoses[model.toolLink]);
+    specification_ = {{}, modelName_, joints_.data(), joints_.size(), links_.data(), links_.size(),
         toolFrame, true};
 }
 
