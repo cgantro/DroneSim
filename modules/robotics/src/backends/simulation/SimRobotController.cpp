@@ -161,19 +161,7 @@ Result SimRobotController::Connect()
     state_.valid = true;
     RefreshTcp();
 
-    jointMotion_.targetPositions = state_.jointPositions;
-    jointMotion_.startPositions = state_.jointPositions;
-    jointMotion_.progress = 0.0;
-    jointMotion_.progressVelocity = 0.0;
-    jointMotion_.progressAcceleration = 0.0;
-    jointMotion_.progressRate = 0.0;
-    jointMotion_.elapsedSeconds = 0.0;
-    jointMotion_.accelerationTimeSeconds = 0.0;
-    jointMotion_.cruiseTimeSeconds = 0.0;
-    jointMotion_.profileDurationSeconds = 0.0;
-    jointMotion_.peakProgressVelocity = 0.0;
-    jointMotion_.braking = false;
-    jointMotion_.pendingMove.reset();
+    jointMotion_.Reset(state_.jointPositions);
     linearInterpolationBuffer_.resize(specification_.jointCount);
     previousJointPositions_.resize(specification_.jointCount);
     connected_ = true;
@@ -807,14 +795,7 @@ Result SimRobotController::Stop()
     }
 
     // 현재 q를 새 목표로 고정해 이후 Update가 남은 동작을 재개하지 않게 한다.
-    jointMotion_.targetPositions = state_.jointPositions;
-    jointMotion_.startPositions = state_.jointPositions;
-    jointMotion_.progress = 0.0;
-    jointMotion_.progressVelocity = 0.0;
-    jointMotion_.progressAcceleration = 0.0;
-    jointMotion_.progressRate = 0.0;
-    jointMotion_.braking = false;
-    jointMotion_.pendingMove.reset();
+    jointMotion_.Reset(state_.jointPositions);
     linearMotion_.path.clear();
     ClearPosePlanningState();
     linearMotion_.profileElapsedSeconds = 0.0;
@@ -878,14 +859,7 @@ bool SimRobotController::RestoreCollisionSafeState(
 
     state_.jointPositions = safePositions;
     std::fill(state_.jointVelocities.begin(), state_.jointVelocities.end(), 0.0);
-    jointMotion_.targetPositions = safePositions;
-    jointMotion_.startPositions = safePositions;
-    jointMotion_.progress = 0.0;
-    jointMotion_.progressVelocity = 0.0;
-    jointMotion_.progressAcceleration = 0.0;
-    jointMotion_.progressRate = 0.0;
-    jointMotion_.braking = false;
-    jointMotion_.pendingMove.reset();
+    jointMotion_.Reset(safePositions);
     linearMotion_.path.clear();
     linearMotion_.segment = 1;
     linearMotion_.segmentFraction = 0.0;

@@ -72,18 +72,10 @@ double TrapezoidDistanceFraction(double timeFraction, double rampTimeFraction)
 void SimRobotController::ConfigureJointMove(
     JointVector targetPositions, double velocityScale, double accelerationScale)
 {
+    jointMotion_.ResetProgress();
     jointMotion_.targetPositions = std::move(targetPositions);
     jointMotion_.startPositions = state_.jointPositions;
-    jointMotion_.progress = 0.0;
-    jointMotion_.progressVelocity = 0.0;
     jointMotion_.progressAcceleration = std::numeric_limits<double>::infinity();
-    jointMotion_.elapsedSeconds = 0.0;
-    jointMotion_.accelerationTimeSeconds = 0.0;
-    jointMotion_.cruiseTimeSeconds = 0.0;
-    jointMotion_.profileDurationSeconds = 0.0;
-    jointMotion_.peakProgressVelocity = 0.0;
-    jointMotion_.braking = false;
-    jointMotion_.pendingMove.reset();
     linearMotion_.path.clear();
 
     jointMotion_.progressRate = std::numeric_limits<double>::infinity();

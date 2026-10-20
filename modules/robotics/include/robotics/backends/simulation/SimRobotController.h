@@ -205,6 +205,31 @@ private:
         double stopProgress = 1.0;
         bool braking = false;
         std::optional<PendingJointMove> pendingMove;
+
+        // 현재 자세를 시작점과 목표로 두고, 이전 이동의 진행·감속·대기 상태를 지운다.
+        void Reset(const JointVector& currentPositions)
+        {
+            targetPositions = currentPositions;
+            startPositions = currentPositions;
+            ResetProgress();
+        }
+
+        // 새 관절 경로를 설정할 때 벡터 저장소를 다시 복사하지 않고 진행 상태만 초기화한다.
+        void ResetProgress()
+        {
+            progress = 0.0;
+            progressVelocity = 0.0;
+            progressAcceleration = 0.0;
+            progressRate = 0.0;
+            elapsedSeconds = 0.0;
+            accelerationTimeSeconds = 0.0;
+            cruiseTimeSeconds = 0.0;
+            profileDurationSeconds = 0.0;
+            peakProgressVelocity = 0.0;
+            stopProgress = 1.0;
+            braking = false;
+            pendingMove.reset();
+        }
     };
 
     enum class JointMoveOrigin { ExternalJointCommand, PoseTargetCommand, PlannedPoseSegment };
