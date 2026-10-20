@@ -123,7 +123,9 @@ RobotPanelActions RobotPanel::DrawContents(const RobotPanelView& view)
     ImGui::Text("Mission success: %s", view.mission.missionSucceeded ? "YES" : "NO");
     ImGui::Text("Successful missions: %llu", static_cast<unsigned long long>(view.mission.completedCount));
     ImGui::Text("Automatic repeat: %s", view.mission.autoRepeat ? "ON" : "OFF");
-    if (state.errorCode == robotics::ErrorCode::EnvironmentContact)
+    if (state.errorCode == robotics::ErrorCode::EnvironmentContact ||
+        state.errorCode == robotics::ErrorCode::SelfCollision ||
+        state.errorCode == robotics::ErrorCode::AttachedObjectCollision)
         ImGui::TextWrapped("A collision stopped the arm at its last safe pose. The task is retracting to the previous safe height.");
     if (view.mission.hasResult)
     {
