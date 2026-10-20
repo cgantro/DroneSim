@@ -673,22 +673,21 @@ struct LinearPathPlanningJob::Impl
         phase = Phase::ValidatePath;
     }
 
-    void CompletePathValidation(JointStateInvalidity pathInvalidity, std::string diagnostic = {})
+    void CompleteRefinementValidation(JointStateInvalidity pathInvalidity, std::string diagnostic)
     {
-        if (validationPurpose == ValidationPurpose::RefinementProbe)
+        if (pathInvalidity == JointStateInvalidity::None)
+            foundCollisionFreeRefinementEdge = true;
+        else if (rejectedRefinementInvalidity == JointStateInvalidity::None)
         {
-            if (pathInvalidity == JointStateInvalidity::None)
-                foundCollisionFreeRefinementEdge = true;
-            else if (rejectedRefinementInvalidity == JointStateInvalidity::None)
-            {
-                rejectedRefinementInvalidity = pathInvalidity;
-                rejectedRefinementDiagnostic = std::move(diagnostic);
-            }
-            ++refinementEdge;
-            phase = Phase::FinishSample;
-            return;
+            rejectedRefinementInvalidity = pathInvalidity;
+            rejectedRefinementDiagnostic = std::move(diagnostic);
         }
+        ++refinementEdge;
+        phase = Phase::FinishSample;
+    }
 
+    void CompleteCandidateValidation(JointStateInvalidity pathInvalidity, std::string diagnostic)
+    {
         if (pathInvalidity != JointStateInvalidity::None)
         {
             if (invalidity == JointStateInvalidity::None)
@@ -727,6 +726,16 @@ struct LinearPathPlanningJob::Impl
             candidates.erase(worst);
         }
         AdvanceToNextSeed();
+    }
+
+    void CompletePathValidation(JointStateInvalidity pathInvalidity, std::string diagnostic = {})
+    {
+        if (validationPurpose == ValidationPurpose::RefinementProbe)
+        {
+            CompleteRefinementValidation(pathInvalidity, std::move(diagnostic));
+            return;
+        }
+        CompleteCandidateValidation(pathInvalidity, std::move(diagnostic));
     }
 
     void FinishContinuationSeeds()
