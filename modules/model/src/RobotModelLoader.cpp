@@ -394,7 +394,8 @@ RobotJoint ReadJoint(const XMLElement& element, const LinkIndexByName& linkIndic
 void ReadLinks(const XMLElement& root, RobotModel& model, LinkIndexByName& linkIndices,
     const std::filesystem::path& path)
 {
-    // robot 바로 아래의 link 항목만 순서대로 읽어 관절이 참조할 링크 목록을 만듭니다.
+    // URDF 관절은 링크를 이름으로 가리키지만 FK와 충돌 계산은 링크 번호를 사용합니다.
+    // 그래서 관절을 읽기 전에 링크를 등록하고, 이름에서 번호를 찾을 수 있게 보관합니다.
     for (const XMLElement* element = root.FirstChildElement("link"); element != nullptr;
         element = element->NextSiblingElement("link"))
     {
@@ -411,7 +412,7 @@ void ReadJoints(const XMLElement& root, RobotModel& model, const LinkIndexByName
     const std::filesystem::path& path)
 {
     std::unordered_set<std::string> jointNames;
-    // 링크 목록을 만든 뒤 관절 항목을 읽어 parent와 child 이름을 링크 번호로 바꿉니다.
+    // 앞서 만든 이름과 번호의 대응표로 각 관절의 parent와 child 링크를 연결합니다.
     for (const XMLElement* element = root.FirstChildElement("joint"); element != nullptr;
         element = element->NextSiblingElement("joint"))
     {
