@@ -1222,7 +1222,6 @@ std::optional<LinearPathPlan> LinearPathPlanningJob::TakePlan()
     impl_->planTaken = true;
     LinearPathPlan plan = std::move(impl_->plan);
     impl_->plan = {};
-    impl_->ReleasePlanningStorage();
     return plan;
 }
 
