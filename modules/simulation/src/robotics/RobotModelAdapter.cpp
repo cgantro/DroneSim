@@ -74,10 +74,8 @@ RobotModelAdapter::RobotModelAdapter(const grasplink::model::RobotModel& model)
             throw std::runtime_error(RobotModelAdapterErrorMessages::invalidActiveJointIndex);
         const RobotJoint& source = model_.joints[index];
 
-        const Pose3 jointPoseInBase = ComposeRobotPose(
-            linkBindPoses[source.parentLink],
-            source.originPositionMeters,
-            source.originRotation);
+        // 관절값이 0일 때 자식 링크의 원점은 URDF 관절 원점과 같은 위치와 방향이다.
+        const Pose3& jointPoseInBase = linkBindPoses[source.childLink];
         const Pose3 jointOriginInPreviousLink = RelativeRobotPose(
             linkBindPoses[previousChildLink], jointPoseInBase);
         const JointPositionLimits limits = PositionLimits(source);

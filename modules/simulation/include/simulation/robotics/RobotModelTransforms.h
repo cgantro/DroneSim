@@ -28,18 +28,6 @@ namespace grasplink::simulation::robotics
 }
 
 /**
- * @brief 부모 기준 변환을 누적해 자식 pose를 같은 기준으로 옮긴다.
- * @param parent 부모 원점의 위치와 방향을 공통 기준으로 나타낸다.
- * @param childPosition 부모 원점에서 잰 자식 원점 위치 [m].
- * @param childRotation 부모 기준 자식 방향을 나타낸 quaternion이다.
- * @return 자식 원점을 공통 기준으로 나타낸 pose다.
- */
-[[nodiscard]] grasplink::robotics::models::Pose3 ComposeRobotPose(
-    const grasplink::robotics::models::Pose3& parent,
-    const glm::dvec3& childPosition,
-    const glm::dquat& childRotation);
-
-/**
  * @brief 공통 기준으로 표현한 pose를 부모 기준 위치와 방향으로 바꾼다.
  * @param parent 부모 pose이며 위치는 [m] 단위다.
  * @param target 부모와 같은 기준으로 표현한 대상 pose다.

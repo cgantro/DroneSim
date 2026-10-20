@@ -20,21 +20,6 @@ struct RobotModelTransformErrorMessages final
 };
 }
 
-Pose3 ComposeRobotPose(
-    const Pose3& parent,
-    const glm::dvec3& childPosition,
-    const glm::dquat& childRotation)
-{
-    const glm::dquat parentRotation{parent.rotation.w, parent.rotation.x,
-        parent.rotation.y, parent.rotation.z};
-    const glm::dvec3 parentPosition{parent.positionMeters.x,
-        parent.positionMeters.y, parent.positionMeters.z};
-    const glm::dvec3 position = parentPosition + parentRotation * childPosition;
-    const glm::dquat rotation = glm::normalize(parentRotation * childRotation);
-    return {{position.x, position.y, position.z},
-        {rotation.w, rotation.x, rotation.y, rotation.z}};
-}
-
 Pose3 RelativeRobotPose(
     const Pose3& parent,
     const Pose3& target)
