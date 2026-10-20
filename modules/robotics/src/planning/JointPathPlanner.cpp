@@ -34,6 +34,13 @@ struct JointPathPlanningJob::Impl
     std::size_t intervalCount = 0;
     std::size_t nextInterval = 1;
 
+    void ReleaseBorrowedInputs()
+    {
+        // 끝난 작업은 모델이나 검사 함수를 다시 부르지 않으므로 빌린 참조를 놓는다.
+        specification = nullptr;
+        checker = {};
+    }
+
     JointStateInvalidity Check(const JointVector& joints)
     {
         ++plan.validityChecks;
@@ -45,6 +52,7 @@ struct JointPathPlanningJob::Impl
         result = MapJointStateInvalidity(invalidity);
         result.message = "JointPathPlanner: " + result.message;
         state = JointPathPlanningState::Failed;
+        ReleaseBorrowedInputs();
     }
 
     void AdvanceOne()
@@ -59,6 +67,7 @@ struct JointPathPlanningJob::Impl
             {
                 plan.points = {start};
                 state = JointPathPlanningState::Completed;
+                ReleaseBorrowedInputs();
             }
             return;
         }
@@ -75,6 +84,7 @@ struct JointPathPlanningJob::Impl
         {
             plan.points = {start, goal};
             state = JointPathPlanningState::Completed;
+            ReleaseBorrowedInputs();
         }
     }
 };
@@ -144,6 +154,7 @@ Result JointPathPlanningJob::Begin(const models::RobotSpecification& specificati
     {
         job.result = {ErrorCode::InvalidCommand, "JointPathPlanner: invalid robot, endpoints, or sample spacing"};
         job.state = JointPathPlanningState::Failed;
+        job.ReleaseBorrowedInputs();
         return job.result;
     }
 
@@ -163,6 +174,7 @@ Result JointPathPlanningJob::Begin(const models::RobotSpecification& specificati
     {
         job.result = {ErrorCode::InvalidCommand, "JointPathPlanner: path exceeds the sample limit"};
         job.state = JointPathPlanningState::Failed;
+        job.ReleaseBorrowedInputs();
         return job.result;
     }
     job.intervalCount = *intervals;
@@ -179,6 +191,7 @@ JointPathPlanningState JointPathPlanningJob::Advance(std::size_t workBudget)
         job.result = {ErrorCode::InvalidCommand,
             "JointPathPlanner: state validity checks must run on the Begin caller thread"};
         job.state = JointPathPlanningState::Failed;
+        job.ReleaseBorrowedInputs();
         return job.state;
     }
 
@@ -194,6 +207,7 @@ void JointPathPlanningJob::Cancel() noexcept
         impl_->state = JointPathPlanningState::Cancelled;
         impl_->result = {ErrorCode::Cancelled, "JointPathPlanner: planning cancelled"};
     }
+    impl_->ReleaseBorrowedInputs();
 }
 
 JointPathPlanningState JointPathPlanningJob::GetState() const noexcept { return impl_->state; }

@@ -10,6 +10,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -94,24 +95,44 @@ void CheckLinearPathPlanningBudgetAndCancellation()
     const JointVector startJoints(specification.jointCount, 0.0);
     JointVector targetJoints = startJoints;
     targetJoints[0] = 0.2;
+    auto checkerContext = std::make_shared<int>(0);
+    std::weak_ptr<int> checkerContextLifetime = checkerContext;
+    StateValidityChecker checker = [checkerContext](const JointVector&)
+    {
+        (void)checkerContext;
+        return JointStateInvalidity::None;
+    };
 
     LinearPathMoveCommand command;
     command.targetPoses.push_back(inverse.EvaluateTcp(targetJoints));
     LinearPathPlanningJob job;
     const Result begin = job.Begin(command, specification, startJoints,
-        inverse.EvaluateTcp(startJoints), inverse, {});
+        inverse.EvaluateTcp(startJoints), inverse, checker);
+    checkerContext.reset();
+    checker = {};
     ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
+    EXPECT_FALSE(checkerContextLifetime.expired());
     ASSERT_EQ(job.GetState(), LinearPathPlanningState::Running);
 
     EXPECT_EQ(job.Advance(0), LinearPathPlanningState::Running);
     EXPECT_EQ(job.Advance(1), LinearPathPlanningState::Running);
     job.Cancel();
     EXPECT_EQ(job.GetState(), LinearPathPlanningState::Cancelled);
+    EXPECT_TRUE(checkerContextLifetime.expired());
     EXPECT_EQ(job.Advance(64), LinearPathPlanningState::Cancelled);
     EXPECT_FALSE(job.TakePlan().has_value());
 
+    auto completedCheckerContext = std::make_shared<int>(0);
+    std::weak_ptr<int> completedCheckerLifetime = completedCheckerContext;
+    StateValidityChecker completedChecker = [completedCheckerContext](const JointVector&)
+    {
+        (void)completedCheckerContext;
+        return JointStateInvalidity::None;
+    };
     const Result restarted = job.Begin(command, specification, startJoints,
-        inverse.EvaluateTcp(startJoints), inverse, {});
+        inverse.EvaluateTcp(startJoints), inverse, completedChecker);
+    completedCheckerContext.reset();
+    completedChecker = {};
     ASSERT_TRUE(static_cast<bool>(restarted)) << restarted.message;
     EXPECT_EQ(job.GetState(), LinearPathPlanningState::Running);
 
@@ -121,6 +142,7 @@ void CheckLinearPathPlanningBudgetAndCancellation()
         job.Advance(64);
     }
     ASSERT_EQ(job.GetState(), LinearPathPlanningState::Completed);
+    EXPECT_TRUE(completedCheckerLifetime.expired());
     auto completedPlan = job.TakePlan();
     ASSERT_TRUE(completedPlan.has_value());
     EXPECT_TRUE(completedPlan->hasMotion);
@@ -239,16 +261,23 @@ void CheckPrismaticJointPathUsesMeterSpacing()
     EXPECT_NEAR(synchronousPositions[3], 0.08, 1e-12);
 
     std::vector<double> checkedPositions;
-    const StateValidityChecker checker = [&](const JointVector& positions)
+    auto checkerContext = std::make_shared<int>(0);
+    std::weak_ptr<int> checkerContextLifetime = checkerContext;
+    StateValidityChecker checker = [&, checkerContext](const JointVector& positions)
     {
+        (void)checkerContext;
         checkedPositions.push_back(positions[0]);
         return JointStateInvalidity::None;
     };
 
     JointPathPlanningJob job;
     const Result begin = job.Begin(specification, {0.0}, {0.1}, checker, options);
+    checkerContext.reset();
+    checker = {};
     ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
+    EXPECT_FALSE(checkerContextLifetime.expired());
     EXPECT_EQ(job.Advance(32), JointPathPlanningState::Completed);
+    EXPECT_TRUE(checkerContextLifetime.expired());
 
     ASSERT_EQ(checkedPositions.size(), 7);
     EXPECT_NEAR(checkedPositions[2], 0.02, 1e-12);

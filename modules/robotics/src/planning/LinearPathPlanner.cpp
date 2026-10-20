@@ -438,6 +438,7 @@ struct LinearPathPlanningJob::Impl
         if (!plan.hasMotion)
         {
             state = LinearPathPlanningState::Completed;
+            ReleasePlanningStorage();
             return result;
         }
 
@@ -455,15 +456,17 @@ struct LinearPathPlanningJob::Impl
     {
         result = std::move(failure);
         state = LinearPathPlanningState::Failed;
-        stateValidityChecker = {};
-        validityDiagnosticProvider = {};
+        ReleasePlanningStorage();
         return result;
     }
 
     void ReleasePlanningStorage()
     {
+        // 끝난 작업은 모델과 IK 계산기를 다시 쓰지 않으므로 빌린 참조와 임시 표본을 해제한다.
         stateValidityChecker = {};
         validityDiagnosticProvider = {};
+        specification = nullptr;
+        inverse = nullptr;
         std::vector<Pose3>().swap(targets);
         std::vector<Pose3>().swap(tcpSamples);
         std::vector<std::vector<PathCandidate>>().swap(layers);
@@ -526,6 +529,7 @@ struct LinearPathPlanningJob::Impl
         }
         state = LinearPathPlanningState::Completed;
         result = Result::Success();
+        ReleasePlanningStorage();
     }
 
     void PrepareSample()
