@@ -26,7 +26,7 @@ class TriangleGlb final
 {
 public:
     explicit TriangleGlb(std::size_t viewLength, int materialIndex = -1,
-        std::size_t vertexCount = 3U, std::string material = {})
+        std::size_t vertexCount = 3U, std::string material = {}, bool includeSceneNode = true)
     {
         constexpr std::array<std::array<float, 3>, 4> positions{{
             {0.0F, 0.0F, 0.0F},
@@ -46,6 +46,9 @@ public:
         const std::string materialArray = material.empty()
             ? std::string{}
             : "\"materials\":[" + material + "],";
+        const std::string sceneNodes = includeSceneNode
+            ? "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0"
+            : "\"nodes\":[]";
         std::string json =
             "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" +
             std::to_string(bufferLength) + "}],"
@@ -55,7 +58,7 @@ public:
             + materialArray +
             "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}" +
             primitiveMaterial + "}]}],"
-            "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0}";
+            + sceneNodes + "}";
 
         Bytes binary(bufferLength);
         std::memcpy(binary.data(), positions.data(), binary.size());
@@ -132,4 +135,9 @@ TEST(GltfLoader, ReadsPositionsAndRejectsAccessorOutsideBufferView)
 
     TriangleGlb incompleteTriangle(48U, -1, 4U);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(incompleteTriangle.Path()), std::runtime_error);
+
+    TriangleGlb missingSceneNode(36U, -1, 3U, {}, false);
+    const auto meshOnlyModel = grasplink::model::GltfLoader::LoadGLB(missingSceneNode.Path());
+    EXPECT_TRUE(meshOnlyModel.nodes.empty());
+    EXPECT_FALSE(meshOnlyModel.rootNodeIndex.has_value());
 }

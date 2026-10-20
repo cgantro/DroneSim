@@ -6,6 +6,8 @@
 #include "graphics/Window.h"
 #include "model/ModelResource.h"
 #include "rendering/assets/AssetManager.h"
+#include "rendering/assets/PrefabFactory.h"
+#include "scene/Scene.h"
 
 #include <gtest/gtest.h>
 
@@ -156,4 +158,25 @@ TEST(GraphicsResource, InvalidShaderSourceFailsCleanly)
     glad_glGetShaderiv = originalGetShaderiv;
     originalGetShaderiv = nullptr;
     EXPECT_EQ(glGetError(), GL_NO_ERROR);
+}
+
+TEST(GraphicsResource, ModelWithoutSceneRootIsRejectedBeforeSceneMutation)
+{
+    flecs::world world;
+    grasplink::scene::Scene scene{world};
+    grasplink::rendering::AssetManager assets;
+    grasplink::model::ModelResource model;
+    const grasplink::scene::Entity sceneRoot{scene.GetSceneRoot()};
+    const std::size_t childCountBefore = sceneRoot.GetChildren().size();
+
+    try
+    {
+        grasplink::rendering::prefab_factory::CreateModel(scene, model, assets, {});
+        FAIL() << "A model without a scene root cannot create a prefab";
+    }
+    catch (const std::runtime_error& error)
+    {
+        EXPECT_STREQ("PrefabFactory requires a valid scene root", error.what());
+    }
+    EXPECT_EQ(sceneRoot.GetChildren().size(), childCountBefore);
 }

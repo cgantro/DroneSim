@@ -118,6 +118,12 @@ void ValidateModelBeforeSceneChanges(
     const AssetManager& assets,
     const std::shared_ptr<::grasplink::graphics::Shader>& shader)
 {
+    if (!model.rootNodeIndex || *model.rootNodeIndex >= model.nodes.size() ||
+        model.nodes[*model.rootNodeIndex].parentIndex)
+    {
+        throw std::runtime_error("PrefabFactory requires a valid scene root");
+    }
+
     if (!shader)
         throw std::runtime_error("PrefabFactory requires a shader");
 
