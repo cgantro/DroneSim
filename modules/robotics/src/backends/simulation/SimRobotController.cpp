@@ -122,18 +122,14 @@ void SimRobotController::SetJointStateValidityChecker(
     planning::StateValidityChecker checker)
 {
     const bool wasPlanning = IsMotionPlanning();
-    CancelPlanningJobs();
+    ResetMotionPlanningWork();
     if (wasPlanning)
     {
-        posePlanning_.phase = PosePlanningPhase::None;
         state_.mode = RobotMode::Idle;
         state_.errorCode = ErrorCode::Cancelled;
         motionPlanningResult_.emplace(
             Failure(ErrorCode::Cancelled, "SimRobotController: motion planning cancelled because the validity checker changed"));
-        pendingLinearPathCommand_ = {};
     }
-    linearPathPlanningJob_ = {};
-    ClearPosePlanningState();
     jointStateValidityChecker_ = std::move(checker);
 }
 
@@ -145,11 +141,8 @@ void SimRobotController::SetJointStateValidityDiagnosticProvider(std::function<s
 Result SimRobotController::Connect()
 {
     // 재연결은 이전 명령과 상태를 이어가지 않고 q=0의 새 논리 세션을 만든다.
-    CancelPlanningJobs();
-    linearPathPlanningJob_ = {};
-    ClearPosePlanningState();
+    ResetMotionPlanningWork();
     motionPlanningResult_.reset();
-    pendingLinearPathCommand_ = {};
     state_ = {};
     state_.jointPositions.resize(specification_.jointCount);
     for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
@@ -171,10 +164,8 @@ Result SimRobotController::Connect()
 
 void SimRobotController::Disconnect() noexcept
 {
-    CancelPlanningJobs();
-    ClearPosePlanningState();
+    ResetMotionPlanningWork();
     motionPlanningResult_.reset();
-    pendingLinearPathCommand_ = {};
     // 백엔드의 관절 배열은 재사용하되 연결/feedback 유효성을 내리고 속도만 즉시 0으로 만든다.
     connected_ = false;
     state_.mode = RobotMode::Disconnected;
@@ -637,12 +628,14 @@ void SimRobotController::ClearPosePlanningState()
     posePathSegment_ = 0;
 }
 
-void SimRobotController::CancelPlanningJobs()
+void SimRobotController::ResetMotionPlanningWork()
 {
     linearPathPlanningJob_.Cancel();
     if (posePlanning_.phase != PosePlanningPhase::None)
         inverse_.CancelSingleSeed(posePlanning_.ikSession);
     posePlanning_.jointPathJob.Cancel();
+    ClearPosePlanningState();
+    pendingLinearPathCommand_ = {};
 }
 
 void SimRobotController::FinishPosePlanning(Result result)
@@ -851,10 +844,7 @@ bool SimRobotController::RestoreCollisionSafeState(
         collisionReason != ErrorCode::AttachedObjectCollision)
         return false;
 
-    CancelPlanningJobs();
-    ClearPosePlanningState();
-    linearPathPlanningJob_ = {};
-    pendingLinearPathCommand_ = {};
+    ResetMotionPlanningWork();
     motionPlanningResult_.reset();
 
     state_.jointPositions = safePositions;

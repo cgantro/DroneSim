@@ -237,7 +237,7 @@ private:
     Result BeginPosePlanningImpl(const CartesianPose& targetInBase,
         std::optional<LinearPathMoveCommand> continuation,
         double velocityScale, double accelerationScale);
-    void CancelPlanningJobs();
+    void ResetMotionPlanningWork();
     void ClearPosePlanningState();
     void FinishPosePlanning(Result result);
     void RetryPosePlanningOrFinish(Result failure);

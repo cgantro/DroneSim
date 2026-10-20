@@ -105,6 +105,12 @@ void CheckLinearPathPlanningBudgetAndCancellation()
     EXPECT_EQ(job.GetState(), LinearPathPlanningState::Cancelled);
     EXPECT_EQ(job.Advance(64), LinearPathPlanningState::Cancelled);
     EXPECT_FALSE(job.TakePlan().has_value());
+
+    const Result restarted = job.Begin(command, specification, startJoints,
+        inverse.EvaluateTcp(startJoints), inverse, {});
+    ASSERT_TRUE(static_cast<bool>(restarted)) << restarted.message;
+    EXPECT_EQ(job.GetState(), LinearPathPlanningState::Running);
+    job.Cancel();
 }
 
 void CheckFourAxisControllerUsesPositionIk()
@@ -351,6 +357,12 @@ void CheckChangingValidityCheckerCancelsPosePlanning()
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->code, ErrorCode::Cancelled);
     EXPECT_EQ(controller.GetStateView().mode, RobotMode::Idle);
+
+    ASSERT_TRUE(static_cast<bool>(controller.BeginPosePlanning(currentPose)));
+    controller.Disconnect();
+    EXPECT_FALSE(controller.IsMotionPlanning());
+    EXPECT_EQ(controller.GetStateView().mode, RobotMode::Disconnected);
+    EXPECT_FALSE(controller.TakeMotionPlanningResult().has_value());
 }
 
 }
