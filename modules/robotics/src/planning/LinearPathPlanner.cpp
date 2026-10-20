@@ -20,6 +20,45 @@
 
 namespace grasplink::robotics::planning
 {
+
+kinematics::IkOptions PathIkOptions(const models::RobotSpecification& specification)
+{
+    // 기본 IK 허용 오차는 경로 직선 오차 예산보다 위치는 100배, 방향은 10배 작다.
+    // 따라서 별도의 수렴 기준을 더하지 않고 LM의 기본 IK 설정을 사용한다.
+    return kinematics::RobotDefaultIkOptions(specification);
+}
+
+Result ValidateLinearPathCommand(const LinearPathMoveCommand& command)
+{
+    if (!command.targetPoses.empty() &&
+        std::isfinite(command.maxLinearVelocityMetersPerSecond) &&
+        command.maxLinearVelocityMetersPerSecond > 0.0 &&
+        std::isfinite(command.maxAngularVelocityRadiansPerSecond) &&
+        command.maxAngularVelocityRadiansPerSecond > 0.0 &&
+        std::isfinite(command.maxLinearAccelerationMetersPerSecondSquared) &&
+        command.maxLinearAccelerationMetersPerSecondSquared > 0.0 &&
+        std::isfinite(command.maxAngularAccelerationRadiansPerSecondSquared) &&
+        command.maxAngularAccelerationRadiansPerSecondSquared > 0.0)
+        return Result::Success();
+    return {ErrorCode::InvalidCommand, "SimRobotController: invalid linear path or motion limits"};
+}
+
+Result MapIkFailure(const kinematics::IkResult& result)
+{
+    using kinematics::IkStatus;
+    ErrorCode code = ErrorCode::IkDidNotConverge;
+    switch (result.status)
+    {
+    case IkStatus::Success: return Result::Success();
+    case IkStatus::InvalidInput: code = ErrorCode::InvalidCommand; break;
+    case IkStatus::MissingToolFrame: code = ErrorCode::Unsupported; break;
+    case IkStatus::Unreachable: code = ErrorCode::Unreachable; break;
+    case IkStatus::JointLimitReached: code = ErrorCode::JointLimitReached; break;
+    case IkStatus::DidNotConverge: break;
+    }
+    return {code, result.message};
+}
+
 namespace
 {
 using models::Pose3;

@@ -17,41 +17,13 @@ namespace grasplink::robotics::planning
 {
 
 /** @brief 직선 경로의 각 표본을 더 엄격한 위치·방향 오차로 맞추는 IK 설정을 만든다. */
-inline kinematics::IkOptions PathIkOptions(const models::RobotSpecification& specification)
-{
-    // 기본 IK 허용 오차는 경로 직선 오차 예산보다 위치는 100배, 방향은 10배 작다.
-    // 따라서 별도의 수렴 기준을 더하지 않고 LM의 기본 IK 설정을 사용한다.
-    return kinematics::RobotDefaultIkOptions(specification);
-}
+kinematics::IkOptions PathIkOptions(const models::RobotSpecification& specification);
 
 /** @brief TCP 경로가 비어 있지 않고 속도·가속도 상한이 모두 유효한지 확인한다. */
-inline Result ValidateLinearPathCommand(const LinearPathMoveCommand& command)
-{
-    if (!command.targetPoses.empty() &&
-        std::isfinite(command.maxLinearVelocityMetersPerSecond) && command.maxLinearVelocityMetersPerSecond > 0.0 &&
-        std::isfinite(command.maxAngularVelocityRadiansPerSecond) && command.maxAngularVelocityRadiansPerSecond > 0.0 &&
-        std::isfinite(command.maxLinearAccelerationMetersPerSecondSquared) && command.maxLinearAccelerationMetersPerSecondSquared > 0.0 &&
-        std::isfinite(command.maxAngularAccelerationRadiansPerSecondSquared) && command.maxAngularAccelerationRadiansPerSecondSquared > 0.0)
-        return Result::Success();
-    return {ErrorCode::InvalidCommand, "SimRobotController: invalid linear path or motion limits"};
-}
+Result ValidateLinearPathCommand(const LinearPathMoveCommand& command);
 
 /** @brief IK 실패 상태를 공통 Controller 결과 코드로 바꾼다. */
-inline Result MapIkFailure(const kinematics::IkResult& result)
-{
-    using kinematics::IkStatus;
-    ErrorCode code = ErrorCode::IkDidNotConverge;
-    switch (result.status)
-    {
-    case IkStatus::Success: return Result::Success();
-    case IkStatus::InvalidInput: code = ErrorCode::InvalidCommand; break;
-    case IkStatus::MissingToolFrame: code = ErrorCode::Unsupported; break;
-    case IkStatus::Unreachable: code = ErrorCode::Unreachable; break;
-    case IkStatus::JointLimitReached: code = ErrorCode::JointLimitReached; break;
-    case IkStatus::DidNotConverge: break;
-    }
-    return {code, result.message};
-}
+Result MapIkFailure(const kinematics::IkResult& result);
 
 /** @brief 변위를 지정한 최대 속도 이하로 이동하는 데 필요한 최소 시간 [s]를 계산한다. */
 inline double RequiredTimeForVelocity(double displacement, double maximumVelocity)
