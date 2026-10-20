@@ -51,6 +51,8 @@ enum class JointPathPlanningState : std::uint8_t
  * @brief 관절 제한과 충돌을 검사하면서 MoveJ용 직접 경로를 확인한다.
  * @details 경로를 `validationPolicy`의 관절 간격으로 검사하며, 막히면 우회하지 않고 요청을 거부한다.
  * Advance의 작업 예산은 확인할 시작점, 끝점, 경로 표본의 최대 개수다.
+ * Begin()에 넘긴 RobotSpecification과 검사 함수가 참조하는 객체는 작업이 완료·실패·취소될 때까지 살아 있어야 한다.
+ * 검사 함수는 복사하지만, 함수가 참조로 사용하는 객체는 복사하지 않는다.
  */
 class JointPathPlanningJob final
 {
