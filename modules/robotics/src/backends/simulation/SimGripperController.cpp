@@ -8,6 +8,11 @@ namespace grasplink::robotics::backends::simulation
 {
 namespace
 {
+struct SimGripperControllerMessages final
+{
+    inline static constexpr char notConnected[] = "SimGripperController: not connected";
+};
+
 Result Failure(ErrorCode code, const char* message)
 {
     return {code, message};
@@ -86,7 +91,7 @@ bool SimGripperController::IsConnected() const noexcept
 Result SimGripperController::Activate()
 {
     if (!connected_)
-        return Failure(ErrorCode::NotConnected, "SimGripperController: not connected");
+        return Failure(ErrorCode::NotConnected, SimGripperControllerMessages::notConnected);
 
     if (state_.activated)
         return Result::Success();
@@ -104,7 +109,7 @@ Result SimGripperController::Activate()
 Result SimGripperController::Reset()
 {
     if (!connected_)
-        return Failure(ErrorCode::NotConnected, "SimGripperController: not connected");
+        return Failure(ErrorCode::NotConnected, SimGripperControllerMessages::notConnected);
 
     const bool reachedRequestedPosition = IsAtTarget();
     ++releaseRevision_;
@@ -124,7 +129,7 @@ Result SimGripperController::Reset()
 Result SimGripperController::Command(const GripperCommand& command)
 {
     if (!connected_)
-        return Failure(ErrorCode::NotConnected, "SimGripperController: not connected");
+        return Failure(ErrorCode::NotConnected, SimGripperControllerMessages::notConnected);
     if (!state_.activated)
         return Failure(ErrorCode::Busy, "SimGripperController: not activated");
 
@@ -181,7 +186,7 @@ Result SimGripperController::Command(const GripperCommand& command)
 Result SimGripperController::Stop()
 {
     if (!connected_)
-        return Failure(ErrorCode::NotConnected, "SimGripperController: not connected");
+        return Failure(ErrorCode::NotConnected, SimGripperControllerMessages::notConnected);
 
     const bool reachedRequestedPosition = IsAtTarget();
     requestedDirection_ = 0;
