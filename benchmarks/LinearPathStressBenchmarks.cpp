@@ -21,6 +21,20 @@ using namespace grasplink::robotics::models;
 using namespace grasplink::robotics::models::hanwha;
 using namespace grasplink::robotics::planning;
 using grasplink::robotics::backends::simulation::SimRobotController;
+
+namespace
+{
+double Percentile(std::vector<double>& samples, double fraction)
+{
+    if (samples.empty())
+        return 0.0;
+    std::sort(samples.begin(), samples.end());
+    const std::size_t index = static_cast<std::size_t>(std::ceil(
+        fraction * static_cast<double>(samples.size()))) - 1;
+    return samples[std::min(index, samples.size() - 1)];
+}
+}
+
 // 생성한 여러 목표로 대화형 경로 계획의 처리량과 지연 분포를 측정합니다. 항상 유효하다고 답하는 콜백을 쓰므로 실제 충돌은 검사하지 않습니다.
 void InteractiveLinearPathStress(benchmark::State& state)
 {
@@ -177,26 +191,17 @@ void InteractiveLinearPathStress(benchmark::State& state)
     state.counters["max_tcp_position_error_mm"] = maximumTcpPositionErrorMeters * 1000.0;
     state.counters["max_tcp_orientation_error_mrad"] = maximumTcpOrientationErrorRadians * 1000.0;
     state.counters["collision_benchmark_mode_dummy_always_valid"] = 1;
-    const auto percentile = [](std::vector<double>& values, double fraction)
-    {
-        if (values.empty())
-            return 0.0;
-        std::sort(values.begin(), values.end());
-        const std::size_t index = static_cast<std::size_t>(std::ceil(
-            fraction * static_cast<double>(values.size()))) - 1;
-        return values[std::min(index, values.size() - 1)];
-    };
-    state.counters["frame_slice_p50_us"] = percentile(frameSliceMicroseconds, 0.50);
-    state.counters["frame_slice_p95_us"] = percentile(frameSliceMicroseconds, 0.95);
-    state.counters["frame_slice_p99_us"] = percentile(frameSliceMicroseconds, 0.99);
+    state.counters["frame_slice_p50_us"] = Percentile(frameSliceMicroseconds, 0.50);
+    state.counters["frame_slice_p95_us"] = Percentile(frameSliceMicroseconds, 0.95);
+    state.counters["frame_slice_p99_us"] = Percentile(frameSliceMicroseconds, 0.99);
     state.counters["frame_slice_max_us"] = frameSliceMicroseconds.empty() ? 0.0 :
         *std::max_element(frameSliceMicroseconds.begin(), frameSliceMicroseconds.end());
-    state.counters["completed_plan_p50_ms"] = percentile(completedPlanMilliseconds, 0.50);
-    state.counters["completed_plan_p95_ms"] = percentile(completedPlanMilliseconds, 0.95);
-    state.counters["completed_plan_p99_ms"] = percentile(completedPlanMilliseconds, 0.99);
-    state.counters["completed_plan_frames_p50"] = percentile(completedPlanFrames, 0.50);
-    state.counters["completed_plan_frames_p95"] = percentile(completedPlanFrames, 0.95);
-    state.counters["completed_plan_frames_p99"] = percentile(completedPlanFrames, 0.99);
+    state.counters["completed_plan_p50_ms"] = Percentile(completedPlanMilliseconds, 0.50);
+    state.counters["completed_plan_p95_ms"] = Percentile(completedPlanMilliseconds, 0.95);
+    state.counters["completed_plan_p99_ms"] = Percentile(completedPlanMilliseconds, 0.99);
+    state.counters["completed_plan_frames_p50"] = Percentile(completedPlanFrames, 0.50);
+    state.counters["completed_plan_frames_p95"] = Percentile(completedPlanFrames, 0.95);
+    state.counters["completed_plan_frames_p99"] = Percentile(completedPlanFrames, 0.99);
     state.SetLabel("대화형 정책, 프레임당 계획 예산 1.5 ms, 충돌 검사는 항상 통과");
     state.SetItemsProcessed(static_cast<std::int64_t>(plannerRuns));
 }
@@ -204,7 +209,17 @@ void InteractiveLinearPathStress(benchmark::State& state)
 // SimRobotController에서 생성한 목표 경로를 실행해 성공과 실패를 셉니다. 상태 검사 콜백이 항상 유효하다고 답하므로 환경 충돌 검사는 포함하지 않습니다.
 void RuntimeLinearPathStress(benchmark::State& state)
 {
+    using Clock = std::chrono::steady_clock;
     const auto cases = RuntimePathCases(static_cast<std::size_t>(state.range(0)));
+    const std::size_t expectedCaseCount = static_cast<std::size_t>(state.iterations()) * cases.size();
+    std::vector<double> planAttemptMilliseconds;
+    std::vector<double> executedPathMilliseconds;
+    std::vector<double> executedPathTicks;
+    planAttemptMilliseconds.reserve(expectedCaseCount);
+    executedPathMilliseconds.reserve(expectedCaseCount);
+    executedPathTicks.reserve(expectedCaseCount);
+    double totalPlanAttemptMilliseconds = 0.0;
+    double totalExecutedPathMilliseconds = 0.0;
     std::uint64_t plannerRejections = 0;
     std::uint64_t plannerIkRejections = 0;
     std::uint64_t plannerJointLimitStatuses = 0;
@@ -246,7 +261,12 @@ void RuntimeLinearPathStress(benchmark::State& state)
             command.maxLinearAccelerationMetersPerSecondSquared = 30.0;
             command.maxAngularAccelerationRadiansPerSecondSquared = 120.0;
             const JointVector startJoints = controller.GetStateView().jointPositions;
+            const auto planningStarted = Clock::now();
             const auto accepted = controller.MoveLinearPath(command);
+            const double planAttemptMillisecondsForCase = std::chrono::duration<double, std::milli>(
+                Clock::now() - planningStarted).count();
+            planAttemptMilliseconds.push_back(planAttemptMillisecondsForCase);
+            totalPlanAttemptMilliseconds += planAttemptMillisecondsForCase;
             if (!accepted)
             {
                 std::ostringstream details;
@@ -279,9 +299,15 @@ void RuntimeLinearPathStress(benchmark::State& state)
 
             constexpr double fixedDeltaSeconds = 0.004;
             constexpr std::size_t maxTicks = 5000;
+            const auto executionStarted = Clock::now();
             std::size_t tick = 0;
             for (; tick < maxTicks && controller.GetStateView().mode == RobotMode::Moving; ++tick)
                 controller.Update(fixedDeltaSeconds);
+            const double executedPathMillisecondsForCase = std::chrono::duration<double, std::milli>(
+                Clock::now() - executionStarted).count();
+            executedPathMilliseconds.push_back(executedPathMillisecondsForCase);
+            executedPathTicks.push_back(static_cast<double>(tick));
+            totalExecutedPathMilliseconds += executedPathMillisecondsForCase;
 
             const auto& result = controller.GetStateView();
             if (result.mode == RobotMode::Fault)
@@ -347,6 +373,17 @@ void RuntimeLinearPathStress(benchmark::State& state)
         static_cast<double>(stateValidityCallbackCalls) / totalCases : 0.0;
     state.counters["environment_collision_checks"] = 0;
     state.counters["collision_benchmark_mode_dummy_always_valid"] = 1;
+    const double iterationCount = static_cast<double>(state.iterations());
+    state.counters["planning_total_ms_per_batch"] = totalPlanAttemptMilliseconds / iterationCount;
+    state.counters["execution_total_ms_per_batch"] = totalExecutedPathMilliseconds / iterationCount;
+    state.counters["plan_attempt_p50_ms"] = Percentile(planAttemptMilliseconds, 0.50);
+    state.counters["plan_attempt_p95_ms"] = Percentile(planAttemptMilliseconds, 0.95);
+    state.counters["plan_attempt_p99_ms"] = Percentile(planAttemptMilliseconds, 0.99);
+    state.counters["executed_path_p50_ms"] = Percentile(executedPathMilliseconds, 0.50);
+    state.counters["executed_path_p95_ms"] = Percentile(executedPathMilliseconds, 0.95);
+    state.counters["executed_path_p99_ms"] = Percentile(executedPathMilliseconds, 0.99);
+    state.counters["executed_path_ticks_p50"] = Percentile(executedPathTicks, 0.50);
+    state.counters["executed_path_ticks_p95"] = Percentile(executedPathTicks, 0.95);
     if (!lastPlannerRejection.empty())
         state.SetLabel(lastPlannerRejection);
     state.SetItemsProcessed(static_cast<std::int64_t>(totalCases));
