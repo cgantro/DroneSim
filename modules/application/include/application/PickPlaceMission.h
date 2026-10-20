@@ -94,6 +94,7 @@ private:
     void UpdatePickup(const UpdateContext& context);
     void UpdatePlacement(const UpdateContext& context);
     void UpdateRetreat(const UpdateContext& context);
+    [[nodiscard]] bool IsStartableStage() const noexcept;
     [[nodiscard]] bool IsMissionActive() const noexcept;
     [[nodiscard]] bool IsEnvironmentCollisionStopped(const robotics::RobotState& state) const noexcept;
     void ResumeFromPause(const robotics::RobotState& state, robotics::IRobotController& controller,

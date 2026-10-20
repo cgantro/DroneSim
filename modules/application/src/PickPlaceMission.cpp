@@ -282,9 +282,14 @@ void PickPlaceMission::UpdateStage(const UpdateContext& context)
     }
 }
 
+bool PickPlaceMission::IsStartableStage() const noexcept
+{
+    return stage_ == Stage::Ready || stage_ == Stage::Complete || stage_ == Stage::Failed;
+}
+
 bool PickPlaceMission::IsMissionActive() const noexcept
 {
-    return stage_ != Stage::Ready && stage_ != Stage::Complete && stage_ != Stage::Failed;
+    return !IsStartableStage();
 }
 
 bool PickPlaceMission::IsEnvironmentCollisionStopped(const robotics::RobotState& state) const noexcept
@@ -505,8 +510,7 @@ void PickPlaceMission::ApplyActions(const PickPlaceMissionActions& actions,
     const robotics::RobotState& state, robotics::IRobotController& controller, bool boxGrasped,
     const robotics::CartesianPose& graspBoxPoseInBase)
 {
-    const bool canStart = !taskPaused_ && !boxGrasped &&
-        (stage_ == Stage::Ready || stage_ == Stage::Complete || stage_ == Stage::Failed);
+    const bool canStart = !taskPaused_ && !boxGrasped && IsStartableStage();
     // 첫 임무는 버튼으로 시작하고 성공 뒤에는 Viewer가 상자를 옮기고 Ready로 돌려놓아 자동으로 다음 임무를 시작한다.
     const bool startRequested = canStart && orientationReady_ &&
         (actions.start || (autoLoopEnabled_ && stage_ == Stage::Ready));
@@ -617,8 +621,7 @@ PickPlaceMissionSnapshot PickPlaceMission::Snapshot() const
     case Stage::Failed: stageName = "Failed"; break;
     }
     return {stageName, lastResult_.message, taskPaused_, stage_ == Stage::Complete, autoLoopEnabled_,
-        hasResult_, lastResult_.Ok(), !taskPaused_ &&
-            (stage_ == Stage::Ready || stage_ == Stage::Complete || stage_ == Stage::Failed),
+        hasResult_, lastResult_.Ok(), !taskPaused_ && IsStartableStage(),
         completedMissionCount_};
 }
 
