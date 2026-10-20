@@ -17,8 +17,6 @@ namespace
 constexpr std::size_t kMaximumPoseIkSeeds = 64;
 constexpr std::size_t kMaximumPoseIkSeedsWithContinuation = 16;
 constexpr double kJointPositionMatchTolerance = 1e-8;
-constexpr double kMinimumPathRampFraction = 0.005;
-constexpr double kMaximumPathRampFraction = 0.45;
 
 struct SimRobotControllerMessages final
 {
@@ -736,7 +734,7 @@ Result SimRobotController::CommitLinearPathPlan(
     linearMotion_.profileRampFraction = accelerationTime /
         (linearMotion_.plannedDurationSeconds + accelerationTime);
     linearMotion_.profileRampFraction = std::clamp(linearMotion_.profileRampFraction,
-        kMinimumPathRampFraction, kMaximumPathRampFraction);
+        detail::kMinimumPathRampFraction, detail::kMaximumPathRampFraction);
     linearMotion_.profileDurationSeconds = linearMotion_.plannedDurationSeconds /
         (1.0 - linearMotion_.profileRampFraction);
     jointMotion_.targetPositions = candidate.back().joints;

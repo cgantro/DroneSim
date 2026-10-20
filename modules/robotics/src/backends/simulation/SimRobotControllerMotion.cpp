@@ -52,7 +52,8 @@ double TrapezoidDistanceFraction(double timeFraction, double rampTimeFraction)
 {
     // 프로파일은 시간의 앞·뒤 rampTimeFraction 비율에서 속도를 선형으로 올리고 내리며, 가운데는 최대 속도를 유지한다.
     // 속도를 적분한 뒤 전체 면적 1-ramp와 비교해 경로 전체가 정확히 0부터 1까지 진행하도록 정규화한다.
-    const double ramp = std::clamp(rampTimeFraction, 1e-6, 0.49);
+    const double ramp = std::clamp(rampTimeFraction,
+        detail::kMinimumPathRampFraction, detail::kMaximumPathRampFraction);
     const double u = std::clamp(timeFraction, 0.0, 1.0);
     double integratedSpeed = 0.0;
     if (u < ramp)
