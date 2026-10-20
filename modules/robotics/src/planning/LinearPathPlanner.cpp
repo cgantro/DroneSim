@@ -1228,15 +1228,6 @@ LinearPathPlanningJob& LinearPathPlanningJob::operator=(LinearPathPlanningJob&&)
 Result LinearPathPlanningJob::Begin(const LinearPathMoveCommand& command,
     const models::RobotSpecification& specification, const JointVector& startJoints,
     const CartesianPose& startTcp, kinematics::LevenbergMarquardtIk& inverse,
-    const StateValidityChecker& stateValidityChecker, const PlanningPolicy& policy)
-{
-    return Begin(command, specification, startJoints, startTcp, inverse,
-        stateValidityChecker, policy, {});
-}
-
-Result LinearPathPlanningJob::Begin(const LinearPathMoveCommand& command,
-    const models::RobotSpecification& specification, const JointVector& startJoints,
-    const CartesianPose& startTcp, kinematics::LevenbergMarquardtIk& inverse,
     const StateValidityChecker& stateValidityChecker, const PlanningPolicy& policy,
     const std::function<std::string()>& validityDiagnosticProvider)
 {
@@ -1276,16 +1267,6 @@ std::optional<LinearPathPlan> LinearPathPlanningJob::TakePlan()
     impl_->plan = {};
     impl_->ReleasePlanningStorage();
     return plan;
-}
-
-Result BuildLinearPath(const LinearPathMoveCommand& command,
-    const models::RobotSpecification& specification, const JointVector& startJoints,
-    const CartesianPose& startTcp, kinematics::LevenbergMarquardtIk& inverse,
-    const StateValidityChecker& stateValidityChecker, LinearPathPlan& plan,
-    const PlanningPolicy& policy)
-{
-    return BuildLinearPath(command, specification, startJoints, startTcp, inverse,
-        stateValidityChecker, plan, policy, {});
 }
 
 Result BuildLinearPath(const LinearPathMoveCommand& command,
