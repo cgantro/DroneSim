@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<robot name="test arm 4 axis">
+  <link name="base_link"><collision><geometry><box size="0.12 0.12 0.12"/></geometry></collision></link>
+  <link name="link1"><collision><origin xyz="0 0 0.06"/><geometry><box size="0.10 0.10 0.12"/></geometry></collision></link>
+  <link name="link2"><collision><origin xyz="0 0 0.06"/><geometry><box size="0.10 0.10 0.12"/></geometry></collision></link>
+  <link name="link3"><collision><origin xyz="0 0 0.06"/><geometry><box size="0.10 0.10 0.12"/></geometry></collision></link>
+  <link name="link4"><collision><origin xyz="0 0 0.06"/><geometry><box size="0.10 0.10 0.12"/></geometry></collision></link>
+  <link name="tool0"/>
+  <joint name="joint1" type="revolute"><parent link="base_link"/><child link="link1"/><origin xyz="0 0.12 0"/><axis xyz="0 0 1"/><limit lower="-2.5" upper="2.5" velocity="1.5"/></joint>
+  <joint name="joint2" type="revolute"><parent link="link1"/><child link="link2"/><origin xyz="0 0.12 0"/><axis xyz="1 0 0"/><limit lower="-2.5" upper="2.5" velocity="1.5"/></joint>
+  <joint name="joint3" type="revolute"><parent link="link2"/><child link="link3"/><origin xyz="0 0.12 0"/><axis xyz="0 1 0"/><limit lower="-2.5" upper="2.5" velocity="1.5"/></joint>
+  <joint name="joint4" type="revolute"><parent link="link3"/><child link="link4"/><origin xyz="0 0.12 0"/><axis xyz="0 0 1"/><limit lower="-2.5" upper="2.5" velocity="1.5"/></joint>
+  <joint name="tool_fixed" type="fixed"><parent link="link4"/><child link="tool0"/><origin xyz="0 0.12 0"/></joint>
+</robot>
