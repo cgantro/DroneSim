@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 #if !defined(__EMSCRIPTEN__) || defined(__EMSCRIPTEN_PTHREADS__)
@@ -82,8 +83,14 @@ struct PhysicsWorldSettings final
     static constexpr float boxConvexRadiusExtentRatio = 0.1F;
     static constexpr float convexHullRadiusMeters = 0.0F;
     static constexpr float minimumRotationLengthSquared = 1.0e-12F;
-    static constexpr double minimumValidDeltaSeconds = 0.0;
 };
+
+// 공개 API는 double을 받지만 Jolt는 float만 받으므로 변환해도 유한한 양수인지 먼저 확인한다.
+bool IsValidFixedDeltaSeconds(double seconds) noexcept
+{
+    return std::isfinite(seconds) && seconds > 0.0 &&
+        seconds <= static_cast<double>(std::numeric_limits<float>::max());
+}
 
 struct PhysicsWorldIdentity final
 {
@@ -116,7 +123,7 @@ struct PhysicsErrorMessages final
     inline static constexpr char ignoredBodyMustBeEnvironment[] =
         "Only an Environment body can be ignored in an environment overlap query.";
     inline static constexpr char invalidFixedDeltaSeconds[] =
-        "fixedDeltaSeconds must be finite and > 0.";
+        "fixedDeltaSeconds must be a finite positive float value.";
     inline static constexpr char moveKinematicRequiresKinematicBody[] =
         "MoveKinematic requires a kinematic body.";
     inline static constexpr char kinematicStopRequiresKinematicBody[] =
@@ -635,8 +642,7 @@ PhysicsWorld::~PhysicsWorld() = default;
 
 void PhysicsWorld::Step(double fixedDeltaSeconds)
 {
-    if (!std::isfinite(fixedDeltaSeconds) ||
-        fixedDeltaSeconds <= PhysicsWorldSettings::minimumValidDeltaSeconds)
+    if (!IsValidFixedDeltaSeconds(fixedDeltaSeconds))
     {
         return;
     }
@@ -988,8 +994,7 @@ void PhysicsWorld::MoveKinematic(
     const JPH::BodyID bodyID = impl_->RequireBodyID(handle);
     ValidateTransform(targetTransform);
 
-    if (!std::isfinite(fixedDeltaSeconds) ||
-        fixedDeltaSeconds <= PhysicsWorldSettings::minimumValidDeltaSeconds)
+    if (!IsValidFixedDeltaSeconds(fixedDeltaSeconds))
         throw std::invalid_argument(PhysicsErrorMessages::invalidFixedDeltaSeconds);
 
     auto& bodyInterface = impl_->physicsSystem.GetBodyInterface();

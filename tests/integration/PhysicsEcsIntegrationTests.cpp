@@ -49,6 +49,25 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
     grasplink::physics::PhysicsWorld physics;
     const auto firstBody = physics.CreateBox({});
     {
+        grasplink::physics::PhysicsWorld oversizedMovePhysics;
+        grasplink::physics::BoxBodyDescription kinematicDescription;
+        kinematicDescription.motionType = BodyMotionType::Kinematic;
+        const auto kinematicBody = oversizedMovePhysics.CreateBox(kinematicDescription);
+        EXPECT_THROW(oversizedMovePhysics.MoveKinematic(
+            kinematicBody, {}, std::numeric_limits<double>::max()), std::invalid_argument);
+    }
+    {
+        grasplink::physics::PhysicsWorld oversizedStepPhysics;
+        grasplink::physics::BoxBodyDescription fallingDescription;
+        fallingDescription.motionType = BodyMotionType::Dynamic;
+        fallingDescription.transform.position.y = 2.0F;
+        const auto fallingBody = oversizedStepPhysics.CreateBox(fallingDescription);
+        const auto before = oversizedStepPhysics.GetBodyTransform(fallingBody);
+        oversizedStepPhysics.Step(std::numeric_limits<double>::max());
+        const auto after = oversizedStepPhysics.GetBodyTransform(fallingBody);
+        EXPECT_EQ(after.position.y, before.position.y);
+    }
+    {
         // World가 하나 더 만들어졌다 사라져도 첫 World가 쓰는 Jolt 등록은 유지되어야 한다.
         grasplink::physics::PhysicsWorld secondaryPhysics;
         const auto foreignBody = secondaryPhysics.CreateBox({});
