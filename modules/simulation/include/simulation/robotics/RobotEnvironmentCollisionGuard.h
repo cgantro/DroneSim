@@ -116,6 +116,8 @@ private:
     grasplink::robotics::JointVector m_SafeJointPositions;
     std::vector<flecs::entity> m_CollisionEntities;
     std::vector<SelfCollisionProxy> m_SelfCollisionProxies;
+    /// 물리 설정 변경으로 Body handle이 바뀔 수 있어 한 번의 충돌 검사 안에서만 재사용한다.
+    mutable std::vector<std::optional<grasplink::physics::PhysicsBodyHandle>> m_SelfCollisionBodyHandleCache;
     std::vector<grasplink::scene::Entity> m_GripperCollisionEntities;
     std::vector<grasplink::simulation::RobotPhysicsAdapter::CandidateWorldTransform> m_CandidateProxyWorldTransforms;
     std::vector<glm::mat4> m_CandidateGripperWorldTransforms;

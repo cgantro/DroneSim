@@ -34,6 +34,7 @@
 namespace grasplink::simulation::robotics
 {
 using grasplink::physics::Transform;
+using grasplink::physics::PhysicsBodyHandle;
 using grasplink::robotics::ErrorCode;
 using grasplink::robotics::JointVector;
 using grasplink::robotics::RobotMode;
@@ -146,6 +147,7 @@ RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
         throw std::invalid_argument(CollisionGuardMessages::missingGripperRoot);
 
     CollectCollisionProxies();
+    m_SelfCollisionBodyHandleCache.resize(m_SelfCollisionProxies.size());
 
     const auto& initialKinematics = m_RobotKinematics.Update(robotController.GetStateView());
     if (m_GripperSupport)
@@ -365,10 +367,20 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyHasSelfCollision(
     const std::vector<Transform>& candidateTransforms) const
 {
     ZoneScopedN("SelfCollisionCheck");
+    std::fill(m_SelfCollisionBodyHandleCache.begin(),
+        m_SelfCollisionBodyHandleCache.end(), std::nullopt);
+    const auto bodyHandleAt = [this](std::size_t index) -> PhysicsBodyHandle
+    {
+        auto& cachedHandle = m_SelfCollisionBodyHandleCache[index];
+        if (!cachedHandle)
+            cachedHandle = m_PhysicsSystem.GetBodyHandle(m_SelfCollisionProxies[index].entity);
+        return *cachedHandle;
+    };
+
     for (std::size_t firstIndex = 0; firstIndex < m_SelfCollisionProxies.size(); ++firstIndex)
     {
         const SelfCollisionProxy& first = m_SelfCollisionProxies[firstIndex];
-        const auto firstBody = m_PhysicsSystem.GetBodyHandle(first.entity);
+        const auto firstBody = bodyHandleAt(firstIndex);
         if (!firstBody.IsValid())
         {
             m_LastSelfCollisionDescription = DescribeIdentity(first.identity) +
@@ -384,7 +396,7 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyHasSelfCollision(
             if (IsAllowedSelfCollision(first.identity, second.identity))
                 continue;
 
-            const auto secondBody = m_PhysicsSystem.GetBodyHandle(second.entity);
+            const auto secondBody = bodyHandleAt(secondIndex);
             if (!secondBody.IsValid())
             {
                 m_LastSelfCollisionDescription = DescribeIdentity(first.identity) + " / " +
