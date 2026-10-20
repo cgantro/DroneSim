@@ -31,6 +31,7 @@ struct GltfTransformLimits final
 // 형상 연결 번호는 uint32_t로 저장하므로 배열 크기도 이 범위를 넘을 수 없다.
 struct GltfMeshLimits final
 {
+    inline static constexpr std::size_t indicesPerTriangle = 3;
     inline static constexpr std::size_t maximumMeshValue =
         std::numeric_limits<std::uint32_t>::max();
 };
@@ -120,6 +121,8 @@ struct GltfLoaderErrorMessages final
             "NORMAL count does not match POSITION count";
         inline static constexpr char textureCoordinateCountMismatch[] =
             "TEXCOORD_0 count does not match POSITION count";
+        inline static constexpr char invalidTriangleIndexCount[] =
+            "glTF triangle primitive index count must be a positive multiple of three";
         inline static constexpr char indexRangeTooLarge[] =
             "glTF mesh index range exceeds uint32_t";
     };
@@ -569,6 +572,11 @@ MeshData ConvertMesh(
 
         const std::vector<std::uint32_t> localIndices =
             ReadIndices(model, primitive.indices, vertexCount);
+        if (localIndices.size() < GltfMeshLimits::indicesPerTriangle ||
+            localIndices.size() % GltfMeshLimits::indicesPerTriangle != 0)
+        {
+            throw std::runtime_error(GltfLoaderErrorMessages::Mesh::invalidTriangleIndexCount);
+        }
 
         if (result.indices.size() > GltfMeshLimits::maximumMeshValue ||
             localIndices.size() > GltfMeshLimits::maximumMeshValue - result.indices.size())

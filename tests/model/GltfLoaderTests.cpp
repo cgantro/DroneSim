@@ -25,8 +25,17 @@ void AppendUInt32(Bytes& bytes, std::uint32_t value)
 class TriangleGlb final
 {
 public:
-    explicit TriangleGlb(std::size_t viewLength, int materialIndex = -1)
+    explicit TriangleGlb(std::size_t viewLength, int materialIndex = -1,
+        std::size_t vertexCount = 3U)
     {
+        constexpr std::array<std::array<float, 3>, 4> positions{{
+            {0.0F, 0.0F, 0.0F},
+            {1.0F, 0.0F, 0.0F},
+            {0.0F, 1.0F, 0.0F},
+            {1.0F, 1.0F, 0.0F}}};
+        if (vertexCount > positions.size())
+            throw std::invalid_argument("triangle GLB test supports at most four vertices");
+        const std::size_t bufferLength = vertexCount * sizeof(positions[0]);
         path_ = std::filesystem::temp_directory_path() /
             ("grasplink-triangle-" + std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count()) + ".glb");
@@ -35,19 +44,17 @@ public:
             ? std::string{}
             : ",\"material\":" + std::to_string(materialIndex);
         std::string json =
-            "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":36}],"
+            "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" +
+            std::to_string(bufferLength) + "}],"
             "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" + std::to_string(viewLength) +
-            "}],\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":3,\"type\":\"VEC3\"}],"
+            "}],\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
+            std::to_string(vertexCount) + ",\"type\":\"VEC3\"}],"
             "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}" +
             primitiveMaterial + "}]}],"
             "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0}";
 
-        Bytes binary(36U);
-        constexpr std::array<float, 9> positions{
-            0.0F, 0.0F, 0.0F,
-            1.0F, 0.0F, 0.0F,
-            0.0F, 1.0F, 0.0F};
-        std::memcpy(binary.data(), positions.data(), sizeof(positions));
+        Bytes binary(bufferLength);
+        std::memcpy(binary.data(), positions.data(), binary.size());
         while (json.size() % 4U != 0U) json.push_back(' ');
         while (binary.size() % 4U != 0U) binary.push_back(0U);
 
@@ -100,4 +107,7 @@ TEST(GltfLoader, ReadsPositionsAndRejectsAccessorOutsideBufferView)
 
     TriangleGlb missingMaterial(36U, 0);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(missingMaterial.Path()), std::runtime_error);
+
+    TriangleGlb incompleteTriangle(48U, -1, 4U);
+    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(incompleteTriangle.Path()), std::runtime_error);
 }
