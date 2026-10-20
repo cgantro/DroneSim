@@ -118,6 +118,7 @@ void CheckLinearPathPlanningBudgetAndCancellation()
     EXPECT_EQ(job.Advance(1), LinearPathPlanningState::Running);
     job.Cancel();
     EXPECT_EQ(job.GetState(), LinearPathPlanningState::Cancelled);
+    EXPECT_EQ(job.GetResult().code, ErrorCode::Cancelled);
     EXPECT_TRUE(checkerContextLifetime.expired());
     EXPECT_EQ(job.Advance(64), LinearPathPlanningState::Cancelled);
     EXPECT_FALSE(job.TakePlan().has_value());

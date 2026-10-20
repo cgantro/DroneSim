@@ -1207,7 +1207,10 @@ void LinearPathPlanningJob::Cancel() noexcept
         impl_->ikSession = 0;
     }
     if (impl_->state == LinearPathPlanningState::Running)
+    {
         impl_->state = LinearPathPlanningState::Cancelled;
+        impl_->result = {ErrorCode::Cancelled, "LinearPathPlanner: planning cancelled"};
+    }
     impl_->ReleasePlanningStorage();
 }
 
