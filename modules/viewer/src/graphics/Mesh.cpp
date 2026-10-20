@@ -25,12 +25,14 @@ Mesh::Mesh(const ::grasplink::model::Vertex* vertices, std::uint32_t vertexCount
     vertexArray_->Bind();
 
     // GPU buffer 업로드 함수는 byte 수를 받으므로 Vertex 개수에 Vertex 구조체 크기를 곱해 전달한다.
-    const std::size_t byteCount = sizeof(::grasplink::model::Vertex) * static_cast<std::size_t>(vertexCount);
-    if (byteCount > std::numeric_limits<std::uint32_t>::max())
+    const std::size_t maximumBufferBytes = std::numeric_limits<std::uint32_t>::max();
+    if (vertexCount > maximumBufferBytes / sizeof(::grasplink::model::Vertex))
     {
         throw std::runtime_error("Mesh vertex data exceeds the GPU buffer limit");
     }
-    vertexBuffer_ = std::make_unique<VertexBuffer>(vertices, static_cast<std::uint32_t>(byteCount));
+    const auto byteCount = static_cast<std::uint32_t>(
+        sizeof(::grasplink::model::Vertex) * static_cast<std::size_t>(vertexCount));
+    vertexBuffer_ = std::make_unique<VertexBuffer>(vertices, byteCount);
     vertexBuffer_->Bind();
 
     // index buffer 연결은 현재 VAO의 일부로 저장된다. VAO를 선택한 상태에서 buffer를 만들고 올려 이후 그리기에 쓰도록 한다.

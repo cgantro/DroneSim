@@ -43,6 +43,8 @@ void ValidateMeshData(const ::grasplink::model::MeshData& meshData)
     const std::size_t maximum = std::numeric_limits<std::uint32_t>::max();
     if (meshData.vertices.size() > maximum)
         throw std::runtime_error("Mesh vertex count exceeds uint32_t range");
+    if (meshData.vertices.size() > maximum / sizeof(::grasplink::model::Vertex))
+        throw std::runtime_error("Mesh vertex data exceeds the GPU buffer limit: " + meshData.name);
     if (meshData.indices.size() > maximum)
         throw std::runtime_error("Mesh index count exceeds uint32_t range");
     if (meshData.indices.size() % 3U != 0U)
