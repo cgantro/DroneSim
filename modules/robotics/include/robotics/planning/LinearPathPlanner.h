@@ -17,11 +17,11 @@ namespace grasplink::robotics::planning
 {
 
 /** @brief 직선 경로의 각 표본을 더 엄격한 위치·방향 오차로 맞추는 IK 설정을 만든다. */
-inline kinematics::IkOptions PathIkOptions()
+inline kinematics::IkOptions PathIkOptions(const models::RobotSpecification& specification)
 {
     // 기본 IK 허용 오차는 경로 직선 오차 예산보다 위치는 100배, 방향은 10배 작다.
     // 따라서 별도의 과도한 수렴 기준을 두지 않고 DLS 기본값을 사용한다.
-    return {};
+    return kinematics::RobotDefaultIkOptions(specification);
 }
 
 /** @brief TCP 경로가 비어 있지 않고 속도·가속도 상한이 모두 유효한지 확인한다. */

@@ -77,6 +77,13 @@ struct IkOptions
 };
 
 /**
+ * @brief 로봇 관절 수에 맞는 기본 역기구학 목표를 고른다.
+ * @details 6개보다 적은 관절로는 위치와 세 방향을 모두 자유롭게 맞출 수 없으므로 위치만 맞춘다.
+ * 6개 이상이면 위치와 방향을 함께 맞춘다. 호출자가 더 구체적인 목표를 원하면 IkOptions를 직접 지정한다.
+ */
+[[nodiscard]] IkOptions RobotDefaultIkOptions(const models::RobotSpecification& specification);
+
+/**
  * @brief IK의 성공 여부와 가장 가까워진 관절각, 잔여 오차를 값으로 반환한다.
  * @details jointPositions는 RobotSpecification 순서다. 회전 관절은 [rad], 직선 관절은 [m]다.
  * 실패 결과의 관절각은 진단용 후보이므로 Controller 목표로 실행하지 않는다.

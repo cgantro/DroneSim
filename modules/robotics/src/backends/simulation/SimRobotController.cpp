@@ -306,7 +306,8 @@ Result SimRobotController::MovePose(const CartesianPose& targetInBase, double ve
     planning::JointStateInvalidity invalidity = planning::JointStateInvalidity::None;
     kinematics::IkResult ikFailure;
     auto solution = planning::SolveCollisionFreeIk(inverse_, *specification_, jointStateValidityChecker_,
-        targetInBase, state_.jointPositions, {}, planning::kDefaultPlanningPolicy,
+        targetInBase, state_.jointPositions,
+        kinematics::RobotDefaultIkOptions(*specification_), planning::kDefaultPlanningPolicy,
         invalidity, ikFailure);
     if (!solution)
     {
@@ -372,7 +373,8 @@ Result SimRobotController::BeginPosePlanningImpl(
     posePlanning_.target = targetInBase;
     posePlanning_.pathFailure = Result::Success();
     pendingPoseMove_ = {{}, velocityScale, accelerationScale};
-    posePlanning_.ikSession = inverse_.BeginSingleSeed(targetInBase, state_.jointPositions);
+    posePlanning_.ikSession = inverse_.BeginSingleSeed(targetInBase, state_.jointPositions,
+        kinematics::RobotDefaultIkOptions(*specification_));
     posePlanning_.phase = PosePlanningPhase::Ik;
     state_.mode = RobotMode::Planning;
     state_.errorCode = ErrorCode::None;
@@ -386,7 +388,8 @@ bool SimRobotController::StartNextPoseIkSeed()
     posePlanning_.continuationPlan.reset();
     posePlanning_.candidateJoints.clear();
     posePlanning_.ikSession = inverse_.BeginSingleSeed(posePlanning_.target,
-        posePlanning_.alternativeSeeds[posePlanning_.alternativeSeedIndex++]);
+        posePlanning_.alternativeSeeds[posePlanning_.alternativeSeedIndex++],
+        kinematics::RobotDefaultIkOptions(*specification_));
     ++posePlanning_.ikSeedAttempts;
     posePlanning_.phase = PosePlanningPhase::Ik;
     return true;

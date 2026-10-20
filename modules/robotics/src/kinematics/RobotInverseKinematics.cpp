@@ -14,6 +14,15 @@
 
 namespace grasplink::robotics::kinematics
 {
+
+IkOptions RobotDefaultIkOptions(const models::RobotSpecification& specification)
+{
+    IkOptions options;
+    if (specification.jointCount < 6)
+        options.taskMode = IkTaskMode::PositionOnly;
+    return options;
+}
+
 namespace
 {
 using namespace detail;

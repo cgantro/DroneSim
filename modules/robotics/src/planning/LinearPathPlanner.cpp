@@ -318,7 +318,7 @@ struct LinearPathPlanningJob::Impl
             return {ErrorCode::InvalidCommand, LinearPathPlannerMessages::invalidTcpTarget};
         }
 
-        options = PathIkOptions();
+        options = PathIkOptions(*specification);
         for (const CartesianPose& endpoint : command.targetPoses)
         {
             const auto endpointSession = inverse->BeginSingleSeed(endpoint, startJoints, options);

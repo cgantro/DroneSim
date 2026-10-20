@@ -39,9 +39,9 @@ bool JointInterpolationFollowsTcpLine(
     return true;
 }
 
-kinematics::IkOptions RuntimeLinearIkOptions()
+kinematics::IkOptions RuntimeLinearIkOptions(const models::RobotSpecification& specification)
 {
-    kinematics::IkOptions options = planning::PathIkOptions();
+    kinematics::IkOptions options = planning::PathIkOptions(specification);
     // 특이 자세에서 관절을 재배치하는 보조 IK에 완화한 오차를 사용해 반복 횟수를 제한한다.
     options.positionToleranceMeters = 1e-6;
     options.orientationToleranceRadians = 1e-5;
@@ -395,7 +395,7 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
     const auto& end = linearMotion_.path[linearMotion_.segment];
     const Pose3 pathTcp = Interpolate(
         FromCartesian(begin.tcpPose), FromCartesian(end.tcpPose), linearMotion_.segmentFraction);
-    const auto options = RuntimeLinearIkOptions();
+    const auto options = RuntimeLinearIkOptions(*specification_);
     double attraction = 1.0;
     double previousDistanceSquared = 0.0;
     for (std::size_t i = 0; i < current.size(); ++i)

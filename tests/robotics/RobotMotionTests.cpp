@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -81,6 +82,26 @@ void CheckPoseApproachWithLinearContinuation()
         ik.EvaluateTcp(continuationJoints)), 0.001);
 }
 
+void CheckFourAxisControllerUsesPositionIk()
+{
+    std::array<models::JointSpecification, 4> joints{};
+    std::copy_n(models::hanwha::kHcr12a.joints, joints.size(), joints.begin());
+    const models::RobotSpecification specification{
+        "Test", "FourAxis", joints.data(), joints.size(), nullptr, 0,
+        models::hanwha::kHcr12a.toolFrameInLastJoint, true};
+    LevenbergMarquardtIk inverse(specification);
+    SimRobotController controller(specification);
+    ASSERT_TRUE(static_cast<bool>(controller.Connect()));
+
+    const JointVector targetJoints{0.12, -0.1, 0.08, 0.05};
+    CartesianPose target = inverse.EvaluateTcp(targetJoints);
+    target.orientationXyzw = {0.0, 0.0, 0.0, 1.0};
+    const Result result = controller.MovePose(target);
+    ASSERT_TRUE(static_cast<bool>(result)) << result.message;
+    ASSERT_TRUE(AdvanceUntilIdle(controller, 0.004));
+    EXPECT_LT(PositionDistance(controller.GetStateView().tcpPose, target), 1e-3);
+}
+
 void CheckMovePoseAndFailurePreservation()
 {
     const models::Pose3 tcpOffset{{0.04, 0.0, 0.0}, {}};
@@ -130,6 +151,7 @@ void CheckMovePoseAndFailurePreservation()
     ASSERT_TRUE(AdvanceUntilIdle(controller, 0.006)) << "motion reaches target within bounded updates";
     ASSERT_NEAR(controller.GetState().jointPositions[0], -0.2, 1e-8) << "MoveJoint replaces a pose target";
     CheckPoseApproachWithLinearContinuation();
+    CheckFourAxisControllerUsesPositionIk();
 }
 
 void CheckMoveJointRejectsInvalidPath();
