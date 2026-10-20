@@ -552,6 +552,16 @@ struct PhysicsWorld::Impl
             physicsSystem.GetBodyInterface().IsAdded(ToBodyID(handle));
     }
 
+    bool AreBodiesAsleep(const ContactSnapshot& contact) const
+    {
+        if (!IsBodyValid(contact.first) || !IsBodyValid(contact.second))
+            return false;
+
+        const auto& bodies = physicsSystem.GetBodyInterface();
+        return !bodies.IsActive(ToBodyID(contact.first)) &&
+            !bodies.IsActive(ToBodyID(contact.second));
+    }
+
     JPH::BodyID RequireBodyID(PhysicsBodyHandle handle) const
     {
         if (!IsBodyValid(handle))
@@ -638,11 +648,9 @@ void PhysicsWorld::Step(double fixedDeltaSeconds)
         // 잠든 접촉은 자세가 바뀌지 않으므로 유지하되 어느 물체든 깨면 이전 접촉을 버리고 이번 충돌 검사 결과를 기다린다.
         std::lock_guard lock(impl_->contactCollector.mutex);
         auto& collector = impl_->contactCollector;
-        const auto& bodies = impl_->physicsSystem.GetBodyInterface();
         for (auto entry = collector.sleeping.begin(); entry != collector.sleeping.end();)
         {
-            if (!IsBodyValid(entry->second.first) || !IsBodyValid(entry->second.second) ||
-                bodies.IsActive(ToBodyID(entry->second.first)) || bodies.IsActive(ToBodyID(entry->second.second)))
+            if (!impl_->AreBodiesAsleep(entry->second))
             {
                 collector.contacts.erase(entry->first);
                 entry = collector.sleeping.erase(entry);
@@ -661,10 +669,8 @@ void PhysicsWorld::Step(double fixedDeltaSeconds)
         // 삭제 callback 안에서는 Body에 접근할 수 없다. 모든 worker가 끝난 이 시점에서만 두 Body의 수면 상태를 확인한다.
         std::lock_guard lock(impl_->contactCollector.mutex);
         auto& collector = impl_->contactCollector;
-        const auto& bodies = impl_->physicsSystem.GetBodyInterface();
         for (const auto& entry : collector.removed)
-            if (IsBodyValid(entry.second.first) && IsBodyValid(entry.second.second) &&
-                !bodies.IsActive(ToBodyID(entry.second.first)) && !bodies.IsActive(ToBodyID(entry.second.second)))
+            if (impl_->AreBodiesAsleep(entry.second))
             {
                 collector.sleeping[entry.first] = entry.second;
                 collector.contacts[entry.first] = entry.second;
