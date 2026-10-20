@@ -14,7 +14,12 @@ namespace grasplink::robotics::backends::simulation
 namespace planning = grasplink::robotics::planning;
 namespace
 {
-constexpr std::size_t kMaximumPoseIkSeeds = 16;
+constexpr std::size_t kMaximumPoseIkSeeds = 64;
+constexpr std::size_t kMaximumPoseIkSeedsWithContinuation = 16;
+constexpr double kJointPositionMatchTolerance = 1e-8;
+constexpr double kMinimumPathRampFraction = 0.005;
+constexpr double kMaximumPathRampFraction = 0.45;
+
 struct SimRobotControllerMessages final
 {
     inline static constexpr char notConnected[] = "SimRobotController: not connected";
@@ -90,7 +95,7 @@ bool SameJointPosition(const JointVector& lhs, const JointVector& rhs)
         return false;
     for (std::size_t index = 0; index < lhs.size(); ++index)
     {
-        if (std::abs(lhs[index] - rhs[index]) > 1e-8)
+        if (std::abs(lhs[index] - rhs[index]) > kJointPositionMatchTolerance)
             return false;
     }
     return true;
@@ -349,7 +354,8 @@ Result SimRobotController::BeginPosePlanningImpl(
     posePlanning_.candidateJoints.clear();
     posePlanning_.alternativeSeeds = kinematics::detail::BuildAlternativeIkSeeds(
         state_.jointPositions, *specification_);
-    const std::size_t maximumSeeds = posePlanning_.continuationCommand ? kMaximumPoseIkSeeds : 64;
+    const std::size_t maximumSeeds = posePlanning_.continuationCommand
+        ? kMaximumPoseIkSeedsWithContinuation : kMaximumPoseIkSeeds;
     kinematics::detail::AppendIkRestartSeeds(posePlanning_.alternativeSeeds,
         state_.jointPositions, *specification_, maximumSeeds - 1);
     posePlanning_.alternativeSeedIndex = 0;
@@ -731,7 +737,8 @@ Result SimRobotController::CommitLinearPathPlan(
         plannedAngularVelocity / linearMotion_.angularAccelerationLimit);
     linearMotion_.profileRampFraction = accelerationTime /
         (linearMotion_.plannedDurationSeconds + accelerationTime);
-    linearMotion_.profileRampFraction = std::clamp(linearMotion_.profileRampFraction, 0.005, 0.45);
+    linearMotion_.profileRampFraction = std::clamp(linearMotion_.profileRampFraction,
+        kMinimumPathRampFraction, kMaximumPathRampFraction);
     linearMotion_.profileDurationSeconds = linearMotion_.plannedDurationSeconds /
         (1.0 - linearMotion_.profileRampFraction);
     linearMotion_.profileElapsedSeconds = 0.0;
