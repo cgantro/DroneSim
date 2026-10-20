@@ -6,7 +6,6 @@
 #include <glm/gtx/norm.hpp>
 #include <algorithm>
 #include <cmath>
-#include <functional>
 #include <stdexcept>
 
 namespace grasplink::simulation::detail
