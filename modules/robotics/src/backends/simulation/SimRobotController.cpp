@@ -158,7 +158,7 @@ Result SimRobotController::Connect()
     linearInterpolationBuffer_.resize(specification_.jointCount);
     previousJointPositions_.resize(specification_.jointCount);
     connected_ = true;
-    linearMotion_.path.clear();
+    linearMotion_.ClearPath();
     return Result::Success();
 }
 
@@ -171,7 +171,7 @@ void SimRobotController::Disconnect() noexcept
     state_.mode = RobotMode::Disconnected;
     state_.valid = false;
     state_.tcpPoseValid = false;
-    linearMotion_.path.clear();
+    linearMotion_.ClearPath();
     std::fill(
         state_.jointVelocities.begin(),
         state_.jointVelocities.end(),
@@ -717,16 +717,14 @@ Result SimRobotController::CommitLinearPathPlan(
         kMinimumPathRampFraction, kMaximumPathRampFraction);
     linearMotion_.profileDurationSeconds = linearMotion_.plannedDurationSeconds /
         (1.0 - linearMotion_.profileRampFraction);
-    linearMotion_.profileElapsedSeconds = 0.0;
     jointMotion_.targetPositions = candidate.back().joints;
     posePathPoints_.clear();
     posePathSegment_ = 0;
     posePlanning_.continuationCommand.reset();
     posePlanning_.continuationPlan.reset();
     posePlanning_.candidateJoints.clear();
+    linearMotion_.ClearPath();
     linearMotion_.path = std::move(candidate);
-    linearMotion_.segment = 1;
-    linearMotion_.segmentFraction = 0.0;
     state_.errorCode = ErrorCode::None;
     state_.mode = RobotMode::Moving;
     return Result::Success();
@@ -789,9 +787,8 @@ Result SimRobotController::Stop()
 
     // 현재 q를 새 목표로 고정해 이후 Update가 남은 동작을 재개하지 않게 한다.
     jointMotion_.Reset(state_.jointPositions);
-    linearMotion_.path.clear();
+    linearMotion_.ClearPath();
     ClearPosePlanningState();
-    linearMotion_.profileElapsedSeconds = 0.0;
     std::fill(
         state_.jointVelocities.begin(),
         state_.jointVelocities.end(),
@@ -850,10 +847,7 @@ bool SimRobotController::RestoreCollisionSafeState(
     state_.jointPositions = safePositions;
     std::fill(state_.jointVelocities.begin(), state_.jointVelocities.end(), 0.0);
     jointMotion_.Reset(safePositions);
-    linearMotion_.path.clear();
-    linearMotion_.segment = 1;
-    linearMotion_.segmentFraction = 0.0;
-    linearMotion_.profileElapsedSeconds = 0.0;
+    linearMotion_.ClearPath();
     // unsafe tick은 직전 안전 자세로 되돌린 뒤 멈춘다. Fault로 고정하면 호출자가 위쪽 안전 자세로 물러나는 명령도 보낼 수 없다.
     state_.mode = RobotMode::Idle;
     state_.errorCode = collisionReason;

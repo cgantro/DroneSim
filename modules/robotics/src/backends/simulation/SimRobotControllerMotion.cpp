@@ -76,7 +76,7 @@ void SimRobotController::ConfigureJointMove(
     jointMotion_.targetPositions = std::move(targetPositions);
     jointMotion_.startPositions = state_.jointPositions;
     jointMotion_.progressAcceleration = std::numeric_limits<double>::infinity();
-    linearMotion_.path.clear();
+    linearMotion_.ClearPath();
 
     jointMotion_.progressRate = std::numeric_limits<double>::infinity();
     bool needsMotion = false;
@@ -249,9 +249,7 @@ void SimRobotController::UpdateLinear(double dtSeconds)
     // 속도를 계산할 수 있도록 tick 시작 위치를 보관한다.
     std::copy(state_.jointPositions.begin(), state_.jointPositions.end(),
         previousJointPositions_.begin());
-    double currentPathTime = 0.0;
-    for (std::size_t i = 1; i < linearMotion_.segment; ++i)
-        currentPathTime += linearMotion_.path[i].durationSeconds;
+    double currentPathTime = linearMotion_.completedPathDurationSeconds;
     if (linearMotion_.segment < linearMotion_.path.size())
         currentPathTime += linearMotion_.segmentFraction * linearMotion_.path[linearMotion_.segment].durationSeconds;
     linearMotion_.profileElapsedSeconds = std::min(linearMotion_.profileDurationSeconds,
@@ -285,6 +283,8 @@ void SimRobotController::UpdateLinear(double dtSeconds)
         remaining = usedSeconds >= remaining ? 0.0 : remaining - usedSeconds;
         if (linearMotion_.segmentFraction >= 1.0 - 1e-12)
         {
+            linearMotion_.completedPathDurationSeconds +=
+                linearMotion_.path[linearMotion_.segment].durationSeconds;
             linearMotion_.segmentFraction = 0.0;
             ++linearMotion_.segment;
         }
@@ -297,13 +297,13 @@ void SimRobotController::UpdateLinear(double dtSeconds)
     if (failed)
     {
         jointMotion_.targetPositions = state_.jointPositions;
-        linearMotion_.path.clear();
+        linearMotion_.ClearPath();
         state_.mode = RobotMode::Fault;
         state_.errorCode = ErrorCode::IkDidNotConverge;
     }
     else if (linearMotion_.segment >= linearMotion_.path.size())
     {
-        linearMotion_.path.clear();
+        linearMotion_.ClearPath();
         state_.mode = RobotMode::Idle;
     }
     for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)

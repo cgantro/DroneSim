@@ -311,6 +311,8 @@ private:
         std::vector<LinearPathPoint> path;
         std::size_t segment = 1;
         double segmentFraction = 0.0;
+        // 앞선 구간의 시간을 기억해 매 제어 틱마다 경로 처음부터 다시 더하지 않는다.
+        double completedPathDurationSeconds = 0.0;
         double linearVelocityLimit = 0.0;
         double angularVelocityLimit = 0.0;
         // 선형 및 회전 가속도 상한으로 사다리꼴 프로파일의 가속·감속 구간 길이를 계산한다.
@@ -321,6 +323,15 @@ private:
         double profileDurationSeconds = 0.0;
         double profileRampFraction = 0.0;
         double profileElapsedSeconds = 0.0;
+
+        void ClearPath() noexcept
+        {
+            path.clear();
+            segment = 1;
+            segmentFraction = 0.0;
+            completedPathDurationSeconds = 0.0;
+            profileElapsedSeconds = 0.0;
+        }
     };
     LinearMotionState linearMotion_;
 };
