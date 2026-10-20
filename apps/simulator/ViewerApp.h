@@ -169,7 +169,7 @@ private:
     // 모델의 Mesh, Material, Texture를 GPU 자원으로 올리고 공유한다.
     std::unique_ptr<grasplink::rendering::AssetManager> m_AssetManager;
 
-    // Collider 추출에 필요한 원본 CPU 정점 자료를 보관한다.
+    // GLB에서 읽은 화면 부품 자료다. 화면 계층을 만들고 그리퍼 충돌 위치를 찾을 때 쓴다.
     grasplink::model::ModelResource m_RobotModel;
     grasplink::model::RobotModel m_RobotDescription;
     // URDF에서 만든 사양 배열을 소유한다. 로봇 설명은 이 어댑터보다 먼저 만들어지고 나중에 파괴된다.
