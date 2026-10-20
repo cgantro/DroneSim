@@ -214,6 +214,10 @@ TEST(RobotModelLoader, ReadsSupportedJointTypesAndRejectsMalformedModels)
         TemporaryUrdf file{xml};
         EXPECT_THROW(grasplink::model::RobotModelLoader::LoadUrdf(file.Path()), std::runtime_error);
     };
+    expectRejected(Link("base_link") + Link("base_link") + Link("tool0"));
+    expectRejected(Link("base_link") + Link("tool0") +
+        "<joint name=\"broken\" type=\"fixed\"><parent link=\"base_link\"/>"
+        "<child link=\"missing\"/></joint>");
     expectRejected(missingAxisXml);
 
     const std::string zeroAxisXml = Link("base_link") + Link("arm") + Link("tool0") +

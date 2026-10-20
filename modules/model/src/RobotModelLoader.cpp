@@ -4,7 +4,6 @@
 
 #include <tinyxml2.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <limits>
@@ -20,6 +19,7 @@ namespace grasplink::model
 namespace
 {
 using tinyxml2::XMLElement;
+using LinkIndexByName = std::unordered_map<std::string, std::size_t>;
 constexpr double kMinimumJointAxisLength = 1.0e-12;
 
 // 모든 로봇 폴더가 따르는 파일 이름과 팔 경로의 기준 링크 이름이다.
@@ -99,14 +99,13 @@ bool HasValidCollisionDimensions(const RobotCollisionGeometry& geometry)
     return false;
 }
 
-std::size_t FindLink(const RobotModel& model, const std::string& name,
+std::size_t FindLink(const LinkIndexByName& linkIndices, const std::string& name,
     const std::filesystem::path& path)
 {
-    const auto found = std::find_if(model.links.begin(), model.links.end(),
-        [&](const RobotLink& link) { return link.name == name; });
-    if (found == model.links.end())
+    const auto found = linkIndices.find(name);
+    if (found == linkIndices.end())
         Invalid(path, "joint refers to unknown link '" + name + "'");
-    return static_cast<std::size_t>(found - model.links.begin());
+    return found->second;
 }
 
 bool IsDescendant(const ModelResource& visual, std::size_t node, std::size_t ancestor)
@@ -237,10 +236,11 @@ std::vector<std::size_t> FindActiveJoints(const RobotModel& model, const LinkTre
     return {reversePath.rbegin(), reversePath.rend()};
 }
 
-void FindActiveChain(RobotModel& model, const std::filesystem::path& path)
+void FindActiveChain(RobotModel& model, const LinkIndexByName& linkIndices,
+    const std::filesystem::path& path)
 {
-    model.baseLink = FindLink(model, RobotModelFormat::baseLink, path);
-    model.toolLink = FindLink(model, RobotModelFormat::toolLink, path);
+    model.baseLink = FindLink(linkIndices, RobotModelFormat::baseLink, path);
+    model.toolLink = FindLink(linkIndices, RobotModelFormat::toolLink, path);
     if (model.baseLink == model.toolLink)
         Invalid(path, "base_link and tool0 must be different links");
 
@@ -359,7 +359,8 @@ void ReadJointLimits(RobotJoint& joint, const XMLElement& element, const std::fi
         Invalid(path, "joint '" + joint.name + "' lower limit exceeds its upper limit");
 }
 
-RobotJoint ReadJoint(const XMLElement& element, const RobotModel& model, const std::filesystem::path& path)
+RobotJoint ReadJoint(const XMLElement& element, const LinkIndexByName& linkIndices,
+    const std::filesystem::path& path)
 {
     RobotJoint joint;
     joint.name = RequiredAttribute(element, "name", path);
@@ -369,8 +370,8 @@ RobotJoint ReadJoint(const XMLElement& element, const RobotModel& model, const s
     const XMLElement* child = element.FirstChildElement("child");
     if (parent == nullptr || child == nullptr)
         Invalid(path, "joint '" + joint.name + "' must name a parent and child link");
-    joint.parentLink = FindLink(model, RequiredAttribute(*parent, "link", path), path);
-    joint.childLink = FindLink(model, RequiredAttribute(*child, "link", path), path);
+    joint.parentLink = FindLink(linkIndices, RequiredAttribute(*parent, "link", path), path);
+    joint.childLink = FindLink(linkIndices, RequiredAttribute(*child, "link", path), path);
 
     if (const XMLElement* origin = element.FirstChildElement("origin"))
     {
@@ -384,15 +385,15 @@ RobotJoint ReadJoint(const XMLElement& element, const RobotModel& model, const s
     return joint;
 }
 
-void ReadLinks(const XMLElement& root, RobotModel& model, const std::filesystem::path& path)
+void ReadLinks(const XMLElement& root, RobotModel& model, LinkIndexByName& linkIndices,
+    const std::filesystem::path& path)
 {
-    std::unordered_set<std::string> linkNames;
     // robot 바로 아래의 link 항목만 순서대로 읽어 관절이 참조할 링크 목록을 만듭니다.
     for (const XMLElement* element = root.FirstChildElement("link"); element != nullptr;
         element = element->NextSiblingElement("link"))
     {
         RobotLink link = ReadLink(*element, path);
-        if (!linkNames.emplace(link.name).second)
+        if (!linkIndices.emplace(link.name, model.links.size()).second)
             Invalid(path, "duplicate link name '" + link.name + "'");
         model.links.push_back(std::move(link));
     }
@@ -400,14 +401,15 @@ void ReadLinks(const XMLElement& root, RobotModel& model, const std::filesystem:
         Invalid(path, "the robot has no links");
 }
 
-void ReadJoints(const XMLElement& root, RobotModel& model, const std::filesystem::path& path)
+void ReadJoints(const XMLElement& root, RobotModel& model, const LinkIndexByName& linkIndices,
+    const std::filesystem::path& path)
 {
     std::unordered_set<std::string> jointNames;
     // 링크 목록을 만든 뒤 관절 항목을 읽어 parent와 child 이름을 링크 번호로 바꿉니다.
     for (const XMLElement* element = root.FirstChildElement("joint"); element != nullptr;
         element = element->NextSiblingElement("joint"))
     {
-        RobotJoint joint = ReadJoint(*element, model, path);
+        RobotJoint joint = ReadJoint(*element, linkIndices, path);
         if (!jointNames.insert(joint.name).second)
             Invalid(path, "duplicate joint name '" + joint.name + "'");
         model.joints.push_back(std::move(joint));
@@ -445,15 +447,16 @@ RobotModel RobotModelLoader::LoadUrdf(const std::filesystem::path& path)
         Invalid(path, "the document must have a <robot> root");
 
     RobotModel model;
+    LinkIndexByName linkIndices;
     model.name = root->Attribute("name") == nullptr ? path.parent_path().filename().string()
         : root->Attribute("name");
 
     // 관절은 링크 이름을 참조하므로 링크를 모두 등록한 뒤에 읽습니다.
-    ReadLinks(*root, model, path);
-    ReadJoints(*root, model, path);
+    ReadLinks(*root, model, linkIndices, path);
+    ReadJoints(*root, model, linkIndices, path);
 
     // 전체 관절 중 base_link에서 tool0까지 실제로 이어지는 경로를 찾아 제어 순서로 저장합니다.
-    FindActiveChain(model, path);
+    FindActiveChain(model, linkIndices, path);
     return model;
 }
 
