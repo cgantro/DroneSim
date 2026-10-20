@@ -35,23 +35,7 @@ Logger::Logger(LoggerOptions options)
 #if !defined(__EMSCRIPTEN__) || defined(__EMSCRIPTEN_PTHREADS__)
     m_Worker = std::thread(&Logger::Consume, this);
 #else
-    try
-    {
-        const std::filesystem::path outputPath(m_Options.filePath);
-        if (outputPath.has_parent_path())
-            std::filesystem::create_directories(outputPath.parent_path());
-        m_Output.open(outputPath, std::ios::out | std::ios::app);
-    }
-    catch (...)
-    {
-    }
-
-    if (!m_Output.is_open())
-    {
-        m_WriteFailures.fetch_add(1, std::memory_order_relaxed);
-        std::cerr << "Logger could not open output file: " << m_Options.filePath << '\n';
-    }
-    m_Output.imbue(std::locale::classic());
+    OpenOutputFile();
 #endif
 }
 
@@ -192,8 +176,7 @@ void Logger::Enqueue(Record record) noexcept
     }
 }
 
-#if !defined(__EMSCRIPTEN__) || defined(__EMSCRIPTEN_PTHREADS__)
-void Logger::Consume()
+void Logger::OpenOutputFile()
 {
     try
     {
@@ -212,6 +195,12 @@ void Logger::Consume()
         std::cerr << "Logger could not open output file: " << m_Options.filePath << '\n';
     }
     m_Output.imbue(std::locale::classic());
+}
+
+#if !defined(__EMSCRIPTEN__) || defined(__EMSCRIPTEN_PTHREADS__)
+void Logger::Consume()
+{
+    OpenOutputFile();
 
     for (;;)
     {

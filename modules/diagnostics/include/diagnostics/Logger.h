@@ -97,6 +97,7 @@ private:
         double value;
     };
 
+    void OpenOutputFile();
     void Enqueue(Record record) noexcept;
 #if !defined(__EMSCRIPTEN__) || defined(__EMSCRIPTEN_PTHREADS__)
     void Consume();
