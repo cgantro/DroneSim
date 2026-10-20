@@ -426,11 +426,6 @@ struct PhysicsSystemModule::Impl
         }
         pendingIds.clear();
 
-        SyncSceneDrivenBodies(fixedDeltaSeconds);
-    }
-
-    void SyncSceneDrivenBodies(double fixedDeltaSeconds)
-    {
         for (const BodySnapshot& body : bodies)
             SyncSceneDrivenBody(body, fixedDeltaSeconds);
     }
@@ -491,26 +486,16 @@ struct PhysicsSystemModule::Impl
         // Dynamic Body의 자세는 Jolt 계산 결과가 기준이다. 지원 조건상 모든 조상 변환이 항등이므로 계산된 World 위치와 회전을 Entity Local 값으로 그대로 기록할 수 있다.
         for (const BodySnapshot& body : bodies)
         {
-            if (!body.ready || !grasplink::physics::IsPhysicsDriven(body.entity.get<RigidBody>().motionType))
+            if (!body.ready || !body.entity.is_alive() ||
+                !grasplink::physics::IsPhysicsDriven(body.entity.get<RigidBody>().motionType))
                 continue;
 
             const auto& binding = body.entity.get<grasplink::simulation::detail::PhysicsBodyBinding>();
-            ApplyWorldTransform(
-                body.entity,
-                physicsWorld.GetBodyTransform(binding.handle));
+            // Jolt 결과에서 위치와 회전만 Entity에 반영한다. Local Scale component가 있으면 component와 현재 값 모두 유지한다.
+            const Transform bodyTransform = physicsWorld.GetBodyTransform(binding.handle);
+            body.entity.set<Position, Local>(Position{bodyTransform.position});
+            body.entity.set<Rotation, Local>(Rotation{bodyTransform.rotation});
         }
-    }
-
-    static void ApplyWorldTransform(
-        flecs::entity entity,
-        const Transform& bodyTransform)
-    {
-        if (!entity.is_alive())
-            return;
-
-        // Jolt 결과에서 위치와 회전만 Entity에 반영한다. Local Scale component가 있으면 component와 현재 값 모두 유지한다.
-        entity.set<Position, Local>(Position{bodyTransform.position});
-        entity.set<Rotation, Local>(Rotation{bodyTransform.rotation});
     }
 };
 
