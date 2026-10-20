@@ -221,6 +221,7 @@ if(BUILD_TESTING)
     endif()
   endfunction()
 
+  grasplink_add_test(grasplink_diagnostics_tests Logger tests/diagnostics/LoggerTests.cpp grasplink_diagnostics GTEST_DISCOVERY CATEGORY diagnostics)
   grasplink_add_test(grasplink_control_tests ControlRuntime tests/robotics/ControlRuntimeTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics FILTER "ControlRuntimeTests.FixedLoopAndControllerContracts")
   grasplink_add_test(grasplink_kinematics_tests RobotKinematics tests/robotics/RobotKinematicsTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)
   grasplink_add_test(grasplink_gripper_kinematics_tests GripperKinematics tests/robotics/GripperKinematicsTests.cpp grasplink_robotics GTEST_DISCOVERY CATEGORY robotics)

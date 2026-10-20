@@ -103,6 +103,7 @@ void Logger::Shutdown() noexcept
     if (m_Worker.joinable())
         m_Worker.join();
 #else
+    m_Accepting = false;
     Flush();
     if (m_Output.is_open())
         m_Output.close();
@@ -158,6 +159,11 @@ void Logger::Enqueue(Record record) noexcept
         }
         m_QueueChanged.notify_one();
 #else
+        if (!m_Accepting)
+        {
+            m_DroppedRecords.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
         WriteRecord(record);
         if (m_Output.is_open())
         {

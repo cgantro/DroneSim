@@ -120,8 +120,8 @@ private:
     std::atomic<std::uint64_t> m_DroppedRecords{0};
     std::atomic<std::uint64_t> m_WriteFailures{0};
 #if !defined(__EMSCRIPTEN__) || defined(__EMSCRIPTEN_PTHREADS__)
-    bool m_Accepting = true;
     bool m_Writing = false;
 #endif
+    bool m_Accepting = true;
 };
 } // namespace grasplink::diagnostics
