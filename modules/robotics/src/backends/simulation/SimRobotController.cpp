@@ -261,12 +261,7 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     }
 
     if (origin != JointMoveOrigin::PlannedPoseSegment)
-    {
-        posePlanning_.continuationCommand.reset();
-        posePlanning_.continuationPlan.reset();
-        posePathPoints_.clear();
-        posePathSegment_ = 0;
-    }
+        ClearPosePlanningState();
 
     if (canBrakeJointPath)
     {
