@@ -106,6 +106,28 @@ bool HasUnitScale(flecs::entity entity, bool allowEntityScale)
     return true;
 }
 
+bool HasIdentityParentPose(flecs::entity parent)
+{
+    constexpr float tolerance = PhysicsSystemTolerances::parentIdentityDifference;
+    if (parent.has<Position, Local>())
+    {
+        const glm::vec3 position = parent.get<Position, Local>();
+        if (!IsFinite(position) || glm::any(glm::greaterThan(glm::abs(position), glm::vec3{tolerance})))
+            return false;
+    }
+
+    if (!parent.has<Rotation, Local>())
+        return true;
+
+    const glm::quat rotation = parent.get<Rotation, Local>();
+    const double length = std::hypot(std::hypot(static_cast<double>(rotation.w), rotation.x),
+        std::hypot(static_cast<double>(rotation.y), rotation.z));
+    return std::isfinite(length) && length > 0.0 &&
+        std::abs(rotation.x / length) <= tolerance &&
+        std::abs(rotation.y / length) <= tolerance &&
+        std::abs(rotation.z / length) <= tolerance;
+}
+
 bool HasSupportedPhysicsParents(flecs::entity entity, BodyMotionType motionType)
 {
     // Dynamic 부모가 Jolt에서 이동하는 동안 자식 Body도 따로 움직이면 두 이동 결과를 하나의 World 자세로 합치는 규칙이 이 시스템에는 없다.
@@ -113,27 +135,10 @@ bool HasSupportedPhysicsParents(flecs::entity entity, BodyMotionType motionType)
     {
         if (parent.has<RigidBody>() && grasplink::physics::IsPhysicsDriven(parent.get<RigidBody>().motionType))
             return false;
-        if (!grasplink::physics::IsPhysicsDriven(motionType))
-            continue;
-        // World는 장면 전체 기준이고 Local은 바로 위 부모 기준이다. Dynamic의 World 결과를 Entity Local 값에 기록하려면 모든 조상 변환이 항등이어야 한다.
-        // 서로 곱해져 우연히 상쇄되는 조상 이동과 회전도 허용하지 않는다.
-        constexpr float tolerance = PhysicsSystemTolerances::parentIdentityDifference;
-        if (parent.has<Position, Local>())
-        {
-            const glm::vec3 position = parent.get<Position, Local>();
-            if (!IsFinite(position) || glm::any(glm::greaterThan(glm::abs(position), glm::vec3{tolerance})))
-                return false;
-        }
-        if (parent.has<Rotation, Local>())
-        {
-            const glm::quat rotation = parent.get<Rotation, Local>();
-            const double length = std::hypot(std::hypot(static_cast<double>(rotation.w), rotation.x),
-                std::hypot(static_cast<double>(rotation.y), rotation.z));
-            if (!std::isfinite(length) || length <= 0.0 ||
-                std::abs(rotation.x / length) > tolerance || std::abs(rotation.y / length) > tolerance ||
-                std::abs(rotation.z / length) > tolerance)
-                return false;
-        }
+        // World는 장면 전체 기준이고 Local은 바로 위 부모 기준이다. Dynamic의 World 결과를 Entity Local 값에 기록하려면 각 조상 자세가 항등이어야 한다.
+        // 조상 변환끼리 곱해져 우연히 상쇄되는 경우도 허용하지 않는다.
+        if (grasplink::physics::IsPhysicsDriven(motionType) && !HasIdentityParentPose(parent))
+            return false;
     }
     return true;
 }
