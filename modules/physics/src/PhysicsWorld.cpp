@@ -707,7 +707,7 @@ void ValidateTransform(const Transform& transform)
     if (!std::isfinite(transform.position.x) || !std::isfinite(transform.position.y) ||
         !std::isfinite(transform.position.z) || !std::isfinite(rotationLengthSquared) ||
         rotationLengthSquared <= PhysicsWorldSettings::minimumRotationLengthSquared)
-            throw std::invalid_argument(PhysicsErrorMessages::invalidTransform);
+        throw std::invalid_argument(PhysicsErrorMessages::invalidTransform);
 }
 
 PhysicsBodyHandle PhysicsWorld::CreateBody(const BodyDescription& description)

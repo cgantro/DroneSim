@@ -33,7 +33,7 @@ public:
      */
     void Step(double fixedDeltaSeconds);
 
-        /**
+    /**
      * @brief Box 충돌 모양 하나를 가진 물리 Body를 만든다.
      * @param description Box 반쪽 길이 [m], Body 원점의 World 자세, 움직임 방식과 충돌 그룹이다.
      * @return 이 PhysicsWorld에서만 사용할 수 있는 Body 핸들이다.
@@ -42,7 +42,7 @@ public:
     PhysicsBodyHandle CreateBox(
         const BoxBodyDescription& description);
 
-        /**
+    /**
      * @brief Box 또는 ConvexHull 충돌 모양을 하나의 물리 Body로 묶는다.
      * ConvexHull은 점들을 모두 포함하는 볼록한 껍질이다. 입력 점 네 개는 최소 개수일 뿐이며 Jolt가 부피를 만들 수 있는 점을 추가로 요구한다.
      * @param description 형상별 Body 기준 배치와 크기, Body 원점의 World 자세, 움직임 방식과 충돌 그룹이다.
@@ -147,7 +147,7 @@ public:
         PhysicsBodyHandle handle,
         const Transform& transform);
 
-        /**
+    /**
      * @brief Scene 목표까지 Kinematic Body가 충돌을 고려하며 움직이도록 Jolt에 전달한다.
      * @param handle 이 PhysicsWorld가 만든 Kinematic Body 핸들이다.
      * @param targetTransform 목표 Body 원점의 World 위치 [m]와 회전이다.
