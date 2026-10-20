@@ -297,6 +297,12 @@ struct LinearPathPlanningJob::Impl
             });
     }
 
+    void AdvanceToNextSeed()
+    {
+        ++seedIndex;
+        phase = Phase::SolveSeed;
+    }
+
     void ResetForBegin(const LinearPathMoveCommand& moveCommand,
         const models::RobotSpecification& robot, const JointVector& joints,
         kinematics::LevenbergMarquardtIk& ik, const StateValidityChecker& checker,
@@ -565,8 +571,7 @@ struct LinearPathPlanningJob::Impl
         if (!workingSolution)
         {
             RecordIkFailure(std::move(workingSolution));
-            ++seedIndex;
-            phase = Phase::SolveSeed;
+            AdvanceToNextSeed();
             return;
         }
 
@@ -583,8 +588,7 @@ struct LinearPathPlanningJob::Impl
                 if (workingContinuation)
                     parentHasContinuation[workingParent] = true;
             }
-            ++seedIndex;
-            phase = Phase::SolveSeed;
+            AdvanceToNextSeed();
             return;
         }
         if (candidates.size() >= policy.maximumIkCandidatesPerSample)
@@ -592,8 +596,7 @@ struct LinearPathPlanningJob::Impl
             const auto worst = FindWorstCandidate();
             if (workingScore > worst->score)
             {
-                ++seedIndex;
-                phase = Phase::SolveSeed;
+                AdvanceToNextSeed();
                 return;
             }
         }
@@ -606,8 +609,7 @@ struct LinearPathPlanningJob::Impl
             {
                 if (workingContinuation)
                     parentHasContinuation[workingParent] = true;
-                ++seedIndex;
-                phase = Phase::SolveSeed;
+                AdvanceToNextSeed();
                 return;
             }
         }
@@ -672,8 +674,7 @@ struct LinearPathPlanningJob::Impl
             parentNeedsSearch[workingParent] = true;
             if (workingContinuation)
                 parentHasContinuation[workingParent] = true;
-            ++seedIndex;
-            phase = Phase::SolveSeed;
+            AdvanceToNextSeed();
             return;
         }
 
@@ -700,8 +701,7 @@ struct LinearPathPlanningJob::Impl
             const auto worst = FindWorstCandidate();
             candidates.erase(worst);
         }
-        ++seedIndex;
-        phase = Phase::SolveSeed;
+        AdvanceToNextSeed();
     }
 
     void FinishContinuationSeeds()
@@ -981,8 +981,7 @@ struct LinearPathPlanningJob::Impl
             parentNeedsSearch[workingParent] = true;
             if (workingContinuation)
                 parentHasContinuation[workingParent] = true;
-            ++seedIndex;
-            phase = Phase::SolveSeed;
+            AdvanceToNextSeed();
             return;
         }
 
