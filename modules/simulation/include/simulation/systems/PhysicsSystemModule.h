@@ -42,7 +42,7 @@ public:
     PhysicsSystemModule(flecs::world& world, grasplink::physics::PhysicsWorld& physicsWorld,
         grasplink::diagnostics::Logger* logger = nullptr);
 
-    /** @brief 연결 Body를 observer가 유효할 때 제거한 뒤 this를 참조하는 observer를 해제한다. */
+    /** @brief 모듈이 만든 Body와 Entity 연결을 정리한 뒤 this를 참조하는 observer를 해제한다. */
     ~PhysicsSystemModule();
 
     PhysicsSystemModule(const PhysicsSystemModule&) = delete;

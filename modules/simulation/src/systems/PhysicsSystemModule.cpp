@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -182,6 +183,8 @@ struct PhysicsSystemModule::Impl
     flecs::query<const RigidBody, const Colliders> bodyQuery;
     flecs::query<const grasplink::simulation::detail::PhysicsBodyBinding> bindingQuery;
     std::vector<BodySnapshot> bodies;
+    // Flecs 설정 변경이 지연 중이어도 모듈이 만든 Jolt Body를 빠짐없이 정리할 수 있도록 핸들을 별도로 추적한다.
+    std::unordered_map<std::uint32_t, PhysicsBodyHandle> ownedBodies;
     // Flecs OnSet callback 중 query 구성을 바꾸면 현재 순회가 영향을 받을 수 있어 예약만 한다. 다음 Step에서 변경이 모두 끝난 설정과 최신 World 자세를 읽는다.
     std::vector<flecs::entity> pendingConfiguration;
     std::unordered_set<flecs::entity_t> pendingIds;
@@ -216,7 +219,7 @@ struct PhysicsSystemModule::Impl
             .event(flecs::OnRemove)
             .each([this](flecs::entity, const grasplink::simulation::detail::PhysicsBodyBinding& binding)
             {
-                physicsWorld.DestroyBody(binding.handle);
+                DestroyOwnedBody(binding.handle);
             });
 
         // 생성 전에 붙어 있던 설정도 빠뜨리지 않고 연결한다. query 순회와 Binding 추가를 분리한다.
@@ -231,22 +234,26 @@ struct PhysicsSystemModule::Impl
 
     ~Impl()
     {
-        // entity.remove가 동기적으로 OnRemove를 호출하므로 Binding observer가 살아 있을 때 Body를 해제한다.
-        // Binding 제거는 Query 소속 여부를 바꾼다. Query를 직접 순회하면서 제거하지 않고 대상 Entity를 먼저 복사한 뒤 삭제한다.
+        // Binding을 Query에서 지우기 전에 Entity를 복사한다. 모듈을 없애는 동안 ECS 변경이 지연돼도 Body는 먼저 직접 정리한다.
         std::vector<flecs::entity> entitiesToUnbind;
         bindingQuery.each([&entitiesToUnbind](flecs::entity entity, const detail::PhysicsBodyBinding&)
         {
             entitiesToUnbind.push_back(entity);
         });
-        for (flecs::entity entity : entitiesToUnbind)
-            if (entity.is_alive())
-                entity.remove<grasplink::simulation::detail::PhysicsBodyBinding>();
 
         rigidBodySetObserver.destruct();
         rigidBodyRemoveObserver.destruct();
         colliderSetObserver.destruct();
         colliderRemoveObserver.destruct();
         bodyBindingRemoveObserver.destruct();
+
+        for (const auto& owned : ownedBodies)
+            physicsWorld.DestroyBody(owned.second);
+        ownedBodies.clear();
+
+        for (flecs::entity entity : entitiesToUnbind)
+            if (entity.is_alive())
+                entity.remove<grasplink::simulation::detail::PhysicsBodyBinding>();
     }
 
     // 두 Fixed Update 사이에 같은 Entity의 설정이 여러 번 바뀌면 Entity ID로 예약을 합친다. 다음 Step에서는 중간값으로 Body를 반복 생성하지 않고 마지막 설정만 적용한다.
@@ -296,14 +303,18 @@ struct PhysicsSystemModule::Impl
         description.motionType = rigidBody.motionType;
         description.collisionLayer = rigidBody.collisionLayer;
 
+        PhysicsBodyHandle newHandle;
         try
         {
-            const PhysicsBodyHandle newHandle = physicsWorld.CreateBody(description);
+            newHandle = physicsWorld.CreateBody(description);
+            ownedBodies.emplace(newHandle.value, newHandle);
             entity.set<grasplink::simulation::detail::PhysicsBodyBinding>({newHandle, bodyTransform, false});
             return true;
         }
         catch (const std::exception& error)
         {
+            if (newHandle.IsValid())
+                DestroyOwnedBody(newHandle);
             LogBodyIssue(grasplink::diagnostics::LogLevel::Error,
                 PhysicsSystemMessages::bodyCreationFailed, entity.id(), error.what());
             return false;
@@ -331,6 +342,14 @@ struct PhysicsSystemModule::Impl
         catch (...)
         {
         }
+    }
+
+    void DestroyOwnedBody(PhysicsBodyHandle handle)
+    {
+        physicsWorld.DestroyBody(handle);
+        const auto owned = ownedBodies.find(handle.value);
+        if (owned != ownedBodies.end() && owned->second.worldToken == handle.worldToken)
+            ownedBodies.erase(owned);
     }
 
     void DestroyBody(flecs::entity entity)

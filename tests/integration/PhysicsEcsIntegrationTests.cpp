@@ -228,4 +228,22 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
     sceneOwner.reset();
     ASSERT_TRUE_MESSAGE(!oldRoot.is_alive() && !falling.IsValid() && !drop.IsValid(), "Scene destruction removes its hierarchy and physics bodies");
     step();
+
+    flecs::world deferredWorld;
+    grasplink::physics::PhysicsWorld deferredPhysics;
+    Scene deferredScene(deferredWorld);
+    Entity deferredBody = deferredScene.CreateEntity("DeferredRemoval");
+    deferredBody.set<RigidBody>({BodyMotionType::Static})
+        .set<Colliders>({{physics_colliders::Box({0.1F, 0.1F, 0.1F})}});
+    TransformSystemModule::UpdateWorldTransforms(deferredWorld);
+    auto deferredIntegration = std::make_unique<grasplink::simulation::PhysicsSystemModule>(
+        deferredWorld, deferredPhysics);
+    deferredIntegration->Step(0.004);
+    const auto deferredHandle = deferredIntegration->GetBodyHandle(deferredBody.GetHandle());
+    ASSERT_TRUE(deferredPhysics.IsBodyValid(deferredHandle));
+
+    deferredWorld.defer_begin();
+    deferredIntegration.reset();
+    EXPECT_FALSE(deferredPhysics.IsBodyValid(deferredHandle));
+    deferredWorld.defer_end();
 }
