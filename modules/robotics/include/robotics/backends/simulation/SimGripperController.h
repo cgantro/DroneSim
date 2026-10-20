@@ -113,8 +113,8 @@ private:
     bool IsAtTarget() const noexcept;
     void UpdateRawPosition() noexcept;
 
-    // specification이 가리키는 관절 배열과 문자열 view의 실제 데이터는 이 객체가 소유하지 않는다. 해당 데이터를 제공한 호출자 측 저장소가 더 오래 살아 있어야 한다.
-    const models::GripperSpecification* specification_ = nullptr;
+    // 그리퍼 사양을 복사하거나 소유하지 않고 빌려 쓴다. 원본은 이 제어기보다 오래 살아야 한다.
+    const models::GripperSpecification& specification_;
 
     // 이 속도 범위는 제조사 사양이 아니라 프로젝트 Simulation backend가 사용하는 가정값이다.
     SimGripperMotionSettings settings_{};

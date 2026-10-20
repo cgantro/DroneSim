@@ -22,13 +22,13 @@ bool IsFinitePositive(double value)
 SimGripperController::SimGripperController(
     const models::GripperSpecification& specification,
     SimGripperMotionSettings settings)
-    : specification_(&specification), settings_(settings)
+    : specification_(specification), settings_(settings)
 {
-    if (specification_->joints == nullptr || specification_->jointCount == 0 ||
-        specification_->positionRequestMin >= specification_->positionRequestMax ||
-        specification_->speedRequestMin >= specification_->speedRequestMax ||
-        specification_->forceRequestMin > specification_->forceRequestMax ||
-        !IsFinitePositive(specification_->nominalMasterClosedRadians))
+    if (specification_.joints == nullptr || specification_.jointCount == 0 ||
+        specification_.positionRequestMin >= specification_.positionRequestMax ||
+        specification_.speedRequestMin >= specification_.speedRequestMax ||
+        specification_.forceRequestMin > specification_.forceRequestMax ||
+        !IsFinitePositive(specification_.nominalMasterClosedRadians))
     {
         throw std::invalid_argument("SimGripperController: invalid gripper specification");
     }
@@ -49,8 +49,8 @@ Result SimGripperController::Connect()
     state_ = {};
     state_.mode = GripperMode::Inactive;
     state_.objectStatus = GripperObjectStatus::AtRequestedPosition;
-    state_.requestedPositionEcho = specification_->positionRequestMin;
-    state_.actualPosition = specification_->positionRequestMin;
+    state_.requestedPositionEcho = specification_.positionRequestMin;
+    state_.actualPosition = specification_.positionRequestMin;
     state_.currentRaw = 0;
     state_.currentValid = false;
     state_.closureFraction = 0.0;
@@ -129,21 +129,21 @@ Result SimGripperController::Command(const GripperCommand& command)
         return Failure(ErrorCode::Busy, "SimGripperController: not activated");
 
     // 위치·속도·힘 raw code 범위를 전부 확인한 뒤 요청을 받아들인다. 하나라도 잘못되면 현재 상태 복사본(snapshot)과 이동 목표를 바꾸지 않는다.
-    if (command.positionRequest < specification_->positionRequestMin ||
-        command.positionRequest > specification_->positionRequestMax ||
-        command.speedRequest < specification_->speedRequestMin ||
-        command.speedRequest > specification_->speedRequestMax ||
-        command.forceRequest < specification_->forceRequestMin ||
-        command.forceRequest > specification_->forceRequestMax)
+    if (command.positionRequest < specification_.positionRequestMin ||
+        command.positionRequest > specification_.positionRequestMax ||
+        command.speedRequest < specification_.speedRequestMin ||
+        command.speedRequest > specification_.speedRequestMax ||
+        command.forceRequest < specification_.forceRequestMin ||
+        command.forceRequest > specification_.forceRequestMax)
     {
         return Failure(ErrorCode::InvalidCommand, "SimGripperController: request outside specification range");
     }
 
     const double positionRange = static_cast<double>(
-        specification_->positionRequestMax - specification_->positionRequestMin);
+        specification_.positionRequestMax - specification_.positionRequestMin);
     ++commandRevision_;
     const double requestedClosure = static_cast<double>(
-        command.positionRequest - specification_->positionRequestMin) / positionRange;
+        command.positionRequest - specification_.positionRequestMin) / positionRange;
 
     // 접촉 정지 뒤 같은 방향으로 더 닫으라는 반복 요청은 정지를 해제하지 않는다.
     // 열린 목표가 들어오면 파지 해제 번호를 바꾸므로 Reset 후 즉시 Activate한 경우도 adapter가 놓치지 않는다.
@@ -162,9 +162,9 @@ Result SimGripperController::Command(const GripperCommand& command)
     contactStopped_ = false;
 
     const double speedRange = static_cast<double>(
-        specification_->speedRequestMax - specification_->speedRequestMin);
+        specification_.speedRequestMax - specification_.speedRequestMin);
     const double speedFraction = static_cast<double>(
-        command.speedRequest - specification_->speedRequestMin) / speedRange;
+        command.speedRequest - specification_.speedRequestMin) / speedRange;
     masterVelocityRadiansPerSecond_ = settings_.minimumMasterVelocityRadiansPerSecond +
         speedFraction * (settings_.maximumMasterVelocityRadiansPerSecond -
             settings_.minimumMasterVelocityRadiansPerSecond);
@@ -230,7 +230,7 @@ void SimGripperController::Update(double dtSeconds)
 
     // 연속 개폐 비율은 master 관절의 각속도로 진행하며 기준 닫힘 각도와 시간으로 변화량을 정한다. 관절 계산에 8-bit raw 위치를 다시 넣지 않아 정수 반올림이 운동에 반복 전달되지 않는다.
     const double maximumClosureStep = masterVelocityRadiansPerSecond_ * dtSeconds /
-        specification_->nominalMasterClosedRadians;
+        specification_.nominalMasterClosedRadians;
     const double remaining = targetClosureFraction_ - state_.closureFraction;
     if (std::abs(remaining) <= maximumClosureStep)
         state_.closureFraction = targetClosureFraction_;
@@ -255,12 +255,12 @@ bool SimGripperController::IsAtTarget() const noexcept
 
 void SimGripperController::UpdateRawPosition() noexcept
 {
-    const double raw = specification_->positionRequestMin + state_.closureFraction *
-        static_cast<double>(specification_->positionRequestMax - specification_->positionRequestMin);
+    const double raw = specification_.positionRequestMin + state_.closureFraction *
+        static_cast<double>(specification_.positionRequestMax - specification_.positionRequestMin);
     const long rounded = std::lround(raw);
     const long bounded = std::clamp(rounded,
-        static_cast<long>(specification_->positionRequestMin),
-        static_cast<long>(specification_->positionRequestMax));
+        static_cast<long>(specification_.positionRequestMin),
+        static_cast<long>(specification_.positionRequestMax));
     state_.actualPosition = static_cast<std::uint8_t>(bounded);
 }
 
