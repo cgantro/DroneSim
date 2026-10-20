@@ -77,6 +77,10 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
         ASSERT_FALSE(secondaryPhysics.IsBodyValid(firstBody));
         EXPECT_THROW((void)secondaryPhysics.GetBodyTransform(firstBody), std::invalid_argument);
     }
+    const auto bodyAfterSecondaryWorld = physics.CreateBox({});
+    physics.Step(1.0 / 60.0);
+    ASSERT_TRUE(physics.IsBodyValid(bodyAfterSecondaryWorld));
+
     physics.DestroyBody(firstBody);
     ASSERT_FALSE(physics.IsBodyValid(firstBody));
     const auto replacementBody = physics.CreateBox({});
