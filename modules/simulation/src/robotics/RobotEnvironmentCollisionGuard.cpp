@@ -240,11 +240,13 @@ void RobotEnvironmentCollisionGuard::CollectCollisionProxies()
     }
 
     const bool hasGripper = m_GripperSupport.has_value();
+    const std::size_t expectedGripperBodyCount = hasGripper
+        ? CollisionGuardLimits::expectedGripperBodyProxyCount
+        : CollisionGuardLimits::noGripperBodyProxyCount;
     if (baseProxyCount > CollisionGuardLimits::maximumBaseProxyCount ||
         registeredLinkIndices.empty() ||
-        (hasGripper && (gripperBodyCount != CollisionGuardLimits::expectedGripperBodyProxyCount ||
-            !m_EndLinkProxy)) ||
-        (!hasGripper && gripperBodyCount != CollisionGuardLimits::noGripperBodyProxyCount))
+        gripperBodyCount != expectedGripperBodyCount ||
+        (hasGripper && !m_EndLinkProxy))
         throw std::invalid_argument(CollisionGuardMessages::missingCollisionGeometry);
     for (SelfCollisionProxy& proxy : m_SelfCollisionProxies)
         if (proxy.identity.part == SelfCollisionPart::GripperBody)
