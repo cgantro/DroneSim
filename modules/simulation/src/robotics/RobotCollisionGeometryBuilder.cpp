@@ -1,295 +1,305 @@
 #include "simulation/robotics/RobotCollisionGeometryBuilder.h"
-#include "CollisionGeometry.h"
+#include "simulation/robotics/RobotModelTransforms.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
-#include <functional>
-#include <numeric>
+#include <iterator>
+#include <optional>
 #include <stdexcept>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
-namespace grasplink::simulation::robot_collision_geometry
+namespace grasplink::simulation::robotics::collision_geometry
 {
-using grasplink::model::MeshData;
-using grasplink::model::ModelResource;
-using grasplink::model::NodeData;
-using grasplink::model::SubMeshInfo;
-
 namespace
 {
-struct PositionKey
-{
-    std::int64_t x;
-    std::int64_t y;
-    std::int64_t z;
+using grasplink::model::RobotCollisionGeometry;
+using grasplink::model::RobotCollisionType;
+using grasplink::model::RobotLink;
+using Shape = grasplink::physics::CollisionShapeDescription;
 
-    bool operator==(const PositionKey& other) const
-    {
-        return x == other.x && y == other.y && z == other.z;
-    }
+struct CollisionGeometryLimits final
+{
+    inline static constexpr double halfExtentScale = 0.5;
+    inline static constexpr int cylinderSegments = 16;
+    inline static constexpr int sphereLongitudeSegments = 16;
+    inline static constexpr int sphereLatitudeSegments = 8;
+    inline static constexpr double pi = 3.14159265358979323846;
 };
 
-struct PositionKeyHash
+struct CollisionGeometryErrorMessages final
 {
-    std::size_t operator()(const PositionKey& key) const
-    {
-        std::size_t result = std::hash<std::int64_t>{}(key.x);
-        result ^= std::hash<std::int64_t>{}(key.y) + 0x9e3779b9U + (result << 6U) + (result >> 2U);
-        result ^= std::hash<std::int64_t>{}(key.z) + 0x9e3779b9U + (result << 6U) + (result >> 2U);
-        return result;
-    }
+    inline static constexpr char invalidBaseOrToolIndex[] =
+        "Robot collision geometry: base link index is out of range";
+    inline static constexpr char missingBaseGeometry[] =
+        "Robot collision geometry: base_link has no URDF collision geometry";
+    inline static constexpr char invalidActiveJointIndex[] =
+        "Robot collision geometry: active joint index is out of range";
+    inline static constexpr char disconnectedToolLink[] =
+        "Robot collision geometry: tool link is not connected to base_link";
+    inline static constexpr char collisionLinkOutsideArmPath[] =
+        "Robot collision geometry: collision links must belong to the single arm path";
+    inline static constexpr char collisionLinkNotAttached[] =
+        "Robot collision geometry: link is not attached to the arm or base";
+    inline static constexpr char missingArmGeometry[] =
+        "Robot collision geometry: arm links have no URDF collision geometry";
+    inline static constexpr char unsupportedCollisionType[] =
+        "Robot collision geometry: collision shape type is unsupported";
 };
 
-PositionKey MakePositionKey(const glm::vec3& position, const Options& options)
+struct LinkJointLookup final
 {
-    // 정점 좌표를 약 0.01 mm 간격의 격자에 맞춰 비교한다. 그래서 서로 다른 index를 가진 seam(메시 이음새)의 같은 위치 정점을 하나로 인식한다.
-    const double precision = std::round(1.0 / options.vertexMergeToleranceMeters);
-    return {
-        static_cast<std::int64_t>(std::llround(position.x * precision)),
-        static_cast<std::int64_t>(std::llround(position.y * precision)),
-        static_cast<std::int64_t>(std::llround(position.z * precision))};
+    std::vector<std::optional<std::size_t>> parentJointByLink;
+    std::vector<std::optional<std::size_t>> activeJointByLink;
+};
+
+grasplink::physics::Transform ToPhysicsTransform(const RobotCollisionGeometry& source)
+{
+    grasplink::physics::Transform result;
+    result.position = glm::vec3(source.positionMeters);
+    result.rotation = glm::quat(source.rotation);
+    return result;
 }
 
-PositionKey MakeCollisionCellKey(const glm::vec3& position, const Options& options)
+Shape BuildBox(const RobotCollisionGeometry& source)
 {
-    // 단위: 충돌 근사 셀 한 변은 16 cm다. 긴 링크의 작은 충돌 형상 수를 줄이면서 떨어진 부품 사이 빈 공간은 한 덩어리로 합치지 않는다.
-    return {
-        static_cast<std::int64_t>(std::floor(position.x / options.cellSizeMeters)),
-        static_cast<std::int64_t>(std::floor(position.y / options.cellSizeMeters)),
-        static_cast<std::int64_t>(std::floor(position.z / options.cellSizeMeters))};
+    Shape result;
+    result.localTransform = ToPhysicsTransform(source);
+    result.type = grasplink::physics::CollisionShapeType::Box;
+    result.halfExtentsMeters = glm::vec3(
+        source.dimensionsMeters * CollisionGeometryLimits::halfExtentScale);
+    return result;
 }
 
-std::size_t FindRoot(std::vector<std::size_t>& parents, std::size_t index)
+Shape BuildCylinder(const RobotCollisionGeometry& source)
 {
-    if (parents[index] != index)
-        parents[index] = FindRoot(parents, parents[index]);
-    return parents[index];
-}
-
-void Join(std::vector<std::size_t>& parents, std::size_t left, std::size_t right)
-{
-    const std::size_t leftRoot = FindRoot(parents, left);
-    const std::size_t rightRoot = FindRoot(parents, right);
-    if (leftRoot != rightRoot) parents[rightRoot] = leftRoot;
-}
-
-bool HasExtent(const std::vector<glm::vec3>& vertices, float minimumMeters)
-{
-    if (vertices.empty()) return false;
-    glm::vec3 minimum = vertices.front();
-    glm::vec3 maximum = vertices.front();
-    for (const glm::vec3& point : vertices)
+    Shape result;
+    result.localTransform = ToPhysicsTransform(source);
+    result.type = grasplink::physics::CollisionShapeType::ConvexHull;
+    constexpr int segments = CollisionGeometryLimits::cylinderSegments;
+    constexpr double pi = CollisionGeometryLimits::pi;
+    const double radius = source.dimensionsMeters.x;
+    const double halfLength = source.dimensionsMeters.y * 0.5;
+    result.pointsMeters.reserve(segments * 2);
+    for (int side = 0; side < segments; ++side)
     {
-        minimum = glm::min(minimum, point);
-        maximum = glm::max(maximum, point);
+        const double angle = 2.0 * pi * side / segments;
+        const float x = static_cast<float>(radius * std::cos(angle));
+        const float y = static_cast<float>(radius * std::sin(angle));
+        result.pointsMeters.emplace_back(x, y, static_cast<float>(-halfLength));
+        result.pointsMeters.emplace_back(x, y, static_cast<float>(halfLength));
     }
-    const glm::vec3 extent = maximum - minimum;
-    return std::max(extent.x, std::max(extent.y, extent.z)) >= minimumMeters;
+    return result;
 }
 
-std::vector<grasplink::physics::CollisionShapeDescription> BuildLinkShapes(
-    const ModelResource& model,
-    const std::vector<glm::mat4>& nodeTransforms,
-    std::size_t jointIndex,
-    std::size_t linkIndex,
-    const std::unordered_set<std::string>& movingNodes,
-    const Options& options)
+Shape BuildSphere(const RobotCollisionGeometry& source)
 {
-    using Shape = grasplink::physics::CollisionShapeDescription;
-    std::vector<Shape> shapes;
-    if (jointIndex >= model.nodes.size() || linkIndex >= model.nodes.size() ||
-        nodeTransforms.size() != model.nodes.size())
-        throw std::invalid_argument("Robot collision geometry: node transform index is out of range");
-    // 메시 정점을 GLB 좌표에서 이 Link를 움직이는 joint 원점 좌표로 바꾼다. 실행 중 FK로 계산한 관절 자세는 별도 proxy Entity에 적용한다.
-    const glm::mat4 jointInverse = glm::inverse(nodeTransforms[jointIndex]);
-
-    for (std::size_t nodeIndex = 0; nodeIndex < model.nodes.size(); ++nodeIndex)
+    Shape result;
+    result.localTransform = ToPhysicsTransform(source);
+    result.type = grasplink::physics::CollisionShapeType::ConvexHull;
+    constexpr int segments = CollisionGeometryLimits::sphereLongitudeSegments;
+    constexpr int latitudeSegments = CollisionGeometryLimits::sphereLatitudeSegments;
+    constexpr double pi = CollisionGeometryLimits::pi;
+    const double radius = source.dimensionsMeters.x;
+    result.pointsMeters.reserve((latitudeSegments - 1) * segments + 2);
+    result.pointsMeters.emplace_back(0.0F, 0.0F, static_cast<float>(-radius));
+    for (int latitude = 1; latitude < latitudeSegments; ++latitude)
     {
-        std::size_t ancestor = nodeIndex;
-        bool insideLink = false;
-        while (true)
+        const double elevation = -pi * 0.5 + pi * latitude / latitudeSegments;
+        const double ringRadius = radius * std::cos(elevation);
+        const double z = radius * std::sin(elevation);
+        for (int side = 0; side < segments; ++side)
         {
-            if (ancestor == linkIndex)
-            {
-                insideLink = true;
-                break;
-            }
-            // 다음 가동 관절 아래의 메시부터는 다른 Link가 움직이므로 이 Link 형상에 포함하지 않는다. Gripper 메시도 팔 어댑터 범위에서 제외한다.
-            if (movingNodes.count(model.nodes[ancestor].name) != 0 ||
-                model.nodes[ancestor].name == "Gripper")
-                break;
-            if (model.nodes[ancestor].parentIndex < 0)
-                break;
-            ancestor = static_cast<std::size_t>(model.nodes[ancestor].parentIndex);
-        }
-        if (!insideLink) continue;
-
-        const NodeData& node = model.nodes[nodeIndex];
-        if (node.meshIndex < 0 || node.meshIndex >= static_cast<int>(model.meshes.size())) continue;
-        const MeshData& mesh = model.meshes[static_cast<std::size_t>(node.meshIndex)];
-        const glm::mat4 meshToJoint = jointInverse * nodeTransforms[nodeIndex];
-
-        for (const SubMeshInfo& subMesh : mesh.subMeshes)
-        {
-            const std::size_t end = static_cast<std::size_t>(subMesh.indexStart) + subMesh.indexCount;
-            if (end > mesh.indices.size()) throw std::runtime_error("Robot GLB has an invalid primitive index range.");
-            std::vector<std::size_t> parents(mesh.vertices.size());
-            std::iota(parents.begin(), parents.end(), 0U);
-            std::unordered_set<std::uint32_t> usedVertices;
-            std::unordered_map<PositionKey, std::uint32_t, PositionKeyHash> matchingPositions;
-            usedVertices.reserve(subMesh.indexCount);
-            matchingPositions.reserve(subMesh.indexCount);
-
-            for (std::size_t index = subMesh.indexStart; index < end; ++index)
-            {
-                const std::uint32_t vertexIndex = mesh.indices[index];
-                if (vertexIndex >= mesh.vertices.size()) throw std::runtime_error("Robot GLB has an invalid vertex index.");
-                usedVertices.insert(vertexIndex);
-                const auto [iterator, inserted] = matchingPositions.emplace(
-                    MakePositionKey(mesh.vertices[vertexIndex].position, options), vertexIndex);
-                if (!inserted) Join(parents, vertexIndex, iterator->second);
-            }
-
-            // 좌표가 같은 seam 정점과 삼각형으로 연결된 정점을 묶어 연결 component를 만든다. 이 묶음으로 서로 떨어진 메시 부품을 구분한다.
-            for (std::size_t index = subMesh.indexStart; index + 2 < end; index += 3)
-            {
-                Join(parents, mesh.indices[index], mesh.indices[index + 1]);
-                Join(parents, mesh.indices[index], mesh.indices[index + 2]);
-            }
-
-            std::unordered_map<std::size_t, std::vector<glm::vec3>> components;
-            for (const std::uint32_t vertexIndex : usedVertices)
-            {
-                const glm::vec4 point = meshToJoint * glm::vec4(mesh.vertices[vertexIndex].position, 1.0F);
-                components[FindRoot(parents, vertexIndex)].emplace_back(point);
-            }
-
-            std::unordered_map<std::size_t,
-                std::unordered_map<PositionKey, std::vector<glm::vec3>, PositionKeyHash>> collisionCells;
-            // 연결된 각 부품 안에서 삼각형 중심이 들어가는 16 cm 셀에 삼각형 정점을 모은다. 삼각형 자체는 셀 경계에서 잘라 나누지 않는다.
-            for (std::size_t index = subMesh.indexStart; index + 2 < end; index += 3)
-            {
-                const std::uint32_t first = mesh.indices[index];
-                const std::size_t component = FindRoot(parents, first);
-                const glm::vec3 a = glm::vec3(meshToJoint * glm::vec4(mesh.vertices[first].position, 1.0F));
-                const glm::vec3 b = glm::vec3(meshToJoint * glm::vec4(mesh.vertices[mesh.indices[index + 1]].position, 1.0F));
-                const glm::vec3 c = glm::vec3(meshToJoint * glm::vec4(mesh.vertices[mesh.indices[index + 2]].position, 1.0F));
-                const PositionKey cell = MakeCollisionCellKey((a + b + c) / 3.0F, options);
-                auto& points = collisionCells[component][cell];
-                points.insert(points.end(), {a, b, c});
-            }
-
-            for (const auto& [component, cells] : collisionCells)
-            {
-                // 연결 부품 전체 폭이 4 cm보다 작거나 셀 안 정점 폭이 1 cm보다 작으면 충돌 형상에서 제외한다.
-                // 시각 Mesh와 단순화한 충돌 외피의 크기와 윤곽은 완전히 같지 않을 수 있다.
-                if (!HasExtent(components[component], options.componentMinimumExtentMeters)) continue;
-                for (const auto& [cell, vertices] : cells)
-                {
-                    (void)cell;
-                    if (!HasExtent(vertices, options.cellMinimumExtentMeters)) continue;
-                    std::vector<glm::vec3> uniqueVertices;
-                    std::unordered_set<PositionKey, PositionKeyHash> uniquePositions;
-                    uniqueVertices.reserve(vertices.size());
-                    uniquePositions.reserve(vertices.size());
-                    for (const glm::vec3& vertex : vertices)
-                    {
-                        if (uniquePositions.insert(MakePositionKey(vertex, options)).second)
-                            uniqueVertices.push_back(vertex);
-                    }
-                    Shape shape;
-                    shape.type = grasplink::physics::CollisionShapeType::ConvexHull;
-                    shape.pointsMeters = detail::BuildConvexSupportPoints(uniqueVertices);
-                    // 여러 방향에서 가장 바깥에 있는 정점으로 만든 근사 볼록 외피를 검사한다. 1 m 기준으로 실제 부피가 있다고 판단된 셀만 충돌 형상으로 남긴다.
-                    if (detail::HasHullVolume(shape.pointsMeters, 1.0F)) shapes.push_back(std::move(shape));
-                }
-            }
+            const double angle = 2.0 * pi * side / segments;
+            result.pointsMeters.emplace_back(
+                static_cast<float>(ringRadius * std::cos(angle)),
+                static_cast<float>(ringRadius * std::sin(angle)),
+                static_cast<float>(z));
         }
     }
-    return shapes;
+    result.pointsMeters.emplace_back(0.0F, 0.0F, static_cast<float>(radius));
+    return result;
 }
 
-std::vector<grasplink::physics::CollisionShapeDescription> BuildBaseShapes(
-    const ModelResource& model,
-    const std::vector<glm::mat4>& nodeTransforms,
-    const std::unordered_map<std::string, std::size_t>& nodesByName,
-    const std::unordered_set<std::string>& movingNodes,
-    const Options& options)
+Shape BuildShape(const RobotCollisionGeometry& source)
 {
-    const auto baseIterator = nodesByName.find("Base");
-    if (baseIterator == nodesByName.end()) return {};
+    switch (source.type)
+    {
+    case RobotCollisionType::Box:
+        return BuildBox(source);
+    case RobotCollisionType::Cylinder:
+        return BuildCylinder(source);
+    case RobotCollisionType::Sphere:
+        return BuildSphere(source);
+    }
 
-    const std::size_t baseIndex = baseIterator->second;
-    // Base 메시도 Link와 같은 연결 부품 및 16 cm 셀 기준으로 나눠 실제 오목한 공간을 볼록 껍질 하나로 메우지 않는다.
-    auto shapes = BuildLinkShapes(model, nodeTransforms, baseIndex, baseIndex, movingNodes, options);
-    // 분할된 Base 기준 정점을 proxy 자식 Entity가 사용할 RobotRoot 기준 좌표로 옮긴다.
-    if (model.rootNodeIndex >= 0 &&
-        static_cast<std::size_t>(model.rootNodeIndex) >= nodeTransforms.size())
-        throw std::invalid_argument("Robot collision geometry: GLB root node is out of range");
-    const glm::mat4 rootInverse = model.rootNodeIndex < 0
-        ? glm::mat4(1.0F)
-        : glm::inverse(nodeTransforms[static_cast<std::size_t>(model.rootNodeIndex)]);
-    const glm::mat4 baseToRobotRoot = rootInverse * nodeTransforms[baseIndex];
-    for (auto& shape : shapes)
-        for (glm::vec3& point : shape.pointsMeters)
-            point = glm::vec3(baseToRobotRoot * glm::vec4(point, 1.0F));
-    return shapes;
+    throw std::invalid_argument(CollisionGeometryErrorMessages::unsupportedCollisionType);
 }
+
+std::vector<Shape> BuildLinkShapes(const RobotLink& link,
+    const grasplink::robotics::models::Pose3& linkPoseInAnchor = {})
+{
+    std::vector<Shape> result;
+    result.reserve(link.collisionGeometry.size());
+    for (const RobotCollisionGeometry& geometry : link.collisionGeometry)
+    {
+        Shape shape = BuildShape(geometry);
+        const glm::vec3 shapePosition = shape.localTransform.position;
+        const glm::quat shapeRotation = shape.localTransform.rotation;
+        const glm::mat4 shapeTransform = glm::translate(glm::mat4{1.0F}, shapePosition) *
+            glm::mat4_cast(shapeRotation);
+        const glm::mat4 combined = PoseMatrix(linkPoseInAnchor) * shapeTransform;
+        shape.localTransform.position = glm::vec3{combined[3]};
+        shape.localTransform.rotation = glm::normalize(glm::quat_cast(glm::mat3{combined}));
+        result.push_back(std::move(shape));
+    }
+    return result;
+}
+
+grasplink::robotics::models::Pose3 RelativePose(
+    const grasplink::robotics::models::Pose3& parent,
+    const grasplink::robotics::models::Pose3& child)
+{
+    const glm::dquat parentRotation{parent.rotation.w, parent.rotation.x,
+        parent.rotation.y, parent.rotation.z};
+    const glm::dquat inverseParentRotation = glm::inverse(parentRotation);
+    const glm::dvec3 parentPosition{parent.positionMeters.x, parent.positionMeters.y,
+        parent.positionMeters.z};
+    const glm::dvec3 childPosition{child.positionMeters.x, child.positionMeters.y,
+        child.positionMeters.z};
+    const glm::dvec3 relativePosition = inverseParentRotation * (childPosition - parentPosition);
+    const glm::dquat childRotation{child.rotation.w, child.rotation.x,
+        child.rotation.y, child.rotation.z};
+    const glm::dquat relativeRotation = glm::normalize(inverseParentRotation * childRotation);
+    return {{relativePosition.x, relativePosition.y, relativePosition.z},
+        {relativeRotation.w, relativeRotation.x, relativeRotation.y, relativeRotation.z}};
+}
+
+LinkJointLookup BuildJointLookup(const grasplink::model::RobotModel& model)
+{
+    LinkJointLookup lookup{
+        std::vector<std::optional<std::size_t>>(model.links.size()),
+        std::vector<std::optional<std::size_t>>(model.links.size())};
+
+    for (std::size_t jointIndex = 0; jointIndex < model.joints.size(); ++jointIndex)
+        lookup.parentJointByLink[model.joints[jointIndex].childLink] = jointIndex;
+
+    for (std::size_t activeIndex = 0; activeIndex < model.activeJoints.size(); ++activeIndex)
+    {
+        const std::size_t jointIndex = model.activeJoints[activeIndex];
+        if (jointIndex >= model.joints.size())
+            throw std::invalid_argument(CollisionGeometryErrorMessages::invalidActiveJointIndex);
+        lookup.activeJointByLink[model.joints[jointIndex].childLink] = activeIndex;
+    }
+
+    return lookup;
+}
+
+std::vector<std::size_t> BuildArmLinkOrder(const grasplink::model::RobotModel& model,
+    const LinkJointLookup& lookup)
+{
+    std::vector<std::size_t> linkOrder;
+    for (std::size_t linkIndex = model.toolLink;;)
+    {
+        linkOrder.push_back(linkIndex);
+        if (linkIndex == model.baseLink)
+            break;
+
+        const auto& parentJoint = lookup.parentJointByLink[linkIndex];
+        if (!parentJoint)
+            throw std::invalid_argument(CollisionGeometryErrorMessages::disconnectedToolLink);
+        linkIndex = model.joints[*parentJoint].parentLink;
+    }
+    std::reverse(linkOrder.begin(), linkOrder.end());
+    return linkOrder;
+}
+
+void ValidateCollisionLinksOnArmPath(const grasplink::model::RobotModel& model,
+    const std::vector<std::size_t>& linkOrder)
+{
+    std::vector<bool> isOnArmPath(model.links.size(), false);
+    for (const std::size_t linkIndex : linkOrder)
+        isOnArmPath[linkIndex] = true;
+
+    for (std::size_t linkIndex = 0; linkIndex < model.links.size(); ++linkIndex)
+    {
+        if (!isOnArmPath[linkIndex] && !model.links[linkIndex].collisionGeometry.empty())
+            throw std::invalid_argument(
+                CollisionGeometryErrorMessages::collisionLinkOutsideArmPath);
+    }
+}
+
+std::pair<std::size_t, std::optional<std::size_t>> FindCollisionAnchor(
+    const grasplink::model::RobotModel& model, const LinkJointLookup& lookup,
+    std::size_t linkIndex)
+{
+    std::size_t anchorLink = linkIndex;
+    while (anchorLink != model.baseLink)
+    {
+        if (lookup.activeJointByLink[anchorLink])
+            return {anchorLink, lookup.activeJointByLink[anchorLink]};
+
+        const auto& parentJoint = lookup.parentJointByLink[anchorLink];
+        if (!parentJoint)
+            break;
+        anchorLink = model.joints[*parentJoint].parentLink;
+    }
+
+    if (anchorLink != model.baseLink)
+        throw std::invalid_argument(CollisionGeometryErrorMessages::collisionLinkNotAttached);
+    return {anchorLink, std::nullopt};
+}
+
+void AddLinkCollisionGeometry(const grasplink::model::RobotModel& model,
+    const std::vector<grasplink::robotics::models::Pose3>& bindPoses,
+    const LinkJointLookup& lookup, std::size_t linkIndex, Result& result)
+{
+    const auto [anchorLink, activeJoint] = FindCollisionAnchor(model, lookup, linkIndex);
+    if (!activeJoint)
+    {
+        auto shapes = BuildLinkShapes(model.links[linkIndex],
+            RelativePose(bindPoses[model.baseLink], bindPoses[linkIndex]));
+        result.baseShapes.insert(result.baseShapes.end(),
+            std::make_move_iterator(shapes.begin()), std::make_move_iterator(shapes.end()));
+        return;
+    }
+
+    const auto localPose = RelativePose(bindPoses[anchorLink], bindPoses[linkIndex]);
+    result.links.push_back({model.links[linkIndex].name, *activeJoint, localPose,
+        BuildLinkShapes(model.links[linkIndex])});
+}
+
 }
 
 Result Build(
-    const grasplink::robotics::models::RobotSpecification& specification,
-    const ModelResource& model,
-    const Options& options)
+    const grasplink::model::RobotModel& model)
 {
-    if (specification.joints == nullptr || specification.jointCount == 0)
-        throw std::invalid_argument("Robot collision geometry: joint specifications are missing");
-    if (specification.links == nullptr || specification.linkCount == 0)
-        throw std::invalid_argument("Robot collision geometry: link specifications are missing");
-    if (!std::isfinite(options.vertexMergeToleranceMeters) ||
-        !std::isfinite(options.cellSizeMeters) ||
-        !std::isfinite(options.componentMinimumExtentMeters) ||
-        !std::isfinite(options.cellMinimumExtentMeters) ||
-        !(options.vertexMergeToleranceMeters > 0.0) || !(options.cellSizeMeters > 0.0F) ||
-        !(options.componentMinimumExtentMeters >= 0.0F) || !(options.cellMinimumExtentMeters >= 0.0F))
-        throw std::invalid_argument("Robot collision geometry: geometry options are invalid");
-
-    const std::vector<glm::mat4> nodeTransforms = detail::BuildNodeWorldTransforms(model);
-    std::unordered_map<std::string, std::size_t> nodesByName;
-    for (std::size_t index = 0; index < model.nodes.size(); ++index)
-        if (!nodesByName.emplace(model.nodes[index].name, index).second)
-            throw std::invalid_argument("Robot collision geometry: duplicate GLB node name");
-
-    std::unordered_set<std::string> movingNodes;
-    for (std::size_t i = 0; i < specification.jointCount; ++i)
-        movingNodes.emplace(specification.joints[i].name);
+    if (model.baseLink >= model.links.size() || model.toolLink >= model.links.size())
+        throw std::invalid_argument(CollisionGeometryErrorMessages::invalidBaseOrToolIndex);
+    const auto bindPoses = grasplink::simulation::robotics::BuildRobotLinkBindPoses(model);
 
     Result result;
-    result.baseShapes = BuildBaseShapes(model, nodeTransforms, nodesByName, movingNodes, options);
-    result.links.reserve(specification.linkCount);
-    for (std::size_t i = 0; i < specification.linkCount; ++i)
-    {
-        const auto& link = specification.links[i];
-        if (link.jointIndex >= specification.jointCount)
-            throw std::invalid_argument("Robot collision geometry: link joint index is out of range");
-        const auto joint = nodesByName.find(std::string(specification.joints[link.jointIndex].name));
-        const auto linkNode = nodesByName.find(std::string(link.name));
-        if (joint == nodesByName.end() || linkNode == nodesByName.end())
-            throw std::invalid_argument("Robot collision geometry: GLB joint or link node is missing");
+    result.baseShapes = BuildLinkShapes(model.links[model.baseLink]);
+    if (result.baseShapes.empty())
+        throw std::invalid_argument(CollisionGeometryErrorMessages::missingBaseGeometry);
 
-        auto shapes = BuildLinkShapes(model, nodeTransforms, joint->second, linkNode->second,
-            movingNodes, options);
-        if (shapes.empty())
-            throw std::invalid_argument("Robot collision geometry: link has no GLB collision geometry");
-        result.links.push_back({link.jointIndex, std::move(shapes)});
+    const LinkJointLookup jointLookup = BuildJointLookup(model);
+    const std::vector<std::size_t> linkOrder = BuildArmLinkOrder(model, jointLookup);
+    ValidateCollisionLinksOnArmPath(model, linkOrder);
+
+    result.links.reserve(linkOrder.size() - 1);
+    for (const std::size_t linkIndex : linkOrder)
+    {
+        if (linkIndex == model.baseLink || model.links[linkIndex].collisionGeometry.empty())
+            continue;
+
+        AddLinkCollisionGeometry(model, bindPoses, jointLookup, linkIndex, result);
     }
+
+    if (result.links.empty())
+        throw std::invalid_argument(CollisionGeometryErrorMessages::missingArmGeometry);
     return result;
 }
 }

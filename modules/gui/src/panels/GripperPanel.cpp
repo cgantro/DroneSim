@@ -6,6 +6,7 @@
 #include <imgui.h>
 
 #include <cstdint>
+#include <utility>
 
 namespace grasplink::gui
 {
@@ -76,12 +77,16 @@ void GripperPanel::DrawContents(grasplink::robotics::IGripperController& gripper
 {
     using grasplink::robotics::GripperCommand;
     ImGui::SeparatorText("Gripper");
+    const auto rememberResult = [&](grasplink::robotics::Result result)
+    {
+        lastGripperResult = std::move(result);
+        hasGripperResult = true;
+    };
     const auto submitClosure = [&](std::uint8_t position)
     {
         GripperCommand command;
         command.positionRequest = position;
-        lastGripperResult = gripper.Command(command);
-        hasGripperResult = true;
+        rememberResult(gripper.Command(command));
     };
     ImGui::Text("Connection: %s", gripper.IsConnected() ? "Connected" : "Disconnected");
 
@@ -98,8 +103,7 @@ void GripperPanel::DrawContents(grasplink::robotics::IGripperController& gripper
     ImGui::SameLine();
     if (ImGui::Button("Stop"))
     {
-        lastGripperResult = gripper.Stop();
-        hasGripperResult = true;
+        rememberResult(gripper.Stop());
     }
     ImGui::EndDisabled();
 

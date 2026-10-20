@@ -60,18 +60,26 @@ RobotPanelActions RobotPanel::DrawContents(const RobotPanelView& view)
             const std::string_view jointName = specification.joints[joint].name;
             ImGui::TextUnformatted(jointName.data(), jointName.data() + jointName.size());
             ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%.1f / %.1f deg",
-                glm::degrees(specification.joints[joint].minPositionRadians),
-                glm::degrees(specification.joints[joint].maxPositionRadians));
+            const auto& jointSpec = specification.joints[joint];
+            if (jointSpec.motionType == robotics::models::JointMotionType::Prismatic)
+                ImGui::Text("%.3f / %.3f m", jointSpec.minimumPosition, jointSpec.maximumPosition);
+            else
+                ImGui::Text("%.1f / %.1f deg",
+                    glm::degrees(jointSpec.minimumPosition), glm::degrees(jointSpec.maximumPosition));
             ImGui::TableSetColumnIndex(2);
-            if (joint < state.jointPositionRadians.size())
-                ImGui::Text("%.1f deg", glm::degrees(state.jointPositionRadians[joint]));
+            if (joint < state.jointPositions.size())
+            {
+                if (jointSpec.motionType == robotics::models::JointMotionType::Prismatic)
+                    ImGui::Text("%.3f m", state.jointPositions[joint]);
+                else
+                    ImGui::Text("%.1f deg", glm::degrees(state.jointPositions[joint]));
+            }
             else
                 ImGui::TextUnformatted("--");
         }
         ImGui::EndTable();
     }
-    ImGui::TextUnformatted("Angle values are current joint positions, not travel percentages.");
+    ImGui::TextUnformatted("Joint values show angles or travel distance, not percentages.");
     if (view.mission.canStart && ImGui::Button("Run random pick and place"))
         actions.start = true;
     if (view.mission.paused)
@@ -90,19 +98,26 @@ RobotPanelActions RobotPanel::DrawContents(const RobotPanelView& view)
     ImGui::Text("Controller: %s", RobotModeName(state.mode));
     std::size_t fastestJoint = 0;
     double maximumJointSpeed = 0.0;
-    for (std::size_t joint = 0; joint < state.jointVelocityRadiansPerSecond.size() &&
+    for (std::size_t joint = 0; joint < state.jointVelocities.size() &&
         joint < specification.jointCount; ++joint)
     {
-        const double speed = std::abs(state.jointVelocityRadiansPerSecond[joint]);
+        const double speed = std::abs(state.jointVelocities[joint]);
         if (speed > maximumJointSpeed)
         {
             fastestJoint = joint;
             maximumJointSpeed = speed;
         }
     }
-    if (specification.jointCount > 0 && !state.jointVelocityRadiansPerSecond.empty())
-        ImGui::Text("Joint speed: %s %.1f deg/s", specification.joints[fastestJoint].name,
-            glm::degrees(maximumJointSpeed));
+    if (specification.jointCount > 0 && !state.jointVelocities.empty())
+    {
+        const auto& jointName = specification.joints[fastestJoint].name;
+        if (specification.joints[fastestJoint].motionType == robotics::models::JointMotionType::Prismatic)
+            ImGui::Text("Joint speed: %.*s %.3f m/s",
+                static_cast<int>(jointName.size()), jointName.data(), maximumJointSpeed);
+        else
+            ImGui::Text("Joint speed: %.*s %.1f deg/s",
+                static_cast<int>(jointName.size()), jointName.data(), glm::degrees(maximumJointSpeed));
+    }
     if (view.mission.paused)
         ImGui::Text("Paused at: %s", view.mission.stageLabel.data());
     ImGui::Text("Mission success: %s", view.mission.missionSucceeded ? "YES" : "NO");

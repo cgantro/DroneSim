@@ -1,5 +1,6 @@
 #include "simulation/robotics/RobotPhysicsAdapter.h"
 #include "simulation/robotics/RobotCollisionGeometryBuilder.h"
+#include "simulation/robotics/RobotModelTransforms.h"
 
 #include "robotics/kinematics/RobotKinematics.h"
 #include "scene/Scene.h"
@@ -10,27 +11,51 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 namespace grasplink::simulation
 {
-using grasplink::model::ModelResource;
+using grasplink::model::RobotModel;
 using grasplink::scene::Entity;
 using grasplink::scene::Scene;
+
+namespace
+{
+struct RobotPhysicsAdapterMessages final
+{
+    inline static constexpr char invalidRobotRoot[] = "RobotPhysicsAdapter: invalid robot root";
+    inline static constexpr char sceneRemoved[] = "RobotPhysicsAdapter: robot Scene has been removed";
+    inline static constexpr char linkPoseCountMismatch[] =
+        "RobotPhysicsAdapter: LinkPose count mismatch";
+};
+
+struct RobotPhysicsProxyNames final
+{
+    inline static constexpr char base[] = "Base_CollisionProxy";
+    inline static constexpr char suffix[] = "_CollisionProxy";
+};
+
+glm::mat4 LinkPoseMatrix(const grasplink::robotics::models::Pose3& jointPose,
+    const grasplink::robotics::models::Pose3& linkOffset)
+{
+    return robotics::PoseMatrix(jointPose) * robotics::PoseMatrix(linkOffset);
+}
+}
 
 RobotPhysicsAdapter::RobotPhysicsAdapter(
     Scene& scene,
     const Entity& robotRoot,
-    const grasplink::robotics::models::RobotSpecification& specification,
-    const ModelResource& model)
+    const RobotModel& model)
 {
-    if (!robotRoot) throw std::runtime_error("RobotPhysicsAdapter: invalid robot root");
-    auto geometry = robot_collision_geometry::Build(specification, model);
+    if (!robotRoot)
+        throw std::runtime_error(RobotPhysicsAdapterMessages::invalidRobotRoot);
+    auto geometry = robotics::collision_geometry::Build(model);
     if (!geometry.baseShapes.empty())
     {
-        base_ = scene.CreateEntity("Base_CollisionProxy");
+        base_ = scene.CreateEntity(RobotPhysicsProxyNames::base);
         base_.SetParent(robotRoot);
         base_.Add<RobotCollisionProxy>();
         base_.Add<RobotBaseEnvironmentProxy>();
@@ -43,37 +68,49 @@ RobotPhysicsAdapter::RobotPhysicsAdapter(
     links_.reserve(geometry.links.size());
     for (std::size_t i = 0; i < geometry.links.size(); ++i)
     {
-        const auto& link = specification.links[i];
         auto& linkGeometry = geometry.links[i];
-        Entity entity = scene.CreateEntity(std::string(link.name) + "_CollisionProxy");
+        Entity entity = scene.CreateEntity(
+            linkGeometry.name + RobotPhysicsProxyNames::suffix);
         // FK에서 나온 위치와 회전은 Robot base 기준이다. proxy를 robotRoot의 자식으로 두어 Scene에서 로봇에 설정한 배치 변환이 부모 계층을 통해 추가된다.
         entity.SetParent(robotRoot);
-        entity.set<RobotCollisionProxy>(RobotCollisionProxy{i, link.jointIndex})
+        entity.set<RobotCollisionProxy>(RobotCollisionProxy{i, linkGeometry.jointIndex})
             .set<RigidBody>(RigidBody{
                 grasplink::physics::BodyMotionType::Kinematic,
                 grasplink::physics::CollisionLayer::Robot})
             .set<Colliders>(Colliders{std::move(linkGeometry.shapes)});
-        links_.push_back({entity, linkGeometry.jointIndex});
+        links_.push_back({entity, linkGeometry.jointIndex, linkGeometry.poseInJointFrame});
     }
 }
 
 void RobotPhysicsAdapter::Apply(
     const grasplink::robotics::kinematics::RobotKinematicState& state)
 {
+    // 한 링크라도 FK 결과나 Scene에서 빠졌으면 아무 proxy도 움직이지 않는다.
+    ValidateState(state);
     for (LinkBinding& link : links_)
     {
+        const glm::mat4 transform = GetLinkLocalTransform(link, state);
+        link.entity.SetLocalPosition(glm::vec3{transform[3]});
+        link.entity.SetLocalRotation(glm::normalize(glm::quat_cast(glm::mat3{transform})));
+    }
+}
+
+glm::mat4 RobotPhysicsAdapter::GetLinkLocalTransform(
+    const LinkBinding& link,
+    const grasplink::robotics::kinematics::RobotKinematicState& state) const
+{
+    return LinkPoseMatrix(state.linkPosesInBaseFrame[link.jointIndex], link.poseInJointFrame);
+}
+
+void RobotPhysicsAdapter::ValidateState(
+    const grasplink::robotics::kinematics::RobotKinematicState& state) const
+{
+    for (const LinkBinding& link : links_)
+    {
         if (!link.entity)
-            throw std::runtime_error("RobotPhysicsAdapter: robot Scene has been removed");
+            throw std::runtime_error(RobotPhysicsAdapterMessages::sceneRemoved);
         if (link.jointIndex >= state.linkPosesInBaseFrame.size())
-            throw std::invalid_argument("RobotPhysicsAdapter: LinkPose count mismatch");
-        const auto& pose = state.linkPosesInBaseFrame[link.jointIndex];
-        link.entity.SetLocalPosition({
-            static_cast<float>(pose.positionMeters.x),
-            static_cast<float>(pose.positionMeters.y),
-            static_cast<float>(pose.positionMeters.z)});
-        // base 기준 FK quaternion을 double 정밀도로 정규화한 뒤 Entity의 float quaternion에 저장한다.
-        link.entity.SetLocalRotation(glm::quat{glm::normalize(glm::dquat{
-            pose.rotation.w, pose.rotation.x, pose.rotation.y, pose.rotation.z})});
+            throw std::invalid_argument(RobotPhysicsAdapterMessages::linkPoseCountMismatch);
     }
 }
 
@@ -83,6 +120,7 @@ void RobotPhysicsAdapter::BuildCandidateWorldTransforms(
     std::vector<CandidateWorldTransform>& output) const
 {
     output.clear();
+    ValidateState(state);
     output.reserve(links_.size() + (base_ ? 1U : 0U));
     if (base_)
     {
@@ -93,22 +131,7 @@ void RobotPhysicsAdapter::BuildCandidateWorldTransforms(
 
     for (const LinkBinding& link : links_)
     {
-        if (!link.entity)
-            throw std::runtime_error("RobotPhysicsAdapter: robot Scene has been removed");
-        if (link.jointIndex >= state.linkPosesInBaseFrame.size())
-            throw std::invalid_argument("RobotPhysicsAdapter: LinkPose count mismatch");
-        const auto& pose = state.linkPosesInBaseFrame[link.jointIndex];
-        const glm::vec3 position{
-            static_cast<float>(pose.positionMeters.x),
-            static_cast<float>(pose.positionMeters.y),
-            static_cast<float>(pose.positionMeters.z)};
-        const glm::quat rotation = glm::normalize(glm::quat{
-            static_cast<float>(pose.rotation.w),
-            static_cast<float>(pose.rotation.x),
-            static_cast<float>(pose.rotation.y),
-            static_cast<float>(pose.rotation.z)});
-        const glm::mat4 local = glm::translate(glm::mat4{1.0F}, position) *
-            glm::mat4_cast(rotation);
+        const glm::mat4 local = GetLinkLocalTransform(link, state);
         output.push_back({link.entity, robotRootWorldTransform * local});
     }
 }

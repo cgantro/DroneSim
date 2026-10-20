@@ -25,6 +25,24 @@ using grasplink::scene::Scale;
 using grasplink::scene::TransformMatrix;
 using grasplink::scene::World;
 
+struct PhysicsSystemTolerances final
+{
+    static constexpr float targetTransformComponentDifference = 1.0e-6F;
+    static constexpr float parentIdentityDifference = 1.0e-6F;
+    static constexpr float unitScaleDifference = 1.0e-4F;
+    static constexpr float unitScaleValue = 1.0F;
+};
+
+struct PhysicsSystemMessages final
+{
+    inline static constexpr char bodyConfigurationLogCategory[] = "physics.body_configuration";
+    inline static constexpr char unsupportedScaleOrParentHierarchy[] =
+        "unsupported scale or parent hierarchy (Dynamic requires identity ancestors)";
+    inline static constexpr char worldTransformUnavailable[] =
+        "could not calculate Entity World Transform";
+    inline static constexpr char bodyCreationFailed[] = "failed to create Body";
+};
+
 struct BodySnapshot
 {
     flecs::entity entity;
@@ -46,7 +64,7 @@ bool SameTarget(const Transform& left, const Transform& right)
 bool ReachedTarget(const Transform& actual, const Transform& target)
 {
     // Jolt가 float로 적분하면서 생기는 작은 수치 차이는 허용한다. 같은 목표에 도달했는지 보는 기준은 위치 1 μm와 quaternion 성분 1e-6이다.
-    constexpr float tolerance = 1.0e-6F;
+    constexpr float tolerance = PhysicsSystemTolerances::targetTransformComponentDifference;
     const glm::quat signedActual = glm::dot(actual.rotation, target.rotation) < 0.0F
         ? -actual.rotation : actual.rotation;
     return glm::all(glm::lessThanEqual(glm::abs(actual.position - target.position), glm::vec3{tolerance})) &&
@@ -72,7 +90,9 @@ bool HasUnitScale(flecs::entity entity, bool allowEntityScale)
         if ((!isEntity || !allowEntityScale) && entity.has<Scale, Local>())
         {
             const glm::vec3 scale = entity.get<Scale, Local>();
-            if (!IsFinite(scale) || glm::any(glm::greaterThan(glm::abs(scale - glm::vec3{1.0F}), glm::vec3{1.0e-4F})))
+            if (!IsFinite(scale) || glm::any(glm::greaterThan(
+                glm::abs(scale - glm::vec3{PhysicsSystemTolerances::unitScaleValue}),
+                glm::vec3{PhysicsSystemTolerances::unitScaleDifference})))
                 return false;
         }
 
@@ -96,7 +116,7 @@ bool HasSupportedPhysicsParents(flecs::entity entity, BodyMotionType motionType)
             continue;
         // World는 장면 전체 기준이고 Local은 바로 위 부모 기준이다. Dynamic의 World 결과를 Entity Local 값에 기록하려면 모든 조상 변환이 항등이어야 한다.
         // 서로 곱해져 우연히 상쇄되는 조상 이동과 회전도 허용하지 않는다.
-        constexpr float tolerance = 1.0e-6F;
+        constexpr float tolerance = PhysicsSystemTolerances::parentIdentityDifference;
         if (parent.has<Position, Local>())
         {
             const glm::vec3 position = parent.get<Position, Local>();
@@ -126,7 +146,7 @@ bool TryGetPhysicsTransform(
 
     // TransformSystem이 갱신한 World 행렬에서 위치와 회전을 읽는다. 물리 Body의 기준점은 Entity 원점이며 내부 계산용 무게중심(COM)과 다를 수 있다.
     const glm::mat4 worldMatrix = entity.get<TransformMatrix, World>();
-    glm::vec3 scale{1.0F};
+    glm::vec3 scale{PhysicsSystemTolerances::unitScaleValue};
     glm::quat rotation{1.0F, 0.0F, 0.0F, 0.0F};
     glm::vec3 translation{0.0F};
     glm::vec3 skew{0.0F};
@@ -259,14 +279,14 @@ struct PhysicsSystemModule::Impl
             !HasSupportedPhysicsParents(entity, rigidBody.motionType))
         {
             LogBodyIssue(grasplink::diagnostics::LogLevel::Warning,
-                "unsupported scale or parent hierarchy (Dynamic requires identity ancestors)", entity.id());
+                PhysicsSystemMessages::unsupportedScaleOrParentHierarchy, entity.id());
             return false;
         }
         Transform bodyTransform;
         if (!TryGetPhysicsTransform(entity, bodyTransform))
         {
             LogBodyIssue(grasplink::diagnostics::LogLevel::Error,
-                "could not calculate Entity World Transform", entity.id());
+                PhysicsSystemMessages::worldTransformUnavailable, entity.id());
             return false;
         }
 
@@ -286,7 +306,7 @@ struct PhysicsSystemModule::Impl
         catch (const std::exception& error)
         {
             LogBodyIssue(grasplink::diagnostics::LogLevel::Error,
-                "failed to create Body", entity.id(), error.what());
+                PhysicsSystemMessages::bodyCreationFailed, entity.id(), error.what());
             return false;
         }
     }
@@ -307,7 +327,7 @@ struct PhysicsSystemModule::Impl
                 entry += ": ";
                 entry += detail;
             }
-            logger->Write(level, "physics.body_configuration", entry);
+            logger->Write(level, PhysicsSystemMessages::bodyConfigurationLogCategory, entry);
         }
         catch (...)
         {
@@ -389,38 +409,59 @@ struct PhysicsSystemModule::Impl
 
     void SyncSceneDrivenBodies(double fixedDeltaSeconds)
     {
-        // Static과 Kinematic의 기준 자세는 Scene이 계산한 World 자세다. Static은 그 위치로 배치한다.
-        // Kinematic은 충돌을 계산할 수 있도록 목표까지의 이동 속도를 Jolt에 전달한다.
         for (const BodySnapshot& body : bodies)
-        {
-            if (!body.ready || !grasplink::physics::IsSceneDriven(body.entity.get<RigidBody>().motionType))
-                continue;
+            SyncSceneDrivenBody(body, fixedDeltaSeconds);
+    }
 
-            auto& binding = body.entity.get_mut<grasplink::simulation::detail::PhysicsBodyBinding>();
-            Transform targetTransform;
-            if (!TryGetPhysicsTransform(body.entity, targetTransform))
-                continue;
-            const bool changed = !SameTarget(targetTransform, binding.sceneTarget);
-            if (body.entity.get<RigidBody>().motionType == BodyMotionType::Static)
-            {
-                if (changed)
-                    physicsWorld.SetBodyTransform(binding.handle, targetTransform);
-            }
-            else if (changed || (binding.kinematicMoving &&
+    void SyncSceneDrivenBody(const BodySnapshot& body, double fixedDeltaSeconds)
+    {
+        if (!body.ready)
+            return;
+
+        const RigidBody& rigidBody = body.entity.get<RigidBody>();
+        if (!grasplink::physics::IsSceneDriven(rigidBody.motionType))
+            return;
+
+        auto& binding = body.entity.get_mut<grasplink::simulation::detail::PhysicsBodyBinding>();
+        Transform targetTransform;
+        if (!TryGetPhysicsTransform(body.entity, targetTransform))
+            return;
+
+        if (rigidBody.motionType == BodyMotionType::Static)
+            SyncStaticBody(binding, targetTransform);
+        else
+            SyncKinematicBody(binding, targetTransform, fixedDeltaSeconds);
+
+        binding.sceneTarget = targetTransform;
+    }
+
+    void SyncStaticBody(
+        const grasplink::simulation::detail::PhysicsBodyBinding& binding,
+        const Transform& targetTransform)
+    {
+        if (!SameTarget(targetTransform, binding.sceneTarget))
+            physicsWorld.SetBodyTransform(binding.handle, targetTransform);
+    }
+
+    void SyncKinematicBody(
+        grasplink::simulation::detail::PhysicsBodyBinding& binding,
+        const Transform& targetTransform,
+        double fixedDeltaSeconds)
+    {
+        if (!SameTarget(targetTransform, binding.sceneTarget) ||
+            (binding.kinematicMoving &&
                 !ReachedTarget(physicsWorld.GetBodyTransform(binding.handle), targetTransform)))
-            {
-                physicsWorld.MoveKinematic(binding.handle, targetTransform, fixedDeltaSeconds);
-                binding.kinematicMoving = true;
-            }
-            else if (binding.kinematicMoving)
-            {
-                // MoveKinematic은 다음 Jolt Step에서 목표로 움직일 속도를 설정한다. 그 속도는 Step 뒤에도 남는다.
-                // 같은 목표를 다시 보내지 않으면 StopKinematic을 호출해 Body를 멈춘다.
-                physicsWorld.StopKinematic(binding.handle);
-                binding.kinematicMoving = false;
-            }
-            binding.sceneTarget = targetTransform;
+        {
+            physicsWorld.MoveKinematic(binding.handle, targetTransform, fixedDeltaSeconds);
+            binding.kinematicMoving = true;
+            return;
         }
+
+        if (!binding.kinematicMoving)
+            return;
+
+        physicsWorld.StopKinematic(binding.handle);
+        binding.kinematicMoving = false;
     }
 
     void PostPhysicsSync()

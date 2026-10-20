@@ -11,8 +11,13 @@
  */
 struct RobotCollisionProxy
 {
+    /// linkIndex나 jointIndex에 연결 정보가 없음을 나타낸다.
     static constexpr std::size_t InvalidLinkIndex = static_cast<std::size_t>(-1);
+
+    /// 로봇 팔에서 충돌 모양을 등록한 순서다. 관절 번호와 다를 수 있다.
     std::size_t linkIndex = InvalidLinkIndex;
+
+    /// 이 충돌 모양을 움직이는 base_link부터의 관절 번호다. 고정 링크는 같은 번호를 공유한다.
     std::size_t jointIndex = InvalidLinkIndex;
 };
 

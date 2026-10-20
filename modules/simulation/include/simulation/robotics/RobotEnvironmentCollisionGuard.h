@@ -9,6 +9,7 @@
 #include <flecs.h>
 #include <glm/glm.hpp>
 
+#include <optional>
 #include <vector>
 #include <string>
 
@@ -37,23 +38,33 @@ namespace grasplink::simulation::robotics
 {
 /**
  * @brief 로봇과 그리퍼의 환경 충돌 및 자기 충돌을 검사하고 안전 자세를 복원한다.
- * @details 고정된 환경 물체와의 충돌은 Jolt 환경 쿼리로 검사하고, 로봇 부품끼리의 충돌은 허용 충돌 행렬에 따라 쌍별로 검사한다. 후보 자세는 FK로 각 충돌 프록시의 월드 변환을 직접 계산하므로 Scene을 변경하지 않는다. Scene에 자세를 적용하는 복원 작업은 Controller 명령과 같은 스레드에서 순서대로 실행해야 한다.
+ * @details 고정된 환경 물체와의 충돌은 Jolt 환경 쿼리로 검사하고, 로봇 부품끼리의 충돌은 허용 충돌 행렬에 따라 쌍별로 검사한다. 후보 자세는 FK로 각 충돌 프록시의 월드 변환을 직접 계산하므로 Scene을 변경하지 않는다.
+ * 제어기, 계산기, 어댑터, Flecs World와 물리 시스템은 이 감시기가 빌려 쓰므로 감시기보다 오래 살아야 한다. Scene이 소유한 충돌 프록시도 감시기가 쓰는 동안 유지해야 한다. 자세 복원은 Controller 명령과 같은 스레드에서 순서대로 실행해야 한다.
  */
 class RobotEnvironmentCollisionGuard final
 {
 public:
+    /**
+     * @brief 그리퍼 충돌 검사가 사용할 세 참조를 한 묶음으로 제공한다.
+     * @details 그리퍼가 있는 장면에서는 제어기, 운동학 계산기, 변환 어댑터가 모두 필요하다. 참조한 객체의 소유권은 옮기지 않으며 Guard보다 오래 살아야 한다.
+     */
+    struct GripperSupport
+    {
+        grasplink::robotics::IGripperController& controller;
+        grasplink::robotics::kinematics::GripperKinematics& kinematics;
+        GripperTransformAdapter& transformAdapter;
+    };
+
     RobotEnvironmentCollisionGuard(
         grasplink::robotics::backends::simulation::SimRobotController& robotController,
-        grasplink::robotics::IGripperController& gripperController,
         grasplink::robotics::kinematics::RobotKinematics& robotKinematics,
         RobotTransformAdapter& robotTransformAdapter,
         grasplink::simulation::RobotPhysicsAdapter& robotPhysicsAdapter,
-        grasplink::robotics::kinematics::GripperKinematics& gripperKinematics,
-        GripperTransformAdapter& gripperTransformAdapter,
         flecs::world& world,
         grasplink::physics::PhysicsWorld& physicsWorld,
         grasplink::simulation::PhysicsSystemModule& physicsSystem,
-        const grasplink::scene::Entity& robotRoot);
+        const grasplink::scene::Entity& robotRoot,
+        std::optional<GripperSupport> gripperSupport = std::nullopt);
     ~RobotEnvironmentCollisionGuard();
 
     RobotEnvironmentCollisionGuard(const RobotEnvironmentCollisionGuard&) = delete;
@@ -72,9 +83,16 @@ private:
         SelfCollisionIdentity identity;
     };
 
+    struct EndLinkProxy
+    {
+        std::size_t jointIndex;
+        std::size_t linkIndex;
+    };
+
     [[nodiscard]] grasplink::robotics::planning::JointStateInvalidity ValidateCandidatePose(
         const grasplink::robotics::JointVector& candidateJoints);
     void ApplyJointPose(const grasplink::robotics::RobotState& state);
+    void CollectCollisionProxies(const grasplink::scene::Entity& robotRoot);
     [[nodiscard]] bool RobotAssemblyOverlapsEnvironment();
     [[nodiscard]] bool RobotAssemblyOverlapsEnvironment(
         const std::vector<grasplink::physics::Transform>& candidateTransforms) const;
@@ -86,12 +104,10 @@ private:
         const grasplink::robotics::kinematics::RobotKinematicState& robotState);
 
     grasplink::robotics::backends::simulation::SimRobotController& m_RobotController;
-    grasplink::robotics::IGripperController& m_GripperController;
     grasplink::robotics::kinematics::RobotKinematics& m_RobotKinematics;
     RobotTransformAdapter& m_RobotTransformAdapter;
     grasplink::simulation::RobotPhysicsAdapter& m_RobotPhysicsAdapter;
-    grasplink::robotics::kinematics::GripperKinematics& m_GripperKinematics;
-    GripperTransformAdapter& m_GripperTransformAdapter;
+    std::optional<GripperSupport> m_GripperSupport;
     flecs::world& m_World;
     grasplink::physics::PhysicsWorld& m_PhysicsWorld;
     grasplink::robotics::RobotState m_CandidateState;
@@ -105,10 +121,11 @@ private:
     std::vector<grasplink::physics::Transform> m_CandidateSelfCollisionTransforms;
     grasplink::scene::Entity m_RobotRoot;
     grasplink::scene::Entity m_GripperRoot;
-    glm::mat4 m_GripperRootInLink6{1.0F};
     mutable std::string m_LastSelfCollisionDescription;
-    std::size_t m_Link6JointIndex = static_cast<std::size_t>(-1);
+    std::optional<EndLinkProxy> m_EndLinkProxy;
     flecs::entity m_BaseEnvironmentEntity;
     grasplink::simulation::PhysicsSystemModule& m_PhysicsSystem;
+    /// 마지막 관절 자식 링크 기준 그리퍼 root의 고정 위치와 방향이다.
+    glm::mat4 m_GripperRootInEndLink{1.0F};
 };
 }

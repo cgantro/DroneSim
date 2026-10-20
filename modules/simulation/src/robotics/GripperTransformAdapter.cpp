@@ -21,7 +21,46 @@ using grasplink::scene::Entity;
 
 namespace
 {
-constexpr float kUnitScaleTolerance = 1.0e-4F;
+struct GripperTransformLimits final
+{
+    inline static constexpr float unitScale = 1.0F;
+    inline static constexpr float scaleTolerance = 1.0e-4F;
+    inline static constexpr std::size_t initialParentPathCapacity = 16;
+};
+
+struct GripperTransformErrorMessages final
+{
+    inline static constexpr char nonFiniteBindTransform[] =
+        "GripperTransformAdapter: non-finite bind transform";
+    inline static constexpr char nonUnitScale[] =
+        "GripperTransformAdapter: gripper hierarchy requires unit scale";
+    inline static constexpr char invalidRoot[] =
+        "GripperTransformAdapter: invalid Gripper root";
+    inline static constexpr char emptySpecification[] =
+        "GripperTransformAdapter: empty joint specification";
+    inline static constexpr char invalidJointName[] =
+        "GripperTransformAdapter: empty or duplicate specification joint name";
+    inline static constexpr char duplicateGlbJointNamePrefix[] =
+        "GripperTransformAdapter: duplicate GLB joint name: ";
+    inline static constexpr char jointNotFoundPrefix[] =
+        "GripperTransformAdapter: joint not found: ";
+    inline static constexpr char jointOutsideRootPrefix[] =
+        "GripperTransformAdapter: joint is outside the Gripper root: ";
+    inline static constexpr char invalidBindRotationPrefix[] =
+        "GripperTransformAdapter: invalid bind rotation: ";
+    inline static constexpr char targetOutsideHierarchy[] =
+        "GripperTransformAdapter: target is outside the Gripper hierarchy";
+    inline static constexpr char removedScene[] =
+        "GripperTransformAdapter: Gripper Scene has been removed";
+    inline static constexpr char changedHierarchy[] =
+        "GripperTransformAdapter: Gripper hierarchy changed or was removed";
+    inline static constexpr char invalidJointPose[] =
+        "GripperTransformAdapter: joint pose count or master angle is invalid";
+    inline static constexpr char nonFiniteJointPose[] =
+        "GripperTransformAdapter: non-finite joint pose";
+    inline static constexpr char invalidDeltaRotation[] =
+        "GripperTransformAdapter: zero or invalid delta rotation";
+};
 
 bool IsFinite(const glm::vec3& value)
 {
@@ -36,9 +75,12 @@ bool IsFinite(const glm::quat& value)
 
 bool IsUnitScale(const glm::vec3& value)
 {
-    return std::abs(value.x - 1.0F) <= kUnitScaleTolerance &&
-        std::abs(value.y - 1.0F) <= kUnitScaleTolerance &&
-        std::abs(value.z - 1.0F) <= kUnitScaleTolerance;
+    return std::abs(value.x - GripperTransformLimits::unitScale) <=
+            GripperTransformLimits::scaleTolerance &&
+        std::abs(value.y - GripperTransformLimits::unitScale) <=
+            GripperTransformLimits::scaleTolerance &&
+        std::abs(value.z - GripperTransformLimits::unitScale) <=
+            GripperTransformLimits::scaleTolerance;
 }
 
 bool IsFinite(const ::grasplink::robotics::models::QuaternionWxyz& value)
@@ -63,11 +105,11 @@ void ValidateLocalTransform(const Entity& entity)
     const glm::quat rotation = entity.GetLocalRotation();
     const glm::vec3 scale = entity.GetLocalScale();
     if (!IsFinite(position) || !IsFinite(rotation) || !IsFinite(scale))
-        throw std::invalid_argument("GripperTransformAdapter: non-finite bind transform");
+        throw std::invalid_argument(GripperTransformErrorMessages::nonFiniteBindTransform);
     // 일반 setter를 거치지 않고 ECS에서 직접 기록한 값도 검사한다. 영 quaternion은 방향을 나타낼 수 없으므로 bind 계층 연결을 거부한다.
     (void)Rotation{rotation};
     if (!IsUnitScale(scale))
-        throw std::invalid_argument("GripperTransformAdapter: gripper hierarchy requires unit scale");
+        throw std::invalid_argument(GripperTransformErrorMessages::nonUnitScale);
 }
 
 bool IsSameHierarchy(const Entity& joint, const std::vector<Entity>& ancestry)
@@ -94,9 +136,9 @@ GripperTransformAdapter::GripperTransformAdapter(
     : gripperRoot_(gripperRoot)
 {
     if (!gripperRoot_)
-        throw std::runtime_error("GripperTransformAdapter: invalid Gripper root");
+        throw std::runtime_error(GripperTransformErrorMessages::invalidRoot);
     if (specification.joints == nullptr || specification.jointCount == 0)
-        throw std::invalid_argument("GripperTransformAdapter: empty joint specification");
+        throw std::invalid_argument(GripperTransformErrorMessages::emptySpecification);
 
     ValidateLocalTransform(gripperRoot_);
 
@@ -107,7 +149,7 @@ GripperTransformAdapter::GripperTransformAdapter(
     {
         const std::string name(specification.joints[i].name);
         if (name.empty() || !wantedNames.emplace(name).second)
-            throw std::invalid_argument("GripperTransformAdapter: empty or duplicate specification joint name");
+            throw std::invalid_argument(GripperTransformErrorMessages::invalidJointName);
     }
 
     std::unordered_map<std::string, Entity> foundJoints;
@@ -118,7 +160,8 @@ GripperTransformAdapter::GripperTransformAdapter(
             const char* rawName = child.GetHandle().name().c_str();
             const std::string name = rawName == nullptr ? std::string{} : std::string(rawName);
             if (wantedNames.count(name) != 0 && !foundJoints.emplace(name, child).second)
-                throw std::runtime_error("GripperTransformAdapter: duplicate GLB joint name: " + name);
+                throw std::runtime_error(
+                    GripperTransformErrorMessages::duplicateGlbJointNamePrefix + name);
             collect(child);
         }
     };
@@ -130,7 +173,7 @@ GripperTransformAdapter::GripperTransformAdapter(
         const std::string name(specification.joints[i].name);
         const auto found = foundJoints.find(name);
         if (found == foundJoints.end())
-            throw std::runtime_error("GripperTransformAdapter: joint not found: " + name);
+            throw std::runtime_error(GripperTransformErrorMessages::jointNotFoundPrefix + name);
 
         JointBinding binding;
         binding.entity = found->second;
@@ -142,18 +185,21 @@ GripperTransformAdapter::GripperTransformAdapter(
                 break;
         }
         if (binding.ancestry.empty() || binding.ancestry.back() != gripperRoot_)
-            throw std::runtime_error("GripperTransformAdapter: joint is outside the Gripper root: " + name);
+            throw std::runtime_error(
+                GripperTransformErrorMessages::jointOutsideRootPrefix + name);
 
-        // 이 GLB에서는 Node 22 Gripper에 비항등 장착 변환이 있으므로 이를 root의 Local TRS에 둔다. 관절별 bind 회전만 따로 저장해 개폐 delta와 합성한다.
+        // 그리퍼의 장착 위치와 방향은 root에 남기고, 각 관절은 GLB 기준 회전에 개폐 회전을 더한다.
         const glm::dquat rawBindRotation{binding.entity.GetLocalRotation()};
         const double rawBindLengthSquared = glm::dot(rawBindRotation, rawBindRotation);
         if (!std::isfinite(rawBindLengthSquared) || rawBindLengthSquared <= 0.0)
-            throw std::invalid_argument("GripperTransformAdapter: invalid bind rotation: " + name);
+            throw std::invalid_argument(
+                GripperTransformErrorMessages::invalidBindRotationPrefix + name);
         const glm::dquat bindRotation = glm::normalize(rawBindRotation);
         binding.bindRotation = ToModelQuaternion(bindRotation);
         joints_.push_back(std::move(binding));
     }
     preparedRotations_.resize(joints_.size());
+    parentPathScratch_.reserve(GripperTransformLimits::initialParentPathCapacity);
 }
 
 void GripperTransformAdapter::Apply(
@@ -173,22 +219,21 @@ void GripperTransformAdapter::BuildCandidateWorldTransforms(
     PrepareRotations(state);
     output.clear();
     output.reserve(targets.size());
-    std::vector<Entity> ancestry;
-    ancestry.reserve(16);
+    auto& parentPath = parentPathScratch_;
     for (const Entity& target : targets)
     {
-        ancestry.clear();
+        parentPath.clear();
         Entity current = target;
         while (current && current != gripperRoot_)
         {
-            ancestry.push_back(current);
+            parentPath.push_back(current);
             current = current.GetParent();
         }
         if (!current)
-            throw std::runtime_error("GripperTransformAdapter: target is outside the Gripper hierarchy");
+            throw std::runtime_error(GripperTransformErrorMessages::targetOutsideHierarchy);
 
         glm::mat4 worldTransform = gripperRootWorldTransform;
-        for (auto iterator = ancestry.rbegin(); iterator != ancestry.rend(); ++iterator)
+        for (auto iterator = parentPath.rbegin(); iterator != parentPath.rend(); ++iterator)
         {
             const Entity& entity = *iterator;
             ValidateLocalTransform(entity);
@@ -214,23 +259,23 @@ void GripperTransformAdapter::PrepareRotations(
     if (!std::isfinite(state.masterAngleRadians) ||
         state.jointAnglesRadians.size() != joints_.size() ||
         state.jointLocalRotations.size() != joints_.size())
-        throw std::invalid_argument("GripperTransformAdapter: joint pose count or master angle is invalid");
+        throw std::invalid_argument(GripperTransformErrorMessages::invalidJointPose);
     if (!gripperRoot_.IsValid())
-        throw std::runtime_error("GripperTransformAdapter: Gripper Scene has been removed");
+        throw std::runtime_error(GripperTransformErrorMessages::removedScene);
 
     for (const JointBinding& binding : joints_)
         if (!IsSameHierarchy(binding.entity, binding.ancestry))
-            throw std::runtime_error("GripperTransformAdapter: Gripper hierarchy changed or was removed");
+            throw std::runtime_error(GripperTransformErrorMessages::changedHierarchy);
 
     for (std::size_t i = 0; i < joints_.size(); ++i)
     {
         if (!std::isfinite(state.jointAnglesRadians[i]) || !IsFinite(state.jointLocalRotations[i]))
-            throw std::invalid_argument("GripperTransformAdapter: non-finite joint pose");
+            throw std::invalid_argument(GripperTransformErrorMessages::nonFiniteJointPose);
 
         const glm::dquat rawDelta = ToDoubleQuaternion(state.jointLocalRotations[i]);
         const double rawDeltaLengthSquared = glm::dot(rawDelta, rawDelta);
         if (!std::isfinite(rawDeltaLengthSquared) || rawDeltaLengthSquared <= 0.0)
-            throw std::invalid_argument("GripperTransformAdapter: zero or invalid delta rotation");
+            throw std::invalid_argument(GripperTransformErrorMessages::invalidDeltaRotation);
         const glm::dquat delta = glm::normalize(rawDelta);
         const glm::dquat bind = glm::normalize(ToDoubleQuaternion(joints_[i].bindRotation));
         const glm::dquat result = glm::normalize(bind * delta);

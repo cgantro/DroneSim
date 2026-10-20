@@ -15,6 +15,12 @@ namespace
 {
 using WorldTransformCache = std::unordered_map<flecs::entity_t, glm::mat4>;
 
+struct TransformSystemScratch final
+{
+    std::vector<flecs::entity> transformedEntities;
+    WorldTransformCache worldTransforms;
+};
+
 glm::mat4 UpdateEntityWorldTransform(flecs::entity entity, WorldTransformCache& cache)
 {
     if (!entity.is_alive())
@@ -64,20 +70,23 @@ TransformSystemModule::TransformSystemModule(flecs::world& world)
 
 void TransformSystemModule::UpdateWorldTransforms(flecs::world& world)
 {
-    // 시작 물체는 위치·회전·크기와 계산 결과를 담을 행렬 공간을 모두 가져야 한다. 계산 도중 방문한 이름 없는 부모는 시작 대상으로 취급하지 않는다.
-    // 처리 대상 handle을 먼저 모은다. 계산 중 부모에 결과 행렬을 추가하면 Flecs가 찾는 물체 목록이 바뀔 수 있기 때문이다.
-    std::vector<flecs::entity> transformedEntities;
-    world.each([&](flecs::entity entity)
+    // 필요한 구성 요소가 모두 있는 물체만 Flecs query로 고른다. 전체 장면을 훑으며 각 물체에 구성 요소가 있는지 따로 묻지 않는다.
+    // 물체 handle을 먼저 모아야 한다. 계산 중 부모에 행렬을 추가하면 Flecs가 찾는 물체 목록이 바뀔 수 있다.
+    auto& scratch = world.ensure<TransformSystemScratch>();
+    auto& transformedEntities = scratch.transformedEntities;
+    auto& cache = scratch.worldTransforms;
+    transformedEntities.clear();
+    cache.clear();
+    world.each([&](flecs::entity entity,
+                   flecs::pair<Position, Local>,
+                   flecs::pair<Rotation, Local>,
+                   flecs::pair<Scale, Local>,
+                   flecs::pair<TransformMatrix, Local>&,
+                   flecs::pair<TransformMatrix, World>&)
     {
-        if (entity.has<Position, Local>() && entity.has<Rotation, Local>() &&
-            entity.has<Scale, Local>() && entity.has<TransformMatrix, Local>() &&
-            entity.has<TransformMatrix, World>())
-        {
-            transformedEntities.push_back(entity);
-        }
+        transformedEntities.push_back(entity);
     });
 
-    WorldTransformCache cache;
     cache.reserve(transformedEntities.size());
     // 같은 호출 안에서 여러 자식이 쓰는 부모 위치는 한 번만 계산해 재사용한다. 다음 물리 갱신이나 화면 그리기 전에는 바뀐 부모 기준 값을 새로 읽는다.
     for (flecs::entity entity : transformedEntities)

@@ -123,7 +123,9 @@ enum class CollisionLayer : std::uint8_t
     Environment,
     Robot,
     Gripper,
-    DynamicObject
+    DynamicObject,
+    /// 실제 충돌 그룹 수를 나타내며 Body에 지정할 수 없다.
+    Count
 };
 
 /** @brief Body 주변의 Box 또는 ConvexHull 충돌 모양을 고른다. */

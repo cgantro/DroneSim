@@ -77,12 +77,12 @@ std::vector<physics::CollisionShapeDescription> MeshShapes(const ModelResource& 
     const std::vector<glm::mat4>& nodeTransforms, std::size_t meshNodeIndex, std::size_t rootIndex)
 {
     const NodeData& node = model.nodes[meshNodeIndex];
-    if (node.meshIndex < 0 || static_cast<std::size_t>(node.meshIndex) >= model.meshes.size())
+    if (!node.meshIndex || *node.meshIndex >= model.meshes.size())
         throw std::invalid_argument("TwoF85 collider mesh node has no valid mesh.");
     // GLB 메시 node에서 소유 joint/body까지의 내부 변환만 합성해 정점 [m]을 해당 부품 좌표계로 옮긴다.
     // 모델 작성자가 지정한 소유 root 변환은 proxy의 부모 계층에 남겨 둔다. 실행 중 Scene이 이 변환을 한 번 적용한다.
     const glm::mat4 meshToRoot = glm::inverse(nodeTransforms[rootIndex]) * nodeTransforms[meshNodeIndex];
-    const MeshData& mesh = model.meshes[static_cast<std::size_t>(node.meshIndex)];
+    const MeshData& mesh = model.meshes[*node.meshIndex];
     std::vector<physics::CollisionShapeDescription> shapes;
     for (const SubMeshInfo& primitive : mesh.subMeshes)
     {
@@ -155,8 +155,8 @@ void ConfigureTwoF85Colliders(Scene& scene, const Entity& robotRoot, const Model
                 throw std::invalid_argument("TwoF85 collider ancestry has invalid TRS.");
             if (!IsUnitScale(node.scale))
                 throw std::invalid_argument("TwoF85 collider ancestry has non-unit scale.");
-            if (node.parentIndex < 0) break;
-            index = static_cast<std::size_t>(node.parentIndex);
+            if (!node.parentIndex) break;
+            index = *node.parentIndex;
         }
     };
 
@@ -191,10 +191,10 @@ void ConfigureTwoF85Colliders(Scene& scene, const Entity& robotRoot, const Model
         Entity sceneAncestor = rootEntity;
         while (modelAncestor != gripperIndex)
         {
-            const int parentIndex = model.nodes[modelAncestor].parentIndex;
-            if (parentIndex < 0 || !sceneAncestor)
+            const auto parentIndex = model.nodes[modelAncestor].parentIndex;
+            if (!parentIndex || !sceneAncestor)
                 throw std::invalid_argument("TwoF85 joint is outside the Gripper hierarchy.");
-            modelAncestor = static_cast<std::size_t>(parentIndex);
+            modelAncestor = *parentIndex;
             sceneAncestor = sceneAncestor.GetParent();
             if (!sceneAncestor || !HasName(sceneAncestor, model.nodes[modelAncestor].name))
                 throw std::invalid_argument("TwoF85 scene joint hierarchy does not match the model.");
@@ -212,8 +212,8 @@ void ConfigureTwoF85Colliders(Scene& scene, const Entity& robotRoot, const Model
             const std::size_t meshIndex = meshIt->second;
             validateAncestry(meshIndex);
             std::size_t ancestor = meshIndex;
-            while (ancestor != rootIndex && model.nodes[ancestor].parentIndex >= 0)
-                ancestor = static_cast<std::size_t>(model.nodes[ancestor].parentIndex);
+            while (ancestor != rootIndex && model.nodes[ancestor].parentIndex)
+                ancestor = *model.nodes[ancestor].parentIndex;
             if (ancestor != rootIndex) throw std::invalid_argument("TwoF85 mesh is outside its owning joint hierarchy.");
             Entity meshEntity = robotRoot.FindChildByNameRecursive(spec.meshes[m]);
             if (!meshEntity) throw std::invalid_argument("TwoF85 required scene mesh entity is missing.");
@@ -227,9 +227,9 @@ void ConfigureTwoF85Colliders(Scene& scene, const Entity& robotRoot, const Model
                 if (!IsUnitScale(sceneAncestor.GetLocalScale()))
                     throw std::invalid_argument("TwoF85 scene mesh ancestry has non-unit scale.");
                 if (modelMeshAncestor == rootIndex) break;
-                const int parentIndex = model.nodes[modelMeshAncestor].parentIndex;
-                if (parentIndex < 0) throw std::invalid_argument("TwoF85 mesh is outside its owning joint hierarchy.");
-                modelMeshAncestor = static_cast<std::size_t>(parentIndex);
+                const auto parentIndex = model.nodes[modelMeshAncestor].parentIndex;
+                if (!parentIndex) throw std::invalid_argument("TwoF85 mesh is outside its owning joint hierarchy.");
+                modelMeshAncestor = *parentIndex;
                 sceneAncestor = sceneAncestor.GetParent();
             }
             auto shapes = MeshShapes(model, nodeTransforms, meshIndex, rootIndex);

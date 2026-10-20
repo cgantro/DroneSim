@@ -64,6 +64,8 @@ private:
     std::vector<JointBinding> joints_;
     // 입력 확인과 계산이 끝날 때까지 새 관절 방향을 임시 저장한다. 매 4 ms 갱신에서 메모리를 다시 할당하지 않는다.
     std::vector<glm::quat> preparedRotations_;
+    // 후보 충돌 위치를 계산할 때 자식 Entity에서 Gripper root까지의 부모 경로를 재사용한다.
+    std::vector<grasplink::scene::Entity> parentPathScratch_;
 
     void PrepareRotations(const ::grasplink::robotics::kinematics::GripperKinematicState& state);
 };

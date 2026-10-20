@@ -12,15 +12,16 @@
 #include "robotics/core/IGripperController.h"
 #include "robotics/kinematics/RobotKinematics.h"
 #include "robotics/kinematics/GripperKinematics.h"
-#include "robotics/models/hanwha/Hcr12a.h"
 
 #include "simulation/robotics/RobotTransformAdapter.h"
 #include "simulation/robotics/GripperTransformAdapter.h"
 #include "simulation/robotics/RobotPhysicsAdapter.h"
+#include "simulation/robotics/RobotModelTransforms.h"
 
 #include <algorithm>
 #include <stdexcept>
 #include <unordered_set>
+#include <utility>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -37,19 +38,42 @@ using grasplink::scene::TransformSystemModule;
 
 namespace
 {
-glm::mat4 PoseMatrix(const grasplink::robotics::models::Pose3& pose)
+struct CollisionGuardLimits final
 {
-    const glm::vec3 position{
-        static_cast<float>(pose.positionMeters.x),
-        static_cast<float>(pose.positionMeters.y),
-        static_cast<float>(pose.positionMeters.z)};
-    const glm::quat rotation = glm::normalize(glm::quat{
-        static_cast<float>(pose.rotation.w),
-        static_cast<float>(pose.rotation.x),
-        static_cast<float>(pose.rotation.y),
-        static_cast<float>(pose.rotation.z)});
-    return glm::translate(glm::mat4{1.0F}, position) * glm::mat4_cast(rotation);
-}
+    inline static constexpr std::size_t maximumBaseProxyCount = 1;
+    inline static constexpr std::size_t expectedGripperBodyProxyCount = 1;
+    inline static constexpr std::size_t noGripperBodyProxyCount = 0;
+    inline static constexpr std::size_t firstJointIndex = 0;
+    inline static constexpr std::size_t oneBasedIndexOffset = 1;
+    inline static constexpr double pi = 3.14159265358979323846;
+    inline static constexpr double degreesPerHalfTurn = 180.0;
+};
+
+struct CollisionGuardMessages final
+{
+    inline static constexpr char missingRobotProxyIdentity[] =
+        "Robot collision proxy has no link identity.";
+    inline static constexpr char duplicateRobotLinkIdentity[] =
+        "Robot collision proxy link identity is duplicated.";
+    inline static constexpr char missingCollisionGeometry[] =
+        "로봇 충돌 형상을 확인할 수 없습니다.";
+    inline static constexpr char jointAnglesLabel[] = " at joints [deg]";
+    inline static constexpr char missingEndJointTransform[] =
+        "로봇 끝 관절의 위치를 찾지 못했습니다.";
+    inline static constexpr char missingCollisionProxyTransform[] =
+        "Robot collision candidate is missing a collision proxy transform.";
+    inline static constexpr char missingSelfCollisionProxyTransform[] =
+        "Robot self-collision candidate is missing a proxy transform.";
+    inline static constexpr char missingPhysicsBody[] = " has no physics body";
+};
+
+struct SelfCollisionPartNames final
+{
+    inline static constexpr char base[] = "Base";
+    inline static constexpr char link[] = "Link";
+    inline static constexpr char gripperBody[] = "GripperBody";
+    inline static constexpr char unknown[] = "Unknown";
+};
 
 grasplink::physics::Transform ToPhysicsTransform(const glm::mat4& matrix)
 {
@@ -73,117 +97,49 @@ std::string DescribeIdentity(SelfCollisionIdentity identity)
 {
     switch (identity.part)
     {
-    case SelfCollisionPart::Base: return "Base";
-    case SelfCollisionPart::Link: return "Link" + std::to_string(identity.linkIndex + 1);
-    case SelfCollisionPart::GripperBody: return "GripperBody";
+    case SelfCollisionPart::Base: return SelfCollisionPartNames::base;
+    case SelfCollisionPart::Link:
+        return SelfCollisionPartNames::link +
+            std::to_string(identity.linkIndex + CollisionGuardLimits::oneBasedIndexOffset);
+    case SelfCollisionPart::GripperBody: return SelfCollisionPartNames::gripperBody;
     }
-    return "Unknown";
+    return SelfCollisionPartNames::unknown;
 }
 }
 
 RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
     grasplink::robotics::backends::simulation::SimRobotController& robotController,
-    grasplink::robotics::IGripperController& gripperController,
     grasplink::robotics::kinematics::RobotKinematics& robotKinematics,
     RobotTransformAdapter& robotTransformAdapter,
     grasplink::simulation::RobotPhysicsAdapter& robotPhysicsAdapter,
-    grasplink::robotics::kinematics::GripperKinematics& gripperKinematics,
-    GripperTransformAdapter& gripperTransformAdapter,
     flecs::world& world,
     grasplink::physics::PhysicsWorld& physicsWorld,
     grasplink::simulation::PhysicsSystemModule& physicsSystem,
-    const Entity& robotRoot)
+    const Entity& robotRoot,
+    std::optional<GripperSupport> gripperSupport)
     : m_RobotController(robotController),
-      m_GripperController(gripperController),
       m_RobotKinematics(robotKinematics),
       m_RobotTransformAdapter(robotTransformAdapter),
       m_RobotPhysicsAdapter(robotPhysicsAdapter),
-      m_GripperKinematics(gripperKinematics),
-      m_GripperTransformAdapter(gripperTransformAdapter),
+      m_GripperSupport(std::move(gripperSupport)),
       m_World(world),
       m_PhysicsWorld(physicsWorld),
       m_CandidateState(robotController.GetStateView()),
-      m_SafeJointPositions(robotController.GetStateView().jointPositionRadians),
+      m_SafeJointPositions(robotController.GetStateView().jointPositions),
       m_PhysicsSystem(physicsSystem)
 {
     m_RobotRoot = robotRoot;
     m_GripperRoot = robotRoot.FindChildByNameRecursive("Gripper");
-    std::unordered_set<std::size_t> registeredLinkIndices;
-    std::size_t baseProxyCount = 0;
-    std::size_t gripperBodyCount = 0;
-    std::vector<Entity> pending{robotRoot};
-    while (!pending.empty())
-    {
-        Entity entity = pending.back();
-        pending.pop_back();
-        if (entity.Has<RigidBody>())
-        {
-            const auto layer = entity.Get<RigidBody>().collisionLayer;
-            if (entity.Has<RobotBaseEnvironmentProxy>())
-            {
-                ++baseProxyCount;
-                m_BaseEnvironmentEntity = entity.GetHandle();
-                m_SelfCollisionProxies.push_back({
-                    entity.GetHandle(), {SelfCollisionPart::Base, 0}});
-            }
-            else if (layer == grasplink::physics::CollisionLayer::Robot &&
-                entity.Has<RobotCollisionProxy>())
-            {
-                const std::size_t linkIndex = entity.Get<RobotCollisionProxy>().linkIndex;
-                const std::size_t jointIndex = entity.Get<RobotCollisionProxy>().jointIndex;
-                if (linkIndex == RobotCollisionProxy::InvalidLinkIndex ||
-                    jointIndex == RobotCollisionProxy::InvalidLinkIndex)
-                    throw std::invalid_argument("Robot collision proxy has no link identity.");
-                if (linkIndex >= grasplink::robotics::models::hanwha::kHcr12aLinks.size())
-                    throw std::invalid_argument("Robot collision proxy link identity is out of range.");
-                if (!registeredLinkIndices.insert(linkIndex).second)
-                    throw std::invalid_argument("Robot collision proxy link identity is duplicated.");
-                if (linkIndex == 5)
-                    m_Link6JointIndex = jointIndex;
-            }
-            else if (layer == grasplink::physics::CollisionLayer::Gripper &&
-                entity.Has<GripperCollisionProxy>() &&
-                entity.Get<GripperCollisionProxy>().part == GripperCollisionPart::Body)
-            {
-                ++gripperBodyCount;
-            }
-            if (layer == grasplink::physics::CollisionLayer::Robot ||
-                layer == grasplink::physics::CollisionLayer::Gripper)
-            {
-                m_CollisionEntities.push_back(entity.GetHandle());
-                if (layer == grasplink::physics::CollisionLayer::Robot &&
-                    entity.Has<RobotCollisionProxy>())
-                {
-                    const auto& proxy = entity.Get<RobotCollisionProxy>();
-                    m_SelfCollisionProxies.push_back({
-                        entity.GetHandle(), {SelfCollisionPart::Link, proxy.linkIndex}});
-                }
-                else if (layer == grasplink::physics::CollisionLayer::Gripper &&
-                    entity.Has<GripperCollisionProxy>() &&
-                    entity.Get<GripperCollisionProxy>().part == GripperCollisionPart::Body)
-                {
-                    m_SelfCollisionProxies.push_back({
-                        entity.GetHandle(), {SelfCollisionPart::GripperBody, 0}});
-                }
-            }
-            if (layer == grasplink::physics::CollisionLayer::Gripper)
-                m_GripperCollisionEntities.push_back(entity);
-        }
-        const auto children = entity.GetChildren();
-        pending.insert(pending.end(), children.begin(), children.end());
-    }
 
-    if (baseProxyCount != 1 || registeredLinkIndices.size() != 6 || gripperBodyCount != 1 ||
-        !m_GripperRoot || m_Link6JointIndex == RobotCollisionProxy::InvalidLinkIndex)
-        throw std::invalid_argument("Robot self-collision requires one Base, six indexed HCR-12A links, and one gripper body.");
-    for (std::size_t index = 0; index < grasplink::robotics::models::hanwha::kHcr12aLinks.size(); ++index)
-        if (registeredLinkIndices.count(index) == 0)
-            throw std::invalid_argument("Robot collision proxy link identities are incomplete.");
+    CollectCollisionProxies(robotRoot);
 
     const auto& initialKinematics = m_RobotKinematics.Update(robotController.GetStateView());
-    const glm::mat4 initialLink6World = robotRoot.GetWorldMatrix() *
-        PoseMatrix(initialKinematics.linkPosesInBaseFrame.at(m_Link6JointIndex));
-    m_GripperRootInLink6 = glm::inverse(initialLink6World) * m_GripperRoot.GetWorldMatrix();
+    if (m_GripperSupport)
+    {
+        const glm::mat4 initialEndJointWorld = robotRoot.GetWorldMatrix() *
+            PoseMatrix(initialKinematics.linkPosesInBaseFrame.at(m_EndLinkProxy->jointIndex));
+        m_GripperRootInEndLink = glm::inverse(initialEndJointWorld) * m_GripperRoot.GetWorldMatrix();
+    }
     m_CandidateCollisionTransforms.resize(m_CollisionEntities.size());
     m_CandidateSelfCollisionTransforms.resize(m_SelfCollisionProxies.size());
 
@@ -197,6 +153,91 @@ RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
     });
 }
 
+void RobotEnvironmentCollisionGuard::CollectCollisionProxies(const Entity& robotRoot)
+{
+    std::unordered_set<std::size_t> registeredLinkIndices;
+    std::size_t baseProxyCount = 0;
+    std::size_t gripperBodyCount = 0;
+    std::vector<Entity> pending{robotRoot};
+    while (!pending.empty())
+    {
+        Entity entity = pending.back();
+        pending.pop_back();
+        const auto children = entity.GetChildren();
+        pending.insert(pending.end(), children.begin(), children.end());
+        if (!entity.Has<RigidBody>())
+            continue;
+
+        const auto layer = entity.Get<RigidBody>().collisionLayer;
+        if (entity.Has<RobotBaseEnvironmentProxy>())
+        {
+            ++baseProxyCount;
+            m_BaseEnvironmentEntity = entity.GetHandle();
+            m_SelfCollisionProxies.push_back({entity.GetHandle(), {
+                SelfCollisionPart::Base, 0, SelfCollisionIdentity::InvalidIndex}});
+        }
+        switch (layer)
+        {
+        case grasplink::physics::CollisionLayer::Robot:
+        {
+            m_CollisionEntities.push_back(entity.GetHandle());
+            if (!entity.Has<RobotCollisionProxy>())
+                break;
+
+            const auto& proxy = entity.Get<RobotCollisionProxy>();
+            if (proxy.linkIndex == RobotCollisionProxy::InvalidLinkIndex ||
+                proxy.jointIndex == RobotCollisionProxy::InvalidLinkIndex)
+                throw std::invalid_argument(CollisionGuardMessages::missingRobotProxyIdentity);
+            if (!registeredLinkIndices.insert(proxy.linkIndex).second)
+                throw std::invalid_argument(CollisionGuardMessages::duplicateRobotLinkIdentity);
+            if (proxy.jointIndex + CollisionGuardLimits::oneBasedIndexOffset ==
+                m_RobotController.GetSpecification().jointCount)
+            {
+                m_EndLinkProxy = EndLinkProxy{proxy.jointIndex, proxy.linkIndex};
+            }
+            m_SelfCollisionProxies.push_back({
+                entity.GetHandle(), {
+                    SelfCollisionPart::Link, proxy.linkIndex, proxy.jointIndex}});
+            break;
+        }
+        case grasplink::physics::CollisionLayer::Gripper:
+        {
+            m_CollisionEntities.push_back(entity.GetHandle());
+            m_GripperCollisionEntities.push_back(entity);
+            if (!entity.Has<GripperCollisionProxy>() ||
+                entity.Get<GripperCollisionProxy>().part != GripperCollisionPart::Body)
+                break;
+
+            ++gripperBodyCount;
+            m_SelfCollisionProxies.push_back({
+                entity.GetHandle(), {SelfCollisionPart::GripperBody,
+                    SelfCollisionIdentity::InvalidIndex,
+                    SelfCollisionIdentity::InvalidIndex}});
+            break;
+        }
+        case grasplink::physics::CollisionLayer::Environment:
+        case grasplink::physics::CollisionLayer::DynamicObject:
+        case grasplink::physics::CollisionLayer::Count:
+            break;
+        }
+    }
+
+    const bool hasGripper = m_GripperSupport.has_value();
+    if (baseProxyCount > CollisionGuardLimits::maximumBaseProxyCount ||
+        registeredLinkIndices.empty() ||
+        (hasGripper && (gripperBodyCount != CollisionGuardLimits::expectedGripperBodyProxyCount ||
+            !m_GripperRoot ||
+            !m_EndLinkProxy)) ||
+        (!hasGripper && gripperBodyCount != CollisionGuardLimits::noGripperBodyProxyCount))
+        throw std::invalid_argument(CollisionGuardMessages::missingCollisionGeometry);
+    for (SelfCollisionProxy& proxy : m_SelfCollisionProxies)
+        if (proxy.identity.part == SelfCollisionPart::GripperBody)
+        {
+            proxy.identity.linkIndex = m_EndLinkProxy->linkIndex;
+            proxy.identity.jointIndex = m_EndLinkProxy->jointIndex;
+        }
+}
+
 RobotEnvironmentCollisionGuard::~RobotEnvironmentCollisionGuard()
 {
     m_RobotController.SetJointStateValidityChecker({});
@@ -205,7 +246,7 @@ RobotEnvironmentCollisionGuard::~RobotEnvironmentCollisionGuard()
 
 void RobotEnvironmentCollisionGuard::CaptureSafeJointPose()
 {
-    const auto& currentJoints = m_RobotController.GetStateView().jointPositionRadians;
+    const auto& currentJoints = m_RobotController.GetStateView().jointPositions;
     std::copy(currentJoints.begin(), currentJoints.end(), m_SafeJointPositions.begin());
 }
 
@@ -214,13 +255,14 @@ void RobotEnvironmentCollisionGuard::RestoreSafePoseIfOverlapping()
     if (m_RobotController.GetStateView().mode != grasplink::robotics::RobotMode::Moving)
         return;
 
-    grasplink::robotics::ErrorCode collisionReason = grasplink::robotics::ErrorCode::EnvironmentContact;
-    if (!RobotAssemblyOverlapsEnvironment())
-    {
-        if (!RobotAssemblyHasSelfCollision())
-            return;
-        collisionReason = grasplink::robotics::ErrorCode::SelfCollision;
-    }
+    const bool environmentContact = RobotAssemblyOverlapsEnvironment();
+    const bool selfCollision = !environmentContact && RobotAssemblyHasSelfCollision();
+    if (!environmentContact && !selfCollision)
+        return;
+
+    const auto collisionReason = environmentContact
+        ? grasplink::robotics::ErrorCode::EnvironmentContact
+        : grasplink::robotics::ErrorCode::SelfCollision;
 
     // Jolt 접촉 callback은 Kinematic 로봇 부품과 Static 바닥의 겹침을 항상 알리지 않으므로 물리 계산 전에 직전 안전 자세를 복원한다.
     if (!m_RobotController.RestoreCollisionSafeState(m_SafeJointPositions, collisionReason))
@@ -233,16 +275,17 @@ grasplink::robotics::planning::JointStateInvalidity RobotEnvironmentCollisionGua
     const grasplink::robotics::JointVector& candidateJoints)
 {
     m_LastSelfCollisionDescription.clear();
-    m_CandidateState.jointPositionRadians = candidateJoints;
+    m_CandidateState.jointPositions = candidateJoints;
     const auto& robotState = m_RobotKinematics.Update(m_CandidateState);
     BuildCandidateProxyTransforms(robotState);
     if (RobotAssemblyOverlapsEnvironment(m_CandidateCollisionTransforms))
         return grasplink::robotics::planning::JointStateInvalidity::EnvironmentCollision;
     if (RobotAssemblyHasSelfCollision(m_CandidateSelfCollisionTransforms))
     {
-        m_LastSelfCollisionDescription += " at joints [deg]";
+        m_LastSelfCollisionDescription += CollisionGuardMessages::jointAnglesLabel;
         for (const double angle : candidateJoints)
-            m_LastSelfCollisionDescription += " " + std::to_string(angle * 180.0 / 3.14159265358979323846);
+            m_LastSelfCollisionDescription += " " + std::to_string(
+                angle * CollisionGuardLimits::degreesPerHalfTurn / CollisionGuardLimits::pi);
         return grasplink::robotics::planning::JointStateInvalidity::SelfCollision;
     }
     m_LastSelfCollisionDescription.clear();
@@ -254,8 +297,12 @@ void RobotEnvironmentCollisionGuard::ApplyJointPose(const grasplink::robotics::R
     const auto& kinematicState = m_RobotKinematics.Update(state);
     m_RobotTransformAdapter.Apply(kinematicState);
     m_RobotPhysicsAdapter.Apply(kinematicState);
-    const auto& gripperState = m_GripperKinematics.Update(m_GripperController.GetState());
-    m_GripperTransformAdapter.Apply(gripperState);
+    if (m_GripperSupport)
+    {
+        const auto& gripperState = m_GripperSupport->kinematics.Update(
+            m_GripperSupport->controller.GetState());
+        m_GripperSupport->transformAdapter.Apply(gripperState);
+    }
     TransformSystemModule::UpdateWorldTransforms(m_World);
 }
 
@@ -279,9 +326,11 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyOverlapsEnvironment(
         if (!collisionBodyHandle.IsValid())
             return true;
 
-        const bool isLink1 = collisionEntity.has<RobotCollisionProxy>() &&
-            collisionEntity.get<RobotCollisionProxy>().linkIndex == 0;
-        const bool overlapsEnvironment = isLink1 && baseEnvironmentBodyHandle.IsValid()
+        // jointIndex는 base_link부터 번호를 매긴 움직이는 관절이다. 첫 관절에 붙은 링크만 Base 연결부 겹침을 허용한다.
+        const bool isBaseMountedLink = collisionEntity.has<RobotCollisionProxy>() &&
+            collisionEntity.get<RobotCollisionProxy>().jointIndex ==
+                CollisionGuardLimits::firstJointIndex;
+        const bool overlapsEnvironment = isBaseMountedLink && baseEnvironmentBodyHandle.IsValid()
             ? m_PhysicsWorld.OverlapsEnvironmentAt(
                 collisionBodyHandle, candidateTransforms[i], baseEnvironmentBodyHandle)
             : m_PhysicsWorld.OverlapsEnvironmentAt(collisionBodyHandle, candidateTransforms[i]);
@@ -309,7 +358,8 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyHasSelfCollision(
         const auto firstBody = m_PhysicsSystem.GetBodyHandle(first.entity);
         if (!firstBody.IsValid())
         {
-            m_LastSelfCollisionDescription = DescribeIdentity(first.identity) + " has no physics body";
+            m_LastSelfCollisionDescription = DescribeIdentity(first.identity) +
+                CollisionGuardMessages::missingPhysicsBody;
             return true;
         }
 
@@ -325,7 +375,7 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyHasSelfCollision(
             if (!secondBody.IsValid())
             {
                 m_LastSelfCollisionDescription = DescribeIdentity(first.identity) + " / " +
-                    DescribeIdentity(second.identity) + " has no physics body";
+                    DescribeIdentity(second.identity) + CollisionGuardMessages::missingPhysicsBody;
                 return true;
             }
             if (m_PhysicsWorld.OverlapsBodiesAt(
@@ -352,32 +402,29 @@ void RobotEnvironmentCollisionGuard::BuildCandidateProxyTransforms(
     ZoneScopedN("CollisionCandidateFK");
     m_RobotPhysicsAdapter.BuildCandidateWorldTransforms(
         robotState, m_RobotRoot.GetWorldMatrix(), m_CandidateProxyWorldTransforms);
-    const glm::mat4* link6World = nullptr;
-    for (const SelfCollisionProxy& proxy : m_SelfCollisionProxies)
+    if (m_GripperSupport)
     {
-        if (proxy.identity.part == SelfCollisionPart::Link && proxy.identity.linkIndex == 5)
-        {
-            link6World = FindWorldTransform(m_CandidateProxyWorldTransforms, proxy.entity);
-            break;
-        }
+        if (!m_EndLinkProxy || m_EndLinkProxy->jointIndex >= robotState.linkPosesInBaseFrame.size())
+            throw std::logic_error(CollisionGuardMessages::missingEndJointTransform);
+        // 장착 오프셋은 마지막 움직이는 관절의 자식 링크 기준으로 저장하므로 후보 자세에서도 같은 기준을 사용한다.
+        const glm::mat4 candidateEndJointWorld = m_RobotRoot.GetWorldMatrix() *
+            PoseMatrix(robotState.linkPosesInBaseFrame[m_EndLinkProxy->jointIndex]);
+        const glm::mat4 candidateGripperRootWorld = candidateEndJointWorld * m_GripperRootInEndLink;
+        const auto& gripperState = m_GripperSupport->kinematics.Update(
+            m_GripperSupport->controller.GetState());
+        m_GripperSupport->transformAdapter.BuildCandidateWorldTransforms(
+            gripperState, candidateGripperRootWorld,
+            m_GripperCollisionEntities, m_CandidateGripperWorldTransforms);
+        for (std::size_t i = 0; i < m_GripperCollisionEntities.size(); ++i)
+            m_CandidateProxyWorldTransforms.push_back({
+                m_GripperCollisionEntities[i], m_CandidateGripperWorldTransforms[i]});
     }
-    if (link6World == nullptr)
-        throw std::logic_error("Robot self-collision candidate is missing Link6.");
-
-    const glm::mat4 candidateGripperRootWorld = *link6World * m_GripperRootInLink6;
-    const auto& gripperState = m_GripperKinematics.Update(m_GripperController.GetState());
-    m_GripperTransformAdapter.BuildCandidateWorldTransforms(
-        gripperState, candidateGripperRootWorld,
-        m_GripperCollisionEntities, m_CandidateGripperWorldTransforms);
-    for (std::size_t i = 0; i < m_GripperCollisionEntities.size(); ++i)
-        m_CandidateProxyWorldTransforms.push_back({
-            m_GripperCollisionEntities[i], m_CandidateGripperWorldTransforms[i]});
 
     for (std::size_t i = 0; i < m_CollisionEntities.size(); ++i)
     {
         const glm::mat4* transform = FindWorldTransform(m_CandidateProxyWorldTransforms, m_CollisionEntities[i]);
         if (transform == nullptr)
-            throw std::logic_error("Robot collision candidate is missing a collision proxy transform.");
+            throw std::logic_error(CollisionGuardMessages::missingCollisionProxyTransform);
         m_CandidateCollisionTransforms[i] = ToPhysicsTransform(*transform);
     }
     for (std::size_t i = 0; i < m_SelfCollisionProxies.size(); ++i)
@@ -385,7 +432,7 @@ void RobotEnvironmentCollisionGuard::BuildCandidateProxyTransforms(
         const glm::mat4* transform = FindWorldTransform(
             m_CandidateProxyWorldTransforms, m_SelfCollisionProxies[i].entity);
         if (transform == nullptr)
-            throw std::logic_error("Robot self-collision candidate is missing a proxy transform.");
+            throw std::logic_error(CollisionGuardMessages::missingSelfCollisionProxyTransform);
         m_CandidateSelfCollisionTransforms[i] = ToPhysicsTransform(*transform);
     }
 }

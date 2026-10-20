@@ -168,6 +168,7 @@ ImU32 LayerColor(grasplink::physics::CollisionLayer layer)
     case grasplink::physics::CollisionLayer::Robot: return IM_COL32(255, 110, 55, 255);
     case grasplink::physics::CollisionLayer::Gripper: return IM_COL32(210, 90, 255, 255);
     case grasplink::physics::CollisionLayer::DynamicObject: return IM_COL32(70, 210, 255, 255);
+    case grasplink::physics::CollisionLayer::Count: return IM_COL32_WHITE;
     }
     return IM_COL32_WHITE;
 }
