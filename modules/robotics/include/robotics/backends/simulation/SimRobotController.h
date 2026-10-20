@@ -188,6 +188,25 @@ private:
         double accelerationScale = 1.0;
     };
 
+    // 관절 이동 목표, 가감속 진행 상태, 감속 뒤 실행할 대기 명령을 한 묶음으로 보관한다.
+    struct JointMotionState
+    {
+        JointVector targetPositions;
+        JointVector startPositions;
+        double progress = 0.0;
+        double progressVelocity = 0.0;
+        double progressAcceleration = 0.0;
+        double progressRate = 0.0;
+        double elapsedSeconds = 0.0;
+        double accelerationTimeSeconds = 0.0;
+        double cruiseTimeSeconds = 0.0;
+        double profileDurationSeconds = 0.0;
+        double peakProgressVelocity = 0.0;
+        double stopProgress = 1.0;
+        bool braking = false;
+        std::optional<PendingJointMove> pendingMove;
+    };
+
     enum class JointMoveOrigin { ExternalJointCommand, PoseTargetCommand, PlannedPoseSegment };
     Result MoveJointImpl(const JointMoveCommand& command, JointMoveOrigin origin);
     Result BeginPosePlanningImpl(const CartesianPose& targetInBase,
@@ -223,24 +242,7 @@ private:
     // 현재 관절 위치·속도와 제어 상태를 저장한다.
     RobotState state_{};
 
-    // MoveJoint가 마지막으로 수락한 관절별 절대 목표 위치다. 새 명령을 받으면 교체한다.
-    JointVector targetPositions_;
-
-    // 관절 명령은 검증한 선형 경로를 따라 하나의 진행률로 동기화해 실행한다.
-    JointVector jointMoveStartPositions_;
-    double jointMoveProgress_ = 0.0;
-    double jointMoveProgressVelocity_ = 0.0;
-    double jointMoveProgressAcceleration_ = 0.0;
-    double jointMoveProgressRate_ = 0.0;
-    double jointMoveElapsedSeconds_ = 0.0;
-    double jointMoveAccelerationTimeSeconds_ = 0.0;
-    double jointMoveCruiseTimeSeconds_ = 0.0;
-    double jointMoveProfileDurationSeconds_ = 0.0;
-    double jointMovePeakProgressVelocity_ = 0.0;
-    double jointMoveStopProgress_ = 1.0;
-    bool jointMoveBraking_ = false;
-    // 감속 중 새 명령이 들어오면 목표와 속도 설정을 한 묶음으로 보관한다.
-    std::optional<PendingJointMove> pendingJointMove_;
+    JointMotionState jointMotion_;
 
     // MoveLinear tick에서 사용할 관절 보간 공간이다. Connect 때 크기를 정해 실행 중 vector 할당을 피한다.
     JointVector linearInterpolationBuffer_;

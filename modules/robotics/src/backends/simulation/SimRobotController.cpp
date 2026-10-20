@@ -161,19 +161,19 @@ Result SimRobotController::Connect()
     state_.valid = true;
     RefreshTcp();
 
-    targetPositions_ = state_.jointPositions;
-    jointMoveStartPositions_ = state_.jointPositions;
-    jointMoveProgress_ = 0.0;
-    jointMoveProgressVelocity_ = 0.0;
-    jointMoveProgressAcceleration_ = 0.0;
-    jointMoveProgressRate_ = 0.0;
-    jointMoveElapsedSeconds_ = 0.0;
-    jointMoveAccelerationTimeSeconds_ = 0.0;
-    jointMoveCruiseTimeSeconds_ = 0.0;
-    jointMoveProfileDurationSeconds_ = 0.0;
-    jointMovePeakProgressVelocity_ = 0.0;
-    jointMoveBraking_ = false;
-    pendingJointMove_.reset();
+    jointMotion_.targetPositions = state_.jointPositions;
+    jointMotion_.startPositions = state_.jointPositions;
+    jointMotion_.progress = 0.0;
+    jointMotion_.progressVelocity = 0.0;
+    jointMotion_.progressAcceleration = 0.0;
+    jointMotion_.progressRate = 0.0;
+    jointMotion_.elapsedSeconds = 0.0;
+    jointMotion_.accelerationTimeSeconds = 0.0;
+    jointMotion_.cruiseTimeSeconds = 0.0;
+    jointMotion_.profileDurationSeconds = 0.0;
+    jointMotion_.peakProgressVelocity = 0.0;
+    jointMotion_.braking = false;
+    jointMotion_.pendingMove.reset();
     linearInterpolationBuffer_.resize(specification_.jointCount);
     previousJointPositions_.resize(specification_.jointCount);
     connected_ = true;
@@ -233,18 +233,18 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     planning::AlignEquivalentJointAngles(targetPositions, state_.jointPositions, specification_);
 
     const bool canBrakeJointPath = state_.mode == RobotMode::Moving && linearMotion_.path.empty() &&
-        jointMoveProgressVelocity_ > detail::kMotionEpsilon && jointMoveProgressAcceleration_ > 0.0;
-    const double stoppingProgress = canBrakeJointPath ? std::min(1.0, jointMoveProgress_ +
-        jointMoveProgressVelocity_ * jointMoveProgressVelocity_ /
-            (2.0 * jointMoveProgressAcceleration_)) : jointMoveProgress_;
+        jointMotion_.progressVelocity > detail::kMotionEpsilon && jointMotion_.progressAcceleration > 0.0;
+    const double stoppingProgress = canBrakeJointPath ? std::min(1.0, jointMotion_.progress +
+        jointMotion_.progressVelocity * jointMotion_.progressVelocity /
+            (2.0 * jointMotion_.progressAcceleration)) : jointMotion_.progress;
     const JointVector* nextPathStart = &state_.jointPositions;
     JointVector brakingStart;
     if (canBrakeJointPath)
     {
         brakingStart = state_.jointPositions;
         for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
-            brakingStart[joint] = jointMoveStartPositions_[joint] +
-                (targetPositions_[joint] - jointMoveStartPositions_[joint]) * stoppingProgress;
+            brakingStart[joint] = jointMotion_.startPositions[joint] +
+                (jointMotion_.targetPositions[joint] - jointMotion_.startPositions[joint]) * stoppingProgress;
         nextPathStart = &brakingStart;
     }
 
@@ -265,10 +265,10 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
 
     if (canBrakeJointPath)
     {
-        pendingJointMove_ = PendingJointMove{
+        jointMotion_.pendingMove = PendingJointMove{
             std::move(targetPositions), command.velocityScale, command.accelerationScale};
-        jointMoveBraking_ = true;
-        jointMoveStopProgress_ = stoppingProgress;
+        jointMotion_.braking = true;
+        jointMotion_.stopProgress = stoppingProgress;
         state_.errorCode = ErrorCode::None;
         return Result::Success();
     }
@@ -669,7 +669,7 @@ void SimRobotController::FinishPosePlanning(Result result)
     if (!*linearPathPlanningResult_)
     {
         ClearPosePlanningState();
-        pendingJointMove_.reset();
+        jointMotion_.pendingMove.reset();
     }
 }
 
@@ -737,7 +737,7 @@ Result SimRobotController::CommitLinearPathPlan(
     linearMotion_.profileDurationSeconds = linearMotion_.plannedDurationSeconds /
         (1.0 - linearMotion_.profileRampFraction);
     linearMotion_.profileElapsedSeconds = 0.0;
-    targetPositions_ = candidate.back().joints;
+    jointMotion_.targetPositions = candidate.back().joints;
     posePathPoints_.clear();
     posePathSegment_ = 0;
     posePlanning_.continuationCommand.reset();
@@ -807,14 +807,14 @@ Result SimRobotController::Stop()
     }
 
     // 현재 q를 새 목표로 고정해 이후 Update가 남은 동작을 재개하지 않게 한다.
-    targetPositions_ = state_.jointPositions;
-    jointMoveStartPositions_ = state_.jointPositions;
-    jointMoveProgress_ = 0.0;
-    jointMoveProgressVelocity_ = 0.0;
-    jointMoveProgressAcceleration_ = 0.0;
-    jointMoveProgressRate_ = 0.0;
-    jointMoveBraking_ = false;
-    pendingJointMove_.reset();
+    jointMotion_.targetPositions = state_.jointPositions;
+    jointMotion_.startPositions = state_.jointPositions;
+    jointMotion_.progress = 0.0;
+    jointMotion_.progressVelocity = 0.0;
+    jointMotion_.progressAcceleration = 0.0;
+    jointMotion_.progressRate = 0.0;
+    jointMotion_.braking = false;
+    jointMotion_.pendingMove.reset();
     linearMotion_.path.clear();
     ClearPosePlanningState();
     linearMotion_.profileElapsedSeconds = 0.0;
@@ -878,14 +878,14 @@ bool SimRobotController::RestoreCollisionSafeState(
 
     state_.jointPositions = safePositions;
     std::fill(state_.jointVelocities.begin(), state_.jointVelocities.end(), 0.0);
-    targetPositions_ = safePositions;
-    jointMoveStartPositions_ = safePositions;
-    jointMoveProgress_ = 0.0;
-    jointMoveProgressVelocity_ = 0.0;
-    jointMoveProgressAcceleration_ = 0.0;
-    jointMoveProgressRate_ = 0.0;
-    jointMoveBraking_ = false;
-    pendingJointMove_.reset();
+    jointMotion_.targetPositions = safePositions;
+    jointMotion_.startPositions = safePositions;
+    jointMotion_.progress = 0.0;
+    jointMotion_.progressVelocity = 0.0;
+    jointMotion_.progressAcceleration = 0.0;
+    jointMotion_.progressRate = 0.0;
+    jointMotion_.braking = false;
+    jointMotion_.pendingMove.reset();
     linearMotion_.path.clear();
     linearMotion_.segment = 1;
     linearMotion_.segmentFraction = 0.0;

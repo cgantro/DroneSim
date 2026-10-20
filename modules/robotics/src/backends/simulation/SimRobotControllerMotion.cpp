@@ -72,68 +72,68 @@ double TrapezoidDistanceFraction(double timeFraction, double rampTimeFraction)
 void SimRobotController::ConfigureJointMove(
     JointVector targetPositions, double velocityScale, double accelerationScale)
 {
-    targetPositions_ = std::move(targetPositions);
-    jointMoveStartPositions_ = state_.jointPositions;
-    jointMoveProgress_ = 0.0;
-    jointMoveProgressVelocity_ = 0.0;
-    jointMoveProgressAcceleration_ = std::numeric_limits<double>::infinity();
-    jointMoveElapsedSeconds_ = 0.0;
-    jointMoveAccelerationTimeSeconds_ = 0.0;
-    jointMoveCruiseTimeSeconds_ = 0.0;
-    jointMoveProfileDurationSeconds_ = 0.0;
-    jointMovePeakProgressVelocity_ = 0.0;
-    jointMoveBraking_ = false;
-    pendingJointMove_.reset();
+    jointMotion_.targetPositions = std::move(targetPositions);
+    jointMotion_.startPositions = state_.jointPositions;
+    jointMotion_.progress = 0.0;
+    jointMotion_.progressVelocity = 0.0;
+    jointMotion_.progressAcceleration = std::numeric_limits<double>::infinity();
+    jointMotion_.elapsedSeconds = 0.0;
+    jointMotion_.accelerationTimeSeconds = 0.0;
+    jointMotion_.cruiseTimeSeconds = 0.0;
+    jointMotion_.profileDurationSeconds = 0.0;
+    jointMotion_.peakProgressVelocity = 0.0;
+    jointMotion_.braking = false;
+    jointMotion_.pendingMove.reset();
     linearMotion_.path.clear();
 
-    jointMoveProgressRate_ = std::numeric_limits<double>::infinity();
+    jointMotion_.progressRate = std::numeric_limits<double>::infinity();
     bool needsMotion = false;
     for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
     {
-        const double distance = std::abs(targetPositions_[joint] - jointMoveStartPositions_[joint]);
+        const double distance = std::abs(jointMotion_.targetPositions[joint] - jointMotion_.startPositions[joint]);
         if (distance <= detail::kMotionEpsilon)
             continue;
         needsMotion = true;
         const auto& limits = specification_.joints[joint];
-        jointMoveProgressRate_ = std::min(jointMoveProgressRate_,
+        jointMotion_.progressRate = std::min(jointMotion_.progressRate,
             limits.maximumVelocity * velocityScale / distance);
         const double acceleration = limits.maximumVelocity /
             detail::kJointVelocityRampSeconds * accelerationScale;
-        jointMoveProgressAcceleration_ = std::min(
-            jointMoveProgressAcceleration_, acceleration / distance);
+        jointMotion_.progressAcceleration = std::min(
+            jointMotion_.progressAcceleration, acceleration / distance);
     }
 
     state_.mode = needsMotion ? RobotMode::Moving : RobotMode::Idle;
     if (!needsMotion)
     {
-        jointMoveProgressRate_ = 0.0;
-        jointMoveProgressAcceleration_ = 0.0;
-        state_.jointPositions = targetPositions_;
+        jointMotion_.progressRate = 0.0;
+        jointMotion_.progressAcceleration = 0.0;
+        state_.jointPositions = jointMotion_.targetPositions;
         std::fill(state_.jointVelocities.begin(), state_.jointVelocities.end(), 0.0);
         RefreshTcp();
     }
     else
     {
-        const double accelerationTimeToMaximum = jointMoveProgressRate_ /
-            jointMoveProgressAcceleration_;
-        const double accelerationDistanceToMaximum = 0.5 * jointMoveProgressAcceleration_ *
+        const double accelerationTimeToMaximum = jointMotion_.progressRate /
+            jointMotion_.progressAcceleration;
+        const double accelerationDistanceToMaximum = 0.5 * jointMotion_.progressAcceleration *
             accelerationTimeToMaximum * accelerationTimeToMaximum;
         if (2.0 * accelerationDistanceToMaximum >= 1.0)
         {
-            jointMoveAccelerationTimeSeconds_ = std::sqrt(1.0 / jointMoveProgressAcceleration_);
-            jointMovePeakProgressVelocity_ = jointMoveProgressAcceleration_ *
-                jointMoveAccelerationTimeSeconds_;
-            jointMoveCruiseTimeSeconds_ = 0.0;
+            jointMotion_.accelerationTimeSeconds = std::sqrt(1.0 / jointMotion_.progressAcceleration);
+            jointMotion_.peakProgressVelocity = jointMotion_.progressAcceleration *
+                jointMotion_.accelerationTimeSeconds;
+            jointMotion_.cruiseTimeSeconds = 0.0;
         }
         else
         {
-            jointMoveAccelerationTimeSeconds_ = accelerationTimeToMaximum;
-            jointMovePeakProgressVelocity_ = jointMoveProgressRate_;
-            jointMoveCruiseTimeSeconds_ = (1.0 - 2.0 * accelerationDistanceToMaximum) /
-                jointMovePeakProgressVelocity_;
+            jointMotion_.accelerationTimeSeconds = accelerationTimeToMaximum;
+            jointMotion_.peakProgressVelocity = jointMotion_.progressRate;
+            jointMotion_.cruiseTimeSeconds = (1.0 - 2.0 * accelerationDistanceToMaximum) /
+                jointMotion_.peakProgressVelocity;
         }
-        jointMoveProfileDurationSeconds_ = 2.0 * jointMoveAccelerationTimeSeconds_ +
-            jointMoveCruiseTimeSeconds_;
+        jointMotion_.profileDurationSeconds = 2.0 * jointMotion_.accelerationTimeSeconds +
+            jointMotion_.cruiseTimeSeconds;
     }
 }
 
@@ -159,84 +159,84 @@ void SimRobotController::Update(double dtSeconds)
 
 void SimRobotController::AdvanceJointMove(double dtSeconds)
 {
-    double nextProgress = jointMoveProgress_;
+    double nextProgress = jointMotion_.progress;
     double nextVelocity = 0.0;
-    if (jointMoveBraking_)
+    if (jointMotion_.braking)
     {
         nextVelocity = std::max(0.0,
-            jointMoveProgressVelocity_ - jointMoveProgressAcceleration_ * dtSeconds);
-        nextProgress += (jointMoveProgressVelocity_ * jointMoveProgressVelocity_ -
-            nextVelocity * nextVelocity) / (2.0 * jointMoveProgressAcceleration_);
-        if (nextProgress >= jointMoveStopProgress_ || nextVelocity == 0.0)
+            jointMotion_.progressVelocity - jointMotion_.progressAcceleration * dtSeconds);
+        nextProgress += (jointMotion_.progressVelocity * jointMotion_.progressVelocity -
+            nextVelocity * nextVelocity) / (2.0 * jointMotion_.progressAcceleration);
+        if (nextProgress >= jointMotion_.stopProgress || nextVelocity == 0.0)
         {
-            nextProgress = jointMoveStopProgress_;
+            nextProgress = jointMotion_.stopProgress;
             nextVelocity = 0.0;
         }
     }
     else
     {
-        jointMoveElapsedSeconds_ = std::min(jointMoveProfileDurationSeconds_,
-            jointMoveElapsedSeconds_ + dtSeconds);
-        const double elapsed = jointMoveElapsedSeconds_;
-        const double accelerationDistance = 0.5 * jointMoveProgressAcceleration_ *
-            jointMoveAccelerationTimeSeconds_ * jointMoveAccelerationTimeSeconds_;
-        if (elapsed < jointMoveAccelerationTimeSeconds_)
+        jointMotion_.elapsedSeconds = std::min(jointMotion_.profileDurationSeconds,
+            jointMotion_.elapsedSeconds + dtSeconds);
+        const double elapsed = jointMotion_.elapsedSeconds;
+        const double accelerationDistance = 0.5 * jointMotion_.progressAcceleration *
+            jointMotion_.accelerationTimeSeconds * jointMotion_.accelerationTimeSeconds;
+        if (elapsed < jointMotion_.accelerationTimeSeconds)
         {
-            nextProgress = 0.5 * jointMoveProgressAcceleration_ * elapsed * elapsed;
-            nextVelocity = jointMoveProgressAcceleration_ * elapsed;
+            nextProgress = 0.5 * jointMotion_.progressAcceleration * elapsed * elapsed;
+            nextVelocity = jointMotion_.progressAcceleration * elapsed;
         }
-        else if (elapsed < jointMoveAccelerationTimeSeconds_ + jointMoveCruiseTimeSeconds_)
+        else if (elapsed < jointMotion_.accelerationTimeSeconds + jointMotion_.cruiseTimeSeconds)
         {
-            nextProgress = accelerationDistance + jointMovePeakProgressVelocity_ *
-                (elapsed - jointMoveAccelerationTimeSeconds_);
-            nextVelocity = jointMovePeakProgressVelocity_;
+            nextProgress = accelerationDistance + jointMotion_.peakProgressVelocity *
+                (elapsed - jointMotion_.accelerationTimeSeconds);
+            nextVelocity = jointMotion_.peakProgressVelocity;
         }
         else
         {
-            const double decelerationTime = jointMoveProfileDurationSeconds_ - elapsed;
-            nextProgress = 1.0 - 0.5 * jointMoveProgressAcceleration_ *
+            const double decelerationTime = jointMotion_.profileDurationSeconds - elapsed;
+            nextProgress = 1.0 - 0.5 * jointMotion_.progressAcceleration *
                 decelerationTime * decelerationTime;
-            nextVelocity = jointMoveProgressAcceleration_ * decelerationTime;
+            nextVelocity = jointMotion_.progressAcceleration * decelerationTime;
         }
     }
-    nextProgress = std::clamp(nextProgress, jointMoveProgress_, jointMoveBraking_ ?
-        jointMoveStopProgress_ : 1.0);
+    nextProgress = std::clamp(nextProgress, jointMotion_.progress, jointMotion_.braking ?
+        jointMotion_.stopProgress : 1.0);
     for (std::size_t i = 0; i < specification_.jointCount; ++i)
     {
-        const double start = jointMoveStartPositions_[i];
-        const double delta = targetPositions_[i] - start;
+        const double start = jointMotion_.startPositions[i];
+        const double delta = jointMotion_.targetPositions[i] - start;
         state_.jointPositions[i] = start + delta * nextProgress;
         state_.jointVelocities[i] = delta * nextVelocity;
     }
-    jointMoveProgress_ = nextProgress;
-    jointMoveProgressVelocity_ = nextVelocity;
+    jointMotion_.progress = nextProgress;
+    jointMotion_.progressVelocity = nextVelocity;
 }
 
 void SimRobotController::FinishJointMoveIfNeeded()
 {
-    if (jointMoveBraking_ && jointMoveProgress_ >= jointMoveStopProgress_ - detail::kMotionEpsilon)
+    if (jointMotion_.braking && jointMotion_.progress >= jointMotion_.stopProgress - detail::kMotionEpsilon)
     {
-        jointMoveProgressVelocity_ = 0.0;
+        jointMotion_.progressVelocity = 0.0;
         std::fill(state_.jointVelocities.begin(),
             state_.jointVelocities.end(), 0.0);
         for (std::size_t i = 0; i < specification_.jointCount; ++i)
-            state_.jointPositions[i] = jointMoveStartPositions_[i] +
-                (targetPositions_[i] - jointMoveStartPositions_[i]) * jointMoveStopProgress_;
-        if (pendingJointMove_)
+            state_.jointPositions[i] = jointMotion_.startPositions[i] +
+                (jointMotion_.targetPositions[i] - jointMotion_.startPositions[i]) * jointMotion_.stopProgress;
+        if (jointMotion_.pendingMove)
         {
-            PendingJointMove nextMove = std::move(*pendingJointMove_);
-            pendingJointMove_.reset();
+            PendingJointMove nextMove = std::move(*jointMotion_.pendingMove);
+            jointMotion_.pendingMove.reset();
             ConfigureJointMove(std::move(nextMove.targetPositions),
                 nextMove.velocityScale, nextMove.accelerationScale);
         }
         return;
     }
 
-    if (jointMoveProgress_ < 1.0)
+    if (jointMotion_.progress < 1.0)
         return;
 
-    state_.jointPositions = targetPositions_;
-    jointMoveProgressVelocity_ = 0.0;
+    state_.jointPositions = jointMotion_.targetPositions;
+    jointMotion_.progressVelocity = 0.0;
     std::fill(state_.jointVelocities.begin(), state_.jointVelocities.end(), 0.0);
     if (posePathSegment_ + 1 < posePathPoints_.size())
     {
@@ -304,7 +304,7 @@ void SimRobotController::UpdateLinear(double dtSeconds)
     }
     if (failed)
     {
-        targetPositions_ = state_.jointPositions;
+        jointMotion_.targetPositions = state_.jointPositions;
         linearMotion_.path.clear();
         state_.mode = RobotMode::Fault;
         state_.errorCode = ErrorCode::IkDidNotConverge;
