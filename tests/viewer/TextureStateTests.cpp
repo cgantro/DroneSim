@@ -1,4 +1,5 @@
 #include "graphics/GlApi.h"
+#include "graphics/IndexBuffer.h"
 #include "graphics/Mesh.h"
 #include "graphics/Shader.h"
 #include "graphics/Texture.h"
@@ -9,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -45,16 +47,29 @@ TEST(GraphicsResource, InvalidUploadDataDoesNotPolluteAssetCacheOrOpenGlState)
     GLuint sentinelVertexArray = 0;
     glGenVertexArrays(1, &sentinelVertexArray);
     glBindVertexArray(sentinelVertexArray);
+    GLuint sentinelIndexBuffer = 0;
+    glGenBuffers(1, &sentinelIndexBuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sentinelIndexBuffer);
     GLint previousVertexArray = 0;
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &previousVertexArray);
+    GLint previousIndexBuffer = 0;
+    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &previousIndexBuffer);
     EXPECT_THROW((grasplink::graphics::Mesh{
         &vertex, std::numeric_limits<std::uint32_t>::max(),
         triangleIndices.data(), static_cast<std::uint32_t>(triangleIndices.size())}),
         std::runtime_error);
+    EXPECT_THROW((grasplink::graphics::IndexBuffer{
+        triangleIndices.data(), std::numeric_limits<std::uint32_t>::max()}),
+        std::runtime_error);
     GLint currentVertexArray = 0;
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &currentVertexArray);
     EXPECT_EQ(currentVertexArray, previousVertexArray);
+    GLint currentIndexBuffer = 0;
+    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &currentIndexBuffer);
+    EXPECT_EQ(currentIndexBuffer, previousIndexBuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+    glDeleteBuffers(1, &sentinelIndexBuffer);
     glDeleteVertexArrays(1, &sentinelVertexArray);
 
     ModelResource malformedModel;

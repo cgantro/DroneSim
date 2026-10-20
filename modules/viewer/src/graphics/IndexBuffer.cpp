@@ -1,6 +1,9 @@
 #include "graphics/IndexBuffer.h"
 
 #include "graphics/GlApi.h"
+
+#include <cstddef>
+#include <limits>
 #include <stdexcept>
 
 namespace grasplink::graphics
@@ -16,6 +19,15 @@ IndexBuffer::IndexBuffer(const uint32_t* indices, uint32_t cnt) : m_Count(cnt){
         "IndexBuffer count  must be Greater than 0"
     );
 
+    if (cnt > static_cast<uint32_t>(std::numeric_limits<GLsizei>::max()))
+        throw std::runtime_error("IndexBuffer count exceeds the OpenGL draw limit");
+    if (static_cast<std::size_t>(cnt) >
+        static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max()) / sizeof(uint32_t))
+        throw std::runtime_error("IndexBuffer data exceeds the GPU buffer limit");
+
+    const GLsizeiptr byteCount = static_cast<GLsizeiptr>(cnt) *
+        static_cast<GLsizeiptr>(sizeof(uint32_t));
+
     // CPU index 배열과 별도로 GPU가 draw 때 읽을 index buffer 객체를 만든다.
    glGenBuffers(1,&m_RendererID);
 
@@ -25,7 +37,7 @@ IndexBuffer::IndexBuffer(const uint32_t* indices, uint32_t cnt) : m_Count(cnt){
    // OpenGL 메모리 할당 크기는 byte로 전달하지만 count와 그리기 함수 인수는 index 원소 수를 뜻한다.
    glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
-        m_Count * sizeof(uint32_t),
+        byteCount,
         indices,
         GL_STATIC_DRAW
    );

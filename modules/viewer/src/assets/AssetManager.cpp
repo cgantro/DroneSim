@@ -3,6 +3,7 @@
 #include "graphics/Material.h"
 #include "graphics/Mesh.h"
 #include "graphics/Texture.h"
+#include "graphics/GlApi.h"
 
 #include <glm/glm.hpp>
 
@@ -47,6 +48,11 @@ void ValidateMeshData(const ::grasplink::model::MeshData& meshData)
         throw std::runtime_error("Mesh vertex data exceeds the GPU buffer limit: " + meshData.name);
     if (meshData.indices.size() > maximum)
         throw std::runtime_error("Mesh index count exceeds uint32_t range");
+    if (meshData.indices.size() > static_cast<std::size_t>(std::numeric_limits<GLsizei>::max()))
+        throw std::runtime_error("Mesh index count exceeds the OpenGL draw limit: " + meshData.name);
+    if (meshData.indices.size() > static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max()) /
+            sizeof(std::uint32_t))
+        throw std::runtime_error("Mesh index data exceeds the GPU buffer limit: " + meshData.name);
     if (meshData.indices.size() % 3U != 0U)
         throw std::runtime_error("Mesh index count must form complete triangles: " + meshData.name);
     for (const std::uint32_t index : meshData.indices)

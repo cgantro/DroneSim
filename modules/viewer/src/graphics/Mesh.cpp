@@ -27,6 +27,11 @@ Mesh::Mesh(const ::grasplink::model::Vertex* vertices, std::uint32_t vertexCount
     }
     const auto byteCount = static_cast<std::uint32_t>(
         sizeof(::grasplink::model::Vertex) * static_cast<std::size_t>(vertexCount));
+    if (indexCount > static_cast<std::uint32_t>(std::numeric_limits<GLsizei>::max()))
+        throw std::runtime_error("Mesh index count exceeds the OpenGL draw limit");
+    if (static_cast<std::size_t>(indexCount) >
+        static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max()) / sizeof(std::uint32_t))
+        throw std::runtime_error("Mesh index data exceeds the GPU buffer limit");
 
     // Vertex Array Object(VAO)를 먼저 선택한다. 이후 지정하는 정점 속성 형식과 index buffer 연결이 이 Mesh의 상태로 저장된다.
     vertexArray_ = std::make_unique<VertexArray>();
