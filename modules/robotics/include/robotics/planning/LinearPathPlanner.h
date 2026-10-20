@@ -20,7 +20,7 @@ namespace grasplink::robotics::planning
 inline kinematics::IkOptions PathIkOptions(const models::RobotSpecification& specification)
 {
     // 기본 IK 허용 오차는 경로 직선 오차 예산보다 위치는 100배, 방향은 10배 작다.
-    // 따라서 별도의 과도한 수렴 기준을 두지 않고 DLS 기본값을 사용한다.
+    // 따라서 별도의 수렴 기준을 더하지 않고 LM의 기본 IK 설정을 사용한다.
     return kinematics::RobotDefaultIkOptions(specification);
 }
 
