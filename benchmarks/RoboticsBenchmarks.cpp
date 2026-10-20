@@ -77,6 +77,11 @@ int main(int argc, char** argv)
         ->Arg(256)
         ->Iterations(1)
         ->UseRealTime();
+    benchmark::RegisterBenchmark("PosePlanWithRobotCollisions", PosePlanWithRobotCollisions)
+        ->Arg(16)
+        ->Arg(64)
+        ->Iterations(1)
+        ->UseManualTime();
     if (iterations > 0)
     {
         fk->Iterations(iterations);

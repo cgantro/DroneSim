@@ -52,7 +52,13 @@ struct ControlTickStages final
 class ControlPhysicsTickFixture final
 {
 public:
-    ControlPhysicsTickFixture()
+    enum class Mode
+    {
+        ControlTick,
+        PosePlanning
+    };
+
+    explicit ControlPhysicsTickFixture(Mode mode = Mode::ControlTick)
         : model_(grasplink::model::RobotModelLoader::Load(
             std::filesystem::path{GRASPLINK_SOURCE_DIR} / "assets" / "robots" / "HCR12A"))
     {
@@ -86,7 +92,8 @@ public:
 
         // 첫 tick에서 Jolt Body를 만들고 캐시를 준비해 초기화 비용을 측정에서 뺀다.
         AdvanceOneTick();
-        StartSlowJointMotion();
+        if (mode == Mode::ControlTick)
+            StartSlowJointMotion();
     }
 
     void AdvanceOneTick()
@@ -134,6 +141,11 @@ public:
     [[nodiscard]] const grasplink::robotics::RobotState& State() const noexcept
     {
         return controller_->GetStateView();
+    }
+
+    [[nodiscard]] SimRobotController& Controller() noexcept
+    {
+        return *controller_;
     }
 
     [[nodiscard]] const ControlTickStages& LastStages() const noexcept
@@ -456,6 +468,116 @@ void ControlPhysicsTick250Hz(benchmark::State& state)
         AddStageCounters(state, stageSamples, "transform_after_physics",
             [](const ControlTickStages& stages) { return stages.transformsAfterPhysicsNanoseconds; });
         state.SetItemsProcessed(static_cast<std::int64_t>(tickTimesNanoseconds.size()));
+    }
+    catch (const std::exception& error)
+    {
+        state.SkipWithError(error.what());
+    }
+}
+
+// 실제 URDF 충돌 형상과 Jolt 질의가 포함된 포즈 계획 비용을 측정한다.
+void PosePlanWithRobotCollisions(benchmark::State& state)
+{
+    using Clock = std::chrono::steady_clock;
+    constexpr std::size_t maximumPlanningFrames = 10000;
+    constexpr auto planningFrameBudget = std::chrono::microseconds(1500);
+    std::unique_ptr<ControlPhysicsTickFixture> fixture;
+    std::vector<RuntimePathCase> cases;
+    std::vector<double> planningFrameMicroseconds;
+    try
+    {
+        state.PauseTiming();
+        fixture = std::make_unique<ControlPhysicsTickFixture>(
+            ControlPhysicsTickFixture::Mode::PosePlanning);
+        cases = RuntimePathCases(static_cast<std::size_t>(state.range(0)));
+        planningFrameMicroseconds.reserve(cases.size() * maximumPlanningFrames);
+        state.ResumeTiming();
+
+        std::uint64_t accepted = 0;
+        std::uint64_t rejected = 0;
+        std::uint64_t timedOut = 0;
+        std::uint64_t beginRejected = 0;
+        std::uint64_t environmentCollisionRejected = 0;
+        std::uint64_t selfCollisionRejected = 0;
+        std::uint64_t otherRejected = 0;
+        for (auto _ : state)
+        {
+            const auto batchStart = Clock::now();
+            for (const RuntimePathCase& testCase : cases)
+            {
+                auto& controller = fixture->Controller();
+                const Result begin = controller.BeginPosePlanning(testCase.targetPose);
+                if (!begin)
+                {
+                    ++beginRejected;
+                    ++rejected;
+                    continue;
+                }
+
+                std::size_t frames = 0;
+                while (controller.IsMotionPlanning() && frames < maximumPlanningFrames)
+                {
+                    const auto frameStart = Clock::now();
+                    const auto frameDeadline = frameStart + planningFrameBudget;
+                    do
+                    {
+                        controller.AdvanceMotionPlanning(1);
+                    } while (controller.IsMotionPlanning() && Clock::now() < frameDeadline);
+                    planningFrameMicroseconds.push_back(std::chrono::duration<double, std::micro>(
+                        Clock::now() - frameStart).count());
+                    ++frames;
+                }
+                if (controller.IsMotionPlanning())
+                {
+                    ++timedOut;
+                    controller.Stop();
+                    continue;
+                }
+
+                const auto result = controller.TakeMotionPlanningResult();
+                if (result && *result)
+                    ++accepted;
+                else
+                {
+                    ++rejected;
+                    if (result && result->code == ErrorCode::EnvironmentContact)
+                        ++environmentCollisionRejected;
+                    else if (result && result->code == ErrorCode::SelfCollision)
+                        ++selfCollisionRejected;
+                    else
+                        ++otherRejected;
+                }
+            }
+            state.SetIterationTime(std::chrono::duration<double>(Clock::now() - batchStart).count());
+        }
+
+        state.counters["pose_plan_accepted"] = static_cast<double>(accepted);
+        state.counters["pose_plan_rejected"] = static_cast<double>(rejected);
+        state.counters["pose_plan_begin_rejected"] = static_cast<double>(beginRejected);
+        state.counters["pose_plan_environment_collision_rejected"] =
+            static_cast<double>(environmentCollisionRejected);
+        state.counters["pose_plan_self_collision_rejected"] =
+            static_cast<double>(selfCollisionRejected);
+        state.counters["pose_plan_other_rejected"] = static_cast<double>(otherRejected);
+        state.counters["pose_plan_timeouts"] = static_cast<double>(timedOut);
+        const auto overBudgetFrames = std::count_if(
+            planningFrameMicroseconds.begin(), planningFrameMicroseconds.end(),
+            [planningFrameBudget](double elapsedMicroseconds)
+            {
+                return elapsedMicroseconds >
+                    std::chrono::duration<double, std::micro>(planningFrameBudget).count();
+            });
+        std::sort(planningFrameMicroseconds.begin(), planningFrameMicroseconds.end());
+        state.counters["planning_frame_p50_us"] = planningFrameMicroseconds.empty() ? 0.0
+            : Percentile(planningFrameMicroseconds, 0.50);
+        state.counters["planning_frame_p95_us"] = planningFrameMicroseconds.empty() ? 0.0
+            : Percentile(planningFrameMicroseconds, 0.95);
+        state.counters["planning_frame_p99_us"] = planningFrameMicroseconds.empty() ? 0.0
+            : Percentile(planningFrameMicroseconds, 0.99);
+        state.counters["planning_frame_over_1_5ms"] = static_cast<double>(overBudgetFrames);
+        state.counters["collision_benchmark_mode_real_robot_guard"] = 1;
+        state.SetItemsProcessed(static_cast<std::int64_t>(accepted + rejected + timedOut));
+        state.SetLabel("HCR-12A URDF 충돌 형상과 Jolt 환경·자가 충돌 검사 포함");
     }
     catch (const std::exception& error)
     {

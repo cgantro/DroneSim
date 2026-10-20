@@ -42,6 +42,7 @@ void LinearPathPlanning(benchmark::State& state);
 void IncrementalLinearPathPlanning(benchmark::State& state);
 void InteractiveLinearPathStress(benchmark::State& state);
 void PosePlanEndpointStress(benchmark::State& state);
+void PosePlanWithRobotCollisions(benchmark::State& state);
 void EndpointIkGeneratedReachable(benchmark::State& state);
 void MoveJJointPathValidation(benchmark::State& state);
 void MoveJCompletion(benchmark::State& state);
