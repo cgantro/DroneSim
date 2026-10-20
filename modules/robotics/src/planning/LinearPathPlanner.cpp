@@ -65,6 +65,8 @@ struct LinearPathPlannerMessages final
         "SimRobotController: invalid joint state in planned path";
     inline static constexpr char plannedStateExceedsJointLimit[] =
         "SimRobotController: planned state exceeds a joint limit";
+    inline static constexpr char pathSamplingLimitExceeded[] =
+        "SimRobotController: joint collision path exceeds the sample limit";
     inline static constexpr char plannedStateOverlapsEnvironment[] =
         "SimRobotController: planned state overlaps the environment";
     inline static constexpr char plannedRobotLinksOverlap[] =
@@ -153,19 +155,34 @@ bool IsPolicyValid(const PlanningPolicy& policy)
         std::isfinite(policy.maximumAngularTcpErrorRadians) && policy.maximumAngularTcpErrorRadians > 0.0;
 }
 
-std::size_t JointPathIntervals(const JointVector& start, const JointVector& end,
+std::optional<std::size_t> JointPathIntervals(const JointVector& start, const JointVector& end,
     const models::RobotSpecification& specification, const PlanningPolicy& policy)
 {
+    if (policy.maximumPathIntervals == 0)
+        return std::nullopt;
+
+    const std::size_t maximumIntervals = std::min(
+        policy.maximumPathIntervals, LinearPathPlannerLimits::maximumPathIntervals);
     double largestSpacingCount = 0.0;
     for (std::size_t joint = 0; joint < start.size(); ++joint)
     {
         const double spacing = specification.joints[joint].motionType == models::JointMotionType::Prismatic
             ? policy.prismaticJointCollisionSampleSpacingMeters
             : policy.jointCollisionSampleSpacingRadians;
-        largestSpacingCount = std::max(largestSpacingCount,
-            std::abs(end[joint] - start[joint]) / spacing);
+        if (!std::isfinite(spacing) || spacing <= 0.0)
+            return std::nullopt;
+
+        const double spacingCount = std::abs(end[joint] - start[joint]) / spacing;
+        if (!std::isfinite(spacingCount))
+            return std::nullopt;
+        largestSpacingCount = std::max(largestSpacingCount, spacingCount);
     }
-    return std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(largestSpacingCount)));
+
+    const double intervalCount = std::max(1.0, std::ceil(largestSpacingCount));
+    // 표본 수를 정수로 바꾸기 전에 상한을 확인해 범위 초과 변환과 과도한 충돌 검사를 막는다.
+    if (intervalCount > static_cast<double>(maximumIntervals))
+        return std::nullopt;
+    return static_cast<std::size_t>(intervalCount);
 }
 
 double JointTransitionCost(const JointVector& start, const JointVector& end,
@@ -644,7 +661,13 @@ struct LinearPathPlanningJob::Impl
             CompletePathValidation(startInvalidity != JointStateInvalidity::None ? startInvalidity : endInvalidity);
             return;
         }
-        validationIntervals = JointPathIntervals(validationStart, validationEnd, *specification, policy);
+        const auto intervals = JointPathIntervals(validationStart, validationEnd, *specification, policy);
+        if (!intervals)
+        {
+            CompletePathValidation(JointStateInvalidity::PathSamplingLimitExceeded);
+            return;
+        }
+        validationIntervals = *intervals;
         phase = Phase::ValidatePath;
     }
 
@@ -1048,11 +1071,13 @@ JointStateInvalidity ValidateJointPath(
     if (endInvalidity != JointStateInvalidity::None)
         return endInvalidity;
 
-    const std::size_t intervals = JointPathIntervals(start, end, specification, policy);
+    const auto intervals = JointPathIntervals(start, end, specification, policy);
+    if (!intervals)
+        return JointStateInvalidity::PathSamplingLimitExceeded;
     JointVector sample(start.size());
-    for (std::size_t step = 1; step <= intervals; ++step)
+    for (std::size_t step = 1; step <= *intervals; ++step)
     {
-        const double fraction = static_cast<double>(step) / static_cast<double>(intervals);
+        const double fraction = static_cast<double>(step) / static_cast<double>(*intervals);
         for (std::size_t joint = 0; joint < start.size(); ++joint)
             sample[joint] = start[joint] + (end[joint] - start[joint]) * fraction;
         // 양 끝 관절각이 유한하고 한계 안에 있으면 선형 보간한 중간 각도도 그 범위 안에 있다. 따라서 매 표본에서는 비용이 큰 충돌 검사만 수행한다.
@@ -1089,6 +1114,8 @@ Result MapJointStateInvalidity(JointStateInvalidity invalidity)
     case JointStateInvalidity::JointCountMismatch:
     case JointStateInvalidity::NonFinitePosition:
         return {ErrorCode::InvalidCommand, LinearPathPlannerMessages::invalidPlannedJointState};
+    case JointStateInvalidity::PathSamplingLimitExceeded:
+        return {ErrorCode::InvalidCommand, LinearPathPlannerMessages::pathSamplingLimitExceeded};
     case JointStateInvalidity::JointLimitViolation:
         return {ErrorCode::JointLimitReached, LinearPathPlannerMessages::plannedStateExceedsJointLimit};
     case JointStateInvalidity::EnvironmentCollision:

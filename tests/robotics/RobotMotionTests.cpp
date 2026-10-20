@@ -190,6 +190,21 @@ void CheckJointStateValidityReasons()
     ASSERT_TRUE((MapJointStateInvalidity(JointStateInvalidity::EnvironmentCollision).code == ErrorCode::EnvironmentContact)) << "environment collision retains its existing controller error code";
     ASSERT_TRUE((MapJointStateInvalidity(JointStateInvalidity::SelfCollision).code == ErrorCode::SelfCollision)) << "self collision is not reported as environment contact";
     ASSERT_TRUE((MapJointStateInvalidity(JointStateInvalidity::AttachedObjectCollision).code == ErrorCode::AttachedObjectCollision)) << "attached-object collision is not reported as environment contact";
+
+    PlanningPolicy policy;
+    policy.maximumPathIntervals = 4;
+    policy.jointCollisionSampleSpacingRadians = 0.1;
+    JointVector pathEnd = joints;
+    pathEnd[0] = 0.5;
+    EXPECT_EQ(ValidateJointPath(joints, pathEnd, specification, {}, policy),
+        JointStateInvalidity::PathSamplingLimitExceeded);
+    EXPECT_EQ(MapJointStateInvalidity(JointStateInvalidity::PathSamplingLimitExceeded).code,
+        ErrorCode::InvalidCommand);
+
+    policy.jointCollisionSampleSpacingRadians = std::numeric_limits<double>::denorm_min();
+    EXPECT_EQ(ValidateJointPath(joints, pathEnd, specification, {}, policy),
+        JointStateInvalidity::PathSamplingLimitExceeded);
+
     CheckMoveJointRejectsInvalidPath();
 }
 

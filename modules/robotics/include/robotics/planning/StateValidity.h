@@ -19,6 +19,7 @@ enum class JointStateInvalidity : std::uint8_t
     JointCountMismatch, // 제공한 관절 수가 로봇 사양과 다르다.
     NonFinitePosition, // 관절각에 NaN 또는 무한대가 포함되어 있다.
     JointLimitViolation, // 하나 이상의 관절각이 허용 범위를 벗어났다.
+    PathSamplingLimitExceeded, // 충돌 검사에 필요한 경로 표본 수가 정책 한도를 넘었다.
     EnvironmentCollision, // 로봇이나 그리퍼가 바닥 또는 작업대 같은 고정 환경과 겹친다.
     SelfCollision, // 로봇 링크끼리 겹친다.
     AttachedObjectCollision // 로봇에 붙은 물체가 환경과 겹친다.
