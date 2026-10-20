@@ -11,6 +11,7 @@
 #include "scene/Scene.h"
 
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <cstdint>
@@ -28,15 +29,15 @@ namespace
 std::shared_ptr<::grasplink::graphics::Material> ResolveMaterial(
     const ::grasplink::model::ModelResource& model,
     const AssetManager& assets,
-    int materialIndex)
+    std::optional<std::size_t> materialIndex)
 {
-    if (materialIndex < 0) return assets.GetDefaultMaterial();
+    if (!materialIndex) return assets.GetDefaultMaterial();
 
-    if (materialIndex >= static_cast<int>(model.materials.size()))
+    if (*materialIndex >= model.materials.size())
         throw std::runtime_error("Invalid material index");
 
     const ::grasplink::model::MaterialData& materialData =
-        model.materials[static_cast<std::size_t>(materialIndex)];
+        model.materials[*materialIndex];
 
     std::shared_ptr<::grasplink::graphics::Material> material = assets.GetMaterial(materialData.uniqueID);
     if (!material)
@@ -45,16 +46,11 @@ std::shared_ptr<::grasplink::graphics::Material> ResolveMaterial(
     return material;
 }
 
-void ValidateModelBeforeSceneChanges(
-    const ::grasplink::model::ModelResource& model,
-    const AssetManager& assets,
-    const std::shared_ptr<::grasplink::graphics::Shader>& shader)
+void ValidateNodeHierarchy(const ::grasplink::model::ModelResource& model)
 {
-    if (!shader)
-        throw std::runtime_error("PrefabFactory requires a shader");
     if (model.nodes.empty())
         throw std::runtime_error("Model has no nodes");
-    if (model.rootNodeIndex < 0 || model.rootNodeIndex >= static_cast<int>(model.nodes.size()))
+    if (!model.rootNodeIndex || *model.rootNodeIndex >= model.nodes.size())
         throw std::runtime_error("Model has invalid root node");
 
     std::vector<std::uint8_t> parentState(model.nodes.size(), 0);
@@ -66,27 +62,32 @@ void ValidateModelBeforeSceneChanges(
         {
             parentState[current] = 1;
             path.push_back(current);
-            const int parent = model.nodes[current].parentIndex;
-            if (parent < -1 || parent >= static_cast<int>(model.nodes.size()))
+            const auto parent = model.nodes[current].parentIndex;
+            if (parent && *parent >= model.nodes.size())
                 throw std::runtime_error("Invalid parent index");
-            if (parent < 0)
+            if (!parent)
                 break;
-            current = static_cast<std::size_t>(parent);
+            current = *parent;
         }
-        if (parentState[current] == 1 && model.nodes[current].parentIndex >= 0)
+        if (parentState[current] == 1 && model.nodes[current].parentIndex)
             throw std::runtime_error("Model contains a parent cycle");
         for (const std::size_t index : path)
             parentState[index] = 2;
     }
+}
 
+void ValidateRenderReferences(
+    const ::grasplink::model::ModelResource& model,
+    const AssetManager& assets)
+{
     for (const ::grasplink::model::NodeData& node : model.nodes)
     {
-        if (node.meshIndex < -1 || node.meshIndex >= static_cast<int>(model.meshes.size()))
+        if (node.meshIndex && *node.meshIndex >= model.meshes.size())
             throw std::runtime_error("Invalid mesh index in model node");
-        if (node.meshIndex < 0)
+        if (!node.meshIndex)
             continue;
 
-        const ::grasplink::model::MeshData& mesh = model.meshes[static_cast<std::size_t>(node.meshIndex)];
+        const ::grasplink::model::MeshData& mesh = model.meshes[*node.meshIndex];
         if (!assets.GetMesh(mesh.uniqueID))
             throw std::runtime_error("Mesh has not been uploaded: " + mesh.name);
         for (const ::grasplink::model::SubMeshInfo& subMesh : mesh.subMeshes)
@@ -96,8 +97,6 @@ void ValidateModelBeforeSceneChanges(
             if (count == 0 || count % 3 != 0 || begin > mesh.indices.size() ||
                 count > mesh.indices.size() - begin)
                 throw std::runtime_error("Invalid primitive index range");
-            if (subMesh.defaultMaterialIndex < -1)
-                throw std::runtime_error("Invalid material index");
             (void)ResolveMaterial(model, assets, subMesh.defaultMaterialIndex);
             for (std::size_t index = begin; index < begin + count; ++index)
                 if (mesh.indices[index] >= mesh.vertices.size())
@@ -106,6 +105,18 @@ void ValidateModelBeforeSceneChanges(
                         std::to_string(mesh.vertices.size()));
         }
     }
+}
+
+void ValidateModelBeforeSceneChanges(
+    const ::grasplink::model::ModelResource& model,
+    const AssetManager& assets,
+    const std::shared_ptr<::grasplink::graphics::Shader>& shader)
+{
+    if (!shader)
+        throw std::runtime_error("PrefabFactory requires a shader");
+
+    ValidateNodeHierarchy(model);
+    ValidateRenderReferences(model, assets);
 }
 
 /**
@@ -123,9 +134,9 @@ void CreateRenderEntities(
     std::size_t nodeIndex,
     ::grasplink::scene::Entity& nodeEntity)
 {
-    if (node.meshIndex < 0) return;
+    if (!node.meshIndex) return;
 
-    const ::grasplink::model::MeshData& meshData = model.meshes[static_cast<std::size_t>(node.meshIndex)];
+    const ::grasplink::model::MeshData& meshData = model.meshes[*node.meshIndex];
     const std::shared_ptr<::grasplink::graphics::Mesh> gpuMesh = assets.GetMesh(meshData.uniqueID);
 
     if (meshData.subMeshes.size() == 1)
@@ -203,10 +214,10 @@ void CreateRenderEntities(
         const ::grasplink::model::NodeData& node = model.nodes[i];
 
         // 부모가 없는 최상위 Entity는 CreateEntity가 장면의 최상위 기준에 이미 연결했다.
-        if (node.parentIndex < 0) continue;
+        if (!node.parentIndex) continue;
 
         entities[i].SetParent(
-            entities[static_cast<std::size_t>(node.parentIndex)]);
+            entities[*node.parentIndex]);
     }
 
     // 마지막 단계: 계층을 만든 뒤 형상 번호와 GPU 업로드, 재질 참조가 유효한지 확인해 화면 그리기 정보를 붙인다.
@@ -223,7 +234,7 @@ void CreateRenderEntities(
             entities[i]);
     }
 
-    return entities[static_cast<std::size_t>(model.rootNodeIndex)];
+    return entities[*model.rootNodeIndex];
 }
 
 } // namespace grasplink::rendering

@@ -6,21 +6,8 @@
 #include "graphics/Renderer.h"
 #include "rendering/RenderContext.h"
 
-#include <vector>
-
 namespace grasplink::rendering
 {
-
-namespace
-{
-// Flecs의 임시 Component 메모리 주소를 저장하지 않으므로, 순회 iterator가 다음 항목으로 이동해도 자료가 유효하다.
-struct RenderItem
-{
-    MeshFilter meshFilter;
-    MeshRenderer meshRenderer;
-    glm::mat4 model;
-};
-} // namespace
 
 RenderSystemModule::RenderSystemModule(flecs::world& world)
 {
@@ -47,7 +34,9 @@ void RenderSystemModule::RegisterSystem(flecs::world& world)
                 if (!context || !context->renderer || !context->camera)
                     return;
 
-                std::vector<RenderItem> items;
+                const glm::mat4 view = context->camera->GetViewMatrix();
+                const glm::mat4 projection = context->camera->GetProjectionMatrix();
+                const glm::vec3 cameraPosition = context->camera->GetPosition();
 
                 while (it.next())
                 {
@@ -59,30 +48,16 @@ void RenderSystemModule::RegisterSystem(flecs::world& world)
                     {
                         if (!meshRenderers[i].visible) continue;
 
-                        // 부모 변환까지 누적된 TransformMatrix의 World 값을 복사해 Renderer에 보낸다.
-                        // 모델 자체의 Local 행렬을 넘기면 Scene 배치 변환이 빠지기 때문이다.
-                        items.push_back({
+                        // Renderer는 ECS를 바꾸지 않으므로 Component를 읽는 동안 World 변환으로 바로 그린다.
+                        context->renderer->Draw(
+                            static_cast<const glm::mat4&>(worldMatrices[i]),
                             meshFilters[i],
                             meshRenderers[i],
-                            static_cast<const glm::mat4&>(worldMatrices[i])});
+                            view,
+                            projection,
+                            cameraPosition);
                     }
                 }
-
-                const glm::mat4 view = context->camera->GetViewMatrix();
-                const glm::mat4 projection = context->camera->GetProjectionMatrix();
-                const glm::vec3 cameraPosition = context->camera->GetPosition();
-
-                for (const RenderItem& item : items)
-                {
-                    context->renderer->Draw(
-                        item.model,
-                        item.meshFilter,
-                        item.meshRenderer,
-                        view,
-                        projection,
-                        cameraPosition);
-                }
-
             });
 }
 

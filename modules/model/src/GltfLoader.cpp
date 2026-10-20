@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -21,6 +22,158 @@ namespace grasplink::model
 {
 namespace
 {
+// GLB 위치·회전·크기 계산에서 허용하는 작은 수치 오차다.
+struct GltfTransformLimits final
+{
+    inline static constexpr float tolerance = 1.0e-5F;
+};
+
+// 형상 연결 번호는 uint32_t로 저장하므로 배열 크기도 이 범위를 넘을 수 없다.
+struct GltfMeshLimits final
+{
+    inline static constexpr std::size_t maximumMeshValue =
+        std::numeric_limits<std::uint32_t>::max();
+};
+
+// 자원 종류를 ID에 넣어 형상 번호와 재질 번호가 서로 겹치지 않게 한다.
+struct GltfResourceIdSuffixes final
+{
+    inline static constexpr char texture[] = "#texture/";
+    inline static constexpr char material[] = "#material/";
+    inline static constexpr char mesh[] = "#mesh/";
+};
+
+// GLB 정점에서 읽는 속성 이름을 한곳에 모아 파일 규격과 코드의 연결을 분명히 한다.
+struct GltfAttributeNames final
+{
+    inline static constexpr char position[] = "POSITION";
+    inline static constexpr char normal[] = "NORMAL";
+    inline static constexpr char textureCoordinates[] = "TEXCOORD_0";
+};
+
+// glTF에서 mode를 생략하면 삼각형으로 처리한다는 규칙을 이름으로 드러낸다.
+struct GltfPrimitiveModes final
+{
+    inline static constexpr int unspecified = -1;
+    inline static constexpr int triangles = TINYGLTF_MODE_TRIANGLES;
+};
+
+enum class NodeVisitState : std::uint8_t
+{
+    Unvisited,
+    Visiting,
+    Visited
+};
+
+struct GltfLoaderErrorMessages final
+{
+    struct Accessor final
+    {
+        inline static constexpr char expectedFloatVec2[] = "Expected FLOAT VEC2 ACCESSOR";
+        inline static constexpr char expectedFloatVec3[] = "Expected FLOAT VEC3 ACCESSOR";
+        inline static constexpr char invalidIndex[] = "Invalid glTF accessor Index";
+        inline static constexpr char sparseUnsupported[] = "Sparse glTF accessors are not supported";
+        inline static constexpr char missingBufferView[] = "Accessor without BufferView is not supported";
+        inline static constexpr char invalidBufferIndex[] = "Invalid glTF buffer index";
+        inline static constexpr char invalidStride[] = "Invalid glTF accessor stride";
+        inline static constexpr char bufferViewOutOfRange[] = "glTF bufferView exceeds buffer size";
+        inline static constexpr char offsetOutOfRange[] = "glTF accessor offset exceeds bufferView";
+        inline static constexpr char offsetOverflow[] = "glTF accessor offset overflows";
+        inline static constexpr char rangeOverflow[] = "glTF accessor range overflows";
+        inline static constexpr char exceedsBufferView[] = "glTF accessor exceeds bufferView";
+    };
+
+    struct Index final
+    {
+        inline static constexpr char unsupportedComponentType[] =
+            "Unsupported glTF index component type";
+        inline static constexpr char expectedScalar[] = "Index Accessor must be SCALAR";
+        inline static constexpr char exceedsVertexCount[] = "glTF index exceeds vertex Count";
+    };
+
+    struct Vertex final
+    {
+        inline static constexpr char attributeNotFinite[] =
+            "glTF vertex attribute contains a non-finite value";
+        inline static constexpr char valueNotFinite[] =
+            "glTF vertex or transform contains a non-finite value";
+    };
+
+    struct Texture final
+    {
+        inline static constexpr char invalidSource[] = "Invalid glTF texture source";
+        inline static constexpr char invalidSize[] = "Invalid glTF image size";
+        inline static constexpr char unsupportedChannels[] = "Only RGB/RGBA glTF images are supported";
+        inline static constexpr char unsupportedBitDepth[] = "Only 8-bit glTF images are supported";
+        inline static constexpr char noDecodedPixels[] = "glTF image contains no decoded pixels";
+    };
+
+    struct Mesh final
+    {
+        inline static constexpr char unsupportedPrimitiveMode[] =
+            "Only TRIANGLES glTF primitives are supported";
+        inline static constexpr char missingPosition[] = "glTF primitive has no POSITION";
+        inline static constexpr char noVertices[] = "glTF Primitives has zero vertices";
+        inline static constexpr char vertexRangeTooLarge[] =
+            "glTF mesh vertex range exceeds uint32_t";
+        inline static constexpr char normalCountMismatch[] =
+            "NORMAL count does not match POSITION count";
+        inline static constexpr char textureCoordinateCountMismatch[] =
+            "TEXCOORD_0 count does not match POSITION count";
+        inline static constexpr char indexRangeTooLarge[] =
+            "glTF mesh index range exceeds uint32_t";
+    };
+
+    struct Node final
+    {
+        inline static constexpr char translationNotFinite[] =
+            "glTF node translation contains a non-finite value";
+        inline static constexpr char scaleNotFinite[] =
+            "glTF node scale contains a non-finite value";
+        inline static constexpr char rotationNotFinite[] =
+            "glTF node rotation contains a non-finite value";
+        inline static constexpr char transformNotFinite[] =
+            "glTF transform contains a non-finite value";
+        inline static constexpr char rotationValueNotFinite[] =
+            "glTF rotation contains a non-finite value";
+        inline static constexpr char invalidTransformFormat[] =
+            "glTF node must use either matrix or TRS";
+        inline static constexpr char perspectiveMatrixUnsupported[] =
+            "Perspective node matrices are not supported";
+        inline static constexpr char matrixDecompositionFailed[] =
+            "Failed to decompose glTF node matrix";
+        inline static constexpr char matrixNotTrs[] =
+            "glTF node matrix must contain non-degenerate TRS only";
+        inline static constexpr char invalidTrsSize[] = "Invalid glTF node TRS component size";
+        inline static constexpr char zeroRotation[] = "glTF node rotation quaternion is zero";
+        inline static constexpr char degenerateScale[] = "glTF node scale must be non-degenerate";
+    };
+
+    struct Hierarchy final
+    {
+        inline static constexpr char invalidMeshIndex[] = "Invalid glTF node mesh index";
+        inline static constexpr char invalidMaterialIndex[] = "Invalid glTF material index";
+        inline static constexpr char invalidChildIndex[] = "Invalid child node index";
+        inline static constexpr char multipleParents[] = "glTF node has multiple parents";
+        inline static constexpr char cycle[] = "glTF node hierarchy contains a cycle";
+    };
+
+    struct Scene final
+    {
+        inline static constexpr char multipleRoots[] =
+            "Multiple root nodes in glTF scenes are not supported";
+        inline static constexpr char invalidDefaultIndex[] = "Invalid glTF default scene index";
+        inline static constexpr char invalidRootIndex[] = "Invalid glTF scene root node";
+        inline static constexpr char disconnectedHierarchy[] =
+            "glTF nodes must form a single tree under the scene root";
+    };
+
+    struct File final
+    {
+        inline static constexpr char loadFailedPrefix[] = "Failed to load GLB: ";
+    };
+};
+
 // Buffer는 glTF 파일의 원본 byte 묶음이고 BufferView는 그중 일부 구간이다. Accessor는 그 구간에서 읽을 값의 자료형·개수·간격을 적은 기록이다.
 // 세 기록의 연결과 범위를 확인한 뒤 첫 값의 주소와 다음 값까지의 간격을 돌려준다.
 struct AccessorView
@@ -30,6 +183,24 @@ struct AccessorView
     std::size_t count = 0;
 };
 
+// Accessor의 마지막 값이 끝나는 byte 위치를 계산한다. count와 stride는 호출자가 양수인지 확인한다.
+std::optional<std::size_t> AccessorRangeEnd(
+    std::size_t offset,
+    std::size_t count,
+    std::size_t stride,
+    std::size_t elementSize)
+{
+    const std::size_t maximum = std::numeric_limits<std::size_t>::max();
+    if (offset > maximum - elementSize)
+        return std::nullopt;
+
+    const std::size_t lastElement = count - 1U;
+    if (lastElement > (maximum - offset - elementSize) / stride)
+        return std::nullopt;
+
+    return offset + lastElement * stride + elementSize;
+}
+
 // Accessor가 가리키는 byte가 실제 Buffer 범위 안에 있는지 확인해 읽을 주소를 만든다. 기존 값 일부를 덮어쓰는 Sparse 형식은 현재 지원하지 않는다.
 AccessorView GetAccessorView(
     const tinygltf::Model& model,
@@ -37,24 +208,24 @@ AccessorView GetAccessorView(
     std::size_t elementSize)
 {
     if (accessorIndex < 0 || accessorIndex >= static_cast<int>(model.accessors.size()))
-        throw std::runtime_error("Invalid glTF accessor Index");
+        throw std::runtime_error(GltfLoaderErrorMessages::Accessor::invalidIndex);
 
     const tinygltf::Accessor& accessor = model.accessors[accessorIndex];
 
     if (accessor.sparse.isSparse)
-        throw std::runtime_error("Sparse glTF accessors are not supported");
+        throw std::runtime_error(GltfLoaderErrorMessages::Accessor::sparseUnsupported);
 
     if (accessor.bufferView < 0 ||
         accessor.bufferView >= static_cast<int>(model.bufferViews.size()))
     {
-        throw std::runtime_error("Accessor without BufferView is not supported");
+        throw std::runtime_error(GltfLoaderErrorMessages::Accessor::missingBufferView);
     }
 
     const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
     if (bufferView.buffer < 0 ||
         bufferView.buffer >= static_cast<int>(model.buffers.size()))
     {
-        throw std::runtime_error("Invalid glTF buffer index");
+        throw std::runtime_error(GltfLoaderErrorMessages::Accessor::invalidBufferIndex);
     }
 
     const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
@@ -66,31 +237,30 @@ AccessorView GetAccessorView(
     */
     const int byteStride = accessor.ByteStride(bufferView);
     if (byteStride <= 0 || static_cast<std::size_t>(byteStride) < elementSize)
-        throw std::runtime_error("Invalid glTF accessor stride");
+        throw std::runtime_error(GltfLoaderErrorMessages::Accessor::invalidStride);
 
     const std::size_t bufferSize = buffer.data.size();
     const std::size_t viewOffset = static_cast<std::size_t>(bufferView.byteOffset);
     const std::size_t viewLength = static_cast<std::size_t>(bufferView.byteLength);
     if (viewOffset > bufferSize || viewLength > bufferSize - viewOffset)
-        throw std::runtime_error("glTF bufferView exceeds buffer size");
+        throw std::runtime_error(GltfLoaderErrorMessages::Accessor::bufferViewOutOfRange);
 
     const std::size_t accessorOffset = static_cast<std::size_t>(accessor.byteOffset);
     if (accessorOffset > viewLength)
-        throw std::runtime_error("glTF accessor offset exceeds bufferView");
+        throw std::runtime_error(GltfLoaderErrorMessages::Accessor::offsetOutOfRange);
     if (accessorOffset > std::numeric_limits<std::size_t>::max() - viewOffset)
-        throw std::runtime_error("glTF accessor offset overflows");
+        throw std::runtime_error(GltfLoaderErrorMessages::Accessor::offsetOverflow);
     const std::size_t offset = viewOffset + accessorOffset;
 
     if (accessor.count > 0)
     {
         const std::size_t count = static_cast<std::size_t>(accessor.count);
         const std::size_t stride = static_cast<std::size_t>(byteStride);
-        if (accessorOffset > std::numeric_limits<std::size_t>::max() - elementSize ||
-            count - 1U > (std::numeric_limits<std::size_t>::max() - accessorOffset - elementSize) / stride)
-            throw std::runtime_error("glTF accessor range overflows");
-        const std::size_t accessorEnd = accessorOffset + (count - 1U) * stride + elementSize;
-        if (accessorEnd > viewLength)
-            throw std::runtime_error("glTF accessor exceeds bufferView");
+        const auto accessorEnd = AccessorRangeEnd(accessorOffset, count, stride, elementSize);
+        if (!accessorEnd)
+            throw std::runtime_error(GltfLoaderErrorMessages::Accessor::rangeOverflow);
+        if (*accessorEnd > viewLength)
+            throw std::runtime_error(GltfLoaderErrorMessages::Accessor::exceedsBufferView);
     }
 
     return AccessorView{
@@ -102,13 +272,13 @@ AccessorView GetAccessorView(
 void RequireFinite(const glm::vec2& value)
 {
     if (!std::isfinite(value.x) || !std::isfinite(value.y))
-        throw std::runtime_error("glTF vertex attribute contains a non-finite value");
+        throw std::runtime_error(GltfLoaderErrorMessages::Vertex::attributeNotFinite);
 }
 
 void RequireFinite(const glm::vec3& value)
 {
     if (!std::isfinite(value.x) || !std::isfinite(value.y) || !std::isfinite(value.z))
-        throw std::runtime_error("glTF vertex or transform contains a non-finite value");
+        throw std::runtime_error(GltfLoaderErrorMessages::Vertex::valueNotFinite);
 }
 
 void RequireFinite(const glm::vec4& value)
@@ -116,7 +286,7 @@ void RequireFinite(const glm::vec4& value)
     if (!std::isfinite(value.x) || !std::isfinite(value.y) ||
         !std::isfinite(value.z) || !std::isfinite(value.w))
     {
-        throw std::runtime_error("glTF transform contains a non-finite value");
+        throw std::runtime_error(GltfLoaderErrorMessages::Node::transformNotFinite);
     }
 }
 
@@ -125,7 +295,7 @@ void RequireFinite(const glm::quat& value)
     if (!std::isfinite(value.x) || !std::isfinite(value.y) ||
         !std::isfinite(value.z) || !std::isfinite(value.w))
     {
-        throw std::runtime_error("glTF rotation contains a non-finite value");
+        throw std::runtime_error(GltfLoaderErrorMessages::Node::rotationValueNotFinite);
     }
 }
 
@@ -176,6 +346,36 @@ T ReadScalar(const unsigned char* data)
     return value;
 }
 
+std::size_t GetIndexComponentSize(int componentType)
+{
+    switch (componentType)
+    {
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+        return sizeof(std::uint8_t);
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+        return sizeof(std::uint16_t);
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+        return sizeof(std::uint32_t);
+    default:
+        throw std::runtime_error(GltfLoaderErrorMessages::Index::unsupportedComponentType);
+    }
+}
+
+std::uint32_t ReadIndex(const unsigned char* source, int componentType)
+{
+    switch (componentType)
+    {
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+        return ReadScalar<std::uint8_t>(source);
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+        return ReadScalar<std::uint16_t>(source);
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+        return ReadScalar<std::uint32_t>(source);
+    default:
+        throw std::runtime_error(GltfLoaderErrorMessages::Index::unsupportedComponentType);
+    }
+}
+
 // 삼각형 연결 번호는 정점 배열에서 사용할 꼭짓점을 고르는 값이다. 이를 32-bit 정수로 통일하고 파일에 번호가 없으면 0부터 정점 순서대로 만든다.
 std::vector<std::uint32_t> ReadIndices(
     const tinygltf::Model& model,
@@ -191,35 +391,22 @@ std::vector<std::uint32_t> ReadIndices(
 
     const tinygltf::Accessor& accessor = model.accessors.at(accessorIndex);
     if (accessor.type != TINYGLTF_TYPE_SCALAR)
-        throw std::runtime_error("Index Accessor must be SCALAR");
+        throw std::runtime_error(GltfLoaderErrorMessages::Index::expectedScalar);
 
-    if (accessor.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE &&
-        accessor.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT &&
-        accessor.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
-    {
-        throw std::runtime_error("Unsupported glTF index component type");
-    }
-    const std::size_t componentSize = accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE
-        ? sizeof(std::uint8_t)
-        : accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT
-            ? sizeof(std::uint16_t)
-            : sizeof(std::uint32_t);
-
-    const AccessorView view = GetAccessorView(model, accessorIndex, componentSize);
+    const AccessorView view = GetAccessorView(
+        model,
+        accessorIndex,
+        GetIndexComponentSize(accessor.componentType));
     std::vector<std::uint32_t> result;
     result.reserve(view.count);
 
     for (std::size_t i = 0; i < view.count; ++i)
     {
         const unsigned char* source = view.data + i * view.stride;
-        const std::uint32_t value = accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE
-            ? ReadScalar<std::uint8_t>(source)
-            : accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT
-                ? ReadScalar<std::uint16_t>(source)
-                : ReadScalar<std::uint32_t>(source);
+        const std::uint32_t value = ReadIndex(source, accessor.componentType);
 
         if (value >= vertexCount)
-            throw std::runtime_error("glTF index exceeds vertex Count");
+            throw std::runtime_error(GltfLoaderErrorMessages::Index::exceedsVertexCount);
 
         result.push_back(value);
     }
@@ -236,27 +423,27 @@ TextureData ConvertTexture(
 {
     TextureData result;
     result.uniqueID = ResourceID{
-        resourcePrefix + "#texture/" + std::to_string(textureIndex)};
+        resourcePrefix + GltfResourceIdSuffixes::texture + std::to_string(textureIndex)};
 
     if (source.source < 0 ||
         source.source >= static_cast<int>(model.images.size()))
     {
-        throw std::runtime_error("Invalid glTF texture source");
+        throw std::runtime_error(GltfLoaderErrorMessages::Texture::invalidSource);
     }
 
     const tinygltf::Image& image = model.images[source.source];
 
     if (image.width <= 0 || image.height <= 0)
-        throw std::runtime_error("Invalid glTF image size");
+        throw std::runtime_error(GltfLoaderErrorMessages::Texture::invalidSize);
 
     if (image.component != 3 && image.component != 4)
-        throw std::runtime_error("Only RGB/RGBA glTF images are supported");
+        throw std::runtime_error(GltfLoaderErrorMessages::Texture::unsupportedChannels);
 
     if (image.bits != 8)
-        throw std::runtime_error("Only 8-bit glTF images are supported");
+        throw std::runtime_error(GltfLoaderErrorMessages::Texture::unsupportedBitDepth);
 
     if (image.image.empty())
-        throw std::runtime_error("glTF image contains no decoded pixels");
+        throw std::runtime_error(GltfLoaderErrorMessages::Texture::noDecodedPixels);
 
     result.width = image.width;
     result.height = image.height;
@@ -275,7 +462,7 @@ MaterialData ConvertMaterial(
     MaterialData result;
     result.name = source.name;
     result.uniqueID = ResourceID{
-        resourcePrefix + "#material/" + std::to_string(materialIndex)};
+        resourcePrefix + GltfResourceIdSuffixes::material + std::to_string(materialIndex)};
 
     const auto& pbr = source.pbrMetallicRoughness;
 
@@ -295,7 +482,7 @@ MaterialData ConvertMaterial(
     if (pbr.baseColorTexture.index >= 0)
     {
         result.baseColorTexture = ResourceID{
-            resourcePrefix + "#texture/" +
+            resourcePrefix + GltfResourceIdSuffixes::texture +
             std::to_string(pbr.baseColorTexture.index)};
     }
 
@@ -312,56 +499,58 @@ MeshData ConvertMesh(
     MeshData result;
     result.name = source.name;
     result.uniqueID = ResourceID{
-        resourcePrefix + "#mesh/" + std::to_string(meshIndex)};
+        resourcePrefix + GltfResourceIdSuffixes::mesh + std::to_string(meshIndex)};
 
     for (const tinygltf::Primitive& primitive : source.primitives)
     {
-        if (primitive.mode != TINYGLTF_MODE_TRIANGLES && primitive.mode != -1)
-            throw std::runtime_error("Only TRIANGLES glTF primitives are supported");
+        if (primitive.mode != GltfPrimitiveModes::triangles &&
+            primitive.mode != GltfPrimitiveModes::unspecified)
+            throw std::runtime_error(GltfLoaderErrorMessages::Mesh::unsupportedPrimitiveMode);
 
         // POSITION은 표면 삼각형의 각 꼭짓점 위치다. 위치가 없으면 화면에 표면을 놓을 수 없다.
-        const auto positionIterator = primitive.attributes.find("POSITION");
+        const auto positionIterator = primitive.attributes.find(GltfAttributeNames::position);
         if (positionIterator == primitive.attributes.end())
-            throw std::runtime_error("glTF primitive has no POSITION");
+            throw std::runtime_error(GltfLoaderErrorMessages::Mesh::missingPosition);
 
         const std::vector<glm::vec3> positions = ReadFloatVectorAccessor<glm::vec3, 3>(
             model, positionIterator->second, TINYGLTF_TYPE_VEC3,
-            "Expected FLOAT VEC3 ACCESSOR", [](const float* value) {
+            GltfLoaderErrorMessages::Accessor::expectedFloatVec3, [](const float* value) {
                 return glm::vec3{value[0], value[1], value[2]};
             });
 
         const std::size_t vertexCount = positions.size();
         if (vertexCount == 0)
-            throw std::runtime_error("glTF Primitives has zero vertices");
-        constexpr std::size_t kMaxMeshValue = std::numeric_limits<std::uint32_t>::max();
-        if (vertexCount > kMaxMeshValue || result.vertices.size() > kMaxMeshValue - vertexCount)
-            throw std::runtime_error("glTF mesh vertex range exceeds uint32_t");
+            throw std::runtime_error(GltfLoaderErrorMessages::Mesh::noVertices);
+        if (vertexCount > GltfMeshLimits::maximumMeshValue ||
+            result.vertices.size() > GltfMeshLimits::maximumMeshValue - vertexCount)
+            throw std::runtime_error(GltfLoaderErrorMessages::Mesh::vertexRangeTooLarge);
 
         // NORMAL은 표면 방향, TEXCOORD_0은 기본 색 이미지 좌표다. 선택 속성이 없으면 Vertex 기본값을 유지한다.
         std::vector<glm::vec3> normals;
-        const auto normalIterator = primitive.attributes.find("NORMAL");
+        const auto normalIterator = primitive.attributes.find(GltfAttributeNames::normal);
         if (normalIterator != primitive.attributes.end())
         {
             normals = ReadFloatVectorAccessor<glm::vec3, 3>(
                 model, normalIterator->second, TINYGLTF_TYPE_VEC3,
-                "Expected FLOAT VEC3 ACCESSOR", [](const float* value) {
+                GltfLoaderErrorMessages::Accessor::expectedFloatVec3, [](const float* value) {
                     return glm::vec3{value[0], value[1], value[2]};
                 });
             if (normals.size() != vertexCount)
-                throw std::runtime_error("NORMAL count does not match POSITION count");
+                throw std::runtime_error(GltfLoaderErrorMessages::Mesh::normalCountMismatch);
         }
 
         std::vector<glm::vec2> texCoords;
-        const auto texCoordIterator = primitive.attributes.find("TEXCOORD_0");
+        const auto texCoordIterator = primitive.attributes.find(GltfAttributeNames::textureCoordinates);
         if (texCoordIterator != primitive.attributes.end())
         {
             texCoords = ReadFloatVectorAccessor<glm::vec2, 2>(
                 model, texCoordIterator->second, TINYGLTF_TYPE_VEC2,
-                "Expected FLOAT VEC2 ACCESSOR", [](const float* value) {
+                GltfLoaderErrorMessages::Accessor::expectedFloatVec2, [](const float* value) {
                     return glm::vec2{value[0], value[1]};
                 });
             if (texCoords.size() != vertexCount)
-                throw std::runtime_error("TEXCOORD_0 count does not match POSITION count");
+                throw std::runtime_error(
+                    GltfLoaderErrorMessages::Mesh::textureCoordinateCountMismatch);
         }
 
         const std::uint32_t baseVertex =
@@ -381,10 +570,10 @@ MeshData ConvertMesh(
         const std::vector<std::uint32_t> localIndices =
             ReadIndices(model, primitive.indices, vertexCount);
 
-        if (result.indices.size() > kMaxMeshValue ||
-            localIndices.size() > kMaxMeshValue - result.indices.size())
+        if (result.indices.size() > GltfMeshLimits::maximumMeshValue ||
+            localIndices.size() > GltfMeshLimits::maximumMeshValue - result.indices.size())
         {
-            throw std::runtime_error("glTF mesh index range exceeds uint32_t");
+            throw std::runtime_error(GltfLoaderErrorMessages::Mesh::indexRangeTooLarge);
         }
 
         const std::uint32_t indexStart =
@@ -400,133 +589,138 @@ MeshData ConvertMesh(
         SubMeshInfo subMesh;
         subMesh.indexStart = indexStart;
         subMesh.indexCount = static_cast<std::uint32_t>(localIndices.size());
-        subMesh.defaultMaterialIndex = primitive.material;
+        if (primitive.material < -1 ||
+            (primitive.material >= 0 &&
+                static_cast<std::size_t>(primitive.material) >= model.materials.size()))
+            throw std::runtime_error(GltfLoaderErrorMessages::Hierarchy::invalidMaterialIndex);
+        if (primitive.material >= 0)
+            subMesh.defaultMaterialIndex = static_cast<std::size_t>(primitive.material);
         result.subMeshes.push_back(subMesh);
     }
 
     return result;
 }
 
-// Node는 모델의 한 부품과 부모·자식 관계를 나타낸다. 부모 기준 위치·회전·크기로 변환을 풀어 저장하고 회전은 길이가 1인 quaternion으로 맞춘다.
-void ReadNodeTransform(
+void ReadMatrixTransform(
     const tinygltf::Node& source,
     NodeData& destination)
 {
-    constexpr float kTransformTolerance = 1.0e-5F;
-    const bool hasMatrix = !source.matrix.empty();
-    if (hasMatrix)
+    if (source.matrix.size() != 16 ||
+        !source.translation.empty() ||
+        !source.rotation.empty() ||
+        !source.scale.empty())
     {
-        if (source.matrix.size() != 16 ||
-            !source.translation.empty() ||
-            !source.rotation.empty() ||
-            !source.scale.empty())
-        {
-            throw std::runtime_error("glTF node must use either matrix or TRS");
-        }
-
-        glm::mat4 matrix{1.0F};
-
-        // 행렬은 좌표를 다른 기준으로 바꾸는 숫자 표다. 파일과 GLM은 열을 먼저 나열하므로 같은 열·행 위치에 숫자를 복사한다.
-        for (int column = 0; column < 4; ++column)
-        {
-            for (int row = 0; row < 4; ++row)
-            {
-                matrix[column][row] = CheckedFloat(source.matrix[column * 4 + row],
-                    "glTF node matrix contains a non-finite value");
-            }
-        }
-
-        // 원근은 멀리 있는 점을 작게 보이게 하는 효과다. 이런 원근 성분은 위치·회전·크기로 나타낼 수 없으므로 원근이 없는 변환만 받는다.
-        if (std::abs(matrix[0][3]) > kTransformTolerance ||
-            std::abs(matrix[1][3]) > kTransformTolerance ||
-            std::abs(matrix[2][3]) > kTransformTolerance ||
-            std::abs(matrix[3][3] - 1.0F) > kTransformTolerance)
-        {
-            throw std::runtime_error("Perspective node matrices are not supported");
-        }
-
-        glm::vec3 scale{1.0F};
-        glm::quat orientation{};
-        glm::vec3 translation{0.0F};
-        glm::vec3 skew{0.0F};
-        glm::vec4 perspective{0.0F};
-
-        if (!glm::decompose(
-                matrix,
-                scale,
-                orientation,
-                translation,
-                skew,
-                perspective))
-        {
-            throw std::runtime_error("Failed to decompose glTF node matrix");
-        }
-
-        RequireFinite(scale);
-        RequireFinite(translation);
-        RequireFinite(orientation);
-        RequireFinite(skew);
-        RequireFinite(perspective);
-        // Shear는 한 축을 다른 축 방향으로 기울이는 변환이다. 위치·회전·크기 세 값으로 보존할 수 없어 분해 결과에 shear가 있는지 확인한다.
-        if (std::abs(scale.x) <= kTransformTolerance ||
-            std::abs(scale.y) <= kTransformTolerance ||
-            std::abs(scale.z) <= kTransformTolerance ||
-            glm::length(orientation) <= kTransformTolerance ||
-            glm::length(skew) > kTransformTolerance ||
-            std::abs(perspective.x) > kTransformTolerance ||
-            std::abs(perspective.y) > kTransformTolerance ||
-            std::abs(perspective.z) > kTransformTolerance ||
-            std::abs(perspective.w - 1.0F) > kTransformTolerance)
-        {
-            throw std::runtime_error("glTF node matrix must contain non-degenerate TRS only");
-        }
-
-        destination.translation = translation;
-        destination.rotation = glm::normalize(orientation);
-        destination.scale = scale;
-        RequireFinite(destination.rotation);
-        return;
+        throw std::runtime_error(GltfLoaderErrorMessages::Node::invalidTransformFormat);
     }
 
+    glm::mat4 matrix{1.0F};
+
+    // 파일과 GLM은 행렬 원소를 열 기준으로 나열하므로 같은 열·행 위치에 옮긴다.
+    for (int column = 0; column < 4; ++column)
+    {
+        for (int row = 0; row < 4; ++row)
+        {
+            matrix[column][row] = CheckedFloat(source.matrix[column * 4 + row],
+                "glTF node matrix contains a non-finite value");
+        }
+    }
+
+    // 원근 성분은 위치·회전·크기만으로 보존할 수 없으므로 거부한다.
+    if (std::abs(matrix[0][3]) > GltfTransformLimits::tolerance ||
+        std::abs(matrix[1][3]) > GltfTransformLimits::tolerance ||
+        std::abs(matrix[2][3]) > GltfTransformLimits::tolerance ||
+        std::abs(matrix[3][3] - 1.0F) > GltfTransformLimits::tolerance)
+    {
+        throw std::runtime_error(GltfLoaderErrorMessages::Node::perspectiveMatrixUnsupported);
+    }
+
+    glm::vec3 scale{1.0F};
+    glm::quat orientation{};
+    glm::vec3 translation{0.0F};
+    glm::vec3 skew{0.0F};
+    glm::vec4 perspective{0.0F};
+
+    if (!glm::decompose(
+            matrix,
+            scale,
+            orientation,
+            translation,
+            skew,
+            perspective))
+    {
+        throw std::runtime_error(GltfLoaderErrorMessages::Node::matrixDecompositionFailed);
+    }
+
+    RequireFinite(scale);
+    RequireFinite(translation);
+    RequireFinite(orientation);
+    RequireFinite(skew);
+    RequireFinite(perspective);
+
+    // 전단 변환은 한 축이 다른 축 방향으로 기울어진 상태다. TRS만 저장할 수 있어 이런 행렬은 거부한다.
+    if (std::abs(scale.x) <= GltfTransformLimits::tolerance ||
+        std::abs(scale.y) <= GltfTransformLimits::tolerance ||
+        std::abs(scale.z) <= GltfTransformLimits::tolerance ||
+        glm::length(orientation) <= GltfTransformLimits::tolerance ||
+        glm::length(skew) > GltfTransformLimits::tolerance ||
+        std::abs(perspective.x) > GltfTransformLimits::tolerance ||
+        std::abs(perspective.y) > GltfTransformLimits::tolerance ||
+        std::abs(perspective.z) > GltfTransformLimits::tolerance ||
+        std::abs(perspective.w - 1.0F) > GltfTransformLimits::tolerance)
+    {
+        throw std::runtime_error(GltfLoaderErrorMessages::Node::matrixNotTrs);
+    }
+
+    destination.translation = translation;
+    destination.rotation = glm::normalize(orientation);
+    destination.scale = scale;
+    RequireFinite(destination.rotation);
+}
+
+void ReadTrsTransform(
+    const tinygltf::Node& source,
+    NodeData& destination)
+{
     if ((!source.translation.empty() && source.translation.size() != 3) ||
         (!source.rotation.empty() && source.rotation.size() != 4) ||
         (!source.scale.empty() && source.scale.size() != 3))
     {
-        throw std::runtime_error("Invalid glTF node TRS component size");
+        throw std::runtime_error(GltfLoaderErrorMessages::Node::invalidTrsSize);
     }
 
     if (source.translation.size() == 3)
     {
         destination.translation = glm::vec3{
-            CheckedFloat(source.translation[0], "glTF node translation contains a non-finite value"),
-            CheckedFloat(source.translation[1], "glTF node translation contains a non-finite value"),
-            CheckedFloat(source.translation[2], "glTF node translation contains a non-finite value")};
+            CheckedFloat(source.translation[0], GltfLoaderErrorMessages::Node::translationNotFinite),
+            CheckedFloat(source.translation[1], GltfLoaderErrorMessages::Node::translationNotFinite),
+            CheckedFloat(source.translation[2], GltfLoaderErrorMessages::Node::translationNotFinite)};
     }
 
     if (source.scale.size() == 3)
     {
         destination.scale = glm::vec3{
-            CheckedFloat(source.scale[0], "glTF node scale contains a non-finite value"),
-            CheckedFloat(source.scale[1], "glTF node scale contains a non-finite value"),
-            CheckedFloat(source.scale[2], "glTF node scale contains a non-finite value")};
+            CheckedFloat(source.scale[0], GltfLoaderErrorMessages::Node::scaleNotFinite),
+            CheckedFloat(source.scale[1], GltfLoaderErrorMessages::Node::scaleNotFinite),
+            CheckedFloat(source.scale[2], GltfLoaderErrorMessages::Node::scaleNotFinite)};
     }
 
     if (source.rotation.size() == 4)
     {
         // Quaternion은 회전을 네 숫자로 나타내며 yaw/pitch 같은 세 축 회전각과 다른 표현이다. 파일의 [x,y,z,w] 순서를 GLM 생성자의 (w,x,y,z)로 옮긴다.
         const glm::quat quaternion{
-            CheckedFloat(source.rotation[3], "glTF node rotation contains a non-finite value"),
-            CheckedFloat(source.rotation[0], "glTF node rotation contains a non-finite value"),
-            CheckedFloat(source.rotation[1], "glTF node rotation contains a non-finite value"),
-            CheckedFloat(source.rotation[2], "glTF node rotation contains a non-finite value")};
+        CheckedFloat(source.rotation[3], GltfLoaderErrorMessages::Node::rotationNotFinite),
+        CheckedFloat(source.rotation[0], GltfLoaderErrorMessages::Node::rotationNotFinite),
+        CheckedFloat(source.rotation[1], GltfLoaderErrorMessages::Node::rotationNotFinite),
+        CheckedFloat(source.rotation[2], GltfLoaderErrorMessages::Node::rotationNotFinite)};
 
         const double quaternionLength = std::sqrt(
             static_cast<double>(quaternion.x) * quaternion.x +
             static_cast<double>(quaternion.y) * quaternion.y +
             static_cast<double>(quaternion.z) * quaternion.z +
             static_cast<double>(quaternion.w) * quaternion.w);
-        if (!std::isfinite(quaternionLength) || quaternionLength <= kTransformTolerance)
-            throw std::runtime_error("glTF node rotation quaternion is zero");
+        if (!std::isfinite(quaternionLength) ||
+            quaternionLength <= GltfTransformLimits::tolerance)
+            throw std::runtime_error(GltfLoaderErrorMessages::Node::zeroRotation);
 
         const glm::quat normalizedQuaternion{
             static_cast<float>(quaternion.w / quaternionLength),
@@ -540,11 +734,161 @@ void ReadNodeTransform(
     RequireFinite(destination.translation);
     RequireFinite(destination.rotation);
     RequireFinite(destination.scale);
-    if (std::abs(destination.scale.x) <= kTransformTolerance ||
-        std::abs(destination.scale.y) <= kTransformTolerance ||
-        std::abs(destination.scale.z) <= kTransformTolerance)
+    if (std::abs(destination.scale.x) <= GltfTransformLimits::tolerance ||
+        std::abs(destination.scale.y) <= GltfTransformLimits::tolerance ||
+        std::abs(destination.scale.z) <= GltfTransformLimits::tolerance)
     {
-        throw std::runtime_error("glTF node scale must be non-degenerate");
+        throw std::runtime_error(GltfLoaderErrorMessages::Node::degenerateScale);
+    }
+}
+
+// Node는 모델의 한 부품과 부모·자식 관계를 나타낸다. glTF의 두 변환 형식을 각각 읽어 부모 기준 위치·회전·크기를 저장한다.
+void ReadNodeTransform(
+    const tinygltf::Node& source,
+    NodeData& destination)
+{
+    if (!source.matrix.empty())
+    {
+        ReadMatrixTransform(source, destination);
+        return;
+    }
+
+    ReadTrsTransform(source, destination);
+}
+
+void ReadVisualResources(
+    const tinygltf::Model& source,
+    const std::string& resourcePrefix,
+    ModelResource& destination)
+{
+    destination.textures.reserve(source.textures.size());
+    for (std::size_t i = 0; i < source.textures.size(); ++i)
+    {
+        destination.textures.push_back(
+            ConvertTexture(source, source.textures[i], resourcePrefix, i));
+    }
+
+    destination.materials.reserve(source.materials.size());
+    for (std::size_t i = 0; i < source.materials.size(); ++i)
+    {
+        destination.materials.push_back(
+            ConvertMaterial(source.materials[i], resourcePrefix, i));
+    }
+
+    destination.meshes.reserve(source.meshes.size());
+    for (std::size_t i = 0; i < source.meshes.size(); ++i)
+    {
+        destination.meshes.push_back(
+            ConvertMesh(source, source.meshes[i], resourcePrefix, i));
+    }
+}
+
+void ReadNodeRecords(const tinygltf::Model& source, ModelResource& destination)
+{
+    destination.nodes.resize(source.nodes.size());
+    for (std::size_t i = 0; i < source.nodes.size(); ++i)
+    {
+        const tinygltf::Node& sourceNode = source.nodes[i];
+        NodeData& node = destination.nodes[i];
+
+        node.name = sourceNode.name.empty()
+            ? "Node_" + std::to_string(i)
+            : sourceNode.name;
+
+        if (sourceNode.mesh < -1 || sourceNode.mesh >= static_cast<int>(destination.meshes.size()))
+            throw std::runtime_error(GltfLoaderErrorMessages::Hierarchy::invalidMeshIndex);
+        if (sourceNode.mesh >= 0)
+            node.meshIndex = static_cast<std::size_t>(sourceNode.mesh);
+        ReadNodeTransform(sourceNode, node);
+    }
+
+    for (std::size_t parentIndex = 0; parentIndex < source.nodes.size(); ++parentIndex)
+    {
+        for (const int childIndex : source.nodes[parentIndex].children)
+        {
+            if (childIndex < 0 || childIndex >= static_cast<int>(destination.nodes.size()))
+                throw std::runtime_error(GltfLoaderErrorMessages::Hierarchy::invalidChildIndex);
+
+            NodeData& child = destination.nodes[static_cast<std::size_t>(childIndex)];
+            if (child.parentIndex)
+                throw std::runtime_error(GltfLoaderErrorMessages::Hierarchy::multipleParents);
+
+            child.parentIndex = parentIndex;
+        }
+    }
+}
+
+void BuildNodeHierarchy(ModelResource& model)
+{
+    std::vector<NodeVisitState> nodeState(
+        model.nodes.size(), NodeVisitState::Unvisited);
+    for (std::size_t start = 0; start < model.nodes.size(); ++start)
+    {
+        std::optional<std::size_t> current = start;
+        while (current && nodeState[*current] == NodeVisitState::Unvisited)
+        {
+            nodeState[*current] = NodeVisitState::Visiting;
+            current = model.nodes[*current].parentIndex;
+        }
+
+        if (current && nodeState[*current] == NodeVisitState::Visiting)
+            throw std::runtime_error(GltfLoaderErrorMessages::Hierarchy::cycle);
+
+        current = start;
+        while (current && nodeState[*current] == NodeVisitState::Visiting)
+        {
+            nodeState[*current] = NodeVisitState::Visited;
+            current = model.nodes[*current].parentIndex;
+        }
+    }
+}
+
+void SelectSceneRoot(const tinygltf::Model& source, ModelResource& model)
+{
+    int sceneIndex = source.defaultScene;
+    if (sceneIndex < 0 && !source.scenes.empty())
+        sceneIndex = 0;
+
+    if (sceneIndex >= static_cast<int>(source.scenes.size()))
+        throw std::runtime_error(GltfLoaderErrorMessages::Scene::invalidDefaultIndex);
+
+    if (sceneIndex >= 0)
+    {
+        const tinygltf::Scene& scene = source.scenes[sceneIndex];
+        if (scene.nodes.size() > 1)
+            throw std::runtime_error(GltfLoaderErrorMessages::Scene::multipleRoots);
+        if (scene.nodes.size() == 1)
+        {
+            const int rootIndex = scene.nodes.front();
+            if (rootIndex < 0 || rootIndex >= static_cast<int>(model.nodes.size()) ||
+                model.nodes[static_cast<std::size_t>(rootIndex)].parentIndex.has_value())
+            {
+                throw std::runtime_error(GltfLoaderErrorMessages::Scene::invalidRootIndex);
+            }
+            model.rootNodeIndex = static_cast<std::size_t>(rootIndex);
+        }
+    }
+
+    // 장면에 시작 부품이 없으면 부모가 없는 부품 하나를 찾는다.
+    if (!model.rootNodeIndex)
+    {
+        for (std::size_t i = 0; i < model.nodes.size(); ++i)
+        {
+            if (model.nodes[i].parentIndex.has_value())
+                continue;
+            if (model.rootNodeIndex.has_value())
+                throw std::runtime_error(GltfLoaderErrorMessages::Scene::multipleRoots);
+            model.rootNodeIndex = i;
+        }
+    }
+
+    // 선택한 부품에서 시작하지 않는 별도 계층이 있으면 PrefabFactory가 한 장면으로 만들 수 없다.
+    for (std::size_t i = 0; i < model.nodes.size(); ++i)
+    {
+        if (!model.nodes[i].parentIndex && i != *model.rootNodeIndex)
+        {
+            throw std::runtime_error(GltfLoaderErrorMessages::Scene::disconnectedHierarchy);
+        }
     }
 }
 } // namespace
@@ -565,7 +909,7 @@ ModelResource GltfLoader::LoadGLB(const std::filesystem::path& path)
 
     if (!loaded)
         throw std::runtime_error(
-            "Failed to load GLB: " + path.string() + "\n" + error);
+            GltfLoaderErrorMessages::File::loadFailedPrefix + path.string() + "\n" + error);
 
     /*
         TinyGLTF가 남긴 경고는 파일 읽기 실패와는 다르다.
@@ -580,166 +924,10 @@ ModelResource GltfLoader::LoadGLB(const std::filesystem::path& path)
         예: robot.glb#mesh/0은 첫 형상, robot.glb#material/0은 첫 재질, robot.glb#texture/0은 첫 glTF texture 항목이다.
     */
     const std::string resourcePrefix = path.generic_string();
-
-    result.textures.reserve(gltfModel.textures.size());
-    for (std::size_t i = 0; i < gltfModel.textures.size(); ++i)
-    {
-        result.textures.push_back(
-            ConvertTexture(
-                gltfModel,
-                gltfModel.textures[i],
-                resourcePrefix,
-                i));
-    }
-
-    result.materials.reserve(gltfModel.materials.size());
-    for (std::size_t i = 0; i < gltfModel.materials.size(); ++i)
-    {
-        result.materials.push_back(
-            ConvertMaterial(
-                gltfModel.materials[i],
-                resourcePrefix,
-                i));
-    }
-
-    result.meshes.reserve(gltfModel.meshes.size());
-    for (std::size_t i = 0; i < gltfModel.meshes.size(); ++i)
-    {
-        result.meshes.push_back(
-            ConvertMesh(
-                gltfModel,
-                gltfModel.meshes[i],
-                resourcePrefix,
-                i));
-    }
-
-    result.nodes.resize(gltfModel.nodes.size());
-    for (std::size_t i = 0; i < gltfModel.nodes.size(); ++i)
-    {
-        const tinygltf::Node& source = gltfModel.nodes[i];
-        NodeData& destination = result.nodes[i];
-
-        destination.name = source.name.empty()
-            ? "Node_" + std::to_string(i)
-            : source.name;
-
-        if (source.mesh < -1 || source.mesh >= static_cast<int>(result.meshes.size()))
-            throw std::runtime_error("Invalid glTF node mesh index");
-        destination.meshIndex = source.mesh;
-        destination.childrenIndices = source.children;
-        ReadNodeTransform(source, destination);
-    }
-
-    /*
-        glTF 부품은 자식 번호만 기록하고 부모 번호는 기록하지 않는다.
-        PrefabFactory가 각 부품의 부모를 알 수 있도록 자식 목록을 훑어 parentIndex를 채운다.
-        두 부모가 같은 부품을 자식으로 가리키면 한 갈래 계층으로 만들 수 없어 거부한다.
-    */
-    for (std::size_t parentIndex = 0;
-         parentIndex < result.nodes.size();
-         ++parentIndex)
-    {
-        const NodeData& parent = result.nodes[parentIndex];
-
-        for (const int childIndex : parent.childrenIndices)
-        {
-            if (childIndex < 0 ||
-                childIndex >= static_cast<int>(result.nodes.size()))
-            {
-                throw std::runtime_error("Invalid child node index");
-            }
-
-            NodeData& child = result.nodes[childIndex];
-
-            if (child.parentIndex != -1)
-                throw std::runtime_error("glTF node has multiple parents");
-
-            child.parentIndex = static_cast<int>(parentIndex);
-        }
-    }
-
-    // 부모 연결을 따라가며 순환을 검사한다. 현재 방문 중인 부품으로 되돌아오면 잘못된 계층이므로 거부한다.
-    std::vector<std::uint8_t> nodeState(result.nodes.size(), 0U);
-    for (std::size_t start = 0; start < result.nodes.size(); ++start)
-    {
-        int current = static_cast<int>(start);
-        while (current >= 0 && nodeState[static_cast<std::size_t>(current)] == 0U)
-        {
-            nodeState[static_cast<std::size_t>(current)] = 1U;
-            current = result.nodes[static_cast<std::size_t>(current)].parentIndex;
-        }
-
-        if (current >= 0 && nodeState[static_cast<std::size_t>(current)] == 1U)
-            throw std::runtime_error("glTF node hierarchy contains a cycle");
-
-        current = static_cast<int>(start);
-        while (current >= 0 && nodeState[static_cast<std::size_t>(current)] == 1U)
-        {
-            nodeState[static_cast<std::size_t>(current)] = 2U;
-            current = result.nodes[static_cast<std::size_t>(current)].parentIndex;
-        }
-    }
-
-    // 파일이 기본 장면을 지정하지 않았으면 첫 장면을 사용한다.
-    int sceneIndex = gltfModel.defaultScene;
-    if (sceneIndex < 0 && !gltfModel.scenes.empty())
-        sceneIndex = 0;
-
-    if (sceneIndex >= static_cast<int>(gltfModel.scenes.size()))
-        throw std::runtime_error("Invalid glTF default scene index");
-
-    if (sceneIndex >= 0 &&
-        sceneIndex < static_cast<int>(gltfModel.scenes.size()))
-    {
-        const tinygltf::Scene& scene = gltfModel.scenes[sceneIndex];
-
-        if (scene.nodes.size() > 1)
-            throw std::runtime_error("Multiple root nodes in glTF scenes are not supported");
-        if (scene.nodes.size() == 1)
-        {
-            const int rootIndex = scene.nodes.front();
-            if (rootIndex < 0 || rootIndex >= static_cast<int>(result.nodes.size()) ||
-                result.nodes[static_cast<std::size_t>(rootIndex)].parentIndex != -1)
-            {
-                throw std::runtime_error("Invalid glTF scene root node");
-            }
-            result.rootNodeIndex = rootIndex;
-        }
-    }
-
-    // 장면에 최상위 부품이 지정되지 않았으면 부모가 없는 부품을 찾는다. 둘 이상이면 어느 장면인지 정할 수 없어 거부한다.
-    if (result.rootNodeIndex < 0)
-    {
-        int rootCandidate = -1;
-        bool multipleRoots = false;
-
-        for (std::size_t i = 0; i < result.nodes.size(); ++i)
-        {
-            if (result.nodes[i].parentIndex != -1) continue;
-
-            if (rootCandidate != -1)
-            {
-                multipleRoots = true;
-                continue;
-            }
-
-            rootCandidate = static_cast<int>(i);
-        }
-
-        if (multipleRoots)
-            throw std::runtime_error("Multiple root nodes in glTF scenes are not supported");
-        result.rootNodeIndex = rootCandidate;
-    }
-
-    // PrefabFactory가 파일의 모든 부품을 만들기 때문에 선택한 장면과 떨어진 별도 부품 계층이 있으면 거부한다.
-    for (std::size_t i = 0; i < result.nodes.size(); ++i)
-    {
-        if (result.nodes[i].parentIndex == -1 &&
-            static_cast<int>(i) != result.rootNodeIndex)
-        {
-            throw std::runtime_error("glTF nodes must form a single tree under the scene root");
-        }
-    }
+    ReadVisualResources(gltfModel, resourcePrefix, result);
+    ReadNodeRecords(gltfModel, result);
+    BuildNodeHierarchy(result);
+    SelectSceneRoot(gltfModel, result);
 
     return result;
 }

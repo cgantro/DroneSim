@@ -3,15 +3,19 @@
 #include "robotics/runtime/FixedControlLoop.h"
 #include "diagnostics/Logger.h"
 #include "model/ModelResource.h"
+#include "model/RobotModel.h"
 #include "application/PickPlaceMission.h"
 #include "application/PickPlaceScenarioSampler.h"
 #include "scene/Entity.h"
-#include "robotics/models/hanwha/Hcr12a.h"
 
 #include <flecs.h>
 #include <cstddef>
 #include <chrono>
 #include <memory>
+#include <filesystem>
+#include <string>
+#include <vector>
+#include "robotics/models/RobotSpecification.h"
 
 namespace grasplink::graphics
 {
@@ -58,6 +62,7 @@ namespace grasplink::simulation::robotics
 {
 class RobotTransformAdapter;
 class GripperTransformAdapter;
+class RobotModelAdapter;
 }
 
 namespace grasplink::gui
@@ -67,6 +72,8 @@ class GripperPanel;
 class RobotPanel;
 class PhysicsDebugPanel;
 class ColliderOverlay;
+struct RobotPanelView;
+struct RobotPanelActions;
 }
 
 namespace grasplink::simulation
@@ -74,16 +81,23 @@ namespace grasplink::simulation
 class PhysicsSystemModule;
 class RobotPhysicsAdapter;
 class GripperGraspAdapter;
+struct GripperGraspState;
 }
 
 namespace grasplink::simulation::robotics { class RobotEnvironmentCollisionGuard; }
 
 namespace grasplink::simulator
 {
-/** @brief Viewer를 자동 테스트용으로 짧게 실행할지 정한다. */
+/**
+ * @brief Viewer가 실행할 로봇 모델 폴더와 테스트 실행 여부를 정한다.
+ * @details 로봇 폴더를 따로 지정하지 않으면 프로젝트에 포함된 HCR-12A 예제를 사용한다.
+ */
 struct ViewerOptions
 {
+    inline static constexpr char defaultRobotDirectory[] = "robots/HCR12A";
+
     bool smokeTest = false;
+    std::filesystem::path robotDirectory{defaultRobotDirectory};
 };
 
 /**
@@ -126,6 +140,10 @@ private:
     // 입력, 누적 Fixed Update, 렌더 프레임 처리를 서로 다른 주기로 반복한다.
     void MainLoop();
     void MainLoopFrame();
+    // 현재 프레임의 상태를 조작 패널에 보여 주고, 버튼 입력은 호출자에게 돌려준다.
+    grasplink::gui::RobotPanelActions DrawControlPanel(float sceneDisplayWidth, float sidebarWidth,
+        float displayHeight, const grasplink::gui::RobotPanelView& view,
+        const grasplink::simulation::GripperGraspState& graspState);
     void AdvanceSimulationTick(double fixedDeltaSeconds);
     bool AdvancePlanningBudget();
     bool UpdateMission();
@@ -153,6 +171,9 @@ private:
 
     // Collider 추출에 필요한 원본 CPU 정점 자료를 보관한다.
     grasplink::model::ModelResource m_RobotModel;
+    grasplink::model::RobotModel m_RobotDescription;
+    // URDF에서 만든 사양 배열을 소유한다. 로봇 설명은 이 어댑터보다 먼저 만들어지고 나중에 파괴된다.
+    std::unique_ptr<grasplink::simulation::robotics::RobotModelAdapter> m_RobotSpecificationAdapter;
 
     // 로봇 모델과 디버그 상자 렌더링에 함께 사용하는 Shader다.
     std::shared_ptr<grasplink::graphics::Shader> m_RobotShader;
@@ -194,7 +215,7 @@ private:
     std::unique_ptr<grasplink::gui::GuiModule> m_GuiModule;
     std::unique_ptr<grasplink::gui::GripperPanel> m_GripperPanel;
     std::unique_ptr<grasplink::gui::RobotPanel> m_RobotPanel;
-    grasplink::application::PickPlaceMission m_PickPlaceMission{grasplink::robotics::models::hanwha::kHcr12a};
+    std::unique_ptr<grasplink::application::PickPlaceMission> m_PickPlaceMission;
     std::unique_ptr<grasplink::application::PickPlaceScenarioSampler> m_ScenarioSampler;
     std::unique_ptr<grasplink::gui::PhysicsDebugPanel> m_PhysicsDebugPanel;
     std::unique_ptr<grasplink::gui::ColliderOverlay> m_ColliderOverlay;

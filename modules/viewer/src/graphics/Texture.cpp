@@ -38,28 +38,31 @@ std::shared_ptr<Texture> Texture::Create2D(
     GLenum format = GL_RGB;
     GLenum internalFormat = GL_RGB8;
 
-    if (channels == 1)
+    switch (channels)
     {
+    case 1:
         format = GL_RED;
         internalFormat = GL_R8;
-    }
-    else if (channels == 3)
-    {
+        break;
+    case 3:
         format = GL_RGB;
         internalFormat = srgb ? GL_SRGB8 : GL_RGB8;
-    }
-    else if (channels == 4)
-    {
+        break;
+    case 4:
         format = GL_RGBA;
         internalFormat = srgb ? GL_SRGB8_ALPHA8 : GL_RGBA8;
-    }
-    else
-    {
+        break;
+    default:
         throw std::runtime_error("Unsupported texture channel count");
     }
 
     auto texture = std::make_shared<Texture>();
     texture->m_Target = GL_TEXTURE_2D;
+
+    GLint previousTexture = 0;
+    GLint previousUnpackAlignment = 4;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
 
     glGenTextures(1, &texture->m_RendererID);
     glBindTexture(GL_TEXTURE_2D, texture->m_RendererID);
@@ -87,7 +90,9 @@ std::shared_ptr<Texture> Texture::Create2D(
     // 축소된 이미지 단계를 미리 만들어 멀리 있거나 작게 보이는 표면에서 Texture 무늬가 깜빡이는 현상을 줄인다.
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    // 업로드 중 바꾼 설정은 OpenGL context 전체에 남으므로 호출 전 값으로 복구한다.
+    glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
 
     // 이 경로는 glTF에 저장된 sampler 설정을 읽지 않고 Texture 반복 방식과 필터를 고정값으로 사용한다.
     return texture;

@@ -10,19 +10,109 @@
 #include <iostream>
 #include <stdexcept>
 #include <filesystem>
+#include <utility>
 
 namespace grasplink::graphics
 {
 
 
 
-// 파일에서 지원하는 #type 이름만 OpenGL Shader 단계로 바꾼다. pixel은 fragment와 같은 단계의 별칭으로 받는다.
-static GLenum ShaderTypeFromString(const std::string& type){
-    if(type == "vertex") return GL_VERTEX_SHADER;
-    if(type == "fragment" || type == "pixel") return GL_FRAGMENT_SHADER;
-    throw std::runtime_error(
-        "Unknown Shader Type: " + type
-    );
+// 파일의 단계 이름을 OpenGL이 쓰는 정점·픽셀 계산 종류로 바꾼다.
+static GLenum ShaderTypeFromString(const std::string& type)
+{
+    if (type == "vertex")
+        return GL_VERTEX_SHADER;
+    if (type == "fragment" || type == "pixel")
+        return GL_FRAGMENT_SHADER;
+    throw std::runtime_error("Unknown Shader Type: " + type);
+}
+
+namespace
+{
+class PendingShaderProgram final
+{
+public:
+    explicit PendingShaderProgram(std::size_t shaderCount)
+    {
+        shaderIDs_.reserve(shaderCount);
+        program_ = glCreateProgram();
+        if (program_ == 0)
+            throw std::runtime_error("Failed to create Shader Program");
+    }
+
+    ~PendingShaderProgram()
+    {
+        for (const GLuint shader : shaderIDs_)
+            glDeleteShader(shader);
+        if (program_ != 0)
+            glDeleteProgram(program_);
+    }
+
+    PendingShaderProgram(const PendingShaderProgram&) = delete;
+    PendingShaderProgram& operator=(const PendingShaderProgram&) = delete;
+
+    [[nodiscard]] GLuint Program() const noexcept { return program_; }
+
+    [[nodiscard]] GLuint CreateShader(GLenum type)
+    {
+        const GLuint shader = glCreateShader(type);
+        if (shader != 0)
+            shaderIDs_.push_back(shader);
+        return shader;
+    }
+
+    void Attach(GLuint shader) const
+    {
+        glAttachShader(program_, shader);
+    }
+
+    [[nodiscard]] GLuint Release()
+    {
+        for (const GLuint shader : shaderIDs_)
+        {
+            glDetachShader(program_, shader);
+            glDeleteShader(shader);
+        }
+        shaderIDs_.clear();
+        return std::exchange(program_, 0U);
+    }
+
+private:
+    GLuint program_ = 0;
+    std::vector<GLuint> shaderIDs_;
+};
+
+std::string ShaderInfoLog(GLuint shader)
+{
+    GLint length = 0;
+    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+    if (length <= 1)
+        return {};
+
+    std::string log(static_cast<std::size_t>(length), '\0');
+    GLsizei written = 0;
+    glGetShaderInfoLog(shader, length, &written, log.data());
+    if (written <= 0)
+        return {};
+    log.resize(static_cast<std::size_t>(written));
+    return log;
+}
+
+std::string ProgramInfoLog(GLuint program)
+{
+    GLint length = 0;
+    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+    if (length <= 1)
+        return {};
+
+    std::string log(static_cast<std::size_t>(length), '\0');
+    GLsizei written = 0;
+    glGetProgramInfoLog(program, length, &written, log.data());
+    if (written <= 0)
+        return {};
+    log.resize(static_cast<std::size_t>(written));
+    return log;
+}
 }
 
 Shader::Shader(const std::string& filepath){
@@ -119,20 +209,19 @@ std::unordered_map<unsigned int, std::string> Shader::PreProcess(const std::stri
     return shaderSources;
 }
 
-void Shader::Compile(const std::unordered_map<unsigned int, std::string>& shaderSources){
-    GLuint program = glCreateProgram();
-    if(program == 0) throw std::runtime_error("Failed to create Shader Program");
+void Shader::Compile(const std::unordered_map<unsigned int, std::string>& shaderSources)
+{
+    PendingShaderProgram pending(shaderSources.size());
 
-    // Shader 단계 ID를 기록해 실패한 생성 과정에서 해제한다. 예외가 발생해도 링크되지 않은 Program이 남지 않게 한다.
-    std::vector<GLuint> shaderIDs;
-
-    for(const auto& [type, originalSource] : shaderSources){
+    for (const auto& [type, originalSource] : shaderSources)
+    {
 #ifdef __EMSCRIPTEN__
         std::string source = originalSource;
         const std::string desktopVersion = "#version 330 core";
         const auto versionPosition = source.find(desktopVersion);
         if (versionPosition != std::string::npos)
             source.replace(versionPosition, desktopVersion.size(), "#version 300 es");
+
         if (type == GL_FRAGMENT_SHADER)
         {
             const auto versionEnd = source.find('\n');
@@ -142,82 +231,32 @@ void Shader::Compile(const std::unordered_map<unsigned int, std::string>& shader
 #else
         const std::string& source = originalSource;
 #endif
-        GLuint shader = glCreateShader(type);
-        if(shader == 0){
-            for(GLuint id: shaderIDs) glDeleteShader(id);
-            glDeleteProgram(program);
+
+        const GLuint shader = pending.CreateShader(type);
+        if (shader == 0)
             throw std::runtime_error("Failed to Create Shader object");
-        }
 
         const GLchar* sourceCstr = source.c_str();
-
-        glShaderSource(shader,1,&sourceCstr,nullptr);
-
+        glShaderSource(shader, 1, &sourceCstr, nullptr);
         glCompileShader(shader);
 
         GLint isCompiled = GL_FALSE;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
+        if (isCompiled == GL_FALSE)
+            throw std::runtime_error("Shader Compile Failed\n" + ShaderInfoLog(shader));
 
-        glGetShaderiv(shader,GL_COMPILE_STATUS,&isCompiled);
-
-        if(isCompiled == GL_FALSE){
-            GLint logLen = 0;
-            glGetShaderiv(shader,GL_INFO_LOG_LENGTH,&logLen);
-
-            std::vector<GLchar> infoLog(logLen);
-            glGetShaderInfoLog(shader,logLen,nullptr,infoLog.data());
-
-            glDeleteShader(shader);
-
-            for(GLuint id: shaderIDs) glDeleteShader(id);
-
-            glDeleteProgram(program);
-
-            throw std::runtime_error(std::string("Shader Compile Failed\n") + infoLog.data());
-
-        }
-
-        glAttachShader(program,shader);
-
-        shaderIDs.push_back(shader);
+        pending.Attach(shader);
     }
 
     // 각 단계가 따로 컴파일되어도 서로 연결되지 않을 수 있다. 따라서 모든 단계를 Program으로 묶는 링크 작업을 별도로 확인한다.
-    glLinkProgram(program);
-
+    glLinkProgram(pending.Program());
     GLint isLinked = GL_FALSE;
-    
-    glGetProgramiv(program,GL_LINK_STATUS,&isLinked);
-
-    if (isLinked == GL_FALSE){
-        GLint logLength = 0;
-
-        glGetProgramiv(
-            program,
-            GL_INFO_LOG_LENGTH,
-            &logLength
-        );
-
-
-        std::vector<GLchar> infoLog(logLength);
-
-        glGetProgramInfoLog(program,logLength,nullptr,infoLog.data());
-
-
-        for (GLuint id : shaderIDs) glDeleteShader(id);
-
-        glDeleteProgram(program);
-
-
-        throw std::runtime_error(std::string("Shader Link Failed:\n")+ infoLog.data());
-    }
+    glGetProgramiv(pending.Program(), GL_LINK_STATUS, &isLinked);
+    if (isLinked == GL_FALSE)
+        throw std::runtime_error("Shader Link Failed:\n" + ProgramInfoLog(pending.Program()));
 
     // 링크가 성공하면 실행에 필요한 코드는 Program에 보존된다. 따라서 컴파일에 쓴 임시 Shader 단계 객체는 Program에서 분리해 해제한다.
-    for(GLuint id : shaderIDs){
-        glDetachShader(program,id);
-        glDeleteShader(id);
-    }
-
-    m_RendererID = static_cast<uint32_t>(program);
+    m_RendererID = static_cast<uint32_t>(pending.Release());
 }
 
 void Shader::Bind() const {glUseProgram(m_RendererID);} 

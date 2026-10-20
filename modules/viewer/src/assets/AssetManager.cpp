@@ -6,12 +6,47 @@
 
 #include <glm/glm.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
 
 namespace grasplink::rendering
 {
+namespace
+{
+void ValidatePixelBuffer(const ::grasplink::model::TextureData& textureData)
+{
+    if (textureData.width <= 0 || textureData.height <= 0 ||
+        (textureData.channels != 1 && textureData.channels != 3 && textureData.channels != 4))
+        throw std::runtime_error("Invalid texture dimensions or channel count");
+
+    const std::size_t width = static_cast<std::size_t>(textureData.width);
+    const std::size_t height = static_cast<std::size_t>(textureData.height);
+    const std::size_t channels = static_cast<std::size_t>(textureData.channels);
+    const std::size_t maximum = std::numeric_limits<std::size_t>::max();
+    if (width > maximum / height || width * height > maximum / channels)
+        throw std::runtime_error("Texture pixel buffer size overflows");
+
+    const std::size_t requiredBytes = width * height * channels;
+    if (textureData.pixels.size() < requiredBytes)
+        throw std::runtime_error("Texture pixel buffer is smaller than its dimensions");
+}
+
+void ValidateMeshData(const ::grasplink::model::MeshData& meshData)
+{
+    if (meshData.vertices.empty())
+        throw std::runtime_error("Cannot upload mesh without vertices: " + meshData.name);
+    if (meshData.indices.empty())
+        throw std::runtime_error("Cannot upload mesh without indices: " + meshData.name);
+
+    const std::size_t maximum = std::numeric_limits<std::uint32_t>::max();
+    if (meshData.vertices.size() > maximum)
+        throw std::runtime_error("Mesh vertex count exceeds uint32_t range");
+    if (meshData.indices.size() > maximum)
+        throw std::runtime_error("Mesh index count exceeds uint32_t range");
+}
+}
 
 AssetManager::AssetManager()
 {
@@ -23,13 +58,40 @@ AssetManager::AssetManager()
 
 void AssetManager::UploadModel(const ::grasplink::model::ModelResource& model)
 {
+    // 잘못된 데이터 때문에 업로드가 중간에 멈춰도 일부 자원이 캐시에 남지 않도록 먼저 확인한다.
+    for (const ::grasplink::model::TextureData& textureData : model.textures)
+    {
+        if (textures_.find(textureData.uniqueID) == textures_.end() &&
+            !textureData.pixels.empty())
+            ValidatePixelBuffer(textureData);
+    }
+
+    for (const ::grasplink::model::MaterialData& materialData : model.materials)
+    {
+        if (materials_.find(materialData.uniqueID) != materials_.end() ||
+            !materialData.baseColorTexture.IsValid() ||
+            textures_.find(materialData.baseColorTexture) != textures_.end())
+            continue;
+
+        const auto textureData = std::find_if(model.textures.begin(), model.textures.end(),
+            [&](const ::grasplink::model::TextureData& texture) {
+                return texture.uniqueID == materialData.baseColorTexture &&
+                    !texture.pixels.empty();
+            });
+        if (textureData == model.textures.end())
+            throw std::runtime_error("Base color texture was not uploaded");
+    }
+
+    for (const ::grasplink::model::MeshData& meshData : model.meshes)
+        if (meshes_.find(meshData.uniqueID) == meshes_.end())
+            ValidateMeshData(meshData);
+
     // 이미지, 재질, 형상 순서로 올린다. 뒤에 처리할 데이터가 앞서 만든 자원을 번호로 찾기 때문이다.
 
     for (const ::grasplink::model::TextureData& textureData : model.textures)
     {
         if (textures_.find(textureData.uniqueID) != textures_.end()) continue;
         if (textureData.pixels.empty()) continue;
-
         // 현재 업로드 경로는 모델의 모든 texture 항목을 sRGB 형식으로 만든다. 화면용 재질에는 기본색 이미지만 연결한다.
         // 다른 종류의 이미지를 실제 재질 입력으로 연결하려면 용도에 맞는 색 공간 처리가 필요하다.
         auto texture = ::grasplink::graphics::Texture::Create2D(
@@ -71,17 +133,6 @@ void AssetManager::UploadModel(const ::grasplink::model::ModelResource& model)
         {
             continue;
         }
-
-        if (meshData.vertices.empty())
-            throw std::runtime_error("Cannot upload mesh without vertices: " + meshData.name);
-        if (meshData.indices.empty())
-            throw std::runtime_error("Cannot upload mesh without indices: " + meshData.name);
-
-        // GPU 그리기 API가 32-bit 원소 개수를 받으므로, 변환 과정에서 큰 값이 잘리지 않게 먼저 범위를 확인한다.
-        if (meshData.vertices.size() > std::numeric_limits<std::uint32_t>::max())
-            throw std::runtime_error("Mesh vertex count exceeds uint32_t range");
-        if (meshData.indices.size() > std::numeric_limits<std::uint32_t>::max())
-            throw std::runtime_error("Mesh index count exceeds uint32_t range");
 
         auto gpuMesh = std::make_shared<::grasplink::graphics::Mesh>(
             meshData.vertices.data(),

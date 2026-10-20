@@ -5,7 +5,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -82,8 +84,8 @@ struct SubMeshInfo{
     /// 이 묶음이 사용할 꼭짓점 연결 번호의 개수.
     std::uint32_t indexCount = 0;
 
-    /// ModelResource::materials에서 선택할 재질 번호. -1이면 기본 재질을 사용한다.
-    int defaultMaterialIndex = -1;
+    /// 연결된 번호가 없으면 화면 기본 재질을 사용한다.
+    std::optional<std::size_t> defaultMaterialIndex;
 };
 
 /**
@@ -140,14 +142,13 @@ struct NodeData
         1.0F
     };
 
-    /// ModelResource::meshes에서 그릴 형상의 번호. -1이면 이 부품에는 형상이 없다.
-    int meshIndex = -1;
+    /// 이 부품에 연결된 화면 형상 번호. 형상이 없으면 비어 있다.
+    std::optional<std::size_t> meshIndex;
 
-    /// ModelResource::nodes에서 부모 부품의 번호. 최상위 부품은 -1이다.
-    int parentIndex = -1;
+    /// 부모 부품의 번호. 최상위 부품이면 비어 있다.
+    std::optional<std::size_t> parentIndex;
 
     /// 이 부품 바로 아래에 연결할 자식 번호 목록.
-    std::vector<int> childrenIndices;
 };
 
 /**
@@ -171,8 +172,8 @@ struct ModelResource
     /// 파일에서 픽셀로 풀어 둔 이미지 데이터.
     std::vector<TextureData> textures;
 
-    /// 사용할 장면의 최상위 부품 번호. 없으면 -1이다.
-    int rootNodeIndex = -1;
+    /// 화면에 표시할 계층의 최상위 부품 번호.
+    std::optional<std::size_t> rootNodeIndex;
 };
 
 } // namespace grasplink::model

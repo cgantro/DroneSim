@@ -27,7 +27,7 @@ using grasplink::scene::Scene;
 void ConfigureFloor(Entity& floor)
 {
     grasplink::simulation::ConfigureStaticFloor(
-        floor, {3.0F, 0.02F, 3.0F}, {0.0F, -0.015F, 0.0F});
+        floor, config::floorHalfExtentsMeters, config::floorColliderCenterOffsetMeters);
 }
 
 Entity CreateGraspBox(Scene& scene, const std::shared_ptr<Shader>& shader)

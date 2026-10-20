@@ -13,9 +13,72 @@
 
 #include <cstdint>
 #include <algorithm>
+#ifndef NDEBUG
+#include <iostream>
+#include <mutex>
+#include <unordered_set>
+#endif
 
 namespace grasplink::graphics
 {
+namespace
+{
+struct RendererDefaults final
+{
+    inline static constexpr int multisampleCount = 4;
+    inline static constexpr int baseColorTextureSlot = 0;
+    inline static constexpr float clearRed = 0.14F;
+    inline static constexpr float clearGreen = 0.15F;
+    inline static constexpr float clearBlue = 0.16F;
+    inline static constexpr float clearAlpha = 1.0F;
+};
+
+// 이 이름은 셰이더 변수와 같아야 하므로 C++ 변수 이름과 별도로 모아 둔다.
+struct RendererUniformNames final
+{
+    inline static constexpr char model[] = "u_Model";
+    inline static constexpr char view[] = "u_View";
+    inline static constexpr char projection[] = "u_Projection";
+    inline static constexpr char baseColorFactor[] = "u_BaseColorFactor";
+    inline static constexpr char metallicFactor[] = "u_MetallicFactor";
+    inline static constexpr char roughnessFactor[] = "u_RoughnessFactor";
+    inline static constexpr char baseColorTexture[] = "u_BaseColorTexture";
+    inline static constexpr char useBaseColorTexture[] = "u_UseBaseColorTexture";
+    inline static constexpr char cameraPosition[] = "u_CameraPosition";
+    inline static constexpr char lightDirection[] = "u_LightDirection";
+};
+
+#ifndef NDEBUG
+const char* OpenGlErrorName(GLenum error)
+{
+    switch (error)
+    {
+    case GL_INVALID_ENUM: return "GL_INVALID_ENUM";
+    case GL_INVALID_VALUE: return "GL_INVALID_VALUE";
+    case GL_INVALID_OPERATION: return "GL_INVALID_OPERATION";
+    case GL_OUT_OF_MEMORY: return "GL_OUT_OF_MEMORY";
+#ifdef GL_INVALID_FRAMEBUFFER_OPERATION
+    case GL_INVALID_FRAMEBUFFER_OPERATION: return "GL_INVALID_FRAMEBUFFER_OPERATION";
+#endif
+    default: return "unknown OpenGL error";
+    }
+}
+
+void ReportOpenGlErrors()
+{
+    static std::mutex reportedErrorsMutex;
+    static std::unordered_set<GLenum> reportedErrors;
+
+    for (GLenum error = glGetError(); error != GL_NO_ERROR; error = glGetError())
+    {
+        std::lock_guard<std::mutex> lock(reportedErrorsMutex);
+        if (reportedErrors.insert(error).second)
+            std::cerr << "Renderer OpenGL error: " << OpenGlErrorName(error)
+                << " (0x" << std::hex << error << std::dec << ")\n";
+    }
+}
+#endif
+}
 
 Renderer::Renderer() = default;
 Renderer::~Renderer() = default;
@@ -31,7 +94,7 @@ void Renderer::Init(int framebufferWidth, int framebufferHeight)
     m_MSAAFramebuffer = std::make_unique<MultisampleFramebuffer>(
         framebufferWidth,
         framebufferHeight,
-        4);
+        RendererDefaults::multisampleCount);
 #else
     m_FramebufferWidth = framebufferWidth;
     m_FramebufferHeight = framebufferHeight;
@@ -50,7 +113,11 @@ void Renderer::BeginFrame()
     m_MSAAFramebuffer->Bind();
 #endif
 
-    glClearColor(0.14F, 0.15F, 0.16F, 1.0F);
+    glClearColor(
+        RendererDefaults::clearRed,
+        RendererDefaults::clearGreen,
+        RendererDefaults::clearBlue,
+        RendererDefaults::clearAlpha);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
@@ -62,7 +129,11 @@ void Renderer::EndFrame()
 #else
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, m_MSAAFramebuffer->GetWidth(), m_MSAAFramebuffer->GetHeight());
-    glClearColor(0.14F, 0.15F, 0.16F, 1.0F);
+    glClearColor(
+        RendererDefaults::clearRed,
+        RendererDefaults::clearGreen,
+        RendererDefaults::clearBlue,
+        RendererDefaults::clearAlpha);
     glClear(GL_COLOR_BUFFER_BIT);
     m_MSAAFramebuffer->ResolveToDefault(
         m_SceneViewport.x, m_SceneViewport.y,
@@ -125,31 +196,33 @@ void Renderer::Draw(
     if (!meshFilter.mesh || !meshRenderer.shader || !meshRenderer.material) return;
 
     meshRenderer.shader->Bind();
-    meshRenderer.shader->SetMat4("u_Model", model);
-    meshRenderer.shader->SetMat4("u_View", view);
-    meshRenderer.shader->SetMat4("u_Projection", projection);
+    meshRenderer.shader->SetMat4(RendererUniformNames::model, model);
+    meshRenderer.shader->SetMat4(RendererUniformNames::view, view);
+    meshRenderer.shader->SetMat4(RendererUniformNames::projection, projection);
 
     meshRenderer.shader->SetFloat4(
-        "u_BaseColorFactor", meshRenderer.material->BaseColorFactor());
+        RendererUniformNames::baseColorFactor, meshRenderer.material->BaseColorFactor());
     meshRenderer.shader->SetFloat(
-        "u_MetallicFactor", meshRenderer.material->MetallicFactor());
+        RendererUniformNames::metallicFactor, meshRenderer.material->MetallicFactor());
     meshRenderer.shader->SetFloat(
-        "u_RoughnessFactor", meshRenderer.material->RoughnessFactor());
+        RendererUniformNames::roughnessFactor, meshRenderer.material->RoughnessFactor());
 
-    constexpr int baseColorTextureSlot = 0;
     if (meshRenderer.material->HasBaseColorTexture())
     {
-        meshRenderer.material->GetBaseColorTexture()->Bind(baseColorTextureSlot);
-        meshRenderer.shader->SetInt("u_BaseColorTexture", baseColorTextureSlot);
-        meshRenderer.shader->SetInt("u_UseBaseColorTexture", 1);
+        meshRenderer.material->GetBaseColorTexture()->Bind(
+            RendererDefaults::baseColorTextureSlot);
+        meshRenderer.shader->SetInt(
+            RendererUniformNames::baseColorTexture,
+            RendererDefaults::baseColorTextureSlot);
+        meshRenderer.shader->SetInt(RendererUniformNames::useBaseColorTexture, 1);
     }
     else
     {
-        meshRenderer.shader->SetInt("u_UseBaseColorTexture", 0);
+        meshRenderer.shader->SetInt(RendererUniformNames::useBaseColorTexture, 0);
     }
 
-    meshRenderer.shader->SetFloat3("u_CameraPosition", cameraPosition);
-    meshRenderer.shader->SetFloat3("u_LightDirection", m_LightDirection);
+    meshRenderer.shader->SetFloat3(RendererUniformNames::cameraPosition, cameraPosition);
+    meshRenderer.shader->SetFloat3(RendererUniformNames::lightDirection, m_LightDirection);
 
     meshFilter.mesh->Bind();
 
@@ -168,6 +241,10 @@ void Renderer::Draw(
 
     meshFilter.mesh->UnBind();
     meshRenderer.shader->UnBind();
+
+#ifndef NDEBUG
+    ReportOpenGlErrors();
+#endif
 
 }
 
