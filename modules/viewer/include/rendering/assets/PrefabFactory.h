@@ -1,7 +1,5 @@
 #pragma once
 
-#include "scene/Entity.h"
-
 #include <memory>
 
 namespace grasplink::graphics { class Shader; }
