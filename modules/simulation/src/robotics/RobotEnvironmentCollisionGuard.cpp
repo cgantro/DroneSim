@@ -128,13 +128,13 @@ RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
       m_PhysicsWorld(physicsWorld),
       m_CandidateState(robotController.GetStateView()),
       m_SafeJointPositions(robotController.GetStateView().jointPositions),
+      m_RobotRoot(robotRoot),
       m_PhysicsSystem(physicsSystem)
 {
-    m_RobotRoot = robotRoot;
     if (m_GripperSupport && !m_GripperSupport->root)
         throw std::invalid_argument(CollisionGuardMessages::missingGripperRoot);
 
-    CollectCollisionProxies(robotRoot);
+    CollectCollisionProxies();
 
     const auto& initialKinematics = m_RobotKinematics.Update(robotController.GetStateView());
     if (m_GripperSupport)
@@ -157,12 +157,12 @@ RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
     });
 }
 
-void RobotEnvironmentCollisionGuard::CollectCollisionProxies(const Entity& robotRoot)
+void RobotEnvironmentCollisionGuard::CollectCollisionProxies()
 {
     std::unordered_set<std::size_t> registeredLinkIndices;
     std::size_t baseProxyCount = 0;
     std::size_t gripperBodyCount = 0;
-    std::vector<Entity> pending{robotRoot};
+    std::vector<Entity> pending{m_RobotRoot};
     while (!pending.empty())
     {
         Entity entity = pending.back();

@@ -94,7 +94,7 @@ private:
     [[nodiscard]] grasplink::robotics::planning::JointStateInvalidity ValidateCandidatePose(
         const grasplink::robotics::JointVector& candidateJoints);
     void ApplyJointPose(const grasplink::robotics::RobotState& state);
-    void CollectCollisionProxies(const grasplink::scene::Entity& robotRoot);
+    void CollectCollisionProxies();
     [[nodiscard]] bool RobotAssemblyOverlapsEnvironment();
     [[nodiscard]] bool RobotAssemblyOverlapsEnvironment(
         const std::vector<grasplink::physics::Transform>& candidateTransforms) const;
