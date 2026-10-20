@@ -8,7 +8,7 @@ namespace grasplink::scene
 {
 
 Scene::Scene(flecs::world& world)
-    : m_World(world), m_SceneRoot(world.entity("SceneRoot").add<SceneRootTag>())
+    : m_World(world), m_SceneRoot(world.entity().add<SceneRootTag>())
 {
 }
 
