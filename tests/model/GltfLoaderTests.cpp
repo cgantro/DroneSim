@@ -26,7 +26,7 @@ class TriangleGlb final
 {
 public:
     explicit TriangleGlb(std::size_t viewLength, int materialIndex = -1,
-        std::size_t vertexCount = 3U)
+        std::size_t vertexCount = 3U, std::string material = {})
     {
         constexpr std::array<std::array<float, 3>, 4> positions{{
             {0.0F, 0.0F, 0.0F},
@@ -43,12 +43,16 @@ public:
         const std::string primitiveMaterial = materialIndex < 0
             ? std::string{}
             : ",\"material\":" + std::to_string(materialIndex);
+        const std::string materialArray = material.empty()
+            ? std::string{}
+            : "\"materials\":[" + material + "],";
         std::string json =
             "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" +
             std::to_string(bufferLength) + "}],"
             "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" + std::to_string(viewLength) +
             "}],\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
             std::to_string(vertexCount) + ",\"type\":\"VEC3\"}],"
+            + materialArray +
             "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}" +
             primitiveMaterial + "}]}],"
             "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0}";
@@ -107,6 +111,24 @@ TEST(GltfLoader, ReadsPositionsAndRejectsAccessorOutsideBufferView)
 
     TriangleGlb missingMaterial(36U, 0);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(missingMaterial.Path()), std::runtime_error);
+
+    TriangleGlb validMaterial(36U, 0, 3U,
+        R"({"pbrMetallicRoughness":{"baseColorFactor":[0.1,0.2,0.3,0.4],"metallicFactor":0.5,"roughnessFactor":0.75}})");
+    const auto materialModel = grasplink::model::GltfLoader::LoadGLB(validMaterial.Path());
+    ASSERT_EQ(materialModel.materials.size(), 1U);
+    EXPECT_FLOAT_EQ(materialModel.materials[0].baseColorFactor.g, 0.2F);
+    EXPECT_FLOAT_EQ(materialModel.materials[0].metallicFactor, 0.5F);
+    EXPECT_FLOAT_EQ(materialModel.materials[0].roughnessFactor, 0.75F);
+
+    TriangleGlb invalidMaterialFactor(36U, 0, 3U,
+        R"({"pbrMetallicRoughness":{"metallicFactor":1.5}})");
+    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidMaterialFactor.Path()),
+        std::runtime_error);
+
+    TriangleGlb invalidTextureReference(36U, 0, 3U,
+        R"({"pbrMetallicRoughness":{"baseColorTexture":{"index":0}}})");
+    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidTextureReference.Path()),
+        std::runtime_error);
 
     TriangleGlb incompleteTriangle(48U, -1, 4U);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(incompleteTriangle.Path()), std::runtime_error);

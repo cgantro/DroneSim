@@ -109,6 +109,16 @@ struct GltfLoaderErrorMessages final
         inline static constexpr char noDecodedPixels[] = "glTF image contains no decoded pixels";
     };
 
+    struct Material final
+    {
+        inline static constexpr char invalidFactor[] =
+            "glTF material factors must be finite and between 0 and 1";
+        inline static constexpr char invalidBaseColorFactor[] =
+            "glTF base color factor must contain four values";
+        inline static constexpr char invalidBaseColorTextureIndex[] =
+            "Invalid glTF base color texture index";
+    };
+
     struct Mesh final
     {
         inline static constexpr char unsupportedPrimitiveMode[] =
@@ -456,8 +466,16 @@ TextureData ConvertTexture(
     return result;
 }
 
-// 재질은 표면 색과 빛 반응을 정하는 데이터다. 파일의 기본색·금속성·거칠기·발광 계수와 기본색 이미지 참조를 내부 자료로 옮긴다.
+float MaterialFactor(double value)
+{
+    if (!std::isfinite(value) || value < 0.0 || value > 1.0)
+        throw std::runtime_error(GltfLoaderErrorMessages::Material::invalidFactor);
+    return static_cast<float>(value);
+}
+
+// 재질은 표면 색과 빛 반응을 정하는 데이터다. 파일의 기본색·금속성·거칠기 계수와 기본색 이미지 참조를 내부 자료로 옮긴다.
 MaterialData ConvertMaterial(
+    const tinygltf::Model& model,
     const tinygltf::Material& source,
     const std::string& resourcePrefix,
     std::size_t materialIndex)
@@ -469,24 +487,29 @@ MaterialData ConvertMaterial(
 
     const auto& pbr = source.pbrMetallicRoughness;
 
-    if (pbr.baseColorFactor.size() == 4)
-    {
-        result.baseColorFactor = glm::vec4{
-            static_cast<float>(pbr.baseColorFactor[0]),
-            static_cast<float>(pbr.baseColorFactor[1]),
-            static_cast<float>(pbr.baseColorFactor[2]),
-            static_cast<float>(pbr.baseColorFactor[3])};
-    }
+    if (pbr.baseColorFactor.size() != 4)
+        throw std::runtime_error(GltfLoaderErrorMessages::Material::invalidBaseColorFactor);
+    result.baseColorFactor = glm::vec4{
+        MaterialFactor(pbr.baseColorFactor[0]),
+        MaterialFactor(pbr.baseColorFactor[1]),
+        MaterialFactor(pbr.baseColorFactor[2]),
+        MaterialFactor(pbr.baseColorFactor[3])};
 
-    result.metallicFactor = static_cast<float>(pbr.metallicFactor);
-    result.roughnessFactor = static_cast<float>(pbr.roughnessFactor);
+    result.metallicFactor = MaterialFactor(pbr.metallicFactor);
+    result.roughnessFactor = MaterialFactor(pbr.roughnessFactor);
 
     // glTF 재질은 texture 항목 번호를 가리키지만 내부 캐시는 모델 경로와 자원 종류, 해당 texture 항목 번호를 합친 ID로 찾는다.
-    if (pbr.baseColorTexture.index >= 0)
+    const int textureIndex = pbr.baseColorTexture.index;
+    if (textureIndex < -1 ||
+        (textureIndex >= 0 && static_cast<std::size_t>(textureIndex) >= model.textures.size()))
+    {
+        throw std::runtime_error(GltfLoaderErrorMessages::Material::invalidBaseColorTextureIndex);
+    }
+    if (textureIndex >= 0)
     {
         result.baseColorTexture = ResourceID{
             resourcePrefix + GltfResourceIdSuffixes::texture +
-            std::to_string(pbr.baseColorTexture.index)};
+            std::to_string(textureIndex)};
     }
 
     return result;
@@ -780,7 +803,7 @@ void ReadVisualResources(
     for (std::size_t i = 0; i < source.materials.size(); ++i)
     {
         destination.materials.push_back(
-            ConvertMaterial(source.materials[i], resourcePrefix, i));
+            ConvertMaterial(source, source.materials[i], resourcePrefix, i));
     }
 
     destination.meshes.reserve(source.meshes.size());
