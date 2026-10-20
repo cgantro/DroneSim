@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <vector>
 
@@ -153,6 +154,28 @@ void CheckLinearPathPlanningBudgetAndCancellation()
     ASSERT_TRUE(static_cast<bool>(restartedAfterCompletion)) << restartedAfterCompletion.message;
     EXPECT_EQ(job.GetState(), LinearPathPlanningState::Running);
     job.Cancel();
+
+    std::size_t wrongThreadCheckerCalls = 0;
+    StateValidityChecker wrongThreadChecker = [&](const JointVector&)
+    {
+        ++wrongThreadCheckerCalls;
+        return JointStateInvalidity::None;
+    };
+    LinearPathPlanningJob wrongThreadJob;
+    const Result wrongThreadBegin = wrongThreadJob.Begin(command, specification,
+        startJoints, inverse.EvaluateTcp(startJoints), inverse, wrongThreadChecker);
+    ASSERT_TRUE(static_cast<bool>(wrongThreadBegin)) << wrongThreadBegin.message;
+    EXPECT_EQ(wrongThreadJob.Advance(1), LinearPathPlanningState::Running);
+
+    LinearPathPlanningState wrongThreadState = LinearPathPlanningState::Idle;
+    std::thread wrongThread([&]
+    {
+        wrongThreadState = wrongThreadJob.Advance(1);
+    });
+    wrongThread.join();
+    EXPECT_EQ(wrongThreadState, LinearPathPlanningState::Failed);
+    EXPECT_EQ(wrongThreadJob.GetResult().code, ErrorCode::InvalidCommand);
+    EXPECT_EQ(wrongThreadCheckerCalls, 0);
 }
 
 void CheckFourAxisControllerUsesPositionIk()

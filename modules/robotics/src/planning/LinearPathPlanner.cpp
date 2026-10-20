@@ -11,6 +11,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <thread>
 #include <utility>
 
 #if GRASPLINK_ENABLE_TRACY
@@ -102,6 +103,8 @@ struct LinearPathPlannerMessages final
         "SimRobotController: path duration exceeds numeric range";
     inline static constexpr char noCollisionFreeIkSolution[] =
         "SimRobotController: no collision-free IK solution";
+    inline static constexpr char wrongThread[] =
+        "LinearPathPlanner: planning must advance on the Begin caller thread";
 };
 
 Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t sampleCount,
@@ -267,6 +270,7 @@ struct LinearPathPlanningJob::Impl
     std::vector<std::size_t> refinementDepth;
     std::size_t sample = 0;
     LinearPathPlanningState state = LinearPathPlanningState::Idle;
+    std::thread::id ownerThread{};
     Result result{};
     LinearPathPlan plan{};
 
@@ -327,15 +331,28 @@ struct LinearPathPlanningJob::Impl
         phase = Phase::SolveSeed;
     }
 
+    void CancelActiveIkSession() noexcept
+    {
+        if (ikSession == 0 || inverse == nullptr)
+            return;
+
+        try
+        {
+            inverse->CancelSingleSeed(ikSession);
+        }
+        catch (...)
+        {
+        }
+        ikSession = 0;
+    }
+
     void ResetForBegin(const LinearPathMoveCommand& moveCommand,
         const models::RobotSpecification& robot, const JointVector& joints,
         kinematics::LevenbergMarquardtIk& ik, const StateValidityChecker& checker,
         const PlanningPolicy& planningPolicy,
         const std::function<std::string()>& diagnosticProvider)
     {
-        if (ikSession != 0 && inverse != nullptr)
-            inverse->CancelSingleSeed(ikSession);
-        ikSession = 0;
+        CancelActiveIkSession();
         stateValidityChecker = {};
         command = moveCommand;
         specification = &robot;
@@ -344,6 +361,7 @@ struct LinearPathPlanningJob::Impl
         stateValidityChecker = checker;
         validityDiagnosticProvider = diagnosticProvider;
         policy = planningPolicy;
+        ownerThread = std::this_thread::get_id();
         plan = {};
         planTaken = false;
         result = Result::Success();
@@ -464,6 +482,7 @@ struct LinearPathPlanningJob::Impl
 
     Result Fail(Result failure)
     {
+        CancelActiveIkSession();
         result = std::move(failure);
         state = LinearPathPlanningState::Failed;
         ReleasePlanningStorage();
@@ -1219,18 +1238,19 @@ Result LinearPathPlanningJob::Begin(const LinearPathMoveCommand& command,
 
 LinearPathPlanningState LinearPathPlanningJob::Advance(std::size_t workBudget)
 {
+    if (impl_->state == LinearPathPlanningState::Running && workBudget > 0 &&
+        std::this_thread::get_id() != impl_->ownerThread)
+    {
+        impl_->Fail({ErrorCode::InvalidCommand, LinearPathPlannerMessages::wrongThread});
+        return impl_->state;
+    }
     impl_->Advance(workBudget);
     return impl_->state;
 }
 
 void LinearPathPlanningJob::Cancel() noexcept
 {
-    if (impl_->state == LinearPathPlanningState::Running && impl_->ikSession != 0)
-    {
-        try { impl_->inverse->CancelSingleSeed(impl_->ikSession); }
-        catch (...) {}
-        impl_->ikSession = 0;
-    }
+    impl_->CancelActiveIkSession();
     if (impl_->state == LinearPathPlanningState::Running)
     {
         impl_->state = LinearPathPlanningState::Cancelled;
