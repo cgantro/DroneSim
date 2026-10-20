@@ -106,7 +106,7 @@ void AssetManager::UploadModel(const ::grasplink::model::ModelResource& model)
             textureData.pixels.data(),
             true);
 
-        textures_.emplace(textureData.uniqueID, texture);
+        textures_.emplace(textureData.uniqueID, std::move(texture));
     }
 
     for (const ::grasplink::model::MaterialData& materialData : model.materials)
