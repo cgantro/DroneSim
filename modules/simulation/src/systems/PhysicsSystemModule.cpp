@@ -149,6 +149,13 @@ bool HasSupportedBodyPlacement(flecs::entity entity, const RigidBody& rigidBody)
         HasSupportedPhysicsParents(entity, rigidBody.motionType);
 }
 
+bool HasRequiredLocalTransform(flecs::entity entity)
+{
+    return entity.has<Position, Local>() &&
+        entity.has<Rotation, Local>() &&
+        entity.has<Scale, Local>();
+}
+
 bool TryGetPhysicsTransform(
     flecs::entity entity,
     Transform& result)
@@ -285,7 +292,7 @@ struct PhysicsSystemModule::Impl
             return false;
         // RigidBody와 Colliders만으로는 Body의 시작 자세와 크기를 알 수 없다.
         // 해당 Entity 자신의 Local Position, Rotation, Scale component가 모두 있어야 한다.
-        if (!entity.has<Position, Local>() || !entity.has<Rotation, Local>() || !entity.has<Scale, Local>())
+        if (!HasRequiredLocalTransform(entity))
             return false;
 
         const RigidBody& rigidBody = entity.get<RigidBody>();
@@ -415,8 +422,7 @@ struct PhysicsSystemModule::Impl
         for (BodySnapshot& body : bodies)
         {
             const RigidBody& rigidBody = body.entity.get<RigidBody>();
-            if (!body.entity.has<Position, Local>() || !body.entity.has<Rotation, Local>() ||
-                !body.entity.has<Scale, Local>())
+            if (!HasRequiredLocalTransform(body.entity))
             {
                 DestroyBody(body.entity);
                 continue;
