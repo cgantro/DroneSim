@@ -466,7 +466,8 @@ void SimRobotController::AdvanceMotionPlanning(std::size_t workBudget)
     case PosePlanningPhase::JointPath:
         AdvancePoseJointPath(workBudget);
         return;
-    case PosePlanningPhase::None:
+    case PosePlanningPhase::Inactive:
+        // 포즈 계획이 없을 때는 별도로 시작한 선형 경로 작업을 진행한다.
         AdvanceLinearPath(workBudget);
         return;
     }
@@ -578,7 +579,7 @@ void SimRobotController::AdvancePoseJointPath(std::size_t workBudget)
     posePathPoints_ = std::move(plan->points);
     posePlanning_.alternativeSeeds.clear();
     posePathSegment_ = 0;
-    posePlanning_.phase = PosePlanningPhase::None;
+    posePlanning_.phase = PosePlanningPhase::Inactive;
     if (!posePlanning_.continuationPlan)
         posePlanning_.continuationCommand.reset();
 
@@ -616,13 +617,13 @@ void SimRobotController::AdvanceLinearPath(std::size_t workBudget)
 
 bool SimRobotController::IsMotionPlanning() const noexcept
 {
-    return posePlanning_.phase != PosePlanningPhase::None ||
+    return posePlanning_.phase != PosePlanningPhase::Inactive ||
         linearPathPlanningJob_.GetState() == planning::LinearPathPlanningState::Running;
 }
 
 void SimRobotController::ClearPosePlanningState()
 {
-    posePlanning_.phase = PosePlanningPhase::None;
+    posePlanning_.phase = PosePlanningPhase::Inactive;
     posePathPoints_.clear();
     posePlanning_.alternativeSeeds.clear();
     posePlanning_.continuationCommand.reset();
@@ -634,7 +635,7 @@ void SimRobotController::ClearPosePlanningState()
 void SimRobotController::ResetMotionPlanningWork()
 {
     linearPathPlanningJob_.Cancel();
-    if (posePlanning_.phase != PosePlanningPhase::None)
+    if (posePlanning_.phase != PosePlanningPhase::Inactive)
         inverse_.CancelSingleSeed(posePlanning_.ikSession);
     posePlanning_.jointPathJob.Cancel();
     ClearPosePlanningState();
@@ -643,7 +644,7 @@ void SimRobotController::ResetMotionPlanningWork()
 
 void SimRobotController::FinishPosePlanning(Result result)
 {
-    posePlanning_.phase = PosePlanningPhase::None;
+    posePlanning_.phase = PosePlanningPhase::Inactive;
     posePlanning_.alternativeSeeds.clear();
     if (!result && posePlanning_.ikSeedAttempts > 1)
         result.message += " after " + std::to_string(posePlanning_.ikSeedAttempts) + " IK seed attempts";
@@ -755,7 +756,7 @@ void SimRobotController::RefreshTcp()
     state_.tcpPoseValid = specification_.hasToolFrame && state_.valid;
     if (state_.tcpPoseValid)
         state_.tcpPose = inverse_.EvaluateTcp(state_.jointPositions);
-    if (posePlanning_.phase != PosePlanningPhase::None)
+    if (posePlanning_.phase != PosePlanningPhase::Inactive)
     {
         inverse_.CancelSingleSeed(posePlanning_.ikSession);
         FinishPosePlanning(Failure(ErrorCode::Cancelled,
@@ -771,7 +772,7 @@ Result SimRobotController::Stop()
     if (IsMotionPlanning())
     {
         linearPathPlanningJob_.Cancel();
-        if (posePlanning_.phase != PosePlanningPhase::None)
+        if (posePlanning_.phase != PosePlanningPhase::Inactive)
         {
             inverse_.CancelSingleSeed(posePlanning_.ikSession);
             posePlanning_.jointPathJob.Cancel();

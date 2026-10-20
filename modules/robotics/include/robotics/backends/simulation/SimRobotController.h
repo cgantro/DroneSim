@@ -287,11 +287,11 @@ private:
     planning::LinearPathPlanningJob linearPathPlanningJob_;
     LinearPathMoveCommand pendingLinearPathCommand_;
     std::optional<Result> motionPlanningResult_;
-    enum class PosePlanningPhase { None, Ik, LinearContinuation, JointPath };
+    enum class PosePlanningPhase { Inactive, Ik, LinearContinuation, JointPath };
     // IK 대체 시작점과 이어서 계획할 경로, 관절 경로 계산 작업을 함께 보관한다.
     struct PosePlanningState
     {
-        PosePlanningPhase phase = PosePlanningPhase::None;
+        PosePlanningPhase phase = PosePlanningPhase::Inactive;
         kinematics::LevenbergMarquardtIk::SessionId ikSession = 0;
         CartesianPose target{};
         std::vector<JointVector> alternativeSeeds;
