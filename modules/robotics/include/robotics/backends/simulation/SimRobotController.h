@@ -284,7 +284,7 @@ private:
     std::function<std::string()> jointStateValidityDiagnosticProvider_;
     planning::LinearPathPlanningJob linearPathPlanningJob_;
     LinearPathMoveCommand pendingLinearPathCommand_;
-    std::optional<Result> linearPathPlanningResult_;
+    std::optional<Result> motionPlanningResult_;
     enum class PosePlanningPhase { None, Ik, LinearContinuation, JointPath };
     // IK 대체 시작점과 이어서 계획할 경로, 관절 경로 계산 작업을 함께 보관한다.
     struct PosePlanningState
