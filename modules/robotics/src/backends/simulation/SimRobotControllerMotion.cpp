@@ -229,28 +229,26 @@ void SimRobotController::FinishJointMoveIfNeeded()
             ConfigureJointMove(std::move(nextMove.targetPositions),
                 nextMove.velocityScale, nextMove.accelerationScale);
         }
+        return;
     }
-    else if (jointMoveProgress_ >= 1.0)
+
+    if (jointMoveProgress_ < 1.0)
+        return;
+
+    state_.jointPositions = targetPositions_;
+    jointMoveProgressVelocity_ = 0.0;
+    std::fill(state_.jointVelocities.begin(), state_.jointVelocities.end(), 0.0);
+    if (posePathSegment_ + 1 < posePathPoints_.size())
     {
-        state_.jointPositions = targetPositions_;
-        jointMoveProgressVelocity_ = 0.0;
-        std::fill(
-            state_.jointVelocities.begin(),
-            state_.jointVelocities.end(),
-            0.0);
-        if (posePathSegment_ + 1 < posePathPoints_.size())
-        {
-            ++posePathSegment_;
-            ConfigureJointMove(posePathPoints_[posePathSegment_], pendingPoseMove_.velocityScale,
-                pendingPoseMove_.accelerationScale);
-        }
-        else
-        {
-            posePathPoints_.clear();
-            posePathSegment_ = 0;
-            state_.mode = RobotMode::Idle;
-        }
+        ++posePathSegment_;
+        ConfigureJointMove(posePathPoints_[posePathSegment_], pendingPoseMove_.velocityScale,
+            pendingPoseMove_.accelerationScale);
+        return;
     }
+
+    posePathPoints_.clear();
+    posePathSegment_ = 0;
+    state_.mode = RobotMode::Idle;
 }
 
 void SimRobotController::UpdateLinear(double dtSeconds)
