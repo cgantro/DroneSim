@@ -230,6 +230,14 @@ TEST(RobotInverseKinematicsTests, IncrementalSingleSeedMatchesSynchronousResult)
             << "incremental solve preserves the synchronous joint result";
     EXPECT_DOUBLE_EQ(actual.positionErrorMeters, expected.positionErrorMeters);
     EXPECT_DOUBLE_EQ(actual.orientationErrorRadians, expected.orientationErrorRadians);
+
+    const auto cancelledSession = incremental.BeginSingleSeed(target, seed);
+    ASSERT_EQ(incremental.StepSingleSeed(cancelledSession, 0), IkSessionState::Running);
+    incremental.CancelSingleSeed(cancelledSession);
+    EXPECT_EQ(incremental.StepSingleSeed(cancelledSession, 1), IkSessionState::Cancelled);
+    const IkResult& cancelled = incremental.GetSingleSeedResult(cancelledSession);
+    EXPECT_EQ(cancelled.status, IkStatus::DidNotConverge);
+    EXPECT_EQ(cancelled.terminationReason, IkTerminationReason::Cancelled);
 }
 
 TEST(RobotInverseKinematicsTests, AppliesToolOffsetAndRejectsInvalidInputs)
