@@ -418,6 +418,13 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
     auto& candidate = candidateScratch_;
     auto& active = activeJointScratch_;
     auto& columns = jacobianColumnsScratch_;
+    const auto recordCurrentResult = [&](const Error& error)
+    {
+        sessionResult_.jointPositions = angles;
+        sessionResult_.iterations = sessionIteration_;
+        sessionResult_.positionErrorMeters = error.position;
+        sessionResult_.orientationErrorRadians = error.orientation;
+    };
     const auto finish = [&](IkStatus status, const char* message) {
         sessionResult_.status = status;
         sessionResult_.message = message;
@@ -454,10 +461,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         const auto& state = forward_.Update(angles);
         const Pose3 current = Compose(state.toolFrameInBaseFrame, tcpInToolFrame_);
         const Error error = Measure(sessionTarget_, current, OrientationWeight(sessionOptions_));
-        sessionResult_.jointPositions = angles;
-        sessionResult_.iterations = sessionIteration_;
-        sessionResult_.positionErrorMeters = error.position;
-        sessionResult_.orientationErrorRadians = error.orientation;
+        recordCurrentResult(error);
         if (HasConverged(error, sessionOptions_))
         {
             sessionResult_.status = IkStatus::Success;
@@ -591,10 +595,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         const auto& state = forward_.Update(angles);
         const Error error = Measure(sessionTarget_, Compose(state.toolFrameInBaseFrame, tcpInToolFrame_),
             OrientationWeight(sessionOptions_));
-        sessionResult_.jointPositions = angles;
-        sessionResult_.iterations = sessionIteration_;
-        sessionResult_.positionErrorMeters = error.position;
-        sessionResult_.orientationErrorRadians = error.orientation;
+        recordCurrentResult(error);
         if (HasConverged(error, sessionOptions_))
         {
             sessionResult_.status = IkStatus::Success;
