@@ -129,6 +129,56 @@ enum class FeasibleStepStatus
     NonFiniteStep
 };
 
+FeasibleStepStatus SolveFreeJointStep(
+    const models::RobotSpecification& specification,
+    const IkOptions& options,
+    const std::vector<SixVector>& columns,
+    const SixVector& weightedError,
+    const JointVector& angles,
+    double damping,
+    JointVector& jointStep,
+    const std::vector<bool>& active,
+    double& stepScale,
+    bool& solvedSystem)
+{
+    // 한계에 묶이지 않은 관절의 열만 사용해 J_free J_freeᵀ + λ²I를 만든다.
+    SixMatrix normal{};
+    for (std::size_t row = 0; row < taskSpaceDimension; ++row)
+    {
+        for (std::size_t column = 0; column < taskSpaceDimension; ++column)
+            for (std::size_t joint = 0; joint < columns.size(); ++joint)
+                if (!active[joint])
+                    normal[row][column] += columns[joint][row] * columns[joint][column];
+        normal[row][row] += damping * damping;
+    }
+
+    SixVector taskStep{};
+    if (!SolveSystem(normal, weightedError, taskStep))
+        return FeasibleStepStatus::NoFeasibleDirection;
+    solvedSystem = true;
+    std::fill(jointStep.begin(), jointStep.end(), 0.0);
+
+    // 작업 공간 변화를 Jacobian 열에 투영해 관절 이동량으로 바꾸고, 한 번에 움직일 크기도 제한한다.
+    double largestScaledStep = 0.0;
+    for (std::size_t joint = 0; joint < angles.size(); ++joint)
+    {
+        if (active[joint])
+            continue;
+        for (std::size_t row = 0; row < taskSpaceDimension; ++row)
+            jointStep[joint] += columns[joint][row] * taskStep[row];
+
+        const bool slides = specification.joints[joint].motionType == models::JointMotionType::Prismatic;
+        const double maximumStep = slides ? options.maxPrismaticStepMeters : options.maxJointStep;
+        largestScaledStep = std::max(largestScaledStep,
+            std::abs(jointStep[joint]) / maximumStep);
+    }
+    if (!std::isfinite(largestScaledStep))
+        return FeasibleStepStatus::NonFiniteStep;
+
+    stepScale = largestScaledStep > 1.0 ? 1.0 / largestScaledStep : 1.0;
+    return FeasibleStepStatus::Feasible;
+}
+
 /**
  * @brief 관절 한계를 넘지 않는 LM 관절 이동량을 계산한다.
  * @details 한계 바깥을 향하는 관절은 이번 반복에서 고정하고, 나머지 관절로 다시 계산한다.
@@ -150,41 +200,12 @@ FeasibleStepStatus FindFeasibleJointStep(
     std::fill(active.begin(), active.end(), false);
     for (std::size_t activePass = 0; activePass <= angles.size(); ++activePass)
     {
-        // 한계에 묶이지 않은 관절의 Jacobian 열로 J_free J_freeᵀ를 만들고 λ²I를 더해 6×6 식을 푼다.
-        // 얻은 작업 공간 변화량을 각 열에 곱해 관절 변화량으로 되돌리므로 관절 수가 달라도 풀이 행렬 크기는 같다.
-        SixMatrix normal{};
-        for (std::size_t row = 0; row < taskSpaceDimension; ++row)
-        {
-            for (std::size_t column = 0; column < taskSpaceDimension; ++column)
-                for (std::size_t joint = 0; joint < columns.size(); ++joint)
-                    if (!active[joint])
-                        normal[row][column] += columns[joint][row] * columns[joint][column];
-            normal[row][row] += damping * damping;
-        }
+        const FeasibleStepStatus stepStatus = SolveFreeJointStep(
+            specification, options, columns, weightedError, angles, damping,
+            jointStep, active, stepScale, solvedSystem);
+        if (stepStatus != FeasibleStepStatus::Feasible)
+            return stepStatus;
 
-        SixVector taskStep{};
-        if (!SolveSystem(normal, weightedError, taskStep))
-            return FeasibleStepStatus::NoFeasibleDirection;
-        solvedSystem = true;
-        std::fill(jointStep.begin(), jointStep.end(), 0.0);
-
-        double largestScaledStep = 0.0;
-        for (std::size_t joint = 0; joint < angles.size(); ++joint)
-        {
-            if (active[joint])
-                continue;
-            for (std::size_t row = 0; row < taskSpaceDimension; ++row)
-                jointStep[joint] += columns[joint][row] * taskStep[row];
-
-            const bool slides = specification.joints[joint].motionType == models::JointMotionType::Prismatic;
-            const double maximumStep = slides ? options.maxPrismaticStepMeters : options.maxJointStep;
-            largestScaledStep = std::max(largestScaledStep,
-                std::abs(jointStep[joint]) / maximumStep);
-        }
-        if (!std::isfinite(largestScaledStep))
-            return FeasibleStepStatus::NonFiniteStep;
-
-        stepScale = largestScaledStep > 1.0 ? 1.0 / largestScaledStep : 1.0;
         bool addedConstraint = false;
         for (std::size_t joint = 0; joint < angles.size(); ++joint)
         {
