@@ -28,6 +28,26 @@ struct SimRobotControllerMessages final
     inline static constexpr char invalidScale[] = "SimRobotController: scale must be in (0, 1]";
     inline static constexpr char missingToolFrame[] = "SimRobotController: missing ToolFrame for TCP motion";
     inline static constexpr char plannerReturnedNoPlan[] = "SimRobotController: completed planner returned no plan";
+    inline static constexpr char jointLimitFailurePrefix[] =
+        "SimRobotController: target outside joint limit: ";
+    inline static constexpr char invalidMaximumJointVelocity[] =
+        "SimRobotController: maximum joint velocity must be finite and positive";
+    inline static constexpr char validityCheckerChangedDuringPlanning[] =
+        "SimRobotController: motion planning cancelled because the validity checker changed";
+    inline static constexpr char jointCountMismatch[] = "SimRobotController: joint count mismatch";
+    inline static constexpr char noCollisionFreePosePath[] =
+        "SimRobotController: no collision-free IK solution or joint path";
+    inline static constexpr char continuationPlannerReturnedNoPlan[] =
+        "SimRobotController: completed continuation planner returned no plan";
+    inline static constexpr char jointPathPlannerReturnedNoPath[] =
+        "SimRobotController: joint path planner completed without a path";
+    inline static constexpr char jointPathHasNoStartState[] =
+        "SimRobotController: joint path contains no start state";
+    inline static constexpr char posePlanningCancelledByStateChange[] =
+        "SimRobotController: pose planning cancelled because the robot state changed";
+    inline static constexpr char posePlanningCancelled[] = "SimRobotController: pose planning cancelled";
+    inline static constexpr char linearPlanningCancelled[] =
+        "SimRobotController: linear path planning cancelled";
 };
 
 Result Failure(ErrorCode code, std::string message)
@@ -53,7 +73,7 @@ Result ValidateJointPositionLimits(
             (position < joint.minimumPosition || position > joint.maximumPosition)))
         {
             return Failure(ErrorCode::InvalidCommand,
-                "SimRobotController: target outside joint limit: " + std::string(joint.name));
+                std::string{SimRobotControllerMessages::jointLimitFailurePrefix} + std::string(joint.name));
         }
     }
     return Result::Success();
@@ -101,9 +121,6 @@ bool SameJointPosition(const JointVector& lhs, const JointVector& rhs)
     return true;
 }
 
-
-
-
 } // namespace
 
 SimRobotController::SimRobotController(const models::RobotSpecification& specification, models::Pose3 tcpInToolFrame)
@@ -114,7 +131,7 @@ SimRobotController::SimRobotController(const models::RobotSpecification& specifi
     {
         const auto& joint = specification_.joints[i];
         if (!std::isfinite(joint.maximumVelocity) || joint.maximumVelocity <= 0.0)
-            throw std::invalid_argument("SimRobotController: maximum joint velocity must be finite and positive");
+            throw std::invalid_argument(SimRobotControllerMessages::invalidMaximumJointVelocity);
     }
 }
 
@@ -128,7 +145,7 @@ void SimRobotController::SetJointStateValidityChecker(
         state_.mode = RobotMode::Idle;
         state_.errorCode = ErrorCode::Cancelled;
         motionPlanningResult_.emplace(
-            Failure(ErrorCode::Cancelled, "SimRobotController: motion planning cancelled because the validity checker changed"));
+            Failure(ErrorCode::Cancelled, SimRobotControllerMessages::validityCheckerChangedDuringPlanning));
     }
     jointStateValidityChecker_ = std::move(checker);
 }
@@ -199,7 +216,7 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
         return Failure(ErrorCode::Busy, SimRobotControllerMessages::linearPlanningBusy);
 
     if (command.targetPositions.size() != specification_.jointCount)
-        return Failure(ErrorCode::InvalidCommand, "SimRobotController: joint count mismatch");
+        return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::jointCountMismatch);
 
     if (!IsScaleValid(command.velocityScale) || !IsScaleValid(command.accelerationScale))
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::invalidScale);
@@ -279,7 +296,7 @@ Result SimRobotController::MovePose(const CartesianPose& targetInBase, double ve
     if (!solution)
     {
         if (invalidity == planning::JointStateInvalidity::EnvironmentCollision)
-            return Failure(ErrorCode::EnvironmentContact, "SimRobotController: no collision-free IK solution or joint path");
+        return Failure(ErrorCode::EnvironmentContact, SimRobotControllerMessages::noCollisionFreePosePath);
         if (invalidity != planning::JointStateInvalidity::None)
         {
             Result result = planning::MapJointStateInvalidity(invalidity);
@@ -547,7 +564,7 @@ void SimRobotController::AdvancePoseLinearContinuation(std::size_t workBudget)
     if (!posePlanning_.continuationPlan)
     {
         posePlanning_.pathFailure = Failure(ErrorCode::Fault,
-            "SimRobotController: completed continuation planner returned no plan");
+            SimRobotControllerMessages::continuationPlannerReturnedNoPlan);
         RetryPosePlanningOrFinish(posePlanning_.pathFailure);
         return;
     }
@@ -572,7 +589,7 @@ void SimRobotController::AdvancePoseJointPath(std::size_t workBudget)
     if (!plan)
     {
         FinishPosePlanning(Failure(ErrorCode::Fault,
-            "SimRobotController: joint path planner completed without a path"));
+            SimRobotControllerMessages::jointPathPlannerReturnedNoPath));
         return;
     }
 
@@ -662,7 +679,7 @@ void SimRobotController::FinishPosePlanning(Result result)
 Result SimRobotController::StartPosePathSegment()
 {
     if (posePathPoints_.empty())
-        return Failure(ErrorCode::Fault, "SimRobotController: joint path contains no start state");
+        return Failure(ErrorCode::Fault, SimRobotControllerMessages::jointPathHasNoStartState);
     if (posePathPoints_.size() == 1)
     {
         posePathPoints_.clear();
@@ -760,7 +777,7 @@ void SimRobotController::RefreshTcp()
     {
         inverse_.CancelSingleSeed(posePlanning_.ikSession);
         FinishPosePlanning(Failure(ErrorCode::Cancelled,
-            "SimRobotController: pose planning cancelled because the robot state changed"));
+            SimRobotControllerMessages::posePlanningCancelledByStateChange));
     }
 }
 
@@ -777,12 +794,12 @@ Result SimRobotController::Stop()
             inverse_.CancelSingleSeed(posePlanning_.ikSession);
             posePlanning_.jointPathJob.Cancel();
             FinishPosePlanning(Failure(ErrorCode::Cancelled,
-                "SimRobotController: pose planning cancelled"));
+                SimRobotControllerMessages::posePlanningCancelled));
         }
         else
         {
             motionPlanningResult_ = Failure(
-                ErrorCode::Cancelled, "SimRobotController: linear path planning cancelled");
+                ErrorCode::Cancelled, SimRobotControllerMessages::linearPlanningCancelled);
             state_.mode = RobotMode::Idle;
             state_.errorCode = ErrorCode::Cancelled;
             pendingLinearPathCommand_ = {};
