@@ -3,6 +3,7 @@
 #include "robotics/kinematics/detail/PoseMath.h"
 
 #include <Eigen/Cholesky>
+#include <Eigen/Eigenvalues>
 
 #include <algorithm>
 #include <array>
@@ -38,7 +39,6 @@ struct IkSolverConstants final
     static constexpr double minimumDampingRatio = 0.01;
     static constexpr double jointLimitToleranceFloor = 1e-10;
     static constexpr double jointLimitToleranceRatio = 1e-10;
-    static constexpr double jacobiConvergenceTolerance = 1e-14;
     static constexpr double minimumSingularValueForCondition = 1e-12;
     static constexpr double negligibleJointStep = 1e-15;
 };
@@ -70,8 +70,6 @@ struct IkErrorMessages final
 
 using SixVector = std::array<double, taskSpaceDimension>;
 using SixMatrix = std::array<SixVector, taskSpaceDimension>;
-// 계산 중 가장 큰 수가 이 값보다 작으면 거의 0으로 나누는 셈이므로 풀이를 멈춘다.
-
 bool Positive(double value) { return std::isfinite(value) && value > 0.0; }
 
 double OrientationWeight(const IkOptions& options)
@@ -235,56 +233,22 @@ bool HasConverged(const Error& error, const IkOptions& options)
 
 std::pair<double, double> JacobianCondition(const std::vector<SixVector>& columns)
 {
-    SixMatrix gram{};
+    using TaskMatrix = Eigen::Matrix<double, taskSpaceDimension, taskSpaceDimension>;
+    TaskMatrix gram = TaskMatrix::Zero();
     for (const auto& column : columns)
         for (std::size_t row = 0; row < taskSpaceDimension; ++row)
             for (std::size_t other = 0; other < taskSpaceDimension; ++other)
-                gram[row][other] += column[row] * column[other];
+                gram(static_cast<Eigen::Index>(row), static_cast<Eigen::Index>(other)) +=
+                    column[row] * column[other];
 
-    for (std::size_t sweep = 0; sweep < IkSolverConstants::maximumJacobiSweeps; ++sweep)
-    {
-        std::size_t p = 0;
-        std::size_t q = 1;
-        double largestOffDiagonal = 0.0;
-        for (std::size_t row = 0; row < taskSpaceDimension; ++row)
-            for (std::size_t column = row + 1; column < taskSpaceDimension; ++column)
-                if (std::abs(gram[row][column]) > largestOffDiagonal)
-                {
-                    largestOffDiagonal = std::abs(gram[row][column]);
-                    p = row;
-                    q = column;
-                }
-        if (largestOffDiagonal <= IkSolverConstants::jacobiConvergenceTolerance)
-            break;
+    // J Jᵀ의 고유값은 야코비안 특이값의 제곱이다. 대칭 행렬 전용 풀이기로 진단에 필요한 양 끝값만 구한다.
+    const Eigen::SelfAdjointEigenSolver<TaskMatrix> solver(gram, Eigen::EigenvaluesOnly);
+    if (solver.info() != Eigen::Success || !solver.eigenvalues().allFinite())
+        return {0.0, std::numeric_limits<double>::infinity()};
 
-        const double angle = 0.5 * std::atan2(2.0 * gram[p][q], gram[q][q] - gram[p][p]);
-        const double cosine = std::cos(angle);
-        const double sine = std::sin(angle);
-        const double pp = gram[p][p];
-        const double qq = gram[q][q];
-        const double pq = gram[p][q];
-        gram[p][p] = cosine * cosine * pp - 2.0 * sine * cosine * pq + sine * sine * qq;
-        gram[q][q] = sine * sine * pp + 2.0 * sine * cosine * pq + cosine * cosine * qq;
-        gram[p][q] = gram[q][p] = 0.0;
-        for (std::size_t index = 0; index < taskSpaceDimension; ++index)
-        {
-            if (index == p || index == q)
-                continue;
-            const double ip = gram[index][p];
-            const double iq = gram[index][q];
-            gram[index][p] = gram[p][index] = cosine * ip - sine * iq;
-            gram[index][q] = gram[q][index] = sine * ip + cosine * iq;
-        }
-    }
-
-    double minimumEigenvalue = std::numeric_limits<double>::infinity();
-    double maximumEigenvalue = 0.0;
-    for (std::size_t axis = 0; axis < taskSpaceDimension; ++axis)
-    {
-        const double eigenvalue = std::max(0.0, gram[axis][axis]);
-        minimumEigenvalue = std::min(minimumEigenvalue, eigenvalue);
-        maximumEigenvalue = std::max(maximumEigenvalue, eigenvalue);
-    }
+    const auto& eigenvalues = solver.eigenvalues();
+    const double minimumEigenvalue = std::max(0.0, eigenvalues[0]);
+    const double maximumEigenvalue = std::max(0.0, eigenvalues[static_cast<Eigen::Index>(taskSpaceDimension - 1)]);
     const double minimumSingularValue = std::sqrt(minimumEigenvalue);
     const double maximumSingularValue = std::sqrt(maximumEigenvalue);
     const double conditionNumber = minimumSingularValue > IkSolverConstants::minimumSingularValueForCondition
