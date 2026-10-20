@@ -403,16 +403,16 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         if (std::abs(delta) > 0.0)
             attraction = std::min(attraction, specification_.joints[i].maximumVelocity * availableSeconds / std::abs(delta));
     }
-    // 후보 시작 위치를 다음 표본 방향으로 조금 옮기고, 현재 경로상의 TCP 자세 IK를 다시 푼다.
-        // IK가 TCP 위치와 방향을 다시 맞추는 동안, TCP를 거의 움직이지 않고 관절 자세를 바꿀 수 있는 여유 방향을 찾는다.
-        // 일반 모델에서 단순 관절 보간이 TCP를 고정한다고 가정하지 않으므로 후보마다 FK/속도 검사를 거친다.
-        for (std::size_t attempt = 0;
-            attempt < detail::kDefaultSimulationMotionPolicy.reorientationRetryAttempts; ++attempt)
+    // 시작 자세를 계획된 관절 자세 쪽으로 조금 옮겨 IK를 푼다. 이 보정은 다음 경로 표본으로 움직이는 동안 수행한다.
+    // IK가 TCP 위치와 방향을 다시 맞추는 동안, TCP를 거의 움직이지 않고 관절 자세를 바꿀 수 있는 여유 방향을 찾는다.
+    // 일반 모델에서 단순 관절 보간이 TCP를 고정한다고 가정하지 않으므로 후보마다 FK와 속도를 다시 확인한다.
+    for (std::size_t attempt = 0;
+        attempt < detail::kDefaultSimulationMotionPolicy.reorientationRetryAttempts; ++attempt)
     {
         JointVector seed = current;
         for (std::size_t i = 0; i < current.size(); ++i)
             seed[i] += (plannedJoints[i] - current[i]) * attraction;
-        // 현재 FK 값 대신 명목 경로의 같은 진행률 자세로 복원해 반복 보조 이동의 작은 IK 오차가 직선 밖으로 누적되지 않게 한다.
+        // 이전 계산의 FK 결과가 아니라 경로에서 정한 TCP를 목표로 삼아 작은 IK 오차가 다음 tick에 쌓이지 않게 한다.
         const auto solution = inverse_.Solve(ToCartesian(pathTcp), seed, options);
         if (!solution)
         {
@@ -436,9 +436,11 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         const double pathPositionError = Length(Subtract(nextTcp.positionMeters, pathTcp.positionMeters));
         const double pathOrientationError = Length(RotationError(nextTcp.rotation, pathTcp.rotation));
         ratio = std::max(ratio, planning::VelocityRatio(
-            Length(Subtract(nextTcp.positionMeters, currentTcp.positionMeters)), availableSeconds, linearMotion_.linearVelocityLimit));
+            Length(Subtract(nextTcp.positionMeters, currentTcp.positionMeters)),
+            availableSeconds, linearMotion_.linearVelocityLimit));
         ratio = std::max(ratio, planning::VelocityRatio(
-            Length(RotationError(nextTcp.rotation, currentTcp.rotation)), availableSeconds, linearMotion_.angularVelocityLimit));
+            Length(RotationError(nextTcp.rotation, currentTcp.rotation)),
+            availableSeconds, linearMotion_.angularVelocityLimit));
         const bool pathValid = planning::ValidateJointPath(
             current, solution.jointPositions, specification_, jointStateValidityChecker_) ==
             planning::JointStateInvalidity::None;
