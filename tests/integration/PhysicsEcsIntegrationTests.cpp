@@ -229,7 +229,7 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
 
     // 같은 Flecs World의 Scene은 루트와 물리 Body를 서로 공유하지 않아야 한다.
     Scene secondScene(world);
-    Entity secondSceneBody = secondScene.CreateEntity();
+    Entity secondSceneBody = secondScene.CreateEntity("Falling");
     secondSceneBody.SetLocalPosition({20.0F, 0.0F, 0.0F});
     secondSceneBody.set<RigidBody>({BodyMotionType::Static})
         .set<Colliders>({{physics_colliders::Box({0.1F, 0.1F, 0.1F})}});
@@ -237,6 +237,8 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
     const auto secondSceneHandle = integration.GetBodyHandle(secondSceneBody.GetHandle());
     ASSERT_TRUE(physics.IsBodyValid(secondSceneHandle));
     ASSERT_NE(scene.GetSceneRoot(), secondScene.GetSceneRoot());
+    ASSERT_NE(falling, secondSceneBody);
+    ASSERT_TRUE(falling.IsValid());
 
     // PhysicsSystemModule이 살아 있더라도 이전 Scene 계층과 Entity 연결 기록이 제거된 뒤 다음 물리 step이 안전하게 실행되어야 한다.
     const auto oldRoot = scene.GetSceneRoot();

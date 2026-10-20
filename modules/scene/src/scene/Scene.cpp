@@ -23,14 +23,13 @@ Entity Scene::CreateEntity(const std::string& name)
     if (!m_SceneRoot.is_alive())
         throw std::logic_error("Scene::CreateEntity requires a live Scene");
 
-    flecs::entity entity = name.empty() ? m_World.entity() : m_World.entity(name.c_str());
+    flecs::entity entity = m_World.entity(m_SceneRoot.id(), name.empty() ? nullptr : name.c_str());
     entity
         .set<Position, Local>(Position{0.0F, 0.0F, 0.0F})
         .set<Rotation, Local>(Rotation{})
         .set<Scale, Local>(Scale{1.0F})
         .set<TransformMatrix, Local>(TransformMatrix{})
-        .set<TransformMatrix, World>(TransformMatrix{})
-        .child_of(m_SceneRoot);
+        .set<TransformMatrix, World>(TransformMatrix{});
     return Entity{entity};
 }
 
