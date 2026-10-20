@@ -143,6 +143,10 @@ std::vector<Shape> BuildLinkShapes(const RobotLink& link,
 {
     std::vector<Shape> result;
     result.reserve(link.collisionGeometry.size());
+    if (link.collisionGeometry.empty())
+        return result;
+
+    const glm::mat4 linkTransform = PoseMatrix(linkPoseInAnchor);
     for (const RobotCollisionGeometry& geometry : link.collisionGeometry)
     {
         Shape shape = BuildShape(geometry);
@@ -150,7 +154,7 @@ std::vector<Shape> BuildLinkShapes(const RobotLink& link,
         const glm::quat shapeRotation = shape.localTransform.rotation;
         const glm::mat4 shapeTransform = glm::translate(glm::mat4{1.0F}, shapePosition) *
             glm::mat4_cast(shapeRotation);
-        const glm::mat4 combined = PoseMatrix(linkPoseInAnchor) * shapeTransform;
+        const glm::mat4 combined = linkTransform * shapeTransform;
         shape.localTransform.position = glm::vec3{combined[3]};
         shape.localTransform.rotation = glm::normalize(glm::quat_cast(glm::mat3{combined}));
         result.push_back(std::move(shape));
