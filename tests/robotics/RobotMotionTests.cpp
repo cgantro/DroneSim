@@ -83,6 +83,30 @@ void CheckPoseApproachWithLinearContinuation()
         ik.EvaluateTcp(continuationJoints)), 0.001);
 }
 
+void CheckLinearPathPlanningBudgetAndCancellation()
+{
+    const auto& specification = models::hanwha::kHcr12a;
+    LevenbergMarquardtIk inverse(specification);
+    const JointVector startJoints(specification.jointCount, 0.0);
+    JointVector targetJoints = startJoints;
+    targetJoints[0] = 0.2;
+
+    LinearPathMoveCommand command;
+    command.targetPoses.push_back(inverse.EvaluateTcp(targetJoints));
+    LinearPathPlanningJob job;
+    const Result begin = job.Begin(command, specification, startJoints,
+        inverse.EvaluateTcp(startJoints), inverse, {});
+    ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
+    ASSERT_EQ(job.GetState(), LinearPathPlanningState::Running);
+
+    EXPECT_EQ(job.Advance(0), LinearPathPlanningState::Running);
+    EXPECT_EQ(job.Advance(1), LinearPathPlanningState::Running);
+    job.Cancel();
+    EXPECT_EQ(job.GetState(), LinearPathPlanningState::Cancelled);
+    EXPECT_EQ(job.Advance(64), LinearPathPlanningState::Cancelled);
+    EXPECT_FALSE(job.TakePlan().has_value());
+}
+
 void CheckFourAxisControllerUsesPositionIk()
 {
     std::array<models::JointSpecification, 4> joints{};
@@ -153,6 +177,7 @@ void CheckMovePoseAndFailurePreservation()
     ASSERT_NEAR(controller.GetState().jointPositions[0], -0.2, 1e-8) << "MoveJoint replaces a pose target";
     CheckPoseApproachWithLinearContinuation();
     CheckFourAxisControllerUsesPositionIk();
+    CheckLinearPathPlanningBudgetAndCancellation();
 }
 
 void CheckMoveJointRejectsInvalidPath();
