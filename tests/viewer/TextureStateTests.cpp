@@ -1,4 +1,5 @@
 #include "graphics/GlApi.h"
+#include "graphics/Mesh.h"
 #include "graphics/Shader.h"
 #include "graphics/Texture.h"
 #include "graphics/Window.h"
@@ -8,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -37,6 +39,23 @@ TEST(GraphicsResource, InvalidUploadDataDoesNotPolluteAssetCacheOrOpenGlState)
     using grasplink::graphics::Window;
 
     Window window{Window::Properties{32, 32, "Texture state test", false, false}};
+
+    const grasplink::model::Vertex vertex{};
+    constexpr std::array<std::uint32_t, 3> triangleIndices{0U, 0U, 0U};
+    GLuint sentinelVertexArray = 0;
+    glGenVertexArrays(1, &sentinelVertexArray);
+    glBindVertexArray(sentinelVertexArray);
+    GLint previousVertexArray = 0;
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &previousVertexArray);
+    EXPECT_THROW((grasplink::graphics::Mesh{
+        &vertex, std::numeric_limits<std::uint32_t>::max(),
+        triangleIndices.data(), static_cast<std::uint32_t>(triangleIndices.size())}),
+        std::runtime_error);
+    GLint currentVertexArray = 0;
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &currentVertexArray);
+    EXPECT_EQ(currentVertexArray, previousVertexArray);
+    glBindVertexArray(0);
+    glDeleteVertexArrays(1, &sentinelVertexArray);
 
     ModelResource malformedModel;
     TextureData shortPixelBuffer;
