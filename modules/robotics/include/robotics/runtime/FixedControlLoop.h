@@ -67,14 +67,17 @@ public:
 
         // 상한을 넘은 시간은 버린다. 긴 멈춤 뒤 시뮬레이션이 실제 시간보다 늦어질 수 있다.
         accumulatorSeconds_ += clampedFrameDeltaSeconds;
+        const double accumulatedSeconds = accumulatorSeconds_;
         std::size_t executedSteps = 0;
 
-        // 모든 tick에 같은 시간 간격을 전달해 화면 갱신 주기와 물리 계산을 분리한다.
-        while (accumulatorSeconds_ >= fixedDeltaSeconds_)
+        // 원래 누적 시간과 처리 횟수로 경계를 계산해 반복 뺄셈의 반올림 오차가 tick을 누락하지 않게 한다.
+        while (accumulatedSeconds >=
+            static_cast<double>(executedSteps + 1U) * fixedDeltaSeconds_)
         {
             tick(fixedDeltaSeconds_);
-            accumulatorSeconds_ -= fixedDeltaSeconds_;
             ++executedSteps;
+            accumulatorSeconds_ = std::max(0.0,
+                accumulatedSeconds - static_cast<double>(executedSteps) * fixedDeltaSeconds_);
         }
 
         return executedSteps;

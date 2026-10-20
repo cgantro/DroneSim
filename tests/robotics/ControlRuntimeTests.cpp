@@ -26,14 +26,26 @@ TEST(ControlRuntimeTests, FixedLoopAndControllerContracts)
     EXPECT_NEAR(loop.GetAccumulatorSeconds(), 0.002, 1e-12) << "remaining time";
     EXPECT_EQ(loop.Advance(0.002, tick), 1) << "carry-over tick";
     loop.Reset();
-    loop.Advance(3.0, tick);
-    EXPECT_GE(ticks, 27);
-    EXPECT_LE(ticks, 28) << "clamp discards excess elapsed time";
+    ticks = 0;
+    EXPECT_EQ(loop.Advance(3.0, tick), 25) << "100 ms cap allows exactly 25 ticks";
+    EXPECT_EQ(ticks, 25) << "excess elapsed time is discarded";
+    EXPECT_DOUBLE_EQ(loop.GetAccumulatorSeconds(), 0.0);
     EXPECT_GE(loop.GetInterpolationAlpha(), 0.0);
     EXPECT_LT(loop.GetInterpolationAlpha(), 1.0);
+
+    loop.Reset();
+    ticks = 0;
+    std::size_t ticksDuringOneSecond = 0;
+    for (std::size_t frame = 0; frame < 250; ++frame)
+        ticksDuringOneSecond += loop.Advance(0.004, tick);
+    EXPECT_EQ(ticksDuringOneSecond, 250) << "250 Hz runs exactly 250 ticks per simulated second";
+    EXPECT_EQ(ticks, 250);
+    EXPECT_DOUBLE_EQ(loop.GetAccumulatorSeconds(), 0.0);
+
     const auto before = ticks;
     loop.Advance(std::numeric_limits<double>::quiet_NaN(), tick);
     loop.Advance(-1.0, tick);
+    loop.Advance(std::numeric_limits<double>::infinity(), tick);
     EXPECT_EQ(ticks, before) << "invalid elapsed time";
 
     backends::simulation::SimRobotController controller(models::hanwha::kHcr12a);
