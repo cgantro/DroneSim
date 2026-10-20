@@ -241,6 +241,28 @@ void CheckSelfCollisionFailureIncludesPairDiagnostic()
     EXPECT_NE(result.message.find("joints [deg]"), std::string::npos);
 }
 
+void CheckChangingValidityCheckerCancelsPosePlanning()
+{
+    SimRobotController controller(models::hanwha::kHcr12a);
+    ASSERT_TRUE(static_cast<bool>(controller.Connect()));
+    const CartesianPose currentPose = controller.GetStateView().tcpPose;
+
+    const Result begin = controller.BeginPosePlanning(currentPose);
+    ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
+    ASSERT_TRUE(controller.IsMotionPlanning());
+
+    controller.SetJointStateValidityChecker([](const JointVector&)
+    {
+        return JointStateInvalidity::None;
+    });
+
+    EXPECT_FALSE(controller.IsMotionPlanning());
+    const auto result = controller.TakeMotionPlanningResult();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->code, ErrorCode::Cancelled);
+    EXPECT_EQ(controller.GetStateView().mode, RobotMode::Idle);
+}
+
 }
 
 
@@ -249,4 +271,5 @@ TEST(RobotMotion, JointStateValidityAndSelfCollisionDiagnostics)
 {
     CheckJointStateValidityReasons();
     CheckSelfCollisionFailureIncludesPairDiagnostic();
+    CheckChangingValidityCheckerCancelsPosePlanning();
 }
