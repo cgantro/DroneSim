@@ -274,6 +274,23 @@ struct LinearPathPlanningJob::Impl
     std::size_t validationIntervals = 0;
     std::size_t validationStep = 0;
 
+    auto FindCandidate(const JointVector& joints)
+    {
+        return std::find_if(candidates.begin(), candidates.end(), [&](const PathCandidate& candidate)
+        {
+            return SameJointCandidate(candidate.joints, joints);
+        });
+    }
+
+    auto FindWorstCandidate()
+    {
+        return std::max_element(candidates.begin(), candidates.end(),
+            [](const PathCandidate& left, const PathCandidate& right)
+            {
+                return left.score < right.score;
+            });
+    }
+
     void ResetForBegin(const LinearPathMoveCommand& moveCommand,
         const models::RobotSpecification& robot, const JointVector& joints,
         kinematics::LevenbergMarquardtIk& ik, const StateValidityChecker& checker,
@@ -552,10 +569,7 @@ struct LinearPathPlanningJob::Impl
         AlignEquivalentJointAngles(workingSolution.jointPositions, parent.joints, *specification);
         workingScore = parent.score + JointTransitionCost(
             parent.joints, workingSolution.jointPositions, *specification);
-        auto duplicate = std::find_if(candidates.begin(), candidates.end(), [&](const PathCandidate& candidate)
-        {
-            return SameJointCandidate(candidate.joints, workingSolution.jointPositions);
-        });
+        auto duplicate = FindCandidate(workingSolution.jointPositions);
         if (duplicate != candidates.end() && workingScore >= duplicate->score)
         {
             if (duplicate->previousCandidate == workingParent)
@@ -570,11 +584,7 @@ struct LinearPathPlanningJob::Impl
         }
         if (candidates.size() >= policy.maximumIkCandidatesPerSample)
         {
-            const auto worst = std::max_element(candidates.begin(), candidates.end(),
-                [](const PathCandidate& left, const PathCandidate& right)
-                {
-                    return left.score < right.score;
-                });
+            const auto worst = FindWorstCandidate();
             if (workingScore > worst->score)
             {
                 ++seedIndex;
@@ -664,10 +674,7 @@ struct LinearPathPlanningJob::Impl
 
         const auto& parent = layers.back()[workingParent];
         parentHasValidChild[workingParent] = true;
-        auto duplicate = std::find_if(candidates.begin(), candidates.end(), [&](const PathCandidate& candidate)
-        {
-            return SameJointCandidate(candidate.joints, workingSolution.jointPositions);
-        });
+        auto duplicate = FindCandidate(workingSolution.jointPositions);
         if (duplicate == candidates.end())
         {
             candidates.push_back({std::move(workingSolution.jointPositions), tcpSamples[sample],
@@ -685,11 +692,7 @@ struct LinearPathPlanningJob::Impl
             parentHasContinuation[workingParent] = true;
         if (candidates.size() > policy.maximumIkCandidatesPerSample)
         {
-            const auto worst = std::max_element(candidates.begin(), candidates.end(),
-                [](const PathCandidate& left, const PathCandidate& right)
-                {
-                    return left.score < right.score;
-                });
+            const auto worst = FindWorstCandidate();
             candidates.erase(worst);
         }
         ++seedIndex;
