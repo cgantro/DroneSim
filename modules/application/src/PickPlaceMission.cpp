@@ -251,6 +251,37 @@ void PickPlaceMission::UpdateGraspOrientation(const robotics::RobotState& state)
     orientationReady_ = true;
 }
 
+void PickPlaceMission::UpdateStage(const UpdateContext& context)
+{
+    switch (stage_)
+    {
+    case Stage::MovingAbovePickup:
+    case Stage::MovingDownToPickup:
+    case Stage::Closing:
+    case Stage::Lifting:
+        UpdatePickup(context);
+        break;
+    case Stage::RaisingAfterResume:
+    case Stage::TransitingToPlacement:
+    case Stage::MovingToPlacementOverhead:
+    case Stage::AligningAbovePlacement:
+    case Stage::MovingDownToPlacement:
+    case Stage::SettlingAtPlacement:
+    case Stage::Opening:
+        UpdatePlacement(context);
+        break;
+    case Stage::Retreating:
+        UpdateRetreat(context);
+        break;
+    case Stage::Ready:
+    case Stage::PlanningMotion:
+    case Stage::Recovering:
+    case Stage::Complete:
+    case Stage::Failed:
+        break;
+    }
+}
+
 bool PickPlaceMission::IsMissionActive() const noexcept
 {
     return stage_ != Stage::Ready && stage_ != Stage::Complete && stage_ != Stage::Failed;
@@ -309,33 +340,7 @@ void PickPlaceMission::Update(const robotics::RobotState& state, robotics::IRobo
     {
         const UpdateContext context{state, controller, gripper, boxGrasped, gripperCloseFinished,
             graspBoxPoseInBase, placementPoseInBase, idle, now};
-        switch (stage_)
-        {
-        case Stage::MovingAbovePickup:
-        case Stage::MovingDownToPickup:
-        case Stage::Closing:
-        case Stage::Lifting:
-            UpdatePickup(context);
-            break;
-        case Stage::RaisingAfterResume:
-        case Stage::TransitingToPlacement:
-        case Stage::MovingToPlacementOverhead:
-        case Stage::AligningAbovePlacement:
-        case Stage::MovingDownToPlacement:
-        case Stage::SettlingAtPlacement:
-        case Stage::Opening:
-            UpdatePlacement(context);
-            break;
-        case Stage::Retreating:
-            UpdateRetreat(context);
-            break;
-        case Stage::Ready:
-        case Stage::PlanningMotion:
-        case Stage::Recovering:
-        case Stage::Complete:
-        case Stage::Failed:
-            break;
-        }
+        UpdateStage(context);
     }
 
     if (!collisionStopped && stage_ == Stage::Recovering && idle)

@@ -90,6 +90,7 @@ private:
     void SetStageFromMotionResult(robotics::Result result, Stage next, robotics::IRobotController& controller);
     void UpdatePlanningMotion(robotics::IRobotController& controller);
     void UpdateGraspOrientation(const robotics::RobotState& state);
+    void UpdateStage(const UpdateContext& context);
     void UpdatePickup(const UpdateContext& context);
     void UpdatePlacement(const UpdateContext& context);
     void UpdateRetreat(const UpdateContext& context);
