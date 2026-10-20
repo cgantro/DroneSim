@@ -211,6 +211,18 @@ void CheckMovePoseAndFailurePreservation()
     ASSERT_TRUE(AdvanceUntilIdle(controller, 0.004)) << "motion reaches target within bounded updates";
     const JointVector targetJoints{0.25, -0.37, 0.34, 0.17, -0.23, 0.11};
     const CartesianPose target = ik.EvaluateTcp(targetJoints);
+
+    const RobotState pathStart = controller.GetState();
+    LinearPathMoveCommand blockedPath;
+    blockedPath.targetPoses.push_back(target);
+    LinearPathPlan rejectedPlan;
+    const Result blockedPathResult = BuildLinearPath(blockedPath,
+        models::hanwha::kHcr12a, pathStart.jointPositions, pathStart.tcpPose, ik,
+        [](const JointVector&) { return JointStateInvalidity::EnvironmentCollision; },
+        rejectedPlan);
+    EXPECT_EQ(blockedPathResult.code, ErrorCode::EnvironmentContact);
+    EXPECT_NE(blockedPathResult.message.find("TCP path sample"), std::string::npos);
+
     ASSERT_TRUE((static_cast<bool>(controller.MovePose(target, 0.5)))) << "MovePose accepts FK-generated reachable pose";
     ASSERT_TRUE((controller.GetState().mode == RobotMode::Moving)) << "MovePose starts joint motion";
 
