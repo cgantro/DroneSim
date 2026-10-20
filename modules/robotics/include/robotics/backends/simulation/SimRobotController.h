@@ -217,8 +217,8 @@ private:
     Result CommitLinearPathPlan(const LinearPathMoveCommand& command, planning::LinearPathPlan plan);
     Result ValidateLinearPathRequest(const LinearPathMoveCommand& command) const;
 
-    // 소유하지 않는 robot model specification 주소.
-    const models::RobotSpecification* specification_ = nullptr;
+    // 로봇 사양을 복사하거나 소유하지 않고 빌려 쓴다. 원본은 이 제어기보다 오래 살아야 한다.
+    const models::RobotSpecification& specification_;
 
     // 현재 관절 위치·속도와 제어 상태를 저장한다.
     RobotState state_{};

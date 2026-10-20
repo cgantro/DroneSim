@@ -88,13 +88,13 @@ void SimRobotController::ConfigureJointMove(
 
     jointMoveProgressRate_ = std::numeric_limits<double>::infinity();
     bool needsMotion = false;
-    for (std::size_t joint = 0; joint < specification_->jointCount; ++joint)
+    for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
     {
         const double distance = std::abs(targetPositions_[joint] - jointMoveStartPositions_[joint]);
         if (distance <= detail::kMotionEpsilon)
             continue;
         needsMotion = true;
-        const auto& limits = specification_->joints[joint];
+        const auto& limits = specification_.joints[joint];
         jointMoveProgressRate_ = std::min(jointMoveProgressRate_,
             limits.maximumVelocity * velocityScale / distance);
         const double acceleration = limits.maximumVelocity /
@@ -201,7 +201,7 @@ void SimRobotController::AdvanceJointMove(double dtSeconds)
     }
     nextProgress = std::clamp(nextProgress, jointMoveProgress_, jointMoveBraking_ ?
         jointMoveStopProgress_ : 1.0);
-    for (std::size_t i = 0; i < specification_->jointCount; ++i)
+    for (std::size_t i = 0; i < specification_.jointCount; ++i)
     {
         const double start = jointMoveStartPositions_[i];
         const double delta = targetPositions_[i] - start;
@@ -219,7 +219,7 @@ void SimRobotController::FinishJointMoveIfNeeded()
         jointMoveProgressVelocity_ = 0.0;
         std::fill(state_.jointVelocities.begin(),
             state_.jointVelocities.end(), 0.0);
-        for (std::size_t i = 0; i < specification_->jointCount; ++i)
+        for (std::size_t i = 0; i < specification_.jointCount; ++i)
             state_.jointPositions[i] = jointMoveStartPositions_[i] +
                 (targetPositions_[i] - jointMoveStartPositions_[i]) * jointMoveStopProgress_;
         if (pendingJointMove_)
@@ -316,7 +316,7 @@ void SimRobotController::UpdateLinear(double dtSeconds)
         linearMotion_.path.clear();
         state_.mode = RobotMode::Idle;
     }
-    for (std::size_t joint = 0; joint < specification_->jointCount; ++joint)
+    for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
     {
         const double previousPosition = previousJointPositions_[joint];
         state_.jointVelocities[joint] = state_.mode == RobotMode::Moving ?
@@ -349,15 +349,15 @@ bool SimRobotController::TryAdvanceLinearSegment(double availableSeconds,
         }
 
         // 명령을 받을 때 직선 TCP 목표마다 IK와 충돌 검사를 끝낸 경로 표본 사이를 보간해 매 tick IK 반복을 없앤다.
-        for (std::size_t joint = 0; joint < specification_->jointCount; ++joint)
+        for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
             linearInterpolationBuffer_[joint] = begin.joints[joint] +
                 (end.joints[joint] - begin.joints[joint]) * nextSegmentFraction;
 
         double requiredSeconds = 0.0;
-        for (std::size_t joint = 0; joint < specification_->jointCount; ++joint)
+        for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
             requiredSeconds = std::max(requiredSeconds, planning::RequiredTimeForVelocity(
                 linearInterpolationBuffer_[joint] - state_.jointPositions[joint],
-                specification_->joints[joint].maximumVelocity));
+                specification_.joints[joint].maximumVelocity));
 
         const Pose3 nextTcp = FromCartesian(inverse_.EvaluateTcp(linearInterpolationBuffer_));
         requiredSeconds = std::max(requiredSeconds,
@@ -395,7 +395,7 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
     const auto& end = linearMotion_.path[linearMotion_.segment];
     const Pose3 pathTcp = Interpolate(
         FromCartesian(begin.tcpPose), FromCartesian(end.tcpPose), linearMotion_.segmentFraction);
-    const auto options = RuntimeLinearIkOptions(*specification_);
+    const auto options = RuntimeLinearIkOptions(specification_);
     double attraction = 1.0;
     double previousDistanceSquared = 0.0;
     for (std::size_t i = 0; i < current.size(); ++i)
@@ -403,7 +403,7 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         const double delta = plannedJoints[i] - current[i];
         previousDistanceSquared += delta * delta;
         if (std::abs(delta) > 0.0)
-            attraction = std::min(attraction, specification_->joints[i].maximumVelocity * availableSeconds / std::abs(delta));
+            attraction = std::min(attraction, specification_.joints[i].maximumVelocity * availableSeconds / std::abs(delta));
     }
     // 후보 시작 위치를 다음 표본 방향으로 조금 옮기고, 현재 경로상의 TCP 자세 IK를 다시 푼다.
         // IK가 TCP 위치와 방향을 다시 맞추는 동안, TCP를 거의 움직이지 않고 관절 자세를 바꿀 수 있는 여유 방향을 찾는다.
@@ -429,7 +429,7 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         {
             const double change = solution.jointPositions[i] - current[i];
             ratio = std::max(ratio, planning::VelocityRatio(
-                change, availableSeconds, specification_->joints[i].maximumVelocity));
+                change, availableSeconds, specification_.joints[i].maximumVelocity));
             movement = std::max(movement, std::abs(change));
             const double residual = plannedJoints[i] - solution.jointPositions[i];
             nextDistanceSquared += residual * residual;
@@ -442,7 +442,7 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         ratio = std::max(ratio, planning::VelocityRatio(
             Length(RotationError(nextTcp.rotation, currentTcp.rotation)), availableSeconds, linearMotion_.angularVelocityLimit));
         const bool pathValid = planning::ValidateJointPath(
-            current, solution.jointPositions, *specification_, jointStateValidityChecker_) ==
+            current, solution.jointPositions, specification_, jointStateValidityChecker_) ==
             planning::JointStateInvalidity::None;
         const bool reorientationFollowsTcp = JointInterpolationFollowsTcpLine(
             current, solution.jointPositions, pathTcp, pathTcp, inverse_);

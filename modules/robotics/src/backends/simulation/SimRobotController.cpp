@@ -107,12 +107,12 @@ bool SameJointPosition(const JointVector& lhs, const JointVector& rhs)
 } // namespace
 
 SimRobotController::SimRobotController(const models::RobotSpecification& specification, models::Pose3 tcpInToolFrame)
-    : specification_(&specification), inverse_(specification, tcpInToolFrame)
+    : specification_(specification), inverse_(specification, tcpInToolFrame)
 {
     // IK 계산기가 관절 배열과 위치 범위를 먼저 검사한다. Controller는 속도 제한만 추가로 확인한다.
-    for (std::size_t i = 0; i < specification_->jointCount; ++i)
+    for (std::size_t i = 0; i < specification_.jointCount; ++i)
     {
-        const auto& joint = specification_->joints[i];
+        const auto& joint = specification_.joints[i];
         if (!std::isfinite(joint.maximumVelocity) || joint.maximumVelocity <= 0.0)
             throw std::invalid_argument("SimRobotController: maximum joint velocity must be finite and positive");
     }
@@ -151,12 +151,12 @@ Result SimRobotController::Connect()
     linearPathPlanningResult_.reset();
     pendingLinearPathCommand_ = {};
     state_ = {};
-    state_.jointPositions.resize(specification_->jointCount);
-    for (std::size_t joint = 0; joint < specification_->jointCount; ++joint)
+    state_.jointPositions.resize(specification_.jointCount);
+    for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
         state_.jointPositions[joint] = std::clamp(0.0,
-            specification_->joints[joint].minimumPosition,
-            specification_->joints[joint].maximumPosition);
-    state_.jointVelocities.assign(specification_->jointCount, 0.0);
+            specification_.joints[joint].minimumPosition,
+            specification_.joints[joint].maximumPosition);
+    state_.jointVelocities.assign(specification_.jointCount, 0.0);
     state_.mode = RobotMode::Idle;
     state_.valid = true;
     RefreshTcp();
@@ -174,8 +174,8 @@ Result SimRobotController::Connect()
     jointMovePeakProgressVelocity_ = 0.0;
     jointMoveBraking_ = false;
     pendingJointMove_.reset();
-    linearInterpolationBuffer_.resize(specification_->jointCount);
-    previousJointPositions_.resize(specification_->jointCount);
+    linearInterpolationBuffer_.resize(specification_.jointCount);
+    previousJointPositions_.resize(specification_.jointCount);
     connected_ = true;
     linearMotion_.path.clear();
     return Result::Success();
@@ -216,13 +216,13 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     if (IsMotionPlanning())
         return Failure(ErrorCode::Busy, SimRobotControllerMessages::linearPlanningBusy);
 
-    if (command.targetPositions.size() != specification_->jointCount)
+    if (command.targetPositions.size() != specification_.jointCount)
         return Failure(ErrorCode::InvalidCommand, "SimRobotController: joint count mismatch");
 
     if (!IsScaleValid(command.velocityScale) || !IsScaleValid(command.accelerationScale))
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::invalidScale);
 
-    const Result validation = ValidateJointPositionLimits(*specification_, command.targetPositions);
+    const Result validation = ValidateJointPositionLimits(specification_, command.targetPositions);
     if (!validation)
         return validation;
 
@@ -230,7 +230,7 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     // 명령을 받는 순간 관절각 q를 바꾸지 않는다. 이후 Update 호출이 정해진 속도 안에서 현재 상태를 목표까지 진행시킨다.
     // 움직이는 도중 새 명령이 들어오면 대기열에 쌓지 않고 현재 목표를 새 목표로 바꾼다.
     JointVector targetPositions = command.targetPositions;
-    planning::AlignEquivalentJointAngles(targetPositions, state_.jointPositions, *specification_);
+    planning::AlignEquivalentJointAngles(targetPositions, state_.jointPositions, specification_);
 
     const bool canBrakeJointPath = state_.mode == RobotMode::Moving && linearMotion_.path.empty() &&
         jointMoveProgressVelocity_ > detail::kMotionEpsilon && jointMoveProgressAcceleration_ > 0.0;
@@ -242,7 +242,7 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     if (canBrakeJointPath)
     {
         brakingStart = state_.jointPositions;
-        for (std::size_t joint = 0; joint < specification_->jointCount; ++joint)
+        for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
             brakingStart[joint] = jointMoveStartPositions_[joint] +
                 (targetPositions_[joint] - jointMoveStartPositions_[joint]) * stoppingProgress;
         nextPathStart = &brakingStart;
@@ -251,7 +251,7 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     if ((origin == JointMoveOrigin::ExternalJointCommand || canBrakeJointPath) && jointStateValidityChecker_)
     {
         const auto invalidity = planning::ValidateJointPath(*nextPathStart, targetPositions,
-            *specification_, jointStateValidityChecker_);
+            specification_, jointStateValidityChecker_);
         if (invalidity != planning::JointStateInvalidity::None)
         {
             Result result = planning::MapJointStateInvalidity(invalidity);
@@ -295,9 +295,9 @@ Result SimRobotController::MovePose(const CartesianPose& targetInBase, double ve
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::invalidScale);
     planning::JointStateInvalidity invalidity = planning::JointStateInvalidity::None;
     kinematics::IkResult ikFailure;
-    auto solution = planning::SolveCollisionFreeIk(inverse_, *specification_, jointStateValidityChecker_,
+    auto solution = planning::SolveCollisionFreeIk(inverse_, specification_, jointStateValidityChecker_,
         targetInBase, state_.jointPositions,
-        kinematics::RobotDefaultIkOptions(*specification_), planning::kDefaultPlanningPolicy,
+        kinematics::RobotDefaultIkOptions(specification_), planning::kDefaultPlanningPolicy,
         invalidity, ikFailure);
     if (!solution)
     {
@@ -344,7 +344,7 @@ Result SimRobotController::BeginPosePlanningImpl(
         if (!validation)
             return validation;
     }
-    if (!specification_->hasToolFrame)
+    if (!specification_.hasToolFrame)
         return Failure(ErrorCode::Unsupported, SimRobotControllerMessages::missingToolFrame);
 
     linearPathPlanningResult_.reset();
@@ -353,11 +353,11 @@ Result SimRobotController::BeginPosePlanningImpl(
     posePlanning_.continuationPlan.reset();
     posePlanning_.candidateJoints.clear();
     posePlanning_.alternativeSeeds = kinematics::detail::BuildAlternativeIkSeeds(
-        state_.jointPositions, *specification_);
+        state_.jointPositions, specification_);
     const std::size_t maximumSeeds = posePlanning_.continuationCommand
         ? kMaximumPoseIkSeedsWithContinuation : kMaximumPoseIkSeeds;
     kinematics::detail::AppendIkRestartSeeds(posePlanning_.alternativeSeeds,
-        state_.jointPositions, *specification_, maximumSeeds - 1);
+        state_.jointPositions, specification_, maximumSeeds - 1);
     posePlanning_.alternativeSeedIndex = 0;
     posePlanning_.ikSeedAttempts = 1;
     posePathSegment_ = 0;
@@ -365,7 +365,7 @@ Result SimRobotController::BeginPosePlanningImpl(
     posePlanning_.pathFailure = Result::Success();
     pendingPoseMove_ = {{}, velocityScale, accelerationScale};
     posePlanning_.ikSession = inverse_.BeginSingleSeed(targetInBase, state_.jointPositions,
-        kinematics::RobotDefaultIkOptions(*specification_));
+        kinematics::RobotDefaultIkOptions(specification_));
     posePlanning_.phase = PosePlanningPhase::Ik;
     state_.mode = RobotMode::Planning;
     state_.errorCode = ErrorCode::None;
@@ -380,7 +380,7 @@ bool SimRobotController::StartNextPoseIkSeed()
     posePlanning_.candidateJoints.clear();
     posePlanning_.ikSession = inverse_.BeginSingleSeed(posePlanning_.target,
         posePlanning_.alternativeSeeds[posePlanning_.alternativeSeedIndex++],
-        kinematics::RobotDefaultIkOptions(*specification_));
+        kinematics::RobotDefaultIkOptions(specification_));
     ++posePlanning_.ikSeedAttempts;
     posePlanning_.phase = PosePlanningPhase::Ik;
     return true;
@@ -390,7 +390,7 @@ bool SimRobotController::StartPoseCandidateJointPath()
 {
     planning::JointPathPlannerOptions options;
     options.validationPolicy = planning::kDefaultPlanningPolicy;
-    const Result begin = posePlanning_.jointPathJob.Begin(*specification_,
+    const Result begin = posePlanning_.jointPathJob.Begin(specification_,
         state_.jointPositions, posePlanning_.candidateJoints, jointStateValidityChecker_, options);
     if (!begin)
     {
@@ -427,7 +427,7 @@ Result SimRobotController::MoveLinearPath(const LinearPathMoveCommand& command)
 
     planning::LinearPathPlan plan;
     const auto result = planning::BuildLinearPath(
-        command, *specification_, state_.jointPositions,
+        command, specification_, state_.jointPositions,
         inverse_.EvaluateTcp(state_.jointPositions), inverse_, jointStateValidityChecker_, plan,
         planning::kDefaultPlanningPolicy, jointStateValidityDiagnosticProvider_);
     if (!result)
@@ -448,7 +448,7 @@ Result SimRobotController::BeginLinearPathPlanning(const LinearPathMoveCommand& 
 
     pendingLinearPathCommand_ = command;
     linearPathPlanningResult_.reset();
-    const Result begin = linearPathPlanningJob_.Begin(command, *specification_,
+    const Result begin = linearPathPlanningJob_.Begin(command, specification_,
         state_.jointPositions, inverse_.EvaluateTcp(state_.jointPositions),
         inverse_, jointStateValidityChecker_, planning::kInteractivePlanningPolicy,
         jointStateValidityDiagnosticProvider_);
@@ -538,7 +538,7 @@ void SimRobotController::StartPoseLinearContinuation()
     }
 
     const Result continuationBegin = linearPathPlanningJob_.Begin(
-        *posePlanning_.continuationCommand, *specification_, posePlanning_.candidateJoints,
+        *posePlanning_.continuationCommand, specification_, posePlanning_.candidateJoints,
         inverse_.EvaluateTcp(posePlanning_.candidateJoints), inverse_, jointStateValidityChecker_,
         planning::kInteractivePlanningPolicy, jointStateValidityDiagnosticProvider_);
     if (!continuationBegin)
@@ -710,7 +710,7 @@ Result SimRobotController::ValidateLinearPathRequest(
     const Result validation = planning::ValidateLinearPathCommand(command);
     if (!validation)
         return validation;
-    if (!specification_->hasToolFrame)
+    if (!specification_.hasToolFrame)
         return Failure(ErrorCode::Unsupported, SimRobotControllerMessages::missingToolFrame);
     return Result::Success();
 }
@@ -774,7 +774,7 @@ std::optional<Result> SimRobotController::CommitCachedLinearContinuation(
 
 void SimRobotController::RefreshTcp()
 {
-    state_.tcpPoseValid = specification_->hasToolFrame && state_.valid;
+    state_.tcpPoseValid = specification_.hasToolFrame && state_.valid;
     if (state_.tcpPoseValid)
         state_.tcpPose = inverse_.EvaluateTcp(state_.jointPositions);
     if (posePlanning_.phase != PosePlanningPhase::None)
@@ -857,7 +857,7 @@ const RobotState& SimRobotController::GetStateView() const noexcept
 const models::RobotSpecification& SimRobotController::GetSpecification() const noexcept
 {
     // 생성 시 받은 사양을 복사하지 않고 참조한다. 따라서 사양 데이터를 가진 저장소는 이 Controller보다 오래 살아 있어야 한다.
-    return *specification_;
+    return specification_;
 }
 
 bool SimRobotController::RestoreCollisionSafeState(const JointVector& safePositions)
@@ -868,8 +868,8 @@ bool SimRobotController::RestoreCollisionSafeState(const JointVector& safePositi
 bool SimRobotController::RestoreCollisionSafeState(
     const JointVector& safePositions, ErrorCode collisionReason)
 {
-    if (safePositions.size() != specification_->jointCount ||
-        !ValidateJointPositionLimits(*specification_, safePositions))
+    if (safePositions.size() != specification_.jointCount ||
+        !ValidateJointPositionLimits(specification_, safePositions))
         return false;
     if (collisionReason != ErrorCode::EnvironmentContact && collisionReason != ErrorCode::SelfCollision &&
         collisionReason != ErrorCode::AttachedObjectCollision)
