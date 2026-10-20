@@ -112,6 +112,7 @@ add_library(grasplink_robotics STATIC
   modules/robotics/src/backends/simulation/SimRobotControllerMotion.cpp
   modules/robotics/src/planning/LinearPathPlanner.cpp
   modules/robotics/src/planning/JointPathPlanner.cpp
+  modules/robotics/src/planning/StateValidity.cpp
   modules/robotics/src/backends/simulation/SimGripperController.cpp
   modules/robotics/src/kinematics/RobotKinematics.cpp
   modules/robotics/src/kinematics/RobotInverseKinematics.cpp

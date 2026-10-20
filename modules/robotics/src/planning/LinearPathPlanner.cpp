@@ -62,20 +62,6 @@ struct LinearPathPlannerMessages final
         "SimRobotController: path duration exceeds numeric range";
     inline static constexpr char noCollisionFreeIkSolution[] =
         "SimRobotController: no collision-free IK solution";
-    inline static constexpr char invalidPlannedJointState[] =
-        "SimRobotController: invalid joint state in planned path";
-    inline static constexpr char plannedStateExceedsJointLimit[] =
-        "SimRobotController: planned state exceeds a joint limit";
-    inline static constexpr char pathSamplingLimitExceeded[] =
-        "SimRobotController: joint collision path exceeds the sample limit";
-    inline static constexpr char plannedStateOverlapsEnvironment[] =
-        "SimRobotController: planned state overlaps the environment";
-    inline static constexpr char plannedRobotLinksOverlap[] =
-        "SimRobotController: planned robot links overlap";
-    inline static constexpr char attachedObjectOverlapsScene[] =
-        "SimRobotController: attached object overlaps the scene";
-    inline static constexpr char unknownJointStateInvalidity[] =
-        "SimRobotController: unknown joint-state invalidity";
 };
 
 Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t sampleCount,
@@ -1060,46 +1046,6 @@ JointStateInvalidity ValidateJointPath(
     }
     return JointStateInvalidity::None;
 }
-JointStateInvalidity ValidateJointState(
-    const models::RobotSpecification& specification,
-    const JointVector& joints,
-    const StateValidityChecker& stateValidityChecker)
-{
-    if (specification.joints == nullptr || joints.size() != specification.jointCount)
-        return JointStateInvalidity::JointCountMismatch;
-    for (std::size_t joint = 0; joint < specification.jointCount; ++joint)
-    {
-        if (!std::isfinite(joints[joint]))
-            return JointStateInvalidity::NonFinitePosition;
-        const auto& limits = specification.joints[joint];
-        if (joints[joint] < limits.minimumPosition || joints[joint] > limits.maximumPosition)
-            return JointStateInvalidity::JointLimitViolation;
-    }
-    return stateValidityChecker ? stateValidityChecker(joints) : JointStateInvalidity::None;
-}
-
-Result MapJointStateInvalidity(JointStateInvalidity invalidity)
-{
-    switch (invalidity)
-    {
-    case JointStateInvalidity::None: return Result::Success();
-    case JointStateInvalidity::JointCountMismatch:
-    case JointStateInvalidity::NonFinitePosition:
-        return {ErrorCode::InvalidCommand, LinearPathPlannerMessages::invalidPlannedJointState};
-    case JointStateInvalidity::PathSamplingLimitExceeded:
-        return {ErrorCode::InvalidCommand, LinearPathPlannerMessages::pathSamplingLimitExceeded};
-    case JointStateInvalidity::JointLimitViolation:
-        return {ErrorCode::JointLimitReached, LinearPathPlannerMessages::plannedStateExceedsJointLimit};
-    case JointStateInvalidity::EnvironmentCollision:
-        return {ErrorCode::EnvironmentContact, LinearPathPlannerMessages::plannedStateOverlapsEnvironment};
-    case JointStateInvalidity::SelfCollision:
-        return {ErrorCode::SelfCollision, LinearPathPlannerMessages::plannedRobotLinksOverlap};
-    case JointStateInvalidity::AttachedObjectCollision:
-        return {ErrorCode::AttachedObjectCollision, LinearPathPlannerMessages::attachedObjectOverlapsScene};
-    }
-    return {ErrorCode::Fault, LinearPathPlannerMessages::unknownJointStateInvalidity};
-}
-
 void AlignEquivalentJointAngles(
     JointVector& target,
     const JointVector& reference,
