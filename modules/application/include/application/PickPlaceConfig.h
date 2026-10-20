@@ -42,8 +42,10 @@ struct PlacementSettings final
 
 inline constexpr double approachHeightMeters = 0.25;
 inline constexpr double transitBoxHeightMeters = 0.45;
-inline constexpr double baseExclusionRadiusMeters = 0.42;
-inline constexpr double transitAnnulusRadiusMeters = 0.56;
+/**
+ * @brief 집기 전 상자를 향해 내려갈 때 유지할 TCP 높이 여유다 [m].
+ * @details 현재 장면의 그리퍼 충돌 형상은 상자 중심보다 10 mm 위에서 겹치고, 20 mm에서 간격이 생긴다. 25 mm를 사용해 5 mm 여유를 둔다.
+ */
 inline constexpr double graspClearanceMeters = 0.025;
 inline constexpr double linearVelocityMetersPerSecond = 2.0;
 inline constexpr double angularVelocityRadiansPerSecond = 8.0;
@@ -55,7 +57,9 @@ inline constexpr float placementAreaThicknessMeters = 0.002F;
 inline constexpr float boxPositionHeightMeters = 0.026F;
 inline constexpr float placementPositionHeightMeters = 0.006F;
 inline constexpr float minimumScenarioRadiusMeters = 0.50F;
+/** @brief 무작위 상자 위치를 뽑을 XZ 평면 반경의 상한이다 [m]. */
 inline constexpr float maximumBoxRadiusMeters = 1.05F;
+/** @brief 무작위 목표 위치를 뽑을 XZ 평면 반경의 상한이다 [m]. 목표 도달 가능 여부는 IK와 경로 검사가 판단한다. */
 inline constexpr float maximumPlacementRadiusMeters = 1.00F;
 inline constexpr float minimumBoxRepeatSeparationMeters = 0.035F;
 inline constexpr float minimumPlacementRepeatSeparationMeters = 0.05F;

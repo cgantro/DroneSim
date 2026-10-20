@@ -14,8 +14,6 @@ namespace grasplink::application
 namespace
 {
 namespace config = pick_place::config;
-// 실제 Gripper convex hull은 TCP가 상자 중심에서 10 mm 위일 때 바닥과 겹쳤다. 20 mm에서 간격이 생겨 여유 5 mm를 더 둔다.
-// 작업공간 상한은 안전 여유값으로 두고, 각 경로 구간의 실제 속도는 IK가 만든 관절 변화량과 모델 관절 속도로 정한다.
 
 glm::dquat TcpOrientation(const robotics::RobotState& state)
 {
