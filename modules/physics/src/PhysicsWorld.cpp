@@ -537,7 +537,7 @@ struct PhysicsWorld::Impl
 
     JPH::PhysicsSystem physicsSystem;
 
-    std::unique_ptr<JPH::TempAllocatorImpl> tempAllocator;
+    JPH::TempAllocatorImpl tempAllocator;
 
     std::unique_ptr<JPH::JobSystem> jobSystem;
     const std::uint64_t worldToken = g_NextWorldToken.fetch_add(1, std::memory_order_relaxed);
@@ -575,10 +575,8 @@ struct PhysicsWorld::Impl
     }
 
     Impl()
+        : tempAllocator(PhysicsWorldLimits::temporaryAllocatorSizeBytes)
     {
-        tempAllocator =
-            std::make_unique<JPH::TempAllocatorImpl>(PhysicsWorldLimits::temporaryAllocatorSizeBytes);
-
 #if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
         jobSystem = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
 #else
@@ -666,7 +664,7 @@ void PhysicsWorld::Step(double fixedDeltaSeconds)
     impl_->physicsSystem.Update(
         static_cast<float>(fixedDeltaSeconds),
         PhysicsWorldLimits::collisionStepsPerUpdate,
-        impl_->tempAllocator.get(),
+        &impl_->tempAllocator,
         impl_->jobSystem.get());
 
     {
