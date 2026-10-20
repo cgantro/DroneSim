@@ -1,31 +1,53 @@
 #include "robotics/kinematics/RobotKinematics.h"
+#include "robotics/backends/simulation/SimGripperController.h"
+#include "robotics/kinematics/GripperKinematics.h"
+#include "robotics/kinematics/RobotInverseKinematics.h"
 #include "robotics/models/hanwha/Hcr12a.h"
+#include "robotics/models/GripperSpecification.h"
 #include "model/GltfLoader.h"
+#include "model/RobotModel.h"
 #include "scene/Scene.h"
 #include "physics/PhysicsWorld.h"
 #include "simulation/components/PhysicsComponents.h"
 #include "simulation/components/RobotCollisionProxy.h"
+#include "simulation/robotics/RobotModelAdapter.h"
+#include "simulation/robotics/RobotTransformAdapter.h"
 #include "simulation/robotics/RobotPhysicsAdapter.h"
 #include "simulation/robotics/RobotCollisionGeometryBuilder.h"
+#include "simulation/robotics/GripperTransformAdapter.h"
+#include "simulation/robotics/RobotEnvironmentCollisionGuard.h"
 #include "simulation/robotics/RobotSelfCollisionPolicy.h"
 #include "simulation/systems/PhysicsSystemModule.h"
+#include "robotics/backends/simulation/SimRobotController.h"
 #include "scene/TransformSystemModule.h"
-#include "TestSupport.h"
 
 #include <gtest/gtest.h>
 
-#include <iostream>
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <memory>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
 namespace
 {
-using grasplink::model::MeshData;
-using grasplink::model::ModelResource;
-using grasplink::model::SubMeshInfo;
-using grasplink::model::Vertex;
+constexpr std::array<grasplink::robotics::models::GripperJointSpecification, 1>
+    kCollisionTestGripperJoints{{
+        {"TestGripperJoint", {}, {0.0, 0.0, 1.0}, 1.0, 0.0, 0.8, true}}};
+constexpr grasplink::robotics::models::GripperSpecification kCollisionTestGripper{
+    "Test", "CollisionTest", 0, 255, 0, 255, 0, 255, 0.8,
+    kCollisionTestGripperJoints.data(), kCollisionTestGripperJoints.size()};
+
+constexpr std::size_t kMaximumHcrCollisionShapeCount = 150;
+constexpr std::size_t kExpectedHcrCollisionProxyCount = 7;
+
+using grasplink::model::RobotCollisionGeometry;
+using grasplink::model::RobotCollisionType;
+using grasplink::model::RobotLink;
+using grasplink::model::RobotModel;
 using grasplink::scene::Entity;
 using grasplink::scene::Scene;
 using grasplink::scene::TransformSystemModule;
@@ -42,60 +64,101 @@ void GTestExpectThrows(Function&& function, const std::string& message)
 }
 
 
-// 물리 충돌용 단순 형상 추출을 검증하는 CPU 시험 자료다. 꼭짓점은 각 로봇 링크 기준 좌표이고, 메시 외곽은 한 변 0.1 m인 닫힌 정육면체다.
-MeshData Cube()
+RobotLink BoxLink(const char* name, const glm::dvec3& size)
 {
-    MeshData mesh;
-    for (unsigned i = 0; i < 8; ++i)
-    {
-        Vertex vertex{};
-        vertex.position = {(i & 1) ? 0.05F : -0.05F, (i & 2) ? 0.05F : -0.05F, (i & 4) ? 0.05F : -0.05F};
-        mesh.vertices.push_back(vertex);
-    }
-    mesh.indices = {0,1,3,0,3,2,4,6,7,4,7,5,0,4,5,0,5,1,2,3,7,2,7,6,0,2,6,0,6,4,1,5,7,1,7,3};
-    SubMeshInfo part;
-    part.indexCount = static_cast<std::uint32_t>(mesh.indices.size());
-    mesh.subMeshes.push_back(part);
-    return mesh;
+    RobotLink link;
+    link.name = name;
+    RobotCollisionGeometry geometry;
+    geometry.type = RobotCollisionType::Box;
+    geometry.dimensionsMeters = size;
+    link.collisionGeometry.push_back(geometry);
+    return link;
 }
 
 void CheckSyntheticGeometry()
 {
     using namespace grasplink::robotics;
-    const models::JointSpecification joints[] = {
-        {"J1", {0,0,0}, {0,0,1}, -3.1416, 3.1416, 1},
-        {"J2", {0,0.5,0}, {0,0,1}, -3.1416, 3.1416, 1}};
-    const models::LinkSpecification links[] = {{"Link1",0},{"Link2",1}};
-    const models::RobotSpecification spec{"Test","TwoLink",joints,2,links,2};
-    ModelResource model;
-    model.rootNodeIndex = 0;
-    model.meshes = {Cube(), Cube(), Cube()};
-    model.nodes.resize(6);
-    const char* names[] = {"RobotRoot","J1","Link1","J2","Link2","Gripper"};
-    for (int i = 0; i < 6; ++i)
+    RobotModel model;
+    model.name = "TwoLink";
+    model.baseLink = 0;
+    RobotLink link1 = BoxLink("Link1", {0.1, 0.1, 0.1});
+    RobotCollisionGeometry sphere;
+    sphere.type = RobotCollisionType::Sphere;
+    sphere.dimensionsMeters = glm::dvec3{0.05};
+    sphere.positionMeters = glm::dvec3{0.0, 0.0, 0.1};
+    link1.collisionGeometry.push_back(sphere);
+    RobotCollisionGeometry cylinder;
+    cylinder.type = RobotCollisionType::Cylinder;
+    cylinder.dimensionsMeters = glm::dvec3{0.025, 0.1, 0.0};
+    link1.collisionGeometry.push_back(cylinder);
+    model.links = {BoxLink("base_link", {0.2, 0.2, 0.2}),
+        BoxLink("BaseSpacer", {0.05, 0.05, 0.05}), std::move(link1),
+        BoxLink("FixedSpacer", {0.06, 0.06, 0.06}), BoxLink("Link2", {0.1, 0.1, 0.1}),
+        RobotLink{"tool0"}};
+    model.toolLink = 5;
+    model.activeJoints = {1, 3};
+    model.joints = {
+        {"base_fixed", grasplink::model::RobotJointType::Fixed, 0, 1,
+            {0.0, 0.1, 0.0}, {1.0, 0.0, 0.0, 0.0}},
+        {"J1", grasplink::model::RobotJointType::Revolute, 1, 2,
+            {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, -3.1416, 3.1416, 1.0},
+        {"spacer_fixed", grasplink::model::RobotJointType::Fixed, 2, 3,
+            {0.0, 0.25, 0.0}, {1.0, 0.0, 0.0, 0.0}},
+        {"J2", grasplink::model::RobotJointType::Prismatic, 3, 4,
+            {0.0, 0.25, 0.0}, {0.7071067811865476, 0.7071067811865476, 0.0, 0.0},
+            {0.0, 0.0, 1.0}, -3.1416, 3.1416, 1.0},
+        {"tool_fixed", grasplink::model::RobotJointType::Fixed, 4, 5,
+            {0.0, 0.5, 0.0}, {1.0, 0.0, 0.0, 0.0}}};
+    grasplink::simulation::robotics::RobotModelAdapter modelAdapter(model);
+    const models::RobotSpecification& spec = modelAdapter.Specification();
+    ASSERT_TRUE(spec.manufacturer.empty());
+    const auto builtGeometry = grasplink::simulation::robotics::collision_geometry::Build(model);
+    auto unsupportedShapeModel = model;
+    unsupportedShapeModel.links[2].collisionGeometry[0].type =
+        static_cast<RobotCollisionType>(255);
+    GTestExpectThrows<std::invalid_argument>([&]
     {
-        model.nodes[i].name = names[i];
-        model.nodes[i].parentIndex = i - 1;
-    }
-    model.nodes[2].meshIndex = 0;
-    model.nodes[3].translation.y = 0.5F;
-    model.nodes[4].meshIndex = 1;
-    model.nodes[5].meshIndex = 2;
-    model.nodes[5].translation.y = 0.5F;
-    const auto builtGeometry = grasplink::simulation::robot_collision_geometry::Build(spec, model);
-    ASSERT_TRUE_MESSAGE(builtGeometry.links.size() == 2, "geometry builder returns one result per specified link");
-    ASSERT_TRUE_MESSAGE(builtGeometry.links[0].jointIndex == 0 && builtGeometry.links[1].jointIndex == 1,
-        "geometry builder keeps each link's FK joint index");
-    ASSERT_TRUE_MESSAGE(!builtGeometry.links[0].shapes.empty() && !builtGeometry.links[1].shapes.empty(),
-        "geometry builder returns collision shapes without creating Scene entities");
-    ASSERT_TRUE_MESSAGE(builtGeometry.baseShapes.empty(), "model without a Base node has no base geometry");
+        (void)grasplink::simulation::robotics::collision_geometry::Build(unsupportedShapeModel);
+    }, "unknown collision shapes are rejected instead of approximated as spheres");
+    ASSERT_TRUE_MESSAGE(builtGeometry.links.size() == 3, "fixed links keep their own collision shapes");
+    ASSERT_TRUE_MESSAGE(builtGeometry.links[0].jointIndex == 0 && builtGeometry.links[1].jointIndex == 0 &&
+        builtGeometry.links[2].jointIndex == 1,
+        "a fixed link follows the nearest moving joint");
+    ASSERT_TRUE_MESSAGE(builtGeometry.links[0].shapes.size() == 3 &&
+        builtGeometry.links[1].shapes.size() == 1 && builtGeometry.links[2].shapes.size() == 1,
+        "URDF collision shapes are prepared before Scene entities are created");
+    ASSERT_TRUE_MESSAGE(builtGeometry.links[0].shapes[0].type == grasplink::physics::CollisionShapeType::Box &&
+        builtGeometry.links[0].shapes[1].type == grasplink::physics::CollisionShapeType::ConvexHull &&
+        builtGeometry.links[0].shapes[2].type == grasplink::physics::CollisionShapeType::ConvexHull,
+        "URDF keeps boxes and approximates spheres and cylinders with convex hulls");
+    ASSERT_TRUE_MESSAGE(builtGeometry.baseShapes.size() == 2,
+        "a fixed base child shares the static base collision body");
+    ASSERT_NEAR_FINITE(builtGeometry.baseShapes[1].localTransform.position.y, 0.1, 1e-5,
+        "fixed base collision keeps its URDF offset");
     flecs::world world;
     auto sceneOwner = std::make_unique<Scene>(world);
     Scene& scene = *sceneOwner;
     Entity root = scene.CreateEntity("RobotRoot");
-    grasplink::simulation::RobotPhysicsAdapter adapter(scene, root, spec, model);
+    Entity baseSpacerVisual = scene.CreateEntity("BaseSpacer");
+    Entity joint1 = scene.CreateEntity("J1");
+    Entity link1Visual = scene.CreateEntity("Link1Visual");
+    Entity fixedSpacerVisual = scene.CreateEntity("FixedSpacer");
+    Entity joint2 = scene.CreateEntity("J2");
+    Entity link2Visual = scene.CreateEntity("Link2Visual");
+    baseSpacerVisual.SetParent(root);
+    baseSpacerVisual.SetLocalPosition({0.0F, 0.1F, 0.0F});
+    joint1.SetParent(baseSpacerVisual);
+    link1Visual.SetParent(joint1);
+    fixedSpacerVisual.SetParent(link1Visual);
+    joint2.SetParent(fixedSpacerVisual);
+    link2Visual.SetParent(joint2);
+    fixedSpacerVisual.SetLocalPosition({0.0F, 0.25F, 0.0F});
+    joint2.SetLocalPosition({0.0F, 0.25F, 0.0F});
+    joint2.SetLocalRotation({0.70710678F, 0.70710678F, 0.0F, 0.0F});
+    grasplink::simulation::robotics::RobotTransformAdapter visualAdapter(root, spec);
+    grasplink::simulation::RobotPhysicsAdapter adapter(scene, root, model);
     std::size_t syntheticLinkIndex = 0;
-    for (const char* name : {"Link1_CollisionProxy", "Link2_CollisionProxy"})
+    for (const char* name : {"Link1_CollisionProxy", "FixedSpacer_CollisionProxy", "Link2_CollisionProxy"})
     {
         Entity proxy = root.GetChild(name);
         ASSERT_TRUE_MESSAGE(proxy.IsValid(), "collision proxy created");
@@ -103,59 +166,329 @@ void CheckSyntheticGeometry()
         ASSERT_TRUE_MESSAGE(!colliders.shapes.empty(), std::string(name) + ": own geometry produces colliders");
         ASSERT_TRUE_MESSAGE(colliders.shapes.size() == builtGeometry.links[syntheticLinkIndex].shapes.size(),
             "adapter installs the builder's generated shape set");
-        for (const auto& shape : colliders.shapes)
-            for (const auto& point : shape.pointsMeters)
-                ASSERT_TRUE_MESSAGE(std::abs(point.x) < 0.051F && std::abs(point.y) < 0.051F && std::abs(point.z) < 0.051F,
-                    "downstream joint and Gripper geometry excluded");
+        ASSERT_TRUE_MESSAGE(colliders.shapes.front().type == grasplink::physics::CollisionShapeType::Box,
+            "the physics proxy keeps the shape declared in URDF");
         ++syntheticLinkIndex;
     }
     kinematics::RobotKinematics fk(spec);
     RobotState state;
     state.valid = true;
-    state.jointPositionRadians = {1.5707963267948966, 0};
-    adapter.Apply(fk.Update(state));
+    state.jointPositions = {1.5707963267948966, 0.05};
+    const auto& fkState = fk.Update(state);
+    adapter.Apply(fkState);
+    visualAdapter.Apply(fkState);
     TransformSystemModule::UpdateWorldTransforms(world);
+    ASSERT_NEAR_FINITE(fkState.jointAxesInBaseFrame[1].x, 1.0, 1e-5,
+        "the rotated URDF origin and first joint turn the second local Z axis toward base +X");
+    const glm::mat4 joint2World = joint2.GetWorldMatrix();
+    ASSERT_NEAR_FINITE(joint2World[3].x, -0.45, 1e-5,
+        "the GLB hierarchy follows FK and slides along the rotated URDF axis");
+    ASSERT_NEAR_FINITE(joint2.GetLocalPosition().y, 0.2, 1e-5,
+        "the prismatic GLB joint keeps its bind offset and adds its travel distance");
+    ASSERT_NEAR_FINITE(joint2.GetLocalRotation().x, 0.70710678, 1e-5,
+        "the GLB joint keeps its bind rotation before applying joint motion");
     const auto link2 = root.GetChild("Link2_CollisionProxy");
-    ASSERT_NEAR_FINITE(link2.GetLocalPosition().x, -0.5, 1e-5, "upstream joint moves proxy pivot");
-    ASSERT_NEAR_FINITE(link2.GetLocalPosition().y, 0.0, 1e-5, "proxy follows FK rather than bind geometry");
-    auto cycle = model;
-    cycle.nodes[0].parentIndex = 5;
-    GTestExpectThrows<std::invalid_argument>([&] { grasplink::simulation::RobotPhysicsAdapter bad(scene, root, spec, cycle); }, "GLB cycle rejected before recursion");
-    GTestExpectThrows<std::invalid_argument>([&] { adapter.Apply({}); }, "missing FK poses rejected");
+    ASSERT_NEAR_FINITE(link2.GetLocalPosition().x, -0.45, 1e-5, "upstream joints move proxy pivot");
+    ASSERT_NEAR_FINITE(link2.GetLocalPosition().y, 0.1, 1e-5, "proxy follows FK rather than bind geometry");
+    const auto fixedSpacer = root.GetChild("FixedSpacer_CollisionProxy");
+    ASSERT_NEAR_FINITE(fixedSpacer.GetLocalPosition().x, -0.25, 1e-5,
+        "fixed-link collision follows its nearest moving parent");
+    ASSERT_NEAR_FINITE(fixedSpacer.GetLocalPosition().y, 0.1, 1e-5,
+        "fixed-link collision keeps the base placement");
+    grasplink::physics::PhysicsWorld physics;
+    grasplink::simulation::PhysicsSystemModule physicsSystem(world, physics);
+    physicsSystem.Step(0.004);
+    TransformSystemModule::UpdateWorldTransforms(world);
+    const auto fixedSpacerBody = physicsSystem.GetBodyHandle(fixedSpacer.GetHandle());
+    ASSERT_TRUE_MESSAGE(physics.IsBodyValid(fixedSpacerBody),
+        "the fixed-link URDF shape is registered as a physics body");
+    auto incompleteFkState = fkState;
+    incompleteFkState.linkPosesInBaseFrame.resize(1);
+    incompleteFkState.linkPosesInBaseFrame[0].positionMeters.x += 1.0;
+    const Entity firstProxy = root.GetChild("Link1_CollisionProxy");
+    const glm::vec3 stableProxyPosition = firstProxy.GetLocalPosition();
+    GTestExpectThrows<std::invalid_argument>([&] { adapter.Apply(incompleteFkState); },
+        "all FK poses are checked before any collision proxy moves");
+    EXPECT_EQ(firstProxy.GetLocalPosition(), stableProxyPosition);
+    std::vector<grasplink::simulation::RobotPhysicsAdapter::CandidateWorldTransform>
+        incompleteCandidates;
+    GTestExpectThrows<std::invalid_argument>([&]
+    {
+        adapter.BuildCandidateWorldTransforms(incompleteFkState, glm::mat4{1.0F}, incompleteCandidates);
+    }, "candidate transforms reject incomplete FK poses");
+    EXPECT_TRUE(incompleteCandidates.empty());
     sceneOwner.reset();
     GTestExpectThrows<std::runtime_error>([&] { adapter.Apply(fk.Update(state)); }, "removed Scene invalidates physics proxy bindings");
+}
+
+void CheckLoadedArmPipeline(std::size_t axisCount)
+{
+    using namespace grasplink;
+    const auto modelDirectory = std::filesystem::path("tests/assets/robots") /
+        ("axis" + std::to_string(axisCount));
+    auto loaded = model::RobotModelLoader::Load(modelDirectory);
+    if (axisCount == 6)
+    {
+        // 고정 오프셋 뒤의 tool0에만 충돌 도형을 두어 관절 프레임과 proxy 프레임을 다르게 만든다.
+        const auto& finalJoint = loaded.robot.joints[loaded.robot.activeJoints.back()];
+        loaded.robot.links[finalJoint.childLink].collisionGeometry.clear();
+        RobotCollisionGeometry toolCollision;
+        toolCollision.type = RobotCollisionType::Box;
+        toolCollision.dimensionsMeters = glm::dvec3{0.04};
+        loaded.robot.links[loaded.robot.toolLink].collisionGeometry.push_back(toolCollision);
+    }
+    simulation::robotics::RobotModelAdapter modelAdapter(loaded.robot);
+    const auto& specification = modelAdapter.Specification();
+
+    flecs::world world;
+    Scene scene(world);
+    std::vector<Entity> visualNodes(loaded.visual.nodes.size());
+    for (std::size_t i = 0; i < loaded.visual.nodes.size(); ++i)
+    {
+        const auto& source = loaded.visual.nodes[i];
+        Entity node = scene.CreateEntity(source.name);
+        node.SetLocalPosition(source.translation);
+        node.SetLocalRotation(source.rotation);
+        node.SetLocalScale(source.scale);
+        visualNodes[i] = node;
+    }
+    for (std::size_t i = 0; i < loaded.visual.nodes.size(); ++i)
+    {
+        const auto parentIndex = loaded.visual.nodes[i].parentIndex;
+        if (parentIndex)
+            visualNodes[i].SetParent(visualNodes[*parentIndex]);
+    }
+
+    Entity robotRoot = visualNodes[*loaded.visual.rootNodeIndex];
+    simulation::robotics::RobotTransformAdapter visualAdapter(robotRoot, specification);
+    simulation::RobotPhysicsAdapter collisionAdapter(scene, robotRoot, loaded.robot);
+    robotics::kinematics::RobotKinematics kinematics(specification);
+
+    robotics::RobotState state;
+    state.valid = true;
+    state.jointPositions.assign(specification.jointCount, 0.0);
+    visualAdapter.Apply(kinematics.Update(state));
+    collisionAdapter.Apply(kinematics.Update(state));
+    TransformSystemModule::UpdateWorldTransforms(world);
+
+    const auto& firstJoint = loaded.robot.joints[loaded.robot.activeJoints.front()];
+    Entity jointEntity = robotRoot.FindChildByNameRecursive(firstJoint.name);
+    Entity firstLinkProxy = robotRoot.GetChild(
+        loaded.robot.links[firstJoint.childLink].name + "_CollisionProxy");
+    ASSERT_TRUE_MESSAGE(jointEntity && firstLinkProxy, "loaded arm creates visual and collision bindings");
+    const glm::quat initialJointRotation = jointEntity.GetLocalRotation();
+    const glm::quat initialProxyRotation = glm::normalize(glm::quat_cast(
+        glm::mat3{firstLinkProxy.GetWorldMatrix()}));
+
+    state.jointPositions.front() = 0.15;
+    const auto& movedState = kinematics.Update(state);
+    visualAdapter.Apply(movedState);
+    collisionAdapter.Apply(movedState);
+    TransformSystemModule::UpdateWorldTransforms(world);
+
+    ASSERT_GT(1.0F - std::abs(glm::dot(initialJointRotation, jointEntity.GetLocalRotation())),
+        1.0e-5F);
+    const glm::quat movedProxyRotation = glm::normalize(glm::quat_cast(
+        glm::mat3{firstLinkProxy.GetWorldMatrix()}));
+    ASSERT_GT(1.0F - std::abs(glm::dot(initialProxyRotation, movedProxyRotation)),
+        1.0e-5F);
+
+    physics::PhysicsWorld physicsWorld;
+    simulation::PhysicsSystemModule physicsSystem(world, physicsWorld);
+    physicsSystem.Step(0.004);
+    Entity baseProxy = robotRoot.GetChild("Base_CollisionProxy");
+    ASSERT_TRUE_MESSAGE(baseProxy && baseProxy.Has<Colliders>() && baseProxy.Has<RigidBody>(),
+        "the URDF base creates a physical collision proxy");
+    ASSERT_TRUE_MESSAGE(physicsWorld.IsBodyValid(physicsSystem.GetBodyHandle(baseProxy.GetHandle())),
+        "the URDF base collision proxy reaches the physics engine");
+    for (const std::size_t jointIndex : loaded.robot.activeJoints)
+    {
+        const auto& joint = loaded.robot.joints[jointIndex];
+        if (loaded.robot.links[joint.childLink].collisionGeometry.empty())
+            continue;
+        Entity proxy = robotRoot.GetChild(loaded.robot.links[joint.childLink].name + "_CollisionProxy");
+        ASSERT_TRUE_MESSAGE(proxy && proxy.Has<Colliders>() && proxy.Has<RigidBody>(),
+            "each URDF arm link creates a physical collision proxy");
+        ASSERT_TRUE_MESSAGE(physicsWorld.IsBodyValid(physicsSystem.GetBodyHandle(proxy.GetHandle())),
+            "each URDF collision proxy reaches the physics engine");
+    }
+
+    robotics::backends::simulation::SimRobotController controller(specification);
+    ASSERT_TRUE(controller.Connect());
+    const auto& homeState = controller.GetStateView();
+    const auto& homeKinematics = kinematics.Update(homeState);
+    visualAdapter.Apply(homeKinematics);
+    collisionAdapter.Apply(homeKinematics);
+
+    std::unique_ptr<robotics::backends::simulation::SimGripperController> gripperController;
+    std::unique_ptr<robotics::kinematics::GripperKinematics> gripperKinematics;
+    std::unique_ptr<simulation::robotics::GripperTransformAdapter> gripperTransformAdapter;
+    std::optional<simulation::robotics::RobotEnvironmentCollisionGuard::GripperSupport> gripperSupport;
+    Entity gripperBodyProxy;
+    if (axisCount == 6)
+    {
+        gripperController = std::make_unique<robotics::backends::simulation::SimGripperController>(
+            kCollisionTestGripper);
+        ASSERT_TRUE(gripperController->Connect());
+        ASSERT_TRUE(gripperController->Activate());
+        gripperKinematics = std::make_unique<robotics::kinematics::GripperKinematics>(
+            kCollisionTestGripper);
+
+        Entity gripperRoot = scene.CreateEntity("Gripper");
+        gripperRoot.SetParent(robotRoot);
+        const auto& toolPosition = homeKinematics.toolFrameInBaseFrame.positionMeters;
+        gripperRoot.SetLocalPosition(glm::vec3{static_cast<float>(toolPosition.x),
+            static_cast<float>(toolPosition.y), static_cast<float>(toolPosition.z)});
+        const auto& toolRotation = homeKinematics.toolFrameInBaseFrame.rotation;
+        gripperRoot.SetLocalRotation(glm::quat{static_cast<float>(toolRotation.w),
+            static_cast<float>(toolRotation.x), static_cast<float>(toolRotation.y),
+            static_cast<float>(toolRotation.z)});
+        Entity gripperJoint = scene.CreateEntity("TestGripperJoint");
+        gripperJoint.SetParent(gripperRoot);
+        gripperTransformAdapter = std::make_unique<simulation::robotics::GripperTransformAdapter>(
+            gripperRoot, kCollisionTestGripper);
+
+        gripperBodyProxy = scene.CreateEntity("GripperBody_CollisionProxy");
+        gripperBodyProxy.SetParent(gripperRoot);
+        gripperBodyProxy.SetLocalPosition({0.25F, 0.0F, 0.0F});
+        gripperBodyProxy.set<GripperCollisionProxy>({GripperCollisionPart::Body})
+            .set<RigidBody>({physics::BodyMotionType::Kinematic, physics::CollisionLayer::Gripper});
+        physics::CollisionShapeDescription gripperShape;
+        gripperShape.type = physics::CollisionShapeType::Box;
+        gripperShape.halfExtentsMeters = glm::vec3{0.02F};
+        gripperBodyProxy.set<Colliders>({{gripperShape}});
+        const auto& gripperState = gripperKinematics->Update(gripperController->GetState());
+        gripperTransformAdapter->Apply(gripperState);
+        gripperSupport.emplace(simulation::robotics::RobotEnvironmentCollisionGuard::GripperSupport{
+            *gripperController, *gripperKinematics, *gripperTransformAdapter});
+    }
+    TransformSystemModule::UpdateWorldTransforms(world);
+    physicsSystem.Step(0.004);
+    TransformSystemModule::UpdateWorldTransforms(world);
+
+    Entity gripperObstacle;
+    if (gripperSupport)
+    {
+        // 로봇 팔이 아니라 tool0에 붙은 그리퍼만 겹치도록 장애물 위치를 잡는다.
+        const glm::vec3 bodyPosition{gripperBodyProxy.GetWorldMatrix()[3]};
+        gripperObstacle = scene.CreateEntity("GripperFrameObstacle");
+        gripperObstacle.SetLocalPosition(bodyPosition);
+        gripperObstacle.set<RigidBody>({physics::BodyMotionType::Static, physics::CollisionLayer::Environment});
+        physics::CollisionShapeDescription obstacleShape;
+        obstacleShape.type = physics::CollisionShapeType::Box;
+        obstacleShape.halfExtentsMeters = glm::vec3{0.02F};
+        gripperObstacle.set<Colliders>({{obstacleShape}});
+        TransformSystemModule::UpdateWorldTransforms(world);
+        physicsSystem.Step(0.004);
+        TransformSystemModule::UpdateWorldTransforms(world);
+    }
+
+    simulation::robotics::RobotEnvironmentCollisionGuard collisionGuard(
+        controller, kinematics, visualAdapter, collisionAdapter,
+        world, physicsWorld, physicsSystem, robotRoot, std::move(gripperSupport));
+
+    if (gripperObstacle)
+    {
+        const auto blockedPose = controller.MovePose(controller.GetStateView().tcpPose);
+        ASSERT_FALSE(blockedPose);
+        ASSERT_EQ(blockedPose.code, robotics::ErrorCode::EnvironmentContact);
+        gripperObstacle.Destroy();
+        TransformSystemModule::UpdateWorldTransforms(world);
+        physicsSystem.Step(0.004);
+        TransformSystemModule::UpdateWorldTransforms(world);
+    }
+
+    constexpr double targetAngleRadians = 1.0;
+    robotics::JointMoveCommand command;
+    command.targetPositions = controller.GetStateView().jointPositions;
+    command.targetPositions.front() = targetAngleRadians;
+    ASSERT_TRUE(controller.MoveJoint(command));
+
+    const auto& targetKinematics = kinematics.Update(command.targetPositions);
+    std::vector<simulation::RobotPhysicsAdapter::CandidateWorldTransform> candidateTransforms;
+    collisionAdapter.BuildCandidateWorldTransforms(
+        targetKinematics, robotRoot.GetWorldMatrix(), candidateTransforms);
+    const auto& movingJoint = loaded.robot.joints[loaded.robot.activeJoints[1]];
+    Entity movingLinkProxy = robotRoot.GetChild(
+        loaded.robot.links[movingJoint.childLink].name + "_CollisionProxy");
+    const auto targetLink = std::find_if(candidateTransforms.begin(), candidateTransforms.end(),
+        [&](const auto& candidate) { return candidate.entity == movingLinkProxy; });
+    ASSERT_NE(targetLink, candidateTransforms.end());
+    const auto& movingCollisionShape = movingLinkProxy.Get<Colliders>().shapes.front();
+    const glm::vec3 obstaclePosition{targetLink->worldTransform *
+        glm::vec4{movingCollisionShape.localTransform.position, 1.0F}};
+
+    Entity obstacle = scene.CreateEntity("CollisionStopObstacle");
+    obstacle.SetLocalPosition(obstaclePosition);
+    obstacle.set<RigidBody>({physics::BodyMotionType::Static, physics::CollisionLayer::Environment});
+    physics::CollisionShapeDescription obstacleShape;
+    obstacleShape.type = physics::CollisionShapeType::Box;
+    obstacleShape.halfExtentsMeters = glm::vec3{0.02F};
+    obstacle.set<Colliders>({{obstacleShape}});
+    TransformSystemModule::UpdateWorldTransforms(world);
+    physicsSystem.Step(0.004);
+
+    bool stoppedByObstacle = false;
+    for (std::size_t tick = 0; tick < 500; ++tick)
+    {
+        collisionGuard.CaptureSafeJointPose();
+        controller.Update(0.004);
+        const auto& currentKinematics = kinematics.Update(controller.GetStateView());
+        visualAdapter.Apply(currentKinematics);
+        collisionAdapter.Apply(currentKinematics);
+        TransformSystemModule::UpdateWorldTransforms(world);
+        collisionGuard.RestoreSafePoseIfOverlapping();
+        physicsSystem.Step(0.004);
+        TransformSystemModule::UpdateWorldTransforms(world);
+
+        const auto& currentState = controller.GetStateView();
+        if (currentState.mode != robotics::RobotMode::Moving)
+        {
+            stoppedByObstacle = currentState.errorCode == robotics::ErrorCode::EnvironmentContact;
+            break;
+        }
+    }
+    ASSERT_TRUE_MESSAGE(stoppedByObstacle, "environment contact restores the last safe joint pose");
+    ASSERT_GT(controller.GetStateView().jointPositions.front(), 0.0);
+    ASSERT_LT(controller.GetStateView().jointPositions.front(), targetAngleRadians);
 }
 }
 
 /**
- * @brief 로봇 링크마다 만든 충돌용 단순 물체가 올바른 모델 조각을 따라가는지 확인한다.
- * @details 화면에 보이는 로봇 모델과 별도로 충돌 계산에 쓰는 단순 물체를 만든다. 각 물체는 링크에 붙어 FK가 관절 각도에서 계산한 위치와 방향을 따라야 한다.
- * 작은 시험 계층으로 하위 관절과 그리퍼가 부모 링크에 중복 포함되지 않는지, 잘못된 모델 연결과 삭제된 Scene 참조가 거부되는지 검사한다.
- * 실제 HCR12A GLB에서 여섯 팔 링크의 단순 볼록 형상 수가 예상 범위에 있는지도 확인한다. 이 시험은 CPU 자료로 설정을 만드는 단계까지만 다루며 GPU 업로드나 Jolt 접촉 계산은 하지 않는다.
+ * @brief URDF 모델 변환 결과와 충돌용 단순 물체가 같은 관절 자세를 사용하는지 확인한다.
+ * @details 작은 두 관절 모델에서 URDF 관절을 제어 사양으로 바꾸고 FK 결과를 충돌용 물체에 적용한다.
+ * 상자·구·원기둥 충돌 형상이 유지되는지, 관절 회전 뒤에도 링크 충돌체가 FK 위치를 따라가는지 함께 검사한다.
  */
 TEST(RobotCollisionGeometry, SyntheticModelBuildsIndependentFkProxies)
 {
     CheckSyntheticGeometry();
+    for (const std::size_t axisCount : {4U, 6U, 7U})
+        CheckLoadedArmPipeline(axisCount);
 }
 
 TEST(RobotCollisionGeometry, AllowedCollisionMatrixExcludesOnlyConnectedPairs)
 {
     using namespace grasplink::simulation::robotics;
     EXPECT_TRUE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Link, 2}, {SelfCollisionPart::Link, 3}));
-    EXPECT_FALSE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Link, 1}, {SelfCollisionPart::Link, 3}));
+        {SelfCollisionPart::Link, 2, 4}, {SelfCollisionPart::Link, 7, 4}));
     EXPECT_TRUE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Base, 0}, {SelfCollisionPart::Link, 0}));
+        {SelfCollisionPart::Link, 2, 4}, {SelfCollisionPart::Link, 8, 5}));
     EXPECT_FALSE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Base, 0}, {SelfCollisionPart::Link, 1}));
+        {SelfCollisionPart::Link, 1, 4}, {SelfCollisionPart::Link, 3, 6}));
     EXPECT_TRUE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Link, 5}, {SelfCollisionPart::GripperBody, 0}));
+        {SelfCollisionPart::Base, 0}, {SelfCollisionPart::Link, 8, 0}));
     EXPECT_FALSE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Link, 4}, {SelfCollisionPart::GripperBody, 0}));
+        {SelfCollisionPart::Base, 0}, {SelfCollisionPart::Link, 0, 1}));
+    EXPECT_TRUE(IsAllowedSelfCollision(
+        {SelfCollisionPart::Link, 5, 7}, {SelfCollisionPart::GripperBody, 9, 7}));
     EXPECT_FALSE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Link, static_cast<std::size_t>(-1)},
-        {SelfCollisionPart::Link, static_cast<std::size_t>(-1)}));
+        {SelfCollisionPart::Link, 4, 6}, {SelfCollisionPart::GripperBody, 9, 7}));
+    EXPECT_FALSE(IsAllowedSelfCollision(
+        {SelfCollisionPart::Link, 4, SelfCollisionIdentity::InvalidIndex},
+        {SelfCollisionPart::GripperBody, 9, SelfCollisionIdentity::InvalidIndex}));
+    EXPECT_FALSE(IsAllowedSelfCollision(
+        {SelfCollisionPart::Link, 0, SelfCollisionIdentity::InvalidIndex},
+        {SelfCollisionPart::Link, 1, SelfCollisionIdentity::InvalidIndex}));
 
     grasplink::physics::PhysicsWorld physics;
     grasplink::physics::BodyDescription first;
@@ -165,10 +498,10 @@ TEST(RobotCollisionGeometry, AllowedCollisionMatrixExcludesOnlyConnectedPairs)
     const auto firstBody = physics.CreateBody(first);
     const auto secondBody = physics.CreateBody(first);
     EXPECT_TRUE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Link, 1}, {SelfCollisionPart::Link, 2}))
+        {SelfCollisionPart::Link, 1, 4}, {SelfCollisionPart::Link, 2, 5}))
         << "adjacent robot links are excluded from self-collision rejection";
     EXPECT_FALSE(IsAllowedSelfCollision(
-        {SelfCollisionPart::Link, 1}, {SelfCollisionPart::Link, 3}));
+        {SelfCollisionPart::Link, 1, 4}, {SelfCollisionPart::Link, 3, 6}));
     EXPECT_TRUE(physics.OverlapsBodiesAt(
         firstBody, first.transform, secondBody, first.transform))
         << "an overlapping non-adjacent pair remains detectable by the narrow-phase query";
@@ -178,32 +511,32 @@ TEST(RobotCollisionGeometry, Hcr12aBaseAndArmProxiesPassOverlapValidation)
 {
     using namespace grasplink::robotics;
     flecs::world world;
-    // 여섯 팔 Link에는 현재 121개 볼록 껍질이 만들어지고 Base의 hull은 별도로 집계한다. 전체 수의 150개 상한으로 형상 복잡도의 예상 밖 증가를 검출한다.
-    const auto actualModel = LoadTestGlb("HCR12A_2F-85.glb");
+    // 실제 HCR 모델도 URDF의 충돌 형상으로 만들어 기준 자세에서 겹침 검사를 통과해야 한다.
+    const auto actualModel = grasplink::model::RobotModelLoader::Load(
+        std::filesystem::path("assets/robots/HCR12A"));
     auto actualScene = std::make_unique<Scene>(world);
     Entity actualRoot = actualScene->CreateEntity("ActualRobot");
     grasplink::simulation::RobotPhysicsAdapter actualAdapter(
-        *actualScene, actualRoot, models::hanwha::kHcr12a, actualModel);
-    std::size_t actualHullCount = 0;
+        *actualScene, actualRoot, actualModel.robot);
+    std::size_t actualShapeCount = 0;
     Entity baseProxy = actualRoot.GetChild("Base_CollisionProxy");
-    ASSERT_TRUE_MESSAGE(baseProxy.IsValid(), "actual Base mesh creates a fixed collision proxy");
+    ASSERT_TRUE_MESSAGE(baseProxy.IsValid(), "URDF base link creates a fixed collision proxy");
     ASSERT_TRUE_MESSAGE(baseProxy.Get<RigidBody>().motionType == grasplink::physics::BodyMotionType::Static,
         "Base proxy does not move with the arm joints");
     ASSERT_TRUE_MESSAGE(baseProxy.Get<RigidBody>().collisionLayer == grasplink::physics::CollisionLayer::Environment,
         "Base proxy participates in Environment overlap checks");
-    ASSERT_TRUE_MESSAGE(!baseProxy.Get<Colliders>().shapes.empty(), "actual Base mesh produces collision hulls");
+    ASSERT_TRUE_MESSAGE(!baseProxy.Get<Colliders>().shapes.empty(), "URDF base link provides collision shapes");
     ASSERT_TRUE_MESSAGE(baseProxy.GetParent() == actualRoot, "Base collider follows the placed robot root");
     const auto& baseShape = baseProxy.Get<Colliders>().shapes.front();
-    ASSERT_TRUE_MESSAGE(baseShape.type == grasplink::physics::CollisionShapeType::ConvexHull,
-        "Base geometry uses the same supported convex hull shape type as arm links");
-    for (const glm::vec3& point : baseShape.pointsMeters)
-        ASSERT_TRUE_MESSAGE(std::abs(point.x) < 0.25F && point.y >= -0.01F && point.y < 0.25F && std::abs(point.z) < 0.25F,
-            "Base hull points come from the GLB Base geometry in robot-root coordinates");
+    ASSERT_TRUE_MESSAGE(baseShape.type == grasplink::physics::CollisionShapeType::Box,
+        "base collision follows the box recorded in URDF");
+    ASSERT_NEAR_FINITE(baseShape.halfExtentsMeters.x, 0.11, 1e-5, "base width comes from URDF");
+    ASSERT_NEAR_FINITE(baseShape.localTransform.position.y, 0.10425, 1e-5, "base position comes from URDF");
 
     grasplink::robotics::kinematics::RobotKinematics actualKinematics(models::hanwha::kHcr12a);
     RobotState homeState;
     homeState.valid = true;
-    homeState.jointPositionRadians.assign(models::hanwha::kHcr12a.jointCount, 0.0);
+    homeState.jointPositions.assign(models::hanwha::kHcr12a.jointCount, 0.0);
     actualAdapter.Apply(actualKinematics.Update(homeState));
     grasplink::physics::PhysicsWorld physics;
     grasplink::simulation::PhysicsSystemModule physicsSystem(world, physics);
@@ -218,7 +551,7 @@ TEST(RobotCollisionGeometry, Hcr12aBaseAndArmProxiesPassOverlapValidation)
     const auto baseBody = physicsSystem.GetBodyHandle(baseProxy.GetHandle());
     ASSERT_TRUE_MESSAGE(physics.IsBodyValid(link1Body), "home Link1 has a Jolt body for overlap validation");
     ASSERT_TRUE_MESSAGE(physics.IsBodyValid(baseBody), "fixed Base has a Jolt body for overlap validation");
-    // 두 GLB 충돌 형상은 J1 베어링에서 실제로 겹치므로, Base 하나만 제외한 검사와 기본 검사를 함께 확인한다.
+    // 로봇 링크와 바닥이 겹치는 경우는 남기고, 연결된 Base와의 겹침만 제외한다.
     ASSERT_TRUE_MESSAGE(physics.OverlapsEnvironmentAt(link1Body, link1Pose),
         "home Link1 intersects Base at their modeled bearing");
     ASSERT_TRUE_MESSAGE(!physics.OverlapsEnvironmentAt(link1Body, link1Pose, baseBody),
@@ -231,7 +564,8 @@ TEST(RobotCollisionGeometry, Hcr12aBaseAndArmProxiesPassOverlapValidation)
         if (proxy == baseProxy)
         {
             selfCollisionProxies.push_back({
-                {grasplink::simulation::robotics::SelfCollisionPart::Base, 0},
+                {grasplink::simulation::robotics::SelfCollisionPart::Base, 0,
+                    grasplink::simulation::robotics::SelfCollisionIdentity::InvalidIndex},
                 {proxy, baseBody}});
             continue;
         }
@@ -241,7 +575,8 @@ TEST(RobotCollisionGeometry, Hcr12aBaseAndArmProxiesPassOverlapValidation)
         ASSERT_TRUE_MESSAGE(physics.IsBodyValid(handle), "each HCR link has a body for self-collision validation");
         selfCollisionProxies.push_back({
             {grasplink::simulation::robotics::SelfCollisionPart::Link,
-                proxy.Get<RobotCollisionProxy>().linkIndex},
+                proxy.Get<RobotCollisionProxy>().linkIndex,
+                proxy.Get<RobotCollisionProxy>().jointIndex},
             {proxy, handle}});
     }
     for (std::size_t first = 0; first < selfCollisionProxies.size(); ++first)
@@ -268,15 +603,15 @@ TEST(RobotCollisionGeometry, Hcr12aBaseAndArmProxiesPassOverlapValidation)
     {
         if (proxy.GetHandle().name() == "Base_CollisionProxy")
         {
-            actualHullCount += proxy.GetHandle().get<Colliders>().shapes.size();
+            actualShapeCount += proxy.GetHandle().get<Colliders>().shapes.size();
             continue;
         }
         const auto& shapes = proxy.GetHandle().get<Colliders>().shapes;
         ASSERT_TRUE_MESSAGE(!shapes.empty(), "actual robot link retains collision coverage");
-        actualHullCount += shapes.size();
-        std::cout << proxy.GetHandle().name() << ": " << shapes.size() << " hulls\n";
+        actualShapeCount += shapes.size();
     }
-    std::cout << "Actual robot hulls: " << actualHullCount << '\n';
-    ASSERT_TRUE_MESSAGE(actualRoot.GetChildren().size() == 7, "actual robot keeps one Base and six independent arm collision proxies");
-    ASSERT_TRUE_MESSAGE(actualHullCount <= 150, "actual robot collider complexity stays within runtime budget");
+    ASSERT_TRUE_MESSAGE(actualRoot.GetChildren().size() == kExpectedHcrCollisionProxyCount,
+        "the HCR model has one base and six arm collision proxies");
+    ASSERT_TRUE_MESSAGE(actualShapeCount <= kMaximumHcrCollisionShapeCount,
+        "robot collision shape count stays within the test limit");
 }

@@ -21,7 +21,7 @@ void ExpectToolPosition(
     const std::string& label)
 {
     // 입력 관절각은 rad, 기대 위치는 로봇 기준점(Base)에서 잰 m 단위다. 관절을 하나씩 회전시켜 축 방향의 부호와 링크 변환이 누적되는 순서를 확인한다.
-    state.jointPositionRadians.assign(jointRadians.begin(), jointRadians.end());
+    state.jointPositions.assign(jointRadians.begin(), jointRadians.end());
     const auto& result = kinematics.Update(state);
     SCOPED_TRACE(label);
     ASSERT_TRUE(result.toolFrameValid);
@@ -63,7 +63,7 @@ TEST(RobotKinematicsTests, ReferencePosesAndValidationContracts)
     ExpectToolPosition(kinematics, state, {0.45, -0.4, 0.3, 0.5, -0.2, 0.7},
         {0.26702766609490924, 1.0867538528236094, 0.60173049560973602}, "mixed pose");
 
-    state.jointPositionRadians.assign(6, 0.0);
+    state.jointPositions.assign(6, 0.0);
     const auto& zeroResult = kinematics.Update(state);
     // 관절 회전 중심도 로봇 기준 [m] 좌표로 확인한다. 1e-12 허용 오차는 동일한 사양 상수로 계산할 때 피벗 위치 누적 순서가 바뀌는 회귀를 찾는다.
     EXPECT_NEAR(zeroResult.linkPosesInBaseFrame.front().positionMeters.y, 0.1985, 1e-12);
@@ -78,10 +78,10 @@ TEST(RobotKinematicsTests, ReferencePosesAndValidationContracts)
     invalidState.valid = false;
     EXPECT_THROW(kinematics.Update(invalidState), std::invalid_argument);
     invalidState = state;
-    invalidState.jointPositionRadians.pop_back();
+    invalidState.jointPositions.pop_back();
     EXPECT_THROW(kinematics.Update(invalidState), std::invalid_argument);
     invalidState = state;
-    invalidState.jointPositionRadians[2] = std::numeric_limits<double>::quiet_NaN();
+    invalidState.jointPositions[2] = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW(kinematics.Update(invalidState), std::invalid_argument);
 
     auto invalidJoints = models::hanwha::kHcr12aJoints;
@@ -116,6 +116,33 @@ TEST(RobotKinematicsTests, ReferencePosesAndValidationContracts)
     RobotKinematics tinyQuaternionKinematics(tinyQuaternionSpecification);
     const auto& tinyQuaternionResult = tinyQuaternionKinematics.Update(state);
     EXPECT_NEAR(tinyQuaternionResult.toolFrameInBaseFrame.rotation.w, 1.0, 1e-12);
+
+    // URDF origin 회전은 축과 ToolFrame 위치를 함께 돌려야 한다. 이 관절의 Local X축은 base의 Y축이 된다.
+    std::array<models::JointSpecification, 1> rotatedOriginJoints{{
+        {"rotated", {1.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, -3.2, 3.2, 1.0}}};
+    models::RobotSpecification rotatedOriginSpecification{
+        "test", "rotated-origin", rotatedOriginJoints.data(), rotatedOriginJoints.size(),
+        nullptr, 0, {{0.0, 0.0, 1.0}, {}}, true};
+    const double halfSqrtTwo = std::sqrt(0.5);
+    rotatedOriginJoints[0].parentToJointOrigin = {
+        {1.0, 0.0, 0.0}, {halfSqrtTwo, 0.0, 0.0, halfSqrtTwo}};
+    RobotKinematics rotatedOriginKinematics(rotatedOriginSpecification);
+    const auto& rotatedOriginResult = rotatedOriginKinematics.Update({quarterTurn});
+    EXPECT_NEAR(rotatedOriginResult.jointAxesInBaseFrame[0].x, 0.0, 1e-12);
+    EXPECT_NEAR(rotatedOriginResult.jointAxesInBaseFrame[0].y, 1.0, 1e-12);
+    EXPECT_NEAR(rotatedOriginResult.toolFrameInBaseFrame.positionMeters.x, 2.0, 1e-12);
+    EXPECT_NEAR(rotatedOriginResult.toolFrameInBaseFrame.positionMeters.y, 0.0, 1e-12);
+
+    std::array<models::JointSpecification, 1> slidingJoints{{
+        {"Slide", {}, {1.0, 0.0, 0.0}, 0.0, 0.2, 0.1}}};
+    slidingJoints[0].motionType = models::JointMotionType::Prismatic;
+    models::RobotSpecification slidingSpecification{
+        "Test", "Slide", slidingJoints.data(), slidingJoints.size(), nullptr, 0,
+        {{0.1, 0.0, 0.0}, {}}, true};
+    RobotKinematics slidingKinematics(slidingSpecification);
+    const auto& slideState = slidingKinematics.Update(JointVector{0.05});
+    EXPECT_NEAR(slideState.toolFrameInBaseFrame.positionMeters.x, 0.15, 1e-12);
+    EXPECT_NEAR(slideState.jointAxesInBaseFrame[0].x, 1.0, 1e-12);
 
     invalidSpecification = models::hanwha::kHcr12a;
     invalidSpecification.joints = nullptr;

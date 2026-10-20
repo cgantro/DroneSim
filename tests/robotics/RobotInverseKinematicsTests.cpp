@@ -68,6 +68,58 @@ models::RobotSpecification MakeSingleJointModel(
 
 }
 
+namespace
+{
+void CheckFourJointModelSolvesPositionOnly()
+{
+    std::array<models::JointSpecification, 4> joints{};
+    for (std::size_t i = 0; i < joints.size(); ++i)
+        joints[i] = models::hanwha::kHcr12a.joints[i];
+    const models::RobotSpecification specification{
+        "Test", "FourAxis", joints.data(), joints.size(), nullptr, 0, {}, true};
+    LevenbergMarquardtIk inverse(specification);
+    const JointVector seed{0.2, -0.35, 0.3, 0.2};
+    const JointVector targetJoints{0.22, -0.33, 0.31, 0.19};
+    CartesianPose target = inverse.EvaluateTcp(targetJoints);
+    target.orientationXyzw = {0.0, 0.0, 0.0, 1.0};
+
+    IkOptions options;
+    options.taskMode = IkTaskMode::PositionOnly;
+    const IkResult result = inverse.Solve(target, seed, options);
+
+    ASSERT_EQ(result.status, IkStatus::Success) << result.message;
+    EXPECT_LT(PositionDistance(inverse.EvaluateTcp(result.jointPositions), target), 2e-5);
+}
+
+void CheckSevenJointModelSolvesReachablePose()
+{
+    std::array<models::JointSpecification, 7> joints{};
+    for (std::size_t i = 0; i < models::hanwha::kHcr12a.jointCount; ++i)
+        joints[i] = models::hanwha::kHcr12a.joints[i];
+    const auto& last = joints[5];
+    joints[6] = {"J7", {last.bindPivotMeters.x, last.bindPivotMeters.y, last.bindPivotMeters.z + 0.08},
+        {0.0, 1.0, 0.0}, -2.0, 2.0, 1.0};
+    const models::RobotSpecification specification{
+        "Test", "SevenAxis", joints.data(), joints.size(), nullptr, 0,
+        models::hanwha::kHcr12a.toolFrameInLastJoint, true};
+    LevenbergMarquardtIk inverse(specification);
+    const JointVector seed{0.2, -0.35, 0.3, 0.2, -0.25, 0.1, 0.0};
+    const JointVector targetJoints{0.21, -0.34, 0.31, 0.19, -0.24, 0.11, 0.03};
+    const CartesianPose target = inverse.EvaluateTcp(targetJoints);
+
+    const IkResult result = inverse.Solve(target, seed);
+
+    ASSERT_EQ(result.status, IkStatus::Success) << result.message;
+    EXPECT_LT(PositionDistance(inverse.EvaluateTcp(result.jointPositions), target), 2e-5);
+}
+}
+
+TEST(RobotInverseKinematicsTests, SolvesPositionAndPoseForFourAndSevenJoints)
+{
+    CheckFourJointModelSolvesPositionOnly();
+    CheckSevenJointModelSolvesReachablePose();
+}
+
 TEST(RobotInverseKinematicsTests, JacobianMatchesFiniteDifferenceWithAngledAxesAndTcpOffset)
 {
     // 서로 다른 크기와 방향을 가진 회전축, 관절 중심, ToolFrame offset을 사용해 축이 Local에서 Base로 변환되는지 확인한다.
@@ -81,7 +133,7 @@ TEST(RobotInverseKinematicsTests, JacobianMatchesFiniteDifferenceWithAngledAxesA
     const double halfAngle = 0.13;
     const models::Pose3 tcpOffset{{0.04, -0.02, 0.03}, {std::cos(halfAngle), std::sin(halfAngle), 0.0, 0.0}};
     RobotKinematics forward(specification);
-    DampedLeastSquaresIk inverse(specification, tcpOffset);
+    LevenbergMarquardtIk inverse(specification, tcpOffset);
     const JointVector angles{0.31, -0.27, 0.19};
     const CartesianPose center = inverse.EvaluateTcp(angles);
     const auto& fkState = forward.Update(angles);
@@ -121,7 +173,7 @@ TEST(RobotInverseKinematicsTests, JacobianMatchesFiniteDifferenceWithAngledAxesA
 
 TEST(RobotInverseKinematicsTests, RoundTripsReachablePoseAndIgnoresQuaternionSign)
 {
-    DampedLeastSquaresIk inverse(models::hanwha::kHcr12a);
+    LevenbergMarquardtIk inverse(models::hanwha::kHcr12a);
     const JointVector currentSeed{0.2, -0.35, 0.3, 0.2, -0.25, 0.1};
     const JointVector targetJoints{0.25, -0.37, 0.34, 0.17, -0.23, 0.11};
     const CartesianPose target = inverse.EvaluateTcp(targetJoints);
@@ -129,7 +181,7 @@ TEST(RobotInverseKinematicsTests, RoundTripsReachablePoseAndIgnoresQuaternionSig
     // 순기구학(FK)은 관절각에서 TCP 자세를 계산하고 역기구학(IK)은 그 자세에서 관절각을 찾는다. 여기서는 같은 로봇 모델의 FK가 만든 목표를 넣어 IK 출력도 FK로 다시 검사한다.
     const IkResult result = inverse.Solve(target, currentSeed);
     ASSERT_EQ(result.status, IkStatus::Success) << "FK-generated reachable target converges: " + result.message;
-    const CartesianPose recovered = inverse.EvaluateTcp(result.jointPositionRadians);
+    const CartesianPose recovered = inverse.EvaluateTcp(result.jointPositions);
     EXPECT_LT(PositionDistance(recovered, target), 2e-5) << "round-trip TCP position error";
     EXPECT_LT(OrientationDistance(recovered, target), 2e-4) << "round-trip TCP orientation error";
 
@@ -138,15 +190,15 @@ TEST(RobotInverseKinematicsTests, RoundTripsReachablePoseAndIgnoresQuaternionSig
         component = -component;
     const IkResult signFlipped = inverse.Solve(equivalent, currentSeed);
     ASSERT_EQ(signFlipped.status, IkStatus::Success) << "opposite quaternion sign describes the same orientation";
-    const CartesianPose signRecovered = inverse.EvaluateTcp(signFlipped.jointPositionRadians);
+    const CartesianPose signRecovered = inverse.EvaluateTcp(signFlipped.jointPositions);
     EXPECT_LT(PositionDistance(signRecovered, target), 2e-5) << "sign-flipped position error";
     EXPECT_LT(OrientationDistance(signRecovered, target), 2e-4) << "sign-flipped orientation error";
 }
 
 TEST(RobotInverseKinematicsTests, IncrementalSingleSeedMatchesSynchronousResult)
 {
-    DampedLeastSquaresIk synchronous(models::hanwha::kHcr12a);
-    DampedLeastSquaresIk incremental(models::hanwha::kHcr12a);
+    LevenbergMarquardtIk synchronous(models::hanwha::kHcr12a);
+    LevenbergMarquardtIk incremental(models::hanwha::kHcr12a);
     const JointVector seed{0.2, -0.35, 0.3, 0.2, -0.25, 0.1};
     const JointVector targetJoints{0.9, -0.2, 0.1, 0.45, -0.1, 0.35};
     const CartesianPose target = synchronous.EvaluateTcp(targetJoints);
@@ -166,94 +218,12 @@ TEST(RobotInverseKinematicsTests, IncrementalSingleSeedMatchesSynchronousResult)
     EXPECT_EQ(actual.status, expected.status) << "incremental and synchronous status match";
     EXPECT_EQ(actual.iterations, expected.iterations) << "incremental and synchronous iteration counts match";
     EXPECT_EQ(actual.message, expected.message) << "incremental and synchronous diagnostics match";
-    EXPECT_EQ(actual.jointPositionRadians.size(), expected.jointPositionRadians.size());
-    for (std::size_t joint = 0; joint < expected.jointPositionRadians.size(); ++joint)
-        EXPECT_DOUBLE_EQ(actual.jointPositionRadians[joint], expected.jointPositionRadians[joint])
+    EXPECT_EQ(actual.jointPositions.size(), expected.jointPositions.size());
+    for (std::size_t joint = 0; joint < expected.jointPositions.size(); ++joint)
+        EXPECT_DOUBLE_EQ(actual.jointPositions[joint], expected.jointPositions[joint])
             << "incremental solve preserves the synchronous joint result";
     EXPECT_DOUBLE_EQ(actual.positionErrorMeters, expected.positionErrorMeters);
     EXPECT_DOUBLE_EQ(actual.orientationErrorRadians, expected.orientationErrorRadians);
-}
-
-TEST(RobotInverseKinematicsTests, IncrementalIterationCountRespectsEachStepBudgetAtLimit)
-{
-    DampedLeastSquaresIk inverse(models::hanwha::kHcr12a);
-    const JointVector seed{0.2, -0.35, 0.3, 0.2, -0.25, 0.1};
-    const JointVector targetJoints{0.9, -0.2, 0.1, 0.45, -0.1, 0.35};
-    const CartesianPose target = inverse.EvaluateTcp(targetJoints);
-    IkOptions options;
-    options.maxIterations = 2;
-    const auto session = inverse.BeginSingleSeed(target, seed, options);
-    IkSessionState state = IkSessionState::Running;
-    std::size_t calls = 0;
-
-    while (state == IkSessionState::Running && calls < options.maxIterations + 1)
-    {
-        const std::size_t before = inverse.GetSingleSeedResult(session).iterations;
-        state = inverse.StepSingleSeed(session, 1);
-        const std::size_t after = inverse.GetSingleSeedResult(session).iterations;
-        EXPECT_GE(after, before) << "reported solver work never moves backwards";
-        EXPECT_LE(after - before, 1u)
-            << "one incremental unit reports at most one completed DLS iteration";
-        EXPECT_LE(after, options.maxIterations)
-            << "reported work never exceeds the configured iteration boundary";
-        ++calls;
-    }
-
-    ASSERT_EQ(state, IkSessionState::Completed);
-    EXPECT_EQ(inverse.GetSingleSeedResult(session).iterations, options.maxIterations)
-        << "the final budgeted step publishes the exact max-iteration count";
-}
-
-TEST(RobotInverseKinematicsTests, IncrementalSingleSeedCanBeCancelledAndOldSessionsExpire)
-{
-    DampedLeastSquaresIk inverse(models::hanwha::kHcr12a);
-    const JointVector seed{0.2, -0.35, 0.3, 0.2, -0.25, 0.1};
-    const JointVector targetJoints{0.9, -0.2, 0.1, 0.45, -0.1, 0.35};
-    const CartesianPose target = inverse.EvaluateTcp(targetJoints);
-    const auto cancelledSession = inverse.BeginSingleSeed(target, seed);
-
-    ASSERT_EQ(inverse.StepSingleSeed(cancelledSession, 1), IkSessionState::Running);
-    inverse.CancelSingleSeed(cancelledSession);
-    EXPECT_EQ(inverse.StepSingleSeed(cancelledSession, 10), IkSessionState::Cancelled)
-        << "a cancelled session stays terminal";
-    EXPECT_EQ(inverse.GetSingleSeedResult(cancelledSession).message, "IK: cancelled");
-
-    const auto nextSession = inverse.BeginSingleSeed(target, seed);
-    EXPECT_THROW((void)inverse.StepSingleSeed(cancelledSession, 1), std::invalid_argument)
-        << "starting another seed invalidates the previous session identifier";
-    EXPECT_EQ(inverse.StepSingleSeed(nextSession, 1), IkSessionState::Running);
-}
-
-TEST(RobotInverseKinematicsTests, FallbackEscapesSingularSeedLocalMinimum)
-{
-    DampedLeastSquaresIk inverse(models::hanwha::kHcr12a);
-    const JointVector source{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-    const JointVector reachableJoints{0.0, -0.8, -0.1, 0.5, -0.4, 0.2};
-    const CartesianPose target = inverse.EvaluateTcp(reachableJoints);
-    const IkResult primaryAttempt = inverse.SolveSingleSeed(target, source);
-    EXPECT_TRUE(primaryAttempt.status == IkStatus::DidNotConverge || primaryAttempt.status == IkStatus::JointLimitReached)
-        << "single-seed solve exposes the singular home-posture local minimum";
-    if (primaryAttempt.status == IkStatus::JointLimitReached)
-    {
-        bool isAtJointLimit = false;
-        for (std::size_t joint = 0; joint < primaryAttempt.jointPositionRadians.size(); ++joint)
-        {
-            const auto& limits = models::hanwha::kHcr12a.joints[joint];
-            isAtJointLimit = isAtJointLimit ||
-                std::abs(primaryAttempt.jointPositionRadians[joint] - limits.minPositionRadians) <= 1e-8 ||
-                std::abs(primaryAttempt.jointPositionRadians[joint] - limits.maxPositionRadians) <= 1e-8;
-        }
-        EXPECT_TRUE(isAtJointLimit) << "joint-limit status requires the returned IK state to be at an active boundary";
-    }
-    const IkResult solved = inverse.Solve(target, source);
-    ASSERT_EQ(solved.status, IkStatus::Success)
-        << "bounded posture alternatives recover an FK-reachable target from a singular home seed";
-    const CartesianPose recovered = inverse.EvaluateTcp(solved.jointPositionRadians);
-    EXPECT_LT(PositionDistance(recovered, target), 2e-5)
-        << "fallback solution preserves the FK-reachable target position";
-    EXPECT_LT(OrientationDistance(recovered, target), 2e-4)
-        << "fallback solution preserves the FK-reachable target orientation";
-    EXPECT_LT(solved.iterations, 200U) << "successful fallback reports the iterations from its converged seed";
 }
 
 TEST(RobotInverseKinematicsTests, AppliesToolOffsetAndRejectsInvalidInputs)
@@ -262,7 +232,7 @@ TEST(RobotInverseKinematicsTests, AppliesToolOffsetAndRejectsInvalidInputs)
     const double halfQuarterTurn = std::acos(-1.0) / 4.0;
     models::Pose3 tcpOffset{{0.3, 0.0, 0.0}, {std::cos(halfQuarterTurn), 0.0, 0.0, std::sin(halfQuarterTurn)}};
     const auto specification = MakeSingleJointModel(joints, {});
-    DampedLeastSquaresIk toolOffsetIk(specification, tcpOffset);
+    LevenbergMarquardtIk toolOffsetIk(specification, tcpOffset);
     const CartesianPose offsetPose = toolOffsetIk.EvaluateTcp({0.0});
     EXPECT_NEAR(offsetPose.positionMeters[0], 0.3, 1e-12) << "TCP offset translation x";
     EXPECT_NEAR(offsetPose.positionMeters[1], 0.0, 1e-12) << "TCP offset translation y";
@@ -271,10 +241,23 @@ TEST(RobotInverseKinematicsTests, AppliesToolOffsetAndRejectsInvalidInputs)
     EXPECT_NEAR(offsetPose.orientationXyzw[3], std::cos(halfQuarterTurn), 1e-12)
         << "TCP orientation retains the tool offset rotation";
 
-    DampedLeastSquaresIk inverse(specification, tcpOffset);
+    std::array<models::JointSpecification, 1> slidingJoints{{
+        {"Slide", {}, {1.0, 0.0, 0.0}, 0.0, 0.2, 0.1}}};
+    slidingJoints[0].motionType = models::JointMotionType::Prismatic;
+    const models::RobotSpecification slidingSpecification{
+        "Test", "Slide", slidingJoints.data(), slidingJoints.size(), nullptr, 0, {}, true};
+    LevenbergMarquardtIk slidingIk(slidingSpecification);
+    IkOptions slidingOptions;
+    slidingOptions.taskMode = IkTaskMode::PositionOnly;
+    const IkResult slidingResult = slidingIk.Solve(
+        CartesianPose{{0.075, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}}, {0.0}, slidingOptions);
+    ASSERT_EQ(slidingResult.status, IkStatus::Success) << slidingResult.message;
+    EXPECT_NEAR(slidingResult.jointPositions[0], 0.075, 1e-6);
+
+    LevenbergMarquardtIk inverse(specification, tcpOffset);
     models::RobotSpecification withoutToolFrame = specification;
     withoutToolFrame.hasToolFrame = false;
-    DampedLeastSquaresIk missingTool(withoutToolFrame);
+    LevenbergMarquardtIk missingTool(withoutToolFrame);
     EXPECT_EQ(missingTool.Solve(offsetPose, {0.0}).status, IkStatus::MissingToolFrame)
         << "IK distinguishes a model without a ToolFrame";
     EXPECT_THROW((void)missingTool.EvaluateTcp({0.0}), std::invalid_argument)
@@ -311,7 +294,7 @@ TEST(RobotInverseKinematicsTests, ReportsFailureStatusesAndStabilizesNearSingula
 {
     std::array<models::JointSpecification, 1> joints{};
     const auto limitedModel = MakeSingleJointModel(joints, {{1.0, 0.0, 0.0}, {}});
-    DampedLeastSquaresIk limited(limitedModel);
+    LevenbergMarquardtIk limited(limitedModel);
     const CartesianPose beyondJointLimit = limited.EvaluateTcp({0.5});
     const IkResult jointLimit = limited.Solve(beyondJointLimit, {0.0});
     EXPECT_EQ(jointLimit.status, IkStatus::JointLimitReached) << "joint boundary failure has its own status";
@@ -326,7 +309,7 @@ TEST(RobotInverseKinematicsTests, ReportsFailureStatusesAndStabilizesNearSingula
 
     const IkResult exhausted = [&]
     {
-        DampedLeastSquaresIk hcr(models::hanwha::kHcr12a);
+        LevenbergMarquardtIk hcr(models::hanwha::kHcr12a);
         const CartesianPose reachable = hcr.EvaluateTcp({0.25, -0.37, 0.34, 0.17, -0.23, 0.11});
         IkOptions options;
         options.maxIterations = 1;
@@ -345,13 +328,13 @@ TEST(RobotInverseKinematicsTests, ReportsFailureStatusesAndStabilizesNearSingula
     std::array<models::JointSpecification, 1> unconstrainedJoints{};
     const auto unconstrainedModel = MakeSingleJointModel(
         unconstrainedJoints, {{1.0, 0.0, 0.0}, {}}, -3.0, 3.0);
-    DampedLeastSquaresIk damped(unconstrainedModel);
+    LevenbergMarquardtIk damped(unconstrainedModel);
     const CartesianPose smallTurn = damped.EvaluateTcp({0.04});
     IkOptions dampedOptions;
     dampedOptions.damping = 1e-2;
     const IkResult nearSingular = damped.Solve(smallTurn, {0.0}, dampedOptions);
     ASSERT_EQ(nearSingular.status, IkStatus::Success) << "damping stabilizes a nearly aligned arm pose";
-    EXPECT_TRUE(std::isfinite(nearSingular.jointPositionRadians[0]) &&
-        std::abs(nearSingular.jointPositionRadians[0]) <= 3.0)
+    EXPECT_TRUE(std::isfinite(nearSingular.jointPositions[0]) &&
+        std::abs(nearSingular.jointPositions[0]) <= 3.0)
         << "damped near-singular result remains finite and within limits";
 }

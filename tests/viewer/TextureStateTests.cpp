@@ -1,0 +1,107 @@
+#include "graphics/GlApi.h"
+#include "graphics/Shader.h"
+#include "graphics/Texture.h"
+#include "graphics/Window.h"
+#include "model/ModelResource.h"
+#include "rendering/assets/AssetManager.h"
+
+#include <gtest/gtest.h>
+
+#include <array>
+#include <stdexcept>
+#include <utility>
+
+namespace
+{
+PFNGLGETSHADERIVPROC originalGetShaderiv = nullptr;
+
+void APIENTRY ReturnEmptyShaderLog(GLuint shader, GLenum name, GLint* value)
+{
+    if (name == GL_INFO_LOG_LENGTH)
+    {
+        *value = 0;
+        return;
+    }
+    originalGetShaderiv(shader, name, value);
+}
+}
+
+TEST(GraphicsResource, InvalidUploadDataDoesNotPolluteAssetCacheOrOpenGlState)
+{
+    using grasplink::model::MaterialData;
+    using grasplink::model::MeshData;
+    using grasplink::model::ModelResource;
+    using grasplink::model::TextureData;
+    using grasplink::rendering::AssetManager;
+    using grasplink::graphics::Texture;
+    using grasplink::graphics::Window;
+
+    Window window{Window::Properties{32, 32, "Texture state test", false, false}};
+
+    ModelResource malformedModel;
+    TextureData shortPixelBuffer;
+    shortPixelBuffer.width = 2;
+    shortPixelBuffer.height = 2;
+    shortPixelBuffer.channels = 4;
+    shortPixelBuffer.pixels = {24, 128, 220};
+    malformedModel.textures.push_back(std::move(shortPixelBuffer));
+    AssetManager assets;
+    EXPECT_THROW(assets.UploadModel(malformedModel), std::runtime_error);
+
+    ModelResource invalidMeshModel;
+    MaterialData material;
+    material.uniqueID = grasplink::model::ResourceID{42U};
+    invalidMeshModel.materials.push_back(material);
+    MeshData mesh;
+    mesh.uniqueID = grasplink::model::ResourceID{43U};
+    invalidMeshModel.meshes.push_back(mesh);
+    EXPECT_THROW(assets.UploadModel(invalidMeshModel), std::runtime_error);
+    EXPECT_EQ(assets.GetMaterial(material.uniqueID), nullptr);
+
+    GLint previousActiveTexture = 0;
+    GLint previousUnpackAlignment = 0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActiveTexture);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
+
+    glActiveTexture(GL_TEXTURE3);
+    GLuint sentinelTexture = 0;
+    glGenTextures(1, &sentinelTexture);
+    glBindTexture(GL_TEXTURE_2D, sentinelTexture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
+
+    constexpr std::array<unsigned char, 3> pixel{24, 128, 220};
+    const auto texture = Texture::Create2D(1, 1, 3, pixel.data(), false);
+
+    GLint boundTexture = 0;
+    GLint unpackAlignment = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &boundTexture);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &unpackAlignment);
+    EXPECT_EQ(boundTexture, static_cast<GLint>(sentinelTexture));
+    EXPECT_EQ(unpackAlignment, 8);
+    EXPECT_NE(texture, nullptr);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDeleteTextures(1, &sentinelTexture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
+    glActiveTexture(static_cast<GLenum>(previousActiveTexture));
+    EXPECT_EQ(glGetError(), GL_NO_ERROR);
+}
+
+TEST(GraphicsResource, InvalidShaderSourceFailsCleanly)
+{
+    using grasplink::graphics::Shader;
+    using grasplink::graphics::Window;
+
+    Window window{Window::Properties{32, 32, "Shader failure test", false, false}};
+    const std::string vertex =
+        "#version 330 core\nvoid main(){gl_Position=vec4(0.0,0.0,0.0,1.0);}";
+    const std::string fragment =
+        "#version 330 core\nthis is not valid GLSL;";
+
+    originalGetShaderiv = glad_glGetShaderiv;
+    glad_glGetShaderiv = ReturnEmptyShaderLog;
+    EXPECT_THROW(Shader::CreateFromSource("invalid", vertex, fragment), std::runtime_error);
+    glad_glGetShaderiv = originalGetShaderiv;
+    originalGetShaderiv = nullptr;
+    EXPECT_EQ(glGetError(), GL_NO_ERROR);
+}

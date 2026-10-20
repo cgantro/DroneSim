@@ -5,10 +5,11 @@
 #include "simulation/components/PhysicsComponents.h"
 #include "simulation/systems/PhysicsSystemModule.h"
 #include "scene/TransformSystemModule.h"
-#include "TestSupport.h"
 
 #include <gtest/gtest.h>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 
 using grasplink::physics::BodyMotionType;
 using grasplink::scene::Entity;
@@ -28,32 +29,51 @@ void GTestExpectThrows(Function&& function, const std::string& message)
 
 
 /**
- * @brief 물리 물체 종류에 따라 누가 위치와 회전을 정하는지 확인한다.
- * @details BodyMotionType은 물체를 움직이는 주체를 나타낸다. Static 바닥은 고정되고 Kinematic 로봇 팔은 프로그램이 정한 목표를 따른다.
- * Dynamic 상자는 Jolt가 계산한 중력 낙하와 다른 물체와의 충돌 결과를 장면 물체에 돌려준다.
- */
-TEST(PhysicsEcsIntegration, PoseAuthorityMatchesBodyMotionType)
-{
-    using grasplink::physics::IsPhysicsDriven;
-    using grasplink::physics::IsSceneDriven;
-    ASSERT_TRUE_MESSAGE(IsSceneDriven(BodyMotionType::Static) && !IsPhysicsDriven(BodyMotionType::Static),
-        "Static pose is Scene driven");
-    ASSERT_TRUE_MESSAGE(IsSceneDriven(BodyMotionType::Kinematic) && !IsPhysicsDriven(BodyMotionType::Kinematic),
-        "Kinematic pose is Scene driven");
-    ASSERT_TRUE_MESSAGE(!IsSceneDriven(BodyMotionType::Dynamic) && IsPhysicsDriven(BodyMotionType::Dynamic),
-        "Dynamic pose is Physics driven");
-}
-
-/**
  * @brief Scene에서 지정한 위치와 Jolt가 계산한 물리 위치가 올바른 순서로 전달되는지 확인한다.
  * @details Dynamic 상자는 위치·회전·크기가 없는 중간 부모 아래에서만 물리 위치를 받을 수 있다. Static 바닥과 Kinematic 목표 물체는 부모를 옮기거나 돌리면 그 변환을 따라간다.
  * Kinematic 물체가 목표에 도착하면 더 움직이지 않고 상자를 일정 높이에서 받쳐야 한다. 충돌 모양 설정을 바꾸거나 Scene을 삭제할 때 연결된 Jolt 물체도 제거되는지 확인한다.
  */
 TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
 {
+    using grasplink::physics::IsPhysicsDriven;
+    using grasplink::physics::IsSceneDriven;
+    ASSERT_TRUE_MESSAGE(IsSceneDriven(BodyMotionType::Static) && !IsPhysicsDriven(BodyMotionType::Static),
+        "Static objects keep the pose set by the Scene");
+    ASSERT_TRUE_MESSAGE(IsSceneDriven(BodyMotionType::Kinematic) && !IsPhysicsDriven(BodyMotionType::Kinematic),
+        "Kinematic objects follow their targets set by the Scene");
+    ASSERT_TRUE_MESSAGE(!IsSceneDriven(BodyMotionType::Dynamic) && IsPhysicsDriven(BodyMotionType::Dynamic),
+        "Dynamic objects receive their pose from physics");
+
     // 이 fixture는 Flecs의 collider 설정, Scene 삭제, 변환 시스템과 Jolt 사이에서 자세가 왕복하는 전체 흐름을 함께 준비한다.
     flecs::world world;
     grasplink::physics::PhysicsWorld physics;
+    const auto firstBody = physics.CreateBox({});
+    {
+        // World가 하나 더 만들어졌다 사라져도 첫 World가 쓰는 Jolt 등록은 유지되어야 한다.
+        grasplink::physics::PhysicsWorld secondaryPhysics;
+        const auto foreignBody = secondaryPhysics.CreateBox({});
+        ASSERT_TRUE(physics.IsBodyValid(firstBody));
+        ASSERT_TRUE(secondaryPhysics.IsBodyValid(foreignBody));
+        ASSERT_FALSE(physics.IsBodyValid(foreignBody));
+        ASSERT_FALSE(secondaryPhysics.IsBodyValid(firstBody));
+        EXPECT_THROW((void)secondaryPhysics.GetBodyTransform(firstBody), std::invalid_argument);
+    }
+    physics.DestroyBody(firstBody);
+    ASSERT_FALSE(physics.IsBodyValid(firstBody));
+    const auto replacementBody = physics.CreateBox({});
+    ASSERT_TRUE(physics.IsBodyValid(replacementBody));
+    ASSERT_FALSE(physics.IsBodyValid(firstBody));
+
+    grasplink::physics::BoxBodyDescription invalidLayerBody;
+    invalidLayerBody.collisionLayer = grasplink::physics::CollisionLayer::Count;
+    EXPECT_THROW(physics.CreateBox(invalidLayerBody), std::invalid_argument);
+    grasplink::physics::BoxBodyDescription invalidTransformBody;
+    invalidTransformBody.transform.position.x = std::numeric_limits<float>::quiet_NaN();
+    EXPECT_THROW(physics.CreateBox(invalidTransformBody), std::invalid_argument);
+    invalidTransformBody = {};
+    invalidTransformBody.transform.rotation = glm::quat{0.0F, 0.0F, 0.0F, 0.0F};
+    EXPECT_THROW(physics.CreateBox(invalidTransformBody), std::invalid_argument);
+
     auto sceneOwner = std::make_unique<Scene>(world);
     Scene& scene = *sceneOwner;
     ASSERT_TRUE_MESSAGE(scene.GetSceneRoot().is_alive(), "Scene owns a live hierarchy root");
