@@ -30,7 +30,8 @@ enum class IkTerminationReason
     ActiveJointLimit,
     Stagnation,
     IterationLimit,
-    Cancelled
+    Cancelled,
+    NumericalFailure
 };
 
 /**
@@ -88,7 +89,7 @@ struct IkOptions
  * @details jointPositions는 RobotSpecification 순서다. 회전 관절은 [rad], 직선 관절은 [m]다.
  * 실패 결과의 관절각은 진단용 후보이므로 Controller 목표로 실행하지 않는다.
  * iterations는 수행한 반복 수이며 오차는 Robot base 기준 위치 거리 [m]와 최단 회전각 [rad]다.
- * terminationReason은 제한, 정체, 반복 한도 중 계산을 끝낸 직접 원인을 나타낸다.
+ * terminationReason은 관절 제한, 정체, 반복 한도, 수치 오류 중 계산을 끝낸 직접 원인을 나타낸다.
  * weightedJacobianMinimumSingularValue와 weightedJacobianConditionNumber는 실패 시 가중 Jacobian에서 계산하며 위치·방향 scaling에 따라 값이 달라진다.
  * 입력이나 거리 사전검사에서 반환되어 FK 오차를 계산하지 않았다면 두 오차 값은 infinity다.
  */

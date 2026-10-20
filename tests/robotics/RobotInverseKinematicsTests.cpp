@@ -325,6 +325,14 @@ TEST(RobotInverseKinematicsTests, ReportsFailureStatusesAndStabilizesNearSingula
         !std::isnan(exhausted.weightedJacobianConditionNumber))
         << "failure diagnostics contain a nonnegative singular value and a defined condition estimate";
 
+    IkOptions tinyStepOptions;
+    tinyStepOptions.maxJointStep = std::numeric_limits<double>::denorm_min();
+    const IkResult numericalFailure = limited.SolveSingleSeed(
+        limited.EvaluateTcp({0.05}), {0.0}, tinyStepOptions);
+    EXPECT_EQ(numericalFailure.status, IkStatus::DidNotConverge);
+    EXPECT_EQ(numericalFailure.terminationReason, IkTerminationReason::NumericalFailure)
+        << "a non-finite joint step is reported as a numeric failure";
+
     std::array<models::JointSpecification, 1> unconstrainedJoints{};
     const auto unconstrainedModel = MakeSingleJointModel(
         unconstrainedJoints, {{1.0, 0.0, 0.0}, {}}, -3.0, 3.0);
