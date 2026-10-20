@@ -43,7 +43,7 @@ double OrientationDistance(const CartesianPose& left, const CartesianPose& right
     return 2.0 * std::acos(std::clamp(dot, 0.0, 1.0));
 }
 
-std::array<double, 3> RotationRate(const CartesianPose& plus, const CartesianPose& minus, double deltaRadians)
+std::array<double, 3> RotationRate(const CartesianPose& plus, const CartesianPose& minus, double deltaJointValue)
 {
     const auto& a = plus.orientationXyzw;
     const auto& b = minus.orientationXyzw;
@@ -55,7 +55,7 @@ std::array<double, 3> RotationRate(const CartesianPose& plus, const CartesianPos
     const double angle = 2.0 * std::atan2(vectorLength, std::abs(w));
     if (vectorLength <= 1e-15)
         return {};
-    const double scale = angle / (2.0 * deltaRadians * vectorLength);
+    const double scale = angle / (2.0 * deltaJointValue * vectorLength);
     return {x * scale, y * scale, z * scale};
 }
 
@@ -175,6 +175,36 @@ TEST(RobotInverseKinematicsTests, JacobianMatchesFiniteDifferenceWithAngledAxesA
         EXPECT_NEAR(numericRotation[1], axis.y, 2e-7) << "finite-difference TCP rotation y follows the base joint axis";
         EXPECT_NEAR(numericRotation[2], axis.z, 2e-7) << "finite-difference TCP rotation z follows the base joint axis";
     }
+
+    std::array<models::JointSpecification, 1> prismaticJoints{{
+        {"Slide", {0.1, -0.2, 0.3}, {2.0, -3.0, 6.0}, -0.5, 0.5, 0.2}}};
+    prismaticJoints[0].motionType = models::JointMotionType::Prismatic;
+    const models::Pose3 prismaticToolFrame{{0.12, -0.04, 0.08}, {}};
+    const models::RobotSpecification prismaticSpecification{
+        "Test", "PrismaticAxis", prismaticJoints.data(), prismaticJoints.size(),
+        nullptr, 0, prismaticToolFrame, true};
+    const models::Pose3 prismaticTcpOffset{
+        {0.03, -0.02, 0.01}, {std::cos(halfAngle), std::sin(halfAngle), 0.0, 0.0}};
+    LevenbergMarquardtIk prismaticIk(prismaticSpecification, prismaticTcpOffset);
+    constexpr double deltaMeters = 1e-6;
+    const CartesianPose prismaticPlus = prismaticIk.EvaluateTcp({0.1 + deltaMeters});
+    const CartesianPose prismaticMinus = prismaticIk.EvaluateTcp({0.1 - deltaMeters});
+    const double axisLength = std::sqrt(2.0 * 2.0 + 3.0 * 3.0 + 6.0 * 6.0);
+    const std::array<double, 3> expectedTranslationRate{
+        2.0 / axisLength, -3.0 / axisLength, 6.0 / axisLength};
+    for (std::size_t coordinate = 0; coordinate < expectedTranslationRate.size(); ++coordinate)
+    {
+        const double measuredRate =
+            (prismaticPlus.positionMeters[coordinate] - prismaticMinus.positionMeters[coordinate]) /
+            (2.0 * deltaMeters);
+        EXPECT_NEAR(measuredRate, expectedTranslationRate[coordinate], 2e-7)
+            << "직선 관절의 TCP 위치 변화율은 정규화된 축 방향과 일치한다";
+    }
+    const std::array<double, 3> prismaticRotationRate =
+        RotationRate(prismaticPlus, prismaticMinus, deltaMeters);
+    EXPECT_NEAR(prismaticRotationRate[0], 0.0, 2e-7);
+    EXPECT_NEAR(prismaticRotationRate[1], 0.0, 2e-7);
+    EXPECT_NEAR(prismaticRotationRate[2], 0.0, 2e-7);
 }
 
 TEST(RobotInverseKinematicsTests, RoundTripsReachablePoseAndIgnoresQuaternionSign)
