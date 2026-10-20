@@ -48,6 +48,18 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
     flecs::world world;
     grasplink::physics::PhysicsWorld physics;
     const auto firstBody = physics.CreateBox({});
+    grasplink::physics::BoxBodyDescription anchorDescription;
+    anchorDescription.motionType = BodyMotionType::Kinematic;
+    const auto anchor = physics.CreateBox(anchorDescription);
+    grasplink::physics::BoxBodyDescription objectDescription;
+    objectDescription.motionType = BodyMotionType::Dynamic;
+    const auto object = physics.CreateBox(objectDescription);
+    const auto graspConstraint = physics.CreateFixedConstraint(anchor, object);
+    ASSERT_TRUE(physics.IsConstraintValid(graspConstraint));
+    physics.DestroyBody(anchor);
+    EXPECT_FALSE(physics.IsConstraintValid(graspConstraint));
+    physics.DestroyBody(object);
+
     {
         grasplink::physics::PhysicsWorld oversizedMovePhysics;
         grasplink::physics::BoxBodyDescription kinematicDescription;
