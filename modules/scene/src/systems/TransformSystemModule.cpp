@@ -77,12 +77,16 @@ void TransformSystemModule::UpdateWorldTransforms(flecs::world& world)
     auto& cache = scratch.worldTransforms;
     transformedEntities.clear();
     cache.clear();
-    world.each([&](flecs::entity entity,
-                   flecs::pair<Position, Local>,
-                   flecs::pair<Rotation, Local>,
-                   flecs::pair<Scale, Local>,
-                   flecs::pair<TransformMatrix, Local>&,
-                   flecs::pair<TransformMatrix, World>&)
+    auto transformQuery = world.query_builder<const Position, const Rotation, const Scale,
+        TransformMatrix, TransformMatrix>()
+        .term_at(0).second<Local>()
+        .term_at(1).second<Local>()
+        .term_at(2).second<Local>()
+        .term_at(3).second<Local>()
+        .term_at(4).second<World>()
+        .build();
+    transformQuery.each([&](flecs::entity entity, const Position&, const Rotation&, const Scale&,
+        TransformMatrix&, TransformMatrix&)
     {
         transformedEntities.push_back(entity);
     });
