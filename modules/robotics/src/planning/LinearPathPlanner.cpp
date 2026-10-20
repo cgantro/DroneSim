@@ -190,6 +190,12 @@ double JointTransitionCost(const JointVector& start, const JointVector& end,
     return score;
 }
 
+double WeightedIkResidual(const kinematics::IkResult& result, const kinematics::IkOptions& options)
+{
+    return result.positionErrorMeters +
+        options.orientationWeightMetersPerRadian * result.orientationErrorRadians;
+}
+
 bool SameJointCandidate(const JointVector& left, const JointVector& right)
 {
     for (std::size_t joint = 0; joint < left.size(); ++joint)
@@ -544,8 +550,7 @@ struct LinearPathPlanningJob::Impl
 
     void RecordIkFailure(kinematics::IkResult failure)
     {
-        const double residual = failure.positionErrorMeters +
-            options.orientationWeightMetersPerRadian * failure.orientationErrorRadians;
+        const double residual = WeightedIkResidual(failure, options);
         if (residual < bestFailureResidual)
         {
             bestFailureResidual = residual;
@@ -1162,19 +1167,14 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
     // 해는 있지만 모든 해의 경로가 막힌 경우와 목표 자체에 IK 해가 없는 경우를 구분한다.
     std::optional<kinematics::IkResult> bestSolution;
     double bestCandidateScore = std::numeric_limits<double>::infinity();
-    const auto residual = [&](const kinematics::IkResult& result)
-    {
-        return result.positionErrorMeters + options.orientationWeightMetersPerRadian *
-            result.orientationErrorRadians;
-    };
     double bestFailureResidual = ikFailure.message.empty()
         ? std::numeric_limits<double>::infinity()
-        : residual(ikFailure);
+        : WeightedIkResidual(ikFailure, options);
     const auto considerSolution = [&](kinematics::IkResult solution)
     {
         if (!solution)
         {
-            const double candidateResidual = residual(solution);
+            const double candidateResidual = WeightedIkResidual(solution, options);
             if (candidateResidual < bestFailureResidual)
             {
                 bestFailureResidual = candidateResidual;
