@@ -126,37 +126,43 @@ void ConnectVisualTree(RobotModel& robot, const ModelResource& visual,
     const std::filesystem::path& path)
 {
     std::unordered_map<std::string, std::size_t> nodeByName;
+    std::unordered_set<std::string> duplicateNodeNames;
     for (std::size_t i = 0; i < visual.nodes.size(); ++i)
     {
         const auto& node = visual.nodes[i];
         if (!nodeByName.emplace(node.name, i).second)
-            Invalid(path, "GLB node names must be unique: '" + node.name + "'");
+            duplicateNodeNames.insert(node.name);
     }
+
+    // 중복 이름은 로봇 링크나 관절을 찾을 때만 문제가 된다. 그 외 GLB 부품 이름은 겹쳐도 된다.
+    const auto findNode = [&](const std::string& name, const char* missingMessage)
+    {
+        if (duplicateNodeNames.find(name) != duplicateNodeNames.end())
+            Invalid(path, "GLB node name is ambiguous for URDF item '" + name + "'");
+        const auto found = nodeByName.find(name);
+        if (found == nodeByName.end())
+            Invalid(path, std::string{missingMessage} + name + "'");
+        return found->second;
+    };
 
     for (auto& link : robot.links)
     {
         if (link.name == RobotModelFormat::baseLink || link.name == RobotModelFormat::toolLink)
             continue;
-        const auto found = nodeByName.find(link.name);
-        if (found == nodeByName.end())
-            Invalid(path, "GLB has no node for URDF link '" + link.name + "'");
-        link.visualNodeIndex = found->second;
+        link.visualNodeIndex = findNode(link.name, "GLB has no node for URDF link '");
     }
 
     for (auto& joint : robot.joints)
     {
         if (joint.type == RobotJointType::Fixed)
             continue;
-        const auto found = nodeByName.find(joint.name);
-        if (found == nodeByName.end())
-            Invalid(path, "GLB has no pivot node for URDF joint '" + joint.name + "'");
-        joint.visualNodeIndex = found->second;
+        joint.visualNodeIndex = findNode(joint.name, "GLB has no pivot node for URDF joint '");
 
         const auto& parentNode = robot.links[joint.parentLink].visualNodeIndex;
         const auto& childNode = robot.links[joint.childLink].visualNodeIndex;
-        if (parentNode && visual.nodes[found->second].parentIndex != parentNode)
+        if (parentNode && visual.nodes[*joint.visualNodeIndex].parentIndex != parentNode)
             Invalid(path, "GLB joint '" + joint.name + "' must be a direct child of its parent link");
-        if (childNode && !IsDescendant(visual, *childNode, found->second))
+        if (childNode && !IsDescendant(visual, *childNode, *joint.visualNodeIndex))
             Invalid(path, "GLB child link '" + robot.links[joint.childLink].name +
                 "' must be below its joint pivot '" + joint.name + "'");
     }

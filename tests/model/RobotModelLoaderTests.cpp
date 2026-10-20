@@ -90,6 +90,43 @@ private:
     std::filesystem::path path_;
 };
 
+class TemporaryRobotDirectory
+{
+public:
+    explicit TemporaryRobotDirectory(const std::filesystem::path& source)
+    {
+        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        path_ = std::filesystem::temp_directory_path() /
+            ("grasplink-duplicate-node-" + std::to_string(stamp));
+        std::filesystem::create_directory(path_);
+        std::filesystem::copy_file(source / "robot.urdf", path_ / "robot.urdf");
+
+        std::ifstream input(source / "robot.glb", std::ios::binary);
+        std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        const std::string rootNode = "\"name\":\"RobotRoot\"";
+        const std::size_t nodeName = bytes.find(rootNode);
+        if (input.bad() || nodeName == std::string::npos)
+            throw std::runtime_error("The axis test model has no expected GLB root node");
+        bytes.replace(nodeName, rootNode.size(), "\"name\":\"base_link\"");
+
+        std::ofstream output(path_ / "robot.glb", std::ios::binary);
+        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        if (!output)
+            throw std::runtime_error("Could not write the temporary robot model");
+    }
+
+    ~TemporaryRobotDirectory()
+    {
+        std::error_code ignored;
+        std::filesystem::remove_all(path_, ignored);
+    }
+
+    [[nodiscard]] const std::filesystem::path& Path() const noexcept { return path_; }
+
+private:
+    std::filesystem::path path_;
+};
+
 std::string Link(const std::string& name)
 {
     if (name == "base_link" || name == "tool0")
@@ -149,6 +186,12 @@ TEST(RobotModelLoader, LoadsDifferentJointCountsAndBundledRobot)
             EXPECT_EQ(joint.visualNodeIndex.has_value(),
                 joint.type != grasplink::model::RobotJointType::Fixed);
     }
+
+    TemporaryRobotDirectory duplicateUnrelatedName{
+        std::filesystem::path(GRASPLINK_SOURCE_DIR) / "tests/assets/robots/axis4"};
+    const auto duplicateNameModel = grasplink::model::RobotModelLoader::Load(
+        duplicateUnrelatedName.Path());
+    EXPECT_EQ(duplicateNameModel.robot.activeJoints.size(), 4U);
 
     TemporaryUrdf file{"<link name=\"base_link\"><collision><geometry><box size=\"0.2 0.2 0.2\"/>"
         "</geometry></collision></link><link name=\"arm\"><collision><origin xyz=\"0 0 0.1\"/>"
