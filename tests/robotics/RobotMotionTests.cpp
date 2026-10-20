@@ -110,6 +110,21 @@ void CheckLinearPathPlanningBudgetAndCancellation()
         inverse.EvaluateTcp(startJoints), inverse, {});
     ASSERT_TRUE(static_cast<bool>(restarted)) << restarted.message;
     EXPECT_EQ(job.GetState(), LinearPathPlanningState::Running);
+
+    for (std::size_t step = 0; step < 10000 &&
+        job.GetState() == LinearPathPlanningState::Running; ++step)
+    {
+        job.Advance(64);
+    }
+    ASSERT_EQ(job.GetState(), LinearPathPlanningState::Completed);
+    auto completedPlan = job.TakePlan();
+    ASSERT_TRUE(completedPlan.has_value());
+    EXPECT_TRUE(completedPlan->hasMotion);
+
+    const Result restartedAfterCompletion = job.Begin(command, specification, startJoints,
+        inverse.EvaluateTcp(startJoints), inverse, {});
+    ASSERT_TRUE(static_cast<bool>(restartedAfterCompletion)) << restartedAfterCompletion.message;
+    EXPECT_EQ(job.GetState(), LinearPathPlanningState::Running);
     job.Cancel();
 }
 
