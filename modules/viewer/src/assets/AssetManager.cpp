@@ -45,6 +45,11 @@ void ValidateMeshData(const ::grasplink::model::MeshData& meshData)
         throw std::runtime_error("Mesh vertex count exceeds uint32_t range");
     if (meshData.indices.size() > maximum)
         throw std::runtime_error("Mesh index count exceeds uint32_t range");
+    if (meshData.indices.size() % 3U != 0U)
+        throw std::runtime_error("Mesh index count must form complete triangles: " + meshData.name);
+    for (const std::uint32_t index : meshData.indices)
+        if (index >= meshData.vertices.size())
+            throw std::runtime_error("Mesh index exceeds vertex count: " + meshData.name);
 }
 }
 

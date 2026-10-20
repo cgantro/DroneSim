@@ -58,6 +58,24 @@ TEST(GraphicsResource, InvalidUploadDataDoesNotPolluteAssetCacheOrOpenGlState)
     EXPECT_THROW(assets.UploadModel(invalidMeshModel), std::runtime_error);
     EXPECT_EQ(assets.GetMaterial(material.uniqueID), nullptr);
 
+    ModelResource invalidIndexModel;
+    MeshData invalidIndexMesh;
+    invalidIndexMesh.uniqueID = grasplink::model::ResourceID{44U};
+    invalidIndexMesh.vertices.resize(3U);
+    invalidIndexMesh.indices = {0U, 1U, 3U};
+    invalidIndexModel.meshes.push_back(invalidIndexMesh);
+    EXPECT_THROW(assets.UploadModel(invalidIndexModel), std::runtime_error);
+    EXPECT_EQ(assets.GetMesh(invalidIndexMesh.uniqueID), nullptr);
+
+    ModelResource incompleteTriangleModel;
+    MeshData incompleteTriangleMesh;
+    incompleteTriangleMesh.uniqueID = grasplink::model::ResourceID{45U};
+    incompleteTriangleMesh.vertices.resize(3U);
+    incompleteTriangleMesh.indices = {0U, 1U};
+    incompleteTriangleModel.meshes.push_back(incompleteTriangleMesh);
+    EXPECT_THROW(assets.UploadModel(incompleteTriangleModel), std::runtime_error);
+    EXPECT_EQ(assets.GetMesh(incompleteTriangleMesh.uniqueID), nullptr);
+
     GLint previousActiveTexture = 0;
     GLint previousUnpackAlignment = 0;
     glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActiveTexture);
