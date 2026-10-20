@@ -7,7 +7,7 @@
 
 /**
  * @brief 로봇 Controller가 주고받는 명령과 상태의 공통 자료형을 정의한다.
- * @details 관절 위치는 [rad], 각속도는 [rad/s], TCP 위치는 [m], 선속도는 [m/s], 가속도는 [m/s²] 또는 [rad/s²], 시간은 [s]다.
+ * @details 회전 관절 위치·속도는 [rad], [rad/s]이고 직선 관절은 [m], [m/s]다. TCP 위치는 [m], 시간은 [s]다.
  * TCP는 공구 끝에서 작업 위치와 방향을 나타내는 기준점이다.
  * 방향 quaternion은 회전을 네 숫자 [x,y,z,w]로 저장한다.
  * Controller가 실제로 보고한 TCP는 FK로 계산한 모델 ToolFrame과 별도다.
@@ -16,7 +16,7 @@
 namespace grasplink::robotics
 {
 
-/** @brief RobotSpecification에 적힌 J1부터 Jn 순서대로 각 관절 값을 저장하는 목록. */
+/** @brief RobotSpecification에 적힌 순서대로 각 관절 위치를 저장한다. 회전 관절은 [rad], 직선 관절은 [m]다. */
 using JointVector = std::vector<double>;
 
 /**
@@ -32,11 +32,11 @@ using JointVector = std::vector<double>;
 enum class ErrorCode
 {
     None,           // 요청을 오류 없이 처리했다.
-    NotConnected,   // 제어 구현가 연결되지 않았거나 동작 중 연결을 잃었다.
+    NotConnected,   // 장치나 시뮬레이션 제어기가 연결되지 않았거나 동작 중 연결을 잃었다.
     InvalidCommand, // 관절 수, 허용 범위 또는 유한성 등 요청 값에 문제가 있다.
-    Busy,           // 제어 구현가 앞선 동작을 처리하고 있어 새 요청을 지금 받을 수 없다.
-    Fault,          // 장비 또는 Simulation 제어 구현가 오류 상태를 보고했다.
-    Unsupported,    // 공통 인터페이스에 있지만 현재 제어 구현는 구현하지 않은 기능이다.
+    Busy,           // 앞선 동작을 처리하고 있어 새 요청을 지금 받을 수 없다.
+    Fault,          // 장비 또는 시뮬레이션 제어기에서 오류가 발생했다.
+    Unsupported,    // 공통 인터페이스에는 있지만 현재 제어기에서 제공하지 않는 기능이다.
     TransportError, // TCP, Serial 또는 Modbus 연결에서 통신이 실패했다.
     Unreachable,    // IK가 링크 길이의 보수적 거리 상한 밖인 목표를 확인했다.
     JointLimitReached, // IK가 관절 한계 때문에 국소 오차를 더 줄이지 못했다.
@@ -75,19 +75,18 @@ struct CartesianPose
     std::array<double, 4> orientationXyzw{0.0, 0.0, 0.0, 1.0};
 };
 
-/** @brief J1부터 Jn까지의 목표각 [rad]과 제어 구현가 적용할 속도·가속도 비율을 담는다. */
+/** @brief 관절별 목표 위치와 제어기가 적용할 속도·가속도 비율을 담는다. */
 struct JointMoveCommand
 {
-    JointVector targetPositionRadians;
+    /// RobotSpecification에 적힌 순서의 목표 위치다. 회전 관절은 [rad], 직선 관절은 [m]다.
+    JointVector targetPositions;
 
-    /// 비율을 허용하는 범위와 적용 방식은 제어 구현마다 다르다. Simulation은 (0,1] 값에 모델 최대 각속도를 곱해 상한을 낮춘다.
+    /// 제어기마다 허용 범위와 해석이 다를 수 있다. 시뮬레이션은 (0,1] 값을 모델의 관절별 최대 속도에 곱한다.
     double velocityScale = 1.0;
 
-    /// 제어 구현별 해석이 다를 수 있다. Simulation은 관절 최대 속도까지 도달하는 가속도 ramp 비율로 해석한다.
+    /// 제어기마다 해석이 다를 수 있다. 시뮬레이션은 최대 속도까지 가속하는 시간의 비율로 사용한다.
     double accelerationScale = 1.0;
 
-    /// true이면 요청한 관절각에 2π를 더하거나 빼 현재 자세에 가까운 등가각으로 바꾸지 않는다. J6을 중앙 0 rad로 풀 때 사용한다.
-    bool preserveJointTurns = false;
 };
 
 // TCP는 공구 끝의 작업 기준점이다. TCP 목표에서 관절 목표를 구하는 역기구학(IK)과 경로 실행이 있어야 직선 이동할 수 있다.
@@ -133,7 +132,7 @@ enum class RobotMode
 {
     Disconnected, // 제어 구현 연결 또는 초기화 전.
     Idle,         // 연결은 되었고 실행 중인 동작 명령은 없다.
-    Moving,       // 관절이 목표각을 향해 움직이는 중이다.
+    Moving,       // 관절이 목표 위치를 향해 움직이는 중이다.
     Planning,     // 관절 자세는 유지하며 경로 계획을 분할 실행하는 중이다.
     Stopped,      // 소프트웨어 Stop 요청에 따라 동작이 멈춘 상태다.
     Fault         // 오류가 있어 정상적인 제어를 할 수 없다.
@@ -141,7 +140,8 @@ enum class RobotMode
 
 /**
  * @brief 한 시점에 Controller가 보고한 관절과 TCP 상태를 값으로 보관한다.
- * @details 관절 위치 [rad], 각속도 [rad/s], TCP 위치 [m]를 저장한다.
+ * @details 관절 값은 RobotSpecification 순서로 저장한다. 회전 관절은 [rad], 직선 관절은 [m]를 쓰며,
+ * 속도는 각각 [rad/s], [m/s]다. TCP 위치는 [m]다.
  * valid는 관절을 포함한 전체 상태 복사본을 쓸 수 있는지 나타낸다.
  * tcpPoseValid는 TCP 위치·방향만 유효한지 나타내므로 TCP가 없어도 관절 상태는 유효할 수 있다.
  * errorCode는 공통 실패 분류를 사용하고, 장치별 원본 오류값은 별도로 해석한다.
@@ -149,11 +149,11 @@ enum class RobotMode
  */
 struct RobotState
 {
-    /// RobotSpecification 순서에 맞춘 현재 J1부터 Jn까지의 관절각 [rad]다.
-    JointVector jointPositionRadians;
+    /// RobotSpecification 순서에 맞춘 현재 관절 위치다. 회전 관절은 [rad], 직선 관절은 [m]다.
+    JointVector jointPositions;
 
-    /// RobotSpecification 순서에 맞춘 현재 J1부터 Jn까지의 관절 속도 [rad/s]다.
-    JointVector jointVelocityRadiansPerSecond;
+    /// RobotSpecification 순서에 맞춘 현재 관절 속도다. 회전 관절은 [rad/s], 직선 관절은 [m/s]다.
+    JointVector jointVelocities;
 
     /// Controller가 보고한 TCP 위치·방향이다. Simulation은 설정한 공구 offset과 관절 FK에서 계산하고 실제 장치는 장치 feedback을 사용한다. tcpPoseValid를 별도로 확인한다.
     CartesianPose tcpPose{};
@@ -188,7 +188,7 @@ struct GripperCommand
     std::uint8_t forceRequest = 128;
 };
 
-/** @brief Gripper 제어 구현가 움직임, 접촉 또는 요청 위치 도달로 구분해 보고한 상태. */
+/** @brief 그리퍼 제어기가 움직임, 접촉 또는 요청 위치 도달 상태를 보고한다. */
 enum class GripperObjectStatus : std::uint8_t
 {
     Moving = 0,              // 접촉이나 목표 도달은 확인되지 않았다. 실제 이동 중인지는 mode와 goToActive도 확인한다.
@@ -237,16 +237,16 @@ struct GripperState
     /// 이동 중, 열거나 닫으며 접촉, 요청 위치 도달 중 어떤 상태인지 분류한다.
     GripperObjectStatus objectStatus = GripperObjectStatus::AtRequestedPosition;
 
-    /// 장치 또는 제어 구현가 보낸 오류 원본 code다. 값 해석은 장치·제어 구현 정의에 따른다.
+    /// 장치나 시뮬레이션 제어기가 보낸 오류 원본 code다. 값의 뜻은 제어기마다 다를 수 있다.
     std::uint8_t faultCode = 0;
 
     /// 장치가 되돌려 준 위치 요청 code다. 현재 실제 위치가 아니라 요청값의 확인용 복사본이다.
     std::uint8_t requestedPositionEcho = 0;
 
-    /// 장치 또는 제어 구현가 보고한 현재 위치 원본 code다. 물리 거리 단위는 아니다.
+    /// 장치나 시뮬레이션 제어기가 보고한 위치 원본 code다. 미터 단위의 거리는 아니다.
     std::uint8_t actualPosition = 0;
 
-    /// 장치 또는 제어 구현가 보고한 전류 원본 code다. Simulation은 전류를 계산하지 않는다.
+    /// 장치가 보고한 전류 원본 code다. 시뮬레이션은 전류를 계산하지 않는다.
     std::uint8_t currentRaw = 0;
 
     /// currentRaw가 실제 제공된 전류 feedback인지 여부. Simulation은 전류를 계산하지 않는다.

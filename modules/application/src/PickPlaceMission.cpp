@@ -80,12 +80,12 @@ const char* RuntimeFaultReason(robotics::ErrorCode errorCode)
 {
     switch (errorCode)
     {
-    case robotics::ErrorCode::IkDidNotConverge: return "runtime IK did not converge";
-    case robotics::ErrorCode::JointLimitReached: return "a joint reached its limit";
-    case robotics::ErrorCode::EnvironmentContact: return "the robot contacted the environment";
-    case robotics::ErrorCode::SelfCollision: return "the robot self-collided";
-    case robotics::ErrorCode::AttachedObjectCollision: return "the attached object collided";
-    default: return "the robot controller reported a fault";
+    case robotics::ErrorCode::IkDidNotConverge: return "역기구학 계산이 목표에 도달하지 못했습니다.";
+    case robotics::ErrorCode::JointLimitReached: return "관절 한계에 막혀 목표에 도달하지 못했습니다.";
+    case robotics::ErrorCode::EnvironmentContact: return "로봇이 바닥이나 주변 물체에 닿았습니다.";
+    case robotics::ErrorCode::SelfCollision: return "로봇 팔의 링크끼리 부딪혔습니다.";
+    case robotics::ErrorCode::AttachedObjectCollision: return "로봇에 붙은 물체가 주변 물체와 부딪혔습니다.";
+    default: return "로봇 제어기에서 오류를 보고했습니다.";
     }
 }
 
@@ -94,7 +94,9 @@ glm::dquat ClosestSquarePlacementOrientation(const glm::dquat& goalBoxOrientatio
 {
     glm::dquat bestTcpOrientation = goalBoxOrientation * glm::inverse(boxRotationOffset);
     double bestAlignment = -1.0;
-    for (int quarterTurn = 0; quarterTurn < 4; ++quarterTurn)
+    for (int quarterTurn = 0;
+         quarterTurn < config::PlacementSettings::equivalentSquareOrientations;
+         ++quarterTurn)
     {
         const glm::dquat equivalentBoxOrientation = glm::angleAxis(
             static_cast<double>(quarterTurn) * glm::half_pi<double>(), glm::dvec3{0.0, 1.0, 0.0}) * goalBoxOrientation;
@@ -162,22 +164,19 @@ robotics::Result MoveLinearTo(const robotics::CartesianPose& pose, robotics::IRo
     return controller.BeginLinearPathPlanning(command);
 }
 
-robotics::Result CommandGripper(std::uint8_t position, robotics::IGripperController& gripper)
+robotics::Result CommandGripper(
+    config::GripperCommandSettings::PositionRequest position,
+    robotics::IGripperController& gripper)
 {
     robotics::GripperCommand command;
-    command.positionRequest = position;
-    command.speedRequest = 255;
-    command.forceRequest = 128;
+    command.positionRequest = static_cast<std::uint8_t>(position);
+    command.speedRequest = config::GripperCommandSettings::speedRequest;
+    command.forceRequest = config::GripperCommandSettings::forceRequest;
     return gripper.Command(command);
 }
 
 }
 
-
-PickPlaceMission::PickPlaceMission(const robotics::models::RobotSpecification& specification) noexcept
-    : specification_(specification)
-{
-}
 
 bool PickPlaceMission::SetResult(robotics::Result result)
 {
@@ -208,240 +207,129 @@ void PickPlaceMission::SetStageFromMotionResult(
     stage_ = next;
 }
 
-robotics::Result PickPlaceMission::RequestJ6Unwind(const robotics::RobotState& state,
-    robotics::IRobotController& controller) const
+void PickPlaceMission::BeginPickup(const robotics::CartesianPose& graspBoxPoseInBase,
+    robotics::IRobotController& controller)
 {
-    if (state.jointPositionRadians.empty())
-        return {robotics::ErrorCode::InvalidCommand, "RobotPanel: current joint positions are unavailable"};
+    const double boxYawRadians = glm::radians(YawDegrees(graspBoxPoseInBase.orientationXyzw));
+    const glm::dquat desiredPickupOrientation = glm::normalize(
+        glm::angleAxis(boxYawRadians, glm::dvec3{0.0, 1.0, 0.0}) * Orientation(graspOrientationXyzw_));
+    pickupOrientationXyzw_ = QuaternionXyzw(desiredPickupOrientation);
 
-    robotics::JointMoveCommand command;
-    command.targetPositionRadians = state.jointPositionRadians;
-    command.targetPositionRadians.back() = 0.0;
-    command.preserveJointTurns = true;
-    return controller.MoveJoint(command);
+    const auto approach = MakeBoxTarget(graspBoxPoseInBase, config::approachHeightMeters,
+        pickupOrientationXyzw_);
+    const auto descent = MakeBoxTarget(graspBoxPoseInBase, config::graspClearanceMeters,
+        pickupOrientationXyzw_);
+    recoveryPose_ = approach;
+    SetStageFromMotionResult(controller.BeginPosePlanningWithLinearContinuation(
+        approach, LinearCommandTo(descent)), Stage::MovingAbovePickup, controller);
+}
+
+void PickPlaceMission::UpdatePlanningMotion(robotics::IRobotController& controller)
+{
+    if (controller.IsMotionPlanning())
+        return;
+
+    auto result = controller.TakeMotionPlanningResult();
+    if (!result)
+    {
+        SetResult({robotics::ErrorCode::Fault, "이동 경로 계산이 결과 없이 끝났습니다."});
+        stage_ = Stage::Failed;
+        return;
+    }
+
+    SetStageFromResult(std::move(*result), pendingStageAfterPlanning_);
+    pendingStageAfterPlanning_ = Stage::Ready;
+}
+
+void PickPlaceMission::UpdateGraspOrientation(const robotics::RobotState& state)
+{
+    if (orientationReady_ || !state.valid || !state.tcpPoseValid)
+        return;
+
+    const glm::dquat current = TcpOrientation(state);
+    // GLB에서 그리퍼의 Y축은 손가락 면에 수직인 접근 방향이다. X축 둘레로 90도 돌리면 손가락 면이 수직이고 접근 축이 바닥을 향한다.
+    const glm::dquat faceDown = glm::angleAxis(glm::half_pi<double>(), glm::dvec3{1.0, 0.0, 0.0}) * current;
+    graspOrientationXyzw_ = {faceDown.x, faceDown.y, faceDown.z, faceDown.w};
+    orientationReady_ = true;
+}
+
+bool PickPlaceMission::IsMissionActive() const noexcept
+{
+    return stage_ != Stage::Ready && stage_ != Stage::Complete && stage_ != Stage::Failed;
+}
+
+bool PickPlaceMission::IsEnvironmentCollisionStopped(const robotics::RobotState& state) const noexcept
+{
+    return state.mode == robotics::RobotMode::Idle &&
+        state.errorCode == robotics::ErrorCode::EnvironmentContact &&
+        IsMissionActive() && stage_ != Stage::Recovering;
 }
 
 void PickPlaceMission::Update(const robotics::RobotState& state, robotics::IRobotController& controller,
     robotics::IGripperController& gripper, bool boxGrasped,
     const robotics::CartesianPose& graspBoxPoseInBase,
-    const robotics::CartesianPose& placementPoseInBase)
+    const robotics::CartesianPose& placementPoseInBase,
+    std::chrono::steady_clock::time_point now)
 {
+    // 정지 뒤에는 상태 피드백이 Idle이어도 임무 단계를 진행하지 않는다.
+    if (taskPaused_)
+        return;
+
     const bool idle = state.mode == robotics::RobotMode::Idle;
-    const bool activeMission = stage_ != Stage::Ready && stage_ != Stage::Complete && stage_ != Stage::Failed;
-    if (!taskPaused_ && activeMission && state.mode == robotics::RobotMode::Fault)
+    if (IsMissionActive() && state.mode == robotics::RobotMode::Fault)
     {
         const auto errorCode = state.errorCode == robotics::ErrorCode::None
             ? robotics::ErrorCode::Fault : state.errorCode;
-        SetResult({errorCode, std::string{"RobotPanel: motion fault: "} + RuntimeFaultReason(errorCode)});
+        SetResult({errorCode, std::string{"로봇 동작 오류: "} + RuntimeFaultReason(errorCode)});
         taskSucceeded_ = false;
         stage_ = Stage::Failed;
         autoLoopEnabled_ = false;
         return;
     }
-    if (stage_ == Stage::PlanningMotion && !taskPaused_)
+    if (stage_ == Stage::PlanningMotion)
     {
-        if (controller.IsMotionPlanning())
-            return;
-        auto result = controller.TakeMotionPlanningResult();
-        if (!result)
-        {
-            SetResult({robotics::ErrorCode::Fault, "RobotPanel: linear path planner ended without a result"});
-            stage_ = Stage::Failed;
-            return;
-        }
-        SetStageFromResult(std::move(*result), pendingStageAfterPlanning_);
-        pendingStageAfterPlanning_ = Stage::Ready;
+        UpdatePlanningMotion(controller);
         return;
     }
     bool gripperCloseFinished = false;
-    if (!taskPaused_ && stage_ == Stage::Closing && !boxGrasped)
+    if (stage_ == Stage::Closing && !boxGrasped)
     {
         const auto gripperState = gripper.GetState();
         gripperCloseFinished = gripperState.mode == robotics::GripperMode::Idle &&
             gripperState.objectStatus == robotics::GripperObjectStatus::AtRequestedPosition;
     }
     // Viewer가 겹친 틱을 취소하면 Controller는 직전 관절각에서 Idle로 멈추고 충돌 원인을 남긴다. 여기서는 하강을 이어가지 않고 저장한 높이로 후퇴한다.
-    const bool collisionStopped = idle &&
-        state.errorCode == robotics::ErrorCode::EnvironmentContact &&
-        stage_ != Stage::Ready && stage_ != Stage::Complete && stage_ != Stage::Failed && stage_ != Stage::Recovering;
+    const bool collisionStopped = IsEnvironmentCollisionStopped(state);
 
-    if (!orientationReady_ && state.valid && state.tcpPoseValid)
-    {
-        const glm::dquat current = TcpOrientation(state);
-        // GLB에서 그리퍼의 Y축은 손가락 면에 수직인 접근 방향이다. X축 둘레로 90도 돌리면 손가락 면이 수직이고 접근 축이 바닥을 향한다.
-        const glm::dquat faceDown = glm::angleAxis(glm::half_pi<double>(), glm::dvec3{1.0, 0.0, 0.0}) * current;
-        graspOrientationXyzw_ = {faceDown.x, faceDown.y, faceDown.z, faceDown.w};
-        orientationReady_ = true;
-    }
+    UpdateGraspOrientation(state);
 
-    if (!taskPaused_ && collisionStopped)
+    if (collisionStopped)
     {
         SetStageFromMotionResult(MoveLinearTo(recoveryPose_, controller), Stage::Recovering, controller);
     }
     else
     {
+        const UpdateContext context{state, controller, gripper, boxGrasped, gripperCloseFinished,
+            graspBoxPoseInBase, placementPoseInBase, idle, now};
         switch (stage_)
         {
-        case Stage::UnwindingBeforeTask:
-            if (idle)
-            {
-                if (state.jointPositionRadians.empty() ||
-                    std::abs(state.jointPositionRadians.back()) > config::j6UnwindToleranceRadians)
-                {
-                    SetResult({robotics::ErrorCode::Fault,
-                        "RobotPanel: J6 did not return to the 0 degree unwind position"});
-                    stage_ = Stage::Failed;
-                }
-                else
-                {
-                    const double boxYawRadians = glm::radians(YawDegrees(graspBoxPoseInBase.orientationXyzw));
-                    const glm::dquat desiredPickupOrientation = glm::normalize(
-                        glm::angleAxis(boxYawRadians, glm::dvec3{0.0, 1.0, 0.0}) * Orientation(graspOrientationXyzw_));
-                    pickupOrientationXyzw_ = QuaternionXyzw(desiredPickupOrientation);
-                    const auto approach = MakeBoxTarget(graspBoxPoseInBase, config::approachHeightMeters,
-                        pickupOrientationXyzw_);
-                    const auto descent = MakeBoxTarget(graspBoxPoseInBase, config::graspClearanceMeters,
-                        pickupOrientationXyzw_);
-                    recoveryPose_ = approach;
-                    SetStageFromMotionResult(controller.BeginPosePlanningWithLinearContinuation(
-                        approach, LinearCommandTo(descent)), Stage::MovingAbovePickup, controller);
-                }
-            }
-            break;
         case Stage::MovingAbovePickup:
-            if (idle)
-            {
-                const auto descent = MakeBoxTarget(graspBoxPoseInBase, config::graspClearanceMeters,
-                    pickupOrientationXyzw_);
-                SetStageFromMotionResult(MoveLinearTo(descent, controller), Stage::MovingDownToPickup, controller);
-            }
-            break;
         case Stage::MovingDownToPickup:
-            if (idle)
-                SetStageFromResult(CommandGripper(255, gripper), Stage::Closing);
-            break;
         case Stage::Closing:
-            if (!taskPaused_ && boxGrasped && state.tcpPoseValid)
-            {
-                // Constraint는 파지 순간의 물체와 그리퍼 상대 자세를 유지한다. 이 차이를 TCP의 Local 좌표로 저장하면 방향이 바뀌어도 목표 위치에 상자 중심을 맞출 수 있다.
-                CaptureAttachedBoxOffset(graspBoxPoseInBase, state, boxOffsetInTool_, boxRotationOffsetInTool_);
-                graspedBoxPoseInBase_ = graspBoxPoseInBase;
-                recoveryPose_ = MakeAttachedBoxTarget(graspBoxPoseInBase, config::approachHeightMeters,
-                    graspBoxPoseInBase.orientationXyzw, boxRotationOffsetInTool_, boxOffsetInTool_);
-                SetStageFromMotionResult(MoveLinearTo(recoveryPose_, controller), Stage::Lifting, controller);
-            }
-            else if (gripperCloseFinished)
-            {
-                taskSucceeded_ = false;
-                if (!SetResult(CommandGripper(0, gripper)))
-                    stage_ = Stage::Failed;
-                else
-                    SetStageFromMotionResult(MoveLinearTo(recoveryPose_, controller), Stage::Recovering, controller);
-            }
-            break;
         case Stage::Lifting:
-            if (idle)
-            {
-                recoveryPose_ = MakeAttachedBoxTarget(graspedBoxPoseInBase_, config::transitBoxHeightMeters,
-                    graspedBoxPoseInBase_.orientationXyzw, boxRotationOffsetInTool_, boxOffsetInTool_);
-                SetStageFromMotionResult(MoveLinearTo(recoveryPose_, controller), Stage::TransitingToPlacement, controller);
-            }
+            UpdatePickup(context);
             break;
         case Stage::RaisingAfterResume:
-            if (idle)
-                stage_ = Stage::TransitingToPlacement;
-            break;
         case Stage::TransitingToPlacement:
-            if (idle)
-            {
-                const glm::dquat boxRotationOffset = Orientation(boxRotationOffsetInTool_);
-                const glm::dquat currentTcp = TcpOrientation(state);
-                const glm::dquat chosenTcp = ClosestSquarePlacementOrientation(
-                    Orientation(placementPoseInBase.orientationXyzw), boxRotationOffset, currentTcp);
-                placementBoxOrientationXyzw_ = QuaternionXyzw(chosenTcp * boxRotationOffset);
-                recoveryPose_ = MakeAttachedBoxTarget(placementPoseInBase, config::transitBoxHeightMeters,
-                    QuaternionXyzw(currentTcp * boxRotationOffset), boxRotationOffsetInTool_, boxOffsetInTool_);
-                SetStageFromMotionResult(MovePoseTo(recoveryPose_, controller), Stage::MovingToPlacementOverhead, controller);
-            }
-            break;
         case Stage::MovingToPlacementOverhead:
-            if (idle)
-            {
-                recoveryPose_ = MakeAttachedBoxTarget(placementPoseInBase, config::approachHeightMeters,
-                    placementBoxOrientationXyzw_, boxRotationOffsetInTool_, boxOffsetInTool_);
-                SetStageFromMotionResult(MovePoseTo(recoveryPose_, controller),
-                    Stage::AligningAbovePlacement, controller);
-            }
-            break;
         case Stage::AligningAbovePlacement:
-            if (idle)
-            {
-                const auto placement = MakeAttachedBoxTarget(placementPoseInBase, 0.0,
-                    placementBoxOrientationXyzw_, boxRotationOffsetInTool_, boxOffsetInTool_);
-                SetStageFromMotionResult(MoveLinearTo(placement, controller),
-                    Stage::MovingDownToPlacement, controller);
-            }
-            break;
         case Stage::MovingDownToPlacement:
-            if (idle)
-            {
-                placementDwellStarted_ = std::chrono::steady_clock::now();
-                stage_ = Stage::SettlingAtPlacement;
-            }
-            break;
         case Stage::SettlingAtPlacement:
-            if (!taskPaused_ && idle &&
-                std::chrono::steady_clock::now() - placementDwellStarted_ >= std::chrono::milliseconds{400})
-                SetStageFromResult(CommandGripper(0, gripper), Stage::Opening);
-            break;
         case Stage::Opening:
-        {
-            const auto gripperState = gripper.GetState();
-            const bool gripperSettled = gripperState.mode == robotics::GripperMode::Idle &&
-                gripperState.objectStatus == robotics::GripperObjectStatus::AtRequestedPosition;
-            const bool openingStoppedAtContact = gripperState.mode == robotics::GripperMode::Stopped &&
-                gripperState.objectStatus == robotics::GripperObjectStatus::ContactWhileOpening;
-            if (!taskPaused_ && !boxGrasped && (gripperSettled || openingStoppedAtContact))
-            {
-                placementReleased_ = true;
-                SetStageFromMotionResult(MoveLinearTo(recoveryPose_, controller), Stage::Retreating, controller);
-            }
+            UpdatePlacement(context);
             break;
-        }
         case Stage::Retreating:
-            if (idle)
-            {
-                if (placementReleased_ && taskSucceeded_ && !boxGrasped)
-                {
-                    SetStageFromResult(RequestJ6Unwind(state, controller), Stage::UnwindingWrist);
-                    if (stage_ == Stage::Failed)
-                        autoLoopEnabled_ = false;
-                }
-                else
-                    stage_ = Stage::UnwindingWrist;
-            }
-            break;
-        case Stage::UnwindingWrist:
-            if (idle)
-            {
-                const bool wristUnwound = !state.jointPositionRadians.empty() &&
-                    std::abs(state.jointPositionRadians.back()) <= config::j6UnwindToleranceRadians;
-                if (!wristUnwound)
-                {
-                    SetResult({robotics::ErrorCode::Fault,
-                        "RobotPanel: J6 did not return to the 0 degree unwind position"});
-                }
-                missionSucceeded_ = wristUnwound && taskSucceeded_ && placementReleased_ &&
-                    BoxCornersFitPlacement(graspBoxPoseInBase, placementPoseInBase);
-                stage_ = missionSucceeded_ ? Stage::Complete : Stage::Failed;
-                if (missionSucceeded_)
-                {
-                    ++completedMissionCount_;
-                    missionSuccessEventPending_ = true;
-                }
-                else
-                    autoLoopEnabled_ = false;
-            }
+            UpdateRetreat(context);
             break;
         case Stage::Ready:
         case Stage::PlanningMotion:
@@ -458,8 +346,156 @@ void PickPlaceMission::Update(const robotics::RobotState& state, robotics::IRobo
     }
     if (stage_ == Stage::Failed)
         autoLoopEnabled_ = false;
+}
 
+void PickPlaceMission::UpdatePickup(const UpdateContext& context)
+{
+    switch (stage_)
+    {
+    case Stage::MovingAbovePickup:
+        if (context.idle)
+        {
+            const auto descent = MakeBoxTarget(context.graspBoxPoseInBase, config::graspClearanceMeters,
+                pickupOrientationXyzw_);
+            SetStageFromMotionResult(MoveLinearTo(descent, context.controller), Stage::MovingDownToPickup,
+                context.controller);
+        }
+        break;
+    case Stage::MovingDownToPickup:
+        if (context.idle)
+            SetStageFromResult(CommandGripper(
+                config::GripperCommandSettings::PositionRequest::Closed, context.gripper), Stage::Closing);
+        break;
+    case Stage::Closing:
+        if (context.boxGrasped && context.state.tcpPoseValid)
+        {
+            // 파지 순간의 상자와 공구 사이 위치·방향을 저장해, 들어 올릴 때도 상자 중심을 유지한다.
+            CaptureAttachedBoxOffset(context.graspBoxPoseInBase, context.state,
+                boxOffsetInTool_, boxRotationOffsetInTool_);
+            graspedBoxPoseInBase_ = context.graspBoxPoseInBase;
+            recoveryPose_ = MakeAttachedBoxTarget(context.graspBoxPoseInBase, config::approachHeightMeters,
+                context.graspBoxPoseInBase.orientationXyzw, boxRotationOffsetInTool_, boxOffsetInTool_);
+            SetStageFromMotionResult(MoveLinearTo(recoveryPose_, context.controller), Stage::Lifting,
+                context.controller);
+        }
+        else if (context.gripperCloseFinished)
+        {
+            taskSucceeded_ = false;
+            if (!SetResult(CommandGripper(
+                config::GripperCommandSettings::PositionRequest::Open, context.gripper)))
+                stage_ = Stage::Failed;
+            else
+                SetStageFromMotionResult(MoveLinearTo(recoveryPose_, context.controller), Stage::Recovering,
+                    context.controller);
+        }
+        break;
+    case Stage::Lifting:
+        if (context.idle)
+        {
+            recoveryPose_ = MakeAttachedBoxTarget(graspedBoxPoseInBase_, config::transitBoxHeightMeters,
+                graspedBoxPoseInBase_.orientationXyzw, boxRotationOffsetInTool_, boxOffsetInTool_);
+            SetStageFromMotionResult(MoveLinearTo(recoveryPose_, context.controller),
+                Stage::TransitingToPlacement, context.controller);
+        }
+        break;
+    default:
+        break;
+    }
+}
 
+void PickPlaceMission::UpdatePlacement(const UpdateContext& context)
+{
+    switch (stage_)
+    {
+    case Stage::RaisingAfterResume:
+        if (context.idle)
+            stage_ = Stage::TransitingToPlacement;
+        break;
+    case Stage::TransitingToPlacement:
+        if (context.idle)
+        {
+            const glm::dquat boxRotationOffset = Orientation(boxRotationOffsetInTool_);
+            const glm::dquat currentTcp = TcpOrientation(context.state);
+            const glm::dquat chosenTcp = ClosestSquarePlacementOrientation(
+                Orientation(context.placementPoseInBase.orientationXyzw), boxRotationOffset, currentTcp);
+            placementBoxOrientationXyzw_ = QuaternionXyzw(chosenTcp * boxRotationOffset);
+            recoveryPose_ = MakeAttachedBoxTarget(context.placementPoseInBase, config::transitBoxHeightMeters,
+                QuaternionXyzw(currentTcp * boxRotationOffset), boxRotationOffsetInTool_, boxOffsetInTool_);
+            SetStageFromMotionResult(MovePoseTo(recoveryPose_, context.controller),
+                Stage::MovingToPlacementOverhead, context.controller);
+        }
+        break;
+    case Stage::MovingToPlacementOverhead:
+        if (context.idle)
+        {
+            recoveryPose_ = MakeAttachedBoxTarget(context.placementPoseInBase, config::approachHeightMeters,
+                placementBoxOrientationXyzw_, boxRotationOffsetInTool_, boxOffsetInTool_);
+            const auto placement = MakeAttachedBoxTarget(context.placementPoseInBase, 0.0,
+                placementBoxOrientationXyzw_, boxRotationOffsetInTool_, boxOffsetInTool_);
+            SetStageFromMotionResult(context.controller.BeginPosePlanningWithLinearContinuation(
+                recoveryPose_, LinearCommandTo(placement)), Stage::AligningAbovePlacement, context.controller);
+        }
+        break;
+    case Stage::AligningAbovePlacement:
+        if (context.idle)
+        {
+            const auto placement = MakeAttachedBoxTarget(context.placementPoseInBase, 0.0,
+                placementBoxOrientationXyzw_, boxRotationOffsetInTool_, boxOffsetInTool_);
+            SetStageFromMotionResult(MoveLinearTo(placement, context.controller),
+                Stage::MovingDownToPlacement, context.controller);
+        }
+        break;
+    case Stage::MovingDownToPlacement:
+        if (context.idle)
+        {
+            placementDwellStarted_ = context.now;
+            stage_ = Stage::SettlingAtPlacement;
+        }
+        break;
+    case Stage::SettlingAtPlacement:
+        if (context.idle &&
+            context.now - placementDwellStarted_ >=
+                config::PlacementSettings::settleDuration)
+            SetStageFromResult(CommandGripper(
+                config::GripperCommandSettings::PositionRequest::Open, context.gripper), Stage::Opening);
+        break;
+    case Stage::Opening:
+    {
+        const auto gripperState = context.gripper.GetState();
+        const bool gripperSettled = gripperState.mode == robotics::GripperMode::Idle &&
+            gripperState.objectStatus == robotics::GripperObjectStatus::AtRequestedPosition;
+        const bool openingStoppedAtContact = gripperState.mode == robotics::GripperMode::Stopped &&
+            gripperState.objectStatus == robotics::GripperObjectStatus::ContactWhileOpening;
+        if (!context.boxGrasped && (gripperSettled || openingStoppedAtContact))
+        {
+            placementReleased_ = true;
+            SetStageFromMotionResult(MoveLinearTo(recoveryPose_, context.controller),
+                Stage::Retreating, context.controller);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void PickPlaceMission::UpdateRetreat(const UpdateContext& context)
+{
+    if (!context.idle)
+        return;
+
+    const bool missionSucceeded = taskSucceeded_ && placementReleased_ && !context.boxGrasped &&
+        BoxCornersFitPlacement(context.graspBoxPoseInBase, context.placementPoseInBase);
+    stage_ = missionSucceeded ? Stage::Complete : Stage::Failed;
+    if (missionSucceeded)
+    {
+        ++completedMissionCount_;
+        missionSuccessEventPending_ = true;
+    }
+    else
+    {
+        autoLoopEnabled_ = false;
+    }
 }
 
 void PickPlaceMission::ApplyActions(const PickPlaceMissionActions& actions,
@@ -476,63 +512,82 @@ void PickPlaceMission::ApplyActions(const PickPlaceMissionActions& actions,
         taskPaused_ = false;
         taskSucceeded_ = true;
         placementReleased_ = false;
-        missionSucceeded_ = false;
         autoLoopEnabled_ = true;
-        SetStageFromResult(RequestJ6Unwind(state, controller), Stage::UnwindingBeforeTask);
+        BeginPickup(graspBoxPoseInBase, controller);
     }
     if (taskPaused_ && actions.resume)
     {
-            taskPaused_ = false;
-            taskSucceeded_ = true;
-            missionSucceeded_ = false;
-            if (boxGrasped)
-            {
-                placementReleased_ = false;
-                if (!state.valid || !state.tcpPoseValid)
-                {
-                    SetResult({robotics::ErrorCode::InvalidCommand,
-                        "RobotPanel: TCP feedback is unavailable for safe resume"});
-                    stage_ = Stage::Failed;
-                }
-                else
-                {
-                    const glm::dquat tcpOrientation = CaptureAttachedBoxOffset(
-                        graspBoxPoseInBase, state, boxOffsetInTool_, boxRotationOffsetInTool_);
-                    graspedBoxPoseInBase_ = graspBoxPoseInBase;
-                    const double currentBoxHeight = graspedBoxPoseInBase_.positionMeters[1];
-                    const double resumeTransitHeight = std::max(currentBoxHeight, config::transitBoxHeightMeters);
-                    const double liftDistance = resumeTransitHeight - currentBoxHeight;
-                    recoveryPose_ = MakeAttachedBoxTarget(graspedBoxPoseInBase_, liftDistance,
-                        graspedBoxPoseInBase_.orientationXyzw, boxRotationOffsetInTool_, boxOffsetInTool_);
-                    graspedBoxPoseInBase_.positionMeters[1] = resumeTransitHeight - config::transitBoxHeightMeters;
-                    SetStageFromMotionResult(MoveLinearTo(recoveryPose_, controller), Stage::RaisingAfterResume, controller);
-                }
-            }
-            else if (placementReleased_)
-            {
-                SetStageFromResult(RequestJ6Unwind(state, controller), Stage::UnwindingWrist);
-            }
-            else if (stage_ == Stage::Opening)
-            {
-                placementReleased_ = false;
-            }
-            else
-            {
-                placementReleased_ = false;
-                SetStageFromResult(RequestJ6Unwind(state, controller), Stage::UnwindingBeforeTask);
-            }
+        ResumeFromPause(state, controller, boxGrasped, graspBoxPoseInBase);
     }
     else if (actions.stop)
     {
-        if (SetResult(controller.Stop()))
-        {
-            if (stage_ == Stage::PlanningMotion)
-                controller.TakeMotionPlanningResult();
-            taskPaused_ = true;
-            autoLoopEnabled_ = false;
-        }
+        StopForPause(controller);
     }
 
+}
+
+void PickPlaceMission::ResumeFromPause(const robotics::RobotState& state,
+    robotics::IRobotController& controller, bool boxGrasped,
+    const robotics::CartesianPose& graspBoxPoseInBase)
+{
+    taskPaused_ = false;
+    taskSucceeded_ = true;
+    if (boxGrasped)
+    {
+        ResumeWithAttachedBox(state, controller, graspBoxPoseInBase);
+        return;
+    }
+
+    if (placementReleased_)
+    {
+        stage_ = Stage::Retreating;
+        return;
+    }
+
+    if (stage_ == Stage::Opening)
+    {
+        placementReleased_ = false;
+        return;
+    }
+
+    placementReleased_ = false;
+    BeginPickup(graspBoxPoseInBase, controller);
+}
+
+void PickPlaceMission::ResumeWithAttachedBox(const robotics::RobotState& state,
+    robotics::IRobotController& controller,
+    const robotics::CartesianPose& graspBoxPoseInBase)
+{
+    placementReleased_ = false;
+    if (!state.valid || !state.tcpPoseValid)
+    {
+        SetResult({robotics::ErrorCode::InvalidCommand,
+            "공구 끝 위치 정보가 없어 안전하게 다시 시작할 수 없습니다."});
+        stage_ = Stage::Failed;
+        return;
+    }
+
+    CaptureAttachedBoxOffset(graspBoxPoseInBase, state, boxOffsetInTool_, boxRotationOffsetInTool_);
+    graspedBoxPoseInBase_ = graspBoxPoseInBase;
+    const double currentBoxHeight = graspedBoxPoseInBase_.positionMeters[1];
+    const double resumeTransitHeight = std::max(currentBoxHeight, config::transitBoxHeightMeters);
+    const double liftDistance = resumeTransitHeight - currentBoxHeight;
+    recoveryPose_ = MakeAttachedBoxTarget(graspedBoxPoseInBase_, liftDistance,
+        graspedBoxPoseInBase_.orientationXyzw, boxRotationOffsetInTool_, boxOffsetInTool_);
+    graspedBoxPoseInBase_.positionMeters[1] = resumeTransitHeight - config::transitBoxHeightMeters;
+    SetStageFromMotionResult(MoveLinearTo(recoveryPose_, controller), Stage::RaisingAfterResume, controller);
+}
+
+void PickPlaceMission::StopForPause(robotics::IRobotController& controller)
+{
+    if (!SetResult(controller.Stop()))
+        return;
+
+    if (stage_ == Stage::PlanningMotion)
+        controller.TakeMotionPlanningResult();
+
+    taskPaused_ = true;
+    autoLoopEnabled_ = false;
 }
 
 PickPlaceMissionSnapshot PickPlaceMission::Snapshot() const
@@ -541,7 +596,6 @@ PickPlaceMissionSnapshot PickPlaceMission::Snapshot() const
     switch (stage_)
     {
     case Stage::Ready: stageName = "Ready"; break;
-    case Stage::UnwindingBeforeTask: stageName = "Unwinding J6 before pickup"; break;
     case Stage::MovingAbovePickup: stageName = "Moving above the box"; break;
     case Stage::MovingDownToPickup: stageName = "Lowering to the box"; break;
     case Stage::Closing: stageName = "Closing gripper"; break;
@@ -555,12 +609,11 @@ PickPlaceMissionSnapshot PickPlaceMission::Snapshot() const
     case Stage::SettlingAtPlacement: stageName = "Holding at placement"; break;
     case Stage::Opening: stageName = "Opening gripper"; break;
     case Stage::Retreating: stageName = "Retracting from goal"; break;
-    case Stage::UnwindingWrist: stageName = "Unwinding J6"; break;
     case Stage::Recovering: stageName = "Retracting after collision"; break;
     case Stage::Complete: stageName = "Complete"; break;
     case Stage::Failed: stageName = "Failed"; break;
     }
-    return {stageName, lastResult_.message, taskPaused_, missionSucceeded_, autoLoopEnabled_,
+    return {stageName, lastResult_.message, taskPaused_, stage_ == Stage::Complete, autoLoopEnabled_,
         hasResult_, lastResult_.Ok(), !taskPaused_ &&
             (stage_ == Stage::Ready || stage_ == Stage::Complete || stage_ == Stage::Failed),
         completedMissionCount_};
@@ -577,7 +630,6 @@ void PickPlaceMission::PrepareNextTask() noexcept
 {
     stage_ = Stage::Ready;
     taskPaused_ = false;
-    missionSucceeded_ = false;
     placementReleased_ = false;
     taskSucceeded_ = true;
 }

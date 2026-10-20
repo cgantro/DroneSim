@@ -38,8 +38,8 @@ public:
     [[nodiscard]] virtual bool IsConnected() const noexcept = 0;
 
     /**
-     * @brief 각 관절을 지정한 절대 목표각으로 움직이도록 요청한다.
-     * @param command J1..Jn 목표각 [rad]과 구현별 속도·가속도 비율.
+     * @brief 각 관절을 지정한 절대 목표 위치로 움직이도록 요청한다.
+     * @param command 모델 순서의 목표 위치다. 회전 관절은 [rad], 직선 관절은 [m]이며 속도·가속도 비율도 포함한다.
      * @return 요청을 받아들였는지 나타낸다. 성공은 목표 도달이나 동작 완료가 아니다.
      * @details 관절 개수·범위와 Busy 처리, 실행 중 명령 교체 여부는 구현 계약에 따른다.
      */
@@ -133,7 +133,7 @@ public:
 
     /**
      * @brief Controller가 보고한 상태의 독립된 복사본을 반환한다.
-     * @return 관절 위치 [rad], 속도 [rad/s], 동작 상태, 오류와 TCP 위치 [m]를 담는다.
+     * @return 관절 위치와 속도를 담는다. 회전 관절은 [rad], [rad/s], 직선 관절은 [m], [m/s]다.
      * @details valid는 관절을 포함한 전체 상태의 유효성을 나타낸다.
      * tcpPoseValid는 해당 구현의 TCP 위치·방향 feedback만 유효한지 나타낸다. Simulation은 관절 FK와 설정된 공구 offset으로 계산할 수 있다.
      * 오류 code의 뜻은 장치나 Simulation 구현에 따라 다르다.

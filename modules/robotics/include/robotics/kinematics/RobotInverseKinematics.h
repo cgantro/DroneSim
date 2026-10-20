@@ -34,7 +34,18 @@ enum class IkTerminationReason
 };
 
 /**
- * @brief 위치와 방향의 허용 오차 및 Damped Least Squares 반복 계산 설정을 정한다.
+ * @brief IK가 맞출 TCP 목표 조건을 지정한다.
+ * @details PositionOnly는 위치 오차만 줄이고 방향은 제한하지 않는다. Pose는 위치와 방향을 함께 맞춘다.
+ * 이 선택은 로봇 관절 수가 아니라 호출자가 지정한다.
+ */
+enum class IkTaskMode
+{
+    PositionOnly,
+    Pose
+};
+
+/**
+ * @brief 위치와 방향의 허용 오차 및 Levenberg–Marquardt 반복 계산 설정을 정한다.
  * @details damping은 팔을 펴서 일부 방향으로 움직일 수 없는 특이 자세에서도 작은 수로 나누어 관절 변화가 폭증하는 것을 줄이는 양수 계수다.
  * 이 값에서 시작해 오차 감소가 확인되면 최소 1%까지 낮추고 감소하지 않으면 높여 안정성과 작은 잔여 오차를 함께 다룬다.
  * orientationWeightMetersPerRadian은 회전 오차 [rad]를 위치 오차 [m]와 함께 최소화하기 위한 길이 비율이며 실제 공구 길이나 속도 제한은 아니다.
@@ -44,23 +55,30 @@ enum class IkTerminationReason
  */
 struct IkOptions
 {
+    /// 기본값 Pose는 위치와 방향을 모두 맞춘다. 위치만 요청하려면 PositionOnly를 지정한다.
+    IkTaskMode taskMode = IkTaskMode::Pose;
     std::size_t maxIterations = 200;
     double positionToleranceMeters = 1e-5;
     double orientationToleranceRadians = 1e-4;
     double damping = 1e-3;
     double orientationWeightMetersPerRadian = 0.3;
-    double maxJointStepRadians = 0.2;
+    /// 한 번에 바꿀 회전 관절의 최대 크기 [rad]다.
+    double maxJointStep = 0.2;
+    /// 한 번에 움직일 직선 관절의 최대 거리 [m]다.
+    double maxPrismaticStepMeters = 0.05;
     /// 허용 오차에 못 미친 채 작은 변화만 반복할 때 종료할 연속 반복 횟수다.
     std::size_t stagnationIterationLimit = 8;
     /// 반복 중 오차 감소율이 이 값 이하일 때 작은 변화로 볼 상대 기준이다.
     double stagnationRelativeCostTolerance = 1e-8;
-    /// 관절 변화가 이 값 이하일 때 작은 변화로 볼 크기 [rad]다.
-    double stagnationJointStepToleranceRadians = 1e-5;
+    /// 관절 변화가 이 값 이하일 때 작은 변화로 볼 크기다. 회전 관절은 [rad], 직선 관절은 [m]다.
+    double stagnationJointStepTolerance = 1e-5;
+    /// 직선 관절의 작은 변화 기준 [m]다.
+    double stagnationPrismaticStepToleranceMeters = 1e-6;
 };
 
 /**
  * @brief IK의 성공 여부와 가장 가까워진 관절각, 잔여 오차를 값으로 반환한다.
- * @details jointPositionRadians는 RobotSpecification 순서의 [rad] 값이다.
+ * @details jointPositions는 RobotSpecification 순서다. 회전 관절은 [rad], 직선 관절은 [m]다.
  * 실패 결과의 관절각은 진단용 후보이므로 Controller 목표로 실행하지 않는다.
  * iterations는 수행한 반복 수이며 오차는 Robot base 기준 위치 거리 [m]와 최단 회전각 [rad]다.
  * terminationReason은 제한, 정체, 반복 한도 중 계산을 끝낸 직접 원인을 나타낸다.
@@ -70,7 +88,7 @@ struct IkOptions
 struct IkResult
 {
     IkStatus status = IkStatus::InvalidInput;
-    JointVector jointPositionRadians;
+    JointVector jointPositions;
     std::size_t iterations = 0;
     double positionErrorMeters = 0.0;
     double orientationErrorRadians = 0.0;
@@ -90,23 +108,23 @@ enum class IkSessionState { Running, Completed, Cancelled };
  * ToolFrame은 공구가 로봇에 붙는 기준점이고 TCP는 실제 작업에 쓰는 공구 끝점이다. tcpInToolFrame으로 두 점 사이의 위치와 방향을 지정한다.
  * 기본값은 두 점이 같은 위치라는 뜻이다. 공구가 길면 실제 공구 끝에 맞는 변환을 전달해야 한다.
  * 목표와 결과 위치는 Robot base 기준이다. Scene에서 로봇 전체를 옮긴 값은 포함하지 않는다.
- * 해석 IK는 특정 로봇 모양에 맞춘 공식을 쓰지만, DLS는 관절을 조금씩 움직여 목표에 가까워지는 방법을 반복 계산한다. 그래서 관절 수가 다른 직렬 회전 관절 로봇에도 같은 계산을 쓸 수 있다.
- * 이 계산기는 코드에 정의된 직렬 회전 관절 모델만 다룬다. URDF 파일 읽기, 직선으로 움직이는 관절, 갈라진 팔 구조는 지원하지 않는다.
+ * 해석 IK는 특정 로봇 모양에 맞춘 공식을 사용한다. LM은 관절을 조금씩 움직이는 계산에서 목표 오차가 줄었는지 확인해 감쇠값을 조절하므로, 관절 수가 다른 직렬 로봇에도 같은 절차를 쓸 수 있다.
+ * 이 계산기는 회전 관절과 직선 관절로 이루어진 직렬 관절 사양을 받는다. URDF를 읽는 일은 모델 로더가 맡으며, 여러 갈래로 나뉘는 팔과 듀얼 암 계산은 지원하지 않는다.
  * 현재 관절각에서 출발해 한 경로만 찾으므로, 계산을 마쳐도 목표에 닿지 못할 수 있다.
  * 로봇 사양은 복사하지 않고 빌려 쓴다. 따라서 사양 자료는 계산기보다 오래 살아 있어야 하며, 같은 계산기를 여러 스레드에서 동시에 사용하면 안 된다.
  */
-class DampedLeastSquaresIk final
+class LevenbergMarquardtIk final
 {
 public:
     using SessionId = std::uint64_t;
 
     /** @brief 사양과 ToolFrame 기준 TCP 고정 변환 [m], quaternion [w,x,y,z]를 검사해 계산기를 만든다. 잘못된 사양이나 변환에는 std::invalid_argument를 던진다. */
-    explicit DampedLeastSquaresIk(const models::RobotSpecification& specification, models::Pose3 tcpInToolFrame = {});
+    explicit LevenbergMarquardtIk(const models::RobotSpecification& specification, models::Pose3 tcpInToolFrame = {});
 
     /**
      * @brief 현재 관절각에 가까운 목표 관절각을 관절 한계 안에서 반복 계산한다.
      * @param targetInBase TCP 목표 위치 [m]와 quaternion [x,y,z,w]다. 유한하고 길이가 0이 아닌 quaternion은 정규화한다.
-     * @param currentSeed 사양 순서의 시작 관절각 [rad]이며 유한하고 관절 제한 안에 있어야 한다.
+     * @param currentSeed 사양 순서의 시작 관절 위치다. 회전 관절은 [rad], 직선 관절은 [m]이며 관절 제한 안에 있어야 한다.
      * @param options 반복 한도와 위치·방향 오차, damping 설정이다. 모든 실수 설정은 유한한 양수여야 한다.
      * @return 성공 시 실행 가능한 목표 관절각이다. 실패 시 상태를 변경하지 않고 실패 이유와 진단 후보를 반환한다.
      */
@@ -130,7 +148,7 @@ public:
     /**
      * @brief 지정한 반복 횟수만큼 이어서 계산하고 현재 세션 상태를 반환한다.
      * @param session 세션 식별자다. 새 세션을 시작한 뒤에는 이전 식별자를 사용할 수 없다.
-     * @param iterationBudget 이번 호출에서 수행할 DLS 갱신 반복의 최대 횟수다. 0이면 상태만 반환한다.
+     * @param iterationBudget 이번 호출에서 수행할 LM 갱신 반복의 최대 횟수다. 0이면 상태만 반환한다.
      */
     [[nodiscard]] IkSessionState StepSingleSeed(SessionId session, std::size_t iterationBudget);
 
@@ -142,19 +160,20 @@ public:
 
     /**
      * @brief 관절각의 FK에 TCP offset을 적용해 Robot base 기준 TCP 자세를 계산한다.
-     * @param jointPositionRadians 사양 순서의 관절각 [rad]다. FK와 같이 이 함수 자체는 관절 한계를 검사하지 않는다.
+     * @param jointPositions 사양 순서의 관절 위치다. 회전 관절은 [rad], 직선 관절은 [m]다. FK처럼 한계는 검사하지 않는다.
      * @return 모델로 계산한 TCP 위치 [m]와 quaternion [x,y,z,w]다. 물리 장치에서 측정한 feedback은 아니다.
      * @throws std::invalid_argument ToolFrame이 없거나 관절 수·각도가 잘못된 경우다.
      */
-    [[nodiscard]] CartesianPose EvaluateTcp(const JointVector& jointPositionRadians);
+    [[nodiscard]] CartesianPose EvaluateTcp(const JointVector& jointPositions);
 
 private:
     const models::RobotSpecification& specification_;
     RobotKinematics forward_;
     models::Pose3 tcpInToolFrame_;
-    JointVector anglesScratch_;
+    JointVector jointPositionsScratch_;
     JointVector jointStepScratch_;
     JointVector candidateScratch_;
+    std::vector<bool> activeJointScratch_;
     std::vector<std::array<double, 6>> jacobianColumnsScratch_;
     double maximumReachMeters_ = 0.0;
     models::Pose3 sessionTarget_;

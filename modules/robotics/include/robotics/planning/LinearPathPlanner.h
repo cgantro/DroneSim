@@ -110,14 +110,14 @@ public:
         const models::RobotSpecification& specification,
         const JointVector& startJoints,
         const CartesianPose& startTcp,
-        kinematics::DampedLeastSquaresIk& inverse,
+        kinematics::LevenbergMarquardtIk& inverse,
         const StateValidityChecker& stateValidityChecker,
         const PlanningPolicy& policy = kDefaultPlanningPolicy);
     Result Begin(const LinearPathMoveCommand& command,
         const models::RobotSpecification& specification,
         const JointVector& startJoints,
         const CartesianPose& startTcp,
-        kinematics::DampedLeastSquaresIk& inverse,
+        kinematics::LevenbergMarquardtIk& inverse,
         const StateValidityChecker& stateValidityChecker,
         const PlanningPolicy& policy,
         const std::function<std::string()>& validityDiagnosticProvider);
@@ -147,7 +147,7 @@ void AlignEquivalentJointAngles(
 
 /** @brief TCP 목표 IK 해 가운데 시작 자세부터의 관절 경로가 유효한 해를 선택한다. */
 std::optional<kinematics::IkResult> SolveCollisionFreeIk(
-    kinematics::DampedLeastSquaresIk& inverse,
+    kinematics::LevenbergMarquardtIk& inverse,
     const models::RobotSpecification& specification,
     const StateValidityChecker& stateValidityChecker,
     const CartesianPose& target,
@@ -177,7 +177,7 @@ Result BuildLinearPath(
     const models::RobotSpecification& specification,
     const JointVector& startJoints,
     const CartesianPose& startTcp,
-    kinematics::DampedLeastSquaresIk& inverse,
+    kinematics::LevenbergMarquardtIk& inverse,
     const StateValidityChecker& stateValidityChecker,
     LinearPathPlan& plan,
     const PlanningPolicy& policy = kDefaultPlanningPolicy);
@@ -186,7 +186,7 @@ Result BuildLinearPath(
     const models::RobotSpecification& specification,
     const JointVector& startJoints,
     const CartesianPose& startTcp,
-    kinematics::DampedLeastSquaresIk& inverse,
+    kinematics::LevenbergMarquardtIk& inverse,
     const StateValidityChecker& stateValidityChecker,
     LinearPathPlan& plan,
     const PlanningPolicy& policy,

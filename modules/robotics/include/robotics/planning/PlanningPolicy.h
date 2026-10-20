@@ -13,7 +13,10 @@ namespace grasplink::robotics::planning
  */
 struct PlanningPolicy final
 {
+    /// 회전 관절 사이의 충돌 검사 간격 [rad]이다.
     double jointCollisionSampleSpacingRadians = 0.08;
+    /// 직선 관절 사이의 충돌 검사 간격 [m]이다.
+    double prismaticJointCollisionSampleSpacingMeters = 0.02;
     double linearPositionSampleSpacingMeters = 0.01;
     double linearOrientationSampleSpacingRadians = 0.05;
     std::size_t maximumPathIntervals = 4096;

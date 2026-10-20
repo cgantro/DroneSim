@@ -3,20 +3,27 @@
 #include "robotics/models/ModelTypes.h"
 
 #include <cstddef>
+#include <optional>
 #include <string_view>
 
 namespace grasplink::robotics::models
 {
 
+/** @brief 로봇 관절의 움직임과 그 값의 단위를 나타낸다. */
+enum class JointMotionType
+{
+    Revolute,
+    Continuous,
+    Prismatic
+};
+
 /**
- * @brief 회전 관절의 이름, 중심, 축, 허용 각도와 최대 속도를 제공한다.
+ * @brief 로봇 관절의 이름, 원점, 축, 위치 제한과 최대 속도를 제공한다.
  * @details bindPivotMeters는 모델 초기 자세에서 Robot base를 기준으로 잰 회전 중심 [m]이다.
  * Robot base는 로봇 바닥에 고정된 기준 좌표다.
- * axis는 초기 관절 회전이 없는 상태에서 관절 Local 좌표계로 본 회전축 방향이다.
+ * axis는 관절 원점의 Local 좌표계에서 본 단위 방향이다.
  * Local은 바로 위 부모 기준이고 World는 부모 변환을 합친 장면 기준이다.
- * minPositionRadians와 maxPositionRadians는 허용 회전 범위 [rad]다.
- * maxVelocityRadiansPerSecond는 최대 각속도 [rad/s]다.
- * HCR-12A에는 제조사 제한과 CAD/GLB에서 측정한 중심 위치를 함께 사용한다.
+ * 회전 관절의 위치와 속도 단위는 [rad], [rad/s]이며 직선 관절은 [m], [m/s]다.
  */
 struct JointSpecification
 {
@@ -29,12 +36,18 @@ struct JointSpecification
     // 관절 Local 좌표계에서 회전이 일어나는 축의 방향 벡터다. 방향 벡터이므로 물리 단위는 없다.
     Axis3 axis;
 
-    /// 제조사 관절 위치 제한 [rad].
-    double minPositionRadians = 0.0;
-    double maxPositionRadians = 0.0;
+    /// 제조사가 정한 관절 위치 범위다. 회전 관절은 [rad], 직선 관절은 [m]다.
+    double minimumPosition = 0.0;
+    double maximumPosition = 0.0;
 
-    /// 이 관절에 허용된 제조사 기준 최대 각속도 [rad/s]다.
-    double maxVelocityRadiansPerSecond = 0.0;
+    /// 이 관절의 최대 속도다. 회전 관절은 [rad/s], 직선 관절은 [m/s]다.
+    double maximumVelocity = 0.0;
+
+    /// 있으면 직전 관절의 자식 링크 좌표계에서 이 관절 원점까지의 고정 위치 [m]와 방향이다. 첫 관절은 base_link 기준이다.
+    std::optional<Pose3> parentToJointOrigin;
+
+    /// 관절이 회전하는지, 연속 회전하는지, 축을 따라 움직이는지 나타낸다.
+    JointMotionType motionType = JointMotionType::Revolute;
 };
 
 /** @brief Link 이름을 그 Link를 움직이는 joints 배열 원소에 연결한다. */

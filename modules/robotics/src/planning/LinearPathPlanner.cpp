@@ -23,14 +23,57 @@ namespace
 {
 using models::Pose3;
 
-constexpr double kFullTurnRadians = 2.0 * 3.14159265358979323846;
-constexpr std::size_t kIkRestartSeedCount = 16;
-constexpr std::size_t kMaximumIkCandidatesPerSample = 8;
-constexpr std::size_t kMaximumIkSeedAttemptsPerSample = 32;
-constexpr std::size_t kMaximumTcpRefinementPasses = 12;
-constexpr std::size_t kMaximumPathIntervals = 4096;
-constexpr double kJointLimitSearchMarginFraction = 0.1;
-constexpr double kJointLimitPenaltyWeight = 0.1;
+struct LinearPathPlannerLimits final
+{
+    static constexpr std::size_t maximumRestartSeedCount = 16;
+    static constexpr std::size_t maximumIkCandidatesPerSample = 8;
+    static constexpr std::size_t maximumIkSeedAttemptsPerSample = 32;
+    static constexpr std::size_t maximumTcpRefinementPasses = 12;
+    static constexpr std::size_t maximumPathIntervals = 4096;
+    static constexpr std::size_t initialTcpSampleCapacity = 64;
+    static constexpr std::size_t finalTcpStraightnessProbeIndex = 3;
+};
+
+struct LinearPathPlannerMath final
+{
+    static constexpr double fullTurnRadians = 2.0 * 3.14159265358979323846;
+    static constexpr double degreesPerFullTurn = 360.0;
+    static constexpr double jointLimitSearchMarginFraction = 0.1;
+    static constexpr double jointLimitPenaltyWeight = 0.1;
+    static constexpr double jointLimitRangeFloor = 1e-12;
+    static constexpr double jointLimitComparisonTolerance = 1e-6;
+    static constexpr double jointLimitBoundaryToleranceFloor = 1e-8;
+    static constexpr double jointLimitBoundaryToleranceRatio = 1e-8;
+    static constexpr double minimumSegmentDurationSeconds = 1e-6;
+    static constexpr double minimumPathIntervalCount = 1.0;
+    static constexpr double tcpStraightnessProbeFraction = 0.25;
+    static constexpr double segmentMidpointFraction = 0.5;
+    static constexpr double millimetersPerMeter = 1000.0;
+    static constexpr double milliradiansPerRadian = 1000.0;
+};
+
+struct LinearPathPlannerMessages final
+{
+    inline static constexpr char invalidPlanningPolicy[] =
+        "SimRobotController: invalid linear path planning policy";
+    inline static constexpr char invalidTcpTarget[] = "SimRobotController: invalid TCP target";
+    inline static constexpr char pathDurationOutOfRange[] =
+        "SimRobotController: path duration exceeds numeric range";
+    inline static constexpr char noCollisionFreeIkSolution[] =
+        "SimRobotController: no collision-free IK solution";
+    inline static constexpr char invalidPlannedJointState[] =
+        "SimRobotController: invalid joint state in planned path";
+    inline static constexpr char plannedStateExceedsJointLimit[] =
+        "SimRobotController: planned state exceeds a joint limit";
+    inline static constexpr char plannedStateOverlapsEnvironment[] =
+        "SimRobotController: planned state overlaps the environment";
+    inline static constexpr char plannedRobotLinksOverlap[] =
+        "SimRobotController: planned robot links overlap";
+    inline static constexpr char attachedObjectOverlapsScene[] =
+        "SimRobotController: attached object overlaps the scene";
+    inline static constexpr char unknownJointStateInvalidity[] =
+        "SimRobotController: unknown joint-state invalidity";
+};
 
 Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t sampleCount,
     const models::RobotSpecification& specification, const CartesianPose& target,
@@ -45,14 +88,15 @@ Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t samp
     {
         if (ikFailure->status == kinematics::IkStatus::JointLimitReached)
         {
-            for (std::size_t joint = 0; joint < ikFailure->jointPositionRadians.size(); ++joint)
+            for (std::size_t joint = 0; joint < ikFailure->jointPositions.size(); ++joint)
             {
                 const auto& limits = specification.joints[joint];
-                const double tolerance = std::max(1e-8,
-                    (limits.maxPositionRadians - limits.minPositionRadians) * 1e-8);
-                const double position = ikFailure->jointPositionRadians[joint];
-                if (std::abs(position - limits.minPositionRadians) <= tolerance ||
-                    std::abs(position - limits.maxPositionRadians) <= tolerance)
+                const double tolerance = std::max(LinearPathPlannerMath::jointLimitBoundaryToleranceFloor,
+                    (limits.maximumPosition - limits.minimumPosition) *
+                        LinearPathPlannerMath::jointLimitBoundaryToleranceRatio);
+                const double position = ikFailure->jointPositions[joint];
+                if (std::abs(position - limits.minimumPosition) <= tolerance ||
+                    std::abs(position - limits.maximumPosition) <= tolerance)
                 {
                     context += "; IK candidate reached " + std::string(limits.name) + " limit";
                     break;
@@ -61,10 +105,18 @@ Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t samp
         }
         context += "; IK residual " + std::to_string(ikFailure->positionErrorMeters) +
             " m / " + std::to_string(ikFailure->orientationErrorRadians) +
-            " rad after " + std::to_string(ikFailure->iterations) + " iterations; candidate_deg=[";
-        for (std::size_t joint = 0; joint < ikFailure->jointPositionRadians.size(); ++joint)
-            context += (joint == 0 ? "" : ",") + std::to_string(
-                ikFailure->jointPositionRadians[joint] * 360.0 / (2.0 * 3.14159265358979323846));
+            " rad after " + std::to_string(ikFailure->iterations) + " iterations; candidate_positions=[";
+        for (std::size_t joint = 0; joint < ikFailure->jointPositions.size(); ++joint)
+        {
+            const auto& jointSpec = specification.joints[joint];
+            const double position = jointSpec.motionType == models::JointMotionType::Prismatic
+                ? ikFailure->jointPositions[joint]
+                : ikFailure->jointPositions[joint] * LinearPathPlannerMath::degreesPerFullTurn /
+                    LinearPathPlannerMath::fullTurnRadians;
+            context += (joint == 0 ? "" : ",") + std::string(jointSpec.name) + "=" +
+                std::to_string(position) +
+                (jointSpec.motionType == models::JointMotionType::Prismatic ? " m" : " deg");
+        }
         context += "]";
     }
     failure.message = std::move(context) + ": " + failure.message;
@@ -83,19 +135,37 @@ bool IsPolicyValid(const PlanningPolicy& policy)
 {
     return std::isfinite(policy.jointCollisionSampleSpacingRadians) &&
         policy.jointCollisionSampleSpacingRadians > 0.0 &&
+        std::isfinite(policy.prismaticJointCollisionSampleSpacingMeters) &&
+        policy.prismaticJointCollisionSampleSpacingMeters > 0.0 &&
         std::isfinite(policy.linearPositionSampleSpacingMeters) &&
         policy.linearPositionSampleSpacingMeters > 0.0 &&
         std::isfinite(policy.linearOrientationSampleSpacingRadians) &&
         policy.linearOrientationSampleSpacingRadians > 0.0 &&
-        policy.maximumPathIntervals > 0 && policy.maximumPathIntervals <= kMaximumPathIntervals &&
+        policy.maximumPathIntervals > 0 &&
+        policy.maximumPathIntervals <= LinearPathPlannerLimits::maximumPathIntervals &&
         policy.maximumIkCandidatesPerSample > 0 &&
-        policy.maximumIkCandidatesPerSample <= kMaximumIkCandidatesPerSample &&
+        policy.maximumIkCandidatesPerSample <= LinearPathPlannerLimits::maximumIkCandidatesPerSample &&
         policy.maximumIkSeedAttemptsPerSample > 0 &&
         policy.maximumIkSeedAttemptsPerSample >= policy.maximumIkCandidatesPerSample &&
-        policy.maximumIkSeedAttemptsPerSample <= kMaximumIkSeedAttemptsPerSample &&
-        policy.maximumTcpRefinementPasses <= kMaximumTcpRefinementPasses &&
+        policy.maximumIkSeedAttemptsPerSample <= LinearPathPlannerLimits::maximumIkSeedAttemptsPerSample &&
+        policy.maximumTcpRefinementPasses <= LinearPathPlannerLimits::maximumTcpRefinementPasses &&
         std::isfinite(policy.maximumLinearTcpErrorMeters) && policy.maximumLinearTcpErrorMeters > 0.0 &&
         std::isfinite(policy.maximumAngularTcpErrorRadians) && policy.maximumAngularTcpErrorRadians > 0.0;
+}
+
+std::size_t JointPathIntervals(const JointVector& start, const JointVector& end,
+    const models::RobotSpecification& specification, const PlanningPolicy& policy)
+{
+    double largestSpacingCount = 0.0;
+    for (std::size_t joint = 0; joint < start.size(); ++joint)
+    {
+        const double spacing = specification.joints[joint].motionType == models::JointMotionType::Prismatic
+            ? policy.prismaticJointCollisionSampleSpacingMeters
+            : policy.jointCollisionSampleSpacingRadians;
+        largestSpacingCount = std::max(largestSpacingCount,
+            std::abs(end[joint] - start[joint]) / spacing);
+    }
+    return std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(largestSpacingCount)));
 }
 
 double JointTransitionCost(const JointVector& start, const JointVector& end,
@@ -105,14 +175,17 @@ double JointTransitionCost(const JointVector& start, const JointVector& end,
     for (std::size_t joint = 0; joint < start.size(); ++joint)
     {
         const auto& limits = specification.joints[joint];
-        const double range = std::max(1e-12, limits.maxPositionRadians - limits.minPositionRadians);
+        const double range = std::max(LinearPathPlannerMath::jointLimitRangeFloor,
+            limits.maximumPosition - limits.minimumPosition);
         const double delta = (end[joint] - start[joint]) / range;
         score += delta * delta;
-        const double margin = std::min(end[joint] - limits.minPositionRadians,
-            limits.maxPositionRadians - end[joint]) / range;
-        const double deficit = std::max(0.0, kJointLimitSearchMarginFraction - margin) /
-            kJointLimitSearchMarginFraction;
-        score += kJointLimitPenaltyWeight * deficit * deficit;
+        const double margin = std::min(end[joint] - limits.minimumPosition,
+            limits.maximumPosition - end[joint]) / range;
+        // 다음 경로 점에서 움직일 여유를 남기도록 관절 한계에 가까운 자세에 작은 불이익을 준다.
+        const double deficit = std::max(0.0,
+            LinearPathPlannerMath::jointLimitSearchMarginFraction - margin) /
+            LinearPathPlannerMath::jointLimitSearchMarginFraction;
+        score += LinearPathPlannerMath::jointLimitPenaltyWeight * deficit * deficit;
     }
     return score;
 }
@@ -121,7 +194,8 @@ bool SameJointCandidate(const JointVector& left, const JointVector& right)
 {
     for (std::size_t joint = 0; joint < left.size(); ++joint)
     {
-        if (std::abs(left[joint] - right[joint]) > 1e-6)
+        if (std::abs(left[joint] - right[joint]) >
+            LinearPathPlannerMath::jointLimitComparisonTolerance)
             return false;
     }
     return true;
@@ -151,7 +225,7 @@ struct LinearPathPlanningJob::Impl
     LinearPathMoveCommand command;
     const models::RobotSpecification* specification = nullptr;
     JointVector startJoints;
-    kinematics::DampedLeastSquaresIk* inverse = nullptr;
+    kinematics::LevenbergMarquardtIk* inverse = nullptr;
     StateValidityChecker stateValidityChecker;
     std::function<std::string()> validityDiagnosticProvider;
     PlanningPolicy policy{};
@@ -191,7 +265,7 @@ struct LinearPathPlanningJob::Impl
     double workingScore = 0.0;
     std::size_t workingParent = 0;
     bool workingContinuation = false;
-    kinematics::DampedLeastSquaresIk::SessionId ikSession = 0;
+    kinematics::LevenbergMarquardtIk::SessionId ikSession = 0;
     Phase phase = Phase::PrepareSample;
     ValidationPurpose validationPurpose = ValidationPurpose::Candidate;
     JointVector validationStart;
@@ -200,10 +274,10 @@ struct LinearPathPlanningJob::Impl
     std::size_t validationIntervals = 0;
     std::size_t validationStep = 0;
 
-    Result Begin(const LinearPathMoveCommand& moveCommand,
+    void ResetForBegin(const LinearPathMoveCommand& moveCommand,
         const models::RobotSpecification& robot, const JointVector& joints,
-        const CartesianPose& tcp, kinematics::DampedLeastSquaresIk& ik,
-        const StateValidityChecker& checker, const PlanningPolicy& planningPolicy,
+        kinematics::LevenbergMarquardtIk& ik, const StateValidityChecker& checker,
+        const PlanningPolicy& planningPolicy,
         const std::function<std::string()>& diagnosticProvider)
     {
         if (ikSession != 0 && inverse != nullptr)
@@ -228,65 +302,69 @@ struct LinearPathPlanningJob::Impl
         seeds.clear();
         candidates.clear();
         evaluatedEdges.clear();
+    }
 
-        if (!IsPolicyValid(policy))
-            return Fail({ErrorCode::InvalidCommand, "SimRobotController: invalid linear path planning policy"});
+    Result ReadAndValidateTargets(const CartesianPose& tcp)
+    {
         targets.reserve(command.targetPoses.size());
         try
         {
-            for (const auto& pose : command.targetPoses)
-                targets.push_back(kinematics::detail::FromCartesian(pose));
+            for (const CartesianPose& target : command.targetPoses)
+                targets.push_back(kinematics::detail::FromCartesian(target));
             start = kinematics::detail::FromCartesian(tcp);
         }
         catch (const std::invalid_argument&)
         {
-            return Fail({ErrorCode::InvalidCommand, "SimRobotController: invalid TCP target"});
+            return {ErrorCode::InvalidCommand, LinearPathPlannerMessages::invalidTcpTarget};
         }
 
         options = PathIkOptions();
         for (const CartesianPose& endpoint : command.targetPoses)
         {
-            const auto endpointSession = inverse->BeginSingleSeed(endpoint, joints, options);
+            const auto endpointSession = inverse->BeginSingleSeed(endpoint, startJoints, options);
             const auto& endpointCheck = inverse->GetSingleSeedResult(endpointSession);
             if (endpointCheck.status == kinematics::IkStatus::Unreachable)
-                return Fail(MapIkFailure(endpointCheck));
+                return MapIkFailure(endpointCheck);
             inverse->CancelSingleSeed(endpointSession);
         }
+        return Result::Success();
+    }
 
+    bool HasMotion() const
+    {
         Pose3 segmentStart = start;
         for (const Pose3& end : targets)
         {
-            plan.hasMotion = plan.hasMotion ||
-                kinematics::detail::Length(kinematics::detail::Subtract(
+            if (kinematics::detail::Length(kinematics::detail::Subtract(
                     end.positionMeters, segmentStart.positionMeters)) > options.positionToleranceMeters ||
                 kinematics::detail::Length(kinematics::detail::RotationError(
-                    end.rotation, segmentStart.rotation)) > options.orientationToleranceRadians;
+                    end.rotation, segmentStart.rotation)) > options.orientationToleranceRadians)
+                return true;
             segmentStart = end;
         }
-        if (!plan.hasMotion)
-        {
-            state = LinearPathPlanningState::Completed;
-            return result;
-        }
+        return false;
+    }
 
-        tcpSamples.reserve(64);
+    Result BuildTcpSamples()
+    {
+        tcpSamples.reserve(LinearPathPlannerLimits::initialTcpSampleCapacity);
         std::size_t totalIntervals = 0;
-        segmentStart = start;
+        Pose3 segmentStart = start;
         for (const Pose3& end : targets)
         {
             const double distance = kinematics::detail::Length(
                 kinematics::detail::Subtract(end.positionMeters, segmentStart.positionMeters));
             const double rotation = kinematics::detail::Length(
                 kinematics::detail::RotationError(end.rotation, segmentStart.rotation));
-            const double intervals = std::max({1.0,
+            const double intervals = std::max({LinearPathPlannerMath::minimumPathIntervalCount,
                 std::ceil(distance / policy.linearPositionSampleSpacingMeters),
                 std::ceil(rotation / policy.linearOrientationSampleSpacingRadians)});
             if (!std::isfinite(intervals) || intervals > static_cast<double>(policy.maximumPathIntervals) ||
                 totalIntervals > policy.maximumPathIntervals ||
                 intervals > static_cast<double>(policy.maximumPathIntervals - totalIntervals))
             {
-                return Fail({ErrorCode::InvalidCommand, "SimRobotController: linear path exceeds " +
-                    std::to_string(policy.maximumPathIntervals) + " intervals"});
+                return {ErrorCode::InvalidCommand, "SimRobotController: linear path exceeds " +
+                    std::to_string(policy.maximumPathIntervals) + " intervals"};
             }
 
             const std::size_t count = static_cast<std::size_t>(intervals);
@@ -296,6 +374,32 @@ struct LinearPathPlanningJob::Impl
                     static_cast<double>(i) / static_cast<double>(count)));
             segmentStart = end;
         }
+        return Result::Success();
+    }
+
+    Result Begin(const LinearPathMoveCommand& moveCommand,
+        const models::RobotSpecification& robot, const JointVector& joints,
+        const CartesianPose& tcp, kinematics::LevenbergMarquardtIk& ik,
+        const StateValidityChecker& checker, const PlanningPolicy& planningPolicy,
+        const std::function<std::string()>& diagnosticProvider)
+    {
+        ResetForBegin(moveCommand, robot, joints, ik, checker, planningPolicy,
+            diagnosticProvider);
+
+        if (!IsPolicyValid(policy))
+            return Fail({ErrorCode::InvalidCommand, LinearPathPlannerMessages::invalidPlanningPolicy});
+        if (const Result targetsResult = ReadAndValidateTargets(tcp); !targetsResult)
+            return Fail(targetsResult);
+
+        plan.hasMotion = HasMotion();
+        if (!plan.hasMotion)
+        {
+            state = LinearPathPlanningState::Completed;
+            return result;
+        }
+
+        if (const Result samplingResult = BuildTcpSamples(); !samplingResult)
+            return Fail(samplingResult);
         layers.reserve(policy.maximumPathIntervals + 1);
         layers.push_back({PathCandidate{joints, start, 0.0, 0}});
         refinementDepth.resize(tcpSamples.size(), 0);
@@ -366,14 +470,14 @@ struct LinearPathPlanningJob::Impl
             for (std::size_t joint = 0; joint < specification->jointCount; ++joint)
                 duration = std::max(duration, RequiredTimeForVelocity(
                     selectedJoints[point][joint] - previousPoint.joints[joint],
-                    specification->joints[joint].maxVelocityRadiansPerSecond));
+                    specification->joints[joint].maximumVelocity));
             if (!std::isfinite(duration))
             {
-                Fail({ErrorCode::InvalidCommand, "SimRobotController: path duration exceeds numeric range"});
+                Fail({ErrorCode::InvalidCommand, LinearPathPlannerMessages::pathDurationOutOfRange});
                 return;
             }
             plan.points.push_back({std::move(selectedJoints[point]), ToCartesian(tcpSamples[point]),
-                std::max(duration, 1e-6)});
+                std::max(duration, LinearPathPlannerMath::minimumSegmentDurationSeconds)});
             plan.plannedLinearVelocity = std::max(plan.plannedLinearVelocity, distance / duration);
             plan.plannedAngularVelocity = std::max(plan.plannedAngularVelocity, rotation / duration);
         }
@@ -445,12 +549,12 @@ struct LinearPathPlanningJob::Impl
         }
 
         const auto& parent = layers.back()[workingParent];
-        AlignEquivalentJointAngles(workingSolution.jointPositionRadians, parent.joints, *specification);
+        AlignEquivalentJointAngles(workingSolution.jointPositions, parent.joints, *specification);
         workingScore = parent.score + JointTransitionCost(
-            parent.joints, workingSolution.jointPositionRadians, *specification);
+            parent.joints, workingSolution.jointPositions, *specification);
         auto duplicate = std::find_if(candidates.begin(), candidates.end(), [&](const PathCandidate& candidate)
         {
-            return SameJointCandidate(candidate.joints, workingSolution.jointPositionRadians);
+            return SameJointCandidate(candidate.joints, workingSolution.jointPositions);
         });
         if (duplicate != candidates.end() && workingScore >= duplicate->score)
         {
@@ -482,8 +586,8 @@ struct LinearPathPlanningJob::Impl
         for (const auto& edge : evaluatedEdges)
         {
             if (edge.parent == workingParent &&
-                std::equal(workingSolution.jointPositionRadians.begin(),
-                    workingSolution.jointPositionRadians.end(), edge.joints.begin()))
+                std::equal(workingSolution.jointPositions.begin(),
+                    workingSolution.jointPositions.end(), edge.joints.begin()))
             {
                 if (workingContinuation)
                     parentHasContinuation[workingParent] = true;
@@ -492,7 +596,7 @@ struct LinearPathPlanningJob::Impl
                 return;
             }
         }
-        evaluatedEdges.push_back({workingParent, workingSolution.jointPositionRadians, false});
+        evaluatedEdges.push_back({workingParent, workingSolution.jointPositions, false});
         tcpProbe = 0;
         phase = Phase::CheckTcp;
     }
@@ -501,10 +605,10 @@ struct LinearPathPlanningJob::Impl
     {
         auto& edge = evaluatedEdges.back();
         const auto& parent = layers.back()[workingParent];
-        if (tcpProbe < 3)
+        if (tcpProbe < LinearPathPlannerLimits::finalTcpStraightnessProbeIndex)
             return;
         edge.followsTcp = true;
-        BeginPathValidation(parent.joints, workingSolution.jointPositionRadians, ValidationPurpose::Candidate);
+        BeginPathValidation(parent.joints, workingSolution.jointPositions, ValidationPurpose::Candidate);
     }
 
     void BeginPathValidation(const JointVector& pathStart, const JointVector& pathEnd,
@@ -523,12 +627,7 @@ struct LinearPathPlanningJob::Impl
             CompletePathValidation(startInvalidity != JointStateInvalidity::None ? startInvalidity : endInvalidity);
             return;
         }
-        double maximumJointChange = 0.0;
-        for (std::size_t joint = 0; joint < validationStart.size(); ++joint)
-            maximumJointChange = std::max(maximumJointChange,
-                std::abs(validationEnd[joint] - validationStart[joint]));
-        validationIntervals = std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(
-            maximumJointChange / policy.jointCollisionSampleSpacingRadians)));
+        validationIntervals = JointPathIntervals(validationStart, validationEnd, *specification, policy);
         phase = Phase::ValidatePath;
     }
 
@@ -567,17 +666,17 @@ struct LinearPathPlanningJob::Impl
         parentHasValidChild[workingParent] = true;
         auto duplicate = std::find_if(candidates.begin(), candidates.end(), [&](const PathCandidate& candidate)
         {
-            return SameJointCandidate(candidate.joints, workingSolution.jointPositionRadians);
+            return SameJointCandidate(candidate.joints, workingSolution.jointPositions);
         });
         if (duplicate == candidates.end())
         {
-            candidates.push_back({std::move(workingSolution.jointPositionRadians), tcpSamples[sample],
+            candidates.push_back({std::move(workingSolution.jointPositions), tcpSamples[sample],
                 workingScore, workingParent});
             duplicate = std::prev(candidates.end());
         }
         else if (workingScore < duplicate->score)
         {
-            duplicate->joints = std::move(workingSolution.jointPositionRadians);
+            duplicate->joints = std::move(workingSolution.jointPositions);
             duplicate->tcpPose = tcpSamples[sample];
             duplicate->score = workingScore;
             duplicate->previousCandidate = workingParent;
@@ -639,7 +738,8 @@ struct LinearPathPlanningJob::Impl
                 if (!parentNeedsSearch[parent])
                     continue;
                 JointVector seed(previous[parent].joints.size());
-                kinematics::detail::BuildIkRestartSeed((sample + 1) * kIkRestartSeedCount + restart,
+                kinematics::detail::BuildIkRestartSeed(
+                    (sample + 1) * LinearPathPlannerLimits::maximumRestartSeedCount + restart,
                     previous[parent].joints, *specification, seed);
                 seeds.push_back({parent, std::move(seed), false});
                 addedSeed = true;
@@ -682,59 +782,72 @@ struct LinearPathPlanningJob::Impl
         }
     }
 
-    void FinishLayer()
+    void FailCurrentSample()
     {
         using namespace kinematics::detail;
-        if (candidates.empty())
+        const CartesianPose target = ToCartesian(tcpSamples[sample]);
+        const std::size_t sampleNumber = sample + 1;
+        const std::size_t sampleCount = tcpSamples.size();
+        if (invalidity == JointStateInvalidity::EnvironmentCollision)
+            Fail(AddPathSampleContext(
+                {ErrorCode::EnvironmentContact, LinearPathPlannerMessages::noCollisionFreeIkSolution},
+                sampleNumber, sampleCount, *specification, target));
+        else if (invalidity != JointStateInvalidity::None)
+            Fail(AddPathSampleContext(MapJointStateInvalidity(invalidity), sampleNumber,
+                sampleCount, *specification, target));
+        else
+            Fail(AddPathSampleContext(MapIkFailure(ikFailure), sampleNumber, sampleCount,
+                *specification, target, &ikFailure));
+        const std::string& diagnostic = invalidityDiagnostic.empty() ?
+            rejectedRefinementDiagnostic : invalidityDiagnostic;
+        if (!diagnostic.empty())
+            result.message += " (" + diagnostic + ")";
+    }
+
+    void RefineCurrentSample()
+    {
+        if (refinementDepth[sample] >= policy.maximumTcpRefinementPasses ||
+            tcpSamples.size() >= policy.maximumPathIntervals)
         {
-            const CartesianPose target = ToCartesian(tcpSamples[sample]);
-            if (needsRefinement)
-            {
-                if (refinementDepth[sample] >= policy.maximumTcpRefinementPasses ||
-                    tcpSamples.size() >= policy.maximumPathIntervals)
-                {
-                    Fail({ErrorCode::IkDidNotConverge,
-                        "SimRobotController: TCP straightness error remains above tolerance at sample " +
-                            std::to_string(sample + 1) + "/" + std::to_string(tcpSamples.size()) +
-                            " after " + std::to_string(refinementDepth[sample]) + " refinements; largest rejected-branch probe " +
-                            std::to_string(maximumSamplePositionErrorMeters * 1000.0) + " mm / " +
-                            std::to_string(maximumSampleOrientationErrorRadians * 1000.0) + " mrad, tolerance " +
-                            std::to_string(policy.maximumLinearTcpErrorMeters * 1000.0) + " mm / " +
-                            std::to_string(policy.maximumAngularTcpErrorRadians * 1000.0) + " mrad" +
-                            (rejectedRefinementDiagnostic.empty() ? std::string{} :
-                                "; first rejected refinement: " + rejectedRefinementDiagnostic)});
-                    return;
-                }
-                {
-                    ZoneScopedN("PlannerRefinement");
-                    const Pose3 midpoint = Interpolate(layers.back().front().tcpPose, tcpSamples[sample], 0.5);
-                    ++plan.tcpRefinementCount;
-                    const std::size_t nextDepth = refinementDepth[sample] + 1;
-                    tcpSamples.insert(tcpSamples.begin() + static_cast<std::ptrdiff_t>(sample), midpoint);
-                    refinementDepth[sample] = nextDepth;
-                    refinementDepth.insert(refinementDepth.begin() + static_cast<std::ptrdiff_t>(sample + 1), nextDepth);
-                }
-                phase = Phase::PrepareSample;
-                return;
-            }
-            const std::size_t sampleNumber = sample + 1;
-            const std::size_t sampleCount = tcpSamples.size();
-            if (invalidity == JointStateInvalidity::EnvironmentCollision)
-                Fail(AddPathSampleContext(
-                    {ErrorCode::EnvironmentContact, "SimRobotController: no collision-free IK solution"},
-                    sampleNumber, sampleCount, *specification, target));
-            else if (invalidity != JointStateInvalidity::None)
-                Fail(AddPathSampleContext(MapJointStateInvalidity(invalidity), sampleNumber,
-                    sampleCount, *specification, target));
-            else
-                Fail(AddPathSampleContext(MapIkFailure(ikFailure), sampleNumber, sampleCount,
-                    *specification, target, &ikFailure));
-            const std::string& diagnostic = invalidityDiagnostic.empty() ?
-                rejectedRefinementDiagnostic : invalidityDiagnostic;
-            if (!diagnostic.empty())
-                result.message += " (" + diagnostic + ")";
+            Fail({ErrorCode::IkDidNotConverge,
+                "SimRobotController: TCP straightness error remains above tolerance at sample " +
+                    std::to_string(sample + 1) + "/" + std::to_string(tcpSamples.size()) +
+                    " after " + std::to_string(refinementDepth[sample]) + " refinements; largest rejected-branch probe " +
+                    std::to_string(maximumSamplePositionErrorMeters * LinearPathPlannerMath::millimetersPerMeter) + " mm / " +
+                    std::to_string(maximumSampleOrientationErrorRadians * LinearPathPlannerMath::milliradiansPerRadian) + " mrad, tolerance " +
+                    std::to_string(policy.maximumLinearTcpErrorMeters * LinearPathPlannerMath::millimetersPerMeter) + " mm / " +
+                    std::to_string(policy.maximumAngularTcpErrorRadians * LinearPathPlannerMath::milliradiansPerRadian) + " mrad" +
+                    (rejectedRefinementDiagnostic.empty() ? std::string{} :
+                        "; first rejected refinement: " + rejectedRefinementDiagnostic)});
             return;
         }
+
+        {
+            ZoneScopedN("PlannerRefinement");
+            const Pose3 midpoint = kinematics::detail::Interpolate(
+                layers.back().front().tcpPose, tcpSamples[sample],
+                LinearPathPlannerMath::segmentMidpointFraction);
+            ++plan.tcpRefinementCount;
+            const std::size_t nextDepth = refinementDepth[sample] + 1;
+            tcpSamples.insert(tcpSamples.begin() + static_cast<std::ptrdiff_t>(sample), midpoint);
+            refinementDepth[sample] = nextDepth;
+            refinementDepth.insert(refinementDepth.begin() + static_cast<std::ptrdiff_t>(sample + 1), nextDepth);
+        }
+        phase = Phase::PrepareSample;
+    }
+
+    void FinishEmptyLayer()
+    {
+        if (needsRefinement)
+        {
+            RefineCurrentSample();
+            return;
+        }
+        FailCurrentSample();
+    }
+
+    void CommitLayerCandidates()
+    {
         std::sort(candidates.begin(), candidates.end(), [](const PathCandidate& left, const PathCandidate& right)
         {
             return left.score < right.score;
@@ -746,131 +859,170 @@ struct LinearPathPlanningJob::Impl
             Finish();
     }
 
+    void FinishLayer()
+    {
+        if (candidates.empty())
+        {
+            FinishEmptyLayer();
+            return;
+        }
+        CommitLayerCandidates();
+    }
+
     void Advance(std::size_t workBudget)
     {
         std::size_t work = 0;
         while (state == LinearPathPlanningState::Running && work < workBudget)
         {
-            if (phase == Phase::PrepareSample)
+            switch (phase)
             {
-                if (sample >= tcpSamples.size())
-                {
-                    Finish();
-                    continue;
-                }
-                PrepareSample();
-                continue;
-            }
-            if (phase == Phase::SolveSeed)
-            {
-                if (seedIndex >= seeds.size())
-                {
-                    if (!expandedSeeds)
-                    {
-                        FinishContinuationSeeds();
-                        continue;
-                    }
-                    FinishCandidateSearch();
-                    continue;
-                }
-                if (ikSession == 0)
-                    StartSeed();
-                {
-                    ZoneScopedN("PlannerIK");
-                    const auto before = inverse->GetSingleSeedResult(ikSession).iterations;
-                    const std::size_t remainingBudget = workBudget - work;
-                    const auto ikState = inverse->StepSingleSeed(ikSession, remainingBudget);
-                    const auto after = inverse->GetSingleSeedResult(ikSession).iterations;
-                    const std::size_t iterationsUsed = after - before;
-                    plan.ikIterationCount += iterationsUsed;
-                    std::size_t consumedWork = iterationsUsed;
-                    if (ikState != kinematics::IkSessionState::Running && after < options.maxIterations)
-                        ++consumedWork;
-                    if (consumedWork == 0)
-                        consumedWork = 1;
-                    work += consumedWork;
-                    if (ikState == kinematics::IkSessionState::Running)
-                        continue;
-                    workingSolution = inverse->GetSingleSeedResult(ikSession);
-                }
-                ikSession = 0;
-                PrepareSolution();
-                continue;
-            }
-            if (phase == Phase::CheckTcp)
-            {
-                const auto& parent = layers.back()[workingParent];
-                JointVector joints(parent.joints.size());
-                const double fraction = 0.25 * static_cast<double>(tcpProbe + 1);
-                for (std::size_t joint = 0; joint < joints.size(); ++joint)
-                    joints[joint] = parent.joints[joint] +
-                        (workingSolution.jointPositionRadians[joint] - parent.joints[joint]) * fraction;
-                ZoneScopedN("PlannerTcpStraightness");
-                const Pose3 actual = kinematics::detail::FromCartesian(inverse->EvaluateTcp(joints));
-                const Pose3 expected = kinematics::detail::Interpolate(parent.tcpPose, tcpSamples[sample], fraction);
-                const double positionError = kinematics::detail::Length(kinematics::detail::Subtract(
-                    actual.positionMeters, expected.positionMeters));
-                const double orientationError = kinematics::detail::Length(kinematics::detail::RotationError(
-                    actual.rotation, expected.rotation));
-                maximumSamplePositionErrorMeters = std::max(maximumSamplePositionErrorMeters, positionError);
-                maximumSampleOrientationErrorRadians = std::max(maximumSampleOrientationErrorRadians, orientationError);
-                ++plan.tcpStraightnessChecks;
-                ++tcpProbe;
-                ++work;
-                if (positionError > policy.maximumLinearTcpErrorMeters ||
-                    orientationError > policy.maximumAngularTcpErrorRadians)
-                {
-                    needsRefinement = true;
-                    parentNeedsSearch[workingParent] = true;
-                    if (workingContinuation)
-                        parentHasContinuation[workingParent] = true;
-                    ++seedIndex;
-                    phase = Phase::SolveSeed;
-                    continue;
-                }
-                if (tcpProbe == 3)
-                    FinishTcpCheck();
-                continue;
-            }
-            if (phase == Phase::ValidatePath)
-            {
-                if (validationStep > validationIntervals)
-                {
-                    CompletePathValidation(JointStateInvalidity::None);
-                    if (validationPurpose == ValidationPurpose::RefinementProbe)
-                        StartNextRefinementValidation();
-                    continue;
-                }
-                const double fraction = static_cast<double>(validationStep) /
-                    static_cast<double>(validationIntervals);
-                for (std::size_t joint = 0; joint < validationSample.size(); ++joint)
-                    validationSample[joint] = validationStart[joint] +
-                        (validationEnd[joint] - validationStart[joint]) * fraction;
-                ZoneScopedN("PlannerJointPathValidity");
-                const auto pathInvalidity = stateValidityChecker ?
-                    stateValidityChecker(validationSample) : JointStateInvalidity::None;
-                std::string diagnostic;
-                if (pathInvalidity != JointStateInvalidity::None && validityDiagnosticProvider)
-                    diagnostic = validityDiagnosticProvider();
-                ++plan.validityStateChecks;
-                ++validationStep;
-                ++work;
-                if (pathInvalidity != JointStateInvalidity::None)
-                {
-                    CompletePathValidation(pathInvalidity, std::move(diagnostic));
-                    if (validationPurpose == ValidationPurpose::RefinementProbe)
-                        StartNextRefinementValidation();
-                }
-                continue;
-            }
-            if (phase == Phase::FinishSample)
-            {
-                if (refinementEdge < evaluatedEdges.size())
-                    StartNextRefinementValidation();
-                else
-                    FinishLayer();
+            case Phase::PrepareSample:
+                AdvanceSamplePreparation();
+                break;
+            case Phase::SolveSeed:
+                AdvanceSeedSolve(workBudget, work);
+                break;
+            case Phase::CheckTcp:
+                AdvanceTcpCheck(work);
+                break;
+            case Phase::ValidatePath:
+                AdvancePathValidation(work);
+                break;
+            case Phase::FinishSample:
+                AdvanceSampleFinish();
+                break;
             }
         }
+    }
+
+    void AdvanceSamplePreparation()
+    {
+        if (sample >= tcpSamples.size())
+        {
+            Finish();
+            return;
+        }
+        PrepareSample();
+    }
+
+    void AdvanceSeedSolve(std::size_t workBudget, std::size_t& work)
+    {
+        if (seedIndex >= seeds.size())
+        {
+            if (expandedSeeds)
+                FinishCandidateSearch();
+            else
+                FinishContinuationSeeds();
+            return;
+        }
+
+        if (ikSession == 0)
+            StartSeed();
+
+        kinematics::IkSessionState ikState;
+        {
+            ZoneScopedN("PlannerIK");
+            const auto before = inverse->GetSingleSeedResult(ikSession).iterations;
+            const std::size_t remainingBudget = workBudget - work;
+            ikState = inverse->StepSingleSeed(ikSession, remainingBudget);
+            const auto after = inverse->GetSingleSeedResult(ikSession).iterations;
+            const std::size_t iterationsUsed = after - before;
+            plan.ikIterationCount += iterationsUsed;
+
+            std::size_t consumedWork = iterationsUsed;
+            if (ikState != kinematics::IkSessionState::Running && after < options.maxIterations)
+                ++consumedWork;
+            work += std::max<std::size_t>(1, consumedWork);
+
+            if (ikState == kinematics::IkSessionState::Running)
+                return;
+            workingSolution = inverse->GetSingleSeedResult(ikSession);
+        }
+
+        ikSession = 0;
+        PrepareSolution();
+    }
+
+    void AdvanceTcpCheck(std::size_t& work)
+    {
+        const auto& parent = layers.back()[workingParent];
+        JointVector joints(parent.joints.size());
+        const double fraction = LinearPathPlannerMath::tcpStraightnessProbeFraction *
+            static_cast<double>(tcpProbe + 1);
+        for (std::size_t joint = 0; joint < joints.size(); ++joint)
+            joints[joint] = parent.joints[joint] +
+                (workingSolution.jointPositions[joint] - parent.joints[joint]) * fraction;
+
+        ZoneScopedN("PlannerTcpStraightness");
+        const Pose3 actual = kinematics::detail::FromCartesian(inverse->EvaluateTcp(joints));
+        const Pose3 expected = kinematics::detail::Interpolate(parent.tcpPose, tcpSamples[sample], fraction);
+        const double positionError = kinematics::detail::Length(kinematics::detail::Subtract(
+            actual.positionMeters, expected.positionMeters));
+        const double orientationError = kinematics::detail::Length(kinematics::detail::RotationError(
+            actual.rotation, expected.rotation));
+        maximumSamplePositionErrorMeters = std::max(maximumSamplePositionErrorMeters, positionError);
+        maximumSampleOrientationErrorRadians = std::max(maximumSampleOrientationErrorRadians, orientationError);
+        ++plan.tcpStraightnessChecks;
+        ++tcpProbe;
+        ++work;
+
+        if (positionError > policy.maximumLinearTcpErrorMeters ||
+            orientationError > policy.maximumAngularTcpErrorRadians)
+        {
+            needsRefinement = true;
+            parentNeedsSearch[workingParent] = true;
+            if (workingContinuation)
+                parentHasContinuation[workingParent] = true;
+            ++seedIndex;
+            phase = Phase::SolveSeed;
+            return;
+        }
+
+        if (tcpProbe == LinearPathPlannerLimits::finalTcpStraightnessProbeIndex)
+            FinishTcpCheck();
+    }
+
+    void AdvancePathValidation(std::size_t& work)
+    {
+        if (validationStep > validationIntervals)
+        {
+            CompletePathValidation(JointStateInvalidity::None);
+            if (validationPurpose == ValidationPurpose::RefinementProbe)
+                StartNextRefinementValidation();
+            return;
+        }
+
+        const double fraction = static_cast<double>(validationStep) /
+            static_cast<double>(validationIntervals);
+        for (std::size_t joint = 0; joint < validationSample.size(); ++joint)
+            validationSample[joint] = validationStart[joint] +
+                (validationEnd[joint] - validationStart[joint]) * fraction;
+
+        ZoneScopedN("PlannerJointPathValidity");
+        const auto pathInvalidity = stateValidityChecker
+            ? stateValidityChecker(validationSample)
+            : JointStateInvalidity::None;
+        std::string diagnostic;
+        if (pathInvalidity != JointStateInvalidity::None && validityDiagnosticProvider)
+            diagnostic = validityDiagnosticProvider();
+        ++plan.validityStateChecks;
+        ++validationStep;
+        ++work;
+
+        if (pathInvalidity == JointStateInvalidity::None)
+            return;
+
+        CompletePathValidation(pathInvalidity, std::move(diagnostic));
+        if (validationPurpose == ValidationPurpose::RefinementProbe)
+            StartNextRefinementValidation();
+    }
+
+    void AdvanceSampleFinish()
+    {
+        if (refinementEdge < evaluatedEdges.size())
+            StartNextRefinementValidation();
+        else
+            FinishLayer();
     }
 };
 
@@ -889,11 +1041,7 @@ JointStateInvalidity ValidateJointPath(
     if (endInvalidity != JointStateInvalidity::None)
         return endInvalidity;
 
-    double maximumJointChange = 0.0;
-    for (std::size_t joint = 0; joint < start.size(); ++joint)
-        maximumJointChange = std::max(maximumJointChange, std::abs(end[joint] - start[joint]));
-    const std::size_t intervals = std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(
-        maximumJointChange / policy.jointCollisionSampleSpacingRadians)));
+    const std::size_t intervals = JointPathIntervals(start, end, specification, policy);
     JointVector sample(start.size());
     for (std::size_t step = 1; step <= intervals; ++step)
     {
@@ -920,7 +1068,7 @@ JointStateInvalidity ValidateJointState(
         if (!std::isfinite(joints[joint]))
             return JointStateInvalidity::NonFinitePosition;
         const auto& limits = specification.joints[joint];
-        if (joints[joint] < limits.minPositionRadians || joints[joint] > limits.maxPositionRadians)
+        if (joints[joint] < limits.minimumPosition || joints[joint] > limits.maximumPosition)
             return JointStateInvalidity::JointLimitViolation;
     }
     return stateValidityChecker ? stateValidityChecker(joints) : JointStateInvalidity::None;
@@ -933,17 +1081,17 @@ Result MapJointStateInvalidity(JointStateInvalidity invalidity)
     case JointStateInvalidity::None: return Result::Success();
     case JointStateInvalidity::JointCountMismatch:
     case JointStateInvalidity::NonFinitePosition:
-        return {ErrorCode::InvalidCommand, "SimRobotController: invalid joint state in planned path"};
+        return {ErrorCode::InvalidCommand, LinearPathPlannerMessages::invalidPlannedJointState};
     case JointStateInvalidity::JointLimitViolation:
-        return {ErrorCode::JointLimitReached, "SimRobotController: planned state exceeds a joint limit"};
+        return {ErrorCode::JointLimitReached, LinearPathPlannerMessages::plannedStateExceedsJointLimit};
     case JointStateInvalidity::EnvironmentCollision:
-        return {ErrorCode::EnvironmentContact, "SimRobotController: planned state overlaps the environment"};
+        return {ErrorCode::EnvironmentContact, LinearPathPlannerMessages::plannedStateOverlapsEnvironment};
     case JointStateInvalidity::SelfCollision:
-        return {ErrorCode::SelfCollision, "SimRobotController: planned robot links overlap"};
+        return {ErrorCode::SelfCollision, LinearPathPlannerMessages::plannedRobotLinksOverlap};
     case JointStateInvalidity::AttachedObjectCollision:
-        return {ErrorCode::AttachedObjectCollision, "SimRobotController: attached object overlaps the scene"};
+        return {ErrorCode::AttachedObjectCollision, LinearPathPlannerMessages::attachedObjectOverlapsScene};
     }
-    return {ErrorCode::Fault, "SimRobotController: unknown joint-state invalidity"};
+    return {ErrorCode::Fault, LinearPathPlannerMessages::unknownJointStateInvalidity};
 }
 
 void AlignEquivalentJointAngles(
@@ -955,19 +1103,24 @@ void AlignEquivalentJointAngles(
     for (std::size_t jointIndex = 0; jointIndex < target.size(); ++jointIndex)
     {
         const auto& joint = specification.joints[jointIndex];
-        const double minimumTurns = std::ceil((joint.minPositionRadians - target[jointIndex]) / kFullTurnRadians);
-        const double maximumTurns = std::floor((joint.maxPositionRadians - target[jointIndex]) / kFullTurnRadians);
+        if (joint.motionType == models::JointMotionType::Prismatic)
+            continue;
+        const double minimumTurns = std::ceil((joint.minimumPosition - target[jointIndex]) /
+            LinearPathPlannerMath::fullTurnRadians);
+        const double maximumTurns = std::floor((joint.maximumPosition - target[jointIndex]) /
+            LinearPathPlannerMath::fullTurnRadians);
         if (minimumTurns > maximumTurns)
             continue;
 
-        const double nearestTurns = std::round((reference[jointIndex] - target[jointIndex]) / kFullTurnRadians);
+        const double nearestTurns = std::round((reference[jointIndex] - target[jointIndex]) /
+            LinearPathPlannerMath::fullTurnRadians);
         const double legalTurns = std::clamp(nearestTurns, minimumTurns, maximumTurns);
-        target[jointIndex] += legalTurns * kFullTurnRadians;
+        target[jointIndex] += legalTurns * LinearPathPlannerMath::fullTurnRadians;
     }
 }
 
 std::optional<kinematics::IkResult> SolveCollisionFreeIk(
-    kinematics::DampedLeastSquaresIk& inverse,
+    kinematics::LevenbergMarquardtIk& inverse,
     const models::RobotSpecification& specification,
     const StateValidityChecker& stateValidityChecker,
     const CartesianPose& target,
@@ -988,9 +1141,9 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
     auto preferred = inverse.SolveSingleSeed(target, start, options);
     if (preferred)
     {
-        AlignEquivalentJointAngles(preferred.jointPositionRadians, start, specification);
+        AlignEquivalentJointAngles(preferred.jointPositions, start, specification);
         const auto pathInvalidity = ValidateJointPath(
-            start, preferred.jointPositionRadians, specification, stateValidityChecker, policy);
+            start, preferred.jointPositions, specification, stateValidityChecker, policy);
         if (pathInvalidity == JointStateInvalidity::None)
             return preferred;
         invalidity = pathInvalidity;
@@ -1014,7 +1167,7 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
     double bestFailureResidual = ikFailure.message.empty()
         ? std::numeric_limits<double>::infinity()
         : residual(ikFailure);
-    const auto considerSolution = [&](kinematics::IkResult solution, bool pathAlreadyValid = false)
+    const auto considerSolution = [&](kinematics::IkResult solution)
     {
         if (!solution)
         {
@@ -1027,36 +1180,18 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
             return;
         }
 
-        AlignEquivalentJointAngles(solution.jointPositionRadians, start, specification);
-        double score = 0.0;
-        for (std::size_t joint = 0; joint < start.size(); ++joint)
-        {
-            const auto& limits = specification.joints[joint];
-            const double range = std::max(1e-12,
-                limits.maxPositionRadians - limits.minPositionRadians);
-            const double delta = (solution.jointPositionRadians[joint] - start[joint]) / range;
-            score += delta * delta;
-            const double marginFraction = std::min(
-                solution.jointPositionRadians[joint] - limits.minPositionRadians,
-                limits.maxPositionRadians - solution.jointPositionRadians[joint]) / range;
-            const double marginDeficit = std::max(0.0,
-                kJointLimitSearchMarginFraction - marginFraction) / kJointLimitSearchMarginFraction;
-            // 한계 가까이에서는 다음 TCP 표본으로 이어갈 관절 방향이 줄어든다. 지금 작은 우회를 허용해 뒤 표본에서 분기를 급히 바꾸는 상황을 줄인다.
-            score += kJointLimitPenaltyWeight * marginDeficit * marginDeficit;
-        }
+        AlignEquivalentJointAngles(solution.jointPositions, start, specification);
+        const double score = JointTransitionCost(start, solution.jointPositions, specification);
         if (score >= bestCandidateScore)
             return;
 
-        if (!pathAlreadyValid)
+        const auto pathInvalidity = ValidateJointPath(
+            start, solution.jointPositions, specification, stateValidityChecker, policy);
+        if (pathInvalidity != JointStateInvalidity::None)
         {
-            const auto pathInvalidity = ValidateJointPath(
-                start, solution.jointPositionRadians, specification, stateValidityChecker, policy);
-            if (pathInvalidity != JointStateInvalidity::None)
-            {
-                if (invalidity == JointStateInvalidity::None)
-                    invalidity = pathInvalidity;
-                return;
-            }
+            if (invalidity == JointStateInvalidity::None)
+                invalidity = pathInvalidity;
+            return;
         }
 
         bestCandidateScore = score;
@@ -1071,7 +1206,8 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
 
     // 기존 자세와 반사 분기에서 해를 찾지 못했을 때만 현재 자세를 기준으로 재시작 seed를 시험한다.
     JointVector restartSeed(start.size());
-    for (std::size_t sample = 1; sample <= kIkRestartSeedCount; ++sample)
+    for (std::size_t sample = 1;
+         sample <= LinearPathPlannerLimits::maximumRestartSeedCount; ++sample)
     {
         kinematics::detail::BuildIkRestartSeed(sample, start, specification, restartSeed);
         considerSolution(inverse.SolveSingleSeed(target, restartSeed, options));
@@ -1089,7 +1225,7 @@ LinearPathPlanningJob& LinearPathPlanningJob::operator=(LinearPathPlanningJob&&)
 
 Result LinearPathPlanningJob::Begin(const LinearPathMoveCommand& command,
     const models::RobotSpecification& specification, const JointVector& startJoints,
-    const CartesianPose& startTcp, kinematics::DampedLeastSquaresIk& inverse,
+    const CartesianPose& startTcp, kinematics::LevenbergMarquardtIk& inverse,
     const StateValidityChecker& stateValidityChecker, const PlanningPolicy& policy)
 {
     return Begin(command, specification, startJoints, startTcp, inverse,
@@ -1098,7 +1234,7 @@ Result LinearPathPlanningJob::Begin(const LinearPathMoveCommand& command,
 
 Result LinearPathPlanningJob::Begin(const LinearPathMoveCommand& command,
     const models::RobotSpecification& specification, const JointVector& startJoints,
-    const CartesianPose& startTcp, kinematics::DampedLeastSquaresIk& inverse,
+    const CartesianPose& startTcp, kinematics::LevenbergMarquardtIk& inverse,
     const StateValidityChecker& stateValidityChecker, const PlanningPolicy& policy,
     const std::function<std::string()>& validityDiagnosticProvider)
 {
@@ -1142,7 +1278,7 @@ std::optional<LinearPathPlan> LinearPathPlanningJob::TakePlan()
 
 Result BuildLinearPath(const LinearPathMoveCommand& command,
     const models::RobotSpecification& specification, const JointVector& startJoints,
-    const CartesianPose& startTcp, kinematics::DampedLeastSquaresIk& inverse,
+    const CartesianPose& startTcp, kinematics::LevenbergMarquardtIk& inverse,
     const StateValidityChecker& stateValidityChecker, LinearPathPlan& plan,
     const PlanningPolicy& policy)
 {
@@ -1152,7 +1288,7 @@ Result BuildLinearPath(const LinearPathMoveCommand& command,
 
 Result BuildLinearPath(const LinearPathMoveCommand& command,
     const models::RobotSpecification& specification, const JointVector& startJoints,
-    const CartesianPose& startTcp, kinematics::DampedLeastSquaresIk& inverse,
+    const CartesianPose& startTcp, kinematics::LevenbergMarquardtIk& inverse,
     const StateValidityChecker& stateValidityChecker, LinearPathPlan& plan,
     const PlanningPolicy& policy,
     const std::function<std::string()>& validityDiagnosticProvider)

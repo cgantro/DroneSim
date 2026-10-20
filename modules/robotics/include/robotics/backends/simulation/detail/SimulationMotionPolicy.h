@@ -19,4 +19,7 @@ struct SimulationMotionPolicy final
 
 inline constexpr SimulationMotionPolicy kDefaultSimulationMotionPolicy{};
 
+inline constexpr double kMotionEpsilon = 1e-8;
+inline constexpr double kJointVelocityRampSeconds = 0.20;
+
 } // namespace grasplink::robotics::backends::simulation::detail

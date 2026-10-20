@@ -8,6 +8,24 @@ namespace grasplink::robotics::kinematics
 {
 namespace
 {
+struct RobotKinematicsConstants final
+{
+    // 축이 이보다 짧으면 방향을 계산할 수 없는 값으로 본다.
+    inline static constexpr double minimumAxisLength = 1.0e-12;
+};
+
+struct RobotKinematicsErrorMessages final
+{
+    inline static constexpr char invalidJointAxis[] = "RobotKinematics: invalid joint axis";
+    inline static constexpr char emptySpecification[] = "RobotKinematics: empty robot specification";
+    inline static constexpr char nonFiniteBindPivot[] = "RobotKinematics: non-finite bind pivot";
+    inline static constexpr char nonFiniteJointOrigin[] = "RobotKinematics: non-finite joint origin";
+    inline static constexpr char nonFiniteToolOffset[] = "RobotKinematics: non-finite tool offset";
+    inline static constexpr char invalidRobotState[] = "RobotKinematics: invalid RobotState";
+    inline static constexpr char jointCountMismatch[] = "RobotKinematics: joint count mismatch";
+    inline static constexpr char nonFiniteJointPosition[] = "RobotKinematics: non-finite joint position";
+};
+
 using models::Axis3;
 using models::Pose3;
 using models::QuaternionWxyz;
@@ -21,8 +39,8 @@ using detail::Subtract;
 QuaternionWxyz AxisRotation(const Axis3& axis, double angle)
 {
     const double length = Length(axis);
-    if (!std::isfinite(length) || length <= 1.0e-12)
-        throw std::invalid_argument("RobotKinematics: invalid joint axis");
+    if (!std::isfinite(length) || length <= RobotKinematicsConstants::minimumAxisLength)
+        throw std::invalid_argument(RobotKinematicsErrorMessages::invalidJointAxis);
 
     const double halfAngle = angle * 0.5;
     const double scale = std::sin(halfAngle) / length;
@@ -35,26 +53,35 @@ RobotKinematics::RobotKinematics(const models::RobotSpecification& specification
 {
     // FK(정방향 기구학)는 관절각에서 각 링크 자세를 계산한다. 계산에 앞서 모델에 관절 pivot(회전 중심), 축, 선택적 ToolFrame이 유효하게 정의되어 있는지 확인한다.
     if (specification_.joints == nullptr || specification_.jointCount == 0)
-        throw std::invalid_argument("RobotKinematics: empty robot specification");
+        throw std::invalid_argument(RobotKinematicsErrorMessages::emptySpecification);
 
     for (std::size_t i = 0; i < specification_.jointCount; ++i)
     {
         const auto& joint = specification_.joints[i];
         if (!std::isfinite(joint.bindPivotMeters.x) || !std::isfinite(joint.bindPivotMeters.y) ||
             !std::isfinite(joint.bindPivotMeters.z))
-            throw std::invalid_argument("RobotKinematics: non-finite bind pivot");
+            throw std::invalid_argument(RobotKinematicsErrorMessages::nonFiniteBindPivot);
         AxisRotation(joint.axis, 0.0);
+        if (joint.parentToJointOrigin)
+        {
+            const auto& origin = *joint.parentToJointOrigin;
+            if (!std::isfinite(origin.positionMeters.x) || !std::isfinite(origin.positionMeters.y) ||
+                !std::isfinite(origin.positionMeters.z))
+                throw std::invalid_argument(RobotKinematicsErrorMessages::nonFiniteJointOrigin);
+            Normalize(origin.rotation);
+        }
     }
     if (specification_.hasToolFrame)
     {
         const auto& tool = specification_.toolFrameInLastJoint;
         if (!std::isfinite(tool.positionMeters.x) || !std::isfinite(tool.positionMeters.y) ||
             !std::isfinite(tool.positionMeters.z))
-            throw std::invalid_argument("RobotKinematics: non-finite tool offset");
+            throw std::invalid_argument(RobotKinematicsErrorMessages::nonFiniteToolOffset);
         Normalize(tool.rotation);
     }
 
     state_.jointLocalRotations.resize(specification_.jointCount);
+    state_.jointPositions.resize(specification_.jointCount);
     state_.linkPosesInBaseFrame.resize(specification_.jointCount);
     state_.jointAxesInBaseFrame.resize(specification_.jointCount);
 }
@@ -63,17 +90,19 @@ const RobotKinematicState& RobotKinematics::Update(const RobotState& state)
 {
     // 결과 위치와 회전은 Robot base 기준이다. Scene에서 robotRoot에 적용한 배치 위치와 회전은 아직 포함하지 않는다.
     if (!state.valid)
-        throw std::invalid_argument("RobotKinematics: invalid RobotState");
-    return Update(state.jointPositionRadians);
+        throw std::invalid_argument(RobotKinematicsErrorMessages::invalidRobotState);
+    return Update(state.jointPositions);
 }
 
-const RobotKinematicState& RobotKinematics::Update(const JointVector& jointPositionRadians)
+const RobotKinematicState& RobotKinematics::Update(const JointVector& jointPositions)
 {
-    if (jointPositionRadians.size() != specification_.jointCount)
-        throw std::invalid_argument("RobotKinematics: joint count mismatch");
-    for (double angle : jointPositionRadians)
-        if (!std::isfinite(angle))
-            throw std::invalid_argument("RobotKinematics: non-finite joint angle");
+    if (jointPositions.size() != specification_.jointCount)
+        throw std::invalid_argument(RobotKinematicsErrorMessages::jointCountMismatch);
+    for (double position : jointPositions)
+        if (!std::isfinite(position))
+            throw std::invalid_argument(RobotKinematicsErrorMessages::nonFiniteJointPosition);
+
+    state_.jointPositions = jointPositions;
 
     QuaternionWxyz parentRotation{};
     Vec3 parentPosition{};
@@ -82,24 +111,53 @@ const RobotKinematicState& RobotKinematics::Update(const JointVector& jointPosit
     for (std::size_t i = 0; i < specification_.jointCount; ++i)
     {
         const models::JointSpecification& joint = specification_.joints[i];
-        const double angle = jointPositionRadians[i];
+        const double position = jointPositions[i];
 
         // 모델 초기 상태(bind pose)에서 이웃한 관절 중심 사이의 차이를 구한다. 부모 관절이 회전하면 이 간격도 함께 회전하므로, 누적된 부모 회전을 적용해 현재 관절 중심을 계산한다.
-        const Vec3 bindOffset = i == 0
-            ? joint.bindPivotMeters
-            : Subtract(joint.bindPivotMeters, previousBindPivot);
-        const Vec3 jointPosition = Add(parentPosition, Rotate(parentRotation, bindOffset));
-        // 관절 Local 축을 부모 누적 회전으로 Robot base 축으로 바꾼다. 자체 회전은 자기 축 방향을 바꾸지 않는다.
+        Vec3 originPosition;
+        QuaternionWxyz originRotation;
+        if (joint.parentToJointOrigin)
+        {
+            // 고정 원점 변환은 이전 관절이 움직인 뒤의 자식 링크 좌표계에서 적용한다.
+            originPosition = Add(parentPosition,
+                Rotate(parentRotation, joint.parentToJointOrigin->positionMeters));
+            originRotation = Normalize(detail::Multiply(parentRotation,
+                Normalize(joint.parentToJointOrigin->rotation)));
+        }
+        else
+        {
+            // 기존 정적 모델은 각 원점을 base 기준으로 보관하므로 이웃한 원점의 차이로 변환을 만든다.
+            const Vec3 bindOffset = i == 0
+                ? joint.bindPivotMeters
+                : Subtract(joint.bindPivotMeters, previousBindPivot);
+            originPosition = Add(parentPosition, Rotate(parentRotation, bindOffset));
+            originRotation = parentRotation;
+        }
+
+        // 회전축은 관절 원점의 Local 좌표로 정의되어 있으므로 원점 방향까지 적용해 base 좌표로 바꾼다.
         const double axisLength = Length(joint.axis);
-        state_.jointAxesInBaseFrame[i] = Rotate(parentRotation,
+        state_.jointAxesInBaseFrame[i] = Rotate(originRotation,
             {joint.axis.x / axisLength, joint.axis.y / axisLength, joint.axis.z / axisLength});
-        // 회전: axis-angle은 관절 Local 회전이며 parent * local로 누적한다. Local 점에는 관절 회전 후 부모 회전이 적용된다.
-        const QuaternionWxyz localRotation = AxisRotation(joint.axis, angle);
-        const QuaternionWxyz worldRotation = Normalize(detail::Multiply(parentRotation, localRotation));
+        // URDF의 고정 원점 회전 뒤에 관절 자체 회전을 적용한다.
+        QuaternionWxyz localRotation{};
+        Vec3 childPosition = originPosition;
+        if (joint.motionType == models::JointMotionType::Prismatic)
+        {
+            const Vec3 normalizedAxis{
+                joint.axis.x / axisLength, joint.axis.y / axisLength, joint.axis.z / axisLength};
+            childPosition = Add(originPosition,
+                Rotate(originRotation, {normalizedAxis.x * position,
+                    normalizedAxis.y * position, normalizedAxis.z * position}));
+        }
+        else
+        {
+            localRotation = AxisRotation(joint.axis, position);
+        }
+        const QuaternionWxyz worldRotation = Normalize(detail::Multiply(originRotation, localRotation));
 
         state_.jointLocalRotations[i] = localRotation;
-        state_.linkPosesInBaseFrame[i] = {jointPosition, worldRotation};
-        parentPosition = jointPosition;
+        state_.linkPosesInBaseFrame[i] = {childPosition, worldRotation};
+        parentPosition = childPosition;
         parentRotation = worldRotation;
         previousBindPivot = joint.bindPivotMeters;
     }

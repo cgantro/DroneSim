@@ -2,7 +2,6 @@
 
 #include "robotics/core/IRobotController.h"
 #include "robotics/core/IGripperController.h"
-#include "robotics/models/RobotSpecification.h"
 
 #include <array>
 #include <chrono>
@@ -40,14 +39,15 @@ struct PickPlaceMissionSnapshot
 class PickPlaceMission final
 {
 public:
-    /** @brief 로봇 모델의 관절 한계를 사용해 임무 객체를 준비한다. */
-    explicit PickPlaceMission(const robotics::models::RobotSpecification& specification) noexcept;
-
-    /** @brief 현재 상태를 읽어 임무의 다음 명령과 단계를 갱신한다. */
+    /**
+     * @brief 로봇 상태를 읽고 임무의 다음 명령과 단계를 갱신합니다.
+     * @param now 현재 시각입니다. 생략하면 실제 시계를 사용합니다.
+     */
     void Update(const robotics::RobotState& state, robotics::IRobotController& controller,
         robotics::IGripperController& gripper, bool boxGrasped,
         const robotics::CartesianPose& graspBoxPoseInBase,
-        const robotics::CartesianPose& placementPoseInBase);
+        const robotics::CartesianPose& placementPoseInBase,
+        std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
     /** @brief 패널에서 받은 시작, 재개, 정지 입력을 임무 명령으로 처리한다. */
     void ApplyActions(const PickPlaceMissionActions& actions,
         const robotics::RobotState& state,
@@ -63,23 +63,47 @@ public:
     void PrepareNextTask() noexcept;
 
 private:
-    /** @brief 현재 자세를 유지하면서 J6만 0도로 되돌리는 명령을 보낸다. */
-    [[nodiscard]] robotics::Result RequestJ6Unwind(const robotics::RobotState& state,
-        robotics::IRobotController& controller) const;
+    struct UpdateContext
+    {
+        const robotics::RobotState& state;
+        robotics::IRobotController& controller;
+        robotics::IGripperController& gripper;
+        bool boxGrasped;
+        bool gripperCloseFinished;
+        const robotics::CartesianPose& graspBoxPoseInBase;
+        const robotics::CartesianPose& placementPoseInBase;
+        bool idle;
+        std::chrono::steady_clock::time_point now;
+    };
 
-    const robotics::models::RobotSpecification& specification_;
     enum class Stage
     {
-        Ready, UnwindingBeforeTask, MovingAbovePickup, MovingDownToPickup,
+        Ready, MovingAbovePickup, MovingDownToPickup,
         Closing, Lifting,
         TransitingToPlacement, PlanningMotion, MovingToPlacementOverhead,
         AligningAbovePlacement, MovingDownToPlacement, SettlingAtPlacement, Opening, Retreating,
-        UnwindingWrist, Recovering, Complete, Failed, RaisingAfterResume
+        Recovering, Complete, Failed, RaisingAfterResume
     };
 
     bool SetResult(robotics::Result result);
     void SetStageFromResult(robotics::Result result, Stage next);
     void SetStageFromMotionResult(robotics::Result result, Stage next, robotics::IRobotController& controller);
+    void UpdatePlanningMotion(robotics::IRobotController& controller);
+    void UpdateGraspOrientation(const robotics::RobotState& state);
+    void UpdatePickup(const UpdateContext& context);
+    void UpdatePlacement(const UpdateContext& context);
+    void UpdateRetreat(const UpdateContext& context);
+    [[nodiscard]] bool IsMissionActive() const noexcept;
+    [[nodiscard]] bool IsEnvironmentCollisionStopped(const robotics::RobotState& state) const noexcept;
+    void ResumeFromPause(const robotics::RobotState& state, robotics::IRobotController& controller,
+        bool boxGrasped, const robotics::CartesianPose& graspBoxPoseInBase);
+    // 상자를 든 채 재개할 때는 현재 공구 자세를 기준으로 상자와의 상대 위치를 다시 맞춘다.
+    void ResumeWithAttachedBox(const robotics::RobotState& state,
+        robotics::IRobotController& controller,
+        const robotics::CartesianPose& graspBoxPoseInBase);
+    void StopForPause(robotics::IRobotController& controller);
+    void BeginPickup(const robotics::CartesianPose& graspBoxPoseInBase,
+        robotics::IRobotController& controller);
 
     std::array<double, 4> graspOrientationXyzw_{};
     std::array<double, 4> pickupOrientationXyzw_{};
@@ -96,7 +120,6 @@ private:
     bool hasResult_ = false;
     bool taskSucceeded_ = true;
     bool placementReleased_ = false;
-    bool missionSucceeded_ = false;
     bool missionSuccessEventPending_ = false;
     bool autoLoopEnabled_ = false;
     bool taskPaused_ = false;

@@ -30,7 +30,7 @@ using StateValidityChecker = std::function<JointStateInvalidity(const JointVecto
 /**
  * @brief 관절 수, 숫자 값, 관절 한계와 등록된 충돌 검사를 순서대로 확인한다.
  * @param specification 검사할 관절 수와 허용 범위를 제공하는 로봇 사양이다.
- * @param joints J1부터 순서대로 저장한 관절 각도 [rad]이다.
+ * @param joints 사양에 적힌 순서의 관절 위치다. 회전 관절은 [rad], 직선 관절은 [m]다.
  * @param stateValidityChecker 관절 값 검증 후 충돌을 확인하는 선택 함수다.
  */
 [[nodiscard]] JointStateInvalidity ValidateJointState(
