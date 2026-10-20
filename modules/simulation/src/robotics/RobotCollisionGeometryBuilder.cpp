@@ -158,25 +158,6 @@ std::vector<Shape> BuildLinkShapes(const RobotLink& link,
     return result;
 }
 
-grasplink::robotics::models::Pose3 RelativePose(
-    const grasplink::robotics::models::Pose3& parent,
-    const grasplink::robotics::models::Pose3& child)
-{
-    const glm::dquat parentRotation{parent.rotation.w, parent.rotation.x,
-        parent.rotation.y, parent.rotation.z};
-    const glm::dquat inverseParentRotation = glm::inverse(parentRotation);
-    const glm::dvec3 parentPosition{parent.positionMeters.x, parent.positionMeters.y,
-        parent.positionMeters.z};
-    const glm::dvec3 childPosition{child.positionMeters.x, child.positionMeters.y,
-        child.positionMeters.z};
-    const glm::dvec3 relativePosition = inverseParentRotation * (childPosition - parentPosition);
-    const glm::dquat childRotation{child.rotation.w, child.rotation.x,
-        child.rotation.y, child.rotation.z};
-    const glm::dquat relativeRotation = glm::normalize(inverseParentRotation * childRotation);
-    return {{relativePosition.x, relativePosition.y, relativePosition.z},
-        {relativeRotation.w, relativeRotation.x, relativeRotation.y, relativeRotation.z}};
-}
-
 LinkJointLookup BuildJointLookup(const grasplink::model::RobotModel& model)
 {
     LinkJointLookup lookup{
@@ -260,13 +241,13 @@ void AddLinkCollisionGeometry(const grasplink::model::RobotModel& model,
     if (!activeJoint)
     {
         auto shapes = BuildLinkShapes(model.links[linkIndex],
-            RelativePose(bindPoses[model.baseLink], bindPoses[linkIndex]));
+            RelativeRobotPose(bindPoses[model.baseLink], bindPoses[linkIndex]));
         result.baseShapes.insert(result.baseShapes.end(),
             std::make_move_iterator(shapes.begin()), std::make_move_iterator(shapes.end()));
         return;
     }
 
-    const auto localPose = RelativePose(bindPoses[anchorLink], bindPoses[linkIndex]);
+    const auto localPose = RelativeRobotPose(bindPoses[anchorLink], bindPoses[linkIndex]);
     result.links.push_back({model.links[linkIndex].name, *activeJoint, localPose,
         BuildLinkShapes(model.links[linkIndex])});
 }
