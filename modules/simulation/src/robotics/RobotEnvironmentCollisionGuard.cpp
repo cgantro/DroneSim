@@ -291,7 +291,6 @@ grasplink::robotics::planning::JointStateInvalidity RobotEnvironmentCollisionGua
                 angle * CollisionGuardLimits::degreesPerHalfTurn / CollisionGuardLimits::pi);
         return grasplink::robotics::planning::JointStateInvalidity::SelfCollision;
     }
-    m_LastSelfCollisionDescription.clear();
     return grasplink::robotics::planning::JointStateInvalidity::None;
 }
 
