@@ -33,8 +33,19 @@
 
 namespace grasplink::simulation::robotics
 {
+using grasplink::physics::Transform;
+using grasplink::robotics::ErrorCode;
+using grasplink::robotics::JointVector;
+using grasplink::robotics::RobotMode;
+using grasplink::robotics::RobotState;
+using grasplink::robotics::backends::simulation::SimRobotController;
+using grasplink::robotics::kinematics::RobotKinematicState;
+using grasplink::robotics::kinematics::RobotKinematics;
+using grasplink::robotics::planning::JointStateInvalidity;
 using grasplink::scene::Entity;
 using grasplink::scene::TransformSystemModule;
+using grasplink::simulation::PhysicsSystemModule;
+using grasplink::simulation::RobotPhysicsAdapter;
 
 namespace
 {
@@ -77,7 +88,7 @@ struct SelfCollisionPartNames final
     inline static constexpr char unknown[] = "Unknown";
 };
 
-grasplink::physics::Transform ToPhysicsTransform(const glm::mat4& matrix)
+Transform ToPhysicsTransform(const glm::mat4& matrix)
 {
     glm::mat3 axes(matrix);
     for (int axis = 0; axis < 3; ++axis)
@@ -86,7 +97,7 @@ grasplink::physics::Transform ToPhysicsTransform(const glm::mat4& matrix)
 }
 
 const glm::mat4* FindWorldTransform(
-    const std::vector<grasplink::simulation::RobotPhysicsAdapter::CandidateWorldTransform>& transforms,
+    const std::vector<RobotPhysicsAdapter::CandidateWorldTransform>& transforms,
     flecs::entity entity)
 {
     for (const auto& candidate : transforms)
@@ -110,13 +121,13 @@ std::string DescribeIdentity(SelfCollisionIdentity identity)
 }
 
 RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
-    grasplink::robotics::backends::simulation::SimRobotController& robotController,
-    grasplink::robotics::kinematics::RobotKinematics& robotKinematics,
+    SimRobotController& robotController,
+    RobotKinematics& robotKinematics,
     RobotTransformAdapter& robotTransformAdapter,
-    grasplink::simulation::RobotPhysicsAdapter& robotPhysicsAdapter,
+    RobotPhysicsAdapter& robotPhysicsAdapter,
     flecs::world& world,
     grasplink::physics::PhysicsWorld& physicsWorld,
-    grasplink::simulation::PhysicsSystemModule& physicsSystem,
+    PhysicsSystemModule& physicsSystem,
     const Entity& robotRoot,
     std::optional<GripperSupport> gripperSupport)
     : m_RobotController(robotController),
@@ -147,7 +158,7 @@ RobotEnvironmentCollisionGuard::RobotEnvironmentCollisionGuard(
     m_CandidateCollisionTransforms.resize(m_CollisionEntities.size());
     m_CandidateSelfCollisionTransforms.resize(m_SelfCollisionProxies.size());
 
-    m_RobotController.SetJointStateValidityChecker([this](const grasplink::robotics::JointVector& candidateJoints)
+    m_RobotController.SetJointStateValidityChecker([this](const JointVector& candidateJoints)
     {
         return ValidateCandidatePose(candidateJoints);
     });
@@ -255,7 +266,7 @@ void RobotEnvironmentCollisionGuard::CaptureSafeJointPose()
 
 void RobotEnvironmentCollisionGuard::RestoreSafePoseIfOverlapping()
 {
-    if (m_RobotController.GetStateView().mode != grasplink::robotics::RobotMode::Moving)
+    if (m_RobotController.GetStateView().mode != RobotMode::Moving)
         return;
 
     const bool environmentContact = RobotAssemblyOverlapsEnvironment();
@@ -264,8 +275,8 @@ void RobotEnvironmentCollisionGuard::RestoreSafePoseIfOverlapping()
         return;
 
     const auto collisionReason = environmentContact
-        ? grasplink::robotics::ErrorCode::EnvironmentContact
-        : grasplink::robotics::ErrorCode::SelfCollision;
+        ? ErrorCode::EnvironmentContact
+        : ErrorCode::SelfCollision;
 
     // Jolt 접촉 callback은 Kinematic 로봇 부품과 Static 바닥의 겹침을 항상 알리지 않으므로 물리 계산 전에 직전 안전 자세를 복원한다.
     if (!m_RobotController.RestoreCollisionSafeState(m_SafeJointPositions, collisionReason))
@@ -274,27 +285,27 @@ void RobotEnvironmentCollisionGuard::RestoreSafePoseIfOverlapping()
     ApplyJointPose(m_RobotController.GetStateView());
 }
 
-grasplink::robotics::planning::JointStateInvalidity RobotEnvironmentCollisionGuard::ValidateCandidatePose(
-    const grasplink::robotics::JointVector& candidateJoints)
+JointStateInvalidity RobotEnvironmentCollisionGuard::ValidateCandidatePose(
+    const JointVector& candidateJoints)
 {
     m_LastSelfCollisionDescription.clear();
     m_CandidateState.jointPositions = candidateJoints;
     const auto& robotState = m_RobotKinematics.Update(m_CandidateState);
     BuildCandidateProxyTransforms(robotState);
     if (RobotAssemblyOverlapsEnvironment(m_CandidateCollisionTransforms))
-        return grasplink::robotics::planning::JointStateInvalidity::EnvironmentCollision;
+        return JointStateInvalidity::EnvironmentCollision;
     if (RobotAssemblyHasSelfCollision(m_CandidateSelfCollisionTransforms))
     {
         m_LastSelfCollisionDescription += CollisionGuardMessages::jointAnglesLabel;
         for (const double angle : candidateJoints)
             m_LastSelfCollisionDescription += " " + std::to_string(
                 angle * CollisionGuardLimits::degreesPerHalfTurn / CollisionGuardLimits::pi);
-        return grasplink::robotics::planning::JointStateInvalidity::SelfCollision;
+        return JointStateInvalidity::SelfCollision;
     }
-    return grasplink::robotics::planning::JointStateInvalidity::None;
+    return JointStateInvalidity::None;
 }
 
-void RobotEnvironmentCollisionGuard::ApplyJointPose(const grasplink::robotics::RobotState& state)
+void RobotEnvironmentCollisionGuard::ApplyJointPose(const RobotState& state)
 {
     const auto& kinematicState = m_RobotKinematics.Update(state);
     m_RobotTransformAdapter.Apply(kinematicState);
@@ -317,7 +328,7 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyOverlapsEnvironment()
 }
 
 bool RobotEnvironmentCollisionGuard::RobotAssemblyOverlapsEnvironment(
-    const std::vector<grasplink::physics::Transform>& candidateTransforms) const
+    const std::vector<Transform>& candidateTransforms) const
 {
     ZoneScopedN("CollisionCheck");
     const auto baseEnvironmentBodyHandle = m_PhysicsSystem.GetBodyHandle(m_BaseEnvironmentEntity);
@@ -351,7 +362,7 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyHasSelfCollision()
 }
 
 bool RobotEnvironmentCollisionGuard::RobotAssemblyHasSelfCollision(
-    const std::vector<grasplink::physics::Transform>& candidateTransforms) const
+    const std::vector<Transform>& candidateTransforms) const
 {
     ZoneScopedN("SelfCollisionCheck");
     for (std::size_t firstIndex = 0; firstIndex < m_SelfCollisionProxies.size(); ++firstIndex)
@@ -399,7 +410,7 @@ std::string RobotEnvironmentCollisionGuard::DescribeSelfCollision() const
 }
 
 void RobotEnvironmentCollisionGuard::BuildCandidateProxyTransforms(
-    const grasplink::robotics::kinematics::RobotKinematicState& robotState)
+    const RobotKinematicState& robotState)
 {
     ZoneScopedN("CollisionCandidateFK");
     m_RobotPhysicsAdapter.BuildCandidateWorldTransforms(
