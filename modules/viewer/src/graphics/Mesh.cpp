@@ -20,11 +20,6 @@ Mesh::Mesh(const ::grasplink::model::Vertex* vertices, std::uint32_t vertexCount
     if (vertices == nullptr || vertexCount == 0U) { throw std::invalid_argument("Mesh has no vertices"); }
     if (indices == nullptr || indexCount == 0U) { throw std::invalid_argument("Mesh has no indices"); }
 
-    // Vertex Array Object(VAO)를 먼저 선택한다. 이후 지정하는 정점 속성 형식과 index buffer 연결이 이 Mesh의 상태로 저장된다.
-    vertexArray_ = std::make_unique<VertexArray>();
-    vertexArray_->Bind();
-
-    // GPU buffer 업로드 함수는 byte 수를 받으므로 Vertex 개수에 Vertex 구조체 크기를 곱해 전달한다.
     const std::size_t maximumBufferBytes = std::numeric_limits<std::uint32_t>::max();
     if (vertexCount > maximumBufferBytes / sizeof(::grasplink::model::Vertex))
     {
@@ -32,6 +27,12 @@ Mesh::Mesh(const ::grasplink::model::Vertex* vertices, std::uint32_t vertexCount
     }
     const auto byteCount = static_cast<std::uint32_t>(
         sizeof(::grasplink::model::Vertex) * static_cast<std::size_t>(vertexCount));
+
+    // Vertex Array Object(VAO)를 먼저 선택한다. 이후 지정하는 정점 속성 형식과 index buffer 연결이 이 Mesh의 상태로 저장된다.
+    vertexArray_ = std::make_unique<VertexArray>();
+    vertexArray_->Bind();
+
+    // GPU buffer 업로드 함수는 byte 수를 받으므로 Vertex 개수에 Vertex 구조체 크기를 곱해 전달한다.
     vertexBuffer_ = std::make_unique<VertexBuffer>(vertices, byteCount);
     vertexBuffer_->Bind();
 
