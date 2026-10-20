@@ -1,8 +1,6 @@
 #include "simulation/robotics/RobotModelAdapter.h"
 #include "simulation/robotics/RobotModelTransforms.h"
 
-#include <glm/gtc/constants.hpp>
-
 #include <stdexcept>
 
 namespace grasplink::simulation::robotics
@@ -27,19 +25,6 @@ using grasplink::robotics::models::RobotSpecification;
 namespace
 {
 using grasplink::robotics::models::Pose3;
-
-struct JointPositionLimits final
-{
-    double minimum;
-    double maximum;
-};
-
-JointPositionLimits PositionLimits(const RobotJoint& joint)
-{
-    if (joint.type == RobotJointType::Continuous)
-        return {-glm::two_pi<double>(), glm::two_pi<double>()};
-    return {joint.lowerLimit, joint.upperLimit};
-}
 
 grasplink::robotics::models::JointMotionType MotionType(RobotJointType type)
 {
@@ -79,15 +64,13 @@ RobotModelAdapter::RobotModelAdapter(const grasplink::model::RobotModel& model)
         const Pose3& jointPoseInBase = linkBindPoses[source.childLink];
         const Pose3 jointOriginInPreviousLink = RelativeRobotPose(
             linkBindPoses[previousChildLink], jointPoseInBase);
-        const JointPositionLimits limits = PositionLimits(source);
-
         jointNames_.push_back(source.name);
-        // URDF의 연속 회전 관절에는 끝 각도가 없다. 수치 계산에는 한 바퀴 범위를 주고, 경로 계획에서 같은 자세의 회전 표현을 맞춘다.
+        // 연속 회전 관절의 무한 범위도 유지한다. IK와 경로 계획이 이 관절을 유한 한계가 없는 관절로 처리한다.
         joints_.push_back({jointNames_.back(),
             jointPoseInBase.positionMeters,
             {source.axis.x, source.axis.y, source.axis.z},
-            limits.minimum,
-            limits.maximum,
+            source.lowerLimit,
+            source.upperLimit,
             source.maximumVelocity,
             jointOriginInPreviousLink,
             MotionType(source.type)});

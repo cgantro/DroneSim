@@ -25,7 +25,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -113,6 +115,16 @@ void CheckSyntheticGeometry()
     sourceModel->name = "Synthetic model name owned by the adapter";
     sourceModel->links[2].name = "Synthetic link name owned by the adapter";
     grasplink::simulation::robotics::RobotModelAdapter modelAdapter(*sourceModel);
+    auto continuousModel = *sourceModel;
+    continuousModel.joints[1].type = grasplink::model::RobotJointType::Continuous;
+    continuousModel.joints[1].lowerLimit = -std::numeric_limits<double>::infinity();
+    continuousModel.joints[1].upperLimit = std::numeric_limits<double>::infinity();
+    grasplink::simulation::robotics::RobotModelAdapter continuousAdapter(continuousModel);
+    const auto& continuousJoint = continuousAdapter.Specification().joints[0];
+    EXPECT_EQ(continuousJoint.motionType, models::JointMotionType::Continuous);
+    EXPECT_FALSE(continuousJoint.HasPositionLimits());
+    EXPECT_TRUE(std::isinf(continuousJoint.minimumPosition));
+    EXPECT_TRUE(std::isinf(continuousJoint.maximumPosition));
     sourceModel.reset();
     const models::RobotSpecification& spec = modelAdapter.Specification();
     ASSERT_TRUE(spec.manufacturer.empty());

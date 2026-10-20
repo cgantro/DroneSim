@@ -191,6 +191,8 @@ FeasibleStepStatus FindFeasibleJointStep(
             if (active[joint])
                 continue;
             const auto& limits = specification.joints[joint];
+            if (!limits.HasPositionLimits())
+                continue;
             const double boundaryTolerance = std::max(IkSolverConstants::jointLimitToleranceFloor,
                 (limits.maximumPosition - limits.minimumPosition) * IkSolverConstants::jointLimitToleranceRatio);
             const double requested = angles[joint] + jointStep[joint] * stepScale;
@@ -270,8 +272,8 @@ LevenbergMarquardtIk::LevenbergMarquardtIk(const models::RobotSpecification& spe
     for (std::size_t i = 0; i < specification_.jointCount; ++i)
     {
         const auto& joint = specification_.joints[i];
-        if (!std::isfinite(joint.minimumPosition) || !std::isfinite(joint.maximumPosition) ||
-            joint.minimumPosition > joint.maximumPosition)
+        if (joint.HasPositionLimits() && (!std::isfinite(joint.minimumPosition) ||
+            !std::isfinite(joint.maximumPosition) || joint.minimumPosition > joint.maximumPosition))
             throw std::invalid_argument(IkErrorMessages::invalidJointLimits);
         if (i > 0)
             maximumReachMeters_ += Length(Subtract(joint.bindPivotMeters, specification_.joints[i - 1].bindPivotMeters));
@@ -335,8 +337,9 @@ LevenbergMarquardtIk::SessionId LevenbergMarquardtIk::BeginSingleSeed(
     }
     for (std::size_t i = 0; i < currentSeed.size(); ++i)
     {
-        if (!std::isfinite(currentSeed[i]) || currentSeed[i] < specification_.joints[i].minimumPosition ||
-            currentSeed[i] > specification_.joints[i].maximumPosition)
+        const auto& joint = specification_.joints[i];
+        if (!std::isfinite(currentSeed[i]) || (joint.HasPositionLimits() &&
+            (currentSeed[i] < joint.minimumPosition || currentSeed[i] > joint.maximumPosition)))
         {
             fail(IkStatus::InvalidInput, IkErrorMessages::seedOutsideJointLimits);
             return activeSessionId_;
@@ -484,11 +487,14 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
                 if (active[joint] || std::abs(jointStep[joint]) <= IkSolverConstants::negligibleJointStep)
                     continue;
                 const auto& limits = specification_.joints[joint];
-                const double distance = jointStep[joint] > 0.0
-                    ? limits.maximumPosition - angles[joint]
-                    : angles[joint] - limits.minimumPosition;
-                feasibleFraction = std::min(feasibleFraction,
-                    std::max(0.0, distance / std::abs(jointStep[joint])));
+                if (limits.HasPositionLimits())
+                {
+                    const double distance = jointStep[joint] > 0.0
+                        ? limits.maximumPosition - angles[joint]
+                        : angles[joint] - limits.minimumPosition;
+                    feasibleFraction = std::min(feasibleFraction,
+                        std::max(0.0, distance / std::abs(jointStep[joint])));
+                }
             }
             for (std::size_t line = 0; line < IkSolverConstants::maximumLineSearchSteps && !improved; ++line)
             {
@@ -498,7 +504,9 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
                 {
                     const double requested = angles[i] + jointStep[i] * fraction;
                     const auto& limits = specification_.joints[i];
-                    candidate[i] = std::clamp(requested, limits.minimumPosition, limits.maximumPosition);
+                    candidate[i] = limits.HasPositionLimits()
+                        ? std::clamp(requested, limits.minimumPosition, limits.maximumPosition)
+                        : requested;
                 }
                 const Error next = Measure(sessionTarget_, Compose(forward_.Update(candidate).toolFrameInBaseFrame, tcpInToolFrame_),
                     OrientationWeight(sessionOptions_));

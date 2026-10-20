@@ -316,6 +316,28 @@ void CheckJointStateValidityReasons()
     ASSERT_TRUE((ValidateJointState(specification, JointVector{}, environmentChecker) ==
         JointStateInvalidity::JointCountMismatch)) << "joint count mismatch has its own invalidity reason";
 
+    std::array<models::JointSpecification, 6> continuousJoints{};
+    std::copy_n(specification.joints, continuousJoints.size(), continuousJoints.begin());
+    continuousJoints[0].motionType = models::JointMotionType::Continuous;
+    continuousJoints[0].minimumPosition = -std::numeric_limits<double>::infinity();
+    continuousJoints[0].maximumPosition = std::numeric_limits<double>::infinity();
+    auto continuousSpecification = specification;
+    continuousSpecification.joints = continuousJoints.data();
+    JointVector manyTurns(continuousJoints.size(), 0.0);
+    manyTurns[0] = 3.0 * models::kFullTurnRadians + 0.1;
+    EXPECT_EQ(ValidateJointState(continuousSpecification, manyTurns, {}), JointStateInvalidity::None)
+        << "continuous joints accept any finite angle without a position limit";
+
+    SimRobotController continuousController(continuousSpecification);
+    ASSERT_TRUE(static_cast<bool>(continuousController.Connect()));
+    JointMoveCommand continuousMove;
+    continuousMove.targetPositions = manyTurns;
+    ASSERT_TRUE(static_cast<bool>(continuousController.MoveJoint(continuousMove)))
+        << "simulation accepts a continuous-joint target outside one turn";
+    ASSERT_TRUE(AdvanceUntilIdle(continuousController, 0.01));
+    EXPECT_NEAR(continuousController.GetState().jointPositions[0], 0.1, 1e-8)
+        << "simulation follows the nearest equivalent turn from its current state";
+
     ASSERT_TRUE((MapJointStateInvalidity(JointStateInvalidity::EnvironmentCollision).code == ErrorCode::EnvironmentContact)) << "environment collision retains its existing controller error code";
     ASSERT_TRUE((MapJointStateInvalidity(JointStateInvalidity::SelfCollision).code == ErrorCode::SelfCollision)) << "self collision is not reported as environment contact";
     ASSERT_TRUE((MapJointStateInvalidity(JointStateInvalidity::AttachedObjectCollision).code == ErrorCode::AttachedObjectCollision)) << "attached-object collision is not reported as environment contact";

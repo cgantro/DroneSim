@@ -32,6 +32,13 @@ inline void BuildIkRestartSeed(std::size_t sample, const JointVector& start,
     for (std::size_t jointIndex = 0; jointIndex < seed.size(); ++jointIndex)
     {
         const auto& joint = specification.joints[jointIndex];
+        if (!joint.HasPositionLimits())
+        {
+            const double offset = HaltonValue(sample,
+                primeBases[jointIndex % primeBases.size()]) - 0.5;
+            seed[jointIndex] = start[jointIndex] + offset * models::kFullTurnRadians;
+            continue;
+        }
         const double range = joint.maximumPosition - joint.minimumPosition;
         if (range <= 1e-12)
         {
@@ -81,6 +88,13 @@ inline std::vector<JointVector> BuildAlternativeIkSeeds(
     for (std::size_t jointIndex = 0; jointIndex < start.size(); ++jointIndex)
     {
         const auto& joint = specification.joints[jointIndex];
+        if (!joint.HasPositionLimits())
+        {
+            JointVector candidate = start;
+            candidate[jointIndex] += models::kFullTurnRadians * 0.5;
+            seeds.push_back(std::move(candidate));
+            continue;
+        }
         const double reflected = joint.minimumPosition + joint.maximumPosition - start[jointIndex];
         if (std::abs(reflected - start[jointIndex]) <= 1e-8)
             continue;

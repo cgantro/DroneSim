@@ -17,6 +17,8 @@ enum class JointMotionType
     Prismatic
 };
 
+inline constexpr double kFullTurnRadians = 6.28318530717958647692;
+
 /**
  * @brief 로봇 관절의 이름, 원점, 축, 위치 제한과 최대 속도를 제공한다.
  * @details bindPivotMeters는 모델 초기 자세에서 Robot base를 기준으로 잰 회전 중심 [m]이다.
@@ -48,6 +50,12 @@ struct JointSpecification
 
     /// 관절이 회전하는지, 연속 회전하는지, 축을 따라 움직이는지 나타낸다.
     JointMotionType motionType = JointMotionType::Revolute;
+
+    /// 연속 회전 관절은 끝 각도가 없고, 나머지 관절은 위치 한계를 따른다.
+    [[nodiscard]] bool HasPositionLimits() const noexcept
+    {
+        return motionType != JointMotionType::Continuous;
+    }
 };
 
 /** @brief Link 이름을 그 Link를 움직이는 joints 배열 원소에 연결한다. */

@@ -202,6 +202,8 @@ TEST(RobotModelLoader, ReadsSupportedJointTypesAndRejectsMalformedModels)
     ASSERT_EQ(model.activeJoints.size(), 2U);
     EXPECT_EQ(model.joints[model.activeJoints[0]].type, grasplink::model::RobotJointType::Prismatic);
     EXPECT_EQ(model.joints[model.activeJoints[1]].type, grasplink::model::RobotJointType::Continuous);
+    EXPECT_TRUE(std::isinf(model.joints[model.activeJoints[1]].lowerLimit));
+    EXPECT_TRUE(std::isinf(model.joints[model.activeJoints[1]].upperLimit));
     EXPECT_NEAR(glm::length(model.joints[model.activeJoints[1]].axis), 1.0, 1e-12);
 
     const std::string missingAxisXml = Link("base_link") + Link("arm") + Link("tool0") +

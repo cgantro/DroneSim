@@ -77,7 +77,7 @@ struct LinearPathPlannerLimits final
 
 struct LinearPathPlannerMath final
 {
-    static constexpr double fullTurnRadians = 2.0 * 3.14159265358979323846;
+    static constexpr double fullTurnRadians = models::kFullTurnRadians;
     static constexpr double degreesPerFullTurn = 360.0;
     static constexpr double jointLimitSearchMarginFraction = 0.1;
     static constexpr double jointLimitPenaltyWeight = 0.1;
@@ -120,6 +120,8 @@ Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t samp
             for (std::size_t joint = 0; joint < ikFailure->jointPositions.size(); ++joint)
             {
                 const auto& limits = specification.joints[joint];
+                if (!limits.HasPositionLimits())
+                    continue;
                 const double tolerance = std::max(LinearPathPlannerMath::jointLimitBoundaryToleranceFloor,
                     (limits.maximumPosition - limits.minimumPosition) *
                         LinearPathPlannerMath::jointLimitBoundaryToleranceRatio);
@@ -189,6 +191,14 @@ double JointTransitionCost(const JointVector& start, const JointVector& end,
     for (std::size_t joint = 0; joint < start.size(); ++joint)
     {
         const auto& limits = specification.joints[joint];
+        if (!limits.HasPositionLimits())
+        {
+            const double shortestTurn = std::remainder(
+                end[joint] - start[joint], LinearPathPlannerMath::fullTurnRadians);
+            const double normalizedTurn = shortestTurn / LinearPathPlannerMath::fullTurnRadians;
+            score += normalizedTurn * normalizedTurn;
+            continue;
+        }
         const double range = std::max(LinearPathPlannerMath::jointLimitRangeFloor,
             limits.maximumPosition - limits.minimumPosition);
         const double delta = (end[joint] - start[joint]) / range;
@@ -1078,6 +1088,12 @@ void AlignEquivalentJointAngles(
         const auto& joint = specification.joints[jointIndex];
         if (joint.motionType == models::JointMotionType::Prismatic)
             continue;
+        if (!joint.HasPositionLimits())
+        {
+            target[jointIndex] += std::round((reference[jointIndex] - target[jointIndex]) /
+                LinearPathPlannerMath::fullTurnRadians) * LinearPathPlannerMath::fullTurnRadians;
+            continue;
+        }
         const double minimumTurns = std::ceil((joint.minimumPosition - target[jointIndex]) /
             LinearPathPlannerMath::fullTurnRadians);
         const double maximumTurns = std::floor((joint.maximumPosition - target[jointIndex]) /

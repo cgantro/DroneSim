@@ -49,8 +49,8 @@ Result ValidateJointPositionLimits(
     {
         const auto& joint = specification.joints[jointIndex];
         const double position = positions[jointIndex];
-        if (!std::isfinite(position) || position < joint.minimumPosition ||
-            position > joint.maximumPosition)
+        if (!std::isfinite(position) || (joint.HasPositionLimits() &&
+            (position < joint.minimumPosition || position > joint.maximumPosition)))
         {
             return Failure(ErrorCode::InvalidCommand,
                 "SimRobotController: target outside joint limit: " + std::string(joint.name));
@@ -146,9 +146,12 @@ Result SimRobotController::Connect()
     state_ = {};
     state_.jointPositions.resize(specification_.jointCount);
     for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
-        state_.jointPositions[joint] = std::clamp(0.0,
-            specification_.joints[joint].minimumPosition,
-            specification_.joints[joint].maximumPosition);
+    {
+        const auto& jointSpec = specification_.joints[joint];
+        state_.jointPositions[joint] = jointSpec.HasPositionLimits()
+            ? std::clamp(0.0, jointSpec.minimumPosition, jointSpec.maximumPosition)
+            : 0.0;
+    }
     state_.jointVelocities.assign(specification_.jointCount, 0.0);
     state_.mode = RobotMode::Idle;
     state_.valid = true;

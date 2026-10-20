@@ -1,5 +1,6 @@
 #include "robotics/kinematics/RobotInverseKinematics.h"
 #include "robotics/kinematics/RobotKinematics.h"
+#include "robotics/kinematics/detail/AlternativeIkSeeds.h"
 #include "robotics/models/hanwha/Hcr12a.h"
 
 #include <algorithm>
@@ -117,6 +118,34 @@ void CheckSevenJointModelSolvesReachablePose()
     ASSERT_EQ(result.status, IkStatus::Success) << result.message;
     EXPECT_LT(PositionDistance(inverse.EvaluateTcp(result.jointPositions), target), 2e-5);
 }
+
+void CheckContinuousJointRemainsUnbounded()
+{
+    const double infinity = std::numeric_limits<double>::infinity();
+    std::array<models::JointSpecification, 1> joints{{
+        {"spin", {0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, -infinity, infinity, 1.0,
+            std::nullopt, models::JointMotionType::Continuous}}};
+    const models::RobotSpecification specification{
+        "Test", "ContinuousJoint", joints.data(), joints.size(), nullptr, 0,
+        {{0.4, 0.0, 0.0}, {}}, true};
+    LevenbergMarquardtIk inverse(specification);
+
+    const JointVector start{models::kFullTurnRadians + 0.4};
+    const JointVector targetJoints{models::kFullTurnRadians + 0.55};
+    const IkResult result = inverse.Solve(inverse.EvaluateTcp(targetJoints), start,
+        RobotDefaultIkOptions(specification));
+    ASSERT_EQ(result.status, IkStatus::Success) << result.message;
+    EXPECT_GT(result.jointPositions[0], models::kFullTurnRadians);
+    EXPECT_LT(PositionDistance(inverse.EvaluateTcp(result.jointPositions),
+        inverse.EvaluateTcp(targetJoints)), 2e-5);
+
+    JointVector restartSeed(1);
+    detail::BuildIkRestartSeed(1, start, specification, restartSeed);
+    EXPECT_TRUE(std::isfinite(restartSeed[0]));
+    const auto alternatives = detail::BuildAlternativeIkSeeds(start, specification);
+    ASSERT_EQ(alternatives.size(), 1U);
+    EXPECT_TRUE(std::isfinite(alternatives[0][0]));
+}
 }
 
 TEST(RobotInverseKinematicsTests, SolvesPositionAndPoseForFourAndSevenJoints)
@@ -124,6 +153,7 @@ TEST(RobotInverseKinematicsTests, SolvesPositionAndPoseForFourAndSevenJoints)
     EXPECT_EQ(RobotDefaultIkOptions(models::hanwha::kHcr12a).taskMode, IkTaskMode::Pose);
     CheckFourJointModelSolvesPositionOnly();
     CheckSevenJointModelSolvesReachablePose();
+    CheckContinuousJointRemainsUnbounded();
 }
 
 TEST(RobotInverseKinematicsTests, JacobianMatchesFiniteDifferenceWithAngledAxesAndTcpOffset)

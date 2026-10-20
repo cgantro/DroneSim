@@ -37,7 +37,8 @@ JointStateInvalidity ValidateJointState(
         if (!std::isfinite(joints[joint]))
             return JointStateInvalidity::NonFinitePosition;
         const auto& limits = specification.joints[joint];
-        if (joints[joint] < limits.minimumPosition || joints[joint] > limits.maximumPosition)
+        if (limits.HasPositionLimits() &&
+            (joints[joint] < limits.minimumPosition || joints[joint] > limits.maximumPosition))
             return JointStateInvalidity::JointLimitViolation;
     }
     return stateValidityChecker ? stateValidityChecker(joints) : JointStateInvalidity::None;
