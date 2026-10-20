@@ -14,7 +14,6 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <cstdint>
 #include <vector>
 
 namespace grasplink::rendering
@@ -22,6 +21,13 @@ namespace grasplink::rendering
 
 namespace
 {
+enum class NodeVisitState
+{
+    Unvisited,
+    Visiting,
+    Visited
+};
+
 /**
  * @brief 표면 묶음에 지정된 재질을 모델의 재질 목록과 자원 캐시에서 찾는다.
  * @details -1은 glTF 표면에 재질 번호가 없다는 뜻이므로 이 경우만 기본 Material을 쓴다. 목록 범위를 벗어난 번호나 GPU에 올리지 않은 재질은 잘못된 모델 연결이므로 예외를 던진다.
@@ -53,14 +59,14 @@ void ValidateNodeHierarchy(const ::grasplink::model::ModelResource& model)
     if (!model.rootNodeIndex || *model.rootNodeIndex >= model.nodes.size())
         throw std::runtime_error("Model has invalid root node");
 
-    std::vector<std::uint8_t> parentState(model.nodes.size(), 0);
+    std::vector<NodeVisitState> parentState(model.nodes.size(), NodeVisitState::Unvisited);
     for (std::size_t start = 0; start < model.nodes.size(); ++start)
     {
         std::vector<std::size_t> path;
         std::size_t current = start;
-        while (parentState[current] == 0)
+        while (parentState[current] == NodeVisitState::Unvisited)
         {
-            parentState[current] = 1;
+            parentState[current] = NodeVisitState::Visiting;
             path.push_back(current);
             const auto parent = model.nodes[current].parentIndex;
             if (parent && *parent >= model.nodes.size())
@@ -69,10 +75,10 @@ void ValidateNodeHierarchy(const ::grasplink::model::ModelResource& model)
                 break;
             current = *parent;
         }
-        if (parentState[current] == 1 && model.nodes[current].parentIndex)
+        if (parentState[current] == NodeVisitState::Visiting && model.nodes[current].parentIndex)
             throw std::runtime_error("Model contains a parent cycle");
         for (const std::size_t index : path)
-            parentState[index] = 2;
+            parentState[index] = NodeVisitState::Visited;
     }
 }
 
