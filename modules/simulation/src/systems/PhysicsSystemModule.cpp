@@ -185,7 +185,6 @@ struct PhysicsSystemModule::Impl
     // Flecs OnSet callback 중 query 구성을 바꾸면 현재 순회가 영향을 받을 수 있어 예약만 한다. 다음 Step에서 변경이 모두 끝난 설정과 최신 World 자세를 읽는다.
     std::vector<flecs::entity> pendingConfiguration;
     std::unordered_set<flecs::entity_t> pendingIds;
-    std::vector<flecs::entity> boundEntities;
     // 등록된 callback은 현재 Impl(this)과 참조한 PhysicsWorld를 사용한다. 두 객체가 해제된 뒤 callback이 남지 않도록 Impl 파괴 중 observer부터 해제한다.
     flecs::observer rigidBodySetObserver;
     flecs::observer rigidBodyRemoveObserver;
@@ -234,12 +233,12 @@ struct PhysicsSystemModule::Impl
     {
         // entity.remove가 동기적으로 OnRemove를 호출하므로 Binding observer가 살아 있을 때 Body를 해제한다.
         // Binding 제거는 Query 소속 여부를 바꾼다. Query를 직접 순회하면서 제거하지 않고 대상 Entity를 먼저 복사한 뒤 삭제한다.
-        boundEntities.clear();
-        bindingQuery.each([this](flecs::entity entity, const detail::PhysicsBodyBinding&)
+        std::vector<flecs::entity> entitiesToUnbind;
+        bindingQuery.each([&entitiesToUnbind](flecs::entity entity, const detail::PhysicsBodyBinding&)
         {
-            boundEntities.push_back(entity);
+            entitiesToUnbind.push_back(entity);
         });
-        for (flecs::entity entity : boundEntities)
+        for (flecs::entity entity : entitiesToUnbind)
             if (entity.is_alive())
                 entity.remove<grasplink::simulation::detail::PhysicsBodyBinding>();
 
