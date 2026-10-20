@@ -645,13 +645,14 @@ void SimRobotController::FinishPosePlanning(Result result)
     if (!result && posePlanning_.ikSeedAttempts > 1)
         result.message += " after " + std::to_string(posePlanning_.ikSeedAttempts) + " IK seed attempts";
     motionPlanningResult_ = std::move(result);
-    state_.mode = *motionPlanningResult_ ? RobotMode::Moving : RobotMode::Idle;
     state_.errorCode = motionPlanningResult_->code;
     if (!*motionPlanningResult_)
     {
+        state_.mode = RobotMode::Idle;
         ClearPosePlanningState();
         jointMotion_.pendingMove.reset();
     }
+    // 성공한 경우에는 경로 시작 단계가 Moving 또는 Idle을 이미 정했으므로 그 상태를 유지한다.
 }
 
 Result SimRobotController::StartPosePathSegment()

@@ -374,6 +374,15 @@ void CheckChangingValidityCheckerCancelsPosePlanning()
     EXPECT_EQ(controller.GetStateView().mode, RobotMode::Idle);
 
     ASSERT_TRUE(static_cast<bool>(controller.BeginPosePlanning(currentPose)));
+    for (std::size_t step = 0; step < 10000 && controller.IsMotionPlanning(); ++step)
+        controller.AdvanceMotionPlanning(64);
+    EXPECT_FALSE(controller.IsMotionPlanning());
+    const auto noMotionResult = controller.TakeMotionPlanningResult();
+    ASSERT_TRUE(noMotionResult.has_value());
+    EXPECT_TRUE(static_cast<bool>(*noMotionResult));
+    EXPECT_EQ(controller.GetStateView().mode, RobotMode::Idle);
+
+    ASSERT_TRUE(static_cast<bool>(controller.BeginPosePlanning(currentPose)));
     controller.Disconnect();
     EXPECT_FALSE(controller.IsMotionPlanning());
     EXPECT_EQ(controller.GetStateView().mode, RobotMode::Disconnected);
