@@ -10,6 +10,7 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <vector>
 
 using namespace grasplink::robotics;
 using namespace grasplink::robotics::planning;
@@ -156,6 +157,54 @@ void CheckMovePoseAndFailurePreservation()
 
 void CheckMoveJointRejectsInvalidPath();
 
+void CheckPrismaticJointPathUsesMeterSpacing()
+{
+    std::array<models::JointSpecification, 1> joints{};
+    joints[0].name = "slide";
+    joints[0].maximumPosition = 0.2;
+    joints[0].maximumVelocity = 1.0;
+    joints[0].motionType = models::JointMotionType::Prismatic;
+
+    models::RobotSpecification specification;
+    specification.manufacturer = "Test";
+    specification.model = "Prismatic";
+    specification.joints = joints.data();
+    specification.jointCount = joints.size();
+
+    JointPathPlannerOptions options;
+    options.validationPolicy.maximumPathIntervals = 10;
+    options.validationPolicy.jointCollisionSampleSpacingRadians = 0.08;
+    options.validationPolicy.prismaticJointCollisionSampleSpacingMeters = 0.02;
+
+    std::vector<double> synchronousPositions;
+    const StateValidityChecker synchronousChecker = [&](const JointVector& positions)
+    {
+        synchronousPositions.push_back(positions[0]);
+        return JointStateInvalidity::None;
+    };
+    EXPECT_EQ(ValidateJointPath({0.0}, {0.1}, specification, synchronousChecker,
+        options.validationPolicy), JointStateInvalidity::None);
+    ASSERT_EQ(synchronousPositions.size(), 5);
+    EXPECT_NEAR(synchronousPositions[0], 0.02, 1e-12);
+    EXPECT_NEAR(synchronousPositions[3], 0.08, 1e-12);
+
+    std::vector<double> checkedPositions;
+    const StateValidityChecker checker = [&](const JointVector& positions)
+    {
+        checkedPositions.push_back(positions[0]);
+        return JointStateInvalidity::None;
+    };
+
+    JointPathPlanningJob job;
+    const Result begin = job.Begin(specification, {0.0}, {0.1}, checker, options);
+    ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
+    EXPECT_EQ(job.Advance(32), JointPathPlanningState::Completed);
+
+    ASSERT_EQ(checkedPositions.size(), 7);
+    EXPECT_NEAR(checkedPositions[2], 0.02, 1e-12);
+    EXPECT_NEAR(checkedPositions[5], 0.08, 1e-12);
+}
+
 void CheckJointStateValidityReasons()
 {
     using grasplink::robotics::planning::MapJointStateInvalidity;
@@ -205,6 +254,7 @@ void CheckJointStateValidityReasons()
     EXPECT_EQ(ValidateJointPath(joints, pathEnd, specification, {}, policy),
         JointStateInvalidity::PathSamplingLimitExceeded);
 
+    CheckPrismaticJointPathUsesMeterSpacing();
     CheckMoveJointRejectsInvalidPath();
 }
 

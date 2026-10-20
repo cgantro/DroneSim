@@ -1,5 +1,7 @@
 #include "robotics/planning/JointPathPlanner.h"
 
+#include "robotics/planning/detail/JointPathSampling.h"
+
 #include <algorithm>
 #include <cmath>
 #include <thread>
@@ -98,10 +100,13 @@ Result JointPathPlanningJob::Begin(const models::RobotSpecification& specificati
     job.nextInterval = 1;
     job.state = JointPathPlanningState::Running;
 
-    const double spacing = options.validationPolicy.jointCollisionSampleSpacingRadians;
+    const auto& policy = options.validationPolicy;
     if (specification.joints == nullptr || specification.jointCount == 0 ||
-        !std::isfinite(spacing) || spacing <= 0.0 ||
-        options.validationPolicy.maximumPathIntervals == 0 ||
+        !std::isfinite(policy.jointCollisionSampleSpacingRadians) ||
+        policy.jointCollisionSampleSpacingRadians <= 0.0 ||
+        !std::isfinite(policy.prismaticJointCollisionSampleSpacingMeters) ||
+        policy.prismaticJointCollisionSampleSpacingMeters <= 0.0 ||
+        policy.maximumPathIntervals == 0 ||
         start.size() != specification.jointCount || goal.size() != specification.jointCount)
     {
         job.result = {ErrorCode::InvalidCommand, "JointPathPlanner: invalid robot, endpoints, or sample spacing"};
@@ -119,18 +124,15 @@ Result JointPathPlanningJob::Begin(const models::RobotSpecification& specificati
         return job.result;
     }
 
-    double maximumChange = 0.0;
-    for (std::size_t joint = 0; joint < start.size(); ++joint)
-        maximumChange = std::max(maximumChange, std::abs(goal[joint] - start[joint]));
-    const double intervals = std::max(1.0, std::ceil(maximumChange / spacing));
-    if (!std::isfinite(intervals) || intervals > static_cast<double>(
-        options.validationPolicy.maximumPathIntervals))
+    const auto intervals = detail::JointPathIntervalCount(
+        start, goal, specification, options.validationPolicy);
+    if (!intervals)
     {
         job.result = {ErrorCode::InvalidCommand, "JointPathPlanner: path exceeds the sample limit"};
         job.state = JointPathPlanningState::Failed;
         return job.result;
     }
-    job.intervalCount = static_cast<std::size_t>(intervals);
+    job.intervalCount = *intervals;
     return Result::Success();
 }
 
