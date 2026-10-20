@@ -305,10 +305,6 @@ public:
                 category2 == CollisionLayer::DynamicObject;
         case CollisionLayer::DynamicObject:
             return true;
-        case CollisionLayer::Count:
-            JPH_ASSERT(false);
-            return false;
-
         default:
             JPH_ASSERT(false);
             return false;
