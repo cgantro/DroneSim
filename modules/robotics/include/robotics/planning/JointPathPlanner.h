@@ -67,6 +67,12 @@ public:
         const JointVector& goal,
         const StateValidityChecker& stateValidityChecker,
         const JointPathPlannerOptions& options = {});
+    /// 작업이 여러 호출에 걸쳐 사양을 빌리므로 임시 사양은 받을 수 없다.
+    Result Begin(models::RobotSpecification&&,
+        const JointVector&,
+        const JointVector&,
+        const StateValidityChecker&,
+        const JointPathPlannerOptions& = {}) = delete;
     JointPathPlanningState Advance(std::size_t workBudget);
     void Cancel() noexcept;
     [[nodiscard]] JointPathPlanningState GetState() const noexcept;

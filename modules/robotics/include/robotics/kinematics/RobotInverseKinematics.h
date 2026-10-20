@@ -133,6 +133,8 @@ public:
 
     /** @brief 사양과 ToolFrame 기준 TCP 고정 변환 [m], quaternion [w,x,y,z]를 검사해 계산기를 만든다. 잘못된 사양이나 변환에는 std::invalid_argument를 던진다. */
     explicit LevenbergMarquardtIk(const models::RobotSpecification& specification, models::Pose3 tcpInToolFrame = {});
+    /// IK 계산기 수명 동안 사양을 빌리므로 임시 사양은 받을 수 없다.
+    LevenbergMarquardtIk(models::RobotSpecification&&, models::Pose3 = {}) = delete;
 
     /**
      * @brief 현재 관절각에 가까운 목표 관절각을 관절 한계 안에서 반복 계산한다.

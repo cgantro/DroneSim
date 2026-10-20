@@ -11,12 +11,15 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 using namespace grasplink::robotics;
 using namespace grasplink::robotics::planning;
 using grasplink::robotics::backends::simulation::SimRobotController;
 using grasplink::robotics::kinematics::LevenbergMarquardtIk;
+
+static_assert(!std::is_constructible_v<SimRobotController, models::RobotSpecification&&>);
 
 namespace
 {

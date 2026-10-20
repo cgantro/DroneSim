@@ -7,9 +7,12 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 using namespace grasplink::robotics;
 using grasplink::robotics::kinematics::RobotKinematics;
+
+static_assert(!std::is_constructible_v<RobotKinematics, models::RobotSpecification&&>);
 
 namespace
 {

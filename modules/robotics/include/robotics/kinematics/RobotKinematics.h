@@ -56,6 +56,8 @@ public:
      * @throws std::invalid_argument 관절 배열이 비었거나 pivot, 축 또는 지정된 ToolFrame이 유효하지 않을 때.
      */
     explicit RobotKinematics(const models::RobotSpecification& specification);
+    /// FK 계산기 수명 동안 사양을 빌리므로 임시 사양은 받을 수 없다.
+    RobotKinematics(models::RobotSpecification&&) = delete;
 
     /**
      * @brief 유효한 Controller 상태 복사본의 관절 위치를 사용해 각 Link 자세를 다시 계산한다.

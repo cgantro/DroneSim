@@ -8,9 +8,12 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
 
 using namespace grasplink::robotics;
 using namespace grasplink::robotics::kinematics;
+
+static_assert(!std::is_constructible_v<LevenbergMarquardtIk, models::RobotSpecification&&>);
 
 namespace
 {

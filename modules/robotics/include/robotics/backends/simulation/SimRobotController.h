@@ -43,6 +43,8 @@ public:
      * @details 내부 IK 계산기가 관절 배열과 위치 제한, FK geometry를 검사한다. 각 관절의 최대 속도는 시간에 따른 움직임을 계산하기 위해 Controller가 확인한다.
      */
     explicit SimRobotController(const models::RobotSpecification& specification, models::Pose3 tcpInToolFrame = {});
+    /// 제어기 수명 동안 사양을 빌리므로 임시 사양은 받을 수 없다.
+    SimRobotController(models::RobotSpecification&&, models::Pose3 = {}) = delete;
 
     /**
      * @brief IK가 만든 관절 자세 후보를 검사하는 함수를 등록한다.
