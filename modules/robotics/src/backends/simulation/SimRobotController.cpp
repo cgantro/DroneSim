@@ -116,14 +116,10 @@ SimRobotController::SimRobotController(const models::RobotSpecification& specifi
 void SimRobotController::SetJointStateValidityChecker(
     planning::StateValidityChecker checker)
 {
-    if (IsMotionPlanning())
+    const bool wasPlanning = IsMotionPlanning();
+    CancelPlanningJobs();
+    if (wasPlanning)
     {
-        linearPathPlanningJob_.Cancel();
-        if (posePlanning_.phase != PosePlanningPhase::None)
-        {
-            inverse_.CancelSingleSeed(posePlanning_.ikSession);
-            posePlanning_.jointPathJob.Cancel();
-        }
         posePlanning_.phase = PosePlanningPhase::None;
         state_.mode = RobotMode::Idle;
         state_.errorCode = ErrorCode::Cancelled;
@@ -132,7 +128,6 @@ void SimRobotController::SetJointStateValidityChecker(
         pendingLinearPathCommand_ = {};
     }
     linearPathPlanningJob_ = {};
-    posePlanning_.jointPathJob.Cancel();
     ClearPosePlanningState();
     jointStateValidityChecker_ = std::move(checker);
 }
@@ -145,13 +140,8 @@ void SimRobotController::SetJointStateValidityDiagnosticProvider(std::function<s
 Result SimRobotController::Connect()
 {
     // 재연결은 이전 명령과 상태를 이어가지 않고 q=0의 새 논리 세션을 만든다.
-    linearPathPlanningJob_.Cancel();
+    CancelPlanningJobs();
     linearPathPlanningJob_ = {};
-    if (posePlanning_.phase != PosePlanningPhase::None)
-    {
-        inverse_.CancelSingleSeed(posePlanning_.ikSession);
-        posePlanning_.jointPathJob.Cancel();
-    }
     ClearPosePlanningState();
     linearPathPlanningResult_.reset();
     pendingLinearPathCommand_ = {};
@@ -188,12 +178,7 @@ Result SimRobotController::Connect()
 
 void SimRobotController::Disconnect() noexcept
 {
-    linearPathPlanningJob_.Cancel();
-    if (posePlanning_.phase != PosePlanningPhase::None)
-    {
-        inverse_.CancelSingleSeed(posePlanning_.ikSession);
-        posePlanning_.jointPathJob.Cancel();
-    }
+    CancelPlanningJobs();
     ClearPosePlanningState();
     linearPathPlanningResult_.reset();
     pendingLinearPathCommand_ = {};
@@ -663,6 +648,14 @@ void SimRobotController::ClearPosePlanningState()
     posePathSegment_ = 0;
 }
 
+void SimRobotController::CancelPlanningJobs()
+{
+    linearPathPlanningJob_.Cancel();
+    if (posePlanning_.phase != PosePlanningPhase::None)
+        inverse_.CancelSingleSeed(posePlanning_.ikSession);
+    posePlanning_.jointPathJob.Cancel();
+}
+
 void SimRobotController::FinishPosePlanning(Result result)
 {
     posePlanning_.phase = PosePlanningPhase::None;
@@ -875,10 +868,7 @@ bool SimRobotController::RestoreCollisionSafeState(
         collisionReason != ErrorCode::AttachedObjectCollision)
         return false;
 
-    linearPathPlanningJob_.Cancel();
-    if (posePlanning_.phase != PosePlanningPhase::None)
-        inverse_.CancelSingleSeed(posePlanning_.ikSession);
-    posePlanning_.jointPathJob.Cancel();
+    CancelPlanningJobs();
     ClearPosePlanningState();
     linearPathPlanningJob_ = {};
     pendingLinearPathCommand_ = {};
