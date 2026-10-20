@@ -1,4 +1,5 @@
 #include "robotics/planning/LinearPathPlanner.h"
+#include "robotics/planning/JointPathPlanner.h"
 
 #include "robotics/kinematics/detail/PoseMath.h"
 #include "robotics/kinematics/detail/AlternativeIkSeeds.h"
@@ -1053,38 +1054,6 @@ struct LinearPathPlanningJob::Impl
     }
 };
 
-JointStateInvalidity ValidateJointPath(
-    const JointVector& start,
-    const JointVector& end,
-    const models::RobotSpecification& specification,
-    const StateValidityChecker& stateValidityChecker,
-    const PlanningPolicy& policy)
-{
-    // 관절 하나의 변화량이 설정한 간격보다 크면 그 사이 자세도 나눠 검사한다. 시작 자세는 이미 검증됐다고 보고 끝 자세까지 확인한다.
-    const auto startInvalidity = ValidateJointState(specification, start, {});
-    if (startInvalidity != JointStateInvalidity::None)
-        return startInvalidity;
-    const auto endInvalidity = ValidateJointState(specification, end, {});
-    if (endInvalidity != JointStateInvalidity::None)
-        return endInvalidity;
-
-    const auto intervals = detail::JointPathIntervalCount(start, end, specification, policy);
-    if (!intervals)
-        return JointStateInvalidity::PathSamplingLimitExceeded;
-    JointVector sample(start.size());
-    for (std::size_t step = 1; step <= *intervals; ++step)
-    {
-        const double fraction = static_cast<double>(step) / static_cast<double>(*intervals);
-        for (std::size_t joint = 0; joint < start.size(); ++joint)
-            sample[joint] = start[joint] + (end[joint] - start[joint]) * fraction;
-        // 양 끝 관절각이 유한하고 한계 안에 있으면 선형 보간한 중간 각도도 그 범위 안에 있다. 따라서 매 표본에서는 비용이 큰 충돌 검사만 수행한다.
-        const auto invalidity = stateValidityChecker ?
-            stateValidityChecker(sample) : JointStateInvalidity::None;
-        if (invalidity != JointStateInvalidity::None)
-            return invalidity;
-    }
-    return JointStateInvalidity::None;
-}
 void AlignEquivalentJointAngles(
     JointVector& target,
     const JointVector& reference,

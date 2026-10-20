@@ -1,4 +1,5 @@
 #include "robotics/backends/simulation/SimRobotController.h"
+#include "robotics/planning/JointPathPlanner.h"
 #include "robotics/planning/LinearPathPlanner.h"
 #include "robotics/kinematics/RobotInverseKinematics.h"
 #include "robotics/models/hanwha/Hcr12a.h"

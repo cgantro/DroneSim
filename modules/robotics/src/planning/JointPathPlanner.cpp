@@ -79,6 +79,39 @@ struct JointPathPlanningJob::Impl
     }
 };
 
+JointStateInvalidity ValidateJointPath(
+    const JointVector& start,
+    const JointVector& end,
+    const models::RobotSpecification& specification,
+    const StateValidityChecker& stateValidityChecker,
+    const PlanningPolicy& policy)
+{
+    // 먼저 두 끝점의 관절 수와 허용 범위를 확인한다. 문제가 있으면 충돌 검사 함수를 호출하지 않는다.
+    const auto startInvalidity = ValidateJointState(specification, start, {});
+    if (startInvalidity != JointStateInvalidity::None)
+        return startInvalidity;
+    const auto endInvalidity = ValidateJointState(specification, end, {});
+    if (endInvalidity != JointStateInvalidity::None)
+        return endInvalidity;
+
+    const auto intervals = detail::JointPathIntervalCount(start, end, specification, policy);
+    if (!intervals)
+        return JointStateInvalidity::PathSamplingLimitExceeded;
+    JointVector sample(start.size());
+    for (std::size_t step = 1; step <= *intervals; ++step)
+    {
+        const double fraction = static_cast<double>(step) / static_cast<double>(*intervals);
+        for (std::size_t joint = 0; joint < start.size(); ++joint)
+            sample[joint] = start[joint] + (end[joint] - start[joint]) * fraction;
+        // 끝점이 유효하므로 선형 보간한 중간 관절값도 한계 안에 있다. 각 표본에서는 충돌 검사만 추가로 수행한다.
+        const auto invalidity = stateValidityChecker ?
+            stateValidityChecker(sample) : JointStateInvalidity::None;
+        if (invalidity != JointStateInvalidity::None)
+            return invalidity;
+    }
+    return JointStateInvalidity::None;
+}
+
 JointPathPlanningJob::JointPathPlanningJob() : impl_(std::make_unique<Impl>()) {}
 JointPathPlanningJob::~JointPathPlanningJob() = default;
 JointPathPlanningJob::JointPathPlanningJob(JointPathPlanningJob&&) noexcept = default;

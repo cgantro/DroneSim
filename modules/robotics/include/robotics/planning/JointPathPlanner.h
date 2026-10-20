@@ -27,6 +27,17 @@ struct JointPathPlan final
     std::size_t validityChecks = 0;
 };
 
+/**
+ * @brief 시작 관절각에서 목표 관절각까지 충돌 없이 이동할 수 있는지 확인한다.
+ * @details 허용된 관절 변화 간격으로 중간 자세를 검사하므로, 두 끝점이 모두 안전해도 그 사이에서 충돌하면 실패한다.
+ */
+[[nodiscard]] JointStateInvalidity ValidateJointPath(
+    const JointVector& start,
+    const JointVector& end,
+    const models::RobotSpecification& specification,
+    const StateValidityChecker& stateValidityChecker,
+    const PlanningPolicy& policy = kDefaultPlanningPolicy);
+
 enum class JointPathPlanningState : std::uint8_t
 {
     Idle,

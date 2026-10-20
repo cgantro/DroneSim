@@ -123,17 +123,6 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
     kinematics::IkResult& ikFailure);
 
 /**
- * @brief 시작 관절각에서 목표 관절각까지 충돌 없이 이동할 수 있는지 확인한다.
- * @details 허용된 관절 변화 간격으로 중간 자세를 검사하므로, 두 끝점이 모두 안전하더라도 그 사이 경로가 충돌하면 실패한다.
- */
-[[nodiscard]] JointStateInvalidity ValidateJointPath(
-    const JointVector& start,
-    const JointVector& end,
-    const models::RobotSpecification& specification,
-    const StateValidityChecker& stateValidityChecker,
-    const PlanningPolicy& policy = kDefaultPlanningPolicy);
-
-/**
  * @brief TCP 직선 경로를 IK 표본과 관절 경로 검증으로 바꾼다.
  * @details 경로가 유효한지 전부 확인한 뒤에만 결과 계획을 갱신한다. 샘플 한도를 넘으면 끝점의 도달 가능성과 경로 구간 수 초과를 구분한다.
  */
