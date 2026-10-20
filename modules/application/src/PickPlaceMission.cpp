@@ -136,11 +136,6 @@ robotics::CartesianPose MakeAttachedBoxTarget(const robotics::CartesianPose& box
     return target;
 }
 
-robotics::Result MovePoseTo(const robotics::CartesianPose& pose, robotics::IRobotController& controller)
-{
-    return controller.BeginPosePlanning(pose);
-}
-
 robotics::LinearPathMoveCommand LinearCommandTo(const robotics::CartesianPose& pose,
     double linearVelocity = config::linearVelocityMetersPerSecond,
     double linearAcceleration = config::linearAccelerationMetersPerSecondSquared)
@@ -429,7 +424,7 @@ void PickPlaceMission::UpdatePlacement(const UpdateContext& context)
             placementBoxOrientationXyzw_ = QuaternionXyzw(chosenTcp * boxRotationOffset);
             recoveryPose_ = MakeAttachedBoxTarget(context.placementPoseInBase, config::transitBoxHeightMeters,
                 QuaternionXyzw(currentTcp * boxRotationOffset), boxRotationOffsetInTool_, boxOffsetInTool_);
-            SetStageFromMotionResult(MovePoseTo(recoveryPose_, context.controller),
+            SetStageFromMotionResult(context.controller.BeginPosePlanning(recoveryPose_),
                 Stage::MovingToPlacementOverhead, context.controller);
         }
         break;
