@@ -70,7 +70,7 @@ void InteractiveLinearPathStress(benchmark::State& state)
             };
             LinearPathPlanningJob job;
             const Result begin = job.Begin(command, kHcr12a, kSeed, startTcp, inverse,
-                dummyAlwaysValid, kInteractivePlanningPolicy);
+                dummyAlwaysValid, kDefaultPlanningPolicy);
             if (!begin)
             {
                 ++rejected;

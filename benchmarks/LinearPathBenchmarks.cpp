@@ -90,7 +90,7 @@ void IncrementalLinearPathPlanning(benchmark::State& state)
     {
         LinearPathPlanningJob job;
         if (!job.Begin(command, kHcr12a, kSeed, startTcp, solver, {},
-            grasplink::robotics::planning::kInteractivePlanningPolicy))
+            grasplink::robotics::planning::kDefaultPlanningPolicy))
         {
             state.SkipWithError("증분 경로 계획기가 벤치마크 경로 생성을 시작하지 못했습니다.");
             break;

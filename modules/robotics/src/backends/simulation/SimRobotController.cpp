@@ -424,7 +424,7 @@ Result SimRobotController::BeginLinearPathPlanning(const LinearPathMoveCommand& 
     motionPlanningResult_.reset();
     const Result begin = linearPathPlanningJob_.Begin(command, specification_,
         state_.jointPositions, inverse_.EvaluateTcp(state_.jointPositions),
-        inverse_, jointStateValidityChecker_, planning::kInteractivePlanningPolicy,
+        inverse_, jointStateValidityChecker_, planning::kDefaultPlanningPolicy,
         jointStateValidityDiagnosticProvider_);
     if (!begin)
     {
@@ -514,7 +514,7 @@ void SimRobotController::StartPoseLinearContinuation()
     const Result continuationBegin = linearPathPlanningJob_.Begin(
         *posePlanning_.continuationCommand, specification_, posePlanning_.candidateJoints,
         inverse_.EvaluateTcp(posePlanning_.candidateJoints), inverse_, jointStateValidityChecker_,
-        planning::kInteractivePlanningPolicy, jointStateValidityDiagnosticProvider_);
+        planning::kDefaultPlanningPolicy, jointStateValidityDiagnosticProvider_);
     if (!continuationBegin)
     {
         posePlanning_.pathFailure = continuationBegin;

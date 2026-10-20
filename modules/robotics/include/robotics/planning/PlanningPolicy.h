@@ -30,17 +30,4 @@ struct PlanningPolicy final
 
 inline constexpr PlanningPolicy kDefaultPlanningPolicy{};
 
-/**
- * @brief MoveL의 각 TCP 표본에서 IK 시작 자세를 최대 16개까지 검사한다.
- * @details 이전 표본의 후보를 이어서 시도하고, 관절 한계나 충돌로 막히면 대체 관절 분기도 탐색한다.
- * Viewer는 계획 계산을 프레임별 작업량으로 나누므로 이 상한을 유지하면서 한 프레임의 긴 정지를 막는다.
- * 오프라인 계획은 별도 정책으로 탐색 폭을 조정할 수 있다.
- */
-inline constexpr PlanningPolicy kInteractivePlanningPolicy = []
-{
-    PlanningPolicy policy{};
-    policy.maximumIkSeedAttemptsPerSample = 16;
-    return policy;
-}();
-
 } // namespace grasplink::robotics::planning
