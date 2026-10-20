@@ -20,6 +20,7 @@ namespace grasplink::model
 namespace
 {
 using tinyxml2::XMLElement;
+constexpr double kMinimumJointAxisLength = 1.0e-12;
 
 // 모든 로봇 폴더가 따르는 파일 이름과 팔 경로의 기준 링크 이름이다.
 struct RobotModelFormat final
@@ -331,7 +332,7 @@ void ReadJointLimits(RobotJoint& joint, const XMLElement& element, const std::fi
         Invalid(path, "joint '" + joint.name + "' must define its axis");
     joint.axis = Vector3(axis->Attribute("xyz"), glm::dvec3{0.0}, path, "joint axis");
     const double axisLength = glm::length(joint.axis);
-    if (!std::isfinite(axisLength) || axisLength <= 1.0e-12)
+    if (!std::isfinite(axisLength) || axisLength <= kMinimumJointAxisLength)
         Invalid(path, "joint '" + joint.name + "' has a zero axis");
     joint.axis /= axisLength;
 
