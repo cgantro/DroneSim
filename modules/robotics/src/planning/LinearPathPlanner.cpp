@@ -107,6 +107,54 @@ struct LinearPathPlannerMessages final
         "LinearPathPlanner: planning must advance on the Begin caller thread";
 };
 
+void AppendJointLimitContext(std::string& context,
+    const kinematics::IkResult& ikFailure,
+    const models::RobotSpecification& specification)
+{
+    if (ikFailure.status != kinematics::IkStatus::JointLimitReached)
+        return;
+
+    for (std::size_t joint = 0; joint < ikFailure.jointPositions.size(); ++joint)
+    {
+        const auto& limits = specification.joints[joint];
+        if (!limits.HasPositionLimits())
+            continue;
+
+        const double tolerance = std::max(LinearPathPlannerMath::jointLimitBoundaryToleranceFloor,
+            (limits.maximumPosition - limits.minimumPosition) *
+                LinearPathPlannerMath::jointLimitBoundaryToleranceRatio);
+        const double position = ikFailure.jointPositions[joint];
+        if (std::abs(position - limits.minimumPosition) <= tolerance ||
+            std::abs(position - limits.maximumPosition) <= tolerance)
+        {
+            context += "; IK candidate reached " + std::string(limits.name) + " limit";
+            break;
+        }
+    }
+}
+
+void AppendIkFailureContext(std::string& context,
+    const kinematics::IkResult& ikFailure,
+    const models::RobotSpecification& specification)
+{
+    AppendJointLimitContext(context, ikFailure, specification);
+    context += "; IK residual " + std::to_string(ikFailure.positionErrorMeters) +
+        " m / " + std::to_string(ikFailure.orientationErrorRadians) +
+        " rad after " + std::to_string(ikFailure.iterations) + " iterations; candidate_positions=[";
+    for (std::size_t joint = 0; joint < ikFailure.jointPositions.size(); ++joint)
+    {
+        const auto& jointSpec = specification.joints[joint];
+        const double position = jointSpec.motionType == models::JointMotionType::Prismatic
+            ? ikFailure.jointPositions[joint]
+            : ikFailure.jointPositions[joint] * LinearPathPlannerMath::degreesPerFullTurn /
+                LinearPathPlannerMath::fullTurnRadians;
+        context += (joint == 0 ? "" : ",") + std::string(jointSpec.name) + "=" +
+            std::to_string(position) +
+            (jointSpec.motionType == models::JointMotionType::Prismatic ? " m" : " deg");
+    }
+    context += "]";
+}
+
 Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t sampleCount,
     const models::RobotSpecification& specification, const CartesianPose& target,
     const kinematics::IkResult* ikFailure = nullptr)
@@ -117,42 +165,7 @@ Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t samp
         std::to_string(target.positionMeters[1]) + ", " +
         std::to_string(target.positionMeters[2]) + ") m";
     if (ikFailure)
-    {
-        if (ikFailure->status == kinematics::IkStatus::JointLimitReached)
-        {
-            for (std::size_t joint = 0; joint < ikFailure->jointPositions.size(); ++joint)
-            {
-                const auto& limits = specification.joints[joint];
-                if (!limits.HasPositionLimits())
-                    continue;
-                const double tolerance = std::max(LinearPathPlannerMath::jointLimitBoundaryToleranceFloor,
-                    (limits.maximumPosition - limits.minimumPosition) *
-                        LinearPathPlannerMath::jointLimitBoundaryToleranceRatio);
-                const double position = ikFailure->jointPositions[joint];
-                if (std::abs(position - limits.minimumPosition) <= tolerance ||
-                    std::abs(position - limits.maximumPosition) <= tolerance)
-                {
-                    context += "; IK candidate reached " + std::string(limits.name) + " limit";
-                    break;
-                }
-            }
-        }
-        context += "; IK residual " + std::to_string(ikFailure->positionErrorMeters) +
-            " m / " + std::to_string(ikFailure->orientationErrorRadians) +
-            " rad after " + std::to_string(ikFailure->iterations) + " iterations; candidate_positions=[";
-        for (std::size_t joint = 0; joint < ikFailure->jointPositions.size(); ++joint)
-        {
-            const auto& jointSpec = specification.joints[joint];
-            const double position = jointSpec.motionType == models::JointMotionType::Prismatic
-                ? ikFailure->jointPositions[joint]
-                : ikFailure->jointPositions[joint] * LinearPathPlannerMath::degreesPerFullTurn /
-                    LinearPathPlannerMath::fullTurnRadians;
-            context += (joint == 0 ? "" : ",") + std::string(jointSpec.name) + "=" +
-                std::to_string(position) +
-                (jointSpec.motionType == models::JointMotionType::Prismatic ? " m" : " deg");
-        }
-        context += "]";
-    }
+        AppendIkFailureContext(context, *ikFailure, specification);
     failure.message = std::move(context) + ": " + failure.message;
     return failure;
 }
