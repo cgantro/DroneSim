@@ -21,5 +21,7 @@ inline constexpr SimulationMotionPolicy kDefaultSimulationMotionPolicy{};
 
 inline constexpr double kMotionEpsilon = 1e-8;
 inline constexpr double kJointVelocityRampSeconds = 0.20;
+/** @brief 속도 상한 비율을 비교할 때 허용하는 부동소수점 오차다. */
+inline constexpr double kVelocityRatioTolerance = 1e-8;
 
 } // namespace grasplink::robotics::backends::simulation::detail

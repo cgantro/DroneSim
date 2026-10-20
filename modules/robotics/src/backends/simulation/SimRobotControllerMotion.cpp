@@ -366,7 +366,7 @@ bool SimRobotController::TryAdvanceLinearSegment(double availableSeconds,
                 Length(RotationError(nextTcp.rotation, currentTcp.rotation)), linearMotion_.angularVelocityLimit));
 
         const double ratio = std::max(1.0, requiredSeconds / availableSeconds);
-        if (ratio <= 1.0 + 1e-8)
+        if (ratio <= 1.0 + detail::kVelocityRatioTolerance)
         {
             state_.jointPositions = linearInterpolationBuffer_;
             linearMotion_.segmentFraction = nextSegmentFraction;
@@ -447,7 +447,7 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         const Pose3 plannedEndTcp = FromCartesian(end.tcpPose);
         const bool remainingLineFollowsTcp = JointInterpolationFollowsTcpLine(
             solution.jointPositions, end.joints, pathTcp, plannedEndTcp, inverse_);
-        const bool respectsVelocityLimits = ratio <= 1.0 + 1e-8;
+        const bool respectsVelocityLimits = ratio <= 1.0 + detail::kVelocityRatioTolerance;
         const bool makesProgress = movement > 1e-12 && nextDistanceSquared < previousDistanceSquared;
         const bool staysOnTcpPath = pathPositionError <= options.positionToleranceMeters &&
             pathOrientationError <= options.orientationToleranceRadians;
