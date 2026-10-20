@@ -1,0 +1,104 @@
+name: Native Quality
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanitizers:
+    name: GCC ASan and UBSan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ninja-build
+
+      - name: Configure GCC sanitizer build
+        run: cmake --preset linux-gcc-asan-ubsan
+
+      - name: Build native targets
+        run: cmake --build --preset linux-gcc-asan-ubsan
+
+      - name: Run unit suites
+        run: >-
+          ctest --test-dir build-linux-gcc-asan-ubsan
+          --output-on-failure --timeout 120
+          -L UNIT -LE 'benchmark|e2e|integration'
+
+      - name: Run integration suite
+        run: >-
+          ctest --test-dir build-linux-gcc-asan-ubsan
+          --output-on-failure --timeout 120
+          -L INTEGRATION -LE 'benchmark|e2e'
+
+  coverage:
+    name: GCC coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install build and coverage tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gcovr ninja-build
+
+      - name: Configure GCC coverage build
+        run: cmake --preset linux-gcc-coverage
+
+      - name: Build native targets
+        run: cmake --build --preset linux-gcc-coverage
+
+      - name: Run unit suites
+        run: >-
+          ctest --test-dir build-linux-gcc-coverage
+          --output-on-failure --timeout 120
+          -L UNIT -LE 'benchmark|e2e|integration'
+
+      - name: Run integration suite
+        run: >-
+          ctest --test-dir build-linux-gcc-coverage
+          --output-on-failure --timeout 120
+          -L INTEGRATION -LE 'benchmark|e2e'
+
+      - name: Generate coverage summary and reports
+        run: |
+          mkdir -p coverage
+          gcovr --root . \
+            --filter 'modules/' \
+            --filter 'apps/simulator/' \
+            --print-summary \
+            --xml-pretty -o coverage/coverage.xml \
+            --html-details coverage/index.html \
+            | tee coverage/summary.txt
+          {
+            echo '### GCC coverage summary'
+            echo
+            echo '```text'
+            cat coverage/summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcc-coverage-reports
+          path: coverage/
+          if-no-files-found: warn

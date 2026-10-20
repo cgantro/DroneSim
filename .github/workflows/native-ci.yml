@@ -1,0 +1,53 @@
+name: Native CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Ubuntu native build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install graphics and virtual display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            ninja-build \
+            pkg-config \
+            xvfb \
+            xauth
+
+      - name: Configure native Debug build
+        run: cmake --preset ninja -DGRASPLINK_BUILD_BENCHMARKS=OFF
+
+      - name: Build native targets
+        run: cmake --build --preset ninja-debug --parallel 4
+
+      - name: Run labeled CTest suite with virtual display
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: >-
+          xvfb-run -a -s "-screen 0 1280x1024x24"
+          ctest --test-dir build-ninja-debug
+          --output-on-failure --timeout 120
