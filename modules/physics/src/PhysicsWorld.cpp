@@ -574,6 +574,39 @@ struct PhysicsWorld::Impl
         return ToBodyID(handle);
     }
 
+    void PrepareSleepingContactsForStep()
+    {
+        // 잠든 물체의 접촉은 유지한다. 물체가 깨어났다면 새 충돌 계산 결과를 기다리도록 이전 접촉을 지운다.
+        std::lock_guard lock(contactCollector.mutex);
+        for (auto entry = contactCollector.sleeping.begin();
+            entry != contactCollector.sleeping.end();)
+        {
+            if (AreBodiesAsleep(entry->second))
+            {
+                ++entry;
+                continue;
+            }
+
+            contactCollector.contacts.erase(entry->first);
+            entry = contactCollector.sleeping.erase(entry);
+        }
+    }
+
+    void PreserveSleepingContactsAfterStep()
+    {
+        // 삭제 callback에서는 Body에 접근할 수 없다. worker가 끝난 뒤에만 수면 상태를 확인한다.
+        std::lock_guard lock(contactCollector.mutex);
+        for (const auto& entry : contactCollector.removed)
+        {
+            if (!AreBodiesAsleep(entry.second))
+                continue;
+
+            contactCollector.sleeping[entry.first] = entry.second;
+            contactCollector.contacts[entry.first] = entry.second;
+        }
+        contactCollector.removed.clear();
+    }
+
     Impl()
         : tempAllocator(PhysicsWorldLimits::temporaryAllocatorSizeBytes)
     {
@@ -645,21 +678,7 @@ void PhysicsWorld::Step(double fixedDeltaSeconds)
 
     // 간격이 0 이하이거나 유한하지 않으면 물리 상태를 바꾸지 않는다. 호출자는 Fixed Update의 양수 시간 간격을 전달해야 한다.
     // 이 호출은 시간을 더 잘게 나누지 않고 Jolt 계산을 한 번 수행한다. Jolt 내부의 병렬 작업은 jobSystem이 맡는다.
-    {
-        // Jolt는 물체가 잠들어 계산을 쉬기 시작할 때도 접촉 삭제를 알린다.
-        // 잠든 접촉은 자세가 바뀌지 않으므로 유지하되 어느 물체든 깨면 이전 접촉을 버리고 이번 충돌 검사 결과를 기다린다.
-        std::lock_guard lock(impl_->contactCollector.mutex);
-        auto& collector = impl_->contactCollector;
-        for (auto entry = collector.sleeping.begin(); entry != collector.sleeping.end();)
-        {
-            if (!impl_->AreBodiesAsleep(entry->second))
-            {
-                collector.contacts.erase(entry->first);
-                entry = collector.sleeping.erase(entry);
-            }
-            else ++entry;
-        }
-    }
+    impl_->PrepareSleepingContactsForStep();
 
     impl_->physicsSystem.Update(
         static_cast<float>(fixedDeltaSeconds),
@@ -667,18 +686,7 @@ void PhysicsWorld::Step(double fixedDeltaSeconds)
         &impl_->tempAllocator,
         impl_->jobSystem.get());
 
-    {
-        // 삭제 callback 안에서는 Body에 접근할 수 없다. 모든 worker가 끝난 이 시점에서만 두 Body의 수면 상태를 확인한다.
-        std::lock_guard lock(impl_->contactCollector.mutex);
-        auto& collector = impl_->contactCollector;
-        for (const auto& entry : collector.removed)
-            if (impl_->AreBodiesAsleep(entry.second))
-            {
-                collector.sleeping[entry.first] = entry.second;
-                collector.contacts[entry.first] = entry.second;
-            }
-        collector.removed.clear();
-    }
+    impl_->PreserveSleepingContactsAfterStep();
 }
 
 
