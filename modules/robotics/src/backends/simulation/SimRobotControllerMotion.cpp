@@ -76,7 +76,7 @@ void SimRobotController::ConfigureJointMove(
     jointMoveStartPositions_ = state_.jointPositions;
     jointMoveProgress_ = 0.0;
     jointMoveProgressVelocity_ = 0.0;
-    jointMoveProgressAcceleration_ = 0.0;
+    jointMoveProgressAcceleration_ = std::numeric_limits<double>::infinity();
     jointMoveElapsedSeconds_ = 0.0;
     jointMoveAccelerationTimeSeconds_ = 0.0;
     jointMoveCruiseTimeSeconds_ = 0.0;
@@ -99,8 +99,8 @@ void SimRobotController::ConfigureJointMove(
             limits.maximumVelocity * velocityScale / distance);
         const double acceleration = limits.maximumVelocity /
             detail::kJointVelocityRampSeconds * accelerationScale;
-        jointMoveProgressAcceleration_ = std::min(jointMoveProgressAcceleration_ == 0.0 ?
-            std::numeric_limits<double>::infinity() : jointMoveProgressAcceleration_, acceleration / distance);
+        jointMoveProgressAcceleration_ = std::min(
+            jointMoveProgressAcceleration_, acceleration / distance);
     }
 
     state_.mode = needsMotion ? RobotMode::Moving : RobotMode::Idle;
