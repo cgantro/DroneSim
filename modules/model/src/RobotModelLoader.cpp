@@ -386,6 +386,7 @@ RobotJoint ReadJoint(const XMLElement& element, const RobotModel& model, const s
 void ReadLinks(const XMLElement& root, RobotModel& model, const std::filesystem::path& path)
 {
     std::unordered_set<std::string> linkNames;
+    // robot 바로 아래의 link 항목만 순서대로 읽어 관절이 참조할 링크 목록을 만듭니다.
     for (const XMLElement* element = root.FirstChildElement("link"); element != nullptr;
         element = element->NextSiblingElement("link"))
     {
@@ -401,6 +402,7 @@ void ReadLinks(const XMLElement& root, RobotModel& model, const std::filesystem:
 void ReadJoints(const XMLElement& root, RobotModel& model, const std::filesystem::path& path)
 {
     std::unordered_set<std::string> jointNames;
+    // 링크 목록을 만든 뒤 관절 항목을 읽어 parent와 child 이름을 링크 번호로 바꿉니다.
     for (const XMLElement* element = root.FirstChildElement("joint"); element != nullptr;
         element = element->NextSiblingElement("joint"))
     {
