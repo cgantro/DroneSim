@@ -14,11 +14,14 @@ namespace grasplink::scene
 namespace
 {
 using WorldTransformCache = std::unordered_map<flecs::entity_t, glm::mat4>;
+using TransformQuery = flecs::query<const Position, const Rotation, const Scale,
+    TransformMatrix, TransformMatrix>;
 
 struct TransformSystemScratch final
 {
     std::vector<flecs::entity> transformedEntities;
     WorldTransformCache worldTransforms;
+    TransformQuery transformQuery;
 };
 
 glm::mat4 UpdateEntityWorldTransform(flecs::entity entity, WorldTransformCache& cache)
@@ -75,17 +78,21 @@ void TransformSystemModule::UpdateWorldTransforms(flecs::world& world)
     auto& scratch = world.ensure<TransformSystemScratch>();
     auto& transformedEntities = scratch.transformedEntities;
     auto& cache = scratch.worldTransforms;
+    if (!scratch.transformQuery)
+    {
+        scratch.transformQuery = world.query_builder<const Position, const Rotation, const Scale,
+            TransformMatrix, TransformMatrix>()
+            .term_at(0).second<Local>()
+            .term_at(1).second<Local>()
+            .term_at(2).second<Local>()
+            .term_at(3).second<Local>()
+            .term_at(4).second<World>()
+            .build();
+    }
+
     transformedEntities.clear();
     cache.clear();
-    auto transformQuery = world.query_builder<const Position, const Rotation, const Scale,
-        TransformMatrix, TransformMatrix>()
-        .term_at(0).second<Local>()
-        .term_at(1).second<Local>()
-        .term_at(2).second<Local>()
-        .term_at(3).second<Local>()
-        .term_at(4).second<World>()
-        .build();
-    transformQuery.each([&](flecs::entity entity, const Position&, const Rotation&, const Scale&,
+    scratch.transformQuery.each([&](flecs::entity entity, const Position&, const Rotation&, const Scale&,
         TransformMatrix&, TransformMatrix&)
     {
         transformedEntities.push_back(entity);
