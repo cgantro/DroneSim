@@ -6,6 +6,9 @@
 
 namespace grasplink::simulation::robotics
 {
+using grasplink::model::RobotModel;
+using grasplink::robotics::models::Pose3;
+
 namespace
 {
 struct RobotModelTransformErrorMessages final
@@ -17,8 +20,8 @@ struct RobotModelTransformErrorMessages final
 };
 }
 
-grasplink::robotics::models::Pose3 ComposeRobotPose(
-    const grasplink::robotics::models::Pose3& parent,
+Pose3 ComposeRobotPose(
+    const Pose3& parent,
     const glm::dvec3& childPosition,
     const glm::dquat& childRotation)
 {
@@ -32,9 +35,9 @@ grasplink::robotics::models::Pose3 ComposeRobotPose(
         {rotation.w, rotation.x, rotation.y, rotation.z}};
 }
 
-grasplink::robotics::models::Pose3 RelativeRobotPose(
-    const grasplink::robotics::models::Pose3& parent,
-    const grasplink::robotics::models::Pose3& target)
+Pose3 RelativeRobotPose(
+    const Pose3& parent,
+    const Pose3& target)
 {
     const glm::dquat parentRotation{parent.rotation.w, parent.rotation.x,
         parent.rotation.y, parent.rotation.z};
@@ -51,11 +54,8 @@ grasplink::robotics::models::Pose3 RelativeRobotPose(
         {rotation.w, rotation.x, rotation.y, rotation.z}};
 }
 
-std::vector<grasplink::robotics::models::Pose3> BuildRobotLinkBindPoses(
-    const grasplink::model::RobotModel& model)
+std::vector<Pose3> BuildRobotLinkBindPoses(const RobotModel& model)
 {
-    using grasplink::robotics::models::Pose3;
-
     if (model.baseLink >= model.links.size())
         throw std::invalid_argument(RobotModelTransformErrorMessages::invalidBaseLinkIndex);
 
