@@ -18,7 +18,7 @@ namespace grasplink::robotics::kinematics
 IkOptions RobotDefaultIkOptions(const models::RobotSpecification& specification)
 {
     IkOptions options;
-    if (specification.jointCount < 6)
+    if (specification.jointCount < detail::taskSpaceDimension)
         options.taskMode = IkTaskMode::PositionOnly;
     return options;
 }
@@ -29,7 +29,6 @@ using namespace detail;
 // LM 계산에 쓰는 고정 기준입니다. 호출자가 조정하는 값은 IkOptions에 둡니다.
 struct IkSolverConstants final
 {
-    static constexpr std::size_t taskDimension = 6;
     static constexpr std::size_t maximumDampingAttempts = 8;
     static constexpr std::size_t maximumLineSearchSteps = 10;
     static constexpr std::size_t maximumJacobiSweeps = 64;
@@ -69,8 +68,8 @@ struct IkErrorMessages final
     inline static constexpr char cancelled[] = "IK: cancelled";
 };
 
-using SixVector = std::array<double, IkSolverConstants::taskDimension>;
-using SixMatrix = std::array<SixVector, IkSolverConstants::taskDimension>;
+using SixVector = std::array<double, taskSpaceDimension>;
+using SixMatrix = std::array<SixVector, taskSpaceDimension>;
 // 계산 중 가장 큰 수가 이 값보다 작으면 거의 0으로 나누는 셈이므로 풀이를 멈춘다.
 
 bool Positive(double value) { return std::isfinite(value) && value > 0.0; }
@@ -97,22 +96,22 @@ SixVector JacobianColumn(
 
 bool SolveSystem(SixMatrix matrix, SixVector right, SixVector& answer)
 {
-    Eigen::Matrix<double, IkSolverConstants::taskDimension, IkSolverConstants::taskDimension> system;
-    Eigen::Matrix<double, IkSolverConstants::taskDimension, 1> target;
-    for (Eigen::Index row = 0; row < IkSolverConstants::taskDimension; ++row)
+    Eigen::Matrix<double, taskSpaceDimension, taskSpaceDimension> system;
+    Eigen::Matrix<double, taskSpaceDimension, 1> target;
+    for (Eigen::Index row = 0; row < taskSpaceDimension; ++row)
     {
         target[row] = right[static_cast<std::size_t>(row)];
-        for (Eigen::Index column = 0; column < IkSolverConstants::taskDimension; ++column)
+        for (Eigen::Index column = 0; column < taskSpaceDimension; ++column)
             system(row, column) = matrix[static_cast<std::size_t>(row)][static_cast<std::size_t>(column)];
     }
 
     const auto decomposition = system.ldlt();
     if (decomposition.info() != Eigen::Success)
         return false;
-    const Eigen::Matrix<double, IkSolverConstants::taskDimension, 1> solution = decomposition.solve(target);
+    const Eigen::Matrix<double, taskSpaceDimension, 1> solution = decomposition.solve(target);
     if (decomposition.info() != Eigen::Success || !solution.allFinite())
         return false;
-    for (Eigen::Index row = 0; row < IkSolverConstants::taskDimension; ++row)
+    for (Eigen::Index row = 0; row < taskSpaceDimension; ++row)
         answer[static_cast<std::size_t>(row)] = solution[row];
     return true;
 }
@@ -156,9 +155,9 @@ FeasibleStepStatus FindFeasibleJointStep(
         // 한계에 묶이지 않은 관절의 Jacobian 열로 J_free J_freeᵀ를 만들고 λ²I를 더해 6×6 식을 푼다.
         // 얻은 작업 공간 변화량을 각 열에 곱해 관절 변화량으로 되돌리므로 관절 수가 달라도 풀이 행렬 크기는 같다.
         SixMatrix normal{};
-        for (std::size_t row = 0; row < IkSolverConstants::taskDimension; ++row)
+        for (std::size_t row = 0; row < taskSpaceDimension; ++row)
         {
-            for (std::size_t column = 0; column < IkSolverConstants::taskDimension; ++column)
+            for (std::size_t column = 0; column < taskSpaceDimension; ++column)
                 for (std::size_t joint = 0; joint < columns.size(); ++joint)
                     if (!active[joint])
                         normal[row][column] += columns[joint][row] * columns[joint][column];
@@ -176,7 +175,7 @@ FeasibleStepStatus FindFeasibleJointStep(
         {
             if (active[joint])
                 continue;
-            for (std::size_t row = 0; row < IkSolverConstants::taskDimension; ++row)
+            for (std::size_t row = 0; row < taskSpaceDimension; ++row)
                 jointStep[joint] += columns[joint][row] * taskStep[row];
 
             const bool slides = specification.joints[joint].motionType == models::JointMotionType::Prismatic;
@@ -238,8 +237,8 @@ std::pair<double, double> JacobianCondition(const std::vector<SixVector>& column
 {
     SixMatrix gram{};
     for (const auto& column : columns)
-        for (std::size_t row = 0; row < IkSolverConstants::taskDimension; ++row)
-            for (std::size_t other = 0; other < IkSolverConstants::taskDimension; ++other)
+        for (std::size_t row = 0; row < taskSpaceDimension; ++row)
+            for (std::size_t other = 0; other < taskSpaceDimension; ++other)
                 gram[row][other] += column[row] * column[other];
 
     for (std::size_t sweep = 0; sweep < IkSolverConstants::maximumJacobiSweeps; ++sweep)
@@ -247,8 +246,8 @@ std::pair<double, double> JacobianCondition(const std::vector<SixVector>& column
         std::size_t p = 0;
         std::size_t q = 1;
         double largestOffDiagonal = 0.0;
-        for (std::size_t row = 0; row < IkSolverConstants::taskDimension; ++row)
-            for (std::size_t column = row + 1; column < IkSolverConstants::taskDimension; ++column)
+        for (std::size_t row = 0; row < taskSpaceDimension; ++row)
+            for (std::size_t column = row + 1; column < taskSpaceDimension; ++column)
                 if (std::abs(gram[row][column]) > largestOffDiagonal)
                 {
                     largestOffDiagonal = std::abs(gram[row][column]);
@@ -267,7 +266,7 @@ std::pair<double, double> JacobianCondition(const std::vector<SixVector>& column
         gram[p][p] = cosine * cosine * pp - 2.0 * sine * cosine * pq + sine * sine * qq;
         gram[q][q] = sine * sine * pp + 2.0 * sine * cosine * pq + cosine * cosine * qq;
         gram[p][q] = gram[q][p] = 0.0;
-        for (std::size_t index = 0; index < IkSolverConstants::taskDimension; ++index)
+        for (std::size_t index = 0; index < taskSpaceDimension; ++index)
         {
             if (index == p || index == q)
                 continue;
@@ -280,7 +279,7 @@ std::pair<double, double> JacobianCondition(const std::vector<SixVector>& column
 
     double minimumEigenvalue = std::numeric_limits<double>::infinity();
     double maximumEigenvalue = 0.0;
-    for (std::size_t axis = 0; axis < IkSolverConstants::taskDimension; ++axis)
+    for (std::size_t axis = 0; axis < taskSpaceDimension; ++axis)
     {
         const double eigenvalue = std::max(0.0, gram[axis][axis]);
         minimumEigenvalue = std::min(minimumEigenvalue, eigenvalue);

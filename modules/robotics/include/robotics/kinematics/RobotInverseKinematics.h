@@ -10,6 +10,11 @@
 
 namespace grasplink::robotics::kinematics
 {
+namespace detail
+{
+inline constexpr std::size_t taskSpaceDimension = 6;
+}
+
 /**
  * @brief IK 반복 계산이 목표 자세를 찾았는지와 찾지 못한 이유를 구분한다.
  * @details Unreachable은 링크 길이로 계산한 보수적 거리 상한 밖에 있는 목표만 뜻한다.
@@ -37,7 +42,7 @@ enum class IkTerminationReason
 /**
  * @brief IK가 맞출 TCP 목표 조건을 지정한다.
  * @details PositionOnly는 위치 오차만 줄이고 방향은 제한하지 않는다. Pose는 위치와 방향을 함께 맞춘다.
- * 이 선택은 로봇 관절 수가 아니라 호출자가 지정한다.
+ * 계산기는 지정된 옵션을 그대로 따른다. 기본 옵션 함수는 관절 수를 보고 시작 모드를 고를 수 있다.
  */
 enum class IkTaskMode
 {
@@ -182,7 +187,7 @@ private:
     JointVector jointStepScratch_;
     JointVector candidateScratch_;
     std::vector<bool> activeJointScratch_;
-    std::vector<std::array<double, 6>> jacobianColumnsScratch_;
+    std::vector<std::array<double, detail::taskSpaceDimension>> jacobianColumnsScratch_;
     double maximumReachMeters_ = 0.0;
     models::Pose3 sessionTarget_;
     IkOptions sessionOptions_;

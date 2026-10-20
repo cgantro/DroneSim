@@ -83,8 +83,8 @@ void CheckFourJointModelSolvesPositionOnly()
     CartesianPose target = inverse.EvaluateTcp(targetJoints);
     target.orientationXyzw = {0.0, 0.0, 0.0, 1.0};
 
-    IkOptions options;
-    options.taskMode = IkTaskMode::PositionOnly;
+    const IkOptions options = RobotDefaultIkOptions(specification);
+    ASSERT_EQ(options.taskMode, IkTaskMode::PositionOnly);
     const IkResult result = inverse.Solve(target, seed, options);
 
     ASSERT_EQ(result.status, IkStatus::Success) << result.message;
@@ -107,7 +107,9 @@ void CheckSevenJointModelSolvesReachablePose()
     const JointVector targetJoints{0.21, -0.34, 0.31, 0.19, -0.24, 0.11, 0.03};
     const CartesianPose target = inverse.EvaluateTcp(targetJoints);
 
-    const IkResult result = inverse.Solve(target, seed);
+    const IkOptions options = RobotDefaultIkOptions(specification);
+    ASSERT_EQ(options.taskMode, IkTaskMode::Pose);
+    const IkResult result = inverse.Solve(target, seed, options);
 
     ASSERT_EQ(result.status, IkStatus::Success) << result.message;
     EXPECT_LT(PositionDistance(inverse.EvaluateTcp(result.jointPositions), target), 2e-5);
@@ -116,6 +118,7 @@ void CheckSevenJointModelSolvesReachablePose()
 
 TEST(RobotInverseKinematicsTests, SolvesPositionAndPoseForFourAndSevenJoints)
 {
+    EXPECT_EQ(RobotDefaultIkOptions(models::hanwha::kHcr12a).taskMode, IkTaskMode::Pose);
     CheckFourJointModelSolvesPositionOnly();
     CheckSevenJointModelSolvesReachablePose();
 }
