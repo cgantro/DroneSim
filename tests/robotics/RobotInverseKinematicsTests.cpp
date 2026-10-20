@@ -346,6 +346,10 @@ TEST(RobotInverseKinematicsTests, ReportsFailureStatusesAndStabilizesNearSingula
         << "the local failure is tied to an active joint boundary";
     EXPECT_TRUE(std::isfinite(jointLimit.weightedJacobianMinimumSingularValue))
         << "failure records the weighted Jacobian minimum singular value";
+    EXPECT_LT(jointLimit.weightedJacobianMinimumSingularValue, 1e-12)
+        << "one joint cannot span all six task-space directions";
+    EXPECT_TRUE(std::isinf(jointLimit.weightedJacobianConditionNumber))
+        << "rank-deficient task-space Jacobian reports an infinite condition number";
 
     const IkResult unreachable = limited.Solve(
         CartesianPose{{50.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}}, {0.0});
