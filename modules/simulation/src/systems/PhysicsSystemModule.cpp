@@ -138,6 +138,12 @@ bool HasSupportedPhysicsParents(flecs::entity entity, BodyMotionType motionType)
     return true;
 }
 
+bool HasSupportedBodyPlacement(flecs::entity entity, const RigidBody& rigidBody)
+{
+    return HasUnitScale(entity, AllowsVisualScale(rigidBody)) &&
+        HasSupportedPhysicsParents(entity, rigidBody.motionType);
+}
+
 bool TryGetPhysicsTransform(
     flecs::entity entity,
     Transform& result)
@@ -281,8 +287,7 @@ struct PhysicsSystemModule::Impl
         const Colliders& colliders = entity.get<Colliders>();
         if (colliders.shapes.empty())
             return false;
-        if (!HasUnitScale(entity, AllowsVisualScale(rigidBody)) ||
-            !HasSupportedPhysicsParents(entity, rigidBody.motionType))
+        if (!HasSupportedBodyPlacement(entity, rigidBody))
         {
             LogBodyIssue(grasplink::diagnostics::LogLevel::Warning,
                 PhysicsSystemMessages::unsupportedScaleOrParentHierarchy, entity.id());
@@ -411,8 +416,7 @@ struct PhysicsSystemModule::Impl
                 DestroyBody(body.entity);
                 continue;
             }
-            if (!HasUnitScale(body.entity, AllowsVisualScale(rigidBody)) ||
-                !HasSupportedPhysicsParents(body.entity, rigidBody.motionType))
+            if (!HasSupportedBodyPlacement(body.entity, rigidBody))
             {
                 DestroyBody(body.entity);
                 continue;
