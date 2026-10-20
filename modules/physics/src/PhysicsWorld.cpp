@@ -34,6 +34,7 @@
 #include <atomic>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #if !defined(__EMSCRIPTEN__) || defined(__EMSCRIPTEN_PTHREADS__)
@@ -54,6 +55,7 @@ namespace
 // 첫 World를 만들 때 등록하고 마지막 World를 해제할 때 등록을 취소한다.
 std::mutex g_JoltRuntimeMutex;
 std::size_t g_JoltRuntimeUsers = 0;
+std::unique_ptr<JPH::Factory> g_JoltFactory;
 
 struct PhysicsWorldLimits final
 {
@@ -145,8 +147,8 @@ void AcquireJoltRuntime()
     if (JPH::Factory::sInstance != nullptr)
         throw std::runtime_error(PhysicsErrorMessages::joltFactoryAlreadyInitialized);
 
-    auto factory = std::make_unique<JPH::Factory>();
-    JPH::Factory::sInstance = factory.get();
+    g_JoltFactory = std::make_unique<JPH::Factory>();
+    JPH::Factory::sInstance = g_JoltFactory.get();
     try
     {
         JPH::RegisterTypes();
@@ -155,9 +157,9 @@ void AcquireJoltRuntime()
     {
         JPH::UnregisterTypes();
         JPH::Factory::sInstance = nullptr;
+        g_JoltFactory.reset();
         throw;
     }
-    factory.release();
 
     g_JoltRuntimeUsers = 1;
 }
@@ -176,8 +178,8 @@ void ReleaseJoltRuntime()
 
     JPH::UnregisterTypes();
 
-    delete JPH::Factory::sInstance;
     JPH::Factory::sInstance = nullptr;
+    g_JoltFactory.reset();
 }
 
 class JoltRuntimeLease final
