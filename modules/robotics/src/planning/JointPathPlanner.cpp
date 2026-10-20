@@ -47,6 +47,13 @@ struct JointPathPlanningJob::Impl
         return ValidateJointState(*specification, joints, checker);
     }
 
+    void Complete()
+    {
+        plan.points = {start, goal};
+        state = JointPathPlanningState::Completed;
+        ReleaseBorrowedInputs();
+    }
+
     void Fail(JointStateInvalidity invalidity)
     {
         result = MapJointStateInvalidity(invalidity);
@@ -69,9 +76,12 @@ struct JointPathPlanningJob::Impl
                 state = JointPathPlanningState::Completed;
                 ReleaseBorrowedInputs();
             }
+            else if (endpoint == 2 && intervalCount == 1)
+                Complete();
             return;
         }
 
+        // 시작점과 끝점은 따로 검사했으므로 내부 표본만 확인한다.
         const auto invalidity = Check(Interpolate(start, goal,
             static_cast<double>(nextInterval) / static_cast<double>(intervalCount)));
         if (invalidity != JointStateInvalidity::None)
@@ -80,12 +90,8 @@ struct JointPathPlanningJob::Impl
             return;
         }
         ++nextInterval;
-        if (nextInterval > intervalCount)
-        {
-            plan.points = {start, goal};
-            state = JointPathPlanningState::Completed;
-            ReleaseBorrowedInputs();
-        }
+        if (nextInterval >= intervalCount)
+            Complete();
     }
 };
 

@@ -277,10 +277,15 @@ void CheckPrismaticJointPathUsesMeterSpacing()
     checker = {};
     ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
     EXPECT_FALSE(checkerContextLifetime.expired());
-    EXPECT_EQ(job.Advance(32), JointPathPlanningState::Completed);
+    for (std::size_t check = 0; check < 5; ++check)
+        EXPECT_EQ(job.Advance(1), JointPathPlanningState::Running);
+    EXPECT_EQ(checkedPositions.size(), 5);
+    EXPECT_EQ(job.Advance(1), JointPathPlanningState::Completed);
     EXPECT_TRUE(checkerContextLifetime.expired());
 
-    ASSERT_EQ(checkedPositions.size(), 7);
+    ASSERT_EQ(checkedPositions.size(), 6);
+    EXPECT_NEAR(checkedPositions[0], 0.0, 1e-12);
+    EXPECT_NEAR(checkedPositions[1], 0.1, 1e-12);
     EXPECT_NEAR(checkedPositions[2], 0.02, 1e-12);
     EXPECT_NEAR(checkedPositions[5], 0.08, 1e-12);
 }
