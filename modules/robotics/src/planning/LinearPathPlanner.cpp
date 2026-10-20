@@ -730,19 +730,24 @@ struct LinearPathPlanningJob::Impl
         phase = Phase::FinishSample;
     }
 
+    void RejectCandidate(JointStateInvalidity pathInvalidity, std::string diagnostic)
+    {
+        if (invalidity == JointStateInvalidity::None)
+        {
+            invalidity = pathInvalidity;
+            invalidityDiagnostic = std::move(diagnostic);
+        }
+        parentNeedsSearch[workingParent] = true;
+        if (workingContinuation)
+            parentHasContinuation[workingParent] = true;
+        AdvanceToNextSeed();
+    }
+
     void CompleteCandidateValidation(JointStateInvalidity pathInvalidity, std::string diagnostic)
     {
         if (pathInvalidity != JointStateInvalidity::None)
         {
-            if (invalidity == JointStateInvalidity::None)
-            {
-                invalidity = pathInvalidity;
-                invalidityDiagnostic = std::move(diagnostic);
-            }
-            parentNeedsSearch[workingParent] = true;
-            if (workingContinuation)
-                parentHasContinuation[workingParent] = true;
-            AdvanceToNextSeed();
+            RejectCandidate(pathInvalidity, std::move(diagnostic));
             return;
         }
 
