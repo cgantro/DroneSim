@@ -20,10 +20,7 @@ Entity::Entity(flecs::entity handle)
 glm::vec3 Entity::GetLocalPosition() const
 {
     // Entity는 장면 물체 자체가 아니라 그 물체 ID를 빌려 보관한다. 대상이 삭제된 뒤에는 Flecs 저장소를 읽지 않고 기본 위치를 반환한다.
-    if (!IsValid())
-        return glm::vec3(0.0f);
-
-    if (!m_EntityHandle.has<Position, Local>())
+    if (!IsValid() || !m_EntityHandle.has<Position, Local>())
         return glm::vec3(0.0f);
 
     return m_EntityHandle.get<Position, Local>();
@@ -32,10 +29,7 @@ glm::vec3 Entity::GetLocalPosition() const
 
 glm::quat Entity::GetLocalRotation() const
 {
-    if (!IsValid())
-        return glm::quat(1.0F, 0.0F, 0.0F, 0.0F);
-
-    if (!m_EntityHandle.has<Rotation, Local>())
+    if (!IsValid() || !m_EntityHandle.has<Rotation, Local>())
         return glm::quat(1.0F, 0.0F, 0.0F, 0.0F);
 
     return m_EntityHandle.get<Rotation, Local>();
@@ -44,10 +38,7 @@ glm::quat Entity::GetLocalRotation() const
 
 glm::vec3 Entity::GetLocalScale() const
 {
-    if (!IsValid())
-        return glm::vec3(1.0f);
-
-    if (!m_EntityHandle.has<Scale, Local>())
+    if (!IsValid() || !m_EntityHandle.has<Scale, Local>())
         return glm::vec3(1.0f);
 
     return m_EntityHandle.get<Scale, Local>();
@@ -90,11 +81,8 @@ void Entity::SetLocalScale(const glm::vec3& scale)
 
 glm::mat4 Entity::GetWorldMatrix() const
 {
-    if (!IsValid())
-        return glm::mat4(1.0f);
-
     // 이 World 행렬은 저장된 Local 값과 부모 행렬에서 마지막으로 계산한 결과다. 위치를 바꾼 직후의 행렬이 필요하면 호출자가 TransformSystemModule을 실행해야 한다.
-    if (!m_EntityHandle.has<TransformMatrix, World>())
+    if (!IsValid() || !m_EntityHandle.has<TransformMatrix, World>())
         return glm::mat4(1.0f);
 
     return m_EntityHandle.get<TransformMatrix, World>();
@@ -142,9 +130,6 @@ Entity& Entity::SetParent(const Entity& parent)
 
 Entity& Entity::AddChild(const Entity& child)
 {
-    if (!IsValid() || !child.IsValid())
-        return *this;
-
     // 부모 설정 한 곳에서 World 소속, Scene 경계, 순환 여부를 검사해 자식을 추가할 때도 같은 규칙을 지킨다.
     Entity childHandle = child;
     childHandle.SetParent(*this);
