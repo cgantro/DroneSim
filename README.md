@@ -7,72 +7,32 @@ AeroSimLab은 가상 드론과 탑재 RGB 카메라를 운용하고 시험하는
 - 60Hz 고정 간격으로 드론의 이륙·이동·경유점 비행·착륙을 계산합니다.
 - 왼쪽에는 주변을 보는 화면, 오른쪽에는 드론에 붙은 EO 카메라 시점을 그립니다.
 - EO 화면의 RGB 픽셀을 Tick 번호와 함께 메모리 프레임으로 읽습니다.
+- 새 프레임을 OpenCV로 회색 영상으로 바꾸고 평균 밝기·대비·선명도를 계산합니다. 픽셀을 복사하지 않고 처리하며, 분석 작업 공간은 다음 프레임에 다시 씁니다.
 - 카메라 켜기·끄기, 고장 주입과 복구를 모의합니다. 카메라가 꺼지거나 고장 나면 오른쪽 영상이 멈춥니다.
 - 지상통제 프로그램에서 UDP로 드론과 카메라를 제어하고, 적용 Tick과 상태를 확인합니다.
 - GLFW가 인식하는 게임패드로 이륙·착륙과 수동 비행을 할 수 있습니다. 연결이 끊기면 비행 중 속도 명령을 지웁니다.
 - JSON 시나리오에서 통신 지연·손실·중복과 카메라 고장·복구를 재생합니다.
 
-드론은 상자 모양이고 운동은 단순한 위치·속도 계산입니다. 공기역학, 실제 비행 성능, GLB 모델 불러오기, 영상 파일 저장과 OpenCV 분석은 구현하지 않았습니다.
+드론은 상자 모양이고 운동은 단순한 위치·속도 계산입니다. 공기역학, 실제 비행 성능, GLB 모델 불러오기와 영상 파일 저장은 구현하지 않았습니다. 밝기·대비·선명도는 시험용 지표이며, 영상의 전체 품질을 판정하지 않습니다. 현재 합성 장면에서 같은 스레드로 분석하고, 실제 운용 영상이나 다른 조명 조건은 검증하지 않았습니다.
 게임패드는 GLFW의 표준 게임패드 매핑을 사용합니다. A는 이륙, B는 착륙, 왼쪽 스틱은 이동, 오른쪽 스틱 가로축은 방향 회전, 트리거는 높이 조절입니다. 실제 조종기 연결 시험은 아직 하지 않았습니다.
 
 ## 빌드
 
-Windows에서는 Visual Studio 개발자 PowerShell에서 실행합니다.
+이 프로젝트는 Windows에서 Visual Studio 2022와 CMake를 사용해 개발할 수 있습니다. Visual Studio 설치 관리자에서 C++ 데스크톱 개발과 CMake 도구를 준비하고, vcpkg를 설치한 뒤 `VCPKG_ROOT`가 설정된 상태로 Visual Studio를 실행합니다. 프로젝트 폴더를 열면 CMake가 필요한 라이브러리를 준비합니다.
 
-```powershell
-git clone https://github.com/microsoft/vcpkg.git $env:USERPROFILE\vcpkg
-& "$env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
-$env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
-
-프로젝트는 vcpkg 선언에 따라 OpenCV의 core·imgproc 구성요소만 준비합니다. 이후 PowerShell 창에서도 `$env:VCPKG_ROOT`를 다시 지정해야 합니다.
+Visual Studio의 CMake 구성 메뉴에서 `Ninja Release`를 고르고 빌드하면 화면 프로그램과 시험 프로그램이 만들어집니다. 자동 시험은 Visual Studio의 테스트 창에서 실행할 수 있습니다.
 
 ## 실행
 
-시뮬레이터는 실행 파일이 있는 폴더에서 시작합니다. 기본 UDP 포트는 27015입니다.
+Visual Studio에서 화면 프로그램을 시작 대상으로 선택하고 실행하면 3D 화면이 열립니다. 자동 비행 시연은 프로그램 인수에 `--demo`를 넣어 실행합니다. 기본 UDP 포트는 27015이며, 다른 포트를 사용할 때는 `--udp-port`와 포트 번호를 지정합니다.
 
-```powershell
-Push-Location .\build
-.\aerosimlab_simulator.exe
-Pop-Location
-```
-
-자동 비행 시연을 보려면 `--demo`를 추가합니다. 다른 포트를 쓰려면 `--udp-port 번호`를 지정합니다.
-
-별도 PowerShell 창에서 지상통제 명령을 보냅니다.
-
-```powershell
-.\build\aerosimlab_ground_control.exe --command takeoff
-# 드론이 뜰 때까지 1.5초 정도 기다립니다.
-.\build\aerosimlab_ground_control.exe --command waypoint 2 0 1.5
-.\build\aerosimlab_ground_control.exe --camera fault
-.\build\aerosimlab_ground_control.exe --camera recover
-.\build\aerosimlab_ground_control.exe --command land
-```
-
-다른 시뮬레이터 주소나 포트는 `--host IPv4`와 `--port 번호`로 지정합니다. 지상통제 프로그램은 명령 결과, 적용 Tick, 드론 상태와 카메라 상태를 출력합니다.
-
-화면 없이 정상 비행이나 장애 시나리오를 실행할 수 있습니다.
-
-```powershell
-.\build\aerosimlab_headless.exe --scenario scenarios/normal-flight.json
-.\build\aerosimlab_headless.exe --scenario scenarios/fault-injection.json
-```
+지상통제와 화면 없는 시나리오 실행은 현재 별도 프로그램의 실행 설정에 인수를 지정해 제어합니다. 지상통제는 이륙·경유점 이동·착륙, 카메라 고장·복구를 지원합니다. 시나리오 프로그램은 정상 비행과 장애 주입 시나리오를 실행합니다. 두 기능 모두 전용 그래픽 화면은 아직 없습니다.
 
 ## 성능 확인
 
-아래 명령은 숨김 OpenGL 창에서 5초 동안 모의와 그리기를 측정하고 JSON 결과를 출력합니다.
+성능을 측정하려면 Visual Studio의 화면 프로그램 실행 설정에 `--benchmark`를 입력하고 시작합니다. 프로그램은 숨김 OpenGL 창에서 5초 동안 모의와 그리기를 측정한 뒤 JSON 결과를 출력합니다. 결과에는 Tick 지연, OpenCV 분석 시간, 밝기·대비·선명도 평균, 그리기 속도와 메모리가 포함됩니다.
 
-```powershell
-Push-Location .\build
-.\aerosimlab_simulator.exe --benchmark
-Pop-Location
-```
-
-현재 세 번 측정한 결과는 [측정 기록](benchmarks/results/aerosimlab-mvp-release.json)에 있습니다. 숨김 창의 FPS는 실제 화면 출력 속도를 뜻하지 않으며, 이전 GraspLink 수치와 비교할 수도 없습니다.
+현재 측정 세 번의 원본은 [측정 기록](benchmarks/results/aerosimlab-mvp-release.json)에 있습니다. 숨김 창의 FPS는 실제 화면 출력 속도가 아닙니다. 분석 전후 실행은 코드 버전이 달라 FPS 차이를 영상 분석의 비용으로 단정하지 않습니다.
 
 ## 관련 문서
 
