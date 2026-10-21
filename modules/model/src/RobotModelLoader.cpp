@@ -23,13 +23,13 @@ using LinkIndexByName = std::unordered_map<std::string, std::size_t>;
 constexpr double kMinimumJointAxisLength = 1.0e-12;
 
 // 모든 로봇 폴더가 따르는 파일 이름과 팔 경로의 기준 링크 이름이다.
-struct RobotModelFormat final
+namespace robot_model_format
 {
-    inline static constexpr char urdfFile[] = "robot.urdf";
-    inline static constexpr char glbFile[] = "robot.glb";
-    inline static constexpr char baseLink[] = "base_link";
-    inline static constexpr char toolLink[] = "tool0";
-};
+inline constexpr char urdfFile[] = "robot.urdf";
+inline constexpr char glbFile[] = "robot.glb";
+inline constexpr char baseLink[] = "base_link";
+inline constexpr char toolLink[] = "tool0";
+}
 
 [[noreturn]] void Invalid(const std::filesystem::path& path, const std::string& message)
 {
@@ -147,7 +147,7 @@ void ConnectVisualTree(RobotModel& robot, const ModelResource& visual,
 
     for (auto& link : robot.links)
     {
-        if (link.name == RobotModelFormat::baseLink || link.name == RobotModelFormat::toolLink)
+        if (link.name == robot_model_format::baseLink || link.name == robot_model_format::toolLink)
             continue;
         link.visualNodeIndex = findNode(link.name, "GLB has no node for URDF link '");
     }
@@ -245,8 +245,8 @@ std::vector<std::size_t> FindActiveJoints(const RobotModel& model, const LinkTre
 void FindActiveChain(RobotModel& model, const LinkIndexByName& linkIndices,
     const std::filesystem::path& path)
 {
-    model.baseLink = FindLink(linkIndices, RobotModelFormat::baseLink, path);
-    model.toolLink = FindLink(linkIndices, RobotModelFormat::toolLink, path);
+    model.baseLink = FindLink(linkIndices, robot_model_format::baseLink, path);
+    model.toolLink = FindLink(linkIndices, robot_model_format::toolLink, path);
     if (model.baseLink == model.toolLink)
         Invalid(path, "base_link and tool0 must be different links");
 
@@ -316,7 +316,7 @@ RobotLink ReadLink(const XMLElement& element, const std::filesystem::path& path)
         collision = collision->NextSiblingElement("collision"))
         link.collisionGeometry.push_back(ReadCollisionGeometry(*collision, link.name, path));
 
-    if (link.name != RobotModelFormat::toolLink && link.collisionGeometry.empty())
+    if (link.name != robot_model_format::toolLink && link.collisionGeometry.empty())
         Invalid(path, "link '" + link.name + "' has no collision geometry");
     return link;
 }
@@ -430,8 +430,8 @@ LoadedRobotModel RobotModelLoader::Load(const std::filesystem::path& directory)
 {
     LoadedRobotModel loaded;
     loaded.directory = std::filesystem::absolute(directory).lexically_normal();
-    const auto urdfPath = loaded.directory / RobotModelFormat::urdfFile;
-    const auto glbPath = loaded.directory / RobotModelFormat::glbFile;
+    const auto urdfPath = loaded.directory / robot_model_format::urdfFile;
+    const auto glbPath = loaded.directory / robot_model_format::glbFile;
     if (!std::filesystem::is_regular_file(urdfPath))
         Invalid(urdfPath, "robot.urdf was not found");
     if (!std::filesystem::is_regular_file(glbPath))
