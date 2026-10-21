@@ -486,10 +486,13 @@ void AeroSimLabApp::UpdateCameraTransforms(int observerWidth, int eoWidth, int h
     observerCamera_->SetTarget(dronePosition + glm::vec3{0.0F, 0.2F, 0.0F});
     observerCamera_->SetAspectRatio(static_cast<float>(observerWidth) / static_cast<float>(height));
 
-    const glm::vec3 forward = glm::vec3{
-        cameraOrientation * glm::vec4{1.0F, 0.0F, 0.0F, 0.0F}};
+    const glm::vec3 viewDirection = glm::vec3{
+        cameraOrientation * glm::vec4{25.0F, -2.5F, 0.0F, 0.0F}};
+    const glm::vec3 cameraUp = glm::vec3{
+        cameraOrientation * glm::vec4{0.0F, 1.0F, 0.0F, 0.0F}};
     eoCamera_->SetPosition(cameraPosition);
-    eoCamera_->SetTarget(cameraPosition + forward * 25.0F + glm::vec3{0.0F, -2.5F, 0.0F});
+    eoCamera_->SetTarget(cameraPosition + viewDirection);
+    eoCamera_->SetUp(cameraUp);
     eoCamera_->SetAspectRatio(static_cast<float>(eoWidth) / static_cast<float>(height));
 }
 

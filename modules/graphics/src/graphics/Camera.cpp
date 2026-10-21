@@ -63,6 +63,11 @@ void Camera::SetTarget(const glm::vec3& target)
     m_Target = target;
 }
 
+void Camera::SetUp(const glm::vec3& up)
+{
+    m_Up = up;
+}
+
 glm::vec3 Camera::GetPosition() const
 {
     return m_Position;

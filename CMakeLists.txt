@@ -362,6 +362,7 @@ if(BUILD_TESTING)
     if(NOT EMSCRIPTEN)
       add_executable(aerosimlab_simulator_integration_tests
         tests/simulator/SimulatorSessionTests.cpp
+        tests/graphics/CameraTests.cpp
       )
       target_link_libraries(aerosimlab_simulator_integration_tests PRIVATE
         aerosimlab_simulator_app

@@ -69,6 +69,9 @@ public:
     /** @brief 장면 좌표에서 바라볼 점 [m]을 갱신한다. @param target 새 목표점 */
     void SetTarget(const glm::vec3& target);
 
+    /** @brief 카메라가 화면 위쪽으로 사용할 장면 좌표 방향을 갱신한다. @param up 새 위쪽 방향 */
+    void SetUp(const glm::vec3& up);
+
     /** @return 장면 좌표에서 카메라 위치 [m] */
     glm::vec3 GetPosition() const;
 
