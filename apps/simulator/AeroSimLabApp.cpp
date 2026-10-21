@@ -103,9 +103,14 @@ int AeroSimLabApp::Run()
             std::chrono::steady_clock::now() - startTime_ >= std::chrono::duration<double>(benchmarkDurationSeconds))
             break;
     }
-    if (smokeTest_ && !eoFrame_.IsValid())
+    const bool cameraFrameHasPixels = eoFrame_.IsValid()
+        && std::any_of(eoFrame_.pixels.begin(), eoFrame_.pixels.end(), [](std::uint8_t value)
+        {
+            return value != 0;
+        });
+    if (smokeTest_ && !cameraFrameHasPixels)
     {
-        std::cerr << "EO 카메라 RGB 프레임을 생성하지 못했습니다.\n";
+        std::cerr << "EO 카메라 RGB 프레임에서 픽셀을 확인하지 못했습니다.\n";
         return 5;
     }
     if (benchmarkMode_)
