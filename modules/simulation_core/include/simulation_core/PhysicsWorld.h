@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 namespace aerosimlab::simulation
 {
@@ -21,6 +22,8 @@ struct RigidBodyDefinition
     glm::dvec3 positionMeters{0.0};
     glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
     double massKilograms = 1.0;
+    /** @brief 기체 축 기준 주관성 모멘트다. 비우면 형상과 질량으로 계산한다. */
+    std::optional<glm::dvec3> principalInertiaKilogramMetersSquared;
     bool isStatic = false;
 };
 

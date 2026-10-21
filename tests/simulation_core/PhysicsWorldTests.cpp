@@ -69,6 +69,8 @@ TEST(PhysicsWorld, X500RotorThrustKeepsTheBodyHovering)
     RigidBodyDefinition definition;
     definition.positionMeters = {0.0, 0.0, 2.0};
     definition.massKilograms = parameters.massKilograms;
+    definition.principalInertiaKilogramMetersSquared =
+        parameters.principalInertiaKilogramMetersSquared;
     const RigidBodyHandle body = world.CreateBox(definition);
 
     for (int tick = 0; tick < 120; ++tick)
@@ -81,6 +83,31 @@ TEST(PhysicsWorld, X500RotorThrustKeepsTheBodyHovering)
     const RigidBodyState result = world.State(body);
     EXPECT_NEAR(result.positionMeters.z, 2.0, 0.01);
     EXPECT_NEAR(result.linearVelocityMetersPerSecond.z, 0.0, 0.01);
+}
+
+TEST(PhysicsWorld, AngularResponseUsesProvidedInertia)
+{
+    PhysicsWorld world;
+    RigidBodyDefinition lowInertiaDefinition;
+    lowInertiaDefinition.positionMeters = {-1.0, 0.0, 10.0};
+    lowInertiaDefinition.principalInertiaKilogramMetersSquared = {0.02, 0.02, 0.02};
+    const RigidBodyHandle lowInertiaBody = world.CreateBox(lowInertiaDefinition);
+
+    RigidBodyDefinition highInertiaDefinition;
+    highInertiaDefinition.positionMeters = {1.0, 0.0, 10.0};
+    highInertiaDefinition.principalInertiaKilogramMetersSquared = {0.02, 0.02, 0.08};
+    const RigidBodyHandle highInertiaBody = world.CreateBox(highInertiaDefinition);
+
+    for (int tick = 0; tick < 60; ++tick)
+    {
+        world.ApplyTorque(lowInertiaBody, {0.0, 0.0, 0.2});
+        world.ApplyTorque(highInertiaBody, {0.0, 0.0, 0.2});
+        world.Step(1.0 / 60.0);
+    }
+
+    EXPECT_GT(
+        world.State(lowInertiaBody).angularVelocityRadiansPerSecond.z,
+        world.State(highInertiaBody).angularVelocityRadiansPerSecond.z);
 }
 
 TEST(PhysicsWorld, TorqueChangesAngularVelocityAndOrientation)
@@ -117,6 +144,15 @@ TEST(PhysicsWorld, RejectsInvalidBodySize)
     PhysicsWorld world;
     RigidBodyDefinition definition;
     definition.halfExtentsMeters.x = 0.0F;
+    EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
+}
+
+TEST(PhysicsWorld, RejectsInvalidPrincipalInertia)
+{
+    PhysicsWorld world;
+    RigidBodyDefinition definition;
+    definition.principalInertiaKilogramMetersSquared = {0.02, 0.0, 0.04};
+
     EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
 }
 }

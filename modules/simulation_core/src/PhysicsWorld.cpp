@@ -209,6 +209,11 @@ RigidBodyHandle PhysicsWorld::CreateBox(const RigidBodyDefinition& definition)
         || !IsFinite(definition.positionMeters)
         || !std::isfinite(glm::length(definition.orientation))
         || !(glm::length(definition.orientation) > 0.0)
+        || (definition.principalInertiaKilogramMetersSquared.has_value()
+            && (!IsFinite(*definition.principalInertiaKilogramMetersSquared)
+                || !(definition.principalInertiaKilogramMetersSquared->x > 0.0)
+                || !(definition.principalInertiaKilogramMetersSquared->y > 0.0)
+                || !(definition.principalInertiaKilogramMetersSquared->z > 0.0)))
         || (!definition.isStatic && !(definition.massKilograms > 0.0)))
     {
         throw std::invalid_argument("강체 크기, 위치, 질량을 확인해 주세요.");
@@ -229,8 +234,17 @@ RigidBodyHandle PhysicsWorld::CreateBox(const RigidBodyDefinition& definition)
     settings.mAllowSleeping = false;
     if (!definition.isStatic)
     {
-        settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
         settings.mMassPropertiesOverride.mMass = static_cast<float>(definition.massKilograms);
+        if (definition.principalInertiaKilogramMetersSquared.has_value())
+        {
+            settings.mOverrideMassProperties = JPH::EOverrideMassProperties::MassAndInertiaProvided;
+            settings.mMassPropertiesOverride.mInertia =
+                JPH::Mat44::sScale(ToJolt(*definition.principalInertiaKilogramMetersSquared));
+        }
+        else
+        {
+            settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        }
     }
 
     JPH::BodyInterface& bodyInterface = impl_->physics.GetBodyInterface();
