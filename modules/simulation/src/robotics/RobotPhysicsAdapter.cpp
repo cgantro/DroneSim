@@ -24,20 +24,20 @@ using grasplink::scene::Scene;
 
 namespace
 {
-struct RobotPhysicsAdapterMessages final
+namespace messages
 {
-    inline static constexpr char invalidRobotRoot[] = "RobotPhysicsAdapter: invalid robot root";
-    inline static constexpr char collisionProxyRemoved[] =
-        "RobotPhysicsAdapter: a required collision proxy has been removed from its Scene";
-    inline static constexpr char linkPoseCountMismatch[] =
-        "RobotPhysicsAdapter: LinkPose count mismatch";
-};
+inline constexpr char invalidRobotRoot[] = "RobotPhysicsAdapter: invalid robot root";
+inline constexpr char collisionProxyRemoved[] =
+    "RobotPhysicsAdapter: a required collision proxy has been removed from its Scene";
+inline constexpr char linkPoseCountMismatch[] =
+    "RobotPhysicsAdapter: LinkPose count mismatch";
+}
 
-struct RobotPhysicsProxyNames final
+namespace proxy_names
 {
-    inline static constexpr char base[] = "Base_CollisionProxy";
-    inline static constexpr char suffix[] = "_CollisionProxy";
-};
+inline constexpr char base[] = "Base_CollisionProxy";
+inline constexpr char suffix[] = "_CollisionProxy";
+}
 
 glm::mat4 LinkPoseMatrix(const grasplink::robotics::models::Pose3& jointPose,
     const grasplink::robotics::models::Pose3& linkOffset)
@@ -52,9 +52,9 @@ RobotPhysicsAdapter::RobotPhysicsAdapter(
     const RobotModel& model)
 {
     if (!robotRoot)
-        throw std::runtime_error(RobotPhysicsAdapterMessages::invalidRobotRoot);
+        throw std::runtime_error(messages::invalidRobotRoot);
     auto geometry = robotics::collision_geometry::Build(model);
-    base_ = scene.CreateEntity(RobotPhysicsProxyNames::base);
+    base_ = scene.CreateEntity(proxy_names::base);
     base_.SetParent(robotRoot);
     base_.Add<RobotCollisionProxy>();
     base_.Add<RobotBaseEnvironmentProxy>();
@@ -68,7 +68,7 @@ RobotPhysicsAdapter::RobotPhysicsAdapter(
     {
         auto& linkGeometry = geometry.links[i];
         Entity entity = scene.CreateEntity(
-            linkGeometry.name + RobotPhysicsProxyNames::suffix);
+            linkGeometry.name + proxy_names::suffix);
         // FK에서 나온 위치와 회전은 Robot base 기준이다. proxy를 robotRoot의 자식으로 두어 Scene에서 로봇에 설정한 배치 변환이 부모 계층을 통해 추가된다.
         entity.SetParent(robotRoot);
         entity.set<RobotCollisionProxy>(RobotCollisionProxy{i, linkGeometry.jointIndex})
@@ -104,14 +104,14 @@ void RobotPhysicsAdapter::ValidateState(
     const grasplink::robotics::kinematics::RobotKinematicState& state) const
 {
     if (!base_)
-        throw std::runtime_error(RobotPhysicsAdapterMessages::collisionProxyRemoved);
+        throw std::runtime_error(messages::collisionProxyRemoved);
 
     for (const LinkBinding& link : links_)
     {
         if (!link.entity)
-            throw std::runtime_error(RobotPhysicsAdapterMessages::collisionProxyRemoved);
+            throw std::runtime_error(messages::collisionProxyRemoved);
         if (link.jointIndex >= state.linkPosesInBaseFrame.size())
-            throw std::invalid_argument(RobotPhysicsAdapterMessages::linkPoseCountMismatch);
+            throw std::invalid_argument(messages::linkPoseCountMismatch);
     }
 }
 
