@@ -54,17 +54,14 @@ RobotPhysicsAdapter::RobotPhysicsAdapter(
     if (!robotRoot)
         throw std::runtime_error(RobotPhysicsAdapterMessages::invalidRobotRoot);
     auto geometry = robotics::collision_geometry::Build(model);
-    if (!geometry.baseShapes.empty())
-    {
-        base_ = scene.CreateEntity(RobotPhysicsProxyNames::base);
-        base_.SetParent(robotRoot);
-        base_.Add<RobotCollisionProxy>();
-        base_.Add<RobotBaseEnvironmentProxy>();
-        base_.set<RigidBody>(RigidBody{
-                grasplink::physics::BodyMotionType::Static,
-                grasplink::physics::CollisionLayer::Environment})
-            .set<Colliders>(Colliders{std::move(geometry.baseShapes)});
-    }
+    base_ = scene.CreateEntity(RobotPhysicsProxyNames::base);
+    base_.SetParent(robotRoot);
+    base_.Add<RobotCollisionProxy>();
+    base_.Add<RobotBaseEnvironmentProxy>();
+    base_.set<RigidBody>(RigidBody{
+            grasplink::physics::BodyMotionType::Static,
+            grasplink::physics::CollisionLayer::Environment})
+        .set<Colliders>(Colliders{std::move(geometry.baseShapes)});
 
     links_.reserve(geometry.links.size());
     for (std::size_t i = 0; i < geometry.links.size(); ++i)
