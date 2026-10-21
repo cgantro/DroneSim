@@ -61,17 +61,14 @@ double TrapezoidDistanceFraction(double timeFraction, double rampTimeFraction)
     const double ramp = std::clamp(rampTimeFraction,
         detail::kMinimumPathRampFraction, detail::kMaximumPathRampFraction);
     const double u = std::clamp(timeFraction, 0.0, 1.0);
-    double integratedSpeed = 0.0;
-    if (u < ramp)
-        integratedSpeed = u * u / (2.0 * ramp);
-    else if (u <= 1.0 - ramp)
-        integratedSpeed = ramp * 0.5 + (u - ramp);
-    else
-    {
-        const double decelerationStart = 1.0 - ramp;
-        integratedSpeed = ramp * 0.5 + (1.0 - 2.0 * ramp) +
-            ((u - u * u * 0.5) - (decelerationStart - decelerationStart * decelerationStart * 0.5)) / ramp;
-    }
+    // 가속·등속·감속 구간의 속도 그래프 면적을 더한다. 각 구간의 시간이 0이면 면적도 0이 된다.
+    const double accelerationTime = std::min(u, ramp);
+    const double accelerationArea = accelerationTime * accelerationTime / (2.0 * ramp);
+    const double cruiseTime = std::clamp(u - ramp, 0.0, 1.0 - 2.0 * ramp);
+    const double decelerationTime = std::clamp(u - (1.0 - ramp), 0.0, ramp);
+    const double decelerationArea = decelerationTime -
+        decelerationTime * decelerationTime / (2.0 * ramp);
+    const double integratedSpeed = accelerationArea + cruiseTime + decelerationArea;
     return std::clamp(integratedSpeed / (1.0 - ramp), 0.0, 1.0);
 }
 }
