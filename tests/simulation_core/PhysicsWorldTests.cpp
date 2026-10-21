@@ -50,18 +50,38 @@ TEST(PhysicsWorld, GravityAcceleratesAFreeBodyDownward)
     EXPECT_NEAR(state.positionMeters.z, expectedPosition, 0.01);
 }
 
-TEST(PhysicsWorld, UpwardForceRaisesTheBody)
+TEST(PhysicsWorld, ConstantForceProducesMassDependentAcceleration)
 {
     PhysicsWorld world;
-    const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 10.0});
+    RigidBodyDefinition lightDefinition;
+    lightDefinition.positionMeters = {-1.0, 0.0, 10.0};
+    lightDefinition.massKilograms = 2.0;
+    const RigidBodyHandle lightBody = world.CreateBox(lightDefinition);
+
+    RigidBodyDefinition heavyDefinition;
+    heavyDefinition.positionMeters = {1.0, 0.0, 10.0};
+    heavyDefinition.massKilograms = 4.0;
+    const RigidBodyHandle heavyBody = world.CreateBox(heavyDefinition);
 
     for (int tick = 0; tick < 60; ++tick)
     {
-        world.ApplyForce(body, {0.0, 0.0, 24.0});
+        world.ApplyForce(lightBody, {0.0, 0.0, 24.0});
+        world.ApplyForce(heavyBody, {0.0, 0.0, 24.0});
         world.Step(1.0 / 60.0);
     }
 
-    EXPECT_GT(world.State(body).linearVelocityMetersPerSecond.z, 1.0);
+    // 위쪽을 양수로 두면 가속도는 힘/질량에서 중력을 뺀 값이다.
+    const double gravityMetersPerSecondSquared = 9.81;
+    // Z축에만 토크를 주므로 각가속도는 토크/해당 축 관성이다.
+    const double elapsedSeconds = 1.0;
+    const double lightExpectedVelocity = (24.0 / 2.0 - gravityMetersPerSecondSquared)
+        * elapsedSeconds;
+    const double heavyExpectedVelocity = (24.0 / 4.0 - gravityMetersPerSecondSquared)
+        * elapsedSeconds;
+    EXPECT_NEAR(world.State(lightBody).linearVelocityMetersPerSecond.z,
+        lightExpectedVelocity, 0.03);
+    EXPECT_NEAR(world.State(heavyBody).linearVelocityMetersPerSecond.z,
+        heavyExpectedVelocity, 0.03);
 }
 
 TEST(PhysicsWorld, X500RotorThrustKeepsTheBodyHovering)
@@ -114,9 +134,16 @@ TEST(PhysicsWorld, AngularResponseUsesProvidedInertia)
         world.Step(1.0 / 60.0);
     }
 
-    EXPECT_GT(
+    const double elapsedSeconds = 1.0;
+    const double appliedTorqueNewtonMeters = 0.2;
+    EXPECT_NEAR(
         world.State(lowInertiaBody).angularVelocityRadiansPerSecond.z,
-        world.State(highInertiaBody).angularVelocityRadiansPerSecond.z);
+        appliedTorqueNewtonMeters / 0.02 * elapsedSeconds,
+        0.05);
+    EXPECT_NEAR(
+        world.State(highInertiaBody).angularVelocityRadiansPerSecond.z,
+        appliedTorqueNewtonMeters / 0.08 * elapsedSeconds,
+        0.05);
 }
 
 TEST(PhysicsWorld, TorqueChangesAngularVelocityAndOrientation)
