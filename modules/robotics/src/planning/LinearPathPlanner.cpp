@@ -183,6 +183,8 @@ Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t samp
     return failure;
 }
 
+// 각 TCP 표본에서 찾은 유효한 관절 자세를 한 층에 모은다. 점수는 시작 자세부터 누적하고,
+// 이전 층의 후보 번호를 함께 저장해 마지막에 가장 나은 전체 경로를 거꾸로 복원한다.
 struct PathCandidate
 {
     JointVector joints;
@@ -293,6 +295,8 @@ struct EvaluatedEdge
 
 struct LinearPathPlanningJob::Impl
 {
+    // 긴 계획을 한 번에 실행하지 않도록 IK 풀기, TCP 직선 확인, 관절 경로 검사를 단계별로 나눈다.
+    // Advance()는 호출자가 준 작업 예산 안에서 현재 단계만 이어서 진행한다.
     enum class Phase { PrepareSample, SolveSeed, CheckTcp, ValidatePath, FinishSample };
     enum class ValidationPurpose { Candidate, RefinementProbe };
 
@@ -852,6 +856,7 @@ struct LinearPathPlanningJob::Impl
 
     void FinishContinuationSeeds()
     {
+        // 직전 관절 자세를 이어 푼 결과가 부족한 구간만 다른 자세와 재시작 자세를 추가로 탐색한다.
         const auto& previous = layers.back();
         for (std::size_t parent = 0; parent < previous.size(); ++parent)
         {
