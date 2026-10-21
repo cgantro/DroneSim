@@ -93,7 +93,7 @@ public:
     [[nodiscard]] static CommandResult Apply(
         DroneState& state, DroneControlState& control, const DroneCommand& command) noexcept;
 
-    /** @brief 고정된 1/60초만큼 위치와 방향을 갱신한다. */
+    /** @brief 고정된 1/60초만큼 위치와 방향을 갱신하고, 지면에 닿으면 정지시킨다. */
     static void AdvanceOneTick(DroneState& state, DroneControlState& control) noexcept;
 
     /** @brief 드론을 원점의 지상 상태로 되돌린다. */

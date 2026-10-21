@@ -58,6 +58,24 @@ TEST(SimulationCore, ExecutesTakeoffMovementAndLandingOnFixedTicks)
     EXPECT_DOUBLE_EQ(simulation.State().positionMeters.z, 0.0);
 }
 
+TEST(SimulationCore, KinematicVelocityCommandStopsAtGround)
+{
+    SimulationCore simulation;
+    ReachHovering(simulation);
+    ASSERT_EQ(simulation.Apply(Command(
+        DroneCommand::Kind::SetVelocity, glm::dvec3{0.0, 0.0, -5.0})),
+        CommandResult::Accepted);
+
+    for (int tick = 0; tick < 30; ++tick)
+    {
+        simulation.AdvanceOneTick();
+    }
+
+    EXPECT_EQ(simulation.State().mode, FlightMode::Grounded);
+    EXPECT_DOUBLE_EQ(simulation.State().positionMeters.z, 0.0);
+    EXPECT_EQ(simulation.State().velocityMetersPerSecond, glm::dvec3{0.0});
+}
+
 TEST(FixedTickAccumulator, CarriesFractionalTimeAndLimitsCatchUp)
 {
     FixedTickAccumulator accumulator;

@@ -175,6 +175,16 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
         }
         break;
     }
+
+    if (IsAirborne(state) && state.positionMeters.z <= 0.0)
+    {
+        state.positionMeters.z = 0.0;
+        state.velocityMetersPerSecond = glm::dvec3{0.0};
+        state.angularVelocityRadiansPerSecond = glm::dvec3{0.0};
+        state.mode = FlightMode::Grounded;
+        control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
+        control.commandedYawRateRadiansPerSecond = 0.0;
+    }
 }
 
 void DroneModel::Reset(DroneState& state, DroneControlState& control) noexcept
