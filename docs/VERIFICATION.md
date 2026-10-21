@@ -39,6 +39,13 @@ Tick 지연은 드론과 카메라의 모의 갱신 함수만 잰 값입니다. 
 
 ## WebAssembly 확인
 
+Emscripten SDK 환경을 활성화한 터미널에서 다음 명령으로 빌드할 수 있습니다.
+
+```powershell
+cmake --preset emscripten-single-thread
+cmake --build --preset emscripten-single-thread
+```
+
 Emscripten 4.0.19로 화면 프로그램과 헤드리스 실행 파일을 빌드했습니다. Node.js에서 정상 비행과 장애 주입 시나리오를 모두 실행해 `passed: true`를 확인했습니다. 정상 비행은 300 Tick 뒤 착륙했고, 장애 시나리오는 카메라 고장·복구와 명령 지연·손실을 재현했습니다. 브라우저에서 화면 프로그램과 관련 파일을 모두 내려받았지만, 화면 표시와 입력 조작은 확인하지 못했습니다.
 
 ## 확인하지 않은 항목
