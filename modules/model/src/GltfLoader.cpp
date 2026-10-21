@@ -881,6 +881,8 @@ void BuildNodeHierarchy(ModelResource& model)
 void SelectSceneRoot(const tinygltf::Model& source, ModelResource& model)
 {
     int sceneIndex = source.defaultScene;
+    if (sceneIndex < -1)
+        throw std::runtime_error(GltfLoaderErrorMessages::Scene::invalidDefaultIndex);
     if (sceneIndex < 0 && !source.scenes.empty())
         sceneIndex = 0;
 

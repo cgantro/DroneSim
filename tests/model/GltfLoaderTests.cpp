@@ -28,7 +28,7 @@ class TriangleGlb final
 public:
     explicit TriangleGlb(std::size_t viewLength, int materialIndex = -1,
         std::size_t vertexCount = 3U, std::string material = {}, bool includeSceneNode = true,
-        std::optional<int> indicesReference = std::nullopt)
+        std::optional<int> indicesReference = std::nullopt, int sceneIndex = 0)
     {
         constexpr std::array<std::array<float, 3>, 4> positions{{
             {0.0F, 0.0F, 0.0F},
@@ -49,7 +49,8 @@ public:
             ? std::string{}
             : "\"materials\":[" + material + "],";
         const std::string sceneNodes = includeSceneNode
-            ? "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0"
+            ? "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":" +
+                std::to_string(sceneIndex)
             : "\"nodes\":[]";
         const std::string primitiveIndices = indicesReference.has_value()
             ? ",\"indices\":" + std::to_string(*indicesReference)
@@ -148,4 +149,8 @@ TEST(GltfLoader, ReadsPositionsAndRejectsAccessorOutsideBufferView)
 
     TriangleGlb invalidIndicesReference(36U, -1, 3U, {}, true, -2);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidIndicesReference.Path()), std::runtime_error);
+
+    TriangleGlb invalidNegativeScene(36U, -1, 3U, {}, true, std::nullopt, -2);
+    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidNegativeScene.Path()),
+        std::runtime_error);
 }
