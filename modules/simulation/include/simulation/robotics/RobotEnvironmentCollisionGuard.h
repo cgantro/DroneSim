@@ -79,6 +79,12 @@ public:
     void RestoreSafePoseIfOverlapping();
 
 private:
+    struct CollisionProxy
+    {
+        flecs::entity entity;
+        bool isBaseMountedLink = false;
+    };
+
     struct SelfCollisionProxy
     {
         flecs::entity entity;
@@ -114,7 +120,7 @@ private:
     grasplink::physics::PhysicsWorld& m_PhysicsWorld;
     grasplink::robotics::RobotState m_CandidateState;
     grasplink::robotics::JointVector m_SafeJointPositions;
-    std::vector<flecs::entity> m_CollisionEntities;
+    std::vector<CollisionProxy> m_CollisionEntities;
     std::vector<SelfCollisionProxy> m_SelfCollisionProxies;
     /// 물리 설정 변경으로 Body handle이 바뀔 수 있어 한 번의 충돌 검사 안에서만 재사용한다.
     std::vector<std::optional<grasplink::physics::PhysicsBodyHandle>> m_SelfCollisionBodyHandleCache;

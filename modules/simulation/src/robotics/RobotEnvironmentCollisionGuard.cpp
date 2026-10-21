@@ -201,25 +201,26 @@ void RobotEnvironmentCollisionGuard::CollectCollisionProxies()
                 throw std::invalid_argument(CollisionGuardMessages::missingRobotProxyIdentity);
 
             const auto& proxy = entity.Get<RobotCollisionProxy>();
-            m_CollisionEntities.push_back(entity.GetHandle());
             if (proxy.linkIndex == RobotCollisionProxy::InvalidLinkIndex ||
                 proxy.jointIndex == RobotCollisionProxy::InvalidLinkIndex)
                 throw std::invalid_argument(CollisionGuardMessages::missingRobotProxyIdentity);
             if (!registeredLinkIndices.insert(proxy.linkIndex).second)
                 throw std::invalid_argument(CollisionGuardMessages::duplicateRobotLinkIdentity);
+            const bool isBaseMountedLink = proxy.jointIndex ==
+                CollisionGuardLimits::firstJointIndex;
+            m_CollisionEntities.push_back({entity.GetHandle(), isBaseMountedLink});
             if (proxy.jointIndex + CollisionGuardLimits::oneBasedIndexOffset ==
                 m_RobotController.GetSpecification().jointCount)
             {
                 m_EndLinkProxy = EndLinkProxy{proxy.jointIndex, proxy.linkIndex};
             }
-            m_SelfCollisionProxies.push_back({
-                entity.GetHandle(), {
-                    SelfCollisionPart::Link, proxy.linkIndex, proxy.jointIndex}});
+            m_SelfCollisionProxies.push_back({entity.GetHandle(), {
+                SelfCollisionPart::Link, proxy.linkIndex, proxy.jointIndex}});
             break;
         }
         case grasplink::physics::CollisionLayer::Gripper:
         {
-            m_CollisionEntities.push_back(entity.GetHandle());
+            m_CollisionEntities.push_back({entity.GetHandle(), false});
             m_GripperCollisionEntities.push_back(entity);
             if (!entity.Has<GripperCollisionProxy>() ||
                 entity.Get<GripperCollisionProxy>().part != GripperCollisionPart::Body)
@@ -327,7 +328,7 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyOverlapsEnvironment()
 {
     for (std::size_t i = 0; i < m_CollisionEntities.size(); ++i)
         m_CandidateCollisionTransforms[i] = ToPhysicsTransform(
-            Entity(m_CollisionEntities[i]).GetWorldMatrix());
+            Entity(m_CollisionEntities[i].entity).GetWorldMatrix());
     return RobotAssemblyOverlapsEnvironment(m_CandidateCollisionTransforms);
 }
 
@@ -338,16 +339,15 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyOverlapsEnvironment(
     const auto baseEnvironmentBodyHandle = m_PhysicsSystem.GetBodyHandle(m_BaseEnvironmentEntity);
     for (std::size_t i = 0; i < m_CollisionEntities.size(); ++i)
     {
-        const flecs::entity collisionEntity = m_CollisionEntities[i];
+        const CollisionProxy& collisionProxy = m_CollisionEntities[i];
+        const flecs::entity collisionEntity = collisionProxy.entity;
         const auto collisionBodyHandle = m_PhysicsSystem.GetBodyHandle(collisionEntity);
         if (!collisionBodyHandle.IsValid())
             return true;
 
         // jointIndex는 base_link부터 번호를 매긴 움직이는 관절이다. 첫 관절에 붙은 링크만 Base 연결부 겹침을 허용한다.
-        const bool isBaseMountedLink = collisionEntity.has<RobotCollisionProxy>() &&
-            collisionEntity.get<RobotCollisionProxy>().jointIndex ==
-                CollisionGuardLimits::firstJointIndex;
-        const bool overlapsEnvironment = isBaseMountedLink && baseEnvironmentBodyHandle.IsValid()
+        const bool overlapsEnvironment = collisionProxy.isBaseMountedLink &&
+            baseEnvironmentBodyHandle.IsValid()
             ? m_PhysicsWorld.OverlapsEnvironmentAt(
                 collisionBodyHandle, candidateTransforms[i], baseEnvironmentBodyHandle)
             : m_PhysicsWorld.OverlapsEnvironmentAt(collisionBodyHandle, candidateTransforms[i]);
@@ -449,7 +449,8 @@ void RobotEnvironmentCollisionGuard::BuildCandidateProxyTransforms(
 
     for (std::size_t i = 0; i < m_CollisionEntities.size(); ++i)
     {
-        const glm::mat4* transform = FindWorldTransform(m_CandidateProxyWorldTransforms, m_CollisionEntities[i]);
+        const glm::mat4* transform = FindWorldTransform(
+            m_CandidateProxyWorldTransforms, m_CollisionEntities[i].entity);
         if (transform == nullptr)
             throw std::logic_error(CollisionGuardMessages::missingCollisionProxyTransform);
         m_CandidateCollisionTransforms[i] = ToPhysicsTransform(*transform);
