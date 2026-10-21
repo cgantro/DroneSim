@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <functional>
+#include <iomanip>
 #include <iostream>
 #include <locale>
 #include <stdexcept>
