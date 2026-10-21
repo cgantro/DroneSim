@@ -5,6 +5,7 @@
 #include "communication/UdpSocket.h"
 #include "simulation_core/ScenarioRunner.h"
 
+#include <array>
 #include <charconv>
 #include <chrono>
 #include <cmath>
@@ -186,32 +187,36 @@ void StartRequest(HWND window, AppState& state,
     }
 }
 
+std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply& reply)
+{
+    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 7> messages{{
+        {"recording_started", L"입력 기록을 시작했습니다. 게임패드와 비행 명령을 기록합니다."},
+        {"recording_stopped", L"기록을 마쳤습니다. 시뮬레이터를 닫기 전까지 재생할 수 있습니다."},
+        {"recording_replay_started", L"입력 기록을 재생합니다."},
+        {"recording_requires_grounded", L"기록은 드론이 지상에 있을 때 시작할 수 있습니다."},
+        {"recording_not_active", L"진행 중인 입력 기록이 없습니다."},
+        {"recording_empty", L"재생할 입력 기록이 없습니다."},
+        {"recording_unavailable", L"기록 또는 재생이 이미 진행 중입니다."}
+    }};
+
+    for (const auto& [status, message] : messages)
+    {
+        if (reply.status == status)
+            return std::wstring(message);
+    }
+
+    if (reply.accepted)
+        return L"명령이 적용됐습니다.";
+    return L"명령이 거부됐습니다: " + WidenAscii(reply.status);
+}
+
 void ShowResult(AppState& state)
 {
     try
     {
         const auto result = state.request.get();
         const auto& reply = result.reply;
-        std::wstring status;
-        if (reply.status == "recording_started")
-            status = L"입력 기록을 시작했습니다. 게임패드와 비행 명령을 기록합니다.";
-        else if (reply.status == "recording_stopped")
-            status = L"기록을 마쳤습니다. 시뮬레이터를 닫기 전까지 재생할 수 있습니다.";
-        else if (reply.status == "recording_replay_started")
-            status = L"입력 기록을 재생합니다.";
-        else if (reply.status == "recording_requires_grounded")
-            status = L"기록은 드론이 지상에 있을 때 시작할 수 있습니다.";
-        else if (reply.status == "recording_not_active")
-            status = L"진행 중인 입력 기록이 없습니다.";
-        else if (reply.status == "recording_empty")
-            status = L"재생할 입력 기록이 없습니다.";
-        else if (reply.status == "recording_unavailable")
-            status = L"기록 또는 재생이 이미 진행 중입니다.";
-        else
-            status = reply.accepted
-                ? L"명령이 적용됐습니다."
-                : L"명령이 거부됐습니다: " + WidenAscii(reply.status);
-        SetStatus(state, status);
+        SetStatus(state, CommandStatusMessage(reply));
 
         const auto& drone = reply.telemetry.drone;
         std::wostringstream telemetry;
