@@ -198,6 +198,15 @@ bool SimRobotController::IsConnected() const noexcept
     return connected_;
 }
 
+Result SimRobotController::ValidateCommandAvailability() const
+{
+    if (!connected_)
+        return Failure(ErrorCode::NotConnected, SimRobotControllerMessages::notConnected);
+    if (IsMotionPlanning())
+        return Failure(ErrorCode::Busy, SimRobotControllerMessages::motionPlanningBusy);
+    return Result::Success();
+}
+
 Result SimRobotController::MoveJoint(const JointMoveCommand& command)
 {
     return MoveJointImpl(command, JointMoveOrigin::ExternalJointCommand);
@@ -205,10 +214,9 @@ Result SimRobotController::MoveJoint(const JointMoveCommand& command)
 
 Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointMoveOrigin origin)
 {
-    if (!connected_)
-        return Failure(ErrorCode::NotConnected, SimRobotControllerMessages::notConnected);
-    if (IsMotionPlanning())
-        return Failure(ErrorCode::Busy, SimRobotControllerMessages::motionPlanningBusy);
+    const Result availability = ValidateCommandAvailability();
+    if (!availability)
+        return availability;
 
     if (command.targetPositions.size() != specification_.jointCount)
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::jointCountMismatch);
@@ -274,10 +282,9 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
 
 Result SimRobotController::MovePose(const CartesianPose& targetInBase, double velocityScale, double accelerationScale)
 {
-    if (!connected_)
-        return Failure(ErrorCode::NotConnected, SimRobotControllerMessages::notConnected);
-    if (IsMotionPlanning())
-        return Failure(ErrorCode::Busy, SimRobotControllerMessages::motionPlanningBusy);
+    const Result availability = ValidateCommandAvailability();
+    if (!availability)
+        return availability;
     if (!IsScaleValid(velocityScale) || !IsScaleValid(accelerationScale))
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::invalidScale);
     planning::JointStateInvalidity invalidity = planning::JointStateInvalidity::None;
@@ -322,10 +329,9 @@ Result SimRobotController::BeginPosePlanningImpl(
     const CartesianPose& targetInBase, std::optional<LinearPathMoveCommand> continuation,
     double velocityScale, double accelerationScale)
 {
-    if (!connected_)
-        return Failure(ErrorCode::NotConnected, SimRobotControllerMessages::notConnected);
-    if (IsMotionPlanning())
-        return Failure(ErrorCode::Busy, SimRobotControllerMessages::motionPlanningBusy);
+    const Result availability = ValidateCommandAvailability();
+    if (!availability)
+        return availability;
     if (!IsScaleValid(velocityScale) || !IsScaleValid(accelerationScale))
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::invalidScale);
     if (continuation)
@@ -696,10 +702,9 @@ std::optional<Result> SimRobotController::TakeMotionPlanningResult()
 Result SimRobotController::ValidateLinearPathRequest(
     const LinearPathMoveCommand& command) const
 {
-    if (!connected_)
-        return Failure(ErrorCode::NotConnected, SimRobotControllerMessages::notConnected);
-    if (IsMotionPlanning())
-        return Failure(ErrorCode::Busy, SimRobotControllerMessages::motionPlanningBusy);
+    const Result availability = ValidateCommandAvailability();
+    if (!availability)
+        return availability;
     const Result validation = planning::ValidateLinearPathCommand(command);
     if (!validation)
         return validation;

@@ -183,6 +183,9 @@ public:
 private:
     using LinearPathPoint = planning::LinearPathPoint;
 
+    // 일반 이동 명령을 받을 수 있는지 연결 상태와 계획 진행 여부를 확인한다.
+    [[nodiscard]] Result ValidateCommandAvailability() const;
+
     struct PendingJointMove
     {
         JointVector targetPositions;
