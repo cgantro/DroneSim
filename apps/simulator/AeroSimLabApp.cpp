@@ -433,38 +433,72 @@ void AeroSimLabApp::PollGamepad()
 
     if (!connected)
     {
-        pendingControllerAction_.reset();
-        if (gamepadConnected_)
-        {
-            window_->SetTitle(groundControlActive_
-                ? "AeroSimLab | 지상통제 입력 사용 중"
-                : "AeroSimLab | 드론 관찰 · EO 영상");
-        }
-        if (gamepadConnected_ && !groundControlActive_)
-        {
-            // 조종기가 끊기면 남아 있던 속도 명령을 지워 제자리 호버링으로 전환한다.
-            const auto mode = simulation_.State().mode;
-            if (mode == aerosimlab::simulation::FlightMode::TakingOff)
-                pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-                    aerosimlab::simulation::DroneCommand::Kind::Land};
-            else if (mode == aerosimlab::simulation::FlightMode::Hovering
-                || mode == aerosimlab::simulation::FlightMode::Flying)
-                pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-                    aerosimlab::simulation::DroneCommand::Kind::Stop};
-            pendingPilotCommand_.reset();
-        }
-        gamepadConnected_ = false;
-        previousTakeoffButton_ = false;
-        previousLandButton_ = false;
+        HandleGamepadDisconnected();
         return;
     }
 
+    const bool takeoffPressed = state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
+    const bool landPressed = state.buttons[GLFW_GAMEPAD_BUTTON_B] == GLFW_PRESS;
+    std::optional<aerosimlab::manual_control::GamepadAxes> pilotAxes;
+    if (!groundControlActive_)
+    {
+        const auto mode = simulation_.State().mode;
+        const bool airborne = mode == aerosimlab::simulation::FlightMode::Hovering
+            || mode == aerosimlab::simulation::FlightMode::Flying;
+        if (airborne)
+        {
+            // GLFW 트리거 값은 -1부터 시작하므로 0~1로 바꾼 뒤 양쪽 입력 차이를 높이 명령으로 쓴다.
+            const auto triggerValue = [](float value)
+            {
+                return (static_cast<double>(value) + 1.0) * 0.5;
+            };
+            pilotAxes = aerosimlab::manual_control::GamepadAxes{
+                .forward = -static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]),
+                .right = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_X]),
+                .vertical = triggerValue(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER])
+                    - triggerValue(state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER]),
+                .yaw = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X])
+            };
+        }
+    }
+    HandleGamepadConnected(takeoffPressed, landPressed, pilotAxes);
+#endif
+}
+
+void AeroSimLabApp::HandleGamepadDisconnected()
+{
+    pendingControllerAction_.reset();
+    if (gamepadConnected_)
+    {
+        window_->SetTitle(groundControlActive_
+            ? "AeroSimLab | 지상통제 입력 사용 중"
+            : "AeroSimLab | 드론 관찰 · EO 영상");
+    }
+    if (gamepadConnected_ && !groundControlActive_)
+    {
+        // 조종기가 끊기면 진행 중인 비행을 안전한 정지 동작으로 바꾼다.
+        const auto mode = simulation_.State().mode;
+        if (mode == aerosimlab::simulation::FlightMode::TakingOff)
+            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
+                aerosimlab::simulation::DroneCommand::Kind::Land};
+        else if (mode == aerosimlab::simulation::FlightMode::Hovering
+            || mode == aerosimlab::simulation::FlightMode::Flying)
+            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
+                aerosimlab::simulation::DroneCommand::Kind::Stop};
+        pendingPilotCommand_.reset();
+    }
+    gamepadConnected_ = false;
+    previousTakeoffButton_ = false;
+    previousLandButton_ = false;
+}
+
+void AeroSimLabApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed,
+    const std::optional<aerosimlab::manual_control::GamepadAxes>& pilotAxes)
+{
     if (!gamepadConnected_ && !groundControlActive_)
         window_->SetTitle("AeroSimLab | 게임패드 연결됨");
     gamepadConnected_ = true;
     externalControl_ = true;
-    const bool takeoffPressed = state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
-    const bool landPressed = state.buttons[GLFW_GAMEPAD_BUTTON_B] == GLFW_PRESS;
 
     if (!groundControlActive_)
     {
@@ -481,30 +515,13 @@ void AeroSimLabApp::PollGamepad()
                 aerosimlab::simulation::DroneCommand::Kind::Land};
         }
 
-        const auto mode = simulation_.State().mode;
-        const bool airborne = mode == aerosimlab::simulation::FlightMode::Hovering
-            || mode == aerosimlab::simulation::FlightMode::Flying;
-        if (airborne)
-        {
-            const auto triggerValue = [](float value)
-            {
-                return (static_cast<double>(value) + 1.0) * 0.5;
-            };
-            const aerosimlab::manual_control::GamepadAxes axes{
-                .forward = -static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]),
-                .right = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_X]),
-                .vertical = triggerValue(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER])
-                    - triggerValue(state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER]),
-                .yaw = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X])
-            };
+        if (pilotAxes)
             pendingPilotCommand_ = aerosimlab::manual_control::MapAxes(
-                axes, simulation_.State().yawRadians);
-        }
+                *pilotAxes, simulation_.State().yawRadians);
     }
 
     previousTakeoffButton_ = takeoffPressed;
     previousLandButton_ = landPressed;
-#endif
 }
 
 bool AeroSimLabApp::ApplySessionCommand(

@@ -78,6 +78,14 @@ private:
         const aerosimlab::communication::UdpPeer& peer);
 #endif
     void PollGamepad();
+    /** @brief 연결이 끊긴 뒤 남은 조종 입력을 지우고 필요한 정지 명령을 예약한다. */
+    void HandleGamepadDisconnected();
+    /**
+     * @brief 버튼의 새 입력과 현재 비행 조작값을 반영한다.
+     * @details 이륙·착륙 버튼은 눌린 순간 한 번 처리하고, 스틱 값은 비행 중 계속 갱신한다.
+     */
+    void HandleGamepadConnected(bool takeoffPressed, bool landPressed,
+        const std::optional<aerosimlab::manual_control::GamepadAxes>& pilotAxes);
     /**
      * @brief 기록 시작·정지·재생 명령을 적용한다.
      * @return true면 재생 시작 과정에서 첫 Tick까지 진행했으므로 바깥에서 한 번 더 진행하지 않는다.
