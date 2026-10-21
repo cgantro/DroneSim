@@ -65,7 +65,12 @@ public:
 
 private:
     void InitializeGraphics();
+    /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
+    /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
+    void AdvanceSimulationTick();
+    void AdvanceReplayTick();
+    void AdvanceManualControlTick();
     void ApplyDemoCommands();
     void PollGroundControl();
 #ifndef __EMSCRIPTEN__

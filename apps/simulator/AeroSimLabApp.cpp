@@ -159,59 +159,7 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
     while (accumulatedSeconds_ >= fixedStepSeconds)
     {
         const auto tickStart = std::chrono::steady_clock::now();
-        if (demoMode_ && !externalControl_)
-            ApplyDemoCommands();
-#ifndef __EMSCRIPTEN__
-        const bool hasGroundCommand = pendingCommand_.has_value();
-#else
-        constexpr bool hasGroundCommand = false;
-#endif
-        ApplyGroundCommand();
-        if (!hasGroundCommand && replaying_)
-        {
-            ApplyRecordedCommands();
-            simulation_.AdvanceOneTick();
-            ++replayTick_;
-            if (replayTick_ >= recordingTickCount_)
-            {
-                replaying_ = false;
-                window_->SetTitle("AeroSimLab | 기록 재생 완료");
-            }
-        }
-        else if (!hasGroundCommand)
-        {
-            if (!groundControlActive_ && pendingControllerAction_)
-            {
-                const auto result = simulation_.Apply(*pendingControllerAction_);
-                if (result == aerosimlab::simulation::CommandResult::Accepted)
-                    RecordCommand(*pendingControllerAction_);
-                pendingControllerAction_.reset();
-            }
-            if (!groundControlActive_ && pendingPilotCommand_)
-            {
-                const auto mode = simulation_.State().mode;
-                if (mode == aerosimlab::simulation::FlightMode::Hovering
-                    || mode == aerosimlab::simulation::FlightMode::Flying)
-                {
-                    const aerosimlab::simulation::DroneCommand velocityCommand{
-                        aerosimlab::simulation::DroneCommand::Kind::SetVelocity,
-                        pendingPilotCommand_->velocityMetersPerSecond};
-                    const aerosimlab::simulation::DroneCommand yawCommand{
-                        aerosimlab::simulation::DroneCommand::Kind::SetYawRate,
-                        glm::dvec3{0.0},
-                        pendingPilotCommand_->yawRateRadiansPerSecond};
-                    if (simulation_.Apply(velocityCommand)
-                        == aerosimlab::simulation::CommandResult::Accepted)
-                        RecordCommand(velocityCommand);
-                    if (simulation_.Apply(yawCommand)
-                        == aerosimlab::simulation::CommandResult::Accepted)
-                        RecordCommand(yawCommand);
-                }
-            }
-            simulation_.AdvanceOneTick();
-            if (recordingActive_)
-                ++recordingTickCount_;
-        }
+        AdvanceSimulationTick();
         if (benchmarkMode_)
         {
             tickDurationsMicroseconds_.push_back(std::chrono::duration<double, std::micro>(
@@ -219,6 +167,76 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
         }
         accumulatedSeconds_ -= fixedStepSeconds;
     }
+}
+
+void AeroSimLabApp::AdvanceSimulationTick()
+{
+    if (demoMode_ && !externalControl_)
+        ApplyDemoCommands();
+#ifndef __EMSCRIPTEN__
+    const bool hasGroundCommand = pendingCommand_.has_value();
+#else
+    constexpr bool hasGroundCommand = false;
+#endif
+    ApplyGroundCommand();
+    if (hasGroundCommand)
+        return;
+
+    if (replaying_)
+    {
+        AdvanceReplayTick();
+        return;
+    }
+
+    AdvanceManualControlTick();
+}
+
+void AeroSimLabApp::AdvanceReplayTick()
+{
+    ApplyRecordedCommands();
+    simulation_.AdvanceOneTick();
+    ++replayTick_;
+    if (replayTick_ >= recordingTickCount_)
+    {
+        replaying_ = false;
+        window_->SetTitle("AeroSimLab | 기록 재생 완료");
+    }
+}
+
+void AeroSimLabApp::AdvanceManualControlTick()
+{
+    if (!groundControlActive_ && pendingControllerAction_)
+    {
+        const auto result = simulation_.Apply(*pendingControllerAction_);
+        if (result == aerosimlab::simulation::CommandResult::Accepted)
+            RecordCommand(*pendingControllerAction_);
+        pendingControllerAction_.reset();
+    }
+    if (!groundControlActive_ && pendingPilotCommand_)
+    {
+        const auto mode = simulation_.State().mode;
+        if (mode == aerosimlab::simulation::FlightMode::Hovering
+            || mode == aerosimlab::simulation::FlightMode::Flying)
+        {
+            const aerosimlab::simulation::DroneCommand velocityCommand{
+                aerosimlab::simulation::DroneCommand::Kind::SetVelocity,
+                pendingPilotCommand_->velocityMetersPerSecond};
+            const aerosimlab::simulation::DroneCommand yawCommand{
+                aerosimlab::simulation::DroneCommand::Kind::SetYawRate,
+                glm::dvec3{0.0},
+                pendingPilotCommand_->yawRateRadiansPerSecond};
+            if (simulation_.Apply(velocityCommand)
+                == aerosimlab::simulation::CommandResult::Accepted)
+                RecordCommand(velocityCommand);
+            if (simulation_.Apply(yawCommand)
+                == aerosimlab::simulation::CommandResult::Accepted)
+                RecordCommand(yawCommand);
+        }
+    }
+
+    simulation_.AdvanceOneTick();
+    if (recordingActive_)
+        ++recordingTickCount_;
 }
 
 void AeroSimLabApp::ApplyDemoCommands()
