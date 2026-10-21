@@ -531,6 +531,7 @@ void PosePlanWithRobotCollisions(benchmark::State& state)
                 {
                     const auto frameStart = Clock::now();
                     const auto frameDeadline = frameStart + planningFrameBudget;
+                    // 이미 시작한 계획 작업 한 단위는 중간에 끊지 않으므로 마지막 단위만큼 예산을 넘길 수 있다.
                     do
                     {
                         controller.AdvanceMotionPlanning(1);
