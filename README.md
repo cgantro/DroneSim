@@ -19,9 +19,14 @@ AeroSimLab은 가상 드론과 탑재 RGB 카메라를 운용하고 시험하는
 
 ## 개발 환경 준비
 
-이 프로젝트는 Windows에서 Visual Studio 2022와 CMake를 사용해 개발할 수 있습니다. Visual Studio 설치 관리자에서 C++ 데스크톱 개발과 CMake 도구를 준비하고, vcpkg를 설치한 뒤 `VCPKG_ROOT`가 설정된 상태로 Visual Studio를 실행합니다. 프로젝트 폴더를 열면 CMake가 필요한 라이브러리를 준비합니다.
+이 안내는 소스 코드를 직접 빌드하는 개발자를 위한 내용입니다. Windows에서 Visual Studio의 화면 메뉴만 사용해 준비하고 실행할 수 있습니다.
 
-Visual Studio의 CMake 구성 메뉴에서 `Ninja Release`를 고르고 빌드하면 화면 프로그램과 시험 프로그램이 만들어집니다. 자동 시험은 Visual Studio의 테스트 창에서 실행할 수 있습니다.
+1. Visual Studio 설치 관리자에서 **C++를 사용한 데스크톱 개발**과 CMake 도구를 설치합니다.
+2. Windows 시작 메뉴에서 **환경 변수 편집**을 검색합니다. 사용자 변수에 `VCPKG_ROOT`를 새로 만들고 값으로 vcpkg 설치 폴더를 지정합니다. 이 프로젝트는 vcpkg를 통해 OpenCV를 준비합니다.
+3. Visual Studio를 다시 열고 프로젝트 폴더를 엽니다. CMake 구성 메뉴에서 `Ninja Release`를 선택한 뒤 빌드합니다. 화면 프로그램과 시험 프로그램이 만들어집니다.
+4. 자동 시험은 Visual Studio의 테스트 창에서 실행합니다.
+
+환경 변수를 등록한 뒤에는 Visual Studio를 다시 시작해야 새 설정을 읽습니다. 프로젝트 폴더를 열었을 때 CMake가 필요한 라이브러리를 준비합니다.
 
 ## 화면에서 사용하기
 
