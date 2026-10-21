@@ -2,12 +2,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <stdexcept>
 
 namespace grasplink::robotics::backends::simulation
 {
 namespace
 {
+constexpr std::uint8_t kInactiveActivationStatusCode = 0;
+constexpr std::uint8_t kActivatedStatusCode = 3;
+
 struct SimGripperControllerMessages final
 {
     inline static constexpr char invalidSpecification[] = "SimGripperController: invalid gripper specification";
@@ -102,7 +106,7 @@ Result SimGripperController::Activate()
         return Result::Success();
 
     state_.activated = true;
-    state_.activationStatus = 3;
+    state_.activationStatus = kActivatedStatusCode;
     state_.goToActive = false;
     state_.mode = GripperMode::Idle;
     state_.objectStatus = IsAtTarget()
@@ -122,7 +126,7 @@ Result SimGripperController::Reset()
     requestedDirection_ = RequestedDirection::None;
     masterVelocityRadiansPerSecond_ = 0.0;
     state_.activated = false;
-    state_.activationStatus = 0;
+    state_.activationStatus = kInactiveActivationStatusCode;
     state_.goToActive = false;
     state_.mode = GripperMode::Inactive;
     state_.objectStatus = reachedRequestedPosition
