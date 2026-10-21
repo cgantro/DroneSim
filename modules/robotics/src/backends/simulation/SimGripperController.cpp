@@ -10,7 +10,12 @@ namespace
 {
 struct SimGripperControllerMessages final
 {
+    inline static constexpr char invalidSpecification[] = "SimGripperController: invalid gripper specification";
+    inline static constexpr char invalidMotionSettings[] = "SimGripperController: invalid master velocity settings";
     inline static constexpr char notConnected[] = "SimGripperController: not connected";
+    inline static constexpr char notActivated[] = "SimGripperController: not activated";
+    inline static constexpr char requestOutsideSpecification[] =
+        "SimGripperController: request outside specification range";
 };
 
 Result Failure(ErrorCode code, const char* message)
@@ -35,14 +40,14 @@ SimGripperController::SimGripperController(
         specification_.forceRequestMin > specification_.forceRequestMax ||
         !IsFinitePositive(specification_.nominalMasterClosedRadians))
     {
-        throw std::invalid_argument("SimGripperController: invalid gripper specification");
+        throw std::invalid_argument(SimGripperControllerMessages::invalidSpecification);
     }
 
     if (!IsFinitePositive(settings_.minimumMasterVelocityRadiansPerSecond) ||
         !IsFinitePositive(settings_.maximumMasterVelocityRadiansPerSecond) ||
         settings_.minimumMasterVelocityRadiansPerSecond > settings_.maximumMasterVelocityRadiansPerSecond)
     {
-        throw std::invalid_argument("SimGripperController: invalid master velocity settings");
+        throw std::invalid_argument(SimGripperControllerMessages::invalidMotionSettings);
     }
 }
 
@@ -131,7 +136,7 @@ Result SimGripperController::Command(const GripperCommand& command)
     if (!connected_)
         return Failure(ErrorCode::NotConnected, SimGripperControllerMessages::notConnected);
     if (!state_.activated)
-        return Failure(ErrorCode::Busy, "SimGripperController: not activated");
+        return Failure(ErrorCode::Busy, SimGripperControllerMessages::notActivated);
 
     // 위치·속도·힘 raw code 범위를 전부 확인한 뒤 요청을 받아들인다. 하나라도 잘못되면 현재 상태 복사본(snapshot)과 이동 목표를 바꾸지 않는다.
     if (command.positionRequest < specification_.positionRequestMin ||
@@ -141,7 +146,7 @@ Result SimGripperController::Command(const GripperCommand& command)
         command.forceRequest < specification_.forceRequestMin ||
         command.forceRequest > specification_.forceRequestMax)
     {
-        return Failure(ErrorCode::InvalidCommand, "SimGripperController: request outside specification range");
+        return Failure(ErrorCode::InvalidCommand, SimGripperControllerMessages::requestOutsideSpecification);
     }
 
     const double positionRange = static_cast<double>(
