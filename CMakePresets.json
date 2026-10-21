@@ -129,6 +129,7 @@
       "description": "Configure the embedded browser simulator without a shared-memory requirement",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-emscripten-single-thread",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "AEROSIMLAB_BUILD_GRAPHICS": "ON",
