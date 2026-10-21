@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "ticks": 180,
+  "drones": [
+    {"name": "lead", "initial_position_meters": [0, 0, 0]},
+    {"name": "wing", "initial_position_meters": [10, 0, 0]}
+  ],
+  "commands": [
+    {"tick": 0, "drone": "lead", "type": "takeoff"},
+    {"tick": 0, "drone": "wing", "type": "takeoff"}
+  ],
+  "mission": {
+    "name": "two-point-survey",
+    "tasks": [
+      {
+        "name": "west-point",
+        "role": "west survey",
+        "drone": "lead",
+        "target_position_meters": [2, 0, 1.5],
+        "start_tick": 90,
+        "deadline_tick": 150,
+        "tolerance_meters": 0.05
+      },
+      {
+        "name": "east-point",
+        "role": "east survey",
+        "drone": "wing",
+        "target_position_meters": [8, 0, 1.5],
+        "start_tick": 90,
+        "deadline_tick": 150,
+        "tolerance_meters": 0.05
+      }
+    ]
+  },
+  "expected": {
+    "tolerance_meters": 0.05,
+    "drones": [
+      {"name": "lead", "mode": "hovering", "position_meters": [2, 0, 1.5]},
+      {"name": "wing", "mode": "hovering", "position_meters": [8, 0, 1.5]}
+    ]
+  }
+}

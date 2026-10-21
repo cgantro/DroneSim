@@ -28,6 +28,13 @@ struct ExpectedDrone
     glm::dvec3 positionMeters;
 };
 
+bool CanReceiveWaypoint(FlightMode mode) noexcept
+{
+    return mode == FlightMode::Hovering
+        || mode == FlightMode::Flying
+        || mode == FlightMode::FollowingWaypoint;
+}
+
 const Json& Required(const Json& object, const char* key)
 {
     const auto entry = object.find(key);
@@ -303,6 +310,74 @@ std::vector<FormationLink> ReadFormationLinks(
     return links;
 }
 
+std::optional<ScenarioResult::Mission> ReadMission(
+    const Json& document,
+    std::uint64_t tickCount,
+    const std::unordered_set<std::string>& droneNames)
+{
+    const auto found = document.find("mission");
+    if (found == document.end())
+        return std::nullopt;
+    if (!found->is_object())
+        throw std::invalid_argument("mission은 JSON 객체여야 합니다.");
+
+    const Json& nameValue = Required(*found, "name");
+    const Json& tasksValue = Required(*found, "tasks");
+    if (!nameValue.is_string() || nameValue.get<std::string>().empty())
+        throw std::invalid_argument("mission.name은 비어 있지 않은 문자열이어야 합니다.");
+    if (!tasksValue.is_array() || tasksValue.size() < 2)
+        throw std::invalid_argument("공동 임무에는 두 대 이상을 배정해야 합니다.");
+
+    ScenarioResult::Mission mission;
+    mission.name = nameValue.get<std::string>();
+    std::unordered_set<std::string> taskNames;
+    std::unordered_set<std::string> assignedDrones;
+    mission.tasks.reserve(tasksValue.size());
+    for (const Json& taskValue : tasksValue)
+    {
+        if (!taskValue.is_object())
+            throw std::invalid_argument("각 mission task는 JSON 객체여야 합니다.");
+
+        const Json& taskNameValue = Required(taskValue, "name");
+        const Json& roleValue = Required(taskValue, "role");
+        const Json& droneValue = Required(taskValue, "drone");
+        if (!taskNameValue.is_string() || taskNameValue.get<std::string>().empty()
+            || !roleValue.is_string() || roleValue.get<std::string>().empty()
+            || !droneValue.is_string())
+        {
+            throw std::invalid_argument(
+                "임무 name과 role은 비어 있지 않은 문자열이어야 하고 drone을 지정해야 합니다.");
+        }
+
+        ScenarioResult::MissionTask task;
+        task.name = taskNameValue.get<std::string>();
+        task.role = roleValue.get<std::string>();
+        task.droneName = droneValue.get<std::string>();
+        if (!taskNames.insert(task.name).second
+            || !droneNames.contains(task.droneName)
+            || !assignedDrones.insert(task.droneName).second)
+        {
+            throw std::invalid_argument("임무 이름은 고유해야 하며, 등록된 드론을 한 번만 배정할 수 있습니다.");
+        }
+
+        task.targetPositionMeters = ReadVector(
+            Required(taskValue, "target_position_meters"), "target_position_meters");
+        task.startTick = ReadUnsigned(Required(taskValue, "start_tick"), "start_tick");
+        task.deadlineTick = ReadUnsigned(
+            Required(taskValue, "deadline_tick"), "deadline_tick");
+        task.toleranceMeters = ReadFiniteNumber(
+            Required(taskValue, "tolerance_meters"), "tolerance_meters");
+        if (task.targetPositionMeters.z < 0.0 || task.toleranceMeters < 0.0
+            || task.startTick > task.deadlineTick || task.deadlineTick >= tickCount)
+        {
+            throw std::invalid_argument(
+                "임무 목표 고도와 허용 오차는 0 이상이고, 시작·기한 Tick은 시나리오 범위 안이어야 합니다.");
+        }
+        mission.tasks.push_back(std::move(task));
+    }
+    return mission;
+}
+
 std::vector<ScheduledCommand> ReadCommands(
     const Json& commands,
     std::uint64_t tickCount,
@@ -460,6 +535,25 @@ ScenarioResult RunScenario(std::string_view jsonText)
         document, tickCount, droneNames);
     if (!formationLinks.empty() && scenarioDrones.size() < 2)
         throw std::invalid_argument("formation_links를 쓰려면 drones에 두 대 이상을 적어야 합니다.");
+    std::optional<ScenarioResult::Mission> mission = ReadMission(
+        document, tickCount, droneNames);
+    if (mission)
+    {
+        for (const FormationLink& link : formationLinks)
+        {
+            const bool followerHasMission = std::any_of(
+                mission->tasks.begin(), mission->tasks.end(),
+                [&link](const ScenarioResult::MissionTask& task)
+                {
+                    return task.droneName == link.followerName;
+                });
+            if (followerHasMission)
+            {
+                throw std::invalid_argument(
+                    "같은 드론에 formation link와 mission 목표를 함께 지정할 수 없습니다.");
+            }
+        }
+    }
     const SimulationDynamics dynamics = ReadDynamics(document);
     const std::optional<glm::dvec3> windVelocity = document.contains("wind_velocity_meters_per_second")
         ? std::optional<glm::dvec3>{ReadVector(
@@ -533,6 +627,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
 
     ScenarioResult result;
+    result.mission = std::move(mission);
     const auto recordMinimumDroneSeparation = [&]()
     {
         if (!expectedMinimumDroneSeparationMeters)
@@ -600,6 +695,45 @@ ScenarioResult RunScenario(std::string_view jsonText)
             ++nextCommand;
         }
 
+        if (result.mission)
+        {
+            for (ScenarioResult::MissionTask& task : result.mission->tasks)
+            {
+                if (task.completed || task.failed || tick < task.startTick)
+                    continue;
+
+                const DroneId droneId = droneIds.at(task.droneName);
+                if (!task.started)
+                {
+                    if (!CanReceiveWaypoint(simulation.State(droneId).mode))
+                    {
+                        task.failed = true;
+                        result.issues.push_back(task.droneName
+                            + " 드론이 비행 중이 아니어서 임무를 시작하지 못했습니다.");
+                        continue;
+                    }
+                    task.started = true;
+                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                        + task.droneName + " 드론이 '" + task.role + "' 임무를 시작했습니다.");
+                }
+                else if (!CanReceiveWaypoint(simulation.State(droneId).mode))
+                {
+                    task.failed = true;
+                    result.issues.push_back(task.droneName
+                        + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다.");
+                    continue;
+                }
+
+                const CommandResult moveResult = simulation.Apply(droneId,
+                    {DroneCommand::Kind::SetWaypoint, task.targetPositionMeters});
+                if (moveResult != CommandResult::Accepted)
+                {
+                    task.failed = true;
+                    result.issues.push_back(task.droneName + " 드론에 임무 목표를 전달하지 못했습니다.");
+                }
+            }
+        }
+
         for (const FormationLink& link : formationLinks)
         {
             bool linkAvailable = true;
@@ -625,13 +759,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 continue;
             const DroneState& leaderState = simulation.State(droneIds.at(link.leaderName));
             const DroneState& followerState = simulation.State(droneIds.at(link.followerName));
-            const auto isAirborne = [](FlightMode mode)
-            {
-                return mode == FlightMode::Hovering
-                    || mode == FlightMode::Flying
-                    || mode == FlightMode::FollowingWaypoint;
-            };
-            if (!isAirborne(leaderState.mode) || !isAirborne(followerState.mode))
+            if (!CanReceiveWaypoint(leaderState.mode)
+                || !CanReceiveWaypoint(followerState.mode))
                 continue;
 
             const CommandResult followResult = simulation.Apply(
@@ -655,6 +784,30 @@ ScenarioResult RunScenario(std::string_view jsonText)
         }
         simulation.AdvanceOneTick();
         recordMinimumDroneSeparation();
+
+        if (result.mission)
+        {
+            for (ScenarioResult::MissionTask& task : result.mission->tasks)
+            {
+                if (!task.started || task.completed || task.failed)
+                    continue;
+
+                const glm::dvec3 distance = simulation.State(droneIds.at(task.droneName))
+                    .positionMeters - task.targetPositionMeters;
+                if (glm::length(distance) <= task.toleranceMeters)
+                {
+                    task.completed = true;
+                    task.completedTick = tick;
+                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                        + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
+                }
+                else if (tick >= task.deadlineTick)
+                {
+                    task.failed = true;
+                    result.issues.push_back(task.droneName + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
+                }
+            }
+        }
     }
 
     result.tickCount = simulation.TickCount();
@@ -671,6 +824,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
     result.finalState = result.drones.front().finalState;
     result.finalCamera = simulation.Camera();
+    if (result.mission)
+    {
+        result.mission->passed = std::all_of(
+            result.mission->tasks.begin(), result.mission->tasks.end(),
+            [](const ScenarioResult::MissionTask& task) { return task.completed; });
+    }
     if (expectedMode && result.finalState.mode != *expectedMode)
     {
         result.issues.push_back(

@@ -112,6 +112,96 @@ TEST(ScenarioRunner, FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterwa
     EXPECT_NE(result.eventLog[4].find("위치 공유가 복구됐습니다"), std::string::npos);
 }
 
+TEST(ScenarioRunner, AssignsDroneRolesAndJudgesMissionDeadlines)
+{
+    constexpr std::string_view missionScenario = R"json(
+    {"version":1,"ticks":180,
+     "drones":[
+       {"name":"lead","initial_position_meters":[0,0,0]},
+       {"name":"wing","initial_position_meters":[10,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"lead","type":"takeoff"},
+       {"tick":0,"drone":"wing","type":"takeoff"}],
+     "mission":{"name":"two-point-survey","tasks":[
+       {"name":"west","role":"west survey","drone":"lead",
+        "target_position_meters":[2,0,1.5],"start_tick":90,
+        "deadline_tick":150,"tolerance_meters":0.05},
+       {"name":"east","role":"east survey","drone":"wing",
+        "target_position_meters":[8,0,1.5],"start_tick":90,
+        "deadline_tick":150,"tolerance_meters":0.05}]},
+     "expected":{"tolerance_meters":0.05,"drones":[
+       {"name":"lead","mode":"hovering","position_meters":[2,0,1.5]},
+       {"name":"wing","mode":"hovering","position_meters":[8,0,1.5]}]}}
+    )json";
+
+    const ScenarioResult success = RunScenario(missionScenario);
+    ASSERT_TRUE(success.passed) << (success.issues.empty() ? "" : success.issues.front());
+    ASSERT_TRUE(success.mission.has_value());
+    EXPECT_TRUE(success.mission->passed);
+    ASSERT_EQ(success.mission->tasks.size(), 2);
+    EXPECT_TRUE(success.mission->tasks[0].completed);
+    EXPECT_TRUE(success.mission->tasks[1].completed);
+    ASSERT_TRUE(success.mission->tasks[0].completedTick.has_value());
+    ASSERT_TRUE(success.mission->tasks[1].completedTick.has_value());
+    EXPECT_LE(*success.mission->tasks[0].completedTick, 150);
+    EXPECT_LE(*success.mission->tasks[1].completedTick, 150);
+
+    constexpr std::string_view missionStartsBeforeTakeoff = R"json(
+    {"version":1,"ticks":3,
+     "drones":[
+       {"name":"lead","initial_position_meters":[0,0,0]},
+       {"name":"wing","initial_position_meters":[4,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"lead","type":"takeoff"},
+       {"tick":0,"drone":"wing","type":"takeoff"}],
+     "mission":{"name":"too-early","tasks":[
+       {"name":"west","role":"west survey","drone":"lead",
+        "target_position_meters":[2,0,1.5],"start_tick":1,
+        "deadline_tick":2,"tolerance_meters":0.05},
+       {"name":"east","role":"east survey","drone":"wing",
+        "target_position_meters":[2,0,1.5],"start_tick":1,
+        "deadline_tick":2,"tolerance_meters":0.05}]},
+     "expected":{"tolerance_meters":0.000001,"drones":[
+       {"name":"lead","mode":"taking_off","position_meters":[0,0,0.05]},
+       {"name":"wing","mode":"taking_off","position_meters":[4,0,0.05]}]}}
+    )json";
+
+    const ScenarioResult failure = RunScenario(missionStartsBeforeTakeoff);
+    EXPECT_FALSE(failure.passed);
+    ASSERT_TRUE(failure.mission.has_value());
+    EXPECT_FALSE(failure.mission->passed);
+    EXPECT_TRUE(failure.mission->tasks[0].failed);
+    EXPECT_TRUE(failure.mission->tasks[1].failed);
+
+    constexpr std::string_view missionMissesDeadline = R"json(
+    {"version":1,"ticks":92,
+     "drones":[
+       {"name":"lead","initial_position_meters":[0,0,0]},
+       {"name":"wing","initial_position_meters":[4,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"lead","type":"takeoff"},
+       {"tick":0,"drone":"wing","type":"takeoff"}],
+     "mission":{"name":"late-arrival","tasks":[
+       {"name":"west","role":"west survey","drone":"lead",
+        "target_position_meters":[100,0,1.5],"start_tick":90,
+        "deadline_tick":91,"tolerance_meters":0.05},
+       {"name":"east","role":"east survey","drone":"wing",
+        "target_position_meters":[100,0,1.5],"start_tick":90,
+        "deadline_tick":91,"tolerance_meters":0.05}]},
+     "expected":{"tolerance_meters":1000,"drones":[
+       {"name":"lead","mode":"following_waypoint","position_meters":[0,0,1.5]},
+       {"name":"wing","mode":"following_waypoint","position_meters":[4,0,1.5]}]}}
+    )json";
+
+    const ScenarioResult missedDeadline = RunScenario(missionMissesDeadline);
+    EXPECT_FALSE(missedDeadline.passed);
+    ASSERT_TRUE(missedDeadline.mission.has_value());
+    EXPECT_FALSE(missedDeadline.mission->passed);
+    EXPECT_TRUE(missedDeadline.mission->tasks[0].failed);
+    EXPECT_TRUE(missedDeadline.mission->tasks[1].failed);
+    EXPECT_NE(missedDeadline.issues.front().find("기한"), std::string::npos);
+}
+
 TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
 {
     constexpr std::string_view scenario = R"json(

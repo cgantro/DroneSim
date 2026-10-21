@@ -36,12 +36,36 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
     for (const auto& drone : result.drones)
         drones.push_back({{"name", drone.name}, {"state", ToJson(drone.finalState)}});
 
+    nlohmann::json mission = nullptr;
+    if (result.mission)
+    {
+        nlohmann::json tasks = nlohmann::json::array();
+        for (const auto& task : result.mission->tasks)
+        {
+            tasks.push_back({
+                {"name", task.name},
+                {"role", task.role},
+                {"drone", task.droneName},
+                {"target_position_meters", {
+                    task.targetPositionMeters.x,
+                    task.targetPositionMeters.y,
+                    task.targetPositionMeters.z}},
+                {"started", task.started},
+                {"completed", task.completed},
+                {"failed", task.failed},
+                {"completed_tick", task.completedTick}});
+        }
+        mission = {{"name", result.mission->name},
+            {"passed", result.mission->passed}, {"tasks", std::move(tasks)}};
+    }
+
     return {
         {"passed", result.passed},
         {"tick_count", result.tickCount},
         {"simulation_time_seconds", result.simulationTimeSeconds},
         {"final_state", ToJson(result.finalState)},
         {"drones", std::move(drones)},
+        {"mission", std::move(mission)},
         {"minimum_drone_separation_meters", result.minimumDroneSeparationMeters},
         {"camera", {
             {"status", aerosimlab::simulation::ToString(result.finalCamera.status)},
