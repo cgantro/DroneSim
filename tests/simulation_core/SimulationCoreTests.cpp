@@ -299,6 +299,38 @@ TEST(SimulationCore, RigidBodyDronesShareOnePhysicsStepAndCanBeRemoved)
     EXPECT_TRUE(std::isfinite(simulation.State(first).positionMeters.z));
 }
 
+TEST(SimulationCore, CollidingRigidBodyDronesRemainSeparated)
+{
+    SimulationCore simulation{SimulationDynamics::RigidBody};
+    const DroneId first = simulation.PrimaryDroneId();
+    const DroneId second = simulation.AddDrone({
+        2.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters});
+    ASSERT_EQ(simulation.Apply(first, Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+    ASSERT_EQ(simulation.Apply(second, Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 240; ++tick)
+        simulation.AdvanceOneTick();
+
+    ASSERT_EQ(simulation.Apply(first, Command(
+        DroneCommand::Kind::SetVelocity, glm::dvec3{1.0, 0.0, 0.0})),
+        CommandResult::Accepted);
+    ASSERT_EQ(simulation.Apply(second, Command(
+        DroneCommand::Kind::SetVelocity, glm::dvec3{-1.0, 0.0, 0.0})),
+        CommandResult::Accepted);
+    double minimumCenterDistance = std::numeric_limits<double>::infinity();
+    for (int tick = 0; tick < 120; ++tick)
+    {
+        simulation.AdvanceOneTick();
+        const glm::dvec3 offset = simulation.State(second).positionMeters
+            - simulation.State(first).positionMeters;
+        minimumCenterDistance = std::min(minimumCenterDistance, glm::length(offset));
+    }
+
+    EXPECT_GT(minimumCenterDistance, 0.30);
+    EXPECT_LT(minimumCenterDistance, 0.55);
+}
+
 TEST(SimulationCore, SameRigidBodyCommandsProduceTheSameState)
 {
     SimulationCore first{SimulationDynamics::RigidBody};
