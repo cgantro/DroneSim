@@ -302,7 +302,7 @@ int AeroSimLabApp::Run()
         if (smokeTest_ && !networkEnabled_ && renderedFrames_ >= smokeTestFrameLimit)
             break;
         if (smokeTest_ && networkEnabled_ && smokeReplayStarted_
-            && !recordingActive_ && !replaying_
+            && !commandRecording_.IsRecording() && !commandRecording_.IsReplaying()
             && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
             break;
         if (smokeTest_ && networkEnabled_ &&
@@ -423,7 +423,7 @@ void AeroSimLabApp::AdvanceSimulationTick()
     if (hasGroundCommand)
         return;
 
-    if (replaying_)
+    if (commandRecording_.IsReplaying())
     {
         AdvanceReplayTick();
         return;
@@ -436,10 +436,10 @@ void AeroSimLabApp::AdvanceReplayTick()
 {
     ApplyRecordedCommands();
     simulation_.AdvanceOneTick();
-    ++replayTick_;
-    if (replayTick_ >= recordingTickCount_)
+    commandRecording_.AdvanceReplayTick();
+    if (commandRecording_.ReplayFinished())
     {
-        replaying_ = false;
+        commandRecording_.StopReplay();
         window_->SetTitle("AeroSimLab | 기록 재생 완료");
     }
 }
@@ -476,8 +476,7 @@ void AeroSimLabApp::AdvanceManualControlTick()
     }
 
     simulation_.AdvanceOneTick();
-    if (recordingActive_)
-        ++recordingTickCount_;
+    commandRecording_.FinishTick();
 }
 
 void AeroSimLabApp::ApplyDemoCommands()
@@ -719,7 +718,7 @@ void AeroSimLabApp::HandleGamepadDisconnected()
 {
     using DisconnectAction = aerosimlab::manual_control::GamepadDisconnectAction;
     const auto action = aerosimlab::manual_control::ResolveGamepadDisconnectAction(
-        gamepadConnected_, groundControlActive_ || replaying_, simulation_.State().mode);
+        gamepadConnected_, groundControlActive_ || commandRecording_.IsReplaying(), simulation_.State().mode);
     if (action == DisconnectAction::NoChange)
         return;
 
@@ -757,7 +756,7 @@ void AeroSimLabApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed
     externalControl_ = true;
 
     if (aerosimlab::manual_control::CanGamepadControlSimulation(
-            groundControlActive_, replaying_))
+            groundControlActive_, commandRecording_.IsReplaying()))
     {
         if (takeoffPressed && !previousTakeoffButton_
             && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
@@ -776,7 +775,7 @@ void AeroSimLabApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed
             pendingPilotCommand_ = aerosimlab::manual_control::MapAxes(
                 *pilotAxes, simulation_.State().yawRadians);
     }
-    else if (replaying_)
+    else if (commandRecording_.IsReplaying())
     {
         pendingControllerAction_.reset();
         pendingPilotCommand_.reset();
@@ -796,7 +795,7 @@ bool AeroSimLabApp::ApplySessionCommand(
     switch (command)
     {
     case Command::StartRecording:
-        if (recordingActive_ || replaying_)
+        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
         {
             reply.status = "recording_unavailable";
             return false;
@@ -808,9 +807,7 @@ bool AeroSimLabApp::ApplySessionCommand(
         }
 
         simulation_.Reset();
-        recordedCommands_.clear();
-        recordingTickCount_ = 0;
-        recordingActive_ = true;
+        (void)commandRecording_.StartRecording();
         externalControl_ = true;
         window_->SetTitle("AeroSimLab | 입력 기록 중");
         reply.accepted = true;
@@ -818,40 +815,38 @@ bool AeroSimLabApp::ApplySessionCommand(
         return false;
 
     case Command::StopRecording:
-        if (!recordingActive_)
+        if (!commandRecording_.IsRecording())
         {
             reply.status = "recording_not_active";
             return false;
         }
 
-        recordingActive_ = false;
+        (void)commandRecording_.StopRecording();
         window_->SetTitle("AeroSimLab | 입력 기록 완료");
         reply.accepted = true;
         reply.status = "recording_stopped";
         return false;
 
     case Command::ReplayRecording:
-        if (recordingActive_ || replaying_)
+        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
         {
             reply.status = "recording_unavailable";
             return false;
         }
-        if (recordedCommands_.empty() || recordingTickCount_ == 0)
+        if (!commandRecording_.StartReplay())
         {
             reply.status = "recording_empty";
             return false;
         }
 
         simulation_.Reset();
-        replaying_ = true;
         smokeReplayStarted_ = smokeTest_;
-        replayTick_ = 0;
-        replayCommandIndex_ = 0;
         pendingControllerAction_.reset();
         pendingPilotCommand_.reset();
         window_->SetTitle("AeroSimLab | 입력 기록 재생 중");
         ApplyRecordedCommands();
-        ++replayTick_;
+        simulation_.AdvanceOneTick();
+        commandRecording_.AdvanceReplayTick();
         reply.accepted = true;
         reply.status = "recording_replay_started";
         return true;
@@ -864,9 +859,9 @@ void AeroSimLabApp::ApplyDroneCommand(
     const aerosimlab::simulation::DroneCommand& command,
     aerosimlab::communication::CommandReply& reply)
 {
-    if (replaying_)
+    if (commandRecording_.IsReplaying())
     {
-        replaying_ = false;
+        commandRecording_.StopReplay();
         window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
     }
 
@@ -917,6 +912,7 @@ void AeroSimLabApp::ApplyGroundCommand()
     reply.sequence = pending.packet.sequence;
     reply.receivedAtMilliseconds = pending.receivedAtMilliseconds;
 
+    const bool wasRecordingAtTickStart = commandRecording_.IsRecording();
     bool replayTickAdvanced = false;
     if (pending.packet.sessionCommand)
         replayTickAdvanced = ApplySessionCommand(*pending.packet.sessionCommand, reply);
@@ -927,12 +923,11 @@ void AeroSimLabApp::ApplyGroundCommand()
 
     if (!replayTickAdvanced)
         simulation_.AdvanceOneTick();
-    if (recordingActive_)
-        ++recordingTickCount_;
+    commandRecording_.FinishTick(wasRecordingAtTickStart);
 
-    if (replaying_ && replayTick_ >= recordingTickCount_)
+    if (commandRecording_.IsReplaying() && commandRecording_.ReplayFinished())
     {
-        replaying_ = false;
+        commandRecording_.StopReplay();
         window_->SetTitle("AeroSimLab | 기록 재생 완료");
     }
     reply.appliedTick = simulation_.TickCount();
@@ -957,18 +952,15 @@ void AeroSimLabApp::ApplyGroundCommand()
 
 void AeroSimLabApp::ApplyRecordedCommands()
 {
-    while (replayCommandIndex_ < recordedCommands_.size()
-        && recordedCommands_[replayCommandIndex_].tick == replayTick_)
+    for (const auto& entry : commandRecording_.CommandsForReplayTick())
     {
-        (void)simulation_.Apply(recordedCommands_[replayCommandIndex_].command);
-        ++replayCommandIndex_;
+        (void)simulation_.Apply(entry.command);
     }
 }
 
 void AeroSimLabApp::RecordCommand(const aerosimlab::simulation::DroneCommand& command)
 {
-    if (recordingActive_)
-        recordedCommands_.push_back({recordingTickCount_, command});
+    commandRecording_.Record(command);
 }
 
 aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const

@@ -4,6 +4,7 @@
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "sensor/RgbFrame.h"
+#include "simulation_core/CommandRecording.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
 #endif
@@ -142,17 +143,7 @@ private:
 #endif
     std::chrono::steady_clock::time_point startTime_;
     std::uint16_t udpPort_ = 0;
-    struct RecordedCommand
-    {
-        std::uint64_t tick = 0;
-        aerosimlab::simulation::DroneCommand command;
-    };
-    std::vector<RecordedCommand> recordedCommands_;
-    std::uint64_t recordingTickCount_ = 0;
-    std::uint64_t replayTick_ = 0;
-    std::size_t replayCommandIndex_ = 0;
-    bool recordingActive_ = false;
-    bool replaying_ = false;
+    aerosimlab::simulation::CommandRecording commandRecording_;
 #ifndef __EMSCRIPTEN__
     struct PendingGroundCommand
     {
