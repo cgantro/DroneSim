@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -16,6 +17,7 @@
 namespace
 {
 using Bytes = std::vector<unsigned char>;
+constexpr int gltfUnsignedByteComponentType = 5121;
 
 void AppendUInt32(Bytes& bytes, std::uint32_t value)
 {
@@ -28,7 +30,8 @@ class TriangleGlb final
 public:
     explicit TriangleGlb(std::size_t viewLength, int materialIndex = -1,
         std::size_t vertexCount = 3U, std::string material = {}, bool includeSceneNode = true,
-        std::optional<int> indicesReference = std::nullopt, int sceneIndex = 0)
+        std::optional<int> indicesReference = std::nullopt, int sceneIndex = 0,
+        bool includeByteIndices = false)
     {
         constexpr std::array<std::array<float, 3>, 4> positions{{
             {0.0F, 0.0F, 0.0F},
@@ -37,7 +40,14 @@ public:
             {1.0F, 1.0F, 0.0F}}};
         if (vertexCount > positions.size())
             throw std::invalid_argument("triangle GLB test supports at most four vertices");
-        const std::size_t bufferLength = vertexCount * sizeof(positions[0]);
+        const std::size_t positionByteLength = vertexCount * sizeof(positions[0]);
+        Bytes indexBytes;
+        if (includeByteIndices)
+        {
+            for (const std::uint32_t index : {0U, 1U, 2U})
+                indexBytes.push_back(static_cast<unsigned char>(index));
+        }
+        const std::size_t bufferLength = positionByteLength + indexBytes.size();
         path_ = std::filesystem::temp_directory_path() /
             ("grasplink-triangle-" + std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count()) + ".glb");
@@ -54,20 +64,32 @@ public:
             : "\"nodes\":[]";
         const std::string primitiveIndices = indicesReference.has_value()
             ? ",\"indices\":" + std::to_string(*indicesReference)
-            : std::string{};
+            : includeByteIndices ? ",\"indices\":1" : std::string{};
+        const std::string bufferViews = includeByteIndices
+            ? "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" +
+                std::to_string(viewLength) + "},{\"buffer\":0,\"byteOffset\":" +
+                std::to_string(positionByteLength) + ",\"byteLength\":" +
+                std::to_string(indexBytes.size()) + "}]"
+            : "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" +
+                std::to_string(viewLength) + "}]";
+        const std::string accessors = includeByteIndices
+            ? "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
+                std::to_string(vertexCount) + ",\"type\":\"VEC3\"},{\"bufferView\":1,\"componentType\":" +
+                std::to_string(gltfUnsignedByteComponentType) + ",\"count\":3,\"type\":\"SCALAR\"}]"
+            : "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
+                std::to_string(vertexCount) + ",\"type\":\"VEC3\"}]";
         std::string json =
             "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" +
             std::to_string(bufferLength) + "}],"
-            "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" + std::to_string(viewLength) +
-            "}],\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
-            std::to_string(vertexCount) + ",\"type\":\"VEC3\"}],"
+            + bufferViews + "," + accessors + ","
             + materialArray +
             "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}" +
             primitiveIndices + primitiveMaterial + "}]}],"
             + sceneNodes + "}";
 
         Bytes binary(bufferLength);
-        std::memcpy(binary.data(), positions.data(), binary.size());
+        std::memcpy(binary.data(), positions.data(), positionByteLength);
+        std::copy(indexBytes.begin(), indexBytes.end(), binary.begin() + positionByteLength);
         while (json.size() % 4U != 0U) json.push_back(' ');
         while (binary.size() % 4U != 0U) binary.push_back(0U);
 
@@ -153,4 +175,9 @@ TEST(GltfLoader, ReadsPositionsAndRejectsAccessorOutsideBufferView)
     TriangleGlb invalidNegativeScene(36U, -1, 3U, {}, true, std::nullopt, -2);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidNegativeScene.Path()),
         std::runtime_error);
+
+    TriangleGlb byteIndices(36U, -1, 3U, {}, true, std::nullopt, 0, true);
+    const auto indexedModel = grasplink::model::GltfLoader::LoadGLB(byteIndices.Path());
+    ASSERT_EQ(indexedModel.meshes.size(), 1U);
+    EXPECT_EQ(indexedModel.meshes.front().indices, (std::vector<std::uint32_t>{0U, 1U, 2U}));
 }
