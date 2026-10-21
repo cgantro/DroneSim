@@ -1,44 +1,40 @@
 # AeroSimLab
 
-AeroSimLab은 드론과 전자광학 카메라를 시험하는 C++ 시뮬레이터를 목표로 합니다. 지금은 기존 GraspLink의 로봇 시뮬레이터를 새 요구에 맞게 바꾸는 중이며, 드론·카메라·지상통제 기능은 아직 구현되지 않았습니다. 실제 장비를 제어하지 않습니다.
+AeroSimLab은 가상 드론과 탑재 카메라를 시험하는 C++ 시뮬레이터입니다. 지금은 화면과 분리된 드론 운동 모형과 JSON 시나리오 실행 기능이 있습니다. 카메라 영상, 지상통제 프로그램, UDP 통신은 아직 구현하지 않았습니다.
 
-## 시연
+현재 화면 프로그램에는 이전 로봇 시연이 남아 있습니다. 드론이 화면에서 움직이는 기능은 아직 연결하지 않았습니다.
 
-[![GraspLink 시연](assets/시연.gif)](assets/시연.webm)
+## 빌드와 실행
 
-## 빌드
-
-### Windows
-
-CMake, Ninja, MSVC가 설치된 Visual Studio Developer PowerShell에서 실행합니다.
+Windows에서는 Visual Studio 개발자 PowerShell에서 다음 명령을 실행합니다.
 
 ```powershell
-cmake --preset ninja
-cmake --build --preset ninja-debug
-cd build-ninja-debug
-.\aerosimlab_simulator.exe
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
 
-### 웹
-
-Emscripten SDK를 활성화한 뒤 빌드합니다.
+화면 없이 예제 시나리오를 실행합니다.
 
 ```powershell
-emcmake cmake --preset emscripten-web
-cmake --build --preset emscripten-web
+.\build\aerosimlab_headless.exe --scenario scenarios/normal-flight.json
 ```
 
-결과물은 `build-emscripten-web/index.html`입니다. 멀티스레드 빌드는 `file://`에서 실행할 수 없습니다. [배포 사이트에서 실행](https://cgantro.github.io/Portfolio/minibcg/index.html)
+출력의 `passed`가 `true`면 명령 재생과 예상 상태 비교가 통과한 것입니다. `--help`는 실행 방법을 보여 줍니다.
 
-GitHub Pages 배포 주소: [GraspLink 웹 시뮬레이터](https://cgantro.github.io/GraspLink/)
-
-단일 스레드 빌드는 `emscripten-single-thread` preset으로 설정하고 빌드합니다.
+기존 화면 프로그램은 다음과 같이 실행합니다.
 
 ```powershell
-emcmake cmake --preset emscripten-single-thread
-cmake --build --preset emscripten-single-thread
+.\build\aerosimlab_simulator.exe
 ```
+
+## 시험
+
+```powershell
+ctest --test-dir build --output-on-failure
+```
+
+시나리오 실행 결과는 시작 위치, 목표 위치, 비행 상태가 정해진 값과 맞는지 확인합니다. 현재 시험에는 이전 로봇 기능도 남아 있으며, 드론 요구에 맞춰 정리할 예정입니다.
 
 ## 문서
 
-[처음 읽기](docs/ARCHITECTURE.md) · [IK와 MoveL 따라 하기](docs/IK_MOVEL_TUTORIAL.md) · [구현 범위](docs/REQUIREMENTS.md) · [성능 기록](docs/PERFORMANCE.md) · [문서 안내](docs/README.md)
+[전환 전 코드 감사](docs/AEROSIMLAB_AUDIT.md) · [문서 안내](docs/README.md)
