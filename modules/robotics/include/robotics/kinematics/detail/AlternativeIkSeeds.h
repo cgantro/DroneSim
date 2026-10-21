@@ -11,7 +11,7 @@
 
 namespace grasplink::robotics::kinematics::detail
 {
-inline std::size_t NextPrime(std::size_t candidate)
+inline std::size_t NextHaltonPrimeBase(std::size_t candidate)
 {
     for (;; ++candidate)
     {
@@ -43,7 +43,7 @@ inline void BuildIkRestartSeed(std::size_t sample, const JointVector& start,
     std::size_t primeBase = 1;
     for (std::size_t jointIndex = 0; jointIndex < seed.size(); ++jointIndex)
     {
-        primeBase = NextPrime(primeBase + 1);
+        primeBase = NextHaltonPrimeBase(primeBase + 1);
         const auto& joint = specification.joints[jointIndex];
         if (!joint.HasPositionLimits())
         {
