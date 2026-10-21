@@ -1,5 +1,6 @@
 #include "simulation_core/DroneModel.h"
 
+#include <glm/gtc/quaternion.hpp>
 #include <glm/geometric.hpp>
 
 #include <algorithm>
@@ -112,6 +113,9 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
 {
     constexpr double step = fixedStepSeconds;
     state.yawRadians += control.commandedYawRateRadiansPerSecond * step;
+    state.orientation = glm::angleAxis(state.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
+    state.angularVelocityRadiansPerSecond = {
+        0.0, 0.0, control.commandedYawRateRadiansPerSecond};
 
     switch (state.mode)
     {

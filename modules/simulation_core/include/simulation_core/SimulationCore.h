@@ -10,6 +10,16 @@
 namespace aerosimlab::simulation
 {
 /**
+ * @brief 기존 운동학 기준선과 Jolt 강체 경로 중 사용할 계산 방식을 고른다.
+ * @details 강체 경로에는 아직 비행 제어기가 없어 드론 명령을 거부한다.
+ */
+enum class SimulationDynamics
+{
+    Kinematic,
+    RigidBody
+};
+
+/**
  * @brief 화면 프레임 시간을 고정 간격 모의 Tick 수로 바꾼다.
  * @details Tick보다 짧은 나머지 시간은 다음 프레임으로 넘긴다. 한 프레임에서 처리할 시간은 100ms로 제한해 화면이 멈춘 뒤 과도한 따라잡기를 막는다.
  */
@@ -34,7 +44,7 @@ class SimulationCore
 {
 public:
     /** @brief Flecs 실행 공간을 만들고 드론과 탑재 카메라를 준비한다. */
-    SimulationCore();
+    explicit SimulationCore(SimulationDynamics dynamics = SimulationDynamics::Kinematic);
 
     /** @brief 모의 객체와 Flecs 실행 공간을 함께 정리한다. */
     ~SimulationCore();

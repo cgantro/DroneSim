@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
 namespace aerosimlab::simulation
@@ -21,12 +22,14 @@ enum class FlightMode
 
 /**
  * @brief 한 번의 모의 단계가 끝난 뒤 드론의 위치와 움직임을 보관한다.
- * @details 위치는 미터, 속도는 초당 미터, 방향각과 회전 속도는 라디안 단위다. 위치와 속도는 장면의 월드 좌표를 쓴다.
+ * @details 위치는 미터, 속도는 초당 미터, 자세는 Quaternion, 각속도는 라디안/초 단위다. 위치와 속도는 장면의 월드 좌표를 쓴다.
  */
 struct DroneState
 {
     glm::dvec3 positionMeters{0.0};
     glm::dvec3 velocityMetersPerSecond{0.0};
+    glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
+    glm::dvec3 angularVelocityRadiansPerSecond{0.0};
     double yawRadians = 0.0;
     FlightMode mode = FlightMode::Grounded;
 };
@@ -66,6 +69,7 @@ enum class CommandResult
     Accepted,
     InvalidValue,
     InvalidFlightMode,
+    UnsupportedDynamics,
     SimulationPaused
 };
 

@@ -47,6 +47,17 @@ glm::dvec3 ReadVector(const Json& value)
     return {ReadFinite(value[0], "x"), ReadFinite(value[1], "y"), ReadFinite(value[2], "z")};
 }
 
+glm::dquat ReadQuaternion(const Json& value)
+{
+    if (!value.is_object())
+        throw std::invalid_argument("Quaternion 값은 성분별 객체여야 합니다.");
+    return {
+        ReadFinite(Required(value, "w"), "orientation.w"),
+        ReadFinite(Required(value, "x"), "orientation.x"),
+        ReadFinite(Required(value, "y"), "orientation.y"),
+        ReadFinite(Required(value, "z"), "orientation.z")};
+}
+
 Json Wrap(std::string_view type, Json payload)
 {
     Json envelope{{"version", 1}, {"type", type}, {"length", 0}, {"payload", std::move(payload)}};
@@ -256,6 +267,13 @@ std::string EncodeReply(const CommandReply& reply)
             {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
             {"velocity_meters_per_second", {
                 state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y, state.velocityMetersPerSecond.z}},
+            {"orientation_quaternion", {
+                {"w", state.orientation.w}, {"x", state.orientation.x},
+                {"y", state.orientation.y}, {"z", state.orientation.z}}},
+            {"angular_velocity_radians_per_second", {
+                state.angularVelocityRadiansPerSecond.x,
+                state.angularVelocityRadiansPerSecond.y,
+                state.angularVelocityRadiansPerSecond.z}},
             {"yaw_radians", state.yawRadians},
             {"camera_status", aerosimlab::communication::ToString(camera.status)},
             {"camera_frame_count", camera.frameCount},
@@ -285,6 +303,11 @@ CommandReply DecodeReply(std::string_view datagram)
     state.mode = ReadFlightMode(Required(telemetry, "flight_mode"));
     state.positionMeters = ReadVector(Required(telemetry, "position_meters"));
     state.velocityMetersPerSecond = ReadVector(Required(telemetry, "velocity_meters_per_second"));
+    if (telemetry.contains("orientation_quaternion"))
+        state.orientation = ReadQuaternion(Required(telemetry, "orientation_quaternion"));
+    if (telemetry.contains("angular_velocity_radians_per_second"))
+        state.angularVelocityRadiansPerSecond =
+            ReadVector(Required(telemetry, "angular_velocity_radians_per_second"));
     state.yawRadians = ReadFinite(Required(telemetry, "yaw_radians"), "yaw_radians");
     auto& camera = reply.telemetry.camera;
     camera.status = ReadCameraStatus(Required(telemetry, "camera_status"));

@@ -166,6 +166,26 @@ TEST(SimulationCore, SameCommandSequenceProducesTheSameState)
     EXPECT_EQ(first.TickCount(), second.TickCount());
 }
 
+TEST(SimulationCore, RigidBodyModeCopiesJoltStateIntoTheDroneEntity)
+{
+    SimulationCore simulation{SimulationDynamics::RigidBody};
+    EXPECT_EQ(
+        simulation.Apply(Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::UnsupportedDynamics);
+
+    for (int tick = 0; tick < 120; ++tick)
+        simulation.AdvanceOneTick();
+
+    EXPECT_NEAR(simulation.State().positionMeters.z, 0.05, 0.01);
+    EXPECT_NEAR(simulation.State().velocityMetersPerSecond.z, 0.0, 0.1);
+    EXPECT_NEAR(glm::length(simulation.State().orientation), 1.0, 1.0e-5);
+    EXPECT_EQ(simulation.State().mode, FlightMode::Grounded);
+
+    simulation.Reset();
+    EXPECT_EQ(simulation.TickCount(), 0);
+    EXPECT_NEAR(simulation.State().positionMeters.z, 0.05, 1.0e-6);
+}
+
 TEST(SimulationCore, CameraStopsOnDisableOrFaultAndResumesAfterRecovery)
 {
     SimulationCore simulation;

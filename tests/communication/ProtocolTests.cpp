@@ -44,13 +44,21 @@ TEST(Protocol, RoundTripsCommandsAndReplyTelemetry)
     reply.telemetry.simulationTimeSeconds = 0.15;
     reply.telemetry.drone.mode = simulation::FlightMode::Hovering;
     reply.telemetry.drone.positionMeters = {1.0, 2.0, 3.0};
+    reply.telemetry.drone.orientation = {0.9238795325, 0.0, 0.0, 0.3826834324};
+    reply.telemetry.drone.angularVelocityRadiansPerSecond = {0.1, -0.2, 0.3};
     reply.telemetry.camera.status = simulation::CameraStatus::Fault;
     reply.telemetry.camera.frameCount = 8;
-    const auto decoded = DecodeReply(EncodeReply(reply));
+    const std::string encodedReply = EncodeReply(reply);
+    EXPECT_LE(encodedReply.size(), maximumDatagramBytes);
+    const auto decoded = DecodeReply(encodedReply);
     EXPECT_EQ(decoded.commandId, 3);
     EXPECT_EQ(decoded.appliedTick, 9);
     EXPECT_EQ(decoded.telemetry.drone.mode, simulation::FlightMode::Hovering);
     EXPECT_EQ(decoded.telemetry.drone.positionMeters, glm::dvec3(1.0, 2.0, 3.0));
+    EXPECT_EQ(decoded.telemetry.drone.orientation, reply.telemetry.drone.orientation);
+    EXPECT_EQ(
+        decoded.telemetry.drone.angularVelocityRadiansPerSecond,
+        reply.telemetry.drone.angularVelocityRadiansPerSecond);
     EXPECT_EQ(decoded.telemetry.camera.status, simulation::CameraStatus::Fault);
 }
 
