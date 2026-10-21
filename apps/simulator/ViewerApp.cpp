@@ -55,6 +55,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #ifdef __EMSCRIPTEN__
@@ -343,16 +344,13 @@ bool ViewerApp::InitRobot(const Entity& robotRoot)
 bool ViewerApp::InitGripper(const Entity& robotRoot)
 {
     const Entity gripperRoot = robotRoot.FindChildByNameRecursive("Gripper");
-    const char* requiredJoints[] = {
-        "LeftOuterKnuckleJoint", "RightOuterKnuckleJoint", "LeftInnerKnuckleJoint",
-        "RightInnerKnuckleJoint", "LeftFingerTipJoint", "RightFingerTipJoint"};
+    const auto& specification = grasplink::robotics::models::robotiq::kTwoF85;
     if (!gripperRoot)
         return true;
-    for (const char* name : requiredJoints)
-        if (!robotRoot.FindChildByNameRecursive(name))
+    for (std::size_t joint = 0; joint < specification.jointCount; ++joint)
+        if (!robotRoot.FindChildByNameRecursive(std::string{specification.joints[joint].name}))
             return true;
 
-    const auto& specification = grasplink::robotics::models::robotiq::kTwoF85;
     m_GripperController = std::make_unique<grasplink::robotics::backends::simulation::SimGripperController>(specification);
     m_PickPlaceMission = std::make_unique<grasplink::application::PickPlaceMission>();
     auto result = m_GripperController->Connect();
