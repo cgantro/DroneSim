@@ -272,4 +272,13 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
     deferredIntegration.reset();
     EXPECT_FALSE(deferredPhysics.IsBodyValid(deferredHandle));
     deferredWorld.defer_end();
+
+    auto restoredIntegration = std::make_unique<grasplink::simulation::PhysicsSystemModule>(
+        deferredWorld, deferredPhysics);
+    restoredIntegration->Step(0.004);
+    const auto restoredHandle = restoredIntegration->GetBodyHandle(deferredBody.GetHandle());
+    EXPECT_TRUE(deferredPhysics.IsBodyValid(restoredHandle));
+    EXPECT_NE(restoredHandle.value, deferredHandle.value);
+    restoredIntegration.reset();
+    EXPECT_FALSE(deferredPhysics.IsBodyValid(restoredHandle));
 }
