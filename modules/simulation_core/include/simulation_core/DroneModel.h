@@ -38,7 +38,9 @@ struct DroneState
 struct DroneControlState
 {
     glm::dvec3 waypointMeters{0.0};
+    glm::dvec3 targetVelocityMetersPerSecond{0.0};
     double commandedYawRateRadiansPerSecond = 0.0;
+    double desiredYawRadians = 0.0;
 };
 
 /**
@@ -82,6 +84,7 @@ class DroneModel
 {
 public:
     static constexpr double fixedStepSeconds = 1.0 / 60.0;
+    static constexpr double takeoffHeightMeters = 1.5;
     static constexpr double maximumSpeedMetersPerSecond = 5.0;
     static constexpr double maximumYawRateRadiansPerSecond = 1.5;
 
@@ -96,7 +99,6 @@ public:
     static void Reset(DroneState& state, DroneControlState& control) noexcept;
 
 private:
-    static constexpr double takeoffHeightMeters = 1.5;
     static constexpr double climbSpeedMetersPerSecond = 1.0;
     static constexpr double waypointToleranceMeters = 0.05;
     static constexpr double altitudeToleranceMeters = 1.0e-12;

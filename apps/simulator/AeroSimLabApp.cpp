@@ -12,6 +12,7 @@
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
+#include <glm/gtc/quaternion.hpp>
 #ifndef __EMSCRIPTEN__
 #include "vision/RgbFrameQuality.h"
 #include "vision/RgbFrameView.h"
@@ -50,6 +51,20 @@ glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
     // 모의는 Z축을 위로 쓰고 화면은 Y축을 위로 쓴다. Y축 방향은 화면의 -Z로 옮겨 오른손 좌표계를 유지한다.
     return {static_cast<float>(positionMeters.x), static_cast<float>(positionMeters.z),
         static_cast<float>(-positionMeters.y)};
+}
+
+glm::quat ToRenderOrientation(const glm::dquat& orientation)
+{
+    constexpr float halfPi = 1.57079632679F;
+    const glm::quat simulationOrientation{
+        static_cast<float>(orientation.w),
+        static_cast<float>(orientation.x),
+        static_cast<float>(orientation.y),
+        static_cast<float>(orientation.z)};
+    const glm::quat simulationToRender = glm::angleAxis(
+        -halfPi, glm::vec3{1.0F, 0.0F, 0.0F});
+    return glm::normalize(
+        simulationToRender * simulationOrientation * glm::inverse(simulationToRender));
 }
 
 glm::mat4 CubeTransform(const glm::vec3& position, const glm::vec3& size)
@@ -298,8 +313,7 @@ void AeroSimLabApp::UpdateCameraTransforms(int observerWidth, int eoWidth, int h
 {
     const auto& state = simulation_.State();
     const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
-    const glm::mat4 heading = glm::rotate(glm::mat4{1.0F},
-        static_cast<float>(state.yawRadians), glm::vec3{0.0F, 1.0F, 0.0F});
+    const glm::mat4 heading = glm::mat4_cast(ToRenderOrientation(state.orientation));
 
     observerCamera_->SetPosition(dronePosition + glm::vec3{7.0F, 5.0F, 7.0F});
     observerCamera_->SetTarget(dronePosition + glm::vec3{0.0F, 0.2F, 0.0F});
@@ -753,8 +767,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 
     const glm::vec3 position = ToRenderPosition(simulation_.State().positionMeters);
     const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
-        glm::rotate(glm::mat4{1.0F}, static_cast<float>(simulation_.State().yawRadians),
-            glm::vec3{0.0F, 1.0F, 0.0F});
+        glm::mat4_cast(ToRenderOrientation(simulation_.State().orientation));
     const auto drawPart = [&](const glm::vec3& offset, const glm::vec3& size,
                               const aerosimlab::graphics::Material& material)
     {

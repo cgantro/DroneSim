@@ -3,6 +3,7 @@
 #include "simulation_core/PhysicsWorld.h"
 #endif
 #include "simulation_core/QuadrotorModel.h"
+#include "simulation_core/QuadrotorFlightController.h"
 
 #include <flecs.h>
 
@@ -18,6 +19,12 @@ struct SimulationCore::EcsStorage
     struct PhysicsBody
     {
         RigidBodyHandle handle;
+    };
+
+    struct DroneActuation
+    {
+        QuadrotorParameters parameters;
+        QuadrotorState motors;
     };
 #endif
 
@@ -52,12 +59,16 @@ struct SimulationCore::EcsStorage
         else
         {
             CreatePhysicsBody();
-            world.system<DroneState, PhysicsBody>("AdvanceRigidBodyDrone")
+            world.system<DroneState, DroneControlState, PhysicsBody, DroneActuation>(
+                "AdvanceRigidBodyDrone")
                 .kind(flecs::OnUpdate)
-                .each([this](DroneState& state, const PhysicsBody& body)
+                .each([this](
+                    DroneState& state,
+                    DroneControlState& control,
+                    const PhysicsBody& body,
+                    DroneActuation& actuation)
                 {
-                    physics->Step(DroneModel::fixedStepSeconds);
-                    CopyPhysicsState(state, body.handle);
+                    AdvanceRigidBody(state, control, body.handle, actuation);
                 });
         }
 #endif
@@ -85,15 +96,62 @@ struct SimulationCore::EcsStorage
             parameters.principalInertiaKilogramMetersSquared;
         physicsBody = physics->CreateBox(definition);
         drone.set<PhysicsBody>({physicsBody});
+        drone.set<DroneActuation>({parameters, {}});
         CopyPhysicsState(drone.get_mut<DroneState>(), physicsBody);
     }
 
     void ResetPhysicsBody()
     {
         RigidBodyState initialState;
-        initialState.positionMeters = {0.0, 0.0, 0.05};
+        initialState.positionMeters = {
+            0.0, 0.0, QuadrotorFlightController::groundedCenterHeightMeters};
         physics->SetState(physicsBody, initialState);
+        drone.get_mut<DroneActuation>().motors = {};
         CopyPhysicsState(drone.get_mut<DroneState>(), physicsBody);
+    }
+
+    void AdvanceRigidBody(
+        DroneState& state,
+        DroneControlState& control,
+        RigidBodyHandle body,
+        DroneActuation& actuation)
+    {
+        const double step = DroneModel::fixedStepSeconds;
+        if (state.mode != FlightMode::Grounded)
+            control.desiredYawRadians += control.commandedYawRateRadiansPerSecond * step;
+
+        const auto targetSpeeds = QuadrotorFlightController::MotorTargets(
+            state, control, actuation.parameters, step);
+        QuadrotorModel::AdvanceMotors(
+            actuation.motors, targetSpeeds, actuation.parameters, step);
+        const QuadrotorWrench wrench =
+            QuadrotorModel::CalculateWrench(actuation.motors, actuation.parameters);
+        physics->ApplyForce(body, state.orientation * wrench.forceNewtons);
+        physics->ApplyTorque(body, state.orientation * wrench.torqueNewtonMeters);
+        physics->Step(step);
+        CopyPhysicsState(state, body);
+
+        if (state.mode == FlightMode::TakingOff
+            && state.positionMeters.z >= DroneModel::takeoffHeightMeters - 0.03
+            && std::abs(state.velocityMetersPerSecond.z) < 0.15)
+        {
+            state.mode = FlightMode::Hovering;
+        }
+        else if (state.mode == FlightMode::FollowingWaypoint
+            && glm::length(control.waypointMeters - state.positionMeters) < 0.05
+            && glm::length(state.velocityMetersPerSecond) < 0.15)
+        {
+            state.mode = FlightMode::Hovering;
+            control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
+        }
+        else if (state.mode == FlightMode::Landing
+            && state.positionMeters.z <= QuadrotorFlightController::groundedCenterHeightMeters + 0.02
+            && std::abs(state.velocityMetersPerSecond.z) < 0.15)
+        {
+            state.mode = FlightMode::Grounded;
+            control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
+            control.commandedYawRateRadiansPerSecond = 0.0;
+        }
     }
 
     void CopyPhysicsState(DroneState& target, RigidBodyHandle body) const
@@ -137,14 +195,21 @@ CommandResult SimulationCore::Apply(const DroneCommand& command) noexcept
     {
         return CommandResult::SimulationPaused;
     }
+    DroneState& state = ecs_->drone.get_mut<DroneState>();
+    DroneControlState& control = ecs_->drone.get_mut<DroneControlState>();
+#if defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
-    {
         return CommandResult::UnsupportedDynamics;
+#endif
+    const CommandResult result = DroneModel::Apply(state, control, command);
+#if !defined(__EMSCRIPTEN__)
+    if (result == CommandResult::Accepted
+        && ecs_->dynamics == SimulationDynamics::RigidBody)
+    {
+        ecs_->CopyPhysicsState(state, ecs_->physicsBody);
     }
-    return DroneModel::Apply(
-        ecs_->drone.get_mut<DroneState>(),
-        ecs_->drone.get_mut<DroneControlState>(),
-        command);
+#endif
+    return result;
 }
 
 void SimulationCore::AdvanceOneTick() noexcept

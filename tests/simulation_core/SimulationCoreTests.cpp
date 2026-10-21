@@ -1,9 +1,11 @@
 #include "simulation_core/SimulationCore.h"
+#include "simulation_core/QuadrotorFlightController.h"
 
 #include <glm/geometric.hpp>
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <limits>
 
 namespace aerosimlab::simulation
@@ -166,24 +168,80 @@ TEST(SimulationCore, SameCommandSequenceProducesTheSameState)
     EXPECT_EQ(first.TickCount(), second.TickCount());
 }
 
-TEST(SimulationCore, RigidBodyModeCopiesJoltStateIntoTheDroneEntity)
+TEST(SimulationCore, RigidBodyModeUsesRotorForcesForTakeoffAndLanding)
 {
     SimulationCore simulation{SimulationDynamics::RigidBody};
-    EXPECT_EQ(
+    ASSERT_EQ(
         simulation.Apply(Command(DroneCommand::Kind::TakeOff)),
-        CommandResult::UnsupportedDynamics);
+        CommandResult::Accepted);
 
-    for (int tick = 0; tick < 120; ++tick)
+    for (int tick = 0; tick < 240; ++tick)
         simulation.AdvanceOneTick();
 
-    EXPECT_NEAR(simulation.State().positionMeters.z, 0.05, 0.01);
-    EXPECT_NEAR(simulation.State().velocityMetersPerSecond.z, 0.0, 0.1);
+    ASSERT_EQ(simulation.State().mode, FlightMode::Hovering);
+    EXPECT_NEAR(simulation.State().positionMeters.z, DroneModel::takeoffHeightMeters, 0.08);
+    EXPECT_NEAR(simulation.State().velocityMetersPerSecond.z, 0.0, 0.15);
     EXPECT_NEAR(glm::length(simulation.State().orientation), 1.0, 1.0e-5);
+
+    ASSERT_EQ(simulation.Apply(Command(
+        DroneCommand::Kind::SetVelocity, glm::dvec3{1.0, 0.0, 0.0})), CommandResult::Accepted);
+    for (int tick = 0; tick < 120; ++tick)
+        simulation.AdvanceOneTick();
+    EXPECT_GT(simulation.State().positionMeters.x, 0.2);
+    EXPECT_GT(std::abs(simulation.State().orientation.y), 0.01);
+    EXPECT_NEAR(glm::length(simulation.State().orientation), 1.0, 1.0e-5);
+
+    const glm::dvec3 waypoint = simulation.State().positionMeters + glm::dvec3{1.0, 0.0, 0.0};
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::SetWaypoint, waypoint)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 240; ++tick)
+        simulation.AdvanceOneTick();
+    EXPECT_EQ(simulation.State().mode, FlightMode::Hovering);
+    EXPECT_NEAR(simulation.State().positionMeters.x, waypoint.x, 0.08);
+
+    ASSERT_EQ(
+        simulation.Apply(Command(DroneCommand::Kind::SetYawRate, glm::dvec3{0.0}, 0.5)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 120; ++tick)
+        simulation.AdvanceOneTick();
+    EXPECT_GT(simulation.State().yawRadians, 0.3);
+
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::Land)), CommandResult::Accepted);
+    for (int tick = 0; tick < 360; ++tick)
+        simulation.AdvanceOneTick();
     EXPECT_EQ(simulation.State().mode, FlightMode::Grounded);
+    EXPECT_NEAR(
+        simulation.State().positionMeters.z,
+        QuadrotorFlightController::groundedCenterHeightMeters,
+        0.02);
+    EXPECT_NEAR(simulation.State().velocityMetersPerSecond.z, 0.0, 0.15);
 
     simulation.Reset();
     EXPECT_EQ(simulation.TickCount(), 0);
     EXPECT_NEAR(simulation.State().positionMeters.z, 0.05, 1.0e-6);
+}
+
+TEST(SimulationCore, SameRigidBodyCommandsProduceTheSameState)
+{
+    SimulationCore first{SimulationDynamics::RigidBody};
+    SimulationCore second{SimulationDynamics::RigidBody};
+    for (SimulationCore* simulation : {&first, &second})
+    {
+        ASSERT_EQ(simulation->Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
+        for (int tick = 0; tick < 240; ++tick)
+            simulation->AdvanceOneTick();
+        ASSERT_EQ(simulation->Apply(Command(
+            DroneCommand::Kind::SetVelocity, glm::dvec3{1.0, -0.5, 0.0})),
+            CommandResult::Accepted);
+        for (int tick = 0; tick < 120; ++tick)
+            simulation->AdvanceOneTick();
+    }
+
+    EXPECT_EQ(first.State().positionMeters, second.State().positionMeters);
+    EXPECT_EQ(first.State().velocityMetersPerSecond, second.State().velocityMetersPerSecond);
+    EXPECT_EQ(first.State().orientation, second.State().orientation);
+    EXPECT_EQ(first.State().angularVelocityRadiansPerSecond,
+        second.State().angularVelocityRadiansPerSecond);
 }
 
 TEST(SimulationCore, CameraStopsOnDisableOrFaultAndResumesAfterRecovery)

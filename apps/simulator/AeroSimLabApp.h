@@ -178,6 +178,11 @@ private:
         glm::vec4{0.35F, 0.39F, 0.34F, 1.0F}, 0.0F, 1.0F};
     aerosimlab::graphics::Material buildingMaterial_{
         glm::vec4{0.63F, 0.59F, 0.48F, 1.0F}, 0.0F, 0.9F};
+#ifndef __EMSCRIPTEN__
+    aerosimlab::simulation::SimulationCore simulation_{
+        aerosimlab::simulation::SimulationDynamics::RigidBody};
+#else
     aerosimlab::simulation::SimulationCore simulation_;
+#endif
 };
 }

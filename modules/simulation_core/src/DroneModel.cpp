@@ -61,6 +61,7 @@ CommandResult DroneModel::Apply(
             return CommandResult::InvalidValue;
         }
         state.velocityMetersPerSecond = ClampLength(command.vector, maximumSpeedMetersPerSecond);
+        control.targetVelocityMetersPerSecond = state.velocityMetersPerSecond;
         state.mode = glm::length(state.velocityMetersPerSecond) == 0.0
             ? FlightMode::Hovering
             : FlightMode::Flying;
@@ -101,6 +102,7 @@ CommandResult DroneModel::Apply(
             return CommandResult::InvalidFlightMode;
         }
         state.velocityMetersPerSecond = glm::dvec3{0.0};
+        control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
         state.mode = FlightMode::Hovering;
         control.commandedYawRateRadiansPerSecond = 0.0;
         return CommandResult::Accepted;
