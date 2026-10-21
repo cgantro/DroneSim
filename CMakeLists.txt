@@ -51,6 +51,9 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/ScenarioRunner.cpp
   modules/simulation_core/src/SimulationCore.cpp
 )
+if(NOT EMSCRIPTEN)
+  target_sources(aerosimlab_simulation_core PRIVATE modules/simulation_core/src/PhysicsWorld.cpp)
+endif()
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm
@@ -228,6 +231,9 @@ if(BUILD_TESTING)
     tests/simulation_core/SimulationCoreTests.cpp
     tests/simulation_core/ScenarioRunnerTests.cpp
   )
+  if(NOT EMSCRIPTEN)
+    target_sources(aerosimlab_simulation_tests PRIVATE tests/simulation_core/PhysicsWorldTests.cpp)
+  endif()
   target_link_libraries(aerosimlab_simulation_tests PRIVATE
     aerosimlab_simulation_core
     GTest::gtest_main
