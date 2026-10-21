@@ -65,14 +65,6 @@ const char* ErrorCodeName(robotics::ErrorCode code)
 
 }
 
-void GripperPanel::Draw(robotics::IGripperController& gripper,
-    const simulation::GripperGraspState* graspState)
-{
-    ImGui::Begin("Gripper control");
-    DrawContents(gripper, graspState);
-    ImGui::End();
-}
-
 void GripperPanel::DrawContents(robotics::IGripperController& gripper,
     const simulation::GripperGraspState* graspState, bool commandsEnabled)
 {
