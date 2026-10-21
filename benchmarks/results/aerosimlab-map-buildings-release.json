@@ -1,0 +1,125 @@
+{
+  "measured_at_utc": "2026-10-21T21:46:09.6397719+00:00",
+  "source_revision": "2a0c3c51",
+  "environment": {
+    "os": "Microsoft Windows 11 Pro",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+    "build": "MSVC Release x64",
+    "framebuffer": "1280x720 hidden OpenGL; VSync off",
+    "opengl_renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+    "opengl_version": "3.3.0 NVIDIA 581.42"
+  },
+  "scene": {
+    "drones": 1,
+    "dynamics": "Jolt rigid body; drone starts grounded",
+    "terrain": "SRTM 65x65 height grid",
+    "building_footprints": 17,
+    "collision_proxy": "axis-aligned boxes; assumed 3m height",
+    "visual_model": "PX4 X500 GLB"
+  },
+  "method": "Three independent 5-second runs. The simulator used fixed 60 Hz ticks, rendered the hidden window, stepped Jolt, and analyzed EO frames synchronously. These are reference measurements; no same-revision before/after comparison is included.",
+  "runs": [
+    {
+      "run": 1,
+      "elapsed_seconds": 5.0018684,
+      "rendered_frames": 1995,
+      "render_fps": 398.85095737424837,
+      "simulation_ticks": 298,
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "p50": 30.8,
+        "p95": 54.5,
+        "p99": 72.6,
+        "samples": 298
+      },
+      "physics_step_duration_us": {
+        "p50": 18.0,
+        "p95": 39.1,
+        "p99": 58.3,
+        "samples": 298
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "p50": 1186.6,
+          "p95": 1310.1,
+          "p99": 1584.3,
+          "samples": 291
+        },
+        "mean_brightness": 196.824829998331,
+        "mean_contrast": 3.6780817028605637,
+        "mean_sharpness": 1.8658118852805932,
+        "samples": 291
+      },
+      "process_cpu_percent_approx": 100.00263101684162,
+      "working_set_bytes": 107790336
+    },
+    {
+      "run": 2,
+      "elapsed_seconds": 5.0002367,
+      "rendered_frames": 1996,
+      "render_fps": 399.181102766595,
+      "simulation_ticks": 297,
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "p50": 31.0,
+        "p95": 52.7,
+        "p99": 70.4,
+        "samples": 297
+      },
+      "physics_step_duration_us": {
+        "p50": 18.1,
+        "p95": 39.1,
+        "p99": 58.4,
+        "samples": 297
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "p50": 1182.4,
+          "p95": 1352.4,
+          "p99": 1574.6,
+          "samples": 290
+        },
+        "mean_brightness": 196.82201627604314,
+        "mean_contrast": 3.684545836092706,
+        "mean_sharpness": 1.8721294223831855,
+        "samples": 290
+      },
+      "process_cpu_percent_approx": 99.99526622409695,
+      "working_set_bytes": 107778048
+    },
+    {
+      "run": 3,
+      "elapsed_seconds": 5.0003541,
+      "rendered_frames": 1995,
+      "render_fps": 398.9717448210318,
+      "simulation_ticks": 298,
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "p50": 31.2,
+        "p95": 52.9,
+        "p99": 76.4,
+        "samples": 298
+      },
+      "physics_step_duration_us": {
+        "p50": 18.3,
+        "p95": 40.2,
+        "p99": 63.8,
+        "samples": 298
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "p50": 1186.3,
+          "p95": 1276.6,
+          "p99": 1438.6,
+          "samples": 291
+        },
+        "mean_brightness": 196.824829998331,
+        "mean_contrast": 3.6780817028605637,
+        "mean_sharpness": 1.8658118852805932,
+        "samples": 291
+      },
+      "process_cpu_percent_approx": 99.99291850151172,
+      "working_set_bytes": 107884544
+    }
+  ]
+}
