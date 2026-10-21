@@ -40,8 +40,6 @@ struct SimRobotControllerMessages final
         "SimRobotController: joint path planner completed without a path";
     inline static constexpr char jointPathHasNoStartState[] =
         "SimRobotController: joint path contains no start state";
-    inline static constexpr char posePlanningCancelledByStateChange[] =
-        "SimRobotController: pose planning cancelled because the robot state changed";
     inline static constexpr char posePlanningCancelled[] = "SimRobotController: pose planning cancelled";
     inline static constexpr char linearPlanningCancelled[] =
         "SimRobotController: linear path planning cancelled";
@@ -770,12 +768,6 @@ void SimRobotController::RefreshTcp()
     state_.tcpPoseValid = specification_.hasToolFrame && state_.valid;
     if (state_.tcpPoseValid)
         state_.tcpPose = inverse_.EvaluateTcp(state_.jointPositions);
-    if (posePlanning_.phase != PosePlanningPhase::Inactive)
-    {
-        inverse_.CancelSingleSeed(posePlanning_.ikSession);
-        FinishPosePlanning(Failure(ErrorCode::Cancelled,
-            SimRobotControllerMessages::posePlanningCancelledByStateChange));
-    }
 }
 
 Result SimRobotController::Stop()
