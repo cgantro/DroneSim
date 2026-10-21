@@ -54,10 +54,11 @@ std::shared_ptr<::grasplink::graphics::Material> ResolveMaterial(
 
 void ValidateNodeHierarchy(const ::grasplink::model::ModelResource& model)
 {
-    if (model.nodes.empty())
-        throw std::runtime_error("Model has no nodes");
-    if (!model.rootNodeIndex || *model.rootNodeIndex >= model.nodes.size())
-        throw std::runtime_error("Model has invalid root node");
+    if (!model.rootNodeIndex || *model.rootNodeIndex >= model.nodes.size() ||
+        model.nodes[*model.rootNodeIndex].parentIndex)
+    {
+        throw std::runtime_error("PrefabFactory requires a valid scene root");
+    }
 
     std::vector<NodeVisitState> parentState(model.nodes.size(), NodeVisitState::Unvisited);
     for (std::size_t start = 0; start < model.nodes.size(); ++start)
@@ -118,16 +119,11 @@ void ValidateModelBeforeSceneChanges(
     const AssetManager& assets,
     const std::shared_ptr<::grasplink::graphics::Shader>& shader)
 {
-    if (!model.rootNodeIndex || *model.rootNodeIndex >= model.nodes.size() ||
-        model.nodes[*model.rootNodeIndex].parentIndex)
-    {
-        throw std::runtime_error("PrefabFactory requires a valid scene root");
-    }
+    ValidateNodeHierarchy(model);
 
     if (!shader)
         throw std::runtime_error("PrefabFactory requires a shader");
 
-    ValidateNodeHierarchy(model);
     ValidateRenderReferences(model, assets);
 }
 
