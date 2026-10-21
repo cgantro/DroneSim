@@ -8,9 +8,6 @@ namespace grasplink::application
 {
 namespace config = pick_place::config;
 
-PickPlaceScenarioSampler::PickPlaceScenarioSampler()
-    = default;
-
 void PickPlaceScenarioSampler::EnsureSeeded()
 {
     if (!initialized_)

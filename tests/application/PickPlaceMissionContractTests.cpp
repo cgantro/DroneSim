@@ -1,9 +1,12 @@
 #include "application/PickPlaceMission.h"
 #include "application/PickPlaceConfig.h"
+#include "application/PickPlaceScenarioSampler.h"
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <utility>
@@ -252,4 +255,50 @@ TEST(PickPlaceMission, CompleteStageReportsSuccessAndRaisesOneEvent)
     EXPECT_EQ(completed.completedCount, 1U);
     EXPECT_TRUE(mission.ConsumeSuccessEvent());
     EXPECT_FALSE(mission.ConsumeSuccessEvent());
+}
+
+TEST(PickPlaceScenarioSampler, SeedReproducesValidScenariosAndResetsHistory)
+{
+    using grasplink::application::PickPlaceScenarioSampler;
+    using namespace grasplink::application::pick_place::config;
+    PickPlaceScenarioSampler first;
+    PickPlaceScenarioSampler second;
+    first.Seed(7319);
+    second.Seed(7319);
+
+    std::array<float, 3> previousBox{};
+    std::array<float, 3> previousPlacement{};
+    std::array<float, 3> initialBox{};
+    for (int sample = 0; sample < 10; ++sample)
+    {
+        const auto box = first.SampleBoxPosition();
+        const auto placement = first.SamplePlacementPosition();
+        const float rotation = first.SamplePlanarRotation();
+        EXPECT_EQ(box, second.SampleBoxPosition());
+        EXPECT_EQ(placement, second.SamplePlacementPosition());
+        EXPECT_EQ(rotation, second.SamplePlanarRotation());
+        if (sample == 0)
+            initialBox = box;
+
+        const float boxRadius = std::hypot(box[0], box[2]);
+        const float placementRadius = std::hypot(placement[0], placement[2]);
+        EXPECT_GE(boxRadius, minimumScenarioRadiusMeters);
+        EXPECT_LE(boxRadius, maximumBoxRadiusMeters);
+        EXPECT_GE(placementRadius, minimumScenarioRadiusMeters);
+        EXPECT_LE(placementRadius, maximumPlacementRadiusMeters);
+        EXPECT_GE(rotation, -scenarioRotationLimitRadians);
+        EXPECT_LE(rotation, scenarioRotationLimitRadians);
+        if (sample > 0)
+        {
+            EXPECT_GE(std::hypot(box[0] - previousBox[0], box[2] - previousBox[2]),
+                minimumBoxRepeatSeparationMeters);
+            EXPECT_GE(std::hypot(placement[0] - previousPlacement[0],
+                placement[2] - previousPlacement[2]), minimumPlacementRepeatSeparationMeters);
+        }
+        previousBox = box;
+        previousPlacement = placement;
+    }
+
+    first.Seed(7319);
+    EXPECT_EQ(first.SampleBoxPosition(), initialBox);
 }

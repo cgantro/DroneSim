@@ -14,9 +14,6 @@ namespace grasplink::application
 class PickPlaceScenarioSampler final
 {
 public:
-    /** @brief 운영 중 사용할 난수 상태를 독립적으로 초기화한다. */
-    PickPlaceScenarioSampler();
-
     /** @brief 같은 호출 순서에서 재현할 난수 순서로 초기화하고 위치 이력을 지운다. */
     void Seed(std::uint32_t seed);
 
