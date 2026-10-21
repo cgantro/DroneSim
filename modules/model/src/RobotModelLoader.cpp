@@ -61,11 +61,11 @@ double Number(const char* value, const std::filesystem::path& path, const std::s
     return result;
 }
 
-glm::dvec3 Vector3(const char* value, const glm::dvec3& fallback,
-    const std::filesystem::path& path, const std::string& field)
+glm::dvec3 Vector3(const char* value, const std::filesystem::path& path,
+    const std::string& field)
 {
     if (value == nullptr)
-        return fallback;
+        return glm::dvec3{0.0};
     std::istringstream input(value);
     glm::dvec3 result;
     if (!(input >> result.x >> result.y >> result.z))
@@ -271,8 +271,7 @@ void ReadCollisionShape(const XMLElement& shape, const std::string& linkName,
     if (shapeType == "box")
     {
         result.type = RobotCollisionType::Box;
-        result.dimensionsMeters = Vector3(RequiredAttribute(shape, "size", path), glm::dvec3{0.0},
-            path, "box size");
+        result.dimensionsMeters = Vector3(RequiredAttribute(shape, "size", path), path, "box size");
     }
     else if (shapeType == "sphere")
     {
@@ -299,10 +298,8 @@ RobotCollisionGeometry ReadCollisionGeometry(
     RobotCollisionGeometry result;
     if (const XMLElement* origin = collision.FirstChildElement("origin"))
     {
-        result.positionMeters = Vector3(origin->Attribute("xyz"), glm::dvec3{0.0}, path,
-            "collision origin xyz");
-        result.rotation = RotationFromRpy(Vector3(origin->Attribute("rpy"), glm::dvec3{0.0}, path,
-            "collision origin rpy"));
+        result.positionMeters = Vector3(origin->Attribute("xyz"), path, "collision origin xyz");
+        result.rotation = RotationFromRpy(Vector3(origin->Attribute("rpy"), path, "collision origin rpy"));
     }
 
     const XMLElement* geometry = collision.FirstChildElement("geometry");
@@ -346,7 +343,7 @@ void ReadJointAxisAndLimits(
     const XMLElement* axis = element.FirstChildElement("axis");
     if (axis == nullptr || axis->Attribute("xyz") == nullptr)
         Invalid(path, "joint '" + joint.name + "' must define its axis");
-    joint.axis = Vector3(axis->Attribute("xyz"), glm::dvec3{0.0}, path, "joint axis");
+    joint.axis = Vector3(axis->Attribute("xyz"), path, "joint axis");
     const double axisLength = glm::length(joint.axis);
     if (!std::isfinite(axisLength) || axisLength <= kMinimumJointAxisLength)
         Invalid(path, "joint '" + joint.name + "' has a zero axis");
@@ -391,10 +388,8 @@ RobotJoint ReadJoint(const XMLElement& element, const LinkIndexByName& linkIndic
 
     if (const XMLElement* origin = element.FirstChildElement("origin"))
     {
-        joint.originPositionMeters = Vector3(origin->Attribute("xyz"), glm::dvec3{0.0}, path,
-            "joint origin xyz");
-        joint.originRotation = RotationFromRpy(Vector3(origin->Attribute("rpy"), glm::dvec3{0.0}, path,
-            "joint origin rpy"));
+        joint.originPositionMeters = Vector3(origin->Attribute("xyz"), path, "joint origin xyz");
+        joint.originRotation = RotationFromRpy(Vector3(origin->Attribute("rpy"), path, "joint origin rpy"));
     }
     if (joint.type != RobotJointType::Fixed)
         ReadJointAxisAndLimits(joint, element, path);
