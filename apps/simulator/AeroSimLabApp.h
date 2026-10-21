@@ -6,7 +6,6 @@
 #include "sensor/RgbFrame.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
-#include "vision/RgbFrameQuality.h"
 #endif
 #include "simulation_core/SimulationCore.h"
 
