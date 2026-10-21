@@ -112,6 +112,45 @@ std::uint32_t Read32(const Json& value, const char* name)
         throw std::invalid_argument(std::string("값이 허용 범위를 벗어났습니다: ") + name);
     return static_cast<std::uint32_t>(number);
 }
+
+CameraCommand ReadCameraCommand(std::string_view action)
+{
+    if (action == "enable") return CameraCommand::Enable;
+    if (action == "disable") return CameraCommand::Disable;
+    if (action == "fault") return CameraCommand::InjectFault;
+    if (action == "recover") return CameraCommand::Recover;
+    throw std::invalid_argument("알 수 없는 카메라 명령입니다.");
+}
+
+SessionCommand ReadSessionCommand(std::string_view action)
+{
+    if (action == "record_start") return SessionCommand::StartRecording;
+    if (action == "record_stop") return SessionCommand::StopRecording;
+    if (action == "record_replay") return SessionCommand::ReplayRecording;
+    throw std::invalid_argument("알 수 없는 기록 제어 명령입니다.");
+}
+
+simulation::DroneCommand ReadDroneCommand(const Json& payload, std::string_view action)
+{
+    using Kind = simulation::DroneCommand::Kind;
+    simulation::DroneCommand command;
+
+    if (action == "takeoff") command.kind = Kind::TakeOff;
+    else if (action == "land") command.kind = Kind::Land;
+    else if (action == "stop") command.kind = Kind::Stop;
+    else if (action == "set_velocity") command.kind = Kind::SetVelocity;
+    else if (action == "set_waypoint") command.kind = Kind::SetWaypoint;
+    else if (action == "set_yaw_rate") command.kind = Kind::SetYawRate;
+    else throw std::invalid_argument("알 수 없는 드론 명령입니다.");
+
+    if (command.kind == Kind::SetVelocity || command.kind == Kind::SetWaypoint)
+        command.vector = ReadVector(Required(payload, "vector"));
+    else if (command.kind == Kind::SetYawRate)
+        command.yawRateRadiansPerSecond = ReadFinite(
+            Required(payload, "yaw_rate_radians_per_second"), "yaw_rate_radians_per_second");
+
+    return command;
+}
 }
 
 std::string EncodeCommand(const CommandPacket& packet)
@@ -187,46 +226,18 @@ CommandPacket DecodeCommand(std::string_view datagram)
 
     if (target == "camera")
     {
-        if (action == "enable") packet.cameraCommand = CameraCommand::Enable;
-        else if (action == "disable") packet.cameraCommand = CameraCommand::Disable;
-        else if (action == "fault") packet.cameraCommand = CameraCommand::InjectFault;
-        else if (action == "recover") packet.cameraCommand = CameraCommand::Recover;
-        else throw std::invalid_argument("알 수 없는 카메라 명령입니다.");
+        packet.cameraCommand = ReadCameraCommand(action);
         return packet;
     }
     if (target == "session")
     {
-        if (action == "record_start") packet.sessionCommand = SessionCommand::StartRecording;
-        else if (action == "record_stop") packet.sessionCommand = SessionCommand::StopRecording;
-        else if (action == "record_replay") packet.sessionCommand = SessionCommand::ReplayRecording;
-        else throw std::invalid_argument("알 수 없는 기록 제어 명령입니다.");
+        packet.sessionCommand = ReadSessionCommand(action);
         return packet;
     }
     if (target != "drone")
         throw std::invalid_argument("알 수 없는 명령 대상입니다.");
 
-    simulation::DroneCommand command;
-    if (action == "takeoff") command.kind = simulation::DroneCommand::Kind::TakeOff;
-    else if (action == "land") command.kind = simulation::DroneCommand::Kind::Land;
-    else if (action == "stop") command.kind = simulation::DroneCommand::Kind::Stop;
-    else if (action == "set_velocity")
-    {
-        command.kind = simulation::DroneCommand::Kind::SetVelocity;
-        command.vector = ReadVector(Required(payload, "vector"));
-    }
-    else if (action == "set_waypoint")
-    {
-        command.kind = simulation::DroneCommand::Kind::SetWaypoint;
-        command.vector = ReadVector(Required(payload, "vector"));
-    }
-    else if (action == "set_yaw_rate")
-    {
-        command.kind = simulation::DroneCommand::Kind::SetYawRate;
-        command.yawRateRadiansPerSecond = ReadFinite(
-            Required(payload, "yaw_rate_radians_per_second"), "yaw_rate_radians_per_second");
-    }
-    else throw std::invalid_argument("알 수 없는 드론 명령입니다.");
-    packet.droneCommand = command;
+    packet.droneCommand = ReadDroneCommand(payload, action);
     return packet;
 }
 
