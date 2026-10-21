@@ -328,6 +328,8 @@ struct LinearPathPlanningJob::Impl
     std::vector<bool> parentHasValidChild;
     std::size_t seedIndex = 0;
     std::size_t tcpProbe = 0;
+    // 후보 관절 자세를 계산할 때 같은 크기의 임시 벡터를 재사용한다.
+    JointVector tcpProbeJoints;
     std::size_t refinementEdge = 0;
     double bestFailureResidual = std::numeric_limits<double>::infinity();
     bool needsRefinement = false;
@@ -403,6 +405,7 @@ struct LinearPathPlanningJob::Impl
         command = moveCommand;
         specification = &robot;
         startJoints = joints;
+        tcpProbeJoints.resize(joints.size());
         inverse = &ik;
         stateValidityChecker = checker;
         validityDiagnosticProvider = diagnosticProvider;
@@ -1076,7 +1079,7 @@ struct LinearPathPlanningJob::Impl
     void AdvanceTcpCheck(std::size_t& work)
     {
         const auto& parent = layers.back()[workingParent];
-        JointVector joints(parent.joints.size());
+        JointVector& joints = tcpProbeJoints;
         const double fraction = math::tcpStraightnessProbeFraction *
             static_cast<double>(tcpProbe + 1);
         for (std::size_t joint = 0; joint < joints.size(); ++joint)
