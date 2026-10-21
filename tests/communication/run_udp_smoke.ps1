@@ -24,6 +24,8 @@ public static class AeroSimLabUiTestWindow
     public const int WaypointXInput = 102;
     public const int WaypointYInput = 103;
     public const int WaypointZInput = 104;
+    public const int CameraOnButton = 109;
+    public const int CameraOffButton = 110;
     public const int RecordingStartButton = 115;
     public const int RecordingStopButton = 116;
     public const int RecordingReplayButton = 117;
@@ -195,6 +197,8 @@ try {
         [AeroSimLabUiTestWindow]::StopButton,
         [AeroSimLabUiTestWindow]::LandButton,
         [AeroSimLabUiTestWindow]::WaypointButton,
+        [AeroSimLabUiTestWindow]::CameraOnButton,
+        [AeroSimLabUiTestWindow]::CameraOffButton,
         [AeroSimLabUiTestWindow]::CameraFaultButton,
         [AeroSimLabUiTestWindow]::CameraRecoverButton,
         [AeroSimLabUiTestWindow]::RecordingStartButton,
@@ -217,6 +221,16 @@ try {
         throw "지상통제 창에서 보낸 카메라 고장 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$faultTelemetry"
     }
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraRecoverButton)
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraOffButton)
+    $disabledTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($disabledTelemetry -notmatch '카메라: disabled') {
+        throw "지상통제 창의 카메라 끄기 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$disabledTelemetry"
+    }
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraOnButton)
+    $enabledTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($enabledTelemetry -notmatch '카메라: active') {
+        throw "지상통제 창의 카메라 켜기 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$enabledTelemetry"
+    }
     $waypointInputIds = @(
         [AeroSimLabUiTestWindow]::WaypointXInput,
         [AeroSimLabUiTestWindow]::WaypointYInput,
