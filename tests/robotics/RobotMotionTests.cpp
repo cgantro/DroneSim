@@ -323,6 +323,17 @@ void CheckPrismaticJointPathUsesMeterSpacing()
     EXPECT_NEAR(checkedPositions[1], 0.1, 1e-12);
     EXPECT_NEAR(checkedPositions[2], 0.02, 1e-12);
     EXPECT_NEAR(checkedPositions[5], 0.08, 1e-12);
+
+    JointPathPlanningJob stationaryJob;
+    const JointVector stationaryPosition{0.05};
+    ASSERT_TRUE(static_cast<bool>(stationaryJob.Begin(
+        specification, stationaryPosition, stationaryPosition, {}, options)));
+    EXPECT_EQ(stationaryJob.Advance(1), JointPathPlanningState::Running);
+    EXPECT_EQ(stationaryJob.Advance(1), JointPathPlanningState::Completed);
+    const auto stationaryPlan = stationaryJob.TakePlan();
+    ASSERT_TRUE(stationaryPlan.has_value());
+    ASSERT_EQ(stationaryPlan->points.size(), 1U);
+    EXPECT_EQ(stationaryPlan->points.front(), stationaryPosition);
 }
 
 void CheckJointStateValidityReasons()

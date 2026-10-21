@@ -49,7 +49,10 @@ struct JointPathPlanningJob::Impl
 
     void Complete()
     {
-        plan.points = {start, goal};
+        if (start == goal)
+            plan.points = {start};
+        else
+            plan.points = {start, goal};
         state = JointPathPlanningState::Completed;
         ReleaseBorrowedInputs();
     }
@@ -70,13 +73,7 @@ struct JointPathPlanningJob::Impl
             const auto invalidity = Check(joints);
             if (invalidity != JointStateInvalidity::None)
                 Fail(invalidity);
-            else if (endpoint == 2 && start == goal)
-            {
-                plan.points = {start};
-                state = JointPathPlanningState::Completed;
-                ReleaseBorrowedInputs();
-            }
-            else if (endpoint == 2 && intervalCount == 1)
+            else if (endpoint == 2 && (start == goal || intervalCount == 1))
                 Complete();
             return;
         }
