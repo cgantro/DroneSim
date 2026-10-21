@@ -9,55 +9,59 @@
 namespace aerosimlab::graphics
 {
 
+IndexBuffer::IndexBuffer(const std::uint32_t* indices, std::uint32_t count)
+    : m_Count(count)
+{
+    if (indices == nullptr)
+        throw std::runtime_error("IndexBuffer indices must not be null");
 
-IndexBuffer::IndexBuffer(const uint32_t* indices, uint32_t cnt) : m_Count(cnt){
-    if(indices == nullptr) throw std::runtime_error(
-        "IndexBuffer indices must not be null"
-    );
+    if (count == 0)
+        throw std::runtime_error("IndexBuffer count  must be Greater than 0");
 
-    if(cnt == 0) throw std::runtime_error(
-        "IndexBuffer count  must be Greater than 0"
-    );
-
-    if (cnt > static_cast<uint32_t>(std::numeric_limits<GLsizei>::max()))
+    if (count > static_cast<std::uint32_t>(std::numeric_limits<GLsizei>::max()))
         throw std::runtime_error("IndexBuffer count exceeds the OpenGL draw limit");
-    if (static_cast<std::size_t>(cnt) >
-        static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max()) / sizeof(uint32_t))
+    if (static_cast<std::size_t>(count) >
+        static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max()) / sizeof(std::uint32_t))
         throw std::runtime_error("IndexBuffer data exceeds the GPU buffer limit");
 
-    const GLsizeiptr byteCount = static_cast<GLsizeiptr>(cnt) *
-        static_cast<GLsizeiptr>(sizeof(uint32_t));
+    const GLsizeiptr byteCount = static_cast<GLsizeiptr>(count) *
+        static_cast<GLsizeiptr>(sizeof(std::uint32_t));
 
-    // CPU index 배열과 별도로 GPU가 draw 때 읽을 index buffer 객체를 만든다.
-   glGenBuffers(1,&m_RendererID);
+    glGenBuffers(1, &m_RendererID);
 
-   // Element Buffer Object(EBO) 연결은 현재 VAO의 상태로 저장되므로 Mesh가 먼저 VAO를 선택해야 한다.
-   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,m_RendererID);
+    // 번호 배열 연결은 현재 선택된 VAO에 저장된다. Mesh가 사용할 VAO를 먼저 선택해야 한다.
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
 
-   // OpenGL 메모리 할당 크기는 byte로 전달하지만 count와 그리기 함수 인수는 index 원소 수를 뜻한다.
-   glBufferData(
+    // GPU 저장 공간 크기는 byte 단위지만, 그리기 함수에 넘길 값은 번호 개수다.
+    glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
         byteCount,
         indices,
         GL_STATIC_DRAW
-   );
+    );
 
-    // VAO가 선택된 상태에서 EBO ID 0을 연결하면 그 VAO에 기록된 EBO 연결도 해제된다.
+    // 여기서 연결을 0으로 바꾸면 현재 VAO에 저장된 번호 배열도 지워지므로 그대로 둔다.
 }
 
-IndexBuffer::~IndexBuffer(){
+IndexBuffer::~IndexBuffer()
+{
     // GPU 자원은 생성 때 사용한 OpenGL context가 살아 있고 현재 스레드에서 활성화되어 있을 때 해제해야 한다.
-    if(m_RendererID != 0){
-        glDeleteBuffers(1,&m_RendererID);
+    if (m_RendererID != 0)
+    {
+        glDeleteBuffers(1, &m_RendererID);
         m_RendererID = 0;
     }
 }
 
-void IndexBuffer::Bind() const {glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,m_RendererID);}
+void IndexBuffer::Bind() const
+{
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
+}
 
-void IndexBuffer::UnBind() const{
+void IndexBuffer::UnBind() const
+{
     // GL_ELEMENT_ARRAY_BUFFER 연결은 VAO에 저장된다. 따라서 0을 연결하면 현재 VAO가 기억하던 EBO도 지워진다.
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 } // namespace aerosimlab::graphics
