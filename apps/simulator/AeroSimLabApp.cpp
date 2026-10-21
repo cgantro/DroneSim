@@ -768,16 +768,17 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         return reinterpret_cast<const char*>(glGetString(name));
     };
 
-    std::vector<double> durations = tickDurationsMicroseconds_;
-    std::sort(durations.begin(), durations.end());
-    const auto percentile = [&durations](double fraction)
+    const auto percentile = [](const std::vector<double>& sortedDurations, double fraction)
     {
-        if (durations.empty())
+        if (sortedDurations.empty())
             return 0.0;
         const std::size_t index = static_cast<std::size_t>(
-            std::ceil(fraction * static_cast<double>(durations.size()))) - 1;
-        return durations[std::min(index, durations.size() - 1)];
+            std::ceil(fraction * static_cast<double>(sortedDurations.size()))) - 1;
+        return sortedDurations[std::min(index, sortedDurations.size() - 1)];
     };
+
+    std::vector<double> durations = tickDurationsMicroseconds_;
+    std::sort(durations.begin(), durations.end());
     const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
         durations.begin(), durations.end(), [](double duration)
         {
@@ -786,14 +787,6 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
 #ifndef __EMSCRIPTEN__
     std::vector<double> visionDurations = visionDurationsMicroseconds_;
     std::sort(visionDurations.begin(), visionDurations.end());
-    const auto visionPercentile = [&visionDurations](double fraction)
-    {
-        if (visionDurations.empty())
-            return 0.0;
-        const std::size_t index = static_cast<std::size_t>(
-            std::ceil(fraction * static_cast<double>(visionDurations.size()))) - 1;
-        return visionDurations[std::min(index, visionDurations.size() - 1)];
-    };
 #endif
     nlohmann::json report{
         {"configuration", "Windows Release; hidden OpenGL window; one drone; simple geometry"},
@@ -805,7 +798,9 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         {"rendered_frames", renderedFrames_},
         {"render_fps", elapsedSeconds > 0.0 ? static_cast<double>(renderedFrames_) / elapsedSeconds : 0.0},
         {"tick_duration_us", {
-            {"p50", percentile(0.50)}, {"p95", percentile(0.95)}, {"p99", percentile(0.99)},
+            {"p50", percentile(durations, 0.50)},
+            {"p95", percentile(durations, 0.95)},
+            {"p99", percentile(durations, 0.99)},
             {"samples", durations.size()}, {"deadline_misses_over_16_67ms", deadlineMisses}}},
         {"process_cpu_percent_approx", elapsedSeconds > 0.0
             ? 100.0 * static_cast<double>(std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC / elapsedSeconds : 0.0}
@@ -820,9 +815,9 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         {"mean_sharpness", visionSampleCount_ > 0
             ? totalSharpness_ / static_cast<double>(visionSampleCount_) : 0.0},
         {"duration_us", {
-            {"p50", visionPercentile(0.50)},
-            {"p95", visionPercentile(0.95)},
-            {"p99", visionPercentile(0.99)},
+            {"p50", percentile(visionDurations, 0.50)},
+            {"p95", percentile(visionDurations, 0.95)},
+            {"p99", percentile(visionDurations, 0.99)},
             {"samples", visionDurations.size()}}}
     };
 #endif
