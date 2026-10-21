@@ -496,8 +496,10 @@ void PickPlaceMission::UpdateRetreat(const UpdateContext& context)
     if (!context.idle)
         return;
 
-    const bool missionSucceeded = taskSucceeded_ && placementReleased_ && !context.boxGrasped &&
-        BoxCornersFitPlacement(context.graspBoxPoseInBase, context.placementPoseInBase);
+    const bool boxReleased = placementReleased_ && !context.boxGrasped;
+    const bool boxFitsPlacement = BoxCornersFitPlacement(
+        context.graspBoxPoseInBase, context.placementPoseInBase);
+    const bool missionSucceeded = taskSucceeded_ && boxReleased && boxFitsPlacement;
     stage_ = missionSucceeded ? Stage::Complete : Stage::Failed;
     if (missionSucceeded)
     {
