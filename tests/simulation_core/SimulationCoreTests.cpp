@@ -158,19 +158,23 @@ TEST(SimulationCore, RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNum
     EXPECT_EQ(simulation.State().mode, FlightMode::Hovering);
 }
 
-TEST(SimulationCore, FollowsWaypointAndClampsVelocityAndYaw)
+TEST(SimulationCore, FollowsThreeWaypointsAndClampsVelocityAndYaw)
 {
     SimulationCore simulation;
     ReachHovering(simulation);
-    ASSERT_EQ(simulation.Apply(Command(
-        DroneCommand::Kind::SetWaypoint, glm::dvec3{1.0, 0.0, 1.5})),
-        CommandResult::Accepted);
-    for (int tick = 0; tick < 120; ++tick)
+    const std::array<glm::dvec3, 3> waypoints{
+        glm::dvec3{1.0, 0.0, 1.5},
+        glm::dvec3{1.0, 1.0, 1.5},
+        glm::dvec3{0.0, 1.0, 1.5}};
+    for (const glm::dvec3& waypoint : waypoints)
     {
-        simulation.AdvanceOneTick();
+        ASSERT_EQ(simulation.Apply(Command(
+            DroneCommand::Kind::SetWaypoint, waypoint)), CommandResult::Accepted);
+        for (int tick = 0; tick < 20; ++tick)
+            simulation.AdvanceOneTick();
+        EXPECT_EQ(simulation.State().mode, FlightMode::Hovering);
+        EXPECT_EQ(simulation.State().positionMeters, waypoint);
     }
-    EXPECT_EQ(simulation.State().mode, FlightMode::Hovering);
-    EXPECT_DOUBLE_EQ(simulation.State().positionMeters.x, 1.0);
 
     ASSERT_EQ(simulation.Apply(Command(
         DroneCommand::Kind::SetVelocity, glm::dvec3{50.0, 0.0, 0.0})),

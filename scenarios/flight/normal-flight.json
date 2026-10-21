@@ -3,13 +3,16 @@
   "ticks": 300,
   "commands": [
     {"tick": 0, "type": "takeoff"},
-    {"tick": 90, "type": "set_waypoint", "position_meters": [3.0, 0.0, 1.5]},
-    {"tick": 150, "type": "stop"},
-    {"tick": 200, "type": "land"}
+    {"tick": 90, "type": "set_waypoint", "position_meters": [1.0, 0.0, 1.5]},
+    {"tick": 110, "type": "set_waypoint", "position_meters": [1.0, 1.0, 1.5]},
+    {"tick": 130, "type": "set_waypoint", "position_meters": [0.0, 1.0, 1.5]},
+    {"tick": 150, "type": "land"}
   ],
   "expected": {
     "mode": "grounded",
-    "position_meters": [3.0, 0.0, 0.0],
-    "tolerance_meters": 0.000001
+    "position_meters": [0.0, 1.0, 0.0],
+    "tolerance_meters": 0.000001,
+    "camera_status": "active",
+    "camera_frame_count": 300
   }
 }
