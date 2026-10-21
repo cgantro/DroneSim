@@ -4,12 +4,19 @@
 #include "model/RobotModel.h"
 #include "physics/PhysicsWorld.h"
 #include "robotics/backends/simulation/SimRobotController.h"
+#include "robotics/backends/simulation/SimGripperController.h"
+#include "robotics/kinematics/GripperKinematics.h"
 #include "robotics/kinematics/RobotKinematics.h"
+#include "robotics/models/robotiq/TwoF85.h"
 #include "robotics/planning/JointPathPlanner.h"
 #include "robotics/runtime/FixedControlLoop.h"
 #include "scene/Scene.h"
 #include "scene/TransformSystemModule.h"
 #include "simulation/SimulationSceneBuilder.h"
+#include "simulation/components/PhysicsComponents.h"
+#include "simulation/robotics/GripperColliders.h"
+#include "simulation/robotics/GripperGraspAdapter.h"
+#include "simulation/robotics/GripperTransformAdapter.h"
 #include "simulation/robotics/RobotEnvironmentCollisionGuard.h"
 #include "simulation/robotics/RobotModelAdapter.h"
 #include "simulation/robotics/RobotPhysicsAdapter.h"
@@ -22,8 +29,12 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <stdexcept>
+#include <utility>
 #include <vector>
+
+#include <glm/glm.hpp>
 
 namespace grasplink::benchmarks
 {
@@ -45,7 +56,7 @@ struct ControlTickStages final
     double controlAndPoseNanoseconds = 0.0;
     double transformsBeforeCollisionNanoseconds = 0.0;
     double collisionCheckNanoseconds = 0.0;
-    double physicsNanoseconds = 0.0;
+    double physicsAndGraspNanoseconds = 0.0;
     double transformsAfterPhysicsNanoseconds = 0.0;
 };
 
@@ -78,17 +89,45 @@ public:
             modelAdapter_->Specification());
         visualAdapter_ = std::make_unique<grasplink::simulation::robotics::RobotTransformAdapter>(
             robotRoot_, modelAdapter_->Specification());
+
+        gripperRoot_ = robotRoot_.FindChildByNameRecursive("Gripper");
+        if (!gripperRoot_)
+            throw std::runtime_error("250 Hz benchmark model has no Gripper node.");
+        const auto& gripperSpecification = grasplink::robotics::models::robotiq::kTwoF85;
+        gripperController_ = std::make_unique<grasplink::robotics::backends::simulation::SimGripperController>(
+            gripperSpecification);
+        auto gripperConnection = gripperController_->Connect();
+        if (gripperConnection)
+            gripperConnection = gripperController_->Activate();
+        if (!gripperConnection)
+            throw std::runtime_error(gripperConnection.message);
+        gripperKinematics_ = std::make_unique<grasplink::robotics::kinematics::GripperKinematics>(
+            gripperSpecification);
+        gripperTransformAdapter_ = std::make_unique<grasplink::simulation::robotics::GripperTransformAdapter>(
+            gripperRoot_, gripperSpecification);
+
         physicsAdapter_ = std::make_unique<grasplink::simulation::RobotPhysicsAdapter>(
             *scene_, robotRoot_, model_.robot);
         CreateFloor();
+        grasplink::simulation::ConfigureTwoF85Colliders(*scene_, robotRoot_, model_.visual);
+        CreateGraspBox();
         ApplyControllerPose();
         grasplink::scene::TransformSystemModule::UpdateWorldTransforms(*world_);
 
         physicsSystem_ = std::make_unique<grasplink::simulation::PhysicsSystemModule>(
             *world_, *physicsWorld_);
+        gripperGraspAdapter_ = std::make_unique<grasplink::simulation::GripperGraspAdapter>(
+            *physicsWorld_, *physicsSystem_, *gripperController_);
+        if (!gripperGraspAdapter_->Bind(robotRoot_))
+            throw std::runtime_error("250 Hz benchmark could not bind Gripper collision proxies.");
+
+        using GripperSupport =
+            grasplink::simulation::robotics::RobotEnvironmentCollisionGuard::GripperSupport;
+        std::optional<GripperSupport> gripperSupport{GripperSupport{
+            gripperRoot_, *gripperController_, *gripperKinematics_, *gripperTransformAdapter_}};
         collisionGuard_ = std::make_unique<grasplink::simulation::robotics::RobotEnvironmentCollisionGuard>(
             *controller_, *kinematics_, *visualAdapter_, *physicsAdapter_,
-            *world_, *physicsWorld_, *physicsSystem_, robotRoot_);
+            *world_, *physicsWorld_, *physicsSystem_, robotRoot_, std::move(gripperSupport));
 
         // 첫 tick에서 Jolt Body를 만들고 캐시를 준비해 초기화 비용을 측정에서 뺀다.
         AdvanceOneTick();
@@ -103,8 +142,10 @@ public:
             {
                 using Clock = std::chrono::steady_clock;
                 auto stageStart = Clock::now();
+                gripperGraspAdapter_->BeforePhysicsStep();
                 collisionGuard_->CaptureSafeJointPose();
                 controller_->Update(fixedDeltaSeconds);
+                gripperController_->Update(fixedDeltaSeconds);
                 ApplyControllerPose();
                 auto stageEnd = Clock::now();
                 lastStages_.controlAndPoseNanoseconds =
@@ -124,8 +165,9 @@ public:
 
                 stageStart = stageEnd;
                 physicsSystem_->Step(fixedDeltaSeconds);
+                gripperGraspAdapter_->AfterPhysicsStep();
                 stageEnd = Clock::now();
-                lastStages_.physicsNanoseconds =
+                lastStages_.physicsAndGraspNanoseconds =
                     std::chrono::duration<double, std::nano>(stageEnd - stageStart).count();
 
                 stageStart = stageEnd;
@@ -192,6 +234,19 @@ private:
         const auto& pose = kinematics_->Update(controller_->GetStateView());
         visualAdapter_->Apply(pose);
         physicsAdapter_->Apply(pose);
+        const auto& gripperPose = gripperKinematics_->Update(gripperController_->GetState());
+        gripperTransformAdapter_->Apply(gripperPose);
+    }
+
+    void CreateGraspBox()
+    {
+        auto box = scene_->CreateEntity("GraspBox");
+        box.SetLocalPosition({0.65F,
+            grasplink::application::pick_place::config::boxPositionHeightMeters, 0.0F});
+        box.set<RigidBody>({grasplink::physics::BodyMotionType::Dynamic,
+            grasplink::physics::CollisionLayer::DynamicObject})
+            .set<Colliders>({{physics_colliders::Box(glm::vec3{
+                grasplink::application::pick_place::config::boxSideMeters * 0.5F})}});
     }
 
     void StartSlowJointMotion()
@@ -218,7 +273,12 @@ private:
     grasplink::scene::Entity robotRoot_;
     std::unique_ptr<grasplink::simulation::robotics::RobotTransformAdapter> visualAdapter_;
     std::unique_ptr<grasplink::simulation::RobotPhysicsAdapter> physicsAdapter_;
+    std::unique_ptr<grasplink::robotics::backends::simulation::SimGripperController> gripperController_;
+    std::unique_ptr<grasplink::robotics::kinematics::GripperKinematics> gripperKinematics_;
+    grasplink::scene::Entity gripperRoot_;
+    std::unique_ptr<grasplink::simulation::robotics::GripperTransformAdapter> gripperTransformAdapter_;
     std::unique_ptr<grasplink::simulation::PhysicsSystemModule> physicsSystem_;
+    std::unique_ptr<grasplink::simulation::GripperGraspAdapter> gripperGraspAdapter_;
     std::unique_ptr<grasplink::simulation::robotics::RobotEnvironmentCollisionGuard> collisionGuard_;
     grasplink::robotics::runtime::FixedControlLoop controlLoop_{kControlTickSeconds};
     ControlTickStages lastStages_;
@@ -430,7 +490,7 @@ void JoltMoveJDirectPath(benchmark::State& state)
     state.SetLabel(pathCrossesObstacle ? "장애물 충돌 경로" : "장애물을 비켜 가는 경로");
 }
 
-// Viewer의 팔 제어, FK, 충돌 확인, Jolt Step, 계층 변환 갱신을 250 Hz tick으로 측정한다.
+// Viewer의 팔과 그리퍼 제어, 충돌 확인, Jolt Step, 계층 변환 갱신을 250 Hz tick으로 측정한다.
 void ControlPhysicsTick250Hz(benchmark::State& state)
 {
     std::unique_ptr<ControlPhysicsTickFixture> fixture;
@@ -475,8 +535,8 @@ void ControlPhysicsTick250Hz(benchmark::State& state)
             [](const ControlTickStages& stages) { return stages.transformsBeforeCollisionNanoseconds; });
         AddStageCounters(state, stageSamples, "collision_check",
             [](const ControlTickStages& stages) { return stages.collisionCheckNanoseconds; });
-        AddStageCounters(state, stageSamples, "physics",
-            [](const ControlTickStages& stages) { return stages.physicsNanoseconds; });
+        AddStageCounters(state, stageSamples, "physics_and_grasp",
+            [](const ControlTickStages& stages) { return stages.physicsAndGraspNanoseconds; });
         AddStageCounters(state, stageSamples, "transform_after_physics",
             [](const ControlTickStages& stages) { return stages.transformsAfterPhysicsNanoseconds; });
         state.SetItemsProcessed(static_cast<std::int64_t>(tickTimesNanoseconds.size()));
