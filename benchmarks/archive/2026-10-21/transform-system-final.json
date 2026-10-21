@@ -2,7 +2,7 @@
   "context": {
     "date": "2026-10-21T07:42:12+09:00",
     "host_name": "PC2019-0316",
-    "executable": "D:\\Projects\\MiniBCG\\build-ninja-release\\grasplink_robotics_benchmarks.exe",
+    "executable": "D:\\Projects\\MiniBCG\\build-ninja-release\\legacy-project_robotics_benchmarks.exe",
     "num_cpus": 20,
     "mhz_per_cpu": 3494,
     "caches": [
