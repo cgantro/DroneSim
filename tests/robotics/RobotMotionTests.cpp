@@ -458,6 +458,22 @@ void CheckChangingValidityCheckerCancelsPosePlanning()
     ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
     ASSERT_TRUE(controller.IsMotionPlanning());
 
+    JointMoveCommand jointMove;
+    jointMove.targetPositions = controller.GetStateView().jointPositions;
+    const Result blockedJointMove = controller.MoveJoint(jointMove);
+    EXPECT_EQ(blockedJointMove.code, ErrorCode::Busy);
+    EXPECT_EQ(blockedJointMove.message, "SimRobotController: motion planning is in progress");
+
+    const Result blockedPoseMove = controller.MovePose(currentPose);
+    EXPECT_EQ(blockedPoseMove.code, ErrorCode::Busy);
+    EXPECT_EQ(blockedPoseMove.message, "SimRobotController: motion planning is in progress");
+
+    LinearPathMoveCommand linearMove;
+    linearMove.targetPoses.push_back(currentPose);
+    const Result blockedLinearMove = controller.MoveLinearPath(linearMove);
+    EXPECT_EQ(blockedLinearMove.code, ErrorCode::Busy);
+    EXPECT_EQ(blockedLinearMove.message, "SimRobotController: motion planning is in progress");
+
     controller.SetJointStateValidityChecker([](const JointVector&)
     {
         return JointStateInvalidity::None;

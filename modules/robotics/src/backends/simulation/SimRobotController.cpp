@@ -21,7 +21,6 @@ constexpr double kJointPositionMatchTolerance = 1e-8;
 struct SimRobotControllerMessages final
 {
     inline static constexpr char notConnected[] = "SimRobotController: not connected";
-    inline static constexpr char linearPlanningBusy[] = "SimRobotController: linear path planning is in progress";
     inline static constexpr char motionPlanningBusy[] = "SimRobotController: motion planning is in progress";
     inline static constexpr char invalidScale[] = "SimRobotController: scale must be in (0, 1]";
     inline static constexpr char missingToolFrame[] = "SimRobotController: missing ToolFrame for TCP motion";
@@ -211,7 +210,7 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     if (!connected_)
         return Failure(ErrorCode::NotConnected, SimRobotControllerMessages::notConnected);
     if (IsMotionPlanning())
-        return Failure(ErrorCode::Busy, SimRobotControllerMessages::linearPlanningBusy);
+        return Failure(ErrorCode::Busy, SimRobotControllerMessages::motionPlanningBusy);
 
     if (command.targetPositions.size() != specification_.jointCount)
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::jointCountMismatch);
@@ -282,7 +281,7 @@ Result SimRobotController::MovePose(const CartesianPose& targetInBase, double ve
     if (!connected_)
         return Failure(ErrorCode::NotConnected, SimRobotControllerMessages::notConnected);
     if (IsMotionPlanning())
-        return Failure(ErrorCode::Busy, SimRobotControllerMessages::linearPlanningBusy);
+        return Failure(ErrorCode::Busy, SimRobotControllerMessages::motionPlanningBusy);
     if (!IsScaleValid(velocityScale) || !IsScaleValid(accelerationScale))
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::invalidScale);
     planning::JointStateInvalidity invalidity = planning::JointStateInvalidity::None;
@@ -702,7 +701,7 @@ Result SimRobotController::ValidateLinearPathRequest(
     if (!connected_)
         return Failure(ErrorCode::NotConnected, SimRobotControllerMessages::notConnected);
     if (IsMotionPlanning())
-        return Failure(ErrorCode::Busy, SimRobotControllerMessages::linearPlanningBusy);
+        return Failure(ErrorCode::Busy, SimRobotControllerMessages::motionPlanningBusy);
     const Result validation = planning::ValidateLinearPathCommand(command);
     if (!validation)
         return validation;
