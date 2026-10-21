@@ -193,6 +193,7 @@ struct ScenarioDrone
 {
     std::string name;
     glm::dvec3 initialPositionMeters;
+    double initialYawRadians;
 };
 
 struct FormationOutage
@@ -236,8 +237,13 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         std::string name = nameValue.get<std::string>();
         if (name.empty() || !names.insert(name).second)
             throw std::invalid_argument("드론 name은 비어 있거나 중복될 수 없습니다.");
+        const auto yaw = item.find("initial_yaw_radians");
+        const double initialYawRadians = yaw == item.end()
+            ? 0.0
+            : ReadFiniteNumber(*yaw, "initial_yaw_radians");
         drones.push_back({std::move(name), ReadVector(
-            Required(item, "initial_position_meters"), "initial_position_meters")});
+            Required(item, "initial_position_meters"), "initial_position_meters"),
+            initialYawRadians});
     }
     return drones;
 }
@@ -621,7 +627,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
     {
         const DroneId unusedDefaultDrone = simulation.PrimaryDroneId();
         for (const ScenarioDrone& drone : scenarioDrones)
-            droneIds.emplace(drone.name, simulation.AddDrone(drone.initialPositionMeters));
+            droneIds.emplace(drone.name, simulation.AddDrone(
+                drone.initialPositionMeters, drone.initialYawRadians));
         if (!simulation.RemoveDrone(unusedDefaultDrone))
             throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
     }

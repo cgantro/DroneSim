@@ -2,6 +2,7 @@
 #include "simulation_core/QuadrotorFlightController.h"
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <gtest/gtest.h>
 
@@ -56,6 +57,31 @@ TEST(SimulationCore, ExecutesTakeoffMovementAndLandingOnFixedTicks)
     }
     EXPECT_EQ(simulation.State().mode, FlightMode::Grounded);
     EXPECT_DOUBLE_EQ(simulation.State().positionMeters.z, 0.0);
+}
+
+TEST(SimulationCore, InitialYawSetsOrientationAndSurvivesReset)
+{
+    constexpr double initialYawRadians = 1.2;
+    const glm::dquat expectedOrientation = glm::angleAxis(
+        initialYawRadians, glm::dvec3{0.0, 0.0, 1.0});
+
+    SimulationCore kinematic;
+    const DroneId kinematicDrone = kinematic.AddDrone(
+        glm::dvec3{2.0, 3.0, 1.0}, initialYawRadians);
+    EXPECT_NEAR(kinematic.State(kinematicDrone).yawRadians, initialYawRadians, 1.0e-12);
+    EXPECT_EQ(kinematic.State(kinematicDrone).orientation, expectedOrientation);
+    kinematic.Reset();
+    EXPECT_NEAR(kinematic.State(kinematicDrone).yawRadians, initialYawRadians, 1.0e-12);
+    EXPECT_EQ(kinematic.State(kinematicDrone).orientation, expectedOrientation);
+
+#ifndef __EMSCRIPTEN__
+    SimulationCore rigidBody{SimulationDynamics::RigidBody};
+    const DroneId rigidBodyDrone = rigidBody.AddDrone(
+        glm::dvec3{2.0, 3.0, 1.5}, initialYawRadians);
+    EXPECT_NEAR(rigidBody.State(rigidBodyDrone).yawRadians, initialYawRadians, 1.0e-6);
+    rigidBody.Reset();
+    EXPECT_NEAR(rigidBody.State(rigidBodyDrone).yawRadians, initialYawRadians, 1.0e-6);
+#endif
 }
 
 TEST(SimulationCore, KinematicVelocityCommandStopsAtGround)

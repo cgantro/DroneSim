@@ -64,8 +64,9 @@ public:
     /** @brief 지정한 드론에 명령을 보내고 적용 결과를 반환한다. */
     [[nodiscard]] CommandResult Apply(DroneId droneId, const DroneCommand& command) noexcept;
 
-    /** @brief 지정한 월드 위치에 드론 하나를 추가하고 그 식별값을 반환한다. */
-    [[nodiscard]] DroneId AddDrone(const glm::dvec3& positionMeters);
+    /** @brief 시작 위치와 방향을 지정해 드론 하나를 추가한다. 방향은 월드 Z축 기준 라디안이다. */
+    [[nodiscard]] DroneId AddDrone(
+        const glm::dvec3& positionMeters, double yawRadians = 0.0);
 
     /** @brief 드론과 연결된 물리 강체를 함께 제거한다. 마지막 드론은 제거할 수 없다. */
     [[nodiscard]] bool RemoveDrone(DroneId droneId);

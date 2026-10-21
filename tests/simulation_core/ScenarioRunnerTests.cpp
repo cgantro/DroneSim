@@ -62,7 +62,7 @@ TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
     {"version":1,"ticks":180,
      "drones":[
        {"name":"lead","initial_position_meters":[0,0,0]},
-       {"name":"scout","initial_position_meters":[10,0,0]}],
+       {"name":"scout","initial_position_meters":[10,0,0],"initial_yaw_radians":1.2}],
      "commands":[
        {"tick":0,"drone":"lead","type":"takeoff","delay_ticks":5},
        {"tick":0,"drone":"scout","type":"takeoff"},
@@ -79,6 +79,7 @@ TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
     EXPECT_EQ(result.drones[1].name, "scout");
     EXPECT_EQ(result.drones[0].finalState.mode, FlightMode::Hovering);
     EXPECT_EQ(result.drones[1].finalState.mode, FlightMode::Hovering);
+    EXPECT_NEAR(result.drones[1].finalState.yawRadians, 1.2, 1.0e-12);
     EXPECT_DOUBLE_EQ(result.drones[0].finalState.positionMeters.z, 1.5);
     EXPECT_DOUBLE_EQ(result.drones[1].finalState.positionMeters.x, 12.0);
     EXPECT_EQ(result.finalState.positionMeters, result.drones[0].finalState.positionMeters);

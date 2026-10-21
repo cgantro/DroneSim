@@ -6,6 +6,7 @@
 #include "simulation_core/QuadrotorFlightController.h"
 
 #include <flecs.h>
+#include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -17,9 +18,10 @@ namespace aerosimlab::simulation
 {
 struct SimulationCore::EcsStorage
 {
-    struct InitialPosition
+    struct InitialPose
     {
-        glm::dvec3 meters{0.0};
+        glm::dvec3 positionMeters{0.0};
+        double yawRadians = 0.0;
     };
 
 #if !defined(__EMSCRIPTEN__)
@@ -54,7 +56,7 @@ struct SimulationCore::EcsStorage
     {
         if (dynamics == SimulationDynamics::Kinematic)
         {
-            primaryDroneId = CreateDrone(glm::dvec3{0.0});
+            primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
             world.system<DroneState, DroneControlState>("AdvanceKinematicDrone")
                 .kind(flecs::OnUpdate)
                 .each([](DroneState& state, DroneControlState& control)
@@ -67,7 +69,7 @@ struct SimulationCore::EcsStorage
         {
             physics = std::make_unique<PhysicsWorld>();
             primaryDroneId = CreateDrone(glm::dvec3{
-                0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters});
+                0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters}, 0.0);
             world.system<DroneState, DroneControlState, PhysicsBody, DroneActuation>(
                 "ApplyRigidBodyForces")
                 .kind(flecs::OnUpdate)
@@ -83,7 +85,7 @@ struct SimulationCore::EcsStorage
 #else
         else
         {
-            primaryDroneId = CreateDrone(glm::dvec3{0.0});
+            primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
         }
 #endif
 
@@ -96,15 +98,19 @@ struct SimulationCore::EcsStorage
             });
     }
 
-    DroneId CreateDrone(const glm::dvec3& positionMeters)
+    DroneId CreateDrone(const glm::dvec3& positionMeters, double yawRadians)
     {
         const DroneId id = nextDroneId++;
         DroneState initialState;
         initialState.positionMeters = positionMeters;
+        initialState.yawRadians = yawRadians;
+        initialState.orientation = glm::angleAxis(yawRadians, glm::dvec3{0.0, 0.0, 1.0});
+        DroneControlState initialControl;
+        initialControl.desiredYawRadians = yawRadians;
         flecs::entity drone = world.entity()
             .set<DroneState>(initialState)
-            .set<DroneControlState>({})
-            .set<InitialPosition>({positionMeters});
+            .set<DroneControlState>(initialControl)
+            .set<InitialPose>({positionMeters, yawRadians});
 
 #if !defined(__EMSCRIPTEN__)
         if (dynamics == SimulationDynamics::RigidBody)
@@ -112,6 +118,7 @@ struct SimulationCore::EcsStorage
             const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
             RigidBodyDefinition definition;
             definition.positionMeters = positionMeters;
+            definition.orientation = initialState.orientation;
             definition.massKilograms = parameters.massKilograms;
             definition.principalInertiaKilogramMetersSquared =
                 parameters.principalInertiaKilogramMetersSquared;
@@ -169,7 +176,10 @@ struct SimulationCore::EcsStorage
     void ResetPhysicsBody(flecs::entity& drone)
     {
         RigidBodyState initialState;
-        initialState.positionMeters = drone.get<InitialPosition>().meters;
+        const InitialPose& initialPose = drone.get<InitialPose>();
+        initialState.positionMeters = initialPose.positionMeters;
+        initialState.orientation = glm::angleAxis(
+            initialPose.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
         const RigidBodyHandle body = drone.get<PhysicsBody>().handle;
         physics->SetState(body, initialState);
         drone.get_mut<DroneActuation>().motors = {};
@@ -318,13 +328,14 @@ CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command
     return result;
 }
 
-DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters)
+DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters, double yawRadians)
 {
     if (!std::isfinite(positionMeters.x)
         || !std::isfinite(positionMeters.y)
-        || !std::isfinite(positionMeters.z))
-        throw std::invalid_argument("드론 시작 위치는 유한한 값이어야 합니다.");
-    return ecs_->CreateDrone(positionMeters);
+        || !std::isfinite(positionMeters.z)
+        || !std::isfinite(yawRadians))
+        throw std::invalid_argument("드론 시작 위치와 방향은 유한한 값이어야 합니다.");
+    return ecs_->CreateDrone(positionMeters, yawRadians);
 }
 
 bool SimulationCore::RemoveDrone(DroneId droneId)
@@ -373,7 +384,14 @@ void SimulationCore::Reset() noexcept
     {
         (void)id;
         DroneModel::Reset(drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>());
-        drone.get_mut<DroneState>().positionMeters = drone.get<EcsStorage::InitialPosition>().meters;
+        const EcsStorage::InitialPose& initialPose = drone.get<EcsStorage::InitialPose>();
+        DroneState& state = drone.get_mut<DroneState>();
+        DroneControlState& control = drone.get_mut<DroneControlState>();
+        state.positionMeters = initialPose.positionMeters;
+        state.yawRadians = initialPose.yawRadians;
+        state.orientation = glm::angleAxis(
+            initialPose.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
+        control.desiredYawRadians = initialPose.yawRadians;
 #if !defined(__EMSCRIPTEN__)
         if (ecs_->dynamics == SimulationDynamics::RigidBody)
             ecs_->ResetPhysicsBody(drone);
