@@ -12,6 +12,10 @@
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
+#ifndef __EMSCRIPTEN__
+#include "vision/RgbFrameQuality.h"
+#include "vision/RgbFrameView.h"
+#endif
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
@@ -269,6 +273,20 @@ void AeroSimLabApp::RenderFrame()
         eoFrame_.simulationTick = camera.lastFrameTick;
         renderer_->ReadRgbPixels(observerWidth, 0, eoWidth, height, eoFrame_.pixels);
         eoFrame_.FlipVertical();
+#ifndef __EMSCRIPTEN__
+        const auto analysisStart = std::chrono::steady_clock::now();
+        // OpenCV는 eoFrame_의 픽셀을 빌려 쓴다. 다음 프레임이 버퍼를 덮기 전에 분석을 끝낸다.
+        const auto quality = aerosimlab::vision::MeasureRgbFrameQuality(
+            aerosimlab::vision::MakeRgbFrameView(eoFrame_));
+        totalMeanBrightness_ += quality.meanBrightness;
+        totalMeanContrast_ += quality.meanContrast;
+        ++visionSampleCount_;
+        if (benchmarkMode_)
+        {
+            visionDurationsMicroseconds_.push_back(std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - analysisStart).count());
+        }
+#endif
     }
 }
 
@@ -562,6 +580,18 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         {
             return duration > 1'000'000.0 / 60.0;
         }));
+#ifndef __EMSCRIPTEN__
+    std::vector<double> visionDurations = visionDurationsMicroseconds_;
+    std::sort(visionDurations.begin(), visionDurations.end());
+    const auto visionPercentile = [&visionDurations](double fraction)
+    {
+        if (visionDurations.empty())
+            return 0.0;
+        const std::size_t index = static_cast<std::size_t>(
+            std::ceil(fraction * static_cast<double>(visionDurations.size()))) - 1;
+        return visionDurations[std::min(index, visionDurations.size() - 1)];
+    };
+#endif
     nlohmann::json report{
         {"configuration", "Windows Release; hidden OpenGL window; one drone; simple geometry"},
         {"source_revision", AEROSIMLAB_SOURCE_REVISION},
@@ -577,6 +607,20 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         {"process_cpu_percent_approx", elapsedSeconds > 0.0
             ? 100.0 * static_cast<double>(std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC / elapsedSeconds : 0.0}
     };
+#ifndef __EMSCRIPTEN__
+    report["vision_analysis"] = {
+        {"samples", visionSampleCount_},
+        {"mean_brightness", visionSampleCount_ > 0
+            ? totalMeanBrightness_ / static_cast<double>(visionSampleCount_) : 0.0},
+        {"mean_contrast", visionSampleCount_ > 0
+            ? totalMeanContrast_ / static_cast<double>(visionSampleCount_) : 0.0},
+        {"duration_us", {
+            {"p50", visionPercentile(0.50)},
+            {"p95", visionPercentile(0.95)},
+            {"p99", visionPercentile(0.99)},
+            {"samples", visionDurations.size()}}}
+    };
+#endif
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS memory{};
     memory.cb = sizeof(memory);

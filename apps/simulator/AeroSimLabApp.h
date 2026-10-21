@@ -6,6 +6,7 @@
 #include "sensor/RgbFrame.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
+#include "vision/RgbFrameQuality.h"
 #endif
 #include "simulation_core/SimulationCore.h"
 
@@ -88,6 +89,12 @@ private:
     double accumulatedSeconds_ = 0.0;
     std::clock_t benchmarkCpuStart_ = 0;
     std::vector<double> tickDurationsMicroseconds_;
+#ifndef __EMSCRIPTEN__
+    std::vector<double> visionDurationsMicroseconds_;
+    double totalMeanBrightness_ = 0.0;
+    double totalMeanContrast_ = 0.0;
+    std::size_t visionSampleCount_ = 0;
+#endif
     std::chrono::steady_clock::time_point startTime_;
     std::uint16_t udpPort_ = 0;
 #ifndef __EMSCRIPTEN__

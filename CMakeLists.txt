@@ -152,6 +152,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     aerosimlab_communication
     nlohmann_json::nlohmann_json
   )
+  if(NOT EMSCRIPTEN)
+    target_link_libraries(aerosimlab_simulator PRIVATE aerosimlab_vision)
+  endif()
   target_compile_definitions(aerosimlab_simulator PRIVATE
     AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"
   )
