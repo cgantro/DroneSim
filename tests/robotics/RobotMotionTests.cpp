@@ -221,7 +221,7 @@ void CheckMovePoseAndFailurePreservation()
         [](const JointVector&) { return JointStateInvalidity::EnvironmentCollision; },
         rejectedPlan);
     EXPECT_EQ(blockedPathResult.code, ErrorCode::EnvironmentContact);
-    EXPECT_NE(blockedPathResult.message.find("TCP path sample"), std::string::npos);
+    EXPECT_NE(blockedPathResult.message.find("LinearPathPlanner: TCP path sample"), std::string::npos);
 
     ASSERT_TRUE((static_cast<bool>(controller.MovePose(target, 0.5)))) << "MovePose accepts FK-generated reachable pose";
     ASSERT_TRUE((controller.GetState().mode == RobotMode::Moving)) << "MovePose starts joint motion";

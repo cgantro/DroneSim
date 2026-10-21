@@ -288,7 +288,7 @@ void RuntimeLinearPathStress(benchmark::State& state)
                     if (accepted.message.find("IK: joint limits block local improvement") != std::string::npos ||
                         accepted.message.find("IK: iteration limit while constrained by joint limits") != std::string::npos)
                         ++plannerIkLimitStalls;
-                    else if (accepted.message.find("SimRobotController: planned state exceeds a joint limit") != std::string::npos)
+                    else if (accepted.message.find("StateValidity: planned state exceeds a joint limit") != std::string::npos)
                         ++plannerVerifiedJointLimitViolations;
                 }
                 ++rejectionsWithFkGeneratedReachableEndpoints;

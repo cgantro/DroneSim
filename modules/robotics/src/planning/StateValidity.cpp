@@ -9,19 +9,19 @@ namespace
 struct StateValidityMessages final
 {
     inline static constexpr char invalidJointState[] =
-        "SimRobotController: invalid joint state in planned path";
+        "StateValidity: invalid joint state in planned path";
     inline static constexpr char pathSamplingLimitExceeded[] =
-        "SimRobotController: joint collision path exceeds the sample limit";
+        "StateValidity: joint collision path exceeds the sample limit";
     inline static constexpr char jointLimitExceeded[] =
-        "SimRobotController: planned state exceeds a joint limit";
+        "StateValidity: planned state exceeds a joint limit";
     inline static constexpr char environmentOverlap[] =
-        "SimRobotController: planned state overlaps the environment";
+        "StateValidity: planned state overlaps the environment";
     inline static constexpr char robotLinksOverlap[] =
-        "SimRobotController: planned robot links overlap";
+        "StateValidity: planned robot links overlap";
     inline static constexpr char attachedObjectOverlap[] =
-        "SimRobotController: attached object overlaps the scene";
+        "StateValidity: attached object overlaps the scene";
     inline static constexpr char unknownInvalidity[] =
-        "SimRobotController: unknown joint-state invalidity";
+        "StateValidity: unknown joint-state invalidity";
 };
 }
 

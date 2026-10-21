@@ -54,7 +54,7 @@ Result ValidateLinearPathCommand(const LinearPathMoveCommand& command)
         std::isfinite(command.maxAngularAccelerationRadiansPerSecondSquared) &&
         command.maxAngularAccelerationRadiansPerSecondSquared > 0.0)
         return Result::Success();
-    return {ErrorCode::InvalidCommand, "SimRobotController: invalid linear path or motion limits"};
+    return {ErrorCode::InvalidCommand, "LinearPathPlanner: invalid path or motion limits"};
 }
 
 Result MapIkFailure(const kinematics::IkResult& result)
@@ -110,12 +110,12 @@ namespace math
 namespace messages
 {
     inline static constexpr char invalidPlanningPolicy[] =
-        "SimRobotController: invalid linear path planning policy";
-    inline static constexpr char invalidTcpTarget[] = "SimRobotController: invalid TCP target";
+        "LinearPathPlanner: invalid planning policy";
+    inline static constexpr char invalidTcpTarget[] = "LinearPathPlanner: invalid TCP target";
     inline static constexpr char pathDurationOutOfRange[] =
-        "SimRobotController: path duration exceeds numeric range";
+        "LinearPathPlanner: path duration exceeds numeric range";
     inline static constexpr char noCollisionFreeIkSolution[] =
-        "SimRobotController: no collision-free IK solution";
+        "LinearPathPlanner: no collision-free IK solution";
     inline static constexpr char wrongThread[] =
         "LinearPathPlanner: planning must advance on the Begin caller thread";
 }
@@ -173,7 +173,7 @@ Result AddPathSampleContext(Result failure, std::size_t sample, std::size_t samp
     const models::RobotSpecification& specification, const CartesianPose& target,
     const kinematics::IkResult* ikFailure = nullptr)
 {
-    std::string context = "SimRobotController: TCP path sample " + std::to_string(sample) + "/" +
+    std::string context = "LinearPathPlanner: TCP path sample " + std::to_string(sample) + "/" +
         std::to_string(sampleCount) + " failed at (" +
         std::to_string(target.positionMeters[0]) + ", " +
         std::to_string(target.positionMeters[1]) + ", " +
@@ -483,7 +483,7 @@ struct LinearPathPlanningJob::Impl
                 totalIntervals > policy.maximumPathIntervals ||
                 intervals > static_cast<double>(policy.maximumPathIntervals - totalIntervals))
             {
-                return {ErrorCode::InvalidCommand, "SimRobotController: linear path exceeds " +
+                return {ErrorCode::InvalidCommand, "LinearPathPlanner: path exceeds " +
                     std::to_string(policy.maximumPathIntervals) + " intervals"};
             }
 
@@ -943,7 +943,7 @@ struct LinearPathPlanningJob::Impl
             tcpSamples.size() >= policy.maximumPathIntervals)
         {
             Fail({ErrorCode::IkDidNotConverge,
-                "SimRobotController: TCP straightness error remains above tolerance at sample " +
+                "LinearPathPlanner: TCP straightness error remains above tolerance at sample " +
                     std::to_string(sample + 1) + "/" + std::to_string(tcpSamples.size()) +
                     " after " + std::to_string(refinementDepth[sample]) + " refinements; largest rejected-branch probe " +
                     std::to_string(maximumSamplePositionErrorMeters * math::millimetersPerMeter) + " mm / " +
