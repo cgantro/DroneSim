@@ -48,6 +48,21 @@ TEST(ControlRuntimeTests, FixedLoopAndControllerContracts)
     loop.Advance(std::numeric_limits<double>::infinity(), tick);
     EXPECT_EQ(ticks, before) << "invalid elapsed time";
 
+    loop.Reset();
+    std::size_t attemptedTicks = 0;
+    EXPECT_THROW(loop.Advance(0.008, [&](double)
+    {
+        if (++attemptedTicks == 2)
+            throw std::runtime_error("tick failed");
+    }), std::runtime_error);
+    EXPECT_EQ(attemptedTicks, 2);
+    EXPECT_DOUBLE_EQ(loop.GetAccumulatorSeconds(), 0.004)
+        << "the failed tick time stays in the accumulator";
+    std::size_t resumedTicks = 0;
+    EXPECT_EQ(loop.Advance(0.004, [&](double) { ++resumedTicks; }), 2)
+        << "retry processes the failed tick and the new elapsed time";
+    EXPECT_DOUBLE_EQ(loop.GetAccumulatorSeconds(), 0.0);
+
     backends::simulation::SimRobotController controller(models::hanwha::kHcr12a);
     ASSERT_TRUE(static_cast<bool>(controller.Connect())) << "connect";
     JointMoveCommand command;
