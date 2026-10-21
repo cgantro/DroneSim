@@ -44,6 +44,13 @@ public static class AeroSimLabUiTestWindow
         IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
+    public static extern bool IsWindowEnabled(IntPtr window);
+
+    [DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = CharSet.Unicode)]
+    private static extern IntPtr ReadControlTextMessage(
+        IntPtr window, uint message, IntPtr capacity, StringBuilder text);
+
+    [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -55,6 +62,13 @@ public static class AeroSimLabUiTestWindow
     public static bool SetText(IntPtr window, string text)
     {
         return SendTextMessage(window, 0x000C, IntPtr.Zero, text) != IntPtr.Zero;
+    }
+
+    public static string ReadControlText(IntPtr window)
+    {
+        var text = new StringBuilder(512);
+        ReadControlTextMessage(window, 0x000D, (IntPtr)text.Capacity, text);
+        return text.ToString();
     }
 
     public static IntPtr FindProcessWindow(uint expectedProcessId, string expectedClassName)
@@ -140,6 +154,23 @@ function Invoke-GroundControlCli([string[]]$Arguments) {
     }
 }
 
+function Invoke-GroundControlButton([int]$ControlId) {
+    $button = [AeroSimLabUiTestWindow]::GetDlgItem($uiWindow, $ControlId)
+    [void][AeroSimLabUiTestWindow]::SendMessage(
+        $button, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+    if ([AeroSimLabUiTestWindow]::IsWindowEnabled($button)) {
+        throw "지상통제 명령($ControlId)이 시작되지 않았습니다."
+    }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    while (-not [AeroSimLabUiTestWindow]::IsWindowEnabled($button)) {
+        if ([DateTime]::UtcNow -ge $deadline) {
+            throw "지상통제 명령($ControlId)에 시뮬레이터가 응답하지 않았습니다."
+        }
+        Start-Sleep -Milliseconds 40
+    }
+}
+
 $sessionCommandId = 1
 $sessionSequence = 1
 function Invoke-SessionCommand([string]$Action, [string]$ExpectedStatus) {
@@ -163,7 +194,6 @@ if ($timeoutResult.ExitCode -ne 3 -or $timeoutResult.Output -notmatch '응답 �
 $retryingClient = $null
 $server = $null
 $groundControlUiProcess = $null
-$uiListener = $null
 $uiWindow = [IntPtr]::Zero
 
 try {
@@ -195,13 +225,56 @@ try {
     }
 
     Start-Sleep -Milliseconds 1800
-    $faultResult = Invoke-GroundControlCli @('--port', "$port", '--camera', 'fault')
-    if ($faultResult.ExitCode -ne 0 -or $faultResult.Output -notmatch '카메라: fault') {
-        throw "카메라 고장 명령이 적용되지 않았습니다.`n$($faultResult.Output)"
+    $groundControlUiProcess = Start-Process -FilePath $GroundControlUiPath `
+        -WorkingDirectory $workingDirectory `
+        -WindowStyle Normal `
+        -PassThru
+    $windowDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    while ($uiWindow -eq [IntPtr]::Zero -and [DateTime]::UtcNow -lt $windowDeadline) {
+        $groundControlUiProcess.Refresh()
+        $uiWindow = [AeroSimLabUiTestWindow]::FindProcessWindow(
+            [uint32]$groundControlUiProcess.Id, 'AeroSimLabGroundControlWindow')
+        Start-Sleep -Milliseconds 50
     }
-    $recoveryResult = Invoke-GroundControlCli @('--port', "$port", '--camera', 'recover')
-    if ($recoveryResult.ExitCode -ne 0 -or $recoveryResult.Output -notmatch '카메라: active') {
-        throw "카메라 복구 명령이 적용되지 않았습니다.`n$($recoveryResult.Output)"
+    if ($uiWindow -eq [IntPtr]::Zero) {
+        throw '지상통제 조작 창을 열지 못했습니다.'
+    }
+    $portInput = [AeroSimLabUiTestWindow]::GetDlgItem(
+        $uiWindow, [AeroSimLabUiTestWindow]::PortInput)
+    if (-not [AeroSimLabUiTestWindow]::SetText($portInput, "$port")) {
+        throw '지상통제 창에 시험용 포트를 입력하지 못했습니다.'
+    }
+
+    $requiredControls = @(
+        [AeroSimLabUiTestWindow]::TakeoffButton,
+        [AeroSimLabUiTestWindow]::LandButton,
+        [AeroSimLabUiTestWindow]::CameraFaultButton,
+        [AeroSimLabUiTestWindow]::CameraRecoverButton,
+        [AeroSimLabUiTestWindow]::RecordingStartButton,
+        [AeroSimLabUiTestWindow]::RecordingStopButton,
+        [AeroSimLabUiTestWindow]::RecordingReplayButton,
+        [AeroSimLabUiTestWindow]::StatusText,
+        [AeroSimLabUiTestWindow]::TelemetryText
+    )
+    foreach ($controlId in $requiredControls) {
+        if ([AeroSimLabUiTestWindow]::GetDlgItem($uiWindow, $controlId) -eq [IntPtr]::Zero) {
+            throw "지상통제 창의 조작 항목($controlId)을 찾지 못했습니다."
+        }
+    }
+
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraFaultButton)
+    $telemetryText = [AeroSimLabUiTestWindow]::GetDlgItem(
+        $uiWindow, [AeroSimLabUiTestWindow]::TelemetryText)
+    $faultTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($faultTelemetry -notmatch '카메라: fault') {
+        throw "지상통제 창에서 보낸 카메라 고장 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$faultTelemetry"
+    }
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraRecoverButton)
+    Start-Sleep -Milliseconds 1800
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::LandButton)
+    $landingTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($landingTelemetry -notmatch '비행 상태: landing' -or $landingTelemetry -notmatch '카메라: active') {
+        throw "지상통제 창의 착륙·카메라 복구 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$landingTelemetry"
     }
 
     $portConflictError = $null
@@ -222,10 +295,6 @@ try {
         throw '이미 사용 중인 UDP 포트를 거부하지 않았습니다.'
     }
 
-    $landingResult = Invoke-GroundControlCli @('--port', "$port", '--command', 'land')
-    if ($landingResult.ExitCode -ne 0) {
-        throw "착륙 명령이 적용되지 않았습니다.`n$($landingResult.Output)"
-    }
     Start-Sleep -Milliseconds 1800
 
     Invoke-SessionCommand 'record_start' 'recording_started'
@@ -250,58 +319,7 @@ try {
         throw "시뮬레이터 시험 서버가 오류로 종료했습니다: $($server.ExitCode)"
     }
 
-    $groundControlUiProcess = Start-Process -FilePath $GroundControlUiPath `
-        -WorkingDirectory $workingDirectory `
-        -WindowStyle Normal `
-        -PassThru
-    $windowDeadline = [DateTime]::UtcNow.AddSeconds(5)
-    while ($uiWindow -eq [IntPtr]::Zero -and [DateTime]::UtcNow -lt $windowDeadline) {
-        $groundControlUiProcess.Refresh()
-        $uiWindow = [AeroSimLabUiTestWindow]::FindProcessWindow(
-            [uint32]$groundControlUiProcess.Id, 'AeroSimLabGroundControlWindow')
-        Start-Sleep -Milliseconds 50
-    }
-    if ($uiWindow -eq [IntPtr]::Zero) {
-        throw '지상통제 조작 창을 열지 못했습니다.'
-    }
-    $uiListener = [System.Net.Sockets.UdpClient]::new($port)
-    $portInput = [AeroSimLabUiTestWindow]::GetDlgItem(
-        $uiWindow, [AeroSimLabUiTestWindow]::PortInput)
-    if (-not [AeroSimLabUiTestWindow]::SetText($portInput, "$port")) {
-        throw '지상통제 창에 시험용 포트를 입력하지 못했습니다.'
-    }
-
-    $requiredControls = @(
-        [AeroSimLabUiTestWindow]::TakeoffButton,
-        [AeroSimLabUiTestWindow]::LandButton,
-        [AeroSimLabUiTestWindow]::CameraFaultButton,
-        [AeroSimLabUiTestWindow]::CameraRecoverButton,
-        [AeroSimLabUiTestWindow]::RecordingStartButton,
-        [AeroSimLabUiTestWindow]::RecordingStopButton,
-        [AeroSimLabUiTestWindow]::RecordingReplayButton,
-        [AeroSimLabUiTestWindow]::StatusText,
-        [AeroSimLabUiTestWindow]::TelemetryText
-    )
-    foreach ($controlId in $requiredControls) {
-        if ([AeroSimLabUiTestWindow]::GetDlgItem($uiWindow, $controlId) -eq [IntPtr]::Zero) {
-            throw "지상통제 창의 조작 항목($controlId)을 찾지 못했습니다."
-        }
-    }
-    $takeoffButton = [AeroSimLabUiTestWindow]::GetDlgItem(
-        $uiWindow, [AeroSimLabUiTestWindow]::TakeoffButton)
-    [void][AeroSimLabUiTestWindow]::SendMessage(
-        $takeoffButton, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
-    $receive = $uiListener.BeginReceive($null, $null)
-    if (-not $receive.AsyncWaitHandle.WaitOne(5000)) {
-        throw '지상통제 창에서 보낸 이륙 명령을 받지 못했습니다.'
-    }
-    $source = [System.Net.IPEndPoint]::new([System.Net.IPAddress]::Any, 0)
-    $datagram = $uiListener.EndReceive($receive, [ref]$source)
-    $uiCommand = [Text.Encoding]::UTF8.GetString($datagram) | ConvertFrom-Json
-    if ($uiCommand.type -ne 'command' -or $uiCommand.payload.action -ne 'takeoff') {
-        throw "지상통제 창에서 예상하지 않은 명령을 받았습니다: $uiCommand"
-    }
-    Write-Output '지상통제 창에서 보낸 이륙 명령을 확인했습니다.'
+    Write-Output '지상통제 창의 착륙·카메라 고장·복구 명령과 시뮬레이터 상태를 확인했습니다.'
 }
 finally {
     if ($null -ne $retryingClient) {
@@ -325,8 +343,5 @@ finally {
         if (-not $groundControlUiProcess.HasExited) {
             Stop-Process -Id $groundControlUiProcess.Id -Force
         }
-    }
-    if ($null -ne $uiListener) {
-        $uiListener.Dispose()
     }
 }
