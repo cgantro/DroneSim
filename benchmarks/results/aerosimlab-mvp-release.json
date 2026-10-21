@@ -377,6 +377,56 @@
         {"elapsed_seconds":5.0005845,"render_fps":397.953479,"rendered_frames":1990,"simulation_ticks":298,"tick_duration_us":{"p50":29.6,"p95":53.6,"p99":82.8,"deadline_misses_over_16_67ms":0},"vision_duration_us":{"p50":1178.2,"p95":1306.6,"p99":1428.2},"working_set_bytes":107700224,"process_cpu_percent_approx":100.0083},
         {"elapsed_seconds":5.0021642,"render_fps":388.831698,"rendered_frames":1945,"simulation_ticks":298,"tick_duration_us":{"p50":29.7,"p95":54.7,"p99":121.5,"deadline_misses_over_16_67ms":0},"vision_duration_us":{"p50":1186.5,"p95":1402.9,"p99":1904.8},"working_set_bytes":107569152,"process_cpu_percent_approx":99.9967}
       ]
+    },
+    {
+      "measured_at": "2026-10-21T20:50Z",
+      "source_revision": "b4680460",
+      "method": "같은 MSVC Release 실행 파일로 5초씩 3회 측정했습니다. 숨김 OpenGL 창(1280×720), VSync 끔, X500 메시와 강체 물리를 사용했습니다. 물리 시간은 Jolt PhysicsSystem::Update 구간만 별도로 쟀습니다. 첫 계측 시험에서 결과가 0으로 나와 검증이 실패했고, 조건문 범위 오류를 고친 뒤 다시 측정했습니다.",
+      "environment": {
+        "os": "Microsoft Windows 10.0.26200",
+        "architecture": "X64",
+        "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+        "build": "MSVC Release x64",
+        "framebuffer": "1280x720",
+        "opengl_renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "opengl_version": "3.3.0 NVIDIA 581.42",
+        "window": "OpenGL hidden window; VSync off"
+      },
+      "runs": [
+        {
+          "elapsed_seconds": 5.0001762,
+          "render_fps": 399.3859256399804,
+          "rendered_frames": 1997,
+          "simulation_ticks": 298,
+          "tick_duration_us": {"p50": 29.5, "p95": 54.2, "p99": 70.3, "samples": 298, "deadline_misses_over_16_67ms": 0},
+          "physics_step_duration_us": {"p50": 17.8, "p95": 41.4, "p99": 58.1, "samples": 298},
+          "vision_analysis_duration_us": {"p50": 1167.9, "p95": 1312.7, "p99": 1475.5, "samples": 291},
+          "working_set_bytes": 107601920,
+          "process_cpu_percent_approx": 99.99647612418138
+        },
+        {
+          "elapsed_seconds": 5.0022398,
+          "render_fps": 397.2220604058206,
+          "rendered_frames": 1987,
+          "simulation_ticks": 298,
+          "tick_duration_us": {"p50": 30.0, "p95": 57.2, "p99": 107.6, "samples": 298, "deadline_misses_over_16_67ms": 0},
+          "physics_step_duration_us": {"p50": 18.1, "p95": 42.2, "p99": 62.4, "samples": 298},
+          "vision_analysis_duration_us": {"p50": 1181.8, "p95": 1307.0, "p99": 1508.6, "samples": 291},
+          "working_set_bytes": 107597824,
+          "process_cpu_percent_approx": 99.99520614745418
+        },
+        {
+          "elapsed_seconds": 5.000022,
+          "render_fps": 399.59824176773617,
+          "rendered_frames": 1998,
+          "simulation_ticks": 298,
+          "tick_duration_us": {"p50": 29.7, "p95": 52.3, "p99": 71.8, "samples": 298, "deadline_misses_over_16_67ms": 0},
+          "physics_step_duration_us": {"p50": 17.9, "p95": 38.8, "p99": 60.2, "samples": 298},
+          "vision_analysis_duration_us": {"p50": 1179.4, "p95": 1306.6, "p99": 1517.0, "samples": 291},
+          "working_set_bytes": 107483136,
+          "process_cpu_percent_approx": 99.99956000193599
+        }
+      ]
     }
   ]
 }
