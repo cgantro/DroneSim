@@ -119,6 +119,21 @@ void CheckSevenJointModelSolvesReachablePose()
     EXPECT_LT(PositionDistance(inverse.EvaluateTcp(result.jointPositions), target), 2e-5);
 }
 
+void CheckRestartSeedsUseDistinctDimensions()
+{
+    std::array<models::JointSpecification, 7> joints{};
+    for (auto& joint : joints)
+        joint.motionType = models::JointMotionType::Continuous;
+    const models::RobotSpecification specification{
+        "Test", "SevenContinuousJoints", joints.data(), joints.size(), nullptr, 0, {}, false};
+    const JointVector start(joints.size(), 0.0);
+    JointVector restart(joints.size());
+
+    detail::BuildIkRestartSeed(1, start, specification, restart);
+
+    EXPECT_NE(restart[0], restart[6]);
+}
+
 void CheckContinuousJointRemainsUnbounded()
 {
     const double infinity = std::numeric_limits<double>::infinity();
@@ -153,6 +168,7 @@ TEST(RobotInverseKinematicsTests, SolvesPositionAndPoseForFourAndSevenJoints)
     EXPECT_EQ(RobotDefaultIkOptions(models::hanwha::kHcr12a).taskMode, IkTaskMode::Pose);
     CheckFourJointModelSolvesPositionOnly();
     CheckSevenJointModelSolvesReachablePose();
+    CheckRestartSeedsUseDistinctDimensions();
     CheckContinuousJointRemainsUnbounded();
 }
 

@@ -4,7 +4,6 @@
 #include "robotics/models/RobotSpecification.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <utility>
@@ -12,6 +11,18 @@
 
 namespace grasplink::robotics::kinematics::detail
 {
+inline std::size_t NextPrime(std::size_t candidate)
+{
+    for (;; ++candidate)
+    {
+        bool isPrime = candidate >= 2;
+        for (std::size_t divisor = 2; isPrime && divisor <= candidate / divisor; ++divisor)
+            isPrime = candidate % divisor != 0;
+        if (isPrime)
+            return candidate;
+    }
+}
+
 inline double HaltonValue(std::size_t index, std::size_t base)
 {
     double value = 0.0;
@@ -28,14 +39,15 @@ inline double HaltonValue(std::size_t index, std::size_t base)
 inline void BuildIkRestartSeed(std::size_t sample, const JointVector& start,
     const models::RobotSpecification& specification, JointVector& seed)
 {
-    constexpr std::array<std::size_t, 6> primeBases{2, 3, 5, 7, 11, 13};
+    // 관절마다 다른 소수 밑을 써서 Halton 수열의 차원이 반복되지 않게 한다.
+    std::size_t primeBase = 1;
     for (std::size_t jointIndex = 0; jointIndex < seed.size(); ++jointIndex)
     {
+        primeBase = NextPrime(primeBase + 1);
         const auto& joint = specification.joints[jointIndex];
         if (!joint.HasPositionLimits())
         {
-            const double offset = HaltonValue(sample,
-                primeBases[jointIndex % primeBases.size()]) - 0.5;
+            const double offset = HaltonValue(sample, primeBase) - 0.5;
             seed[jointIndex] = start[jointIndex] + offset * models::kFullTurnRadians;
             continue;
         }
@@ -46,8 +58,7 @@ inline void BuildIkRestartSeed(std::size_t sample, const JointVector& start,
             continue;
         }
         const double startFraction = (start[jointIndex] - joint.minimumPosition) / range;
-        const double shiftedFraction = HaltonValue(sample,
-            primeBases[jointIndex % primeBases.size()]) + startFraction - 0.5;
+        const double shiftedFraction = HaltonValue(sample, primeBase) + startFraction - 0.5;
         seed[jointIndex] = joint.minimumPosition +
             (shiftedFraction - std::floor(shiftedFraction)) * range;
     }
