@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -48,27 +47,6 @@ public:
 
     Shader(const Shader&) = delete;
     Shader& operator=(const Shader&) = delete;
-
-    /**
-     * @brief shader 파일을 읽어 여러 Entity가 공유할 수 있는 그리기 프로그램을 만든다.
-     * @param filepath `#type` 표시로 두 코드가 나뉜 파일 경로
-     * @return 실행 프로그램을 함께 소유하는 공유 참조
-     * @throws std::runtime_error 파일 읽기, 각 코드 검사·변환 또는 두 코드 연결이 실패하면 발생한다.
-     */
-    static std::shared_ptr<Shader> Create(const std::string& filepath);
-
-    /**
-     * @brief 정점 코드와 픽셀 코드를 받아 여러 Entity가 공유할 실행 프로그램을 만든다.
-     * @param name 그리기 프로그램을 구분할 이름
-     * @param vertexSrc 꼭짓점을 화면 위치로 바꾸는 GLSL 코드
-     * @param fragmentSrc 픽셀별 색을 계산하는 GLSL 코드
-     * @return 실행 프로그램을 함께 소유하는 공유 참조
-     * @throws std::runtime_error 각 코드 검사·변환 또는 두 코드 연결이 실패하면 발생한다.
-     */
-    static std::shared_ptr<Shader> CreateFromSource(
-        const std::string& name,
-        const std::string& vertexSrc,
-        const std::string& fragmentSrc);
 
     /**
      * @brief 이후 입력값 전달과 그리기 명령에 사용할 GPU Program을 선택한다.

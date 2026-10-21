@@ -148,15 +148,6 @@ Shader::~Shader(){
     }
 }
 
-std::shared_ptr<Shader> Shader::Create(const std::string& filepath){
-    return std::make_shared<Shader>(filepath);
-}
-
-std::shared_ptr<Shader> Shader::CreateFromSource(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
-{
-    return std::make_shared<Shader>(name, vertexSrc, fragmentSrc);
-}
-
 std::string Shader::ReadFile(const std::string& filepath){
     // Shader 전처리는 호출자가 수행하므로 이 단계에서는 #type 표식까지 원문 그대로 유지한다.
     std::ifstream file(filepath, std::ios::in | std::ios::binary);

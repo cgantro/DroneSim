@@ -1,6 +1,7 @@
 #pragma once
 
 #include "communication/Protocol.h"
+#include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "sensor/RgbFrame.h"
 #ifndef __EMSCRIPTEN__
@@ -19,7 +20,6 @@
 namespace aerosimlab::graphics
 {
 class Camera;
-class Material;
 class Mesh;
 class Renderer;
 class Shader;
@@ -56,7 +56,7 @@ private:
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition);
     void DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
-        const std::shared_ptr<aerosimlab::graphics::Material>& material,
+        const aerosimlab::graphics::Material& material,
         const glm::mat4& view, const glm::mat4& projection);
 
     bool smokeTest_ = false;
@@ -95,12 +95,16 @@ private:
     std::unique_ptr<aerosimlab::graphics::Renderer> renderer_;
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
-    std::shared_ptr<aerosimlab::graphics::Mesh> cube_;
-    std::shared_ptr<aerosimlab::graphics::Shader> shader_;
-    std::shared_ptr<aerosimlab::graphics::Material> droneMaterial_;
-    std::shared_ptr<aerosimlab::graphics::Material> propellerMaterial_;
-    std::shared_ptr<aerosimlab::graphics::Material> groundMaterial_;
-    std::shared_ptr<aerosimlab::graphics::Material> buildingMaterial_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
+    std::unique_ptr<aerosimlab::graphics::Shader> shader_;
+    aerosimlab::graphics::Material droneMaterial_{
+        glm::vec4{0.12F, 0.48F, 0.32F, 1.0F}, 0.0F, 0.75F};
+    aerosimlab::graphics::Material propellerMaterial_{
+        glm::vec4{0.08F, 0.09F, 0.10F, 1.0F}, 0.0F, 0.9F};
+    aerosimlab::graphics::Material groundMaterial_{
+        glm::vec4{0.35F, 0.39F, 0.34F, 1.0F}, 0.0F, 1.0F};
+    aerosimlab::graphics::Material buildingMaterial_{
+        glm::vec4{0.63F, 0.59F, 0.48F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::simulation::SimulationCore simulation_;
 };
 }

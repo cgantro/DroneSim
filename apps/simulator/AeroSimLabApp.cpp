@@ -2,7 +2,6 @@
 
 #include "graphics/Camera.h"
 #include "graphics/GlApi.h"
-#include "graphics/Material.h"
 #include "graphics/Mesh.h"
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
@@ -141,17 +140,8 @@ void AeroSimLabApp::InitializeGraphics()
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
 
-    cube_ = std::shared_ptr<aerosimlab::graphics::Mesh>(
-        aerosimlab::graphics::Mesh::CreateCube(1.0F));
-    shader_ = aerosimlab::graphics::Shader::Create("shaders/Scene.glsl");
-    droneMaterial_ = std::make_shared<aerosimlab::graphics::Material>(
-        glm::vec4{0.12F, 0.48F, 0.32F, 1.0F}, 0.0F, 0.75F);
-    propellerMaterial_ = std::make_shared<aerosimlab::graphics::Material>(
-        glm::vec4{0.08F, 0.09F, 0.10F, 1.0F}, 0.0F, 0.9F);
-    groundMaterial_ = std::make_shared<aerosimlab::graphics::Material>(
-        glm::vec4{0.35F, 0.39F, 0.34F, 1.0F}, 0.0F, 1.0F);
-    buildingMaterial_ = std::make_shared<aerosimlab::graphics::Material>(
-        glm::vec4{0.63F, 0.59F, 0.48F, 1.0F}, 0.0F, 0.9F);
+    cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
+    shader_ = std::make_unique<aerosimlab::graphics::Shader>("shaders/Scene.glsl");
 }
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
@@ -524,7 +514,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         glm::rotate(glm::mat4{1.0F}, static_cast<float>(simulation_.State().yawRadians),
             glm::vec3{0.0F, 1.0F, 0.0F});
     const auto drawPart = [&](const glm::vec3& offset, const glm::vec3& size,
-                              const std::shared_ptr<aerosimlab::graphics::Material>& material)
+                              const aerosimlab::graphics::Material& material)
     {
         DrawCube(heading * glm::translate(glm::mat4{1.0F}, offset) *
             glm::scale(glm::mat4{1.0F}, size), cameraPosition, material, view, projection);
@@ -540,10 +530,10 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 }
 
 void AeroSimLabApp::DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
-    const std::shared_ptr<aerosimlab::graphics::Material>& material,
+    const aerosimlab::graphics::Material& material,
     const glm::mat4& view, const glm::mat4& projection)
 {
-    renderer_->Draw(transform, *cube_, *material, *shader_, view, projection, cameraPosition);
+    renderer_->Draw(transform, *cube_, material, *shader_, view, projection, cameraPosition);
 }
 
 void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
