@@ -71,15 +71,16 @@ RobotPanelActions DrawRobotPanelContents(const RobotPanelView& view)
                 ImGui::Text("%.1f / %.1f deg",
                     glm::degrees(jointSpec.minimumPosition), glm::degrees(jointSpec.maximumPosition));
             ImGui::TableSetColumnIndex(2);
-            if (joint < state.jointPositions.size())
+            if (joint >= state.jointPositions.size())
             {
-                if (jointSpec.motionType == robotics::models::JointMotionType::Prismatic)
-                    ImGui::Text("%.3f m", state.jointPositions[joint]);
-                else
-                    ImGui::Text("%.1f deg", glm::degrees(state.jointPositions[joint]));
-            }
-            else
                 ImGui::TextUnformatted("--");
+                continue;
+            }
+
+            if (jointSpec.motionType == robotics::models::JointMotionType::Prismatic)
+                ImGui::Text("%.3f m", state.jointPositions[joint]);
+            else
+                ImGui::Text("%.1f deg", glm::degrees(state.jointPositions[joint]));
         }
         ImGui::EndTable();
     }
