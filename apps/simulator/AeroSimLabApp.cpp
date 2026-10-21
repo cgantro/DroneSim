@@ -22,7 +22,9 @@
 #include <chrono>
 #include <cstddef>
 #include <memory>
+#ifndef _WIN32
 #include <iostream>
+#endif
 #include <string>
 #include <ctime>
 #include <cmath>
@@ -76,7 +78,6 @@ int AeroSimLabApp::Run()
     if (networkEnabled_)
     {
         udpSocket_ = std::make_unique<aerosimlab::communication::UdpSocket>(udpPort_);
-        std::cout << "지상통제 UDP 대기 중: 0.0.0.0:" << udpPort_ << '\n';
     }
 #endif
     startTime_ = std::chrono::steady_clock::now();
@@ -117,7 +118,6 @@ int AeroSimLabApp::Run()
         });
     if (smokeTest_ && !cameraFrameHasPixels)
     {
-        std::cerr << "EO 카메라 RGB 프레임에서 픽셀을 확인하지 못했습니다.\n";
         return 5;
     }
     if (benchmarkMode_)
@@ -355,6 +355,7 @@ void AeroSimLabApp::PollGroundControl()
             sequenceGuard_.Commit(packet);
             groundControlActive_ = true;
             externalControl_ = true;
+            window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
             pendingControllerAction_.reset();
             pendingPilotCommand_.reset();
             const auto elapsed = std::chrono::steady_clock::now() - startTime_;
@@ -383,7 +384,11 @@ void AeroSimLabApp::PollGamepad()
     {
         pendingControllerAction_.reset();
         if (gamepadConnected_)
-            std::cout << "게임패드 연결 해제" << (groundControlActive_ ? " (지상통제 입력 유지)" : "") << '\n';
+        {
+            window_->SetTitle(groundControlActive_
+                ? "AeroSimLab | 지상통제 입력 사용 중"
+                : "AeroSimLab | 드론 관찰 · EO 영상");
+        }
         if (gamepadConnected_ && !groundControlActive_)
         {
             // 조종기가 끊기면 남아 있던 속도 명령을 지워 제자리 호버링으로 전환한다.
@@ -403,8 +408,8 @@ void AeroSimLabApp::PollGamepad()
         return;
     }
 
-    if (!gamepadConnected_)
-        std::cout << "게임패드 연결: GLFW 표준 매핑 사용" << '\n';
+    if (!gamepadConnected_ && !groundControlActive_)
+        window_->SetTitle("AeroSimLab | 게임패드 연결됨");
     gamepadConnected_ = true;
     externalControl_ = true;
     const bool takeoffPressed = state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
@@ -502,7 +507,12 @@ void AeroSimLabApp::ApplyGroundCommand()
     }
     catch (const std::exception& error)
     {
-        std::cerr << "지상통제 응답 전송 실패: " << error.what() << '\n';
+#ifdef _WIN32
+        const std::string message = std::string("지상통제 응답 전송 실패: ") + error.what() + "\n";
+        OutputDebugStringA(message.c_str());
+#else
+        (void)error;
+#endif
     }
     pendingCommand_.reset();
     ++smokeCommandCount_;
@@ -633,6 +643,11 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
         report["working_set_bytes"] = memory.WorkingSetSize;
 #endif
-    std::cout << report.dump(2) << '\n';
+    const std::string output = report.dump(2) + '\n';
+#ifdef _WIN32
+    OutputDebugStringA(output.c_str());
+#else
+    std::cout << output;
+#endif
 }
 }

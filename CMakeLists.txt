@@ -159,10 +159,18 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   endif()
   target_compile_definitions(aerosimlab_graphics PUBLIC GLFW_INCLUDE_NONE)
 
-  add_executable(aerosimlab_simulator
-    apps/simulator/main.cpp
-    apps/simulator/AeroSimLabApp.cpp
-  )
+  if(WIN32)
+    add_executable(aerosimlab_simulator WIN32
+      apps/simulator/main.cpp
+      apps/simulator/AeroSimLabApp.cpp
+    )
+    target_link_libraries(aerosimlab_simulator PRIVATE shell32)
+  else()
+    add_executable(aerosimlab_simulator
+      apps/simulator/main.cpp
+      apps/simulator/AeroSimLabApp.cpp
+    )
+  endif()
   target_include_directories(aerosimlab_simulator PRIVATE apps/simulator)
   target_link_libraries(aerosimlab_simulator PRIVATE
     aerosimlab_graphics

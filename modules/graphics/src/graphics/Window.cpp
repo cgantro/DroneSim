@@ -104,6 +104,11 @@ void Window::SwapBuffers() const
     glfwSwapBuffers(m_Handle);
 }
 
+void Window::SetTitle(const std::string& title) const
+{
+    glfwSetWindowTitle(m_Handle, title.c_str());
+}
+
 void Window::GetFramebufferSize(int& width, int& height) const
 {
     glfwGetFramebufferSize(m_Handle, &width, &height);

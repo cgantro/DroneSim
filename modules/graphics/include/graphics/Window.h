@@ -67,6 +67,12 @@ public:
     void SwapBuffers() const;
 
     /**
+     * @brief 현재 조작 상태를 알리도록 창 제목을 바꾼다.
+     * @param title 화면 위쪽에 표시할 제목.
+     */
+    void SetTitle(const std::string& title) const;
+
+    /**
      * @brief GPU가 그림을 그릴 실제 픽셀 너비와 높이를 돌려준다.
      * @param width 실제 너비 [pixel]
      * @param height 실제 높이 [pixel]
