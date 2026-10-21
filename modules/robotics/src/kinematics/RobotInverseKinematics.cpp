@@ -234,6 +234,32 @@ FeasibleStepStatus FindFeasibleJointStep(
     return FeasibleStepStatus::NoFeasibleDirection;
 }
 
+double LimitStepToJointRanges(
+    const models::RobotSpecification& specification,
+    const JointVector& angles,
+    const JointVector& jointStep,
+    const std::vector<bool>& active,
+    double stepScale)
+{
+    // 관절 한계를 넘는 이동은 선 탐색 전에 가능한 범위까지 줄인다.
+    double feasibleFraction = stepScale;
+    for (std::size_t joint = 0; joint < angles.size(); ++joint)
+    {
+        if (active[joint] || std::abs(jointStep[joint]) <= IkSolverConstants::negligibleJointStep)
+            continue;
+        const auto& limits = specification.joints[joint];
+        if (!limits.HasPositionLimits())
+            continue;
+
+        const double distance = jointStep[joint] > 0.0
+            ? limits.maximumPosition - angles[joint]
+            : angles[joint] - limits.minimumPosition;
+        feasibleFraction = std::min(feasibleFraction,
+            std::max(0.0, distance / std::abs(jointStep[joint])));
+    }
+    return feasibleFraction;
+}
+
 Error Measure(const Pose3& target, const Pose3& current, double weight)
 {
     const Vec3 position = Subtract(target.positionMeters, current.positionMeters);
@@ -508,21 +534,8 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
                 continue;
             }
 
-            double feasibleFraction = stepScale;
-            for (std::size_t joint = 0; joint < angles.size(); ++joint)
-            {
-                if (active[joint] || std::abs(jointStep[joint]) <= IkSolverConstants::negligibleJointStep)
-                    continue;
-                const auto& limits = specification_.joints[joint];
-                if (limits.HasPositionLimits())
-                {
-                    const double distance = jointStep[joint] > 0.0
-                        ? limits.maximumPosition - angles[joint]
-                        : angles[joint] - limits.minimumPosition;
-                    feasibleFraction = std::min(feasibleFraction,
-                        std::max(0.0, distance / std::abs(jointStep[joint])));
-                }
-            }
+            const double feasibleFraction = LimitStepToJointRanges(
+                specification_, angles, jointStep, active, stepScale);
             for (std::size_t line = 0; line < IkSolverConstants::maximumLineSearchSteps && !improved; ++line)
             {
                 const double fraction = feasibleFraction * std::ldexp(1.0, -line);
