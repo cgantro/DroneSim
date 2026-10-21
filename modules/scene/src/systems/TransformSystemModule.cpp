@@ -5,6 +5,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <cmath>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -28,6 +30,11 @@ struct TransformInput final
 using WorldTransformCache = std::unordered_map<flecs::entity_t, CachedTransform>;
 using TransformQuery = flecs::query<const Position, const Rotation, const Scale,
     TransformMatrix, TransformMatrix>;
+
+bool IsFiniteVector(const glm::vec3& value)
+{
+    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+}
 
 // Flecs world가 이 임시 자료를 소유하므로 호출 사이에도 남아 용량을 재사용한다.
 // 각 Flecs world가 따로 보관해 서로 다른 장면의 변환이 섞이지 않게 한다.
@@ -84,7 +91,10 @@ glm::mat4 TransformSystemModule::ComposeLocalMatrix(
     const glm::quat& rotation,
     const glm::vec3& scale)
 {
-    // 점에는 먼저 축별 크기, 다음 방향 회전, 마지막으로 위치 이동을 적용한다. ECS 저장소에서 직접 바꾼 회전값도 계산 가능한 방향인지 확인한다.
+    if (!IsFiniteVector(position) || !IsFiniteVector(scale))
+        throw std::invalid_argument("Transform position and scale must be finite");
+
+    // 점에는 크기, 회전, 위치를 차례로 적용한다. ECS 값을 직접 바꿔도 위치·크기·회전은 행렬 계산 전에 다시 검사한다.
     return glm::translate(glm::mat4(1.0F), position) *
         glm::mat4_cast(static_cast<const glm::quat&>(Rotation{rotation})) *
         glm::scale(glm::mat4(1.0F), scale);

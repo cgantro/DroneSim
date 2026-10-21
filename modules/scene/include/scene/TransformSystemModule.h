@@ -25,7 +25,7 @@ public:
      * @param rotation 부모 기준 방향을 나타내는 quaternion. 성분은 유한해야 하고 모두 0일 수 없다.
      * @param scale 부모 기준 축별 크기 배율. 단위 없음.
      * @return 점에 크기 배율, 회전, 위치 이동을 차례로 적용하는 행렬이다.
-     * @throws std::invalid_argument 방향을 나타낼 수 없는 quaternion을 전달한 경우.
+     * @throws std::invalid_argument 위치나 크기가 유한하지 않거나 회전을 나타낼 수 없는 quaternion을 전달한 경우.
      */
     static glm::mat4 ComposeLocalMatrix(
         const glm::vec3& position,

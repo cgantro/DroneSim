@@ -480,6 +480,15 @@ void CheckLoadedArmPipeline(std::size_t axisCount)
  */
 TEST(RobotCollisionGeometry, SyntheticModelBuildsIndependentFkProxies)
 {
+    const auto identityRotation = glm::quat{1.0F, 0.0F, 0.0F, 0.0F};
+    const auto unitScale = glm::vec3{1.0F};
+    EXPECT_THROW(TransformSystemModule::ComposeLocalMatrix(
+        {std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F}, identityRotation, unitScale),
+        std::invalid_argument);
+    EXPECT_THROW(TransformSystemModule::ComposeLocalMatrix(
+        glm::vec3{0.0F}, identityRotation,
+        {1.0F, std::numeric_limits<float>::infinity(), 1.0F}), std::invalid_argument);
+
     CheckSyntheticGeometry();
     for (const std::size_t axisCount : {4U, 6U, 7U})
         CheckLoadedArmPipeline(axisCount);
