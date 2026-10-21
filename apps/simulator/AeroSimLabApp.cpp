@@ -83,7 +83,7 @@ nlohmann::json MeasureDroneScaling()
     constexpr std::array<std::size_t, 4> droneCounts{1U, 2U, 4U, 8U};
     constexpr std::size_t repetitions = 3U;
     constexpr std::size_t warmupTicks = 120U;
-    constexpr std::size_t measuredTicks = 3000U;
+    constexpr std::size_t measuredTicks = 30000U;
     const auto readWorkingSetBytes = []() -> std::optional<std::size_t>
     {
 #ifdef _WIN32
@@ -172,7 +172,7 @@ nlohmann::json MeasureDroneScaling()
     }
 
     return {
-        {"method", "헤드리스 강체 모의; 한 Jolt 세계에서 모든 드론을 함께 갱신. 각 실행은 워밍업 뒤 3,000 Tick을 측정하고 프로세스 CPU 시간과 작업 집합을 기록"},
+        {"method", "헤드리스 강체 모의; 한 Jolt 세계에서 모든 드론을 함께 갱신. 각 실행은 워밍업 뒤 30,000 Tick을 측정하고 프로세스 CPU 시간과 작업 집합을 기록"},
         {"counts", droneCounts},
         {"repetitions_per_count", repetitions},
         {"runs", std::move(runs)}};
