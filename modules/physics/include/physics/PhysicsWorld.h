@@ -69,11 +69,12 @@ public:
     [[nodiscard]] CollisionLayer GetCollisionLayer(PhysicsBodyHandle handle) const;
 
     /**
-     * @brief 마지막 물리 계산에서 남아 있는 접촉 값을 복사한다.
+     * @brief 마지막 물리 계산에서 남아 있는 접촉 값을 전달한 벡터에 복사한다.
+     * @param output 접촉 목록을 덮어쓸 벡터다. 기존 저장 공간은 유지하므로 매 tick 재사용할 수 있다.
      * @details Jolt worker callback은 내부 mutex로 보호한 접촉 목록만 갱신하며 이 함수는 Step이 끝난 뒤 호출한다.
-     * 삭제된 Body의 항목은 반환하지 않는다. 이 API를 포함한 World 조작과 Step은 호출자 스레드에서 순서대로 실행해야 한다.
+     * 삭제된 Body의 항목은 복사하지 않는다. 이 API를 포함한 World 조작과 Step은 호출자 스레드에서 순서대로 실행해야 한다.
      */
-    [[nodiscard]] std::vector<ContactSnapshot> GetContacts() const;
+    void CopyContactsTo(std::vector<ContactSnapshot>& output) const;
 
     /**
      * @brief Kinematic 기준 물체에 Dynamic 물체의 현재 상대 자세를 고정하는 연결을 만든다.

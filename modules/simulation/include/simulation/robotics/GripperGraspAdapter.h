@@ -3,6 +3,8 @@
 #include "scene/Entity.h"
 #include "physics/PhysicsTypes.h"
 
+#include <vector>
+
 namespace grasplink::physics { class PhysicsWorld; }
 namespace grasplink::robotics::backends::simulation { class SimGripperController; }
 
@@ -72,6 +74,12 @@ public:
     [[nodiscard]] GripperGraspState GetState() const;
 
 private:
+    struct ContactCandidate
+    {
+        physics::PhysicsBodyHandle object;
+        glm::vec3 fingerToObject{};
+    };
+
     /** @brief 열기·Reset 요청과 교체된 충돌 Body를 확인해 오래된 파지를 해제한다. */
     void RefreshBindingAndReleaseState();
 
@@ -92,5 +100,8 @@ private:
     physics::Transform previousLeft_;
     physics::Transform previousRight_;
     bool previousTipsValid_ = false;
+    std::vector<physics::ContactSnapshot> contactSnapshots_;
+    std::vector<ContactCandidate> leftContactCandidates_;
+    std::vector<ContactCandidate> rightContactCandidates_;
 };
 }

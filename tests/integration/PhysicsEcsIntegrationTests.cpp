@@ -11,6 +11,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
 using grasplink::physics::BodyMotionType;
 using grasplink::scene::Entity;
@@ -124,9 +125,14 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
                     isSameHandle(contact.second, contactFloorHandle));
         });
     };
-    EXPECT_TRUE(hasContact(physics.GetContacts())) << "Jolt contacts are available to simulation clients";
+    std::vector<grasplink::physics::ContactSnapshot> contacts;
+    physics.CopyContactsTo(contacts);
+    EXPECT_TRUE(hasContact(contacts)) << "Jolt contacts are available to simulation clients";
+    const auto contactBufferCapacity = contacts.capacity();
     physics.DestroyBody(contactObjectHandle);
-    EXPECT_FALSE(hasContact(physics.GetContacts())) << "destroyed Body contacts are removed immediately";
+    physics.CopyContactsTo(contacts);
+    EXPECT_FALSE(hasContact(contacts)) << "destroyed Body contacts are removed immediately";
+    EXPECT_EQ(contacts.capacity(), contactBufferCapacity) << "contact snapshots reuse caller storage";
 
     grasplink::physics::BoxBodyDescription invalidLayerBody;
     invalidLayerBody.collisionLayer = grasplink::physics::CollisionLayer::Count;

@@ -778,14 +778,14 @@ CollisionLayer PhysicsWorld::GetCollisionLayer(PhysicsBodyHandle handle) const
     return ObjectLayers::Category(layer);
 }
 
-std::vector<ContactSnapshot> PhysicsWorld::GetContacts() const
+void PhysicsWorld::CopyContactsTo(std::vector<ContactSnapshot>& output) const
 {
-    std::vector<ContactSnapshot> result;
+    output.clear();
     std::lock_guard lock(impl_->contactCollector.mutex);
+    output.reserve(impl_->contactCollector.contacts.size());
     for (const auto& entry : impl_->contactCollector.contacts)
         if (IsBodyValid(entry.second.first) && IsBodyValid(entry.second.second))
-            result.push_back(entry.second);
-    return result;
+            output.push_back(entry.second);
 }
 
 PhysicsConstraintHandle PhysicsWorld::CreateFixedConstraint(PhysicsBodyHandle anchor, PhysicsBodyHandle object)

@@ -131,20 +131,16 @@ void GripperGraspAdapter::AfterPhysicsStep()
     const bool opening = controller_.IsOpeningRequested();
     bool openingBlocked = false;
 
-    struct Candidate
-    {
-        physics::PhysicsBodyHandle object;
-        glm::vec3 fingerToObject;
-    };
-    std::vector<Candidate> leftObjects;
-    std::vector<Candidate> rightObjects;
-    for (const auto& contact : world_.GetContacts())
+    leftContactCandidates_.clear();
+    rightContactCandidates_.clear();
+    world_.CopyContactsTo(contactSnapshots_);
+    for (const auto& contact : contactSnapshots_)
     {
         // Jolt는 가까워지는 물체를 미리 보고할 수 있다. 음수 겹침 깊이는 실제 접촉이 아니므로 파지 후보에서 제외한다.
         if (contact.penetrationMeters < 0.0F)
             continue;
         auto collect = [&](physics::PhysicsBodyHandle finger, bool& touched,
-            std::vector<Candidate>& objects)
+            std::vector<ContactCandidate>& objects)
         {
             physics::PhysicsBodyHandle other;
             glm::vec3 normal;
@@ -168,19 +164,23 @@ void GripperGraspAdapter::AfterPhysicsStep()
             if (world_.GetBodyMotionType(other) == physics::BodyMotionType::Dynamic)
                 objects.push_back({other, normal});
         };
-        collect(left, state_.leftContact, leftObjects);
-        collect(right, state_.rightContact, rightObjects);
+        collect(left, state_.leftContact, leftContactCandidates_);
+        collect(right, state_.rightContact, rightContactCandidates_);
     }
 
     previousLeft_ = currentLeft;
     previousRight_ = currentRight;
     previousTipsValid_ = true;
     physics::PhysicsBodyHandle graspCandidate;
-    for (const auto& candidate : leftObjects)
-        if (std::any_of(rightObjects.begin(), rightObjects.end(), [&](const auto& rightCandidate)
-            { return SameBody(candidate.object, rightCandidate.object) &&
-                glm::dot(candidate.fingerToObject, rightCandidate.fingerToObject) <=
-                    kOpposingFingerNormalDotThreshold; }))
+    for (const auto& candidate : leftContactCandidates_)
+        if (std::any_of(
+                rightContactCandidates_.begin(), rightContactCandidates_.end(),
+                [&](const auto& rightCandidate)
+                {
+                    return SameBody(candidate.object, rightCandidate.object) &&
+                        glm::dot(candidate.fingerToObject, rightCandidate.fingerToObject) <=
+                            kOpposingFingerNormalDotThreshold;
+                }))
         {
             graspCandidate = candidate.object;
             break;
