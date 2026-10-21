@@ -106,6 +106,11 @@ void RobotTransformAdapter::Apply(const ::grasplink::robotics::kinematics::Robot
     if (state.jointLocalRotations.size() != joints_.size() || state.jointPositions.size() != joints_.size())
         throw std::invalid_argument(RobotTransformAdapterMessages::jointStateCountMismatch);
 
+    // 뒤쪽 관절이 사라졌을 때 앞쪽 관절만 바뀌지 않도록 먼저 모두 확인한다.
+    for (const JointBinding& binding : joints_)
+        if (!binding.entity)
+            throw std::runtime_error(RobotTransformAdapterMessages::sceneRemoved);
+
     for (std::size_t i = 0; i < joints_.size(); ++i)
     {
         // 모델 원점 회전을 유지하고, 그 뒤에 FK가 계산한 관절 움직임을 곱한다.
@@ -114,8 +119,6 @@ void RobotTransformAdapter::Apply(const ::grasplink::robotics::kinematics::Robot
         const glm::quat motion{static_cast<float>(pose.w), static_cast<float>(pose.x),
             static_cast<float>(pose.y), static_cast<float>(pose.z)};
         auto& binding = joints_[i];
-        if (!binding.entity)
-            throw std::runtime_error(RobotTransformAdapterMessages::sceneRemoved);
         if (binding.motionType == ::grasplink::robotics::models::JointMotionType::Prismatic)
         {
             binding.entity.SetLocalPosition(binding.bindPosition +

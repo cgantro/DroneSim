@@ -254,6 +254,13 @@ void CheckSyntheticGeometry()
     EXPECT_THROW(adapter.BuildCandidateWorldTransforms(
         fk.Update(state), glm::mat4{1.0F}, incompleteCandidates), std::runtime_error)
         << "candidate transforms require the base collision proxy";
+    const glm::quat firstJointBeforeRejectedApply = joint1.GetLocalRotation();
+    state.jointPositions[0] = 0.0;
+    const auto& stateWithMissingVisualJoint = fk.Update(state);
+    joint2.Destroy();
+    EXPECT_THROW(visualAdapter.Apply(stateWithMissingVisualJoint), std::runtime_error)
+        << "removed visual joints are detected before any joint is updated";
+    EXPECT_EQ(joint1.GetLocalRotation(), firstJointBeforeRejectedApply);
     sceneOwner.reset();
     EXPECT_THROW(adapter.Apply(fk.Update(state)), std::runtime_error)
         << "removed Scene invalidates physics proxy bindings";
