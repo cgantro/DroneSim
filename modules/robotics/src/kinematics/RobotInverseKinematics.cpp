@@ -77,6 +77,35 @@ double OrientationWeight(const IkOptions& options)
         ? 0.0 : options.orientationWeightMetersPerRadian;
 }
 
+bool ValidSolverOptions(const IkOptions& options)
+{
+    return options.maxIterations > 0 &&
+        Positive(options.positionToleranceMeters) &&
+        Positive(options.orientationToleranceRadians) &&
+        Positive(options.damping) &&
+        Positive(options.orientationWeightMetersPerRadian) &&
+        Positive(options.maxJointStep) &&
+        Positive(options.maxPrismaticStepMeters) &&
+        options.stagnationIterationLimit > 0 &&
+        Positive(options.stagnationRelativeCostTolerance) &&
+        Positive(options.stagnationJointStepTolerance) &&
+        Positive(options.stagnationPrismaticStepToleranceMeters);
+}
+
+bool SeedWithinJointLimits(
+    const models::RobotSpecification& specification,
+    const JointVector& seed)
+{
+    for (std::size_t joint = 0; joint < seed.size(); ++joint)
+    {
+        const auto& limits = specification.joints[joint];
+        if (!std::isfinite(seed[joint]) || (limits.HasPositionLimits() &&
+            (seed[joint] < limits.minimumPosition || seed[joint] > limits.maximumPosition)))
+            return false;
+    }
+    return true;
+}
+
 SixVector JacobianColumn(
     const models::JointSpecification& joint,
     const Vec3& axis,
@@ -383,27 +412,15 @@ LevenbergMarquardtIk::SessionId LevenbergMarquardtIk::BeginSingleSeed(
             ? IkTerminationReason::MissingToolFrame : IkTerminationReason::InvalidInput;
         sessionState_ = IkSessionState::Completed;
     };
-    if (currentSeed.size() != specification_.jointCount || options.maxIterations == 0 ||
-        !Positive(options.positionToleranceMeters) || !Positive(options.orientationToleranceRadians) ||
-        !Positive(options.damping) || !Positive(options.orientationWeightMetersPerRadian) ||
-        !Positive(options.maxJointStep) || !Positive(options.maxPrismaticStepMeters) ||
-        options.stagnationIterationLimit == 0 ||
-        !Positive(options.stagnationRelativeCostTolerance) ||
-        !Positive(options.stagnationJointStepTolerance) ||
-        !Positive(options.stagnationPrismaticStepToleranceMeters))
+    if (currentSeed.size() != specification_.jointCount || !ValidSolverOptions(options))
     {
         fail(IkStatus::InvalidInput, IkErrorMessages::invalidSeedOrOptions);
         return activeSessionId_;
     }
-    for (std::size_t i = 0; i < currentSeed.size(); ++i)
+    if (!SeedWithinJointLimits(specification_, currentSeed))
     {
-        const auto& joint = specification_.joints[i];
-        if (!std::isfinite(currentSeed[i]) || (joint.HasPositionLimits() &&
-            (currentSeed[i] < joint.minimumPosition || currentSeed[i] > joint.maximumPosition)))
-        {
-            fail(IkStatus::InvalidInput, IkErrorMessages::seedOutsideJointLimits);
-            return activeSessionId_;
-        }
+        fail(IkStatus::InvalidInput, IkErrorMessages::seedOutsideJointLimits);
+        return activeSessionId_;
     }
     try { sessionTarget_ = FromCartesian(targetInBase); }
     catch (const std::invalid_argument&)
