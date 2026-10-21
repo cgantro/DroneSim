@@ -129,7 +129,16 @@ enum class FeasibleStepStatus
     NonFiniteStep
 };
 
-FeasibleStepStatus SolveFreeJointStep(
+// 관절 한계를 반영한 이동량과 감쇠를 다시 계산하는 데 필요한 판정을 함께 보관한다.
+struct FeasibleJointStep
+{
+    FeasibleStepStatus status = FeasibleStepStatus::NoFeasibleDirection;
+    double scale = 1.0;
+    bool solvedAnySystem = false;
+    bool hitAnyJointLimit = false;
+};
+
+FeasibleJointStep SolveFreeJointStep(
     const models::RobotSpecification& specification,
     const IkOptions& options,
     const std::vector<SixVector>& columns,
@@ -137,10 +146,9 @@ FeasibleStepStatus SolveFreeJointStep(
     const JointVector& angles,
     double damping,
     JointVector& jointStep,
-    const std::vector<bool>& active,
-    double& stepScale,
-    bool& solvedSystem)
+    const std::vector<bool>& active)
 {
+    FeasibleJointStep result;
     // 한계에 묶이지 않은 관절의 열만 사용해 J_free J_freeᵀ + λ²I를 만든다.
     SixMatrix normal{};
     for (std::size_t row = 0; row < taskSpaceDimension; ++row)
@@ -154,8 +162,8 @@ FeasibleStepStatus SolveFreeJointStep(
 
     SixVector taskStep{};
     if (!SolveSystem(normal, weightedError, taskStep))
-        return FeasibleStepStatus::NoFeasibleDirection;
-    solvedSystem = true;
+        return result;
+    result.solvedAnySystem = true;
     std::fill(jointStep.begin(), jointStep.end(), 0.0);
 
     // 작업 공간 변화를 Jacobian 열에 투영해 관절 이동량으로 바꾸고, 한 번에 움직일 크기도 제한한다.
@@ -173,10 +181,14 @@ FeasibleStepStatus SolveFreeJointStep(
             std::abs(jointStep[joint]) / maximumStep);
     }
     if (!std::isfinite(largestScaledStep))
-        return FeasibleStepStatus::NonFiniteStep;
+    {
+        result.status = FeasibleStepStatus::NonFiniteStep;
+        return result;
+    }
 
-    stepScale = largestScaledStep > 1.0 ? 1.0 / largestScaledStep : 1.0;
-    return FeasibleStepStatus::Feasible;
+    result.status = FeasibleStepStatus::Feasible;
+    result.scale = largestScaledStep > 1.0 ? 1.0 / largestScaledStep : 1.0;
+    return result;
 }
 
 /**
@@ -184,7 +196,7 @@ FeasibleStepStatus SolveFreeJointStep(
  * @details 한계 바깥을 향하는 관절은 이번 반복에서 고정하고, 나머지 관절로 다시 계산한다.
  * 반환 상태는 호출자가 감쇠값을 조절하거나 수치 오류를 보고하는 데 사용한다.
  */
-FeasibleStepStatus FindFeasibleJointStep(
+FeasibleJointStep FindFeasibleJointStep(
     const models::RobotSpecification& specification,
     const IkOptions& options,
     const std::vector<SixVector>& columns,
@@ -192,19 +204,20 @@ FeasibleStepStatus FindFeasibleJointStep(
     const JointVector& angles,
     double damping,
     JointVector& jointStep,
-    std::vector<bool>& active,
-    double& stepScale,
-    bool& solvedSystem,
-    bool& limitBlocked)
+    std::vector<bool>& active)
 {
+    FeasibleJointStep result;
     std::fill(active.begin(), active.end(), false);
     for (std::size_t activePass = 0; activePass <= angles.size(); ++activePass)
     {
-        const FeasibleStepStatus stepStatus = SolveFreeJointStep(
+        const FeasibleJointStep step = SolveFreeJointStep(
             specification, options, columns, weightedError, angles, damping,
-            jointStep, active, stepScale, solvedSystem);
-        if (stepStatus != FeasibleStepStatus::Feasible)
-            return stepStatus;
+            jointStep, active);
+        result.status = step.status;
+        result.scale = step.scale;
+        result.solvedAnySystem |= step.solvedAnySystem;
+        if (result.status != FeasibleStepStatus::Feasible)
+            return result;
 
         bool addedConstraint = false;
         for (std::size_t joint = 0; joint < angles.size(); ++joint)
@@ -216,7 +229,7 @@ FeasibleStepStatus FindFeasibleJointStep(
                 continue;
             const double boundaryTolerance = std::max(IkSolverConstants::jointLimitToleranceFloor,
                 (limits.maximumPosition - limits.minimumPosition) * IkSolverConstants::jointLimitToleranceRatio);
-            const double requested = angles[joint] + jointStep[joint] * stepScale;
+            const double requested = angles[joint] + jointStep[joint] * result.scale;
             const bool atLowerLimit = angles[joint] <= limits.minimumPosition + boundaryTolerance;
             const bool atUpperLimit = angles[joint] >= limits.maximumPosition - boundaryTolerance;
             if ((atLowerLimit && requested < limits.minimumPosition) ||
@@ -224,14 +237,15 @@ FeasibleStepStatus FindFeasibleJointStep(
             {
                 active[joint] = true;
                 addedConstraint = true;
-                limitBlocked = true;
+                result.hitAnyJointLimit = true;
             }
         }
 
         if (!addedConstraint)
-            return FeasibleStepStatus::Feasible;
+            return result;
     }
-    return FeasibleStepStatus::NoFeasibleDirection;
+    result.status = FeasibleStepStatus::NoFeasibleDirection;
+    return result;
 }
 
 double LimitStepToJointRanges(
@@ -518,12 +532,12 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         bool solvedDampedSystem = false;
         for (std::size_t attempt = 0; attempt < IkSolverConstants::maximumDampingAttempts && !improved; ++attempt)
         {
-            double stepScale = 1.0;
-            const FeasibleStepStatus stepStatus = FindFeasibleJointStep(
+            const FeasibleJointStep step = FindFeasibleJointStep(
                 specification_, sessionOptions_, columns, error.weighted, angles,
-                sessionDamping_, jointStep, active, stepScale,
-                solvedDampedSystem, activeLimitBlockedThisIteration);
-            if (stepStatus == FeasibleStepStatus::NonFiniteStep)
+                sessionDamping_, jointStep, active);
+            solvedDampedSystem |= step.solvedAnySystem;
+            activeLimitBlockedThisIteration |= step.hitAnyJointLimit;
+            if (step.status == FeasibleStepStatus::NonFiniteStep)
             {
                 FinishSession(IkStatus::DidNotConverge, IkTerminationReason::NumericalFailure,
                     IkErrorMessages::nonFiniteNumericalStep);
@@ -531,7 +545,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
             }
             if (sessionState_ != IkSessionState::Running)
                 break;
-            if (stepStatus == FeasibleStepStatus::NoFeasibleDirection)
+            if (step.status == FeasibleStepStatus::NoFeasibleDirection)
             {
                 sessionDamping_ *= solvedDampedSystem
                     ? IkSolverConstants::rejectedStepDampingGrowth : IkSolverConstants::singularSystemDampingGrowth;
@@ -539,7 +553,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
             }
 
             const double feasibleFraction = LimitStepToJointRanges(
-                specification_, angles, jointStep, active, stepScale);
+                specification_, angles, jointStep, active, step.scale);
             for (std::size_t line = 0; line < IkSolverConstants::maximumLineSearchSteps && !improved; ++line)
             {
                 const double fraction = feasibleFraction * std::ldexp(1.0, -line);
