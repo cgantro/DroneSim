@@ -4,6 +4,7 @@
 
 #include <tinyxml2.h>
 
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <limits>
@@ -51,7 +52,11 @@ double Number(const char* value, const std::filesystem::path& path, const std::s
         Invalid(path, field + " is missing");
     char* end = nullptr;
     const double result = std::strtod(value, &end);
-    if (end == value || *end != '\0' || !std::isfinite(result))
+    if (end == value)
+        Invalid(path, field + " must be a finite number");
+    while (std::isspace(static_cast<unsigned char>(*end)))
+        ++end;
+    if (*end != '\0' || !std::isfinite(result))
         Invalid(path, field + " must be a finite number");
     return result;
 }

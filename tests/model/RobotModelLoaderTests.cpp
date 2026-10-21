@@ -143,7 +143,7 @@ std::string RevoluteJoint(const std::string& name, const std::string& parent,
 {
     return "<joint name=\"" + name + "\" type=\"revolute\"><parent link=\"" + parent +
         "\"/><child link=\"" + child + "\"/><axis xyz=\"0 0 1\"/>"
-        "<limit lower=\"-2\" upper=\"2\" velocity=\"1\"/></joint>";
+        "<limit lower=\" -2 \" upper=\" 2 \" velocity=\" 1 \"/></joint>";
 }
 
 std::string SerialArm(std::size_t count)
@@ -259,6 +259,13 @@ TEST(RobotModelLoader, ReadsSupportedJointTypesAndRejectsMalformedModels)
         TemporaryUrdf file{xml};
         EXPECT_THROW(grasplink::model::RobotModelLoader::LoadUrdf(file.Path()), std::runtime_error);
     };
+    const std::string emptyNumericAttributeXml = Link("base_link") + Link("arm") + Link("tool0") +
+        "<joint name=\"arm_joint\" type=\"revolute\"><parent link=\"base_link\"/>"
+        "<child link=\"arm\"/><axis xyz=\"0 0 1\"/>"
+        "<limit lower=\"   \" upper=\"1\" velocity=\"1\"/></joint>" +
+        "<joint name=\"tool_fixed\" type=\"fixed\"><parent link=\"arm\"/>"
+        "<child link=\"tool0\"/></joint>";
+    expectRejected(emptyNumericAttributeXml);
     expectRejected(Link("base_link") + Link("base_link") + Link("tool0"));
     expectRejected(Link("base_link") + Link("tool0") +
         "<joint name=\"broken\" type=\"fixed\"><parent link=\"base_link\"/>"
