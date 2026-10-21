@@ -44,6 +44,13 @@ option(GRASPLINK_BUILD_GRAPHICS "Build the OpenGL viewer" ON)
 option(GRASPLINK_ENABLE_TRACY "Enable Tracy runtime profiling" ON)
 option(GRASPLINK_BUILD_BENCHMARKS "Build FK, IK, and path-planning benchmarks" ${BUILD_TESTING})
 
+add_library(aerosimlab_simulation_core STATIC
+  modules/simulation_core/src/DroneModel.cpp
+  modules/simulation_core/src/SimulationCore.cpp
+)
+target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
+target_link_libraries(aerosimlab_simulation_core PUBLIC glm::glm)
+
 if(GRASPLINK_BUILD_GRAPHICS AND GRASPLINK_ENABLE_TRACY)
   set(TRACY_ENABLE ON CACHE BOOL "Enable Tracy runtime profiling" FORCE)
   set(TRACY_ON_DEMAND ON CACHE BOOL "Capture Tracy data only when a profiler connects" FORCE)
@@ -202,6 +209,9 @@ if(BUILD_TESTING)
         ${discovery_options} PROPERTIES LABELS "${discovery_labels}" ${test_properties})
     endif()
   endfunction()
+
+  grasplink_add_test(aerosimlab_simulation_core_tests SimulationCore
+    tests/simulation_core/SimulationCoreTests.cpp aerosimlab_simulation_core GROUPED CATEGORY simulation)
 
   grasplink_add_test(grasplink_diagnostics_tests Logger tests/diagnostics/LoggerTests.cpp grasplink_diagnostics CATEGORY diagnostics)
   grasplink_add_test(grasplink_control_tests ControlRuntime tests/robotics/ControlRuntimeTests.cpp grasplink_robotics CATEGORY robotics FILTER "ControlRuntimeTests.FixedLoopAndControllerContracts")
