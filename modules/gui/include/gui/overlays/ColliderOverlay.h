@@ -31,15 +31,13 @@ public:
 
     /**
      * @brief 활성 ImGui 프레임에 충돌 모양을 화면 선으로 그린다.
-     * @param camera Scene 위치를 화면 픽셀로 바꾸는 데 쓰며 호출이 끝나면 보관하지 않는 Camera 참조다.
+     * @param camera Scene 위치를 화면 좌표로 바꾸는 데 쓰며 호출이 끝나면 보관하지 않는 Camera 참조다.
      * @param visible false이면 저장한 선을 지운다. 다시 켤 때 새 Scene의 물체에서 선을 계산한다.
+     * @param viewportSize 선을 그릴 화면 영역의 너비와 높이 [ImGui 좌표]다.
      * @details 카메라는 원근 투영으로 앞뒤 거리를 화면 크기에 반영한다. 카메라 뒤쪽의 점은 화면 앞에 있는 것처럼 잘못 나타날 수 있어 선을 만들 때 건너뛴다.
      * 화면 선 좌표는 매번 다시 구하는 비용을 줄이려고 최대 50 ms 재사용한다. 그동안 카메라를 움직이면 선이 잠시 이전 위치에 보일 수 있다.
      * 선은 화면 맨 앞에 그리므로 벽이나 로봇에 가려진 충돌 모양도 확인할 수 있다. OpenGL 명령은 직접 실행하지 않는다.
      */
-    void Draw(const grasplink::graphics::Camera& camera, bool visible);
-
-    /** @brief 화면의 일부만 Scene viewport로 쓸 때 해당 영역 크기에 맞춰 충돌선을 그린다. */
     void Draw(const grasplink::graphics::Camera& camera, bool visible, const ImVec2& viewportSize);
 
 private:

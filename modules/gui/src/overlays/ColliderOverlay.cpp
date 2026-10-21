@@ -278,11 +278,6 @@ ColliderOverlay::ColliderOverlay(flecs::world& world)
 
 ColliderOverlay::~ColliderOverlay() = default;
 
-void ColliderOverlay::Draw(const grasplink::graphics::Camera& camera, bool visible)
-{
-    m_Impl->Draw(camera, visible, ImGui::GetIO().DisplaySize);
-}
-
 void ColliderOverlay::Draw(const grasplink::graphics::Camera& camera, bool visible, const ImVec2& viewportSize)
 {
     m_Impl->Draw(camera, visible, viewportSize);
