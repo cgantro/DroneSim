@@ -110,6 +110,13 @@ public:
     [[nodiscard]] std::uint64_t GetCommandRevision() const noexcept { return commandRevision_; }
 
 private:
+    enum class RequestedDirection
+    {
+        Opening,
+        None,
+        Closing
+    };
+
     bool IsAtTarget() const noexcept;
     void UpdateRawPosition() noexcept;
 
@@ -127,7 +134,7 @@ private:
     // 현재 명령의 raw speed를 프로젝트 설정값에 대응시켜 정한 자유공간 master 관절의 각속도 [rad/s]다.
     double masterVelocityRadiansPerSecond_ = 0.0;
     bool contactStopped_ = false;
-    int requestedDirection_ = 0;
+    RequestedDirection requestedDirection_ = RequestedDirection::None;
     std::uint64_t releaseRevision_ = 0;
     std::uint64_t commandRevision_ = 0;
 };
