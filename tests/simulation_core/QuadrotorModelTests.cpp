@@ -22,6 +22,19 @@ TEST(QuadrotorModel, EqualRotorSpeedsBalanceWeightAndCancelTorque)
     EXPECT_NEAR(wrench.torqueNewtonMeters.z, 0.0, 1.0e-12);
 }
 
+TEST(QuadrotorModel, X500CollisionBoxesIncludeFrameGearAndFourPropellerPlanes)
+{
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+
+    ASSERT_EQ(parameters.collisionBoxes.size(), 9U);
+    EXPECT_NEAR(parameters.collisionBoxes[0].halfExtentsMeters.x, 0.1767767F, 1.0e-6F);
+    EXPECT_NEAR(parameters.collisionBoxes[1].positionMeters.z, -0.123, 1.0e-9);
+    EXPECT_NEAR(parameters.collisionBoxes[4].positionMeters.z, -0.2195, 1.0e-9);
+    EXPECT_NEAR(parameters.collisionBoxes[5].positionMeters.x, 0.174, 1.0e-9);
+    EXPECT_NEAR(parameters.collisionBoxes[5].positionMeters.y, -0.174, 1.0e-9);
+    EXPECT_NEAR(parameters.collisionBoxes[8].positionMeters.z, 0.06, 1.0e-9);
+}
+
 TEST(QuadrotorModel, MotorResponseAndUnequalRotorsChangeWrench)
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();

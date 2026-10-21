@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <iterator>
@@ -140,6 +141,32 @@ TEST(PhysicsWorld, GroundStopsAFallingBody)
 
     const RigidBodyState state = world.State(body);
     EXPECT_GE(state.positionMeters.z, 0.08);
+    EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.1);
+}
+
+TEST(PhysicsWorld, CompoundBoxesCanRestOnSeparatedRaisedPlatforms)
+{
+    PhysicsWorld world;
+    RigidBodyDefinition platform;
+    platform.isStatic = true;
+    platform.halfExtentsMeters = {0.2F, 0.2F, 0.5F};
+    platform.positionMeters = {-0.5, 0.0, 0.5};
+    static_cast<void>(world.CreateBox(platform));
+    platform.positionMeters.x = 0.5;
+    static_cast<void>(world.CreateBox(platform));
+
+    const std::array<RigidBodyBox, 2> collisionBoxes{{
+        {{0.1F, 0.1F, 0.1F}, {-0.5, 0.0, 0.0}, {1.0, 0.0, 0.0, 0.0}},
+        {{0.1F, 0.1F, 0.1F}, {0.5, 0.0, 0.0}, {1.0, 0.0, 0.0, 0.0}}}};
+    RigidBodyDefinition bodyDefinition;
+    bodyDefinition.positionMeters = {0.0, 0.0, 3.0};
+    const RigidBodyHandle body = world.CreateCompoundBoxes(bodyDefinition, collisionBoxes);
+
+    for (int tick = 0; tick < 240; ++tick)
+        world.Step(1.0 / 60.0);
+
+    const RigidBodyState state = world.State(body);
+    EXPECT_NEAR(state.positionMeters.z, 1.1, 0.03);
     EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.1);
 }
 

@@ -14,7 +14,8 @@ namespace aerosimlab::simulation
 class QuadrotorFlightController
 {
 public:
-    static constexpr double groundedCenterHeightMeters = 0.05;
+    /** @brief PX4 X500 모델 기준점은 지면에서 0.24m 높이에 놓인다. */
+    static constexpr double groundedModelOriginHeightMeters = 0.24;
 
     /** @brief 현재 상태와 명령으로 다음 고정 Tick의 모터 목표를 계산한다. */
     [[nodiscard]] static std::array<double, QuadrotorModel::rotorCount> MotorTargets(

@@ -2,6 +2,8 @@
 
 #include <glm/vec3.hpp>
 
+#include "simulation_core/PhysicsWorld.h"
+
 #include <array>
 #include <cstddef>
 
@@ -20,6 +22,9 @@ struct RotorDefinition
     RotorRotation rotation = RotorRotation::Clockwise;
 };
 
+/** @brief 기체 기준 좌표에 놓인 PX4 모델의 상자 충돌 형상이다. */
+using QuadrotorCollisionBox = RigidBodyBox;
+
 /** @brief 한 단계에서 모터에 적용할 목표 속도와 현재 속도다. */
 struct QuadrotorState
 {
@@ -35,6 +40,7 @@ struct QuadrotorParameters
     double massKilograms = 2.0;
     glm::dvec3 principalInertiaKilogramMetersSquared{0.0216666667, 0.0216666667, 0.04};
     std::array<RotorDefinition, 4> rotors{};
+    std::array<QuadrotorCollisionBox, 9> collisionBoxes{};
     double thrustCoefficientNewtonsPerSpeedSquared = 8.54858e-6;
     double momentToThrustRatio = 0.016;
     double motorTimeConstantUpSeconds = 0.0125;

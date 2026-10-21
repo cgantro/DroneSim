@@ -65,6 +65,18 @@ QuadrotorParameters QuadrotorParameters::X500Gazebo()
         {{-0.174, 0.174, 0.0}, RotorRotation::CounterClockwise},
         {{0.174, 0.174, 0.0}, RotorRotation::Clockwise},
         {{-0.174, -0.174, 0.0}, RotorRotation::Clockwise}}};
+    const glm::dquat legSlopeDown = glm::angleAxis(-0.35, glm::dvec3{1.0, 0.0, 0.0});
+    const glm::dquat legSlopeUp = glm::angleAxis(0.35, glm::dvec3{1.0, 0.0, 0.0});
+    parameters.collisionBoxes = {{
+        {{0.1767767F, 0.1767767F, 0.025F}, {0.0, 0.0, 0.007}, {1.0, 0.0, 0.0, 0.0}},
+        {{0.0075F, 0.0075F, 0.105F}, {0.0, -0.098, -0.123}, legSlopeDown},
+        {{0.0075F, 0.0075F, 0.105F}, {0.0, 0.098, -0.123}, legSlopeUp},
+        {{0.125F, 0.0075F, 0.0075F}, {0.0, -0.132, -0.2195}, {1.0, 0.0, 0.0, 0.0}},
+        {{0.125F, 0.0075F, 0.0075F}, {0.0, 0.132, -0.2195}, {1.0, 0.0, 0.0, 0.0}},
+        {{0.1396154F, 0.00846154F, 0.00042308F}, {0.174, -0.174, 0.06}, {1.0, 0.0, 0.0, 0.0}},
+        {{0.1396154F, 0.00846154F, 0.00042308F}, {-0.174, 0.174, 0.06}, {1.0, 0.0, 0.0, 0.0}},
+        {{0.1396154F, 0.00846154F, 0.00042308F}, {0.174, 0.174, 0.06}, {1.0, 0.0, 0.0, 0.0}},
+        {{0.1396154F, 0.00846154F, 0.00042308F}, {-0.174, -0.174, 0.06}, {1.0, 0.0, 0.0, 0.0}}}};
     parameters.thrustCoefficientNewtonsPerSpeedSquared = 8.54858e-6;
     parameters.momentToThrustRatio = 0.016;
     parameters.motorTimeConstantUpSeconds = 0.0125;

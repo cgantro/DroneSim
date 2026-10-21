@@ -152,7 +152,7 @@ std::array<double, QuadrotorModel::rotorCount> QuadrotorFlightController::MotorT
     else if (state.mode == FlightMode::Landing)
     {
         const glm::dvec3 targetPosition{
-            state.positionMeters.x, state.positionMeters.y, groundedCenterHeightMeters};
+            state.positionMeters.x, state.positionMeters.y, groundedModelOriginHeightMeters};
         desiredAcceleration = positionGain * (targetPosition - state.positionMeters)
             - velocityGain * state.velocityMetersPerSecond;
     }

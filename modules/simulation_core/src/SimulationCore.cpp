@@ -87,16 +87,14 @@ struct SimulationCore::EcsStorage
     void CreatePhysicsBody()
     {
         const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-        // 기체 충돌 형상이 준비되기 전까지 지면 접촉을 확인할 임시 상자다.
-        constexpr glm::vec3 halfExtentsMeters{0.2F, 0.2F, 0.05F};
         physics = std::make_unique<PhysicsWorld>();
         RigidBodyDefinition definition;
-        definition.halfExtentsMeters = halfExtentsMeters;
-        definition.positionMeters = {0.0, 0.0, halfExtentsMeters.z};
+        definition.positionMeters = {
+            0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters};
         definition.massKilograms = parameters.massKilograms;
         definition.principalInertiaKilogramMetersSquared =
             parameters.principalInertiaKilogramMetersSquared;
-        physicsBody = physics->CreateBox(definition);
+        physicsBody = physics->CreateCompoundBoxes(definition, parameters.collisionBoxes);
         drone.set<PhysicsBody>({physicsBody});
         drone.set<DroneActuation>({parameters, {}});
         CopyPhysicsState(drone.get_mut<DroneState>(), physicsBody);
@@ -106,7 +104,7 @@ struct SimulationCore::EcsStorage
     {
         RigidBodyState initialState;
         initialState.positionMeters = {
-            0.0, 0.0, QuadrotorFlightController::groundedCenterHeightMeters};
+            0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters};
         physics->SetState(physicsBody, initialState);
         drone.get_mut<DroneActuation>().motors = {};
         CopyPhysicsState(drone.get_mut<DroneState>(), physicsBody);
@@ -153,7 +151,7 @@ struct SimulationCore::EcsStorage
             control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
         }
         else if (state.mode == FlightMode::Landing
-            && state.positionMeters.z <= QuadrotorFlightController::groundedCenterHeightMeters + 0.02
+            && state.positionMeters.z <= QuadrotorFlightController::groundedModelOriginHeightMeters + 0.02
             && std::abs(state.velocityMetersPerSecond.z) < 0.15)
         {
             state.mode = FlightMode::Grounded;

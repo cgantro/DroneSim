@@ -212,13 +212,14 @@ TEST(SimulationCore, RigidBodyModeUsesRotorForcesForTakeoffAndLanding)
     EXPECT_EQ(simulation.State().mode, FlightMode::Grounded);
     EXPECT_NEAR(
         simulation.State().positionMeters.z,
-        QuadrotorFlightController::groundedCenterHeightMeters,
+        QuadrotorFlightController::groundedModelOriginHeightMeters,
         0.02);
     EXPECT_NEAR(simulation.State().velocityMetersPerSecond.z, 0.0, 0.15);
 
     simulation.Reset();
     EXPECT_EQ(simulation.TickCount(), 0);
-    EXPECT_NEAR(simulation.State().positionMeters.z, 0.05, 1.0e-6);
+    EXPECT_NEAR(simulation.State().positionMeters.z,
+        QuadrotorFlightController::groundedModelOriginHeightMeters, 1.0e-6);
 }
 
 TEST(SimulationCore, SameRigidBodyCommandsProduceTheSameState)

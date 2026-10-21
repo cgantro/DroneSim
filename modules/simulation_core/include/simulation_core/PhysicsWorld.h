@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 
 namespace aerosimlab::simulation
 {
@@ -15,6 +16,14 @@ namespace aerosimlab::simulation
 struct RigidBodyHandle
 {
     std::uint32_t value = 0;
+};
+
+/** @brief 강체 기준 위치·자세에 놓을 상자 충돌 형상이다. */
+struct RigidBodyBox
+{
+    glm::vec3 halfExtentsMeters{0.1F};
+    glm::dvec3 positionMeters{0.0};
+    glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
 };
 
 /** @brief 상자 모양 강체를 만들 때 필요한 크기와 초기 상태다. */
@@ -53,6 +62,11 @@ public:
 
     /** @brief 상자 모양의 움직이는 물체나 고정된 장애물을 만든다. */
     [[nodiscard]] RigidBodyHandle CreateBox(const RigidBodyDefinition& definition);
+
+    /** @brief 여러 상자를 하나의 강체로 묶어 움직이는 물체나 장애물을 만든다. */
+    [[nodiscard]] RigidBodyHandle CreateCompoundBoxes(
+        const RigidBodyDefinition& definition,
+        std::span<const RigidBodyBox> boxes);
 
     /** @brief 평평한 바닥을 지형 높이 자료로 바꿔 정적 충돌 지형을 만든다. */
     void SetTerrain(const terrain::TerrainGrid& terrain);

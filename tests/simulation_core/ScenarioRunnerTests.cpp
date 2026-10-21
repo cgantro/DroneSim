@@ -1,4 +1,5 @@
 #include "simulation_core/ScenarioRunner.h"
+#include "simulation_core/QuadrotorFlightController.h"
 
 #include <gtest/gtest.h>
 
@@ -50,7 +51,7 @@ TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
     {"version":1,"dynamics":"rigid_body",
      "wind_velocity_meters_per_second":[2,0,0],"ticks":600,
      "commands":[{"tick":0,"type":"takeoff"},{"tick":240,"type":"land"}],
-     "expected":{"mode":"grounded","position_meters":[0.5563,-0.2720,0.05],
+     "expected":{"mode":"grounded","position_meters":[0.5563,-0.2720,0.24],
        "tolerance_meters":0.05}}
     )json";
 
@@ -59,7 +60,8 @@ TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
     EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
     EXPECT_EQ(result.tickCount, 600);
     EXPECT_EQ(result.finalState.mode, FlightMode::Grounded);
-    EXPECT_NEAR(result.finalState.positionMeters.z, 0.05, 0.02);
+    EXPECT_NEAR(result.finalState.positionMeters.z,
+        QuadrotorFlightController::groundedModelOriginHeightMeters, 0.02);
     EXPECT_GT(result.finalState.positionMeters.x, 0.4);
     EXPECT_EQ(result.finalState.positionMeters, repeatedResult.finalState.positionMeters);
 }

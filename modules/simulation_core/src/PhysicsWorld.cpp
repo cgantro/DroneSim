@@ -11,6 +11,7 @@
 #include <Jolt/Physics/Collision/ObjectLayerPairFilterTable.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
@@ -204,12 +205,15 @@ PhysicsWorld::~PhysicsWorld() = default;
 
 RigidBodyHandle PhysicsWorld::CreateBox(const RigidBodyDefinition& definition)
 {
-    if (!(definition.halfExtentsMeters.x > 0.0F)
-        || !(definition.halfExtentsMeters.y > 0.0F)
-        || !(definition.halfExtentsMeters.z > 0.0F)
-        || !std::isfinite(definition.halfExtentsMeters.x)
-        || !std::isfinite(definition.halfExtentsMeters.y)
-        || !std::isfinite(definition.halfExtentsMeters.z)
+    const RigidBodyBox box{definition.halfExtentsMeters, {}, {1.0, 0.0, 0.0, 0.0}};
+    return CreateCompoundBoxes(definition, std::span{&box, 1U});
+}
+
+RigidBodyHandle PhysicsWorld::CreateCompoundBoxes(
+    const RigidBodyDefinition& definition,
+    std::span<const RigidBodyBox> boxes)
+{
+    if (boxes.empty()
         || !std::isfinite(definition.massKilograms)
         || definition.massKilograms < 0.0
         || !IsFinite(definition.positionMeters)
@@ -222,14 +226,40 @@ RigidBodyHandle PhysicsWorld::CreateBox(const RigidBodyDefinition& definition)
                 || !(definition.principalInertiaKilogramMetersSquared->z > 0.0)))
         || (!definition.isStatic && !(definition.massKilograms > 0.0)))
     {
-        throw std::invalid_argument("강체 크기, 위치, 질량을 확인해 주세요.");
+        throw std::invalid_argument("강체 위치와 질량을 확인해 주세요.");
     }
+
+    JPH::StaticCompoundShapeSettings shapeSettings;
+    for (const RigidBodyBox& box : boxes)
+    {
+        if (!(box.halfExtentsMeters.x > 0.0F)
+            || !(box.halfExtentsMeters.y > 0.0F)
+            || !(box.halfExtentsMeters.z > 0.0F)
+            || !std::isfinite(box.halfExtentsMeters.x)
+            || !std::isfinite(box.halfExtentsMeters.y)
+            || !std::isfinite(box.halfExtentsMeters.z)
+            || !IsFinite(box.positionMeters)
+            || !std::isfinite(glm::length(box.orientation))
+            || !(glm::length(box.orientation) > 0.0))
+        {
+            throw std::invalid_argument("강체 충돌 상자의 크기와 자세를 확인해 주세요.");
+        }
+        shapeSettings.AddShape(
+            ToJolt(box.positionMeters),
+            ToJolt(glm::normalize(box.orientation)),
+            new JPH::BoxShape(ToJolt(box.halfExtentsMeters), 0.0F));
+    }
+
+    const JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+    if (shapeResult.HasError())
+        throw std::runtime_error(std::string("Jolt 복합 충돌 모양을 만들지 못했습니다: ")
+            + shapeResult.GetError().c_str());
 
     const JPH::EMotionType motion = definition.isStatic
         ? JPH::EMotionType::Static
         : JPH::EMotionType::Dynamic;
     JPH::BodyCreationSettings settings{
-        new JPH::BoxShape(ToJolt(definition.halfExtentsMeters), 0.0F),
+        shapeResult.Get(),
         JPH::RVec3{ToJolt(definition.positionMeters)},
         ToJolt(definition.orientation),
         motion,
