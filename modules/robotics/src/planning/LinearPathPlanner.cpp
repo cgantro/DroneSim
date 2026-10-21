@@ -1065,6 +1065,7 @@ struct LinearPathPlanningJob::Impl
             const std::size_t iterationsUsed = after - before;
             plan.ikIterationCount += iterationsUsed;
 
+            // 반복 없이 바로 끝나는 실패도 한 작업으로 세어, 시드 탐색이 호출 예산을 넘지 않게 한다.
             std::size_t consumedWork = iterationsUsed;
             if (ikState != kinematics::IkSessionState::Running && after < options.maxIterations)
                 ++consumedWork;
