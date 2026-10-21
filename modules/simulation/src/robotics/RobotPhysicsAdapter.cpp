@@ -27,7 +27,8 @@ namespace
 struct RobotPhysicsAdapterMessages final
 {
     inline static constexpr char invalidRobotRoot[] = "RobotPhysicsAdapter: invalid robot root";
-    inline static constexpr char sceneRemoved[] = "RobotPhysicsAdapter: robot Scene has been removed";
+    inline static constexpr char collisionProxyRemoved[] =
+        "RobotPhysicsAdapter: a required collision proxy has been removed from its Scene";
     inline static constexpr char linkPoseCountMismatch[] =
         "RobotPhysicsAdapter: LinkPose count mismatch";
 };
@@ -105,10 +106,13 @@ glm::mat4 RobotPhysicsAdapter::GetLinkLocalTransform(
 void RobotPhysicsAdapter::ValidateState(
     const grasplink::robotics::kinematics::RobotKinematicState& state) const
 {
+    if (!base_)
+        throw std::runtime_error(RobotPhysicsAdapterMessages::collisionProxyRemoved);
+
     for (const LinkBinding& link : links_)
     {
         if (!link.entity)
-            throw std::runtime_error(RobotPhysicsAdapterMessages::sceneRemoved);
+            throw std::runtime_error(RobotPhysicsAdapterMessages::collisionProxyRemoved);
         if (link.jointIndex >= state.linkPosesInBaseFrame.size())
             throw std::invalid_argument(RobotPhysicsAdapterMessages::linkPoseCountMismatch);
     }

@@ -255,6 +255,15 @@ void CheckSyntheticGeometry()
         adapter.BuildCandidateWorldTransforms(incompleteFkState, glm::mat4{1.0F}, incompleteCandidates);
     }, "candidate transforms reject incomplete FK poses");
     EXPECT_TRUE(incompleteCandidates.empty());
+    Entity baseProxy = root.GetChild("Base_CollisionProxy");
+    ASSERT_TRUE_MESSAGE(baseProxy.IsValid(), "the robot has a base collision proxy");
+    baseProxy.Destroy();
+    GTestExpectThrows<std::runtime_error>([&] { adapter.Apply(fk.Update(state)); },
+        "a removed base proxy cannot silently disable base collision checks");
+    GTestExpectThrows<std::runtime_error>([&]
+    {
+        adapter.BuildCandidateWorldTransforms(fk.Update(state), glm::mat4{1.0F}, incompleteCandidates);
+    }, "candidate transforms require the base collision proxy");
     sceneOwner.reset();
     GTestExpectThrows<std::runtime_error>([&] { adapter.Apply(fk.Update(state)); }, "removed Scene invalidates physics proxy bindings");
 }
