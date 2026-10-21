@@ -334,6 +334,34 @@ void CheckPrismaticJointPathUsesMeterSpacing()
     ASSERT_TRUE(stationaryPlan.has_value());
     ASSERT_EQ(stationaryPlan->points.size(), 1U);
     EXPECT_EQ(stationaryPlan->points.front(), stationaryPosition);
+
+    std::size_t wrongThreadCheckerCalls = 0;
+    auto wrongThreadContext = std::make_shared<int>(0);
+    std::weak_ptr<int> wrongThreadContextLifetime = wrongThreadContext;
+    StateValidityChecker wrongThreadChecker = [&, wrongThreadContext](const JointVector&)
+    {
+        (void)wrongThreadContext;
+        ++wrongThreadCheckerCalls;
+        return JointStateInvalidity::None;
+    };
+    JointPathPlanningJob wrongThreadJob;
+    ASSERT_TRUE(static_cast<bool>(wrongThreadJob.Begin(
+        specification, {0.0}, {0.1}, wrongThreadChecker, policy)));
+    wrongThreadChecker = {};
+    wrongThreadContext.reset();
+    EXPECT_FALSE(wrongThreadContextLifetime.expired());
+
+    JointPathPlanningState wrongThreadState = JointPathPlanningState::Idle;
+    std::thread worker([&]
+    {
+        wrongThreadState = wrongThreadJob.Advance(1);
+    });
+    worker.join();
+
+    EXPECT_EQ(wrongThreadState, JointPathPlanningState::Failed);
+    EXPECT_EQ(wrongThreadJob.GetResult().code, ErrorCode::InvalidCommand);
+    EXPECT_EQ(wrongThreadCheckerCalls, 0U);
+    EXPECT_TRUE(wrongThreadContextLifetime.expired());
 }
 
 void CheckJointStateValidityReasons()
