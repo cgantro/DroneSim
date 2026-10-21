@@ -86,7 +86,7 @@ struct SimulationCore::EcsStorage
 #if !defined(__EMSCRIPTEN__)
     void CreatePhysicsBody()
     {
-        const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+        const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
         physics = std::make_unique<PhysicsWorld>();
         RigidBodyDefinition definition;
         definition.positionMeters = {

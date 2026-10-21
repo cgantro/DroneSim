@@ -31,6 +31,30 @@ TEST(QuadrotorModel, EqualRotorSpeedsBalanceWeightAndCancelTorque)
     EXPECT_NEAR(wrench.torqueNewtonMeters.z, 0.0, 1.0e-12);
 }
 
+TEST(QuadrotorModel, X500MotorTableEstimateMatchesPublishedThrustPoints)
+{
+    const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
+    constexpr double radiansPerSecondPerRpm = 0.10471975511965977;
+    // 공개된 Holybro 모터 표의 회전수(rpm)와 추력(g) 세 점이다.
+    constexpr std::array<double, 3> speedsRpm{4269.0, 6252.0, 10703.0};
+    constexpr std::array<double, 3> thrustGrams{214.74, 470.2, 1367.04};
+
+    EXPECT_NEAR(parameters.maximumMotorSpeedRadiansPerSecond,
+        speedsRpm.back() * radiansPerSecondPerRpm, 1.0e-6);
+
+    for (std::size_t point = 0; point < speedsRpm.size(); ++point)
+    {
+        QuadrotorState state;
+        state.motorSpeedRadiansPerSecond.fill(
+            speedsRpm[point] * radiansPerSecondPerRpm);
+
+        const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(state, parameters);
+        const double expectedThrustNewtons = thrustGrams[point] / 1000.0 * 9.80665;
+        EXPECT_NEAR(wrench.forceNewtons.z / QuadrotorModel::rotorCount,
+            expectedThrustNewtons, expectedThrustNewtons * 0.02);
+    }
+}
+
 TEST(QuadrotorModel, X500CollisionBoxesIncludeFrameGearAndFourPropellerPlanes)
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();

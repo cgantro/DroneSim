@@ -54,6 +54,12 @@ struct QuadrotorParameters
 
     /** @brief PX4가 공개한 X500 Gazebo 모델의 중심 기체와 모터 설정값을 반환한다. */
     [[nodiscard]] static QuadrotorParameters X500Gazebo();
+
+    /**
+     * @brief 공개된 X500 모터 표에 맞춘 추력 계수와 속도 범위를 반환한다.
+     * @details 질량·관성·로터 배치·모터 응답·토크 비율·항력은 PX4 Gazebo 설정을 사용한다.
+     */
+    [[nodiscard]] static QuadrotorParameters X500MotorTableEstimate();
 };
 
 /** @brief 기체 중심 좌표계에서 합한 힘과 토크다. */

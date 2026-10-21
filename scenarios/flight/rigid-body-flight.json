@@ -9,7 +9,7 @@
   ],
   "expected": {
     "mode": "grounded",
-    "position_meters": [1.6933, -0.2122, 0.2237],
+    "position_meters": [1.5400, -0.1935, 0.2236],
     "tolerance_meters": 0.05
   }
 }

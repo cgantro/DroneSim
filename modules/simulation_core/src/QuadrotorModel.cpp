@@ -106,6 +106,15 @@ QuadrotorParameters QuadrotorParameters::X500Gazebo()
     return parameters;
 }
 
+QuadrotorParameters QuadrotorParameters::X500MotorTableEstimate()
+{
+    QuadrotorParameters parameters = X500Gazebo();
+    parameters.thrustCoefficientNewtonsPerSpeedSquared = 1.067745911e-5;
+    // 정격 한계가 아니라 공개 표에 실린 가장 높은 시험 회전수다.
+    parameters.maximumMotorSpeedRadiansPerSecond = 1120.8155390457184;
+    return parameters;
+}
+
 void QuadrotorModel::AdvanceMotors(
     QuadrotorState& state,
     const std::array<double, rotorCount>& targetSpeedRadiansPerSecond,
