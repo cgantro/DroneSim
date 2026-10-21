@@ -19,6 +19,18 @@ namespace
 using Bytes = std::vector<unsigned char>;
 constexpr int gltfUnsignedByteComponentType = 5121;
 
+struct TriangleGlbOptions
+{
+    std::size_t positionBufferViewLength = 36U;
+    int materialIndex = -1;
+    std::size_t vertexCount = 3U;
+    std::string materialJson;
+    bool includeSceneNode = true;
+    std::optional<int> indicesReference;
+    int sceneIndex = 0;
+    bool includeByteIndices = false;
+};
+
 void AppendUInt32(Bytes& bytes, std::uint32_t value)
 {
     for (unsigned int shift = 0; shift < 32; shift += 8)
@@ -28,21 +40,18 @@ void AppendUInt32(Bytes& bytes, std::uint32_t value)
 class TriangleGlb final
 {
 public:
-    explicit TriangleGlb(std::size_t viewLength, int materialIndex = -1,
-        std::size_t vertexCount = 3U, std::string material = {}, bool includeSceneNode = true,
-        std::optional<int> indicesReference = std::nullopt, int sceneIndex = 0,
-        bool includeByteIndices = false)
+    explicit TriangleGlb(const TriangleGlbOptions& options = {})
     {
         constexpr std::array<std::array<float, 3>, 4> positions{{
             {0.0F, 0.0F, 0.0F},
             {1.0F, 0.0F, 0.0F},
             {0.0F, 1.0F, 0.0F},
             {1.0F, 1.0F, 0.0F}}};
-        if (vertexCount > positions.size())
+        if (options.vertexCount > positions.size())
             throw std::invalid_argument("triangle GLB test supports at most four vertices");
-        const std::size_t positionByteLength = vertexCount * sizeof(positions[0]);
+        const std::size_t positionByteLength = options.vertexCount * sizeof(positions[0]);
         Bytes indexBytes;
-        if (includeByteIndices)
+        if (options.includeByteIndices)
         {
             for (const std::uint32_t index : {0U, 1U, 2U})
                 indexBytes.push_back(static_cast<unsigned char>(index));
@@ -52,32 +61,34 @@ public:
             ("grasplink-triangle-" + std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count()) + ".glb");
 
-        const std::string primitiveMaterial = materialIndex < 0
+        const std::string primitiveMaterial = options.materialIndex < 0
             ? std::string{}
-            : ",\"material\":" + std::to_string(materialIndex);
-        const std::string materialArray = material.empty()
+            : ",\"material\":" + std::to_string(options.materialIndex);
+        const std::string materialArray = options.materialJson.empty()
             ? std::string{}
-            : "\"materials\":[" + material + "],";
-        const std::string sceneNodes = includeSceneNode
+            : "\"materials\":[" + options.materialJson + "],";
+        const std::string sceneNodes = options.includeSceneNode
             ? "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":" +
-                std::to_string(sceneIndex)
+                std::to_string(options.sceneIndex)
             : "\"nodes\":[]";
-        const std::string primitiveIndices = indicesReference.has_value()
-            ? ",\"indices\":" + std::to_string(*indicesReference)
-            : includeByteIndices ? ",\"indices\":1" : std::string{};
-        const std::string bufferViews = includeByteIndices
+        std::string primitiveIndices;
+        if (options.indicesReference.has_value())
+            primitiveIndices = ",\"indices\":" + std::to_string(*options.indicesReference);
+        else if (options.includeByteIndices)
+            primitiveIndices = ",\"indices\":1";
+        const std::string bufferViews = options.includeByteIndices
             ? "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" +
-                std::to_string(viewLength) + "},{\"buffer\":0,\"byteOffset\":" +
+                std::to_string(options.positionBufferViewLength) + "},{\"buffer\":0,\"byteOffset\":" +
                 std::to_string(positionByteLength) + ",\"byteLength\":" +
                 std::to_string(indexBytes.size()) + "}]"
             : "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" +
-                std::to_string(viewLength) + "}]";
-        const std::string accessors = includeByteIndices
+                std::to_string(options.positionBufferViewLength) + "}]";
+        const std::string accessors = options.includeByteIndices
             ? "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
-                std::to_string(vertexCount) + ",\"type\":\"VEC3\"},{\"bufferView\":1,\"componentType\":" +
+                std::to_string(options.vertexCount) + ",\"type\":\"VEC3\"},{\"bufferView\":1,\"componentType\":" +
                 std::to_string(gltfUnsignedByteComponentType) + ",\"count\":3,\"type\":\"SCALAR\"}]"
             : "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
-                std::to_string(vertexCount) + ",\"type\":\"VEC3\"}]";
+                std::to_string(options.vertexCount) + ",\"type\":\"VEC3\"}]";
         std::string json =
             "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" +
             std::to_string(bufferLength) + "}],"
@@ -125,58 +136,82 @@ private:
 }
 
 /**
- * @brief GLB 정점 자료를 읽고 Accessor가 지정한 구역 밖의 읽기를 거부하는지 확인한다.
- * @details Accessor는 파일 안의 정점 배열에서 읽을 범위를 정한다. 지정 구역이 실제 정점보다 짧으면 로더가 범위를 벗어나 읽지 않고 오류를 알려야 한다.
+ * @brief GLB 메시, 재질, 인덱스를 읽고 잘못된 입력을 거부하는지 확인한다.
+ * @details 버퍼 범위와 재질 참조를 검사한다. 삼각형 구성, 장면 연결, 인덱스 형식도 지원 범위에 맞게 처리하는지 확인한다.
  */
-TEST(GltfLoader, ReadsPositionsAndRejectsAccessorOutsideBufferView)
+TEST(GltfLoader, ReadsMeshMaterialAndIndexDataAndRejectsInvalidInputs)
 {
-    TriangleGlb validFile(36U);
+    TriangleGlb validFile;
     const auto model = grasplink::model::GltfLoader::LoadGLB(validFile.Path());
     ASSERT_EQ(model.meshes.size(), 1U);
     ASSERT_EQ(model.meshes.front().vertices.size(), 3U);
     EXPECT_FLOAT_EQ(model.meshes.front().vertices[1].position.x, 1.0F);
     EXPECT_FLOAT_EQ(model.meshes.front().vertices[2].position.y, 1.0F);
 
-    TriangleGlb shortView(24U);
+    TriangleGlbOptions shortViewOptions;
+    shortViewOptions.positionBufferViewLength = 24U;
+    TriangleGlb shortView(shortViewOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(shortView.Path()), std::runtime_error);
 
-    TriangleGlb missingMaterial(36U, 0);
+    TriangleGlbOptions missingMaterialOptions;
+    missingMaterialOptions.materialIndex = 0;
+    TriangleGlb missingMaterial(missingMaterialOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(missingMaterial.Path()), std::runtime_error);
 
-    TriangleGlb validMaterial(36U, 0, 3U,
-        R"({"pbrMetallicRoughness":{"baseColorFactor":[0.1,0.2,0.3,0.4],"metallicFactor":0.5,"roughnessFactor":0.75}})");
+    TriangleGlbOptions validMaterialOptions;
+    validMaterialOptions.materialIndex = 0;
+    validMaterialOptions.materialJson =
+        R"({"pbrMetallicRoughness":{"baseColorFactor":[0.1,0.2,0.3,0.4],"metallicFactor":0.5,"roughnessFactor":0.75}})";
+    TriangleGlb validMaterial(validMaterialOptions);
     const auto materialModel = grasplink::model::GltfLoader::LoadGLB(validMaterial.Path());
     ASSERT_EQ(materialModel.materials.size(), 1U);
     EXPECT_FLOAT_EQ(materialModel.materials[0].baseColorFactor.g, 0.2F);
     EXPECT_FLOAT_EQ(materialModel.materials[0].metallicFactor, 0.5F);
     EXPECT_FLOAT_EQ(materialModel.materials[0].roughnessFactor, 0.75F);
 
-    TriangleGlb invalidMaterialFactor(36U, 0, 3U,
-        R"({"pbrMetallicRoughness":{"metallicFactor":1.5}})");
+    TriangleGlbOptions invalidMaterialFactorOptions;
+    invalidMaterialFactorOptions.materialIndex = 0;
+    invalidMaterialFactorOptions.materialJson =
+        R"({"pbrMetallicRoughness":{"metallicFactor":1.5}})";
+    TriangleGlb invalidMaterialFactor(invalidMaterialFactorOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidMaterialFactor.Path()),
         std::runtime_error);
 
-    TriangleGlb invalidTextureReference(36U, 0, 3U,
-        R"({"pbrMetallicRoughness":{"baseColorTexture":{"index":0}}})");
+    TriangleGlbOptions invalidTextureReferenceOptions;
+    invalidTextureReferenceOptions.materialIndex = 0;
+    invalidTextureReferenceOptions.materialJson =
+        R"({"pbrMetallicRoughness":{"baseColorTexture":{"index":0}}})";
+    TriangleGlb invalidTextureReference(invalidTextureReferenceOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidTextureReference.Path()),
         std::runtime_error);
 
-    TriangleGlb incompleteTriangle(48U, -1, 4U);
+    TriangleGlbOptions incompleteTriangleOptions;
+    incompleteTriangleOptions.positionBufferViewLength = 48U;
+    incompleteTriangleOptions.vertexCount = 4U;
+    TriangleGlb incompleteTriangle(incompleteTriangleOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(incompleteTriangle.Path()), std::runtime_error);
 
-    TriangleGlb missingSceneNode(36U, -1, 3U, {}, false);
+    TriangleGlbOptions missingSceneNodeOptions;
+    missingSceneNodeOptions.includeSceneNode = false;
+    TriangleGlb missingSceneNode(missingSceneNodeOptions);
     const auto meshOnlyModel = grasplink::model::GltfLoader::LoadGLB(missingSceneNode.Path());
     EXPECT_TRUE(meshOnlyModel.nodes.empty());
     EXPECT_FALSE(meshOnlyModel.rootNodeIndex.has_value());
 
-    TriangleGlb invalidIndicesReference(36U, -1, 3U, {}, true, -2);
+    TriangleGlbOptions invalidIndicesReferenceOptions;
+    invalidIndicesReferenceOptions.indicesReference = -2;
+    TriangleGlb invalidIndicesReference(invalidIndicesReferenceOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidIndicesReference.Path()), std::runtime_error);
 
-    TriangleGlb invalidNegativeScene(36U, -1, 3U, {}, true, std::nullopt, -2);
+    TriangleGlbOptions invalidNegativeSceneOptions;
+    invalidNegativeSceneOptions.sceneIndex = -2;
+    TriangleGlb invalidNegativeScene(invalidNegativeSceneOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidNegativeScene.Path()),
         std::runtime_error);
 
-    TriangleGlb byteIndices(36U, -1, 3U, {}, true, std::nullopt, 0, true);
+    TriangleGlbOptions byteIndicesOptions;
+    byteIndicesOptions.includeByteIndices = true;
+    TriangleGlb byteIndices(byteIndicesOptions);
     const auto indexedModel = grasplink::model::GltfLoader::LoadGLB(byteIndices.Path());
     ASSERT_EQ(indexedModel.meshes.size(), 1U);
     EXPECT_EQ(indexedModel.meshes.front().indices, (std::vector<std::uint32_t>{0U, 1U, 2U}));
