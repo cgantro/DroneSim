@@ -6,7 +6,7 @@
 
 namespace aerosimlab::simulation
 {
-TEST(QuadrotorModel, EqualRotorSpeedsBalanceWeightAndCancelTorque)
+TEST(QuadrotorModel, X500GazeboParametersMatchSourceAndBalanceWeight)
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
     EXPECT_NEAR(parameters.massKilograms, 2.0643076923076924, 1.0e-12);
@@ -16,7 +16,29 @@ TEST(QuadrotorModel, EqualRotorSpeedsBalanceWeightAndCancelTorque)
         0.02394961745804886, 1.0e-12);
     EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.z,
         0.043999953714003955, 1.0e-12);
-    EXPECT_DOUBLE_EQ(parameters.rotors[0].positionMeters.z, 0.06);
+    EXPECT_DOUBLE_EQ(parameters.thrustCoefficientNewtonsPerSpeedSquared, 8.54858e-6);
+    EXPECT_DOUBLE_EQ(parameters.momentToThrustRatio, 0.016);
+    EXPECT_DOUBLE_EQ(parameters.motorTimeConstantUpSeconds, 0.0125);
+    EXPECT_DOUBLE_EQ(parameters.motorTimeConstantDownSeconds, 0.025);
+    EXPECT_DOUBLE_EQ(parameters.maximumMotorSpeedRadiansPerSecond, 1000.0);
+    EXPECT_DOUBLE_EQ(parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter, 8.06428e-5);
+    EXPECT_DOUBLE_EQ(parameters.rollingMomentCoefficientNewtonMetersSecondsSquaredPerMeter, 1.0e-6);
+
+    const std::array<glm::dvec3, QuadrotorModel::rotorCount> expectedRotorPositions{
+        glm::dvec3{0.174, -0.174, 0.06},
+        glm::dvec3{-0.174, 0.174, 0.06},
+        glm::dvec3{0.174, 0.174, 0.06},
+        glm::dvec3{-0.174, -0.174, 0.06}};
+    const std::array<RotorRotation, QuadrotorModel::rotorCount> expectedRotorDirections{
+        RotorRotation::CounterClockwise,
+        RotorRotation::CounterClockwise,
+        RotorRotation::Clockwise,
+        RotorRotation::Clockwise};
+    for (std::size_t rotor = 0; rotor < QuadrotorModel::rotorCount; ++rotor)
+    {
+        EXPECT_EQ(parameters.rotors[rotor].positionMeters, expectedRotorPositions[rotor]);
+        EXPECT_EQ(parameters.rotors[rotor].rotation, expectedRotorDirections[rotor]);
+    }
 
     const double hoverSpeed = std::sqrt(
         parameters.massKilograms * 9.81
