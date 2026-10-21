@@ -140,6 +140,7 @@ if ($timeoutResult.ExitCode -ne 3 -or $timeoutResult.Output -notmatch '응답 �
 
 $retryingClient = $null
 $server = $null
+$recoveredServer = $null
 $groundControlUiProcess = $null
 $uiWindow = [IntPtr]::Zero
 
@@ -312,7 +313,37 @@ try {
         throw "시뮬레이터 시험 서버가 오류로 종료했습니다: $($server.ExitCode)"
     }
 
-    Write-Output '지상통제 창의 비행·카메라·기록 명령과 시뮬레이터 상태를 확인했습니다.'
+    $cameraOffButton = [AeroSimLabUiTestWindow]::GetDlgItem(
+        $uiWindow, [AeroSimLabUiTestWindow]::CameraOffButton)
+    [void][AeroSimLabUiTestWindow]::SendMessage(
+        $cameraOffButton, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+    if ([AeroSimLabUiTestWindow]::IsWindowEnabled($cameraOffButton)) {
+        throw '시뮬레이터가 꺼진 상태에서 지상통제 명령을 시작하지 못했습니다.'
+    }
+
+    Start-Sleep -Milliseconds 500
+    $recoveredServer = Start-Process -FilePath $Simulator `
+        -ArgumentList @('--smoke-test', '--udp-port', "$port") `
+        -WorkingDirectory $workingDirectory `
+        -WindowStyle Hidden `
+        -PassThru
+    $recoveryDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    while (-not [AeroSimLabUiTestWindow]::IsWindowEnabled($cameraOffButton)) {
+        $recoveredServer.Refresh()
+        if ($recoveredServer.HasExited) {
+            throw "시뮬레이터를 다시 시작하지 못했습니다. 종료 코드: $($recoveredServer.ExitCode)"
+        }
+        if ([DateTime]::UtcNow -ge $recoveryDeadline) {
+            throw '시뮬레이터를 다시 시작한 뒤에도 재시도 명령의 응답이 오지 않았습니다.'
+        }
+        Start-Sleep -Milliseconds 40
+    }
+    $recoveredTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($recoveredTelemetry -notmatch '카메라: disabled') {
+        throw "재시도한 카메라 끄기 명령의 응답을 확인하지 못했습니다.`n$recoveredTelemetry"
+    }
+
+    Write-Output '지상통제 명령과 시뮬레이터 종료 중 재시도·재기동 후 복구를 확인했습니다.'
 }
 finally {
     if ($null -ne $retryingClient) {
@@ -326,6 +357,12 @@ finally {
     }
     if ($null -ne $server -and -not $server.HasExited) {
         Stop-Process -Id $server.Id -Force
+    }
+    if ($null -ne $recoveredServer) {
+        $recoveredServer.Refresh()
+    }
+    if ($null -ne $recoveredServer -and -not $recoveredServer.HasExited) {
+        Stop-Process -Id $recoveredServer.Id -Force
     }
     if ($uiWindow -ne [IntPtr]::Zero) {
         [AeroSimLabUiTestWindow]::PostMessage(
