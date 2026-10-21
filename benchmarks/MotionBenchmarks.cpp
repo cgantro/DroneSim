@@ -57,6 +57,8 @@ struct ControlTickStages final
     double transformsBeforeCollisionNanoseconds = 0.0;
     double collisionCheckNanoseconds = 0.0;
     double physicsAndGraspNanoseconds = 0.0;
+    double physicsStepNanoseconds = 0.0;
+    double graspFeedbackNanoseconds = 0.0;
     double transformsAfterPhysicsNanoseconds = 0.0;
 };
 
@@ -165,8 +167,15 @@ public:
 
                 stageStart = stageEnd;
                 physicsSystem_->Step(fixedDeltaSeconds);
+                stageEnd = Clock::now();
+                lastStages_.physicsStepNanoseconds =
+                    std::chrono::duration<double, std::nano>(stageEnd - stageStart).count();
+
+                const auto physicsStepEnd = stageEnd;
                 gripperGraspAdapter_->AfterPhysicsStep();
                 stageEnd = Clock::now();
+                lastStages_.graspFeedbackNanoseconds =
+                    std::chrono::duration<double, std::nano>(stageEnd - physicsStepEnd).count();
                 lastStages_.physicsAndGraspNanoseconds =
                     std::chrono::duration<double, std::nano>(stageEnd - stageStart).count();
 
@@ -537,6 +546,10 @@ void ControlPhysicsTick250Hz(benchmark::State& state)
             [](const ControlTickStages& stages) { return stages.collisionCheckNanoseconds; });
         AddStageCounters(state, stageSamples, "physics_and_grasp",
             [](const ControlTickStages& stages) { return stages.physicsAndGraspNanoseconds; });
+        AddStageCounters(state, stageSamples, "physics_step",
+            [](const ControlTickStages& stages) { return stages.physicsStepNanoseconds; });
+        AddStageCounters(state, stageSamples, "gripper_feedback",
+            [](const ControlTickStages& stages) { return stages.graspFeedbackNanoseconds; });
         AddStageCounters(state, stageSamples, "transform_after_physics",
             [](const ControlTickStages& stages) { return stages.transformsAfterPhysicsNanoseconds; });
         state.SetItemsProcessed(static_cast<std::int64_t>(tickTimesNanoseconds.size()));
