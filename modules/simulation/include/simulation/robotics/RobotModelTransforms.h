@@ -40,10 +40,10 @@ namespace grasplink::simulation::robotics
 /**
  * @brief 관절을 모두 0으로 둔 상태에서 각 URDF 링크의 위치와 방향을 계산한다.
  * @details 결과 배열은 RobotModel::links와 같은 순서이며, 모든 위치와 방향은 base_link 기준이다.
- * 고정 관절과 움직이는 관절의 origin 변환을 함께 누적해 모델 변환과 충돌 도형 생성기가 같은 기준 자세를 쓴다.
+ * 고정 관절과 움직이는 관절의 origin 변환을 함께 누적한다. 또한 activeJoints가 base_link부터 tool0까지 순서대로 이어지는지 확인해 FK와 충돌 도형 생성기가 같은 관절 경로를 사용하게 한다.
  * @param model 링크와 부모·자식 관절 관계를 가진 로봇 모델이다.
  * @return 링크마다 base_link 기준 위치 [m]와 quaternion [w,x,y,z]을 담은 배열이다.
- * @throws std::invalid_argument base_link가 없거나 일부 링크가 base_link에서 이어지지 않은 경우.
+ * @throws std::invalid_argument 기준 링크가 없거나, 일부 링크가 이어지지 않거나, 움직이는 관절 경로가 tool0까지 이어지지 않은 경우.
  */
 [[nodiscard]] std::vector<grasplink::robotics::models::Pose3> BuildRobotLinkBindPoses(
     const grasplink::model::RobotModel& model);

@@ -7,16 +7,19 @@
 namespace grasplink::simulation::robotics
 {
 using grasplink::model::RobotModel;
+using grasplink::model::RobotJointType;
 using grasplink::robotics::models::Pose3;
 
 namespace
 {
 struct RobotModelTransformErrorMessages final
 {
-    inline static constexpr char invalidBaseLinkIndex[] = "URDF 모델의 base_link 위치가 잘못되었습니다.";
+    inline static constexpr char invalidBaseOrToolLinkIndex[] = "URDF 모델의 base_link 또는 tool0 위치가 잘못되었습니다.";
     inline static constexpr char jointReferencesMissingLink[] = "URDF 관절이 없는 링크를 가리킵니다.";
     inline static constexpr char multipleParentJoints[] = "URDF 링크에는 부모 관절을 하나만 둘 수 있습니다.";
     inline static constexpr char linkDisconnectedFromBase[] = "URDF 링크가 base_link와 이어져 있지 않습니다.";
+    inline static constexpr char invalidActiveJointIndex[] = "URDF의 움직이는 관절 위치가 잘못되었습니다.";
+    inline static constexpr char invalidActiveJointPath[] = "URDF의 움직이는 관절이 base_link부터 tool0까지 이어지지 않습니다.";
 };
 }
 
@@ -41,10 +44,11 @@ Pose3 RelativeRobotPose(
 
 std::vector<Pose3> BuildRobotLinkBindPoses(const RobotModel& model)
 {
-    if (model.baseLink >= model.links.size())
-        throw std::invalid_argument(RobotModelTransformErrorMessages::invalidBaseLinkIndex);
+    if (model.baseLink >= model.links.size() || model.toolLink >= model.links.size())
+        throw std::invalid_argument(RobotModelTransformErrorMessages::invalidBaseOrToolLinkIndex);
 
     std::vector<std::vector<std::size_t>> childJoints(model.links.size());
+    std::vector<std::size_t> parentJoints(model.links.size(), model.joints.size());
     std::vector<bool> hasParentJoint(model.links.size(), false);
     for (std::size_t jointIndex = 0; jointIndex < model.joints.size(); ++jointIndex)
     {
@@ -54,6 +58,7 @@ std::vector<Pose3> BuildRobotLinkBindPoses(const RobotModel& model)
         if (joint.childLink == model.baseLink || hasParentJoint[joint.childLink])
             throw std::invalid_argument(RobotModelTransformErrorMessages::multipleParentJoints);
         hasParentJoint[joint.childLink] = true;
+        parentJoints[joint.childLink] = jointIndex;
         childJoints[joint.parentLink].push_back(jointIndex);
     }
 
@@ -88,6 +93,34 @@ std::vector<Pose3> BuildRobotLinkBindPoses(const RobotModel& model)
     for (bool linkWasReached : visited)
         if (!linkWasReached)
             throw std::invalid_argument(RobotModelTransformErrorMessages::linkDisconnectedFromBase);
+
+    const auto isFixedPath = [&](std::size_t link, std::size_t ancestor)
+    {
+        while (link != ancestor)
+        {
+            const std::size_t parentJointIndex = parentJoints[link];
+            if (parentJointIndex == model.joints.size() ||
+                model.joints[parentJointIndex].type != RobotJointType::Fixed)
+                return false;
+            link = model.joints[parentJointIndex].parentLink;
+        }
+        return true;
+    };
+
+    std::size_t previousChildLink = model.baseLink;
+    for (const std::size_t jointIndex : model.activeJoints)
+    {
+        if (jointIndex >= model.joints.size())
+            throw std::invalid_argument(RobotModelTransformErrorMessages::invalidActiveJointIndex);
+
+        const auto& joint = model.joints[jointIndex];
+        if (joint.type == RobotJointType::Fixed || !isFixedPath(joint.parentLink, previousChildLink))
+            throw std::invalid_argument(RobotModelTransformErrorMessages::invalidActiveJointPath);
+        previousChildLink = joint.childLink;
+    }
+    if (model.activeJoints.empty() || !isFixedPath(model.toolLink, previousChildLink))
+        throw std::invalid_argument(RobotModelTransformErrorMessages::invalidActiveJointPath);
+
     return poses;
 }
 

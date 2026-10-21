@@ -20,7 +20,8 @@ public:
     /**
      * @brief URDF에서 읽은 모델을 제어 사양으로 변환한다.
      * @param model 링크와 관절 자료를 보관한 원본 모델이다. 필요한 이름과 수치는 생성 중 어댑터가 복사한다.
-     * @throws std::runtime_error 관절 경로가 잘못되었거나 제어 사양으로 바꿀 수 없는 경우 발생한다.
+     * @throws std::invalid_argument 모델의 관절 경로가 잘못된 경우 발생한다.
+     * @throws std::runtime_error 관절 종류를 제어 사양으로 바꿀 수 없는 경우 발생한다.
      */
     explicit RobotModelAdapter(const grasplink::model::RobotModel& model);
 

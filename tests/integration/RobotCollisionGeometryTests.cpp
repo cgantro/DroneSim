@@ -129,10 +129,12 @@ void CheckSyntheticGeometry()
     grasplink::simulation::robotics::RobotModelAdapter continuousAdapter(continuousModel);
     auto outOfOrderModel = model;
     outOfOrderModel.activeJoints = {3, 1};
-    EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(outOfOrderModel), std::runtime_error);
+    EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(outOfOrderModel), std::invalid_argument);
+    EXPECT_THROW((void)grasplink::simulation::robotics::collision_geometry::Build(outOfOrderModel),
+        std::invalid_argument);
     auto incompletePathModel = model;
     incompletePathModel.activeJoints = {1};
-    EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(incompletePathModel), std::runtime_error);
+    EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(incompletePathModel), std::invalid_argument);
     const auto& continuousJoint = continuousAdapter.Specification().joints[0];
     EXPECT_EQ(continuousJoint.motionType, models::JointMotionType::Continuous);
     EXPECT_FALSE(continuousJoint.HasPositionLimits());

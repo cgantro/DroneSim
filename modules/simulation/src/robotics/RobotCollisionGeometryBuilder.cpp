@@ -35,8 +35,6 @@ struct CollisionGeometryErrorMessages final
         "Robot collision geometry: base link index is out of range";
     inline static constexpr char missingBaseGeometry[] =
         "Robot collision geometry: base_link has no URDF collision geometry";
-    inline static constexpr char invalidActiveJointIndex[] =
-        "Robot collision geometry: active joint index is out of range";
     inline static constexpr char disconnectedToolLink[] =
         "Robot collision geometry: tool link is not connected to base_link";
     inline static constexpr char collisionLinkOutsideArmPath[] =
@@ -178,8 +176,6 @@ LinkJointLookup BuildJointLookup(const grasplink::model::RobotModel& model)
     for (std::size_t activeIndex = 0; activeIndex < model.activeJoints.size(); ++activeIndex)
     {
         const std::size_t jointIndex = model.activeJoints[activeIndex];
-        if (jointIndex >= model.joints.size())
-            throw std::invalid_argument(CollisionGeometryErrorMessages::invalidActiveJointIndex);
         lookup.activeJointByLink[model.joints[jointIndex].childLink] = activeIndex;
     }
 
