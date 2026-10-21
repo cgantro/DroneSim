@@ -181,7 +181,10 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   endif()
   target_compile_definitions(aerosimlab_graphics PUBLIC GLFW_INCLUDE_NONE)
 
-  add_library(aerosimlab_simulator_app STATIC apps/simulator/AeroSimLabApp.cpp)
+  add_library(aerosimlab_simulator_app STATIC
+    apps/simulator/AeroSimLabApp.cpp
+    apps/simulator/SimulationBenchmark.cpp
+  )
   target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator)
   target_link_libraries(aerosimlab_simulator_app PUBLIC
     aerosimlab_graphics
