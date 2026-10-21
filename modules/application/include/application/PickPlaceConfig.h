@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/gtc/constants.hpp>
 #include <glm/vec3.hpp>
 
 #include <chrono>
@@ -17,7 +18,7 @@ inline constexpr glm::dvec3 worldUpAxis{0.0, 1.0, 0.0};
 /** @brief 시연용 그리퍼의 접근 방향을 아래로 맞출 때 사용할 회전축이다. */
 inline constexpr glm::dvec3 gripperFaceDownAdjustmentAxis{1.0, 0.0, 0.0};
 /** @brief 정사각형 배치와 그리퍼 방향 보정에 쓰는 90도 각도 [rad]다. */
-inline constexpr double quarterTurnRadians = 1.57079632679489661923;
+inline constexpr double quarterTurnRadians = glm::half_pi<double>();
 
 /**
  * @brief 집기·놓기 임무가 Gripper에 보내는 원시 요청값을 모은다.
@@ -71,6 +72,6 @@ inline constexpr float maximumPlacementRadiusMeters = 1.00F;
 inline constexpr float minimumBoxRepeatSeparationMeters = 0.035F;
 inline constexpr float minimumPlacementRepeatSeparationMeters = 0.05F;
 inline constexpr float scenarioCoordinateLimitMeters = 1.05F;
-inline constexpr float scenarioRotationLimitRadians = 1.57079632679F;
+inline constexpr float scenarioRotationLimitRadians = static_cast<float>(quarterTurnRadians);
 
 }
