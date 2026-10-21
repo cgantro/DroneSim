@@ -2,6 +2,7 @@
 
 #include "communication/Protocol.h"
 #include "manual_control/GamepadCommandMapper.h"
+#include "sensor/RgbFrame.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
 #endif
@@ -67,6 +68,7 @@ private:
     bool previousLandButton_ = false;
     std::optional<aerosimlab::simulation::DroneCommand> pendingControllerAction_;
     std::optional<aerosimlab::manual_control::PilotCommand> pendingPilotCommand_;
+    aerosimlab::sensor::RgbFrame eoFrame_;
     bool networkEnabled_ = false;
     std::size_t smokeCommandCount_ = 0;
     bool benchmarkMode_ = false;

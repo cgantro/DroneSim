@@ -50,6 +50,9 @@ add_library(aerosimlab_manual_control STATIC
 target_include_directories(aerosimlab_manual_control PUBLIC modules/manual_control/include)
 target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_core)
 
+add_library(aerosimlab_sensor STATIC modules/sensor/src/RgbFrame.cpp)
+target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
+
 if(NOT EMSCRIPTEN)
   add_executable(aerosimlab_ground_control apps/ground_control/main.cpp)
   target_link_libraries(aerosimlab_ground_control PRIVATE aerosimlab_communication)
@@ -108,6 +111,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     aerosimlab_graphics
     aerosimlab_simulation_core
     aerosimlab_manual_control
+    aerosimlab_sensor
     aerosimlab_communication
     nlohmann_json::nlohmann_json
   )
@@ -180,6 +184,14 @@ if(BUILD_TESTING)
     TEST_PREFIX "ManualControl."
     DISCOVERY_TIMEOUT 60
     PROPERTIES LABELS "UNIT;manual_control"
+  )
+
+  add_executable(aerosimlab_sensor_tests tests/sensor/RgbFrameTests.cpp)
+  target_link_libraries(aerosimlab_sensor_tests PRIVATE aerosimlab_sensor GTest::gtest_main)
+  gtest_discover_tests(aerosimlab_sensor_tests
+    TEST_PREFIX "Sensor."
+    DISCOVERY_TIMEOUT 60
+    PROPERTIES LABELS "UNIT;sensor"
   )
 
   add_test(NAME HeadlessScenarioSmoke

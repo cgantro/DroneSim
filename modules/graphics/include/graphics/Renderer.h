@@ -1,7 +1,9 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace aerosimlab::graphics
 {
@@ -20,6 +22,8 @@ public:
     void Init(int framebufferWidth, int framebufferHeight);
     void BeginFrame();
     void EndFrame();
+    /** @brief 화면에 합성된 RGB 픽셀을 지정한 배열에 저장한다. OpenGL 좌표 기준으로 아래 행부터 기록한다. */
+    void ReadRgbPixels(int x, int y, int width, int height, std::vector<std::uint8_t>& pixels) const;
     void Resize(int width, int height);
     void SetSceneViewport(int x, int y, int width, int height);
     void Draw(

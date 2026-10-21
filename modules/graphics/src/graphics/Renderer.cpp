@@ -136,6 +136,24 @@ void Renderer::EndFrame()
 #endif
 }
 
+void Renderer::ReadRgbPixels(int x, int y, int width, int height,
+    std::vector<std::uint8_t>& pixels) const
+{
+    if (width <= 0 || height <= 0)
+    {
+        pixels.clear();
+        return;
+    }
+
+    pixels.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3U);
+    GLint previousPackAlignment = 4;
+    glGetIntegerv(GL_PACK_ALIGNMENT, &previousPackAlignment);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadBuffer(GL_BACK);
+    glReadPixels(x, y, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
+}
+
 void Renderer::Resize(int width, int height)
 {
 #ifdef __EMSCRIPTEN__

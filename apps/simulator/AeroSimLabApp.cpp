@@ -103,6 +103,11 @@ int AeroSimLabApp::Run()
             std::chrono::steady_clock::now() - startTime_ >= std::chrono::duration<double>(benchmarkDurationSeconds))
             break;
     }
+    if (smokeTest_ && !eoFrame_.IsValid())
+    {
+        std::cerr << "EO 카메라 RGB 프레임을 생성하지 못했습니다.\n";
+        return 5;
+    }
     if (benchmarkMode_)
     {
         const double elapsedSeconds = std::chrono::duration<double>(
@@ -258,6 +263,17 @@ void AeroSimLabApp::RenderFrame()
             eoCamera_->GetPosition());
     renderer_->SetSceneViewport(0, 0, width, height);
     renderer_->EndFrame();
+
+    const auto& camera = simulation_.Camera();
+    if (camera.status == aerosimlab::simulation::CameraStatus::Active
+        && camera.lastFrameTick > eoFrame_.simulationTick)
+    {
+        eoFrame_.width = eoWidth;
+        eoFrame_.height = height;
+        eoFrame_.simulationTick = camera.lastFrameTick;
+        renderer_->ReadRgbPixels(observerWidth, 0, eoWidth, height, eoFrame_.pixels);
+        eoFrame_.FlipVertical();
+    }
 }
 
 void AeroSimLabApp::PollGroundControl()
