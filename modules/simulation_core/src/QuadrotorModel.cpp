@@ -58,13 +58,32 @@ double DirectionSign(RotorRotation rotation)
 QuadrotorParameters QuadrotorParameters::X500Gazebo()
 {
     QuadrotorParameters parameters;
-    parameters.massKilograms = 2.0;
-    parameters.principalInertiaKilogramMetersSquared = {0.0216666667, 0.0216666667, 0.04};
+    constexpr double baseMassKilograms = 2.0;
+    constexpr double baseInertiaX = 0.02166666666666667;
+    constexpr double baseInertiaY = 0.02166666666666667;
+    constexpr double baseInertiaZ = 0.04000000000000001;
+    constexpr double rotorMassKilograms = 0.016076923076923075;
+    constexpr double rotorArmMeters = 0.174;
+    constexpr double rotorHeightMeters = 0.06;
+    constexpr double rotorInertiaX = 3.8464910483993325e-7;
+    constexpr double rotorInertiaY = 2.6115851691700804e-5;
+    constexpr double rotorInertiaZ = 2.649858234714004e-5;
+    constexpr double rotorCount = static_cast<double>(QuadrotorModel::rotorCount);
+
+    // 로터 링크의 질량과 관성을 중심 기체 기준으로 옮겨 한 강체의 관성으로 합친다.
+    parameters.massKilograms = baseMassKilograms + rotorCount * rotorMassKilograms;
+    parameters.principalInertiaKilogramMetersSquared = {
+        baseInertiaX + rotorCount * (rotorInertiaX + rotorMassKilograms
+            * (rotorArmMeters * rotorArmMeters + rotorHeightMeters * rotorHeightMeters)),
+        baseInertiaY + rotorCount * (rotorInertiaY + rotorMassKilograms
+            * (rotorArmMeters * rotorArmMeters + rotorHeightMeters * rotorHeightMeters)),
+        baseInertiaZ + rotorCount * (rotorInertiaZ + rotorMassKilograms
+            * (2.0 * rotorArmMeters * rotorArmMeters))};
     parameters.rotors = {{
-        {{0.174, -0.174, 0.0}, RotorRotation::CounterClockwise},
-        {{-0.174, 0.174, 0.0}, RotorRotation::CounterClockwise},
-        {{0.174, 0.174, 0.0}, RotorRotation::Clockwise},
-        {{-0.174, -0.174, 0.0}, RotorRotation::Clockwise}}};
+        {{rotorArmMeters, -rotorArmMeters, rotorHeightMeters}, RotorRotation::CounterClockwise},
+        {{-rotorArmMeters, rotorArmMeters, rotorHeightMeters}, RotorRotation::CounterClockwise},
+        {{rotorArmMeters, rotorArmMeters, rotorHeightMeters}, RotorRotation::Clockwise},
+        {{-rotorArmMeters, -rotorArmMeters, rotorHeightMeters}, RotorRotation::Clockwise}}};
     const glm::dquat legSlopeDown = glm::angleAxis(-0.35, glm::dvec3{1.0, 0.0, 0.0});
     const glm::dquat legSlopeUp = glm::angleAxis(0.35, glm::dvec3{1.0, 0.0, 0.0});
     parameters.collisionBoxes = {{

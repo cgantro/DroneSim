@@ -9,6 +9,15 @@ namespace aerosimlab::simulation
 TEST(QuadrotorModel, EqualRotorSpeedsBalanceWeightAndCancelTorque)
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    EXPECT_NEAR(parameters.massKilograms, 2.0643076923076924, 1.0e-12);
+    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.x,
+        0.023846692647701416, 1.0e-12);
+    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.y,
+        0.02394961745804886, 1.0e-12);
+    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.z,
+        0.043999953714003955, 1.0e-12);
+    EXPECT_DOUBLE_EQ(parameters.rotors[0].positionMeters.z, 0.06);
+
     const double hoverSpeed = std::sqrt(
         parameters.massKilograms * 9.81
         / (QuadrotorModel::rotorCount * parameters.thrustCoefficientNewtonsPerSpeedSquared));

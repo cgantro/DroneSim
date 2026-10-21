@@ -51,7 +51,7 @@ TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
     {"version":1,"dynamics":"rigid_body",
      "wind_velocity_meters_per_second":[2,0,0],"ticks":600,
      "commands":[{"tick":0,"type":"takeoff"},{"tick":240,"type":"land"}],
-     "expected":{"mode":"grounded","position_meters":[0.5563,-0.2720,0.24],
+     "expected":{"mode":"grounded","position_meters":[1.6933,-0.2122,0.2237],
        "tolerance_meters":0.05}}
     )json";
 

@@ -33,12 +33,13 @@ struct QuadrotorState
 
 /**
  * @brief 기체 질량·관성과 로터·모터의 계산값을 보관한다.
- * @details X500 기본값의 질량과 관성은 Gazebo 모델의 중심 기체 링크 기준이다. 로터 링크 질량은 아직 합산하지 않는다.
+ * @details X500 기본값은 Gazebo의 중심 기체와 네 로터 링크를 한 강체로 합친 값이다. 로터 회전 자체의 관성 효과는 따로 계산하지 않는다.
  */
 struct QuadrotorParameters
 {
-    double massKilograms = 2.0;
-    glm::dvec3 principalInertiaKilogramMetersSquared{0.0216666667, 0.0216666667, 0.04};
+    double massKilograms = 2.0643076923076924;
+    glm::dvec3 principalInertiaKilogramMetersSquared{
+        0.023846692647701416, 0.02394961745804886, 0.043999953714003955};
     std::array<RotorDefinition, 4> rotors{};
     std::array<QuadrotorCollisionBox, 9> collisionBoxes{};
     double thrustCoefficientNewtonsPerSpeedSquared = 8.54858e-6;
