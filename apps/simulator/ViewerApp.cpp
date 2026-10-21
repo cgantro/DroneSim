@@ -87,45 +87,45 @@ namespace
 {
 
 // Viewer 창은 시작할 때 이 픽셀 크기로 요청한다. 실제 렌더 대상 크기는 DPI 배율에 따라 framebuffer에서 다시 읽는다.
-struct ViewerWindowSettings final
+namespace viewer_window
 {
-    inline static constexpr int width = 1280;
-    inline static constexpr int height = 720;
-    inline static constexpr char title[] = "Simulation | GraspLink";
-};
+inline constexpr int width = 1280;
+inline constexpr int height = 720;
+inline constexpr char title[] = "Simulation | GraspLink";
+}
 
 // 로봇 제어기와 물리 시뮬레이션은 화면 프레임률과 관계없이 250 Hz, 즉 4 ms 간격으로 갱신한다.
-struct ViewerControlTiming final
+namespace viewer_control
 {
-    inline static constexpr double frequencyHz = 250.0;
-    inline static constexpr double fixedDeltaSeconds = 1.0 / frequencyHz;
-};
+inline constexpr double frequencyHz = 250.0;
+inline constexpr double fixedDeltaSeconds = 1.0 / frequencyHz;
+}
 
 // 창 이동이나 디버거 정지 뒤 긴 시간이 쌓여도 한 프레임에서 최대 100 ms만 시뮬레이션에 누적한다.
-struct ViewerFrameTiming final
+namespace viewer_frame
 {
-    inline static constexpr double maximumDeltaSeconds = 0.1;
-    inline static constexpr double smokeTestDeltaSeconds = 1.0 / 60.0;
-    inline static constexpr std::size_t smokeTestFrameCount = 8;
-};
+inline constexpr double maximumDeltaSeconds = 0.1;
+inline constexpr double smokeTestDeltaSeconds = 1.0 / 60.0;
+inline constexpr std::size_t smokeTestFrameCount = 8;
+}
 
 
 
 // 카메라의 시작 위치와 바라볼 지점은 Scene의 World 좌표 [m]로 지정한다.
-struct ViewerCameraSettings final
+namespace viewer_camera
 {
-    inline static const glm::vec3 position{2.0F, 1.35F, 1.15F};
-    inline static const glm::vec3 target{0.05F, 0.50F, 0.40F};
-};
+inline const glm::vec3 position{2.0F, 1.35F, 1.15F};
+inline const glm::vec3 target{0.05F, 0.50F, 0.40F};
+}
 
-struct ViewerLayoutSettings final
+namespace viewer_layout
 {
     // 사이드바 폭을 화면 크기에 맞추고 지나치게 좁거나 넓지 않게 한다.
-    inline static constexpr float sidebarPreferredFraction = 0.36F;
-    inline static constexpr float sidebarMaximumFraction = 0.48F;
-    inline static constexpr float sidebarMinimumWidth = 260.0F;
-    inline static constexpr float sidebarMaximumWidth = 460.0F;
-};
+    inline constexpr float sidebarPreferredFraction = 0.36F;
+    inline constexpr float sidebarMaximumFraction = 0.48F;
+    inline constexpr float sidebarMinimumWidth = 260.0F;
+    inline constexpr float sidebarMaximumWidth = 460.0F;
+}
 
 using SimRobotController = grasplink::robotics::backends::simulation::SimRobotController;
 using RobotTransformAdapter = grasplink::simulation::robotics::RobotTransformAdapter;
@@ -157,8 +157,8 @@ grasplink::robotics::CartesianPose ToRobotBasePose(
 
 ViewerApp::ViewerApp(ViewerOptions options)
     : m_Options(options),
-      m_ControlLoop(ViewerControlTiming::fixedDeltaSeconds,
-          ViewerFrameTiming::maximumDeltaSeconds)
+      m_ControlLoop(viewer_control::fixedDeltaSeconds,
+          viewer_frame::maximumDeltaSeconds)
 {
 }
 
@@ -242,8 +242,8 @@ bool ViewerApp::InitViewer()
 {
     // Window가 OpenGL Context를 소유한다. Renderer와 AssetManager의 GPU 자원은 이 Context 안에서 만든다.
     m_Window = std::make_unique<Window>(
-        Window::Properties{ViewerWindowSettings::width, ViewerWindowSettings::height,
-            ViewerWindowSettings::title,
+        Window::Properties{viewer_window::width, viewer_window::height,
+            viewer_window::title,
             !m_Options.smokeTest, !m_Options.smokeTest});
 
     int framebufferWidth = 0;
@@ -254,10 +254,10 @@ bool ViewerApp::InitViewer()
     m_Renderer = std::make_unique<Renderer>();
     m_Renderer->Init(framebufferWidth, framebufferHeight);
 
-    const float aspectRatio = static_cast<float>(ViewerWindowSettings::width) /
-        static_cast<float>(ViewerWindowSettings::height);
+    const float aspectRatio = static_cast<float>(viewer_window::width) /
+        static_cast<float>(viewer_window::height);
     m_Camera = std::make_unique<Camera>(
-        ViewerCameraSettings::position, ViewerCameraSettings::target, aspectRatio);
+        viewer_camera::position, viewer_camera::target, aspectRatio);
     m_GuiModule = std::make_unique<grasplink::gui::GuiModule>(*m_Window);
     m_GripperPanel = std::make_unique<grasplink::gui::GripperPanel>();
     m_RobotPanel = std::make_unique<grasplink::gui::RobotPanel>();
@@ -541,7 +541,7 @@ void ViewerApp::MainLoop()
     {
         MainLoopFrame();
         if (m_Options.smokeTest &&
-            m_RenderedFrames >= ViewerFrameTiming::smokeTestFrameCount)
+            m_RenderedFrames >= viewer_frame::smokeTestFrameCount)
             break;
     }
 #endif
@@ -592,13 +592,13 @@ void ViewerApp::MainLoopFrame()
     ZoneScopedN("Frame");
     FrameMark;
     const auto currentFrameTime = Clock::now();
-    const double frameDeltaSeconds = m_Options.smokeTest ? ViewerFrameTiming::smokeTestDeltaSeconds
+    const double frameDeltaSeconds = m_Options.smokeTest ? viewer_frame::smokeTestDeltaSeconds
         : std::chrono::duration<double>(currentFrameTime - m_LastFrameTime).count();
 
     m_LastFrameTime = currentFrameTime;
 
     // 디버거 정지 등으로 한 프레임이 길어져도 제어와 물리 누적기에 최대 100 ms만 전달한다.
-    const double clampedFrameDeltaSeconds = std::min(frameDeltaSeconds, ViewerFrameTiming::maximumDeltaSeconds);
+    const double clampedFrameDeltaSeconds = std::min(frameDeltaSeconds, viewer_frame::maximumDeltaSeconds);
     const float renderDeltaSeconds = static_cast<float>(clampedFrameDeltaSeconds);
     // 창 이벤트를 처리하고, ImGui가 마우스를 사용하지 않을 때만 카메라 입력을 전달한다.
     m_Window->PollEvents();
@@ -649,10 +649,10 @@ void ViewerApp::MainLoopFrame()
     const ImGuiIO& guiIo = ImGui::GetIO();
     const float displayWidth = std::max(guiIo.DisplaySize.x, 1.0F);
     const float displayHeight = std::max(guiIo.DisplaySize.y, 1.0F);
-    const float sidebarWidth = std::min(displayWidth * ViewerLayoutSettings::sidebarMaximumFraction,
-        std::clamp(displayWidth * ViewerLayoutSettings::sidebarPreferredFraction,
-            ViewerLayoutSettings::sidebarMinimumWidth,
-            ViewerLayoutSettings::sidebarMaximumWidth));
+    const float sidebarWidth = std::min(displayWidth * viewer_layout::sidebarMaximumFraction,
+        std::clamp(displayWidth * viewer_layout::sidebarPreferredFraction,
+            viewer_layout::sidebarMinimumWidth,
+            viewer_layout::sidebarMaximumWidth));
     const float sceneDisplayWidth = std::max(displayWidth - sidebarWidth, 1.0F);
     const float horizontalScale = static_cast<float>(framebufferWidth) / displayWidth;
     const int sceneWidth = std::clamp(static_cast<int>(std::lround(sceneDisplayWidth * horizontalScale)),
