@@ -10,7 +10,7 @@ Visual Studio에서 프로젝트 폴더를 열고 `Ninja Release` 구성을 선�
 
 ## Release 측정
 
-측정 기능은 Visual Studio의 실행 설정에서 `--benchmark`를 지정해 시작합니다. 결과 JSON은 Visual Studio 디버그 출력 창에 표시됩니다. 측정은 2026년 10월 21일, Windows x64와 MSVC Release에서 수행했습니다. CPU는 13th Gen Intel Core i5-13600KF이고 그래픽카드는 NVIDIA GeForce RTX 3060 Ti입니다. 1280×720 OpenGL 창을 화면에 표시하지 않고 VSync를 끈 채 매번 5초 동안 실행했습니다.
+성능 측정은 Visual Studio의 성능 측정 실행 설정으로 시작합니다. 결과 JSON은 Visual Studio 디버그 출력 창에 표시됩니다. 측정은 2026년 10월 21일, Windows x64와 MSVC Release에서 수행했습니다. CPU는 13th Gen Intel Core i5-13600KF이고 그래픽카드는 NVIDIA GeForce RTX 3060 Ti입니다. 1280×720 OpenGL 창을 화면에 표시하지 않고 VSync를 끈 채 매번 5초 동안 실행했습니다.
 
 | 재측정 | 모의 Tick | Tick p50 / p95 / p99 | 16.67ms 초과 | 숨김 그리기 속도 | 메모리 |
 | --- | ---: | ---: | ---: | ---: | ---: |
