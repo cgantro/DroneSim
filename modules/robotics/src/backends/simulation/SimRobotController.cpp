@@ -272,8 +272,6 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     return Result::Success();
 }
 
-
-
 Result SimRobotController::MovePose(const CartesianPose& targetInBase, double velocityScale, double accelerationScale)
 {
     if (!connected_)
@@ -291,7 +289,10 @@ Result SimRobotController::MovePose(const CartesianPose& targetInBase, double ve
     if (!solution)
     {
         if (invalidity == planning::JointStateInvalidity::EnvironmentCollision)
-        return Failure(ErrorCode::EnvironmentContact, SimRobotControllerMessages::noCollisionFreePosePath);
+        {
+            return Failure(ErrorCode::EnvironmentContact,
+                SimRobotControllerMessages::noCollisionFreePosePath);
+        }
         if (invalidity != planning::JointStateInvalidity::None)
         {
             Result result = planning::MapJointStateInvalidity(invalidity);
