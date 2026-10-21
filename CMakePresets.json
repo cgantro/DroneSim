@@ -2,183 +2,20 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "ninja",
-      "displayName": "Ninja Debug",
-      "description": "Configure a Debug build with Ninja",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-ninja-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "AEROSIMLAB_BUILD_GRAPHICS": "ON"
-      }
-    },
-    {
       "name": "ninja-release",
       "displayName": "Ninja Release",
-      "description": "Configure a Release build with Ninja",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-ninja-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "AEROSIMLAB_BUILD_GRAPHICS": "ON"
       }
-    },
-    {
-      "name": "linux-gcc-asan-ubsan",
-      "displayName": "Linux GCC ASan + UBSan",
-      "description": "Configure native tests with GCC AddressSanitizer and UndefinedBehaviorSanitizer",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-linux-gcc-asan-ubsan",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      },
-      "environment": {
-        "CC": "gcc",
-        "CXX": "g++"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
-        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
-        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
-        "AEROSIMLAB_BUILD_GRAPHICS": "OFF",
-        "BUILD_TESTING": "ON"
-      }
-    },
-    {
-      "name": "linux-clang-asan-ubsan",
-      "displayName": "Linux Clang ASan + UBSan",
-      "description": "Configure native tests with Clang AddressSanitizer and UndefinedBehaviorSanitizer",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-linux-clang-asan-ubsan",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      },
-      "environment": {
-        "CC": "clang",
-        "CXX": "clang++"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
-        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
-        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
-        "AEROSIMLAB_BUILD_GRAPHICS": "OFF",
-        "BUILD_TESTING": "ON"
-      }
-    },
-    {
-      "name": "linux-gcc-coverage",
-      "displayName": "Linux GCC Coverage",
-      "description": "Configure native tests with GCC gcov-compatible coverage instrumentation",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-linux-gcc-coverage",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      },
-      "environment": {
-        "CC": "gcc",
-        "CXX": "g++"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_FLAGS": "--coverage -O0 -g",
-        "CMAKE_CXX_FLAGS": "--coverage -O0 -g",
-        "CMAKE_EXE_LINKER_FLAGS": "--coverage",
-        "CMAKE_SHARED_LINKER_FLAGS": "--coverage",
-        "AEROSIMLAB_BUILD_GRAPHICS": "OFF",
-        "BUILD_TESTING": "ON"
-      }
-    },
-    {
-      "name": "linux-clang-coverage",
-      "displayName": "Linux Clang Coverage",
-      "description": "Configure native tests with Clang gcov-compatible coverage instrumentation",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-linux-clang-coverage",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      },
-      "environment": {
-        "CC": "clang",
-        "CXX": "clang++"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_FLAGS": "--coverage -O0 -g",
-        "CMAKE_CXX_FLAGS": "--coverage -O0 -g",
-        "CMAKE_EXE_LINKER_FLAGS": "--coverage",
-        "CMAKE_SHARED_LINKER_FLAGS": "--coverage",
-        "AEROSIMLAB_BUILD_GRAPHICS": "OFF",
-        "BUILD_TESTING": "ON"
-      }
-    },
-    {
-      "name": "emscripten-single-thread",
-      "displayName": "Emscripten Single Thread Release",
-      "description": "Configure the embedded browser simulator without a shared-memory requirement",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-emscripten-single-thread",
-      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "AEROSIMLAB_BUILD_GRAPHICS": "ON",
-        "BUILD_TESTING": "OFF"
-      }
     }
   ],
   "buildPresets": [
     {
-      "name": "ninja-debug",
-      "displayName": "Ninja Debug",
-      "configurePreset": "ninja",
-      "jobs": 10
-    },
-    {
       "name": "ninja-release",
-      "displayName": "Ninja Release",
-      "configurePreset": "ninja-release",
-      "jobs": 10
-    },
-    {
-      "name": "linux-gcc-asan-ubsan",
-      "displayName": "Build Linux GCC ASan + UBSan",
-      "configurePreset": "linux-gcc-asan-ubsan",
-      "jobs": 4
-    },
-    {
-      "name": "linux-clang-asan-ubsan",
-      "displayName": "Build Linux Clang ASan + UBSan",
-      "configurePreset": "linux-clang-asan-ubsan",
-      "jobs": 4
-    },
-    {
-      "name": "linux-gcc-coverage",
-      "displayName": "Build Linux GCC Coverage",
-      "configurePreset": "linux-gcc-coverage",
-      "jobs": 4
-    },
-    {
-      "name": "linux-clang-coverage",
-      "displayName": "Build Linux Clang Coverage",
-      "configurePreset": "linux-clang-coverage",
-      "jobs": 4
-    },
-    {
-      "name": "emscripten-single-thread",
-      "displayName": "Build Emscripten Single Thread Release",
-      "configurePreset": "emscripten-single-thread",
-      "jobs": 4
+      "configurePreset": "ninja-release"
     }
   ]
 }
