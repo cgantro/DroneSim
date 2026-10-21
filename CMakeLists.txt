@@ -50,6 +50,7 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/EoCameraModel.cpp
   modules/simulation_core/src/ScenarioRunner.cpp
   modules/simulation_core/src/SimulationCore.cpp
+  modules/simulation_core/src/QuadrotorModel.cpp
 )
 if(NOT EMSCRIPTEN)
   target_sources(aerosimlab_simulation_core PRIVATE modules/simulation_core/src/PhysicsWorld.cpp)
@@ -230,6 +231,7 @@ if(BUILD_TESTING)
   add_executable(aerosimlab_simulation_tests
     tests/simulation_core/SimulationCoreTests.cpp
     tests/simulation_core/ScenarioRunnerTests.cpp
+    tests/simulation_core/QuadrotorModelTests.cpp
   )
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_simulation_tests PRIVATE tests/simulation_core/PhysicsWorldTests.cpp)

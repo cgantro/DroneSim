@@ -1,4 +1,5 @@
 #include "simulation_core/PhysicsWorld.h"
+#include "simulation_core/QuadrotorModel.h"
 
 #include <gtest/gtest.h>
 
@@ -52,6 +53,34 @@ TEST(PhysicsWorld, UpwardForceRaisesTheBody)
     }
 
     EXPECT_GT(world.State(body).linearVelocityMetersPerSecond.z, 1.0);
+}
+
+TEST(PhysicsWorld, X500RotorThrustKeepsTheBodyHovering)
+{
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    const double hoverSpeed = std::sqrt(
+        parameters.massKilograms * 9.81
+        / (QuadrotorModel::rotorCount * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    QuadrotorState motors;
+    motors.motorSpeedRadiansPerSecond.fill(hoverSpeed);
+    const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(motors, parameters);
+
+    PhysicsWorld world;
+    RigidBodyDefinition definition;
+    definition.positionMeters = {0.0, 0.0, 2.0};
+    definition.massKilograms = parameters.massKilograms;
+    const RigidBodyHandle body = world.CreateBox(definition);
+
+    for (int tick = 0; tick < 120; ++tick)
+    {
+        world.ApplyForce(body, wrench.forceNewtons);
+        world.ApplyTorque(body, wrench.torqueNewtonMeters);
+        world.Step(1.0 / 60.0);
+    }
+
+    const RigidBodyState result = world.State(body);
+    EXPECT_NEAR(result.positionMeters.z, 2.0, 0.01);
+    EXPECT_NEAR(result.linearVelocityMetersPerSecond.z, 0.0, 0.01);
 }
 
 TEST(PhysicsWorld, TorqueChangesAngularVelocityAndOrientation)
