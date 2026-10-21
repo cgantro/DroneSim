@@ -86,6 +86,8 @@ struct GltfLoaderErrorMessages final
 
     struct Index final
     {
+        inline static constexpr char invalidAccessorIndex[] =
+            "Invalid glTF index accessor index";
         inline static constexpr char unsupportedComponentType[] =
             "Unsupported glTF index component type";
         inline static constexpr char expectedScalar[] = "Index Accessor must be SCALAR";
@@ -395,12 +397,14 @@ std::vector<std::uint32_t> ReadIndices(
     int accessorIndex,
     std::size_t vertexCount)
 {
-    if (accessorIndex < 0)
+    if (accessorIndex == -1)
     {
         std::vector<std::uint32_t> indices(vertexCount);
         std::iota(indices.begin(), indices.end(), 0U);
         return indices;
     }
+    if (accessorIndex < -1)
+        throw std::runtime_error(GltfLoaderErrorMessages::Index::invalidAccessorIndex);
 
     const tinygltf::Accessor& accessor = model.accessors.at(accessorIndex);
     if (accessor.type != TINYGLTF_TYPE_SCALAR)

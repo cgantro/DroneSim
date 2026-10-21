@@ -8,6 +8,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -26,7 +27,8 @@ class TriangleGlb final
 {
 public:
     explicit TriangleGlb(std::size_t viewLength, int materialIndex = -1,
-        std::size_t vertexCount = 3U, std::string material = {}, bool includeSceneNode = true)
+        std::size_t vertexCount = 3U, std::string material = {}, bool includeSceneNode = true,
+        std::optional<int> indicesReference = std::nullopt)
     {
         constexpr std::array<std::array<float, 3>, 4> positions{{
             {0.0F, 0.0F, 0.0F},
@@ -49,6 +51,9 @@ public:
         const std::string sceneNodes = includeSceneNode
             ? "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0"
             : "\"nodes\":[]";
+        const std::string primitiveIndices = indicesReference.has_value()
+            ? ",\"indices\":" + std::to_string(*indicesReference)
+            : std::string{};
         std::string json =
             "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" +
             std::to_string(bufferLength) + "}],"
@@ -57,7 +62,7 @@ public:
             std::to_string(vertexCount) + ",\"type\":\"VEC3\"}],"
             + materialArray +
             "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}" +
-            primitiveMaterial + "}]}],"
+            primitiveIndices + primitiveMaterial + "}]}],"
             + sceneNodes + "}";
 
         Bytes binary(bufferLength);
@@ -140,4 +145,7 @@ TEST(GltfLoader, ReadsPositionsAndRejectsAccessorOutsideBufferView)
     const auto meshOnlyModel = grasplink::model::GltfLoader::LoadGLB(missingSceneNode.Path());
     EXPECT_TRUE(meshOnlyModel.nodes.empty());
     EXPECT_FALSE(meshOnlyModel.rootNodeIndex.has_value());
+
+    TriangleGlb invalidIndicesReference(36U, -1, 3U, {}, true, -2);
+    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidIndicesReference.Path()), std::runtime_error);
 }
