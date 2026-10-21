@@ -13,9 +13,6 @@
 #include <chrono>
 #include <memory>
 #include <filesystem>
-#include <string>
-#include <vector>
-#include "robotics/models/RobotSpecification.h"
 
 namespace grasplink::graphics
 {
@@ -33,13 +30,7 @@ class AssetManager;
 
 namespace grasplink::scene
 {
-class Entity;
 class Scene;
-}
-
-namespace grasplink::model
-{
-struct ModelResource;
 }
 
 namespace grasplink::physics
