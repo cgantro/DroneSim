@@ -12,9 +12,9 @@ namespace grasplink::gui
 {
 namespace
 {
-const char* GripperModeName(grasplink::robotics::GripperMode mode)
+const char* GripperModeName(robotics::GripperMode mode)
 {
-    using grasplink::robotics::GripperMode;
+    using robotics::GripperMode;
     switch (mode)
     {
     case GripperMode::Disconnected: return "Disconnected";
@@ -27,9 +27,9 @@ const char* GripperModeName(grasplink::robotics::GripperMode mode)
     return "Unknown";
 }
 
-const char* GripperObjectStatusName(grasplink::robotics::GripperObjectStatus status)
+const char* GripperObjectStatusName(robotics::GripperObjectStatus status)
 {
-    using grasplink::robotics::GripperObjectStatus;
+    using robotics::GripperObjectStatus;
     switch (status)
     {
     case GripperObjectStatus::Moving: return "No contact / target not reached";
@@ -40,9 +40,9 @@ const char* GripperObjectStatusName(grasplink::robotics::GripperObjectStatus sta
     return "Unknown";
 }
 
-const char* ErrorCodeName(grasplink::robotics::ErrorCode code)
+const char* ErrorCodeName(robotics::ErrorCode code)
 {
-    using grasplink::robotics::ErrorCode;
+    using robotics::ErrorCode;
     switch (code)
     {
     case ErrorCode::None: return "Success";
@@ -65,19 +65,20 @@ const char* ErrorCodeName(grasplink::robotics::ErrorCode code)
 
 }
 
-void GripperPanel::Draw(grasplink::robotics::IGripperController& gripper, const grasplink::simulation::GripperGraspState* graspState)
+void GripperPanel::Draw(robotics::IGripperController& gripper,
+    const simulation::GripperGraspState* graspState)
 {
     ImGui::Begin("Gripper control");
     DrawContents(gripper, graspState);
     ImGui::End();
 }
 
-void GripperPanel::DrawContents(grasplink::robotics::IGripperController& gripper,
-    const grasplink::simulation::GripperGraspState* graspState, bool commandsEnabled)
+void GripperPanel::DrawContents(robotics::IGripperController& gripper,
+    const simulation::GripperGraspState* graspState, bool commandsEnabled)
 {
-    using grasplink::robotics::GripperCommand;
+    using robotics::GripperCommand;
     ImGui::SeparatorText("Gripper");
-    const auto rememberResult = [&](grasplink::robotics::Result result)
+    const auto rememberResult = [&](robotics::Result result)
     {
         lastGripperResult = std::move(result);
         hasGripperResult = true;
@@ -107,7 +108,7 @@ void GripperPanel::DrawContents(grasplink::robotics::IGripperController& gripper
     }
     ImGui::EndDisabled();
 
-    const grasplink::robotics::GripperState state = gripper.GetState();
+    const robotics::GripperState state = gripper.GetState();
     if (state.valid)
     {
         ImGui::Text("Mode: %s", GripperModeName(state.mode));
