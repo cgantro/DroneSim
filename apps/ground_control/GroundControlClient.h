@@ -8,6 +8,11 @@
 #include <string>
 #include <string_view>
 
+namespace aerosimlab::communication
+{
+class UdpSocket;
+}
+
 namespace aerosimlab::ground_control
 {
 /**
@@ -32,6 +37,7 @@ public:
  * @param host 숫자 형식의 IPv4 주소다.
  * @param port 시뮬레이터가 기다리는 UDP 포트다.
  * @param packet 재전송할 때도 식별자와 내용이 바뀌지 않는 명령이다.
+ * @param socket 응답을 받을 때까지 유지하는 호출자 소유 UDP 소켓이다.
  * @param timeout 응답을 기다리는 최대 시간이다.
  * @return 시뮬레이터가 돌려준 상태와 요청 시작부터 응답까지 걸린 시간이다.
  * @throws std::exception 주소 변환, 통신 또는 응답 해석에 실패하면 예외를 던진다.
@@ -40,5 +46,6 @@ public:
     std::string_view host,
     std::uint16_t port,
     const communication::CommandPacket& packet,
+    communication::UdpSocket& socket,
     std::chrono::milliseconds timeout = std::chrono::seconds(4));
 }

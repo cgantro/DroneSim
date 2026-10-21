@@ -12,13 +12,13 @@ CommandResult SendCommand(
     std::string_view host,
     std::uint16_t port,
     const communication::CommandPacket& packet,
+    communication::UdpSocket& socket,
     std::chrono::milliseconds timeout)
 {
     if (timeout <= std::chrono::milliseconds::zero())
         throw std::invalid_argument("응답 대기 시간은 0보다 커야 합니다.");
 
     const auto destination = communication::UdpSocket::Resolve(host, port);
-    communication::UdpSocket socket(0);
     const std::string datagram = communication::EncodeCommand(packet);
     const auto requestStarted = std::chrono::steady_clock::now();
     const auto deadline = requestStarted + timeout;

@@ -2,6 +2,7 @@
 #include <Windows.h>
 
 #include "GroundControlClient.h"
+#include "communication/UdpSocket.h"
 #include "simulation_core/ScenarioRunner.h"
 
 #include <charconv>
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <future>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -54,6 +56,7 @@ struct AppState
     bool requestPending = false;
     std::uint32_t nextCommandId = 1;
     std::uint32_t nextSequence = 1;
+    std::optional<aerosimlab::communication::UdpSocket> socket;
     std::future<aerosimlab::ground_control::CommandResult> request;
 };
 
@@ -158,17 +161,20 @@ void StartRequest(HWND window, AppState& state,
     {
         const std::string host = ToUtf8(ReadText(state.hostInput));
         const std::uint16_t port = ReadPort(state.portInput);
+        if (!state.socket)
+            state.socket.emplace(0);
         packet.commandId = state.nextCommandId++;
         packet.sequence = state.nextSequence++;
+        auto* socket = &*state.socket;
         state.requestPending = true;
         SetControlsEnabled(state, false);
         SetStatus(state, L"시뮬레이터 응답을 기다리는 중입니다...");
-        // 응답 대기는 별도 작업에서 하고, 창 스레드는 나중에 future 결과만 읽는다.
+        // 요청이 끝날 때까지 버튼을 잠가 여러 작업이 같은 소켓을 동시에 쓰지 않게 한다.
         state.request = std::async(std::launch::async,
-            [host, port, packet = std::move(packet)]
+            [host, port, packet = std::move(packet), socket]
             {
                 return aerosimlab::ground_control::SendCommand(
-                    host, port, packet, std::chrono::seconds(4));
+                    host, port, packet, *socket, std::chrono::seconds(4));
             });
         SetTimer(window, requestTimerId, requestPollMilliseconds, nullptr);
     }

@@ -1,5 +1,6 @@
 #include "GroundControlClient.h"
 #include "communication/Protocol.h"
+#include "communication/UdpSocket.h"
 #include "simulation_core/ScenarioRunner.h"
 
 #include <charconv>
@@ -162,7 +163,8 @@ int main(int argc, char** argv)
             return 2;
         }
 
-        const auto result = aerosimlab::ground_control::SendCommand(host, port, packet);
+        aerosimlab::communication::UdpSocket socket(0);
+        const auto result = aerosimlab::ground_control::SendCommand(host, port, packet, socket);
         PrintReply(result.reply, result.responseTimeMilliseconds);
         return result.reply.accepted ? 0 : 1;
     }
