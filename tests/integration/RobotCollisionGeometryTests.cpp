@@ -132,6 +132,12 @@ void CheckSyntheticGeometry()
     EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(outOfOrderModel), std::invalid_argument);
     EXPECT_THROW((void)grasplink::simulation::robotics::collision_geometry::Build(outOfOrderModel),
         std::invalid_argument);
+    auto invalidJointIndexModel = model;
+    invalidJointIndexModel.activeJoints = {model.joints.size()};
+    EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(invalidJointIndexModel),
+        std::invalid_argument);
+    EXPECT_THROW((void)grasplink::simulation::robotics::collision_geometry::Build(invalidJointIndexModel),
+        std::invalid_argument);
     auto incompletePathModel = model;
     incompletePathModel.activeJoints = {1};
     EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(incompletePathModel), std::invalid_argument);
