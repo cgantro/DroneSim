@@ -1,5 +1,11 @@
 #include "AeroSimLabApp.h"
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
+#include <Psapi.h>
+#endif
+
 #include "graphics/Camera.h"
 #include "graphics/GlApi.h"
 #include "graphics/Mesh.h"
@@ -17,12 +23,6 @@
 #include <ctime>
 #include <cmath>
 #include <nlohmann/json.hpp>
-
-#ifdef _WIN32
-#define NOMINMAX
-#include <Windows.h>
-#include <Psapi.h>
-#endif
 
 #ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
