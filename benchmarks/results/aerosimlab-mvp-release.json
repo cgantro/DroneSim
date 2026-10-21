@@ -161,6 +161,100 @@
           "process_cpu_percent_approx": 99.9915227187039
         }
       ]
+    },
+    {
+      "measured_at": "2026-10-21T15:37:43Z",
+      "source_revision": "159012b",
+      "environment": {
+        "os": "Microsoft Windows 10.0.26200",
+        "architecture": "X64",
+        "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+        "build": "MSVC Release x64",
+        "framebuffer": "1280x720",
+        "opengl_renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "opengl_version": "3.3.0 NVIDIA 581.42"
+      },
+      "method": "각 5초 측정, 숨김 창과 VSync 끔. 드론 1대와 단순 도형을 렌더링하고 새 RGB 영상마다 동기 OpenCV 밝기·대비 분석. 3회 반복.",
+      "runs": [
+        {
+          "elapsed_seconds": 5.0015738,
+          "render_fps": 402.8731916342012,
+          "rendered_frames": 2015,
+          "simulation_ticks": 298,
+          "tick_duration_us": {
+            "deadline_misses_over_16_67ms": 0,
+            "p50": 0.2,
+            "p95": 0.5,
+            "p99": 1.1,
+            "samples": 298
+          },
+          "vision_analysis": {
+            "duration_us": {
+              "p50": 643.2,
+              "p95": 711.1,
+              "p99": 753.3,
+              "samples": 293
+            },
+            "mean_brightness": 165.02645833333366,
+            "mean_contrast": 71.3310116995504,
+            "samples": 293
+          },
+          "working_set_bytes": 64061440,
+          "process_cpu_percent_approx": 100.00852131783
+        },
+        {
+          "elapsed_seconds": 5.0007608,
+          "render_fps": 403.738567139624,
+          "rendered_frames": 2019,
+          "simulation_ticks": 298,
+          "tick_duration_us": {
+            "deadline_misses_over_16_67ms": 0,
+            "p50": 0.2,
+            "p95": 0.4,
+            "p99": 0.5,
+            "samples": 298
+          },
+          "vision_analysis": {
+            "duration_us": {
+              "p50": 646.1,
+              "p95": 732.1,
+              "p99": 888.5,
+              "samples": 293
+            },
+            "mean_brightness": 165.02645833333366,
+            "mean_contrast": 71.3310116995504,
+            "samples": 293
+          },
+          "working_set_bytes": 64131072,
+          "process_cpu_percent_approx": 100.0047832721773
+        },
+        {
+          "elapsed_seconds": 5.0011328,
+          "render_fps": 404.5083545871847,
+          "rendered_frames": 2023,
+          "simulation_ticks": 298,
+          "tick_duration_us": {
+            "deadline_misses_over_16_67ms": 0,
+            "p50": 0.2,
+            "p95": 0.4,
+            "p99": 1.1,
+            "samples": 298
+          },
+          "vision_analysis": {
+            "duration_us": {
+              "p50": 644.0,
+              "p95": 710.9,
+              "p99": 731.2,
+              "samples": 293
+            },
+            "mean_brightness": 165.02645833333366,
+            "mean_contrast": 71.3310116995504,
+            "samples": 293
+          },
+          "working_set_bytes": 64131072,
+          "process_cpu_percent_approx": 99.99734460160707
+        }
+      ]
     }
   ]
 }
