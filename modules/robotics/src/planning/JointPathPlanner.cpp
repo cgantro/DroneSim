@@ -22,6 +22,13 @@ JointVector Interpolate(const JointVector& start, const JointVector& goal, doubl
 
 struct JointPathPlanningJob::Impl
 {
+    enum class EndpointCheckStage
+    {
+        Start,
+        Goal,
+        IntermediateSamples
+    };
+
     const models::RobotSpecification* specification = nullptr;
     JointVector start;
     JointVector goal;
@@ -30,7 +37,7 @@ struct JointPathPlanningJob::Impl
     Result result{};
     JointPathPlanningState state = JointPathPlanningState::Idle;
     std::thread::id ownerThread{};
-    std::size_t endpoint = 0;
+    EndpointCheckStage endpoint = EndpointCheckStage::Start;
     std::size_t intervalCount = 0;
     std::size_t nextInterval = 1;
 
@@ -67,13 +74,17 @@ struct JointPathPlanningJob::Impl
 
     void AdvanceOne()
     {
-        if (endpoint < 2)
+        if (endpoint != EndpointCheckStage::IntermediateSamples)
         {
-            const JointVector& joints = endpoint++ == 0 ? start : goal;
+            const bool checkingStart = endpoint == EndpointCheckStage::Start;
+            const JointVector& joints = checkingStart ? start : goal;
+            endpoint = checkingStart ? EndpointCheckStage::Goal
+                                     : EndpointCheckStage::IntermediateSamples;
             const auto invalidity = Check(joints);
             if (invalidity != JointStateInvalidity::None)
                 Fail(invalidity);
-            else if (endpoint == 2 && (start == goal || intervalCount == 1))
+            else if (endpoint == EndpointCheckStage::IntermediateSamples &&
+                (start == goal || intervalCount == 1))
                 Complete();
             return;
         }
@@ -142,7 +153,7 @@ Result JointPathPlanningJob::Begin(const models::RobotSpecification& specificati
     job.plan = {};
     job.result = Result::Success();
     job.ownerThread = std::this_thread::get_id();
-    job.endpoint = 0;
+    job.endpoint = Impl::EndpointCheckStage::Start;
     job.nextInterval = 1;
     job.state = JointPathPlanningState::Running;
 
