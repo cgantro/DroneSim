@@ -61,13 +61,6 @@ using grasplink::scene::TransformSystemModule;
 #define ASSERT_NEAR_FINITE(actual, expected, tolerance, message) \
     ASSERT_TRUE(std::isfinite(actual) && std::abs((actual) - (expected)) <= (tolerance)) << message
 
-template<typename Exception, typename Function>
-void GTestExpectThrows(Function&& function, const std::string& message)
-{
-    EXPECT_THROW(function(), Exception) << message;
-}
-
-
 RobotLink BoxLink(const char* name, const glm::dvec3& size)
 {
     RobotLink link;
@@ -148,10 +141,9 @@ void CheckSyntheticGeometry()
     auto unsupportedShapeModel = model;
     unsupportedShapeModel.links[2].collisionGeometry[0].type =
         static_cast<RobotCollisionType>(255);
-    GTestExpectThrows<std::invalid_argument>([&]
-    {
-        (void)grasplink::simulation::robotics::collision_geometry::Build(unsupportedShapeModel);
-    }, "unknown collision shapes are rejected instead of approximated as spheres");
+    EXPECT_THROW((void)grasplink::simulation::robotics::collision_geometry::Build(unsupportedShapeModel),
+        std::invalid_argument)
+        << "unknown collision shapes are rejected instead of approximated as spheres";
     ASSERT_TRUE_MESSAGE(builtGeometry.links.size() == 3, "fixed links keep their own collision shapes");
     ASSERT_TRUE_MESSAGE(builtGeometry.links[0].jointIndex == 0 && builtGeometry.links[1].jointIndex == 0 &&
         builtGeometry.links[2].jointIndex == 1,
@@ -245,27 +237,26 @@ void CheckSyntheticGeometry()
     incompleteFkState.linkPosesInBaseFrame[0].positionMeters.x += 1.0;
     const Entity firstProxy = root.GetChild("Link1_CollisionProxy");
     const glm::vec3 stableProxyPosition = firstProxy.GetLocalPosition();
-    GTestExpectThrows<std::invalid_argument>([&] { adapter.Apply(incompleteFkState); },
-        "all FK poses are checked before any collision proxy moves");
+    EXPECT_THROW(adapter.Apply(incompleteFkState), std::invalid_argument)
+        << "all FK poses are checked before any collision proxy moves";
     EXPECT_EQ(firstProxy.GetLocalPosition(), stableProxyPosition);
     std::vector<grasplink::simulation::RobotPhysicsAdapter::CandidateWorldTransform>
         incompleteCandidates;
-    GTestExpectThrows<std::invalid_argument>([&]
-    {
-        adapter.BuildCandidateWorldTransforms(incompleteFkState, glm::mat4{1.0F}, incompleteCandidates);
-    }, "candidate transforms reject incomplete FK poses");
+    EXPECT_THROW(adapter.BuildCandidateWorldTransforms(
+        incompleteFkState, glm::mat4{1.0F}, incompleteCandidates), std::invalid_argument)
+        << "candidate transforms reject incomplete FK poses";
     EXPECT_TRUE(incompleteCandidates.empty());
     Entity baseProxy = root.GetChild("Base_CollisionProxy");
     ASSERT_TRUE_MESSAGE(baseProxy.IsValid(), "the robot has a base collision proxy");
     baseProxy.Destroy();
-    GTestExpectThrows<std::runtime_error>([&] { adapter.Apply(fk.Update(state)); },
-        "a removed base proxy cannot silently disable base collision checks");
-    GTestExpectThrows<std::runtime_error>([&]
-    {
-        adapter.BuildCandidateWorldTransforms(fk.Update(state), glm::mat4{1.0F}, incompleteCandidates);
-    }, "candidate transforms require the base collision proxy");
+    EXPECT_THROW(adapter.Apply(fk.Update(state)), std::runtime_error)
+        << "a removed base proxy cannot silently disable base collision checks";
+    EXPECT_THROW(adapter.BuildCandidateWorldTransforms(
+        fk.Update(state), glm::mat4{1.0F}, incompleteCandidates), std::runtime_error)
+        << "candidate transforms require the base collision proxy";
     sceneOwner.reset();
-    GTestExpectThrows<std::runtime_error>([&] { adapter.Apply(fk.Update(state)); }, "removed Scene invalidates physics proxy bindings");
+    EXPECT_THROW(adapter.Apply(fk.Update(state)), std::runtime_error)
+        << "removed Scene invalidates physics proxy bindings";
 }
 
 void CheckLoadedArmPipeline(std::size_t axisCount)
