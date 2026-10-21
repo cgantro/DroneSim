@@ -57,5 +57,68 @@
       },
       "working_set_bytes": 59170816
     }
+  ],
+  "rechecks": [
+    {
+      "measured_at": "2026-10-21T14:39:28Z",
+      "source_revision": "00d9e8f plus local benchmark metadata change",
+      "environment": {
+        "os": "Microsoft Windows NT 10.0.26200.0",
+        "architecture": "X64",
+        "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+        "build": "MSVC Release x64",
+        "framebuffer": "1280x720",
+        "opengl_renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "opengl_version": "3.3.0 NVIDIA 581.42"
+      },
+      "method": "각 5초 측정. 같은 실행 파일과 화면 크기에서 숨김 OpenGL 창, 드론 1대, 단순 도형을 사용해 모의와 그리기를 수행하고 3회 반복.",
+      "runs": [
+        {
+          "elapsed_seconds": 5.000063,
+          "render_fps": 402.1949323438525,
+          "rendered_frames": 2011,
+          "simulation_ticks": 298,
+          "tick_duration_us": {
+            "deadline_misses_over_16_67ms": 0,
+            "p50": 0.3,
+            "p95": 0.5,
+            "p99": 0.9,
+            "samples": 298
+          },
+          "working_set_bytes": 63594496,
+          "process_cpu_percent_approx": 99.9987400158758
+        },
+        {
+          "elapsed_seconds": 5.0014136,
+          "render_fps": 404.68558729076113,
+          "rendered_frames": 2024,
+          "simulation_ticks": 298,
+          "tick_duration_us": {
+            "deadline_misses_over_16_67ms": 0,
+            "p50": 0.3,
+            "p95": 0.5,
+            "p99": 0.7,
+            "samples": 298
+          },
+          "working_set_bytes": 63582208,
+          "process_cpu_percent_approx": 100.011724685197
+        },
+        {
+          "elapsed_seconds": 5.0004595,
+          "render_fps": 403.162949324957,
+          "rendered_frames": 2016,
+          "simulation_ticks": 297,
+          "tick_duration_us": {
+            "deadline_misses_over_16_67ms": 0,
+            "p50": 0.3,
+            "p95": 0.5,
+            "p99": 1.0,
+            "samples": 297
+          },
+          "working_set_bytes": 63598592,
+          "process_cpu_percent_approx": 100.0108090066523
+        }
+      ]
+    }
   ]
 }

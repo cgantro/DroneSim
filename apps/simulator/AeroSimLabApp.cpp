@@ -1,6 +1,7 @@
 #include "AeroSimLabApp.h"
 
 #include "graphics/Camera.h"
+#include "graphics/GlApi.h"
 #include "graphics/Material.h"
 #include "graphics/Mesh.h"
 #include "graphics/Renderer.h"
@@ -547,6 +548,15 @@ void AeroSimLabApp::DrawCube(const glm::mat4& transform, const glm::vec3& camera
 
 void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
 {
+    int framebufferWidth = 0;
+    int framebufferHeight = 0;
+    window_->GetFramebufferSize(framebufferWidth, framebufferHeight);
+
+    const auto glString = [](GLenum name)
+    {
+        return reinterpret_cast<const char*>(glGetString(name));
+    };
+
     std::vector<double> durations = tickDurationsMicroseconds_;
     std::sort(durations.begin(), durations.end());
     const auto percentile = [&durations](double fraction)
@@ -564,6 +574,8 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         }));
     nlohmann::json report{
         {"configuration", "Windows Release; hidden OpenGL window; one drone; simple geometry"},
+        {"framebuffer", {{"width", framebufferWidth}, {"height", framebufferHeight}}},
+        {"opengl", {{"renderer", glString(GL_RENDERER)}, {"version", glString(GL_VERSION)}}},
         {"elapsed_seconds", elapsedSeconds},
         {"simulation_ticks", simulation_.TickCount()},
         {"rendered_frames", renderedFrames_},
