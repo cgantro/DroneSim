@@ -238,8 +238,8 @@ void SimRobotController::FinishJointMoveIfNeeded()
     if (posePathSegment_ + 1 < posePathPoints_.size())
     {
         ++posePathSegment_;
-        ConfigureJointMove(posePathPoints_[posePathSegment_], pendingPoseMove_.velocityScale,
-            pendingPoseMove_.accelerationScale);
+        ConfigureJointMove(posePathPoints_[posePathSegment_], posePathScales_.velocity,
+            posePathScales_.acceleration);
         return;
     }
 

@@ -359,7 +359,7 @@ Result SimRobotController::BeginPosePlanningImpl(
     posePathSegment_ = 0;
     posePlanning_.target = targetInBase;
     posePlanning_.pathFailure = Result::Success();
-    pendingPoseMove_ = {{}, velocityScale, accelerationScale};
+    posePathScales_ = {velocityScale, accelerationScale};
     posePlanning_.ikSession = inverse_.BeginSingleSeed(targetInBase, state_.jointPositions,
         kinematics::RobotDefaultIkOptions(specification_));
     posePlanning_.phase = PosePlanningPhase::Ik;
@@ -684,12 +684,12 @@ Result SimRobotController::StartPosePathSegment()
     if (posePathPoints_.size() == 1)
     {
         posePathPoints_.clear();
-        return MoveJointImpl({state_.jointPositions, pendingPoseMove_.velocityScale,
-            pendingPoseMove_.accelerationScale}, JointMoveOrigin::PlannedPoseSegment);
+        return MoveJointImpl({state_.jointPositions, posePathScales_.velocity,
+            posePathScales_.acceleration}, JointMoveOrigin::PlannedPoseSegment);
     }
     posePathSegment_ = 1;
-    return MoveJointImpl({posePathPoints_[posePathSegment_], pendingPoseMove_.velocityScale,
-        pendingPoseMove_.accelerationScale}, JointMoveOrigin::PlannedPoseSegment);
+    return MoveJointImpl({posePathPoints_[posePathSegment_], posePathScales_.velocity,
+        posePathScales_.acceleration}, JointMoveOrigin::PlannedPoseSegment);
 }
 
 std::optional<Result> SimRobotController::TakeMotionPlanningResult()

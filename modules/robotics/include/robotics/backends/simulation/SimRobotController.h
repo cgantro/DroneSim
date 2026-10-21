@@ -307,7 +307,13 @@ private:
         planning::JointPathPlanningJob jointPathJob;
     };
     PosePlanningState posePlanning_;
-    JointMoveCommand pendingPoseMove_;
+    struct JointMotionScales
+    {
+        double velocity = 1.0;
+        double acceleration = 1.0;
+    };
+    // 포즈 경로를 여러 관절 이동으로 나눠 실행할 때 원래 명령의 속도 비율을 유지한다.
+    JointMotionScales posePathScales_;
     std::vector<JointVector> posePathPoints_;
     std::size_t posePathSegment_ = 0;
     // TCP 경로 점, 현재 구간, 속도·가속도 한계와 시간 프로파일을 함께 보관한다.
