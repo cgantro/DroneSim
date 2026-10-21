@@ -158,4 +158,30 @@ TEST(SimulationCore, SameCommandSequenceProducesTheSameState)
     EXPECT_EQ(first.State().mode, second.State().mode);
     EXPECT_EQ(first.TickCount(), second.TickCount());
 }
+
+TEST(SimulationCore, CameraStopsOnDisableOrFaultAndResumesAfterRecovery)
+{
+    SimulationCore simulation;
+    simulation.AdvanceOneTick();
+    EXPECT_EQ(simulation.Camera().frameCount, 1);
+    EXPECT_EQ(simulation.Camera().lastFrameTick, 1);
+
+    simulation.SetCameraEnabled(false);
+    simulation.AdvanceOneTick();
+    EXPECT_EQ(simulation.Camera().status, CameraStatus::Disabled);
+    EXPECT_EQ(simulation.Camera().frameCount, 1);
+
+    simulation.SetCameraEnabled(true);
+    simulation.SetCameraFault(true);
+    simulation.SetCameraEnabled(true);
+    simulation.AdvanceOneTick();
+    EXPECT_EQ(simulation.Camera().status, CameraStatus::Fault);
+    EXPECT_EQ(simulation.Camera().frameCount, 1);
+
+    simulation.SetCameraFault(false);
+    simulation.AdvanceOneTick();
+    EXPECT_EQ(simulation.Camera().status, CameraStatus::Active);
+    EXPECT_EQ(simulation.Camera().frameCount, 2);
+    EXPECT_EQ(simulation.Camera().lastFrameTick, 4);
+}
 }

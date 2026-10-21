@@ -33,6 +33,12 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                 state.velocityMetersPerSecond.z}},
             {"yaw_radians", state.yawRadians}
         }},
+        {"camera", {
+            {"status", aerosimlab::simulation::ToString(result.finalCamera.status)},
+            {"frame_count", result.finalCamera.frameCount},
+            {"last_frame_tick", result.finalCamera.lastFrameTick}
+        }},
+        {"events", result.eventLog},
         {"issues", result.issues}
     };
 }

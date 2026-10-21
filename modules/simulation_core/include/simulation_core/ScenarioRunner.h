@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simulation_core/DroneModel.h"
+#include "simulation_core/EoCameraModel.h"
 
 #include <cstdint>
 #include <string>
@@ -19,7 +20,9 @@ struct ScenarioResult
     std::uint64_t tickCount = 0;
     double simulationTimeSeconds = 0.0;
     DroneState finalState;
+    CameraState finalCamera;
     std::vector<std::string> issues;
+    std::vector<std::string> eventLog;
 };
 
 /**

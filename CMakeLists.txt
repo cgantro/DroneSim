@@ -19,6 +19,7 @@ aerosimlab_add_scenario_dependencies()
 
 add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/DroneModel.cpp
+  modules/simulation_core/src/EoCameraModel.cpp
   modules/simulation_core/src/ScenarioRunner.cpp
   modules/simulation_core/src/SimulationCore.cpp
 )
@@ -27,6 +28,26 @@ target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm
   PRIVATE nlohmann_json::nlohmann_json
 )
+
+add_library(aerosimlab_communication STATIC
+  modules/communication/src/Protocol.cpp
+)
+if(NOT EMSCRIPTEN)
+  target_sources(aerosimlab_communication PRIVATE modules/communication/src/UdpSocket.cpp)
+endif()
+target_include_directories(aerosimlab_communication PUBLIC modules/communication/include)
+target_link_libraries(aerosimlab_communication PUBLIC
+  aerosimlab_simulation_core
+  nlohmann_json::nlohmann_json
+)
+if(WIN32)
+  target_link_libraries(aerosimlab_communication PUBLIC ws2_32)
+endif()
+
+if(NOT EMSCRIPTEN)
+  add_executable(aerosimlab_ground_control apps/ground_control/main.cpp)
+  target_link_libraries(aerosimlab_ground_control PRIVATE aerosimlab_communication)
+endif()
 
 add_executable(aerosimlab_headless apps/headless/main.cpp)
 target_link_libraries(aerosimlab_headless PRIVATE
@@ -80,10 +101,18 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   target_link_libraries(aerosimlab_simulator PRIVATE
     aerosimlab_graphics
     aerosimlab_simulation_core
+    aerosimlab_communication
+    nlohmann_json::nlohmann_json
   )
+  if(WIN32)
+    target_link_libraries(aerosimlab_simulator PRIVATE Psapi)
+  endif()
   if(EMSCRIPTEN)
     set_target_properties(aerosimlab_simulator PROPERTIES SUFFIX ".html")
-    target_link_options(aerosimlab_simulator PRIVATE "-sALLOW_MEMORY_GROWTH=1")
+    target_link_options(aerosimlab_simulator PRIVATE
+      "-sALLOW_MEMORY_GROWTH=1"
+      "--preload-file" "${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
+    )
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -117,11 +146,43 @@ if(BUILD_TESTING)
   gtest_discover_tests(aerosimlab_simulation_tests
     TEST_PREFIX "Simulation."
     DISCOVERY_TIMEOUT 60
+    PROPERTIES LABELS "UNIT;simulation"
+  )
+
+  add_executable(aerosimlab_communication_tests
+    tests/communication/ProtocolTests.cpp
+  )
+  target_link_libraries(aerosimlab_communication_tests PRIVATE
+    aerosimlab_communication
+    GTest::gtest_main
+  )
+  gtest_discover_tests(aerosimlab_communication_tests
+    TEST_PREFIX "Communication."
+    DISCOVERY_TIMEOUT 60
+    PROPERTIES LABELS "UNIT;communication"
   )
 
   add_test(NAME HeadlessScenarioSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/normal-flight.json")
   set_tests_properties(HeadlessScenarioSmoke PROPERTIES LABELS "INTEGRATION;simulation")
+
+  add_test(NAME HeadlessFaultScenarioSmoke
+    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/fault-injection.json")
+  set_tests_properties(HeadlessFaultScenarioSmoke PROPERTIES LABELS "INTEGRATION;simulation")
+
+  if(WIN32)
+    find_program(AEROSIMLAB_POWERSHELL powershell.exe REQUIRED)
+    add_test(NAME GroundControlUdpSmoke
+      COMMAND ${AEROSIMLAB_POWERSHELL} -NoProfile -ExecutionPolicy Bypass
+        -File "${CMAKE_SOURCE_DIR}/tests/communication/run_udp_smoke.ps1"
+        -Simulator "$<TARGET_FILE:aerosimlab_simulator>"
+        -GroundControl "$<TARGET_FILE:aerosimlab_ground_control>")
+    set_tests_properties(GroundControlUdpSmoke PROPERTIES
+      WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>"
+      TIMEOUT 20
+      RUN_SERIAL TRUE
+      LABELS "INTEGRATION;communication")
+  endif()
 
   if(AEROSIMLAB_BUILD_GRAPHICS)
     add_test(NAME ViewerSmoke COMMAND aerosimlab_simulator --smoke-test)

@@ -1,10 +1,18 @@
 #pragma once
 
+#include "communication/Protocol.h"
+#ifndef __EMSCRIPTEN__
+#include "communication/UdpSocket.h"
+#endif
 #include "simulation_core/SimulationCore.h"
 
 #include <glm/glm.hpp>
 
+#include <chrono>
+#include <ctime>
 #include <memory>
+#include <optional>
+#include <vector>
 
 namespace aerosimlab::graphics
 {
@@ -26,7 +34,8 @@ namespace aerosimlab::simulator
 class AeroSimLabApp
 {
 public:
-    explicit AeroSimLabApp(bool smokeTest);
+    explicit AeroSimLabApp(bool smokeTest, std::uint16_t udpPort, bool demoMode,
+        bool networkEnabled, bool benchmarkMode);
     ~AeroSimLabApp();
 
     /** @brief 그래픽 자원을 준비하고 창이 닫힐 때까지 모의를 실행한다. */
@@ -36,6 +45,10 @@ private:
     void InitializeGraphics();
     void AdvanceSimulation(double elapsedSeconds);
     void ApplyDemoCommands();
+    void PollGroundControl();
+    void ApplyGroundCommand();
+    void WriteBenchmarkReport(double elapsedSeconds) const;
+    [[nodiscard]] aerosimlab::communication::Telemetry CurrentTelemetry() const;
     void RenderFrame();
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition);
@@ -44,8 +57,30 @@ private:
         const glm::mat4& view, const glm::mat4& projection);
 
     bool smokeTest_ = false;
+    bool demoMode_ = false;
+    bool externalControl_ = false;
+    bool networkEnabled_ = false;
+    std::size_t smokeCommandCount_ = 0;
+    bool benchmarkMode_ = false;
     std::size_t renderedFrames_ = 0;
     double accumulatedSeconds_ = 0.0;
+    std::clock_t benchmarkCpuStart_ = 0;
+    std::vector<double> tickDurationsMicroseconds_;
+    std::chrono::steady_clock::time_point startTime_;
+    std::uint16_t udpPort_ = 0;
+#ifndef __EMSCRIPTEN__
+    struct PendingGroundCommand
+    {
+        aerosimlab::communication::CommandPacket packet;
+        aerosimlab::communication::UdpPeer peer;
+        std::uint64_t receivedAtMilliseconds = 0;
+    };
+    std::optional<PendingGroundCommand> pendingCommand_;
+    std::optional<aerosimlab::communication::UdpPeer> activePeer_;
+    std::optional<aerosimlab::communication::CommandReply> lastReply_;
+    aerosimlab::communication::SequenceGuard sequenceGuard_;
+    std::unique_ptr<aerosimlab::communication::UdpSocket> udpSocket_;
+#endif
     std::unique_ptr<aerosimlab::graphics::Window> window_;
     std::unique_ptr<aerosimlab::graphics::Renderer> renderer_;
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;

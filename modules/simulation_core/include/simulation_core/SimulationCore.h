@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simulation_core/DroneModel.h"
+#include "simulation_core/EoCameraModel.h"
 
 #include <cstdint>
 
@@ -31,6 +32,15 @@ public:
     /** @brief 현재 드론 상태를 반환한다. */
     [[nodiscard]] const DroneState& State() const noexcept;
 
+    /** @brief 모의 카메라의 상태와 프레임 생성 정보를 반환한다. */
+    [[nodiscard]] const CameraState& Camera() const noexcept;
+
+    /** @brief 카메라를 켜거나 끈다. 고장 상태는 복구 명령으로만 해제된다. */
+    void SetCameraEnabled(bool enabled) noexcept;
+
+    /** @brief 카메라 장애를 주입하거나 해제한다. */
+    void SetCameraFault(bool faulted) noexcept;
+
     /** @brief 지금까지 실행한 고정 간격 단계 수를 반환한다. */
     [[nodiscard]] std::uint64_t TickCount() const noexcept;
 
@@ -42,6 +52,7 @@ public:
 
 private:
     DroneModel drone_;
+    EoCameraModel camera_;
     std::uint64_t tickCount_ = 0;
     bool paused_ = false;
 };

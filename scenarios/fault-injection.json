@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "ticks": 180,
+  "commands": [
+    {"tick": 0, "type": "takeoff", "duplicate": true},
+    {"tick": 90, "type": "set_waypoint", "position_meters": [2.0, 0.0, 1.5], "delay_ticks": 10},
+    {"tick": 170, "type": "land", "drop": true}
+  ],
+  "camera_events": [
+    {"tick": 30, "action": "fault"},
+    {"tick": 60, "action": "recover"}
+  ],
+  "expected": {
+    "mode": "hovering",
+    "position_meters": [2.0, 0.0, 1.5],
+    "tolerance_meters": 0.001,
+    "camera_status": "active",
+    "camera_frame_count": 150
+  }
+}

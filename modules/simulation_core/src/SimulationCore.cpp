@@ -18,6 +18,7 @@ void SimulationCore::AdvanceOneTick() noexcept
         return;
     }
     drone_.AdvanceOneTick();
+    camera_.AdvanceOneTick(tickCount_ + 1);
     ++tickCount_;
 }
 
@@ -34,6 +35,7 @@ void SimulationCore::Resume() noexcept
 void SimulationCore::Reset() noexcept
 {
     drone_.Reset();
+    camera_.Reset();
     tickCount_ = 0;
     paused_ = false;
 }
@@ -41,6 +43,24 @@ void SimulationCore::Reset() noexcept
 const DroneState& SimulationCore::State() const noexcept
 {
     return drone_.State();
+}
+
+const CameraState& SimulationCore::Camera() const noexcept
+{
+    return camera_.State();
+}
+
+void SimulationCore::SetCameraEnabled(bool enabled) noexcept
+{
+    camera_.SetEnabled(enabled);
+}
+
+void SimulationCore::SetCameraFault(bool faulted) noexcept
+{
+    if (faulted)
+        camera_.InjectFault();
+    else
+        camera_.Recover();
 }
 
 std::uint64_t SimulationCore::TickCount() const noexcept

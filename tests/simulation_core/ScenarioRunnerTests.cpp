@@ -74,4 +74,26 @@ TEST(ScenarioRunner, RejectsUnsupportedAndUnorderedScenarioData)
         "commands":[],"expected":{"mode":7,"position_meters":[0,0,0]}})json")),
         std::invalid_argument);
 }
+
+TEST(ScenarioRunner, ReplaysDelayLossDuplicateAndCameraRecovery)
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"ticks":180,
+     "commands":[
+       {"tick":0,"type":"takeoff","duplicate":true},
+       {"tick":90,"type":"set_waypoint","position_meters":[2,0,1.5],"delay_ticks":10},
+       {"tick":170,"type":"land","drop":true}],
+     "camera_events":[{"tick":30,"action":"fault"},{"tick":60,"action":"recover"}],
+     "expected":{"mode":"hovering","position_meters":[2,0,1.5],
+       "camera_status":"active","camera_frame_count":150}}
+    )json";
+    const ScenarioResult result = RunScenario(scenario);
+    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    EXPECT_EQ(result.finalCamera.status, CameraStatus::Active);
+    EXPECT_EQ(result.finalCamera.frameCount, 150);
+    ASSERT_EQ(result.eventLog.size(), 7);
+    EXPECT_NE(result.eventLog[1].find("중복"), std::string::npos);
+    EXPECT_NE(result.eventLog[2].find("fault"), std::string::npos);
+    EXPECT_NE(result.eventLog[4].find("늦게 전달"), std::string::npos);
+}
 }

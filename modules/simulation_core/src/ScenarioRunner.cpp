@@ -4,7 +4,9 @@
 #include <glm/geometric.hpp>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -135,7 +137,18 @@ FlightMode ReadFlightMode(const Json& value)
 struct ScheduledCommand
 {
     std::uint64_t tick;
+    std::uint64_t sendTick;
+    std::uint64_t delayTicks;
+    std::uint64_t sequence;
     DroneCommand command;
+    bool dropped;
+    bool duplicated;
+};
+
+struct ScheduledCameraEvent
+{
+    std::uint64_t tick;
+    std::string action;
 };
 
 std::vector<ScheduledCommand> ReadCommands(const Json& commands, std::uint64_t tickCount)
@@ -160,11 +173,67 @@ std::vector<ScheduledCommand> ReadCommands(const Json& commands, std::uint64_t t
         {
             throw std::invalid_argument("명령은 tick 순서대로 작성해야 합니다.");
         }
-        result.push_back({tick, ReadCommand(item)});
+        const std::uint64_t delay = item.contains("delay_ticks")
+            ? ReadUnsigned(item["delay_ticks"], "delay_ticks")
+            : 0;
+        if (delay >= tickCount - tick)
+            throw std::invalid_argument("통신 지연 뒤 명령이 시나리오 실행 범위를 벗어납니다.");
+        if ((item.contains("drop") && !item["drop"].is_boolean())
+            || (item.contains("duplicate") && !item["duplicate"].is_boolean()))
+            throw std::invalid_argument("drop과 duplicate는 true 또는 false여야 합니다.");
+        const bool dropped = item.contains("drop") && item["drop"].get<bool>();
+        const bool duplicated = item.contains("duplicate") && item["duplicate"].get<bool>();
+        result.push_back({tick + delay, tick, delay, static_cast<std::uint64_t>(result.size()) + 1,
+            ReadCommand(item), dropped, duplicated});
         previousTick = tick;
         hasPreviousTick = true;
     }
+    std::stable_sort(result.begin(), result.end(), [](const auto& left, const auto& right)
+    {
+        return left.tick < right.tick;
+    });
     return result;
+}
+
+std::vector<ScheduledCameraEvent> ReadCameraEvents(const Json& document, std::uint64_t tickCount)
+{
+    const auto found = document.find("camera_events");
+    if (found == document.end())
+        return {};
+    if (!found->is_array())
+        throw std::invalid_argument("camera_events는 배열이어야 합니다.");
+
+    std::vector<ScheduledCameraEvent> events;
+    events.reserve(found->size());
+    std::uint64_t previousTick = 0;
+    bool hasPreviousTick = false;
+    for (const Json& event : *found)
+    {
+        const std::uint64_t tick = ReadUnsigned(Required(event, "tick"), "tick");
+        const Json& actionValue = Required(event, "action");
+        if (tick >= tickCount || !actionValue.is_string())
+            throw std::invalid_argument("카메라 이벤트의 tick 또는 action이 잘못되었습니다.");
+        if (hasPreviousTick && tick < previousTick)
+            throw std::invalid_argument("카메라 이벤트는 tick 순서대로 작성해야 합니다.");
+        const std::string action = actionValue.get<std::string>();
+        if (action != "enable" && action != "disable" && action != "fault" && action != "recover")
+            throw std::invalid_argument("알 수 없는 카메라 이벤트입니다: " + action);
+        events.push_back({tick, action});
+        previousTick = tick;
+        hasPreviousTick = true;
+    }
+    return events;
+}
+
+CameraStatus ReadCameraStatus(const Json& value)
+{
+    if (!value.is_string())
+        throw std::invalid_argument("expected.camera_status는 문자열이어야 합니다.");
+    const std::string status = value.get<std::string>();
+    if (status == "active") return CameraStatus::Active;
+    if (status == "disabled") return CameraStatus::Disabled;
+    if (status == "fault") return CameraStatus::Fault;
+    throw std::invalid_argument("알 수 없는 카메라 상태입니다: " + status);
 }
 }
 
@@ -198,6 +267,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
 
     const std::vector<ScheduledCommand> commands = ReadCommands(
         Required(document, "commands"), tickCount);
+    const std::vector<ScheduledCameraEvent> cameraEvents = ReadCameraEvents(document, tickCount);
     const Json& expected = Required(document, "expected");
     if (!expected.is_object())
     {
@@ -214,20 +284,61 @@ ScenarioResult RunScenario(std::string_view jsonText)
         throw std::invalid_argument("tolerance_meters는 0 이상이어야 합니다.");
     }
 
+    const std::optional<CameraStatus> expectedCameraStatus = expected.contains("camera_status")
+        ? std::optional<CameraStatus>{ReadCameraStatus(expected["camera_status"])}
+        : std::nullopt;
+    const std::optional<std::uint64_t> expectedFrameCount = expected.contains("camera_frame_count")
+        ? std::optional<std::uint64_t>{ReadUnsigned(expected["camera_frame_count"], "camera_frame_count")}
+        : std::nullopt;
+
     SimulationCore simulation;
     ScenarioResult result;
     std::size_t nextCommand = 0;
+    std::size_t nextCameraEvent = 0;
+    std::uint64_t lastDeliveredSequence = 0;
     for (std::uint64_t tick = 0; tick < tickCount; ++tick)
     {
         while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
         {
-            const CommandResult commandResult = simulation.Apply(commands[nextCommand].command);
-            if (commandResult != CommandResult::Accepted)
+            const ScheduledCommand& scheduled = commands[nextCommand];
+            if (scheduled.dropped)
             {
-                result.issues.push_back(
-                    "tick " + std::to_string(tick) + " 명령을 적용하지 못했습니다.");
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": 통신 장애로 명령을 버렸습니다.");
+                ++nextCommand;
+                continue;
             }
+
+            if (scheduled.sequence <= lastDeliveredSequence)
+            {
+                result.issues.push_back("tick " + std::to_string(tick) + "에서 역순 명령을 거부했습니다.");
+                ++nextCommand;
+                continue;
+            }
+            lastDeliveredSequence = scheduled.sequence;
+            if (scheduled.delayTicks > 0)
+            {
+                result.eventLog.push_back("tick " + std::to_string(scheduled.sendTick)
+                    + "에 보낸 명령을 " + std::to_string(scheduled.delayTicks)
+                    + " Tick 늦게 전달했습니다.");
+            }
+            const CommandResult commandResult = simulation.Apply(scheduled.command);
+            if (commandResult != CommandResult::Accepted)
+                result.issues.push_back("tick " + std::to_string(tick) + " 명령을 적용하지 못했습니다.");
+            else
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": 명령을 적용했습니다.");
+            if (scheduled.duplicated)
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": 재전송된 중복 명령을 한 번만 처리했습니다.");
             ++nextCommand;
+        }
+
+        while (nextCameraEvent < cameraEvents.size() && cameraEvents[nextCameraEvent].tick == tick)
+        {
+            const auto& event = cameraEvents[nextCameraEvent++];
+            if (event.action == "enable") simulation.SetCameraEnabled(true);
+            else if (event.action == "disable") simulation.SetCameraEnabled(false);
+            else if (event.action == "fault") simulation.SetCameraFault(true);
+            else simulation.SetCameraFault(false);
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": 카메라 " + event.action);
         }
         simulation.AdvanceOneTick();
     }
@@ -235,6 +346,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
     result.tickCount = simulation.TickCount();
     result.simulationTimeSeconds = simulation.SimulationTimeSeconds();
     result.finalState = simulation.State();
+    result.finalCamera = simulation.Camera();
     if (result.finalState.mode != expectedMode)
     {
         result.issues.push_back(
@@ -245,6 +357,10 @@ ScenarioResult RunScenario(std::string_view jsonText)
     {
         result.issues.push_back("최종 위치가 허용 오차를 벗어났습니다.");
     }
+    if (expectedCameraStatus && result.finalCamera.status != *expectedCameraStatus)
+        result.issues.push_back("최종 카메라 상태가 예상값과 다릅니다.");
+    if (expectedFrameCount && result.finalCamera.frameCount != *expectedFrameCount)
+        result.issues.push_back("카메라 프레임 수가 예상값과 다릅니다.");
     result.passed = result.issues.empty();
     return result;
 }
