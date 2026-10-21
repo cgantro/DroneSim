@@ -35,23 +35,27 @@ public static class AeroSimLabUiTestWindow
     [DllImport("user32.dll")]
     public static extern IntPtr GetDlgItem(IntPtr window, int controlId);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern bool SetWindowText(IntPtr window, string text);
+    [DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendTextMessage(
+        IntPtr window, uint message, IntPtr wParam, string text);
+
+    [DllImport("user32.dll", EntryPoint = "SendMessageW")]
+    public static extern IntPtr SendMessage(
+        IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowTextLength(IntPtr window);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetClassName(IntPtr window, StringBuilder className, int capacity);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowText(IntPtr window, StringBuilder text, int capacity);
 
     [DllImport("user32.dll")]
     public static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    public static bool SetText(IntPtr window, string text)
+    {
+        return SendTextMessage(window, 0x000C, IntPtr.Zero, text) != IntPtr.Zero;
+    }
 
     public static IntPtr FindProcessWindow(uint expectedProcessId, string expectedClassName)
     {
@@ -74,12 +78,6 @@ public static class AeroSimLabUiTestWindow
         return found;
     }
 
-    public static string ReadText(IntPtr window)
-    {
-        var text = new StringBuilder(GetWindowTextLength(window) + 1);
-        GetWindowText(window, text, text.Capacity);
-        return text.ToString();
-    }
 }
 
 public static class AeroSimLabSessionTestClient
@@ -165,6 +163,7 @@ if ($timeoutResult.ExitCode -ne 3 -or $timeoutResult.Output -notmatch '응답 �
 $retryingClient = $null
 $server = $null
 $groundControlUiProcess = $null
+$uiListener = $null
 $uiWindow = [IntPtr]::Zero
 
 try {
@@ -265,10 +264,10 @@ try {
     if ($uiWindow -eq [IntPtr]::Zero) {
         throw '지상통제 조작 창을 열지 못했습니다.'
     }
+    $uiListener = [System.Net.Sockets.UdpClient]::new($port)
     $portInput = [AeroSimLabUiTestWindow]::GetDlgItem(
         $uiWindow, [AeroSimLabUiTestWindow]::PortInput)
-    [AeroSimLabUiTestWindow]::SetWindowText($portInput, "$port") | Out-Null
-    if ([AeroSimLabUiTestWindow]::ReadText($portInput) -ne "$port") {
+    if (-not [AeroSimLabUiTestWindow]::SetText($portInput, "$port")) {
         throw '지상통제 창에 시험용 포트를 입력하지 못했습니다.'
     }
 
@@ -288,7 +287,21 @@ try {
             throw "지상통제 창의 조작 항목($controlId)을 찾지 못했습니다."
         }
     }
-    Write-Output '지상통제 창과 조작 항목을 확인했습니다.'
+    $takeoffButton = [AeroSimLabUiTestWindow]::GetDlgItem(
+        $uiWindow, [AeroSimLabUiTestWindow]::TakeoffButton)
+    [void][AeroSimLabUiTestWindow]::SendMessage(
+        $takeoffButton, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+    $receive = $uiListener.BeginReceive($null, $null)
+    if (-not $receive.AsyncWaitHandle.WaitOne(5000)) {
+        throw '지상통제 창에서 보낸 이륙 명령을 받지 못했습니다.'
+    }
+    $source = [System.Net.IPEndPoint]::new([System.Net.IPAddress]::Any, 0)
+    $datagram = $uiListener.EndReceive($receive, [ref]$source)
+    $uiCommand = [Text.Encoding]::UTF8.GetString($datagram) | ConvertFrom-Json
+    if ($uiCommand.type -ne 'command' -or $uiCommand.payload.action -ne 'takeoff') {
+        throw "지상통제 창에서 예상하지 않은 명령을 받았습니다: $uiCommand"
+    }
+    Write-Output '지상통제 창에서 보낸 이륙 명령을 확인했습니다.'
 }
 finally {
     if ($null -ne $retryingClient) {
@@ -312,5 +325,8 @@ finally {
         if (-not $groundControlUiProcess.HasExited) {
             Stop-Process -Id $groundControlUiProcess.Id -Force
         }
+    }
+    if ($null -ne $uiListener) {
+        $uiListener.Dispose()
     }
 }
