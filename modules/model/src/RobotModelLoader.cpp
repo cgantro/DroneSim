@@ -340,7 +340,8 @@ RobotJointType ReadJointType(const std::string& type, const std::string& name,
     Invalid(path, "joint '" + name + "' uses unsupported type '" + type + "'");
 }
 
-void ReadJointLimits(RobotJoint& joint, const XMLElement& element, const std::filesystem::path& path)
+void ReadJointAxisAndLimits(
+    RobotJoint& joint, const XMLElement& element, const std::filesystem::path& path)
 {
     const XMLElement* axis = element.FirstChildElement("axis");
     if (axis == nullptr || axis->Attribute("xyz") == nullptr)
@@ -396,7 +397,7 @@ RobotJoint ReadJoint(const XMLElement& element, const LinkIndexByName& linkIndic
             "joint origin rpy"));
     }
     if (joint.type != RobotJointType::Fixed)
-        ReadJointLimits(joint, element, path);
+        ReadJointAxisAndLimits(joint, element, path);
     return joint;
 }
 
