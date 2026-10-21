@@ -837,9 +837,15 @@ bool SimRobotController::RestoreCollisionSafeState(
     if (safePositions.size() != specification_.jointCount ||
         !ValidateJointPositionLimits(specification_, safePositions))
         return false;
-    if (collisionReason != ErrorCode::EnvironmentContact && collisionReason != ErrorCode::SelfCollision &&
-        collisionReason != ErrorCode::AttachedObjectCollision)
+    switch (collisionReason)
+    {
+    case ErrorCode::EnvironmentContact:
+    case ErrorCode::SelfCollision:
+    case ErrorCode::AttachedObjectCollision:
+        break;
+    default:
         return false;
+    }
 
     ResetMotionPlanningWork();
     motionPlanningResult_.reset();

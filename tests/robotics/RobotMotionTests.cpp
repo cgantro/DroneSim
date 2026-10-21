@@ -393,6 +393,19 @@ void CheckJointStateValidityReasons()
     ASSERT_TRUE((MapJointStateInvalidity(JointStateInvalidity::SelfCollision).code == ErrorCode::SelfCollision)) << "self collision is not reported as environment contact";
     ASSERT_TRUE((MapJointStateInvalidity(JointStateInvalidity::AttachedObjectCollision).code == ErrorCode::AttachedObjectCollision)) << "attached-object collision is not reported as environment contact";
 
+    SimRobotController recoveryController(specification);
+    ASSERT_TRUE(static_cast<bool>(recoveryController.Connect()));
+    JointVector safePositions = recoveryController.GetStateView().jointPositions;
+    safePositions[0] = 0.1;
+    ASSERT_TRUE(recoveryController.RestoreCollisionSafeState(safePositions, ErrorCode::SelfCollision));
+    EXPECT_EQ(recoveryController.GetStateView().jointPositions, safePositions);
+    EXPECT_EQ(recoveryController.GetStateView().errorCode, ErrorCode::SelfCollision);
+
+    const RobotState stateBeforeRejectedRecovery = recoveryController.GetState();
+    EXPECT_FALSE(recoveryController.RestoreCollisionSafeState(safePositions, ErrorCode::Cancelled));
+    EXPECT_EQ(recoveryController.GetStateView().jointPositions, stateBeforeRejectedRecovery.jointPositions);
+    EXPECT_EQ(recoveryController.GetStateView().errorCode, stateBeforeRejectedRecovery.errorCode);
+
     PlanningPolicy policy;
     policy.maximumPathIntervals = 4;
     policy.jointCollisionSampleSpacingRadians = 0.1;
