@@ -41,6 +41,12 @@ try {
         throw "재전송 명령이 서버 시작 뒤 적용되지 않았습니다. 종료 코드: $($retryingClient.ExitCode)"
     }
 
+    $portConflictReply = (& $Simulator @('--smoke-test', '--udp-port', "$port") 2>&1 | Out-String)
+    $portConflictExit = $LASTEXITCODE
+    if ($portConflictExit -eq 0 -or $portConflictReply -notmatch 'Winsock 오류 10048') {
+        throw "사용 중인 UDP 포트 오류를 정확히 알리지 못했습니다. 종료 코드: $portConflictExit`n$portConflictReply"
+    }
+
     $replies = @()
     $calls = @(
         @('--port', "$port", '--camera', 'fault'),

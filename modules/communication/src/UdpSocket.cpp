@@ -26,17 +26,19 @@ namespace
 using NativeSocket = SOCKET;
 constexpr NativeSocket invalidSocket = INVALID_SOCKET;
 NativeSocket Native(std::uintptr_t handle) noexcept { return static_cast<NativeSocket>(handle); }
-std::string SocketError(const char* operation)
+int LastSocketError() noexcept { return WSAGetLastError(); }
+std::string SocketError(const char* operation, int errorCode)
 {
-    return std::string(operation) + " 실패 (Winsock 오류 " + std::to_string(WSAGetLastError()) + ")";
+    return std::string(operation) + " 실패 (Winsock 오류 " + std::to_string(errorCode) + ")";
 }
 #else
 using NativeSocket = int;
 constexpr NativeSocket invalidSocket = -1;
 NativeSocket Native(std::uintptr_t handle) noexcept { return static_cast<NativeSocket>(handle); }
-std::string SocketError(const char* operation)
+int LastSocketError() noexcept { return errno; }
+std::string SocketError(const char* operation, int errorCode)
 {
-    return std::string(operation) + " 실패 (오류 " + std::to_string(errno) + ")";
+    return std::string(operation) + " 실패 (오류 " + std::to_string(errorCode) + ")";
 }
 #endif
 }
@@ -53,11 +55,12 @@ UdpSocket::UdpSocket(std::uint16_t localPort)
     const NativeSocket socketHandle = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (socketHandle == invalidSocket)
     {
+        const int errorCode = LastSocketError();
 #ifdef _WIN32
         if (winsockStarted_)
             WSACleanup();
 #endif
-        throw std::runtime_error(SocketError("UDP 소켓 생성"));
+        throw std::runtime_error(SocketError("UDP 소켓 생성", errorCode));
     }
 
     sockaddr_in address{};
@@ -66,6 +69,7 @@ UdpSocket::UdpSocket(std::uint16_t localPort)
     address.sin_port = htons(localPort);
     if (::bind(socketHandle, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0)
     {
+        const int errorCode = LastSocketError();
 #ifdef _WIN32
         closesocket(socketHandle);
         if (winsockStarted_)
@@ -74,25 +78,27 @@ UdpSocket::UdpSocket(std::uint16_t localPort)
 #else
         close(socketHandle);
 #endif
-        throw std::runtime_error(SocketError("UDP 포트 연결"));
+        throw std::runtime_error(SocketError("UDP 포트 연결", errorCode));
     }
 
 #ifdef _WIN32
     u_long nonBlocking = 1;
     if (ioctlsocket(socketHandle, FIONBIO, &nonBlocking) != 0)
     {
+        const int errorCode = LastSocketError();
         closesocket(socketHandle);
         if (winsockStarted_)
             WSACleanup();
         winsockStarted_ = false;
-        throw std::runtime_error(SocketError("UDP non-blocking 설정"));
+        throw std::runtime_error(SocketError("UDP non-blocking 설정", errorCode));
     }
 #else
     const int flags = fcntl(socketHandle, F_GETFL, 0);
     if (flags < 0 || fcntl(socketHandle, F_SETFL, flags | O_NONBLOCK) < 0)
     {
+        const int errorCode = LastSocketError();
         close(socketHandle);
-        throw std::runtime_error(SocketError("UDP non-blocking 설정"));
+        throw std::runtime_error(SocketError("UDP non-blocking 설정", errorCode));
     }
 #endif
     handle_ = static_cast<std::uintptr_t>(socketHandle);
@@ -136,7 +142,7 @@ std::optional<std::string> UdpSocket::Receive(UdpPeer& peer)
             peer.portNetworkOrder = source.sin_port;
             return std::string(maximumDatagramBytes + 1, ' ');
         }
-        throw std::runtime_error(SocketError("UDP 수신"));
+        throw std::runtime_error(SocketError("UDP 수신", error));
     }
 #else
     socklen_t sourceLength = sizeof(source);
@@ -144,9 +150,10 @@ std::optional<std::string> UdpSocket::Receive(UdpPeer& peer)
         reinterpret_cast<sockaddr*>(&source), &sourceLength);
     if (received < 0)
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+        const int errorCode = LastSocketError();
+        if (errorCode == EAGAIN || errorCode == EWOULDBLOCK || errorCode == EINTR)
             return std::nullopt;
-        throw std::runtime_error(SocketError("UDP 수신"));
+        throw std::runtime_error(SocketError("UDP 수신", errorCode));
     }
 #endif
     peer.addressNetworkOrder = source.sin_addr.s_addr;
@@ -171,7 +178,10 @@ void UdpSocket::Send(std::string_view datagram, const UdpPeer& peer) const
         reinterpret_cast<const sockaddr*>(&destination), sizeof(destination));
     if (sent < 0 || static_cast<std::size_t>(sent) != datagram.size())
 #endif
-        throw std::runtime_error(SocketError("UDP 전송"));
+    {
+        const int errorCode = LastSocketError();
+        throw std::runtime_error(SocketError("UDP 전송", errorCode));
+    }
 }
 
 std::uint16_t UdpSocket::LocalPort() const
@@ -184,7 +194,10 @@ std::uint16_t UdpSocket::LocalPort() const
     socklen_t addressLength = sizeof(address);
     if (getsockname(Native(handle_), reinterpret_cast<sockaddr*>(&address), &addressLength) != 0)
 #endif
-        throw std::runtime_error(SocketError("UDP 로컬 포트 확인"));
+    {
+        const int errorCode = LastSocketError();
+        throw std::runtime_error(SocketError("UDP 로컬 포트 확인", errorCode));
+    }
     return ntohs(address.sin_port);
 }
 
