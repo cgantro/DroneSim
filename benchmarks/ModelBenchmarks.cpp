@@ -21,7 +21,7 @@ void LoadUrdfAndGlb(benchmark::State& state)
 {
     for (auto _ : state)
     {
-        auto loaded = grasplink::model::RobotModelLoader::Load(
+        auto loaded = grasplink::model::LoadRobotModel(
             std::filesystem::path{GRASPLINK_SOURCE_DIR} / "assets/robots/HCR12A");
         benchmark::DoNotOptimize(loaded.robot.links.data());
         benchmark::DoNotOptimize(loaded.visual.nodes.data());
@@ -31,7 +31,7 @@ void LoadUrdfAndGlb(benchmark::State& state)
 // 충돌 검사는 로봇 모델을 단순한 도형으로 바꿔 수행합니다. 이 측정은 URDF 모델에서 충돌용 도형을 만드는 시간을 잽니다.
 void BuildUrdfCollisionGeometry(benchmark::State& state)
 {
-    const auto loaded = grasplink::model::RobotModelLoader::Load(
+    const auto loaded = grasplink::model::LoadRobotModel(
         std::filesystem::path{GRASPLINK_SOURCE_DIR} / "assets/robots/HCR12A");
     std::size_t shapeCount = 0;
     for (auto _ : state)

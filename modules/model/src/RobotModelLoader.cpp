@@ -441,7 +441,7 @@ void ReadJoints(const XMLElement& root, RobotModel& model, const LinkIndexByName
 }
 }
 
-LoadedRobotModel RobotModelLoader::Load(const std::filesystem::path& directory)
+LoadedRobotModel LoadRobotModel(const std::filesystem::path& directory)
 {
     LoadedRobotModel loaded;
     loaded.directory = std::filesystem::absolute(directory).lexically_normal();
@@ -452,13 +452,13 @@ LoadedRobotModel RobotModelLoader::Load(const std::filesystem::path& directory)
     if (!std::filesystem::is_regular_file(glbPath))
         Invalid(glbPath, "robot.glb was not found");
 
-    loaded.robot = LoadUrdf(urdfPath);
+    loaded.robot = LoadRobotUrdf(urdfPath);
     loaded.visual = LoadGlb(glbPath);
     ConnectVisualTree(loaded.robot, loaded.visual, loaded.directory);
     return loaded;
 }
 
-RobotModel RobotModelLoader::LoadUrdf(const std::filesystem::path& path)
+RobotModel LoadRobotUrdf(const std::filesystem::path& path)
 {
     tinyxml2::XMLDocument document;
     if (document.LoadFile(path.string().c_str()) != tinyxml2::XML_SUCCESS)

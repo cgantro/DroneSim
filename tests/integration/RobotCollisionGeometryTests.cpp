@@ -285,7 +285,7 @@ void CheckLoadedArmPipeline(std::size_t axisCount)
     using namespace grasplink;
     const auto modelDirectory = std::filesystem::path("tests/assets/robots") /
         ("axis" + std::to_string(axisCount));
-    auto loaded = model::RobotModelLoader::Load(modelDirectory);
+    auto loaded = model::LoadRobotModel(modelDirectory);
     if (axisCount == 6)
     {
         // 고정 오프셋 뒤의 tool0에만 충돌 도형을 두어 관절 프레임과 proxy 프레임을 다르게 만든다.
@@ -601,7 +601,7 @@ TEST(RobotCollisionGeometry, Hcr12aBaseAndArmProxiesPassOverlapValidation)
     using namespace grasplink::robotics;
     flecs::world world;
     // 실제 HCR 모델도 URDF의 충돌 형상으로 만들어 기준 자세에서 겹침 검사를 통과해야 한다.
-    const auto actualModel = grasplink::model::RobotModelLoader::Load(
+    const auto actualModel = grasplink::model::LoadRobotModel(
         std::filesystem::path("assets/robots/HCR12A"));
     auto actualScene = std::make_unique<Scene>(world);
     Entity actualRoot = actualScene->CreateEntity("ActualRobot");

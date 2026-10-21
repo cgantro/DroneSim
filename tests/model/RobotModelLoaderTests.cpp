@@ -170,12 +170,12 @@ TEST(RobotModelLoader, LoadsDifferentJointCountsAndBundledRobot)
     for (const std::size_t count : {4U, 6U, 7U})
     {
         TemporaryUrdf file{SerialArm(count)};
-        const auto model = grasplink::model::RobotModelLoader::LoadUrdf(file.Path());
+        const auto model = grasplink::model::LoadRobotUrdf(file.Path());
         EXPECT_EQ(model.activeJoints.size(), count);
         EXPECT_EQ(model.links[model.baseLink].name, "base_link");
         EXPECT_EQ(model.links[model.toolLink].name, "tool0");
 
-        const auto testModel = grasplink::model::RobotModelLoader::Load(
+        const auto testModel = grasplink::model::LoadRobotModel(
             std::filesystem::path(GRASPLINK_SOURCE_DIR) / "tests/assets/robots" /
                 ("axis" + std::to_string(count)));
         EXPECT_EQ(testModel.robot.activeJoints.size(), count);
@@ -189,7 +189,7 @@ TEST(RobotModelLoader, LoadsDifferentJointCountsAndBundledRobot)
 
     TemporaryRobotDirectory duplicateUnrelatedName{
         std::filesystem::path(GRASPLINK_SOURCE_DIR) / "tests/assets/robots/axis4"};
-    const auto duplicateNameModel = grasplink::model::RobotModelLoader::Load(
+    const auto duplicateNameModel = grasplink::model::LoadRobotModel(
         duplicateUnrelatedName.Path());
     EXPECT_EQ(duplicateNameModel.robot.activeJoints.size(), 4U);
 
@@ -201,14 +201,14 @@ TEST(RobotModelLoader, LoadsDifferentJointCountsAndBundledRobot)
         "<child link=\"arm\"/><axis xyz=\"0 0 1\"/><limit lower=\"-1\" upper=\"1\" velocity=\"1\"/>"
         "</joint><joint name=\"fixed\" type=\"fixed\"><parent link=\"arm\"/><child link=\"tool0\"/>"
         "</joint>"};
-    const auto model = grasplink::model::RobotModelLoader::LoadUrdf(file.Path());
+    const auto model = grasplink::model::LoadRobotUrdf(file.Path());
     const auto& collisions = model.links[model.joints[model.activeJoints.front()].childLink].collisionGeometry;
     ASSERT_EQ(collisions.size(), 2U);
     EXPECT_EQ(collisions[0].type, grasplink::model::RobotCollisionType::Sphere);
     EXPECT_DOUBLE_EQ(collisions[0].positionMeters.z, 0.1);
     EXPECT_EQ(collisions[1].type, grasplink::model::RobotCollisionType::Cylinder);
 
-    const auto loaded = grasplink::model::RobotModelLoader::Load(
+    const auto loaded = grasplink::model::LoadRobotModel(
         std::filesystem::path(GRASPLINK_SOURCE_DIR) / "assets/robots/HCR12A");
     EXPECT_EQ(loaded.robot.activeJoints.size(), 6U);
     EXPECT_FALSE(loaded.visual.nodes.empty());
@@ -241,7 +241,7 @@ TEST(RobotModelLoader, ReadsSupportedJointTypesAndRejectsMalformedModels)
         "<child link=\"tool0\"/></joint>";
 
     TemporaryUrdf file{xml};
-    const auto model = grasplink::model::RobotModelLoader::LoadUrdf(file.Path());
+    const auto model = grasplink::model::LoadRobotUrdf(file.Path());
     ASSERT_EQ(model.activeJoints.size(), 2U);
     EXPECT_EQ(model.joints[model.activeJoints[0]].type, grasplink::model::RobotJointType::Prismatic);
     EXPECT_EQ(model.joints[model.activeJoints[1]].type, grasplink::model::RobotJointType::Continuous);
@@ -257,7 +257,7 @@ TEST(RobotModelLoader, ReadsSupportedJointTypesAndRejectsMalformedModels)
     const auto expectRejected = [](const std::string& xml)
     {
         TemporaryUrdf file{xml};
-        EXPECT_THROW(grasplink::model::RobotModelLoader::LoadUrdf(file.Path()), std::runtime_error);
+        EXPECT_THROW((void)grasplink::model::LoadRobotUrdf(file.Path()), std::runtime_error);
     };
     const std::string emptyNumericAttributeXml = Link("base_link") + Link("arm") + Link("tool0") +
         "<joint name=\"arm_joint\" type=\"revolute\"><parent link=\"base_link\"/>"

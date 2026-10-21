@@ -112,25 +112,14 @@ struct LoadedRobotModel
 };
 
 /**
- * @brief 로봇 폴더의 구조 자료와 화면 모델을 읽고 링크 이름으로 연결한다.
- * @details 로봇마다 링크 수가 달라도 같은 경로로 읽는다. 축과 한계값은 모델 자료에서 가져오며, 빠진 값을 추정하지 않는다.
+ * @brief 로봇 폴더의 URDF 구조와 GLB 화면 모델을 읽어 링크 이름으로 연결한다.
+ * @param directory 구조 설명과 화면 모델이 함께 들어 있는 폴더다.
+ * @return 실행 중 관절 계산·충돌 검사·렌더링에 쓰는 모델 자료다.
+ * @throws std::runtime_error 파일이 없거나 모델 연결이 잘못된 경우 발생한다. 축과 한계값은 추정하지 않는다.
  */
-class RobotModelLoader final
-{
-public:
-    /**
-     * @brief 로봇 폴더를 읽어 URDF 관절 자료와 GLB 화면 모델을 연결한다.
-     * @param directory 구조 설명과 화면 모델이 함께 들어 있는 폴더다.
-     * @return 실행 중 FK·IK·렌더링에 사용하는 모델 자료다.
-     * @throws std::runtime_error 파일이 없거나 모델 연결이 잘못된 경우 발생한다. 축이나 한계값을 추정해 채우지 않는다.
-     */
-    static LoadedRobotModel Load(const std::filesystem::path& directory);
+[[nodiscard]] LoadedRobotModel LoadRobotModel(const std::filesystem::path& directory);
 
-    /** @brief URDF에서 링크·관절 나무를 읽는다. GLB 연결 검사는 `Load`에서 수행한다. */
-    static RobotModel LoadUrdf(const std::filesystem::path& path);
-
-private:
-    RobotModelLoader() = delete;
-};
+/** @brief URDF에서 링크·관절 나무를 읽는다. GLB와의 연결 검사는 LoadRobotModel이 수행한다. */
+[[nodiscard]] RobotModel LoadRobotUrdf(const std::filesystem::path& path);
 
 } // namespace grasplink::model

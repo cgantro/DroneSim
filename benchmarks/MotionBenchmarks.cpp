@@ -72,7 +72,7 @@ public:
     };
 
     explicit ControlPhysicsTickFixture(Mode mode = Mode::ControlTick)
-        : model_(grasplink::model::RobotModelLoader::Load(
+        : model_(grasplink::model::LoadRobotModel(
             std::filesystem::path{GRASPLINK_SOURCE_DIR} / "assets" / "robots" / "HCR12A"))
     {
         world_ = std::make_unique<flecs::world>();
