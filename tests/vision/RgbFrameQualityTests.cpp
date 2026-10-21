@@ -8,19 +8,29 @@
 
 namespace aerosimlab::vision
 {
-TEST(RgbFrameQuality, MeasuresMeanBrightnessAndContrastWithoutChangingPixels)
+TEST(RgbFrameQuality, MeasuresGrayscaleAndSharpnessWithoutChangingInput)
 {
-    cv::Mat image(1, 2, CV_8UC3);
+    cv::Mat image(2, 2, CV_8UC3);
     image.at<cv::Vec3b>(0, 0) = {0, 0, 0};
     image.at<cv::Vec3b>(0, 1) = {255, 255, 255};
+    image.at<cv::Vec3b>(1, 0) = {255, 0, 0};
+    image.at<cv::Vec3b>(1, 1) = {0, 255, 0};
 
-    const RgbFrameQuality quality = MeasureRgbFrameQuality(image);
+    RgbFrameAnalyzer analyzer;
+    const RgbFrameQuality quality = analyzer.Analyze(image);
 
-    EXPECT_DOUBLE_EQ(quality.meanBrightness, 127.5);
-    EXPECT_DOUBLE_EQ(quality.meanContrast, 127.5);
+    EXPECT_DOUBLE_EQ(quality.meanBrightness, 120.25);
+    EXPECT_GT(quality.meanContrast, 0.0);
+    EXPECT_GT(quality.sharpness, 0.0);
     EXPECT_EQ(image.at<cv::Vec3b>(0, 0), cv::Vec3b(0, 0, 0));
     EXPECT_EQ(image.at<cv::Vec3b>(0, 1), cv::Vec3b(255, 255, 255));
-    EXPECT_THROW(static_cast<void>(MeasureRgbFrameQuality(cv::Mat{})), std::invalid_argument);
-    EXPECT_THROW(static_cast<void>(MeasureRgbFrameQuality(cv::Mat(1, 1, CV_8UC1))), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(analyzer.Analyze(cv::Mat{})), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(analyzer.Analyze(cv::Mat(1, 1, CV_8UC1))), std::invalid_argument);
+
+    const cv::Mat flatImage(4, 4, CV_8UC3, cv::Scalar{100, 100, 100});
+    const RgbFrameQuality flatQuality = analyzer.Analyze(flatImage);
+    EXPECT_DOUBLE_EQ(flatQuality.meanBrightness, 100.0);
+    EXPECT_DOUBLE_EQ(flatQuality.meanContrast, 0.0);
+    EXPECT_DOUBLE_EQ(flatQuality.sharpness, 0.0);
 }
 }

@@ -62,6 +62,9 @@ AeroSimLabApp::AeroSimLabApp(Options options)
       networkEnabled_(options.networkEnabled), benchmarkMode_(options.benchmarkMode),
       udpPort_(options.udpPort)
 {
+#ifndef __EMSCRIPTEN__
+    visionAnalyzer_ = std::make_unique<aerosimlab::vision::RgbFrameAnalyzer>();
+#endif
 }
 
 AeroSimLabApp::~AeroSimLabApp() = default;
@@ -276,10 +279,11 @@ void AeroSimLabApp::RenderFrame()
 #ifndef __EMSCRIPTEN__
         const auto analysisStart = std::chrono::steady_clock::now();
         // OpenCV는 eoFrame_의 픽셀을 빌려 쓴다. 다음 프레임이 버퍼를 덮기 전에 분석을 끝낸다.
-        const auto quality = aerosimlab::vision::MeasureRgbFrameQuality(
+        const auto quality = visionAnalyzer_->Analyze(
             aerosimlab::vision::MakeRgbFrameView(eoFrame_));
         totalMeanBrightness_ += quality.meanBrightness;
         totalMeanContrast_ += quality.meanContrast;
+        totalSharpness_ += quality.sharpness;
         ++visionSampleCount_;
         if (benchmarkMode_)
         {
@@ -614,6 +618,8 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
             ? totalMeanBrightness_ / static_cast<double>(visionSampleCount_) : 0.0},
         {"mean_contrast", visionSampleCount_ > 0
             ? totalMeanContrast_ / static_cast<double>(visionSampleCount_) : 0.0},
+        {"mean_sharpness", visionSampleCount_ > 0
+            ? totalSharpness_ / static_cast<double>(visionSampleCount_) : 0.0},
         {"duration_us", {
             {"p50", visionPercentile(0.50)},
             {"p95", visionPercentile(0.95)},

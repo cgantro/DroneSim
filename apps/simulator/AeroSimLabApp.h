@@ -26,6 +26,13 @@ class Shader;
 class Window;
 }
 
+#ifndef __EMSCRIPTEN__
+namespace aerosimlab::vision
+{
+class RgbFrameAnalyzer;
+}
+#endif
+
 namespace aerosimlab::simulator
 {
 /**
@@ -92,7 +99,9 @@ private:
     std::vector<double> visionDurationsMicroseconds_;
     double totalMeanBrightness_ = 0.0;
     double totalMeanContrast_ = 0.0;
+    double totalSharpness_ = 0.0;
     std::size_t visionSampleCount_ = 0;
+    std::unique_ptr<aerosimlab::vision::RgbFrameAnalyzer> visionAnalyzer_;
 #endif
     std::chrono::steady_clock::time_point startTime_;
     std::uint16_t udpPort_ = 0;
