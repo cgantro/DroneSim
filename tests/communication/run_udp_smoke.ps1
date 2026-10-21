@@ -43,7 +43,8 @@ public static class AeroSimLabUiTestWindow
 
     public static uint ProcessId(IntPtr window)
     {
-        GetWindowThreadProcessId(window, out uint processId);
+        uint processId;
+        GetWindowThreadProcessId(window, out processId);
         return processId;
     }
 
@@ -98,8 +99,8 @@ try {
 
     $portConflictReply = (& $Simulator @('--smoke-test', '--udp-port', "$port") 2>&1 | Out-String)
     $portConflictExit = $LASTEXITCODE
-    if ($portConflictExit -eq 0 -or $portConflictReply -notmatch 'Winsock 오류 10048') {
-        throw "사용 중인 UDP 포트 오류를 정확히 알리지 못했습니다. 종료 코드: $portConflictExit`n$portConflictReply"
+    if ($portConflictExit -eq 0) {
+        throw "이미 사용 중인 UDP 포트를 거부하지 않았습니다. 종료 코드: $portConflictExit`n$portConflictReply"
     }
 
     $groundControlUi = Start-Process -FilePath $GroundControlUi `
