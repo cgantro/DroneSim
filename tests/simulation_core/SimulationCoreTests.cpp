@@ -73,7 +73,7 @@ TEST(SimulationCore, RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNum
     EXPECT_EQ(simulation.State().mode, FlightMode::Hovering);
 }
 
-TEST(SimulationCore, FollowsWaypointAndClampsCommandedSpeed)
+TEST(SimulationCore, FollowsWaypointAndClampsVelocityAndYaw)
 {
     SimulationCore simulation;
     ReachHovering(simulation);
@@ -91,12 +91,7 @@ TEST(SimulationCore, FollowsWaypointAndClampsCommandedSpeed)
         DroneCommand::Kind::SetVelocity, glm::dvec3{50.0, 0.0, 0.0})),
         CommandResult::Accepted);
     EXPECT_DOUBLE_EQ(glm::length(simulation.State().velocityMetersPerSecond), 5.0);
-}
 
-TEST(SimulationCore, LimitsYawSpeedAndStopsTurningOnZeroRate)
-{
-    SimulationCore simulation;
-    ReachHovering(simulation);
     ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::SetYawRate, glm::dvec3{0.0}, 100.0)),
         CommandResult::Accepted);
     for (int tick = 0; tick < 60; ++tick)

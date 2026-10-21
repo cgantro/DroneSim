@@ -6,7 +6,7 @@
 
 namespace aerosimlab::vision
 {
-TEST(RgbFrameView, UsesTheOriginalPixelsWithoutCopying)
+TEST(RgbFrameView, SharesValidPixelsAndRejectsInvalidFrames)
 {
     sensor::RgbFrame frame{2, 1, 3, {1, 2, 3, 4, 5, 6}};
 
@@ -18,12 +18,8 @@ TEST(RgbFrameView, UsesTheOriginalPixelsWithoutCopying)
     EXPECT_EQ(view.data, frame.pixels.data());
     view.at<cv::Vec3b>(0, 1)[0] = 42;
     EXPECT_EQ(frame.pixels[3], 42);
-}
 
-TEST(RgbFrameView, RejectsInvalidFrames)
-{
-    sensor::RgbFrame frame{2, 1, 0, {1, 2, 3}};
-
-    EXPECT_THROW(static_cast<void>(MakeRgbFrameView(frame)), std::invalid_argument);
+    sensor::RgbFrame invalidFrame{2, 1, 0, {1, 2, 3}};
+    EXPECT_THROW(static_cast<void>(MakeRgbFrameView(invalidFrame)), std::invalid_argument);
 }
 }

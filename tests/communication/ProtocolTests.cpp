@@ -6,7 +6,7 @@
 
 namespace aerosimlab::communication
 {
-TEST(Protocol, RoundTripsDroneAndCameraCommandsWithCheckedLength)
+TEST(Protocol, RoundTripsCommandsAndReplyTelemetry)
 {
     CommandPacket drone;
     drone.commandId = 7;
@@ -25,44 +25,7 @@ TEST(Protocol, RoundTripsDroneAndCameraCommandsWithCheckedLength)
     camera.sequence = 12;
     camera.cameraCommand = CameraCommand::InjectFault;
     EXPECT_EQ(DecodeCommand(EncodeCommand(camera)).cameraCommand, CameraCommand::InjectFault);
-}
 
-TEST(Protocol, RejectsWrongVersionTypeLengthAndOversizedMessages)
-{
-    CommandPacket packet;
-    packet.commandId = 1;
-    packet.sequence = 1;
-    packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::TakeOff};
-    const auto valid = EncodeCommand(packet);
-    auto wrongLength = valid;
-    const auto lengthPosition = wrongLength.find("\"length\":");
-    ASSERT_NE(lengthPosition, std::string::npos);
-    wrongLength.replace(lengthPosition + 9, 1, "9");
-    EXPECT_THROW(static_cast<void>(DecodeCommand(wrongLength)), std::invalid_argument);
-    EXPECT_THROW(static_cast<void>(DecodeCommand("{}")), std::invalid_argument);
-    EXPECT_THROW(static_cast<void>(DecodeCommand(std::string(maximumDatagramBytes + 1, 'x'))), std::invalid_argument);
-}
-
-TEST(Protocol, SequenceGuardRecognizesDuplicatesAndRejectsOlderCommands)
-{
-    SequenceGuard guard;
-    CommandPacket first;
-    first.commandId = 10;
-    first.sequence = 4;
-    EXPECT_EQ(guard.Inspect(first), SequenceGuard::Decision::New);
-    guard.Commit(first);
-    EXPECT_EQ(guard.Inspect(first), SequenceGuard::Decision::Duplicate);
-
-    CommandPacket older{9, 3};
-    EXPECT_EQ(guard.Inspect(older), SequenceGuard::Decision::OutOfOrder);
-    CommandPacket reusedSequence{11, 4};
-    EXPECT_EQ(guard.Inspect(reusedSequence), SequenceGuard::Decision::OutOfOrder);
-    CommandPacket next{11, 5};
-    EXPECT_EQ(guard.Inspect(next), SequenceGuard::Decision::New);
-}
-
-TEST(Protocol, RoundTripsAcknowledgementAndTelemetry)
-{
     CommandReply reply;
     reply.commandId = 3;
     reply.sequence = 5;
@@ -82,5 +45,30 @@ TEST(Protocol, RoundTripsAcknowledgementAndTelemetry)
     EXPECT_EQ(decoded.telemetry.drone.mode, simulation::FlightMode::Hovering);
     EXPECT_EQ(decoded.telemetry.drone.positionMeters, glm::dvec3(1.0, 2.0, 3.0));
     EXPECT_EQ(decoded.telemetry.camera.status, simulation::CameraStatus::Fault);
+}
+
+TEST(Protocol, RejectsInvalidPacketsAndSequenceNumbers)
+{
+    CommandPacket packet;
+    packet.commandId = 1;
+    packet.sequence = 1;
+    packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::TakeOff};
+    const auto valid = EncodeCommand(packet);
+    auto wrongLength = valid;
+    const auto lengthPosition = wrongLength.find("\"length\":");
+    ASSERT_NE(lengthPosition, std::string::npos);
+    wrongLength.replace(lengthPosition + 9, 1, "9");
+    EXPECT_THROW(static_cast<void>(DecodeCommand(wrongLength)), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(DecodeCommand("{}")), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(DecodeCommand(std::string(maximumDatagramBytes + 1, 'x'))), std::invalid_argument);
+
+    SequenceGuard guard;
+    CommandPacket first{10, 4};
+    EXPECT_EQ(guard.Inspect(first), SequenceGuard::Decision::New);
+    guard.Commit(first);
+    EXPECT_EQ(guard.Inspect(first), SequenceGuard::Decision::Duplicate);
+    EXPECT_EQ(guard.Inspect(CommandPacket{9, 3}), SequenceGuard::Decision::OutOfOrder);
+    EXPECT_EQ(guard.Inspect(CommandPacket{11, 4}), SequenceGuard::Decision::OutOfOrder);
+    EXPECT_EQ(guard.Inspect(CommandPacket{11, 5}), SequenceGuard::Decision::New);
 }
 }
