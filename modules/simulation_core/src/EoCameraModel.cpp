@@ -1,7 +1,13 @@
 #include "simulation_core/EoCameraModel.h"
+#include "simulation_core/DroneModel.h"
 
 namespace aerosimlab::simulation
 {
+namespace
+{
+constexpr glm::dvec3 cameraMountPositionBodyMeters{0.35, 0.0, 0.12};
+}
+
 void EoCameraModel::AdvanceOneTick(CameraState& state, std::uint64_t tick) noexcept
 {
     if (state.status != CameraStatus::Active)
@@ -9,6 +15,13 @@ void EoCameraModel::AdvanceOneTick(CameraState& state, std::uint64_t tick) noexc
 
     ++state.frameCount;
     state.lastFrameTick = tick;
+}
+
+void EoCameraModel::UpdatePose(CameraState& camera, const DroneState& drone) noexcept
+{
+    camera.positionMeters = drone.positionMeters
+        + drone.orientation * cameraMountPositionBodyMeters;
+    camera.orientation = drone.orientation;
 }
 
 void EoCameraModel::SetEnabled(CameraState& state, bool enabled) noexcept

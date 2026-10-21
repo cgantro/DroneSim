@@ -97,6 +97,7 @@ struct SimulationCore::EcsStorage
             {
                 EoCameraModel::AdvanceOneTick(state, tickCount + 1);
             });
+        SynchronizeCameraPose();
     }
 
     DroneId CreateDrone(const glm::dvec3& positionMeters, double yawRadians)
@@ -151,6 +152,13 @@ struct SimulationCore::EcsStorage
         return found->second;
     }
 
+    void SynchronizeCameraPose()
+    {
+        EoCameraModel::UpdatePose(
+            camera.get_mut<CameraState>(),
+            FindDrone(primaryDroneId).get<DroneState>());
+    }
+
     bool RemoveDrone(DroneId id)
     {
         if (drones.size() <= 1)
@@ -169,7 +177,10 @@ struct SimulationCore::EcsStorage
         const bool removedPrimary = id == primaryDroneId;
         drones.erase(found);
         if (removedPrimary)
+        {
             primaryDroneId = drones.begin()->first;
+            SynchronizeCameraPose();
+        }
         return true;
     }
 
@@ -367,6 +378,7 @@ void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yaw
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->ResetPhysicsBody(drone);
 #endif
+    ecs_->SynchronizeCameraPose();
 }
 
 bool SimulationCore::RemoveDrone(DroneId droneId)
@@ -397,6 +409,7 @@ void SimulationCore::AdvanceOneTick() noexcept
         ecs_->AdvancePhysicsWorld();
 #endif
     ++ecs_->tickCount;
+    ecs_->SynchronizeCameraPose();
 }
 
 void SimulationCore::Pause() noexcept
@@ -432,6 +445,7 @@ void SimulationCore::Reset() noexcept
     EoCameraModel::Reset(ecs_->camera.get_mut<CameraState>());
     ecs_->tickCount = 0;
     paused_ = false;
+    ecs_->SynchronizeCameraPose();
 }
 
 const DroneState& SimulationCore::State() const noexcept

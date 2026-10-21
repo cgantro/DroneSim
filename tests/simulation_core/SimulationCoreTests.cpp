@@ -44,6 +44,18 @@ void ReachHovering(SimulationCore& simulation, DroneId droneId)
         simulation.AdvanceOneTick();
     ASSERT_EQ(simulation.State(droneId).mode, FlightMode::Hovering);
 }
+
+void ExpectCameraPoseMatchesPrimaryDrone(const SimulationCore& simulation)
+{
+    const DroneState& drone = simulation.State();
+    const CameraState& camera = simulation.Camera();
+    const glm::dvec3 mountPositionBodyMeters{0.35, 0.0, 0.12};
+    const glm::dvec3 expectedPosition = drone.positionMeters
+        + drone.orientation * mountPositionBodyMeters;
+
+    EXPECT_NEAR(glm::length(camera.positionMeters - expectedPosition), 0.0, 1.0e-10);
+    EXPECT_EQ(camera.orientation, drone.orientation);
+}
 }
 
 TEST(SimulationCore, ExecutesTakeoffMovementAndLandingOnFixedTicks)
@@ -366,6 +378,7 @@ TEST(SimulationCore, MultipleKinematicDronesKeepIndependentStateAndCommands)
     ASSERT_TRUE(simulation.RemoveDrone(first));
     EXPECT_EQ(simulation.DroneCount(), 1U);
     EXPECT_EQ(simulation.PrimaryDroneId(), second);
+    ExpectCameraPoseMatchesPrimaryDrone(simulation);
     EXPECT_NEAR(simulation.State().positionMeters.x, 9.0, 1.0e-12);
     EXPECT_FALSE(simulation.RemoveDrone(second));
     EXPECT_THROW((void)simulation.State(first), std::out_of_range);
@@ -554,5 +567,26 @@ TEST(SimulationCore, CameraStopsOnDisableOrFaultAndResumesAfterRecovery)
     EXPECT_EQ(simulation.Camera().status, CameraStatus::Active);
     EXPECT_EQ(simulation.Camera().frameCount, 2);
     EXPECT_EQ(simulation.Camera().lastFrameTick, 4);
+}
+
+TEST(SimulationCore, EoCameraPoseTracksPrimaryDroneThroughTicksAndReset)
+{
+    SimulationCore kinematic;
+    kinematic.SetInitialPose({2.0, -3.0, 4.0}, 1.1);
+    ExpectCameraPoseMatchesPrimaryDrone(kinematic);
+    kinematic.AdvanceOneTick();
+    ExpectCameraPoseMatchesPrimaryDrone(kinematic);
+    kinematic.Reset();
+    ExpectCameraPoseMatchesPrimaryDrone(kinematic);
+
+#ifndef __EMSCRIPTEN__
+    SimulationCore rigidBody{SimulationDynamics::RigidBody};
+    rigidBody.SetInitialPose({2.0, -3.0, 1.0}, 1.1);
+    ExpectCameraPoseMatchesPrimaryDrone(rigidBody);
+    rigidBody.AdvanceOneTick();
+    ExpectCameraPoseMatchesPrimaryDrone(rigidBody);
+    rigidBody.Reset();
+    ExpectCameraPoseMatchesPrimaryDrone(rigidBody);
+#endif
 }
 }
