@@ -1,6 +1,5 @@
 #include "application/PickPlaceMission.h"
 #include "application/PickPlaceConfig.h"
-#include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
@@ -97,7 +96,7 @@ glm::dquat ClosestSquarePlacementOrientation(const glm::dquat& goalBoxOrientatio
          ++quarterTurn)
     {
         const glm::dquat equivalentBoxOrientation = glm::angleAxis(
-            static_cast<double>(quarterTurn) * glm::half_pi<double>(), glm::dvec3{0.0, 1.0, 0.0}) * goalBoxOrientation;
+            static_cast<double>(quarterTurn) * config::quarterTurnRadians, config::worldUpAxis) * goalBoxOrientation;
         const glm::dquat candidateTcpOrientation = glm::normalize(
             equivalentBoxOrientation * glm::inverse(boxRotationOffset));
         const double alignment = std::abs(glm::dot(candidateTcpOrientation, currentTcpOrientation));
@@ -205,7 +204,7 @@ void PickPlaceMission::BeginPickup(const robotics::CartesianPose& graspBoxPoseIn
 {
     const double boxYawRadians = glm::radians(YawDegrees(graspBoxPoseInBase.orientationXyzw));
     const glm::dquat desiredPickupOrientation = glm::normalize(
-        glm::angleAxis(boxYawRadians, glm::dvec3{0.0, 1.0, 0.0}) * Orientation(graspOrientationXyzw_));
+        glm::angleAxis(boxYawRadians, config::worldUpAxis) * Orientation(graspOrientationXyzw_));
     pickupOrientationXyzw_ = QuaternionXyzw(desiredPickupOrientation);
 
     const auto approach = MakeBoxTarget(graspBoxPoseInBase, config::approachHeightMeters,
@@ -241,7 +240,8 @@ void PickPlaceMission::UpdateGraspOrientation(const robotics::RobotState& state)
 
     const glm::dquat current = TcpOrientation(state);
     // GLB에서 그리퍼의 Y축은 손가락 면에 수직인 접근 방향이다. X축 둘레로 90도 돌리면 손가락 면이 수직이고 접근 축이 바닥을 향한다.
-    const glm::dquat faceDown = glm::angleAxis(glm::half_pi<double>(), glm::dvec3{1.0, 0.0, 0.0}) * current;
+    const glm::dquat faceDown = glm::angleAxis(
+        config::quarterTurnRadians, config::gripperFaceDownAdjustmentAxis) * current;
     graspOrientationXyzw_ = {faceDown.x, faceDown.y, faceDown.z, faceDown.w};
     orientationReady_ = true;
 }

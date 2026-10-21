@@ -12,6 +12,13 @@ namespace grasplink::application::pick_place::config
 inline constexpr glm::vec3 floorHalfExtentsMeters{3.0F, 0.02F, 3.0F};
 inline constexpr glm::vec3 floorColliderCenterOffsetMeters{0.0F, -0.015F, 0.0F};
 
+/** @brief 시연 장면에서 위쪽을 가리키는 월드 Y축이다. */
+inline constexpr glm::dvec3 worldUpAxis{0.0, 1.0, 0.0};
+/** @brief 시연용 그리퍼의 접근 방향을 아래로 맞출 때 사용할 회전축이다. */
+inline constexpr glm::dvec3 gripperFaceDownAdjustmentAxis{1.0, 0.0, 0.0};
+/** @brief 정사각형 배치와 그리퍼 방향 보정에 쓰는 90도 각도 [rad]다. */
+inline constexpr double quarterTurnRadians = 1.57079632679489661923;
+
 /**
  * @brief 집기·놓기 임무가 Gripper에 보내는 원시 요청값을 모은다.
  * @details 위치·속도·힘 값은 장치에 보내는 code이며 미터, 속도, 힘 단위가 아니다.
