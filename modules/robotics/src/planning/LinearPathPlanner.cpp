@@ -1286,9 +1286,24 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
 } // namespace detail
 
 LinearPathPlanningJob::LinearPathPlanningJob() : impl_(std::make_unique<Impl>()) {}
-LinearPathPlanningJob::~LinearPathPlanningJob() = default;
+LinearPathPlanningJob::~LinearPathPlanningJob()
+{
+    // 작업을 버릴 때 빌려 쓴 IK 계산기에 진행 중인 세션을 남기지 않는다.
+    if (impl_)
+        impl_->CancelActiveIkSession();
+}
 LinearPathPlanningJob::LinearPathPlanningJob(LinearPathPlanningJob&&) noexcept = default;
-LinearPathPlanningJob& LinearPathPlanningJob::operator=(LinearPathPlanningJob&&) noexcept = default;
+LinearPathPlanningJob& LinearPathPlanningJob::operator=(LinearPathPlanningJob&& other) noexcept
+{
+    if (this == &other)
+        return *this;
+
+    // 기존 작업의 세션을 취소한 뒤 새 작업의 소유권을 넘겨받는다.
+    if (impl_)
+        impl_->CancelActiveIkSession();
+    impl_ = std::move(other.impl_);
+    return *this;
+}
 
 Result LinearPathPlanningJob::Begin(const LinearPathMoveCommand& command,
     const models::RobotSpecification& specification, const JointVector& startJoints,

@@ -14,6 +14,7 @@
 #include <string>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 using namespace grasplink::robotics;
@@ -92,10 +93,42 @@ void CheckPoseApproachWithLinearContinuation()
 void CheckLinearPathPlanningBudgetAndCancellation()
 {
     const auto& specification = models::hanwha::kHcr12a;
-    LevenbergMarquardtIk inverse(specification);
     const JointVector startJoints(specification.jointCount, 0.0);
     JointVector targetJoints = startJoints;
     targetJoints[0] = 0.2;
+
+    LevenbergMarquardtIk abandonedInverse(specification);
+    LinearPathMoveCommand abandonedCommand;
+    abandonedCommand.targetPoses.push_back(abandonedInverse.EvaluateTcp(targetJoints));
+    {
+        LinearPathPlanningJob abandonedJob;
+        const Result begin = abandonedJob.Begin(abandonedCommand,
+            specification, startJoints, abandonedInverse.EvaluateTcp(startJoints), abandonedInverse, {});
+        ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
+        ASSERT_EQ(abandonedJob.Advance(1), LinearPathPlanningState::Running);
+        EXPECT_EQ(abandonedInverse.StepSingleSeed(2, 0), kinematics::IkSessionState::Running);
+    }
+    EXPECT_EQ(abandonedInverse.StepSingleSeed(2, 0), kinematics::IkSessionState::Cancelled);
+
+    LevenbergMarquardtIk replacedInverse(specification);
+    LevenbergMarquardtIk movedInverse(specification);
+    {
+        LinearPathPlanningJob destination;
+        LinearPathPlanningJob source;
+        ASSERT_TRUE(static_cast<bool>(destination.Begin(abandonedCommand,
+            specification, startJoints, replacedInverse.EvaluateTcp(startJoints), replacedInverse, {})));
+        ASSERT_EQ(destination.Advance(1), LinearPathPlanningState::Running);
+        ASSERT_TRUE(static_cast<bool>(source.Begin(abandonedCommand,
+            specification, startJoints, movedInverse.EvaluateTcp(startJoints), movedInverse, {})));
+        ASSERT_EQ(source.Advance(1), LinearPathPlanningState::Running);
+
+        destination = std::move(source);
+        EXPECT_EQ(replacedInverse.StepSingleSeed(2, 0), kinematics::IkSessionState::Cancelled);
+        EXPECT_EQ(movedInverse.StepSingleSeed(2, 0), kinematics::IkSessionState::Running);
+    }
+    EXPECT_EQ(movedInverse.StepSingleSeed(2, 0), kinematics::IkSessionState::Cancelled);
+
+    LevenbergMarquardtIk inverse(specification);
     auto checkerContext = std::make_shared<int>(0);
     std::weak_ptr<int> checkerContextLifetime = checkerContext;
     StateValidityChecker checker = [checkerContext](const JointVector&)
