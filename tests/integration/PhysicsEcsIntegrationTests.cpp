@@ -7,6 +7,7 @@
 #include "scene/TransformSystemModule.h"
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -91,6 +92,36 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
     const auto replacementBody = physics.CreateBox({});
     ASSERT_TRUE(physics.IsBodyValid(replacementBody));
     ASSERT_FALSE(physics.IsBodyValid(firstBody));
+
+    grasplink::physics::BoxBodyDescription contactFloor;
+    contactFloor.motionType = BodyMotionType::Static;
+    contactFloor.collisionLayer = grasplink::physics::CollisionLayer::Environment;
+    contactFloor.halfExtentsMeters = {1.0F, 0.1F, 1.0F};
+    contactFloor.transform.position = {10.0F, 0.0F, 0.0F};
+    const auto contactFloorHandle = physics.CreateBox(contactFloor);
+    grasplink::physics::BoxBodyDescription contactObject;
+    contactObject.motionType = BodyMotionType::Dynamic;
+    contactObject.halfExtentsMeters = glm::vec3{0.1F};
+    contactObject.transform.position = {10.0F, 0.15F, 0.0F};
+    const auto contactObjectHandle = physics.CreateBox(contactObject);
+    physics.Step(0.004);
+    const auto isSameHandle = [](const auto& first, const auto& second)
+    {
+        return first.value == second.value && first.worldToken == second.worldToken;
+    };
+    const auto hasContact = [&](const auto& contacts)
+    {
+        return std::any_of(contacts.begin(), contacts.end(), [&](const auto& contact)
+        {
+            return (isSameHandle(contact.first, contactFloorHandle) &&
+                isSameHandle(contact.second, contactObjectHandle)) ||
+                (isSameHandle(contact.first, contactObjectHandle) &&
+                    isSameHandle(contact.second, contactFloorHandle));
+        });
+    };
+    EXPECT_TRUE(hasContact(physics.GetContacts())) << "Jolt contacts are available to simulation clients";
+    physics.DestroyBody(contactObjectHandle);
+    EXPECT_FALSE(hasContact(physics.GetContacts())) << "destroyed Body contacts are removed immediately";
 
     grasplink::physics::BoxBodyDescription invalidLayerBody;
     invalidLayerBody.collisionLayer = grasplink::physics::CollisionLayer::Count;
