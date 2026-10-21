@@ -26,7 +26,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y ninja-build
+          sudo apt-get install --no-install-recommends -y libopencv-dev ninja-build
 
       - name: Configure GCC sanitizer build
         run: cmake --preset linux-gcc-asan-ubsan
@@ -57,7 +57,7 @@ jobs:
       - name: Install build and coverage tools
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y gcovr ninja-build
+          sudo apt-get install --no-install-recommends -y gcovr libopencv-dev ninja-build
 
       - name: Configure GCC coverage build
         run: cmake --preset linux-gcc-coverage

@@ -5,6 +5,7 @@
 /build-*/
 /Build/
 /CMakeBuild/
+/vcpkg_installed/
 
 logs/*
 # CMake generated files

@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
+  set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    CACHE STRING "vcpkg CMake toolchain")
+endif()
+
 project(AeroSimLab VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -12,6 +17,10 @@ endif()
 
 include(CTest)
 include(cmake/Dependencies.cmake)
+
+if(NOT EMSCRIPTEN)
+  find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+endif()
 
 option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
 aerosimlab_add_common_dependencies()
@@ -52,6 +61,10 @@ target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_cor
 
 add_library(aerosimlab_sensor STATIC modules/sensor/src/RgbFrame.cpp)
 target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
+if(NOT EMSCRIPTEN)
+  target_include_directories(aerosimlab_sensor PUBLIC ${OpenCV_INCLUDE_DIRS})
+  target_link_libraries(aerosimlab_sensor PUBLIC ${OpenCV_LIBS})
+endif()
 
 if(NOT EMSCRIPTEN)
   add_executable(aerosimlab_ground_control apps/ground_control/main.cpp)

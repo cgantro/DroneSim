@@ -20,10 +20,15 @@ AeroSimLab은 가상 드론과 탑재 RGB 카메라를 운용하고 시험하는
 Windows에서는 Visual Studio 개발자 PowerShell에서 실행합니다.
 
 ```powershell
+git clone https://github.com/microsoft/vcpkg.git $env:USERPROFILE\vcpkg
+& "$env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+$env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+프로젝트는 vcpkg 선언에 따라 OpenCV의 core·imgproc 구성요소만 준비합니다. 이후 PowerShell 창에서도 `$env:VCPKG_ROOT`를 다시 지정해야 합니다.
 
 ## 실행
 
