@@ -38,7 +38,10 @@ enum ControlId : int
     cameraFaultButtonId,
     cameraRecoverButtonId,
     statusTextId,
-    telemetryTextId
+    telemetryTextId,
+    recordingStartButtonId,
+    recordingStopButtonId,
+    recordingReplayButtonId
 };
 
 struct AppState
@@ -139,7 +142,8 @@ void SetStatus(AppState& state, const std::wstring& text)
 void SetControlsEnabled(AppState& state, bool enabled)
 {
     const int buttonIds[]{takeoffButtonId, stopButtonId, landButtonId, waypointButtonId,
-        cameraOnButtonId, cameraOffButtonId, cameraFaultButtonId, cameraRecoverButtonId};
+        cameraOnButtonId, cameraOffButtonId, cameraFaultButtonId, cameraRecoverButtonId,
+        recordingStartButtonId, recordingStopButtonId, recordingReplayButtonId};
     for (const int id : buttonIds)
         EnableWindow(GetDlgItem(GetParent(state.statusText), id), enabled);
 }
@@ -182,9 +186,26 @@ void ShowResult(AppState& state)
     {
         const auto result = state.request.get();
         const auto& reply = result.reply;
-        SetStatus(state, reply.accepted
-            ? L"명령이 적용됐습니다."
-            : L"명령이 거부됐습니다: " + WidenAscii(reply.status));
+        std::wstring status;
+        if (reply.status == "recording_started")
+            status = L"입력 기록을 시작했습니다. 게임패드와 비행 명령을 기록합니다.";
+        else if (reply.status == "recording_stopped")
+            status = L"기록을 마쳤습니다. 시뮬레이터를 닫기 전까지 재생할 수 있습니다.";
+        else if (reply.status == "recording_replay_started")
+            status = L"입력 기록을 재생합니다.";
+        else if (reply.status == "recording_requires_grounded")
+            status = L"기록은 드론이 지상에 있을 때 시작할 수 있습니다.";
+        else if (reply.status == "recording_not_active")
+            status = L"진행 중인 입력 기록이 없습니다.";
+        else if (reply.status == "recording_empty")
+            status = L"재생할 입력 기록이 없습니다.";
+        else if (reply.status == "recording_unavailable")
+            status = L"기록 또는 재생이 이미 진행 중입니다.";
+        else
+            status = reply.accepted
+                ? L"명령이 적용됐습니다."
+                : L"명령이 거부됐습니다: " + WidenAscii(reply.status);
+        SetStatus(state, status);
 
         const auto& drone = reply.telemetry.drone;
         std::wostringstream telemetry;
@@ -245,11 +266,19 @@ void CreateControls(HWND window, AppState& state)
         AddControl(window, L"BUTTON", cameraLabels[index], BS_PUSHBUTTON,
             20 + index * 130, 233, 120, 32, cameraIds[index]);
 
-    AddLabel(window, L"명령 결과", 20, 282, 100);
+    AddLabel(window, L"입력 기록", 20, 282, 140);
+    AddControl(window, L"BUTTON", L"기록 시작", BS_PUSHBUTTON,
+        20, 307, 155, 32, recordingStartButtonId);
+    AddControl(window, L"BUTTON", L"기록 종료", BS_PUSHBUTTON,
+        185, 307, 155, 32, recordingStopButtonId);
+    AddControl(window, L"BUTTON", L"마지막 기록 재생", BS_PUSHBUTTON,
+        350, 307, 180, 32, recordingReplayButtonId);
+
+    AddLabel(window, L"명령 결과", 20, 352, 100);
     state.statusText = AddControl(window, L"STATIC", L"시뮬레이터에 연결해 명령을 보냅니다.",
-        SS_LEFT, 20, 308, 510, 28, statusTextId);
+        SS_LEFT, 20, 378, 510, 34, statusTextId);
     state.telemetryText = AddControl(window, L"STATIC", L"드론과 카메라 상태가 여기에 표시됩니다.",
-        SS_LEFT, 20, 342, 510, 72, telemetryTextId);
+        SS_LEFT, 20, 415, 510, 72, telemetryTextId);
 }
 
 LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
@@ -305,6 +334,15 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
         case cameraOffButtonId: packet.cameraCommand = aerosimlab::communication::CameraCommand::Disable; break;
         case cameraFaultButtonId: packet.cameraCommand = aerosimlab::communication::CameraCommand::InjectFault; break;
         case cameraRecoverButtonId: packet.cameraCommand = aerosimlab::communication::CameraCommand::Recover; break;
+        case recordingStartButtonId:
+            packet.sessionCommand = aerosimlab::communication::SessionCommand::StartRecording;
+            break;
+        case recordingStopButtonId:
+            packet.sessionCommand = aerosimlab::communication::SessionCommand::StopRecording;
+            break;
+        case recordingReplayButtonId:
+            packet.sessionCommand = aerosimlab::communication::SessionCommand::ReplayRecording;
+            break;
         default: return 0;
         }
         StartRequest(window, *state, std::move(packet));
@@ -356,7 +394,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
     AppState state;
     HWND window = CreateWindowExW(0, windowClassName, L"AeroSimLab 지상통제",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 570, 465, nullptr, nullptr, instance, &state);
+        CW_USEDEFAULT, CW_USEDEFAULT, 570, 530, nullptr, nullptr, instance, &state);
     if (!window)
         return 1;
 

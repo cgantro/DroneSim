@@ -69,6 +69,8 @@ private:
     void PollGroundControl();
     void PollGamepad();
     void ApplyGroundCommand();
+    void ApplyRecordedCommands();
+    void RecordCommand(const aerosimlab::simulation::DroneCommand& command);
     void WriteBenchmarkReport(double elapsedSeconds) const;
     [[nodiscard]] aerosimlab::communication::Telemetry CurrentTelemetry() const;
     void RenderFrame();
@@ -105,6 +107,17 @@ private:
 #endif
     std::chrono::steady_clock::time_point startTime_;
     std::uint16_t udpPort_ = 0;
+    struct RecordedCommand
+    {
+        std::uint64_t tick = 0;
+        aerosimlab::simulation::DroneCommand command;
+    };
+    std::vector<RecordedCommand> recordedCommands_;
+    std::uint64_t recordingTickCount_ = 0;
+    std::uint64_t replayTick_ = 0;
+    std::size_t replayCommandIndex_ = 0;
+    bool recordingActive_ = false;
+    bool replaying_ = false;
 #ifndef __EMSCRIPTEN__
     struct PendingGroundCommand
     {
