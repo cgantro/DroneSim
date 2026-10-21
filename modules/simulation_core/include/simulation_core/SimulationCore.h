@@ -85,6 +85,12 @@ public:
     /** @brief 강체 모드에서 사용할 월드 기준 바람 속도를 설정한다. */
     void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity);
 
+    /** @brief 벤치마크에서 물리 단계 시간 측정을 켜거나 끈다. */
+    void SetPhysicsStepTimingEnabled(bool enabled) noexcept;
+
+    /** @brief 마지막 Tick의 Jolt 물리 계산 시간을 마이크로초로 반환한다. */
+    [[nodiscard]] double LastPhysicsStepDurationMicroseconds() const noexcept;
+
 #ifndef __EMSCRIPTEN__
     /** @brief 강체 모드의 평평한 바닥을 높이 자료에 맞는 충돌 지형으로 바꾼다. */
     void SetTerrain(const terrain::TerrainGrid& terrain);

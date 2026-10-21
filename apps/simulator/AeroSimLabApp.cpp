@@ -164,6 +164,8 @@ AeroSimLabApp::AeroSimLabApp(Options options)
       networkEnabled_(options.networkEnabled), benchmarkMode_(options.benchmarkMode),
       udpPort_(options.udpPort)
 {
+    if (benchmarkMode_)
+        simulation_.SetPhysicsStepTimingEnabled(true);
 #ifndef __EMSCRIPTEN__
     visionAnalyzer_ = std::make_unique<aerosimlab::vision::RgbFrameAnalyzer>();
 #endif
@@ -265,11 +267,17 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
     for (std::size_t tick = 0; tick < tickCount; ++tick)
     {
         const auto tickStart = std::chrono::steady_clock::now();
+        const std::uint64_t previousSimulationTick = simulation_.TickCount();
         AdvanceSimulationTick();
         if (benchmarkMode_)
         {
             tickDurationsMicroseconds_.push_back(std::chrono::duration<double, std::micro>(
                 std::chrono::steady_clock::now() - tickStart).count());
+#ifndef __EMSCRIPTEN__
+            if (simulation_.TickCount() != previousSimulationTick)
+                physicsStepDurationsMicroseconds_.push_back(
+                    simulation_.LastPhysicsStepDurationMicroseconds());
+#endif
         }
     }
 }
@@ -899,6 +907,8 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
             return duration > 1'000'000.0 / 60.0;
         }));
 #ifndef __EMSCRIPTEN__
+    std::vector<double> physicsStepDurations = physicsStepDurationsMicroseconds_;
+    std::sort(physicsStepDurations.begin(), physicsStepDurations.end());
     std::vector<double> visionDurations = visionDurationsMicroseconds_;
     std::sort(visionDurations.begin(), visionDurations.end());
 #endif
@@ -920,6 +930,11 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
             ? 100.0 * static_cast<double>(std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC / elapsedSeconds : 0.0}
     };
 #ifndef __EMSCRIPTEN__
+    report["physics_step_duration_us"] = {
+        {"p50", percentile(physicsStepDurations, 0.50)},
+        {"p95", percentile(physicsStepDurations, 0.95)},
+        {"p99", percentile(physicsStepDurations, 0.99)},
+        {"samples", physicsStepDurations.size()}};
     report["vision_analysis"] = {
         {"samples", visionSampleCount_},
         {"mean_brightness", visionSampleCount_ > 0

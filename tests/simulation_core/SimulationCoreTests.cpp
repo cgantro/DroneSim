@@ -173,6 +173,11 @@ TEST(SimulationCore, SameCommandSequenceProducesTheSameState)
 TEST(SimulationCore, RigidBodyModeUsesRotorForcesForTakeoffAndLanding)
 {
     SimulationCore simulation{SimulationDynamics::RigidBody};
+    simulation.SetPhysicsStepTimingEnabled(true);
+    simulation.AdvanceOneTick();
+    EXPECT_GT(simulation.LastPhysicsStepDurationMicroseconds(), 0.0);
+    simulation.SetPhysicsStepTimingEnabled(false);
+
     ASSERT_EQ(
         simulation.Apply(Command(DroneCommand::Kind::TakeOff)),
         CommandResult::Accepted);

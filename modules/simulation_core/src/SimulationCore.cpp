@@ -34,6 +34,8 @@ struct SimulationCore::EcsStorage
     flecs::entity drone;
     flecs::entity camera;
     glm::dvec3 windVelocityMetersPerSecond{0.0};
+    bool measurePhysicsStepDuration = false;
+    double lastPhysicsStepDurationMicroseconds = 0.0;
 #if !defined(__EMSCRIPTEN__)
     std::unique_ptr<PhysicsWorld> physics;
     RigidBodyHandle physicsBody;
@@ -134,7 +136,10 @@ struct SimulationCore::EcsStorage
             airRelativeVelocityBody, angularVelocityBody);
         physics->ApplyForce(body, state.orientation * wrench.forceNewtons);
         physics->ApplyTorque(body, state.orientation * wrench.torqueNewtonMeters);
-        physics->Step(step);
+        if (measurePhysicsStepDuration)
+            physics->Step(step, 1, &lastPhysicsStepDurationMicroseconds);
+        else
+            physics->Step(step);
         CopyPhysicsState(state, body);
 
         if (state.mode == FlightMode::TakingOff
@@ -224,6 +229,7 @@ void SimulationCore::AdvanceOneTick() noexcept
     {
         return;
     }
+    ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
     ecs_->world.progress(DroneModel::fixedStepSeconds);
     ++ecs_->tickCount;
 }
@@ -282,6 +288,17 @@ void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
     if (!std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))
         throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
     ecs_->windVelocityMetersPerSecond = velocity;
+}
+
+void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept
+{
+    ecs_->measurePhysicsStepDuration = enabled;
+    ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
+}
+
+double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
+{
+    return ecs_->lastPhysicsStepDurationMicroseconds;
 }
 
 #ifndef __EMSCRIPTEN__

@@ -33,7 +33,10 @@ TEST(PhysicsWorld, GravityAcceleratesAFreeBodyDownward)
     constexpr double gravityMetersPerSecondSquared = 9.81;
     const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 10.0});
 
-    for (int tick = 0; tick < tickCount; ++tick)
+    double physicsStepDurationMicroseconds = 0.0;
+    world.Step(stepSeconds, 1, &physicsStepDurationMicroseconds);
+    EXPECT_GT(physicsStepDurationMicroseconds, 0.0);
+    for (int tick = 1; tick < tickCount; ++tick)
         world.Step(stepSeconds);
 
     const RigidBodyState state = world.State(body);

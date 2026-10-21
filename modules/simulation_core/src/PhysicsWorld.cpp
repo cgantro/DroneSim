@@ -18,6 +18,7 @@
 #include <glm/geometric.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -392,12 +393,23 @@ void PhysicsWorld::ApplyTorque(RigidBodyHandle body, const glm::dvec3& torqueNew
     impl_->physics.GetBodyInterface().AddTorque(impl_->GetBody(body), ToJolt(torqueNewtonMeters));
 }
 
-void PhysicsWorld::Step(double seconds, int collisionSteps)
+void PhysicsWorld::Step(double seconds, int collisionSteps, double* durationMicroseconds)
 {
     if (!std::isfinite(seconds) || !(seconds > 0.0) || collisionSteps <= 0)
         throw std::invalid_argument("물리 시간 간격과 충돌 계산 횟수를 확인해 주세요.");
+
+    if (durationMicroseconds == nullptr)
+    {
+        impl_->physics.Update(static_cast<float>(seconds), collisionSteps,
+            &impl_->tempAllocator, &impl_->jobSystem);
+        return;
+    }
+
+    const auto start = std::chrono::steady_clock::now();
     impl_->physics.Update(static_cast<float>(seconds), collisionSteps,
         &impl_->tempAllocator, &impl_->jobSystem);
+    *durationMicroseconds = std::chrono::duration<double, std::micro>(
+        std::chrono::steady_clock::now() - start).count();
 }
 
 RigidBodyState PhysicsWorld::State(RigidBodyHandle body) const

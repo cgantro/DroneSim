@@ -86,8 +86,8 @@ public:
     /** @brief 물체 중심에 회전력을 가한다. 한 번의 다음 물리 단계에 적용된다. */
     void ApplyTorque(RigidBodyHandle body, const glm::dvec3& torqueNewtonMeters);
 
-    /** @brief 정해진 시간만큼 중력과 접촉을 계산한다. */
-    void Step(double seconds, int collisionSteps = 1);
+    /** @brief 고정 시간만큼 계산하고, 요청되면 Jolt 계산 시간을 마이크로초로 기록한다. */
+    void Step(double seconds, int collisionSteps = 1, double* durationMicroseconds = nullptr);
 
     /** @brief 현재 물리엔진이 계산한 위치·자세·속도를 읽는다. */
     [[nodiscard]] RigidBodyState State(RigidBodyHandle body) const;
