@@ -41,8 +41,18 @@ TEST(ScenarioRunner, ReplaysFlightCommandsAndChecksFinalState)
     EXPECT_DOUBLE_EQ(result.finalState.positionMeters.z, 0.0);
     EXPECT_EQ(result.passed, repeatedResult.passed);
     EXPECT_EQ(result.tickCount, repeatedResult.tickCount);
+    EXPECT_DOUBLE_EQ(result.simulationTimeSeconds, repeatedResult.simulationTimeSeconds);
     EXPECT_EQ(result.finalState.positionMeters, repeatedResult.finalState.positionMeters);
+    EXPECT_EQ(result.finalState.velocityMetersPerSecond,
+        repeatedResult.finalState.velocityMetersPerSecond);
+    EXPECT_EQ(result.finalState.orientation, repeatedResult.finalState.orientation);
+    EXPECT_EQ(result.finalState.angularVelocityRadiansPerSecond,
+        repeatedResult.finalState.angularVelocityRadiansPerSecond);
+    EXPECT_DOUBLE_EQ(result.finalState.yawRadians, repeatedResult.finalState.yawRadians);
     EXPECT_EQ(result.finalState.mode, repeatedResult.finalState.mode);
+    EXPECT_EQ(result.finalCamera.status, repeatedResult.finalCamera.status);
+    EXPECT_EQ(result.finalCamera.frameCount, repeatedResult.finalCamera.frameCount);
+    EXPECT_EQ(result.eventLog, repeatedResult.eventLog);
     EXPECT_EQ(result.issues, repeatedResult.issues);
 }
 
@@ -215,12 +225,26 @@ TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
     const ScenarioResult result = RunScenario(scenario);
     const ScenarioResult repeatedResult = RunScenario(scenario);
     EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    EXPECT_EQ(result.passed, repeatedResult.passed);
     EXPECT_EQ(result.tickCount, 600);
+    EXPECT_EQ(result.tickCount, repeatedResult.tickCount);
+    EXPECT_DOUBLE_EQ(result.simulationTimeSeconds, repeatedResult.simulationTimeSeconds);
     EXPECT_EQ(result.finalState.mode, FlightMode::Grounded);
+    EXPECT_EQ(result.finalState.mode, repeatedResult.finalState.mode);
+    EXPECT_EQ(result.finalState.positionMeters, repeatedResult.finalState.positionMeters);
+    EXPECT_EQ(result.finalState.velocityMetersPerSecond,
+        repeatedResult.finalState.velocityMetersPerSecond);
+    EXPECT_EQ(result.finalState.orientation, repeatedResult.finalState.orientation);
+    EXPECT_EQ(result.finalState.angularVelocityRadiansPerSecond,
+        repeatedResult.finalState.angularVelocityRadiansPerSecond);
+    EXPECT_DOUBLE_EQ(result.finalState.yawRadians, repeatedResult.finalState.yawRadians);
     EXPECT_NEAR(result.finalState.positionMeters.z,
         QuadrotorFlightController::groundedModelOriginHeightMeters, 0.02);
     EXPECT_GT(result.finalState.positionMeters.x, 0.4);
-    EXPECT_EQ(result.finalState.positionMeters, repeatedResult.finalState.positionMeters);
+    EXPECT_EQ(result.finalCamera.status, repeatedResult.finalCamera.status);
+    EXPECT_EQ(result.finalCamera.frameCount, repeatedResult.finalCamera.frameCount);
+    EXPECT_EQ(result.eventLog, repeatedResult.eventLog);
+    EXPECT_EQ(result.issues, repeatedResult.issues);
 }
 
 TEST(ScenarioRunner, ReportsCommandFailuresAndRejectsInvalidScenarios)

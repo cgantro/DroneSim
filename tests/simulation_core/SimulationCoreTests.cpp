@@ -384,6 +384,8 @@ TEST(SimulationCore, SameRigidBodyCommandsProduceTheSameState)
     EXPECT_EQ(first.State().orientation, second.State().orientation);
     EXPECT_EQ(first.State().angularVelocityRadiansPerSecond,
         second.State().angularVelocityRadiansPerSecond);
+    EXPECT_DOUBLE_EQ(first.State().yawRadians, second.State().yawRadians);
+    EXPECT_EQ(first.State().mode, second.State().mode);
 }
 
 TEST(SimulationCore, RigidBodyHoverStaysStableForTenMinutes)
