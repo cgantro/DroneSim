@@ -20,10 +20,16 @@ struct JointPathPlannerOptions final
     PlanningPolicy validationPolicy{};
 };
 
+/**
+ * @brief 검증한 직접 관절 경로의 끝점과 검사 횟수를 보관한다.
+ * @details 계획이 완료되면 `points`에 시작 자세와 목표 자세가 들어간다. 두 자세가 같으면 한 점만 저장한다.
+ * 중간 자세는 경로가 안전한지 확인하는 데 사용하지만 목록에는 저장하지 않는다.
+ */
 struct JointPathPlan final
 {
+    /// 안전하다고 확인한 직접 경로의 시작 자세와 목표 자세다.
     std::vector<JointVector> points;
-    std::size_t iterations = 0;
+    /// 시작점·끝점·중간 자세에서 실행한 유효성 검사 횟수다.
     std::size_t validityChecks = 0;
 };
 
