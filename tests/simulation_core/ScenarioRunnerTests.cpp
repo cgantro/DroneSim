@@ -54,6 +54,8 @@ TEST(ScenarioRunner, ReplaysFlightCommandsAndChecksFinalState)
     EXPECT_EQ(result.finalState.mode, repeatedResult.finalState.mode);
     EXPECT_EQ(result.finalCamera.status, repeatedResult.finalCamera.status);
     EXPECT_EQ(result.finalCamera.frameCount, repeatedResult.finalCamera.frameCount);
+    EXPECT_EQ(result.finalCamera.positionMeters, repeatedResult.finalCamera.positionMeters);
+    EXPECT_EQ(result.finalCamera.orientation, repeatedResult.finalCamera.orientation);
     EXPECT_EQ(result.eventLog, repeatedResult.eventLog);
     EXPECT_EQ(result.issues, repeatedResult.issues);
 }
@@ -259,6 +261,8 @@ TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
     EXPECT_GT(result.finalState.positionMeters.x, 0.4);
     EXPECT_EQ(result.finalCamera.status, repeatedResult.finalCamera.status);
     EXPECT_EQ(result.finalCamera.frameCount, repeatedResult.finalCamera.frameCount);
+    EXPECT_EQ(result.finalCamera.positionMeters, repeatedResult.finalCamera.positionMeters);
+    EXPECT_EQ(result.finalCamera.orientation, repeatedResult.finalCamera.orientation);
     EXPECT_EQ(result.eventLog, repeatedResult.eventLog);
     EXPECT_EQ(result.issues, repeatedResult.issues);
 }
