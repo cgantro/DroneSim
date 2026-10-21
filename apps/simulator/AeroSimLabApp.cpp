@@ -478,26 +478,32 @@ void AeroSimLabApp::PollGamepad()
 
 void AeroSimLabApp::HandleGamepadDisconnected()
 {
-    if (!gamepadConnected_)
+    using DisconnectAction = aerosimlab::manual_control::GamepadDisconnectAction;
+    const auto action = aerosimlab::manual_control::ResolveGamepadDisconnectAction(
+        gamepadConnected_, groundControlActive_, simulation_.State().mode);
+    if (action == DisconnectAction::NoChange)
         return;
 
     pendingControllerAction_.reset();
     window_->SetTitle(groundControlActive_
         ? "AeroSimLab | 지상통제 입력 사용 중"
         : "AeroSimLab | 드론 관찰 · EO 영상");
-    if (!groundControlActive_)
+    switch (action)
     {
-        // 조종기가 끊기면 진행 중인 비행을 안전한 정지 동작으로 바꾼다.
-        const auto mode = simulation_.State().mode;
-        if (mode == aerosimlab::simulation::FlightMode::TakingOff)
-            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-                aerosimlab::simulation::DroneCommand::Kind::Land};
-        else if (mode == aerosimlab::simulation::FlightMode::Hovering
-            || mode == aerosimlab::simulation::FlightMode::Flying)
-            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-                aerosimlab::simulation::DroneCommand::Kind::Stop};
-        pendingPilotCommand_.reset();
+    case DisconnectAction::Land:
+        pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
+            aerosimlab::simulation::DroneCommand::Kind::Land};
+        break;
+    case DisconnectAction::Stop:
+        pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
+            aerosimlab::simulation::DroneCommand::Kind::Stop};
+        break;
+    case DisconnectAction::NoChange:
+    case DisconnectAction::ClearPendingAction:
+        break;
     }
+    if (!groundControlActive_)
+        pendingPilotCommand_.reset();
     gamepadConnected_ = false;
     previousTakeoffButton_ = false;
     previousLandButton_ = false;

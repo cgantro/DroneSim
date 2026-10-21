@@ -46,4 +46,19 @@ PilotCommand MapAxes(const GamepadAxes& axes, double droneYawRadians) noexcept
     command.yawRateRadiansPerSecond = yaw * simulation::DroneModel::maximumYawRateRadiansPerSecond;
     return command;
 }
+
+GamepadDisconnectAction ResolveGamepadDisconnectAction(
+    bool wasConnected, bool groundControlActive, simulation::FlightMode flightMode) noexcept
+{
+    if (!wasConnected)
+        return GamepadDisconnectAction::NoChange;
+    if (groundControlActive)
+        return GamepadDisconnectAction::ClearPendingAction;
+    if (flightMode == simulation::FlightMode::TakingOff)
+        return GamepadDisconnectAction::Land;
+    if (flightMode == simulation::FlightMode::Hovering
+        || flightMode == simulation::FlightMode::Flying)
+        return GamepadDisconnectAction::Stop;
+    return GamepadDisconnectAction::ClearPendingAction;
+}
 }

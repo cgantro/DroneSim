@@ -24,10 +24,29 @@ struct PilotCommand
     double yawRateRadiansPerSecond = 0.0;
 };
 
+/**
+ * @brief 게임패드 연결이 끊겼을 때 처리할 동작을 나타낸다.
+ * @details NoChange는 이미 끊긴 상태라 대기 중인 안전 명령을 유지한다. ClearPendingAction은 연결이 끊긴 순간에 대기 중인 조종 명령을 비우고 추가 동작을 보내지 않는다.
+ */
+enum class GamepadDisconnectAction
+{
+    NoChange,
+    ClearPendingAction,
+    Stop,
+    Land
+};
+
 /** @brief 게임패드의 현재 축과 드론 방향을 월드 좌표의 조종 값으로 바꾼다. */
 [[nodiscard]] PilotCommand MapAxes(
     const GamepadAxes& axes, double droneYawRadians) noexcept;
 
 /** @brief 축의 작은 흔들림은 무시하고 입력 범위를 -1부터 1까지 다시 맞춘다. */
 [[nodiscard]] double ApplyDeadZone(double value) noexcept;
+
+/**
+ * @brief 연결이 끊긴 순간에 실행할 동작을 고른다.
+ * @details 이전 상태가 이미 끊김이면 NoChange를 반환해 대기 중인 정지·착륙 명령을 유지한다.
+ */
+[[nodiscard]] GamepadDisconnectAction ResolveGamepadDisconnectAction(
+    bool wasConnected, bool groundControlActive, simulation::FlightMode flightMode) noexcept;
 }
