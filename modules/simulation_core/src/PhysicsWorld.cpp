@@ -257,6 +257,25 @@ RigidBodyHandle PhysicsWorld::CreateBox(const RigidBodyDefinition& definition)
     return handle;
 }
 
+void PhysicsWorld::SetState(RigidBodyHandle body, const RigidBodyState& state)
+{
+    if (!IsFinite(state.positionMeters)
+        || !IsFinite(state.linearVelocityMetersPerSecond)
+        || !IsFinite(state.angularVelocityRadiansPerSecond)
+        || !std::isfinite(glm::length(state.orientation))
+        || !(glm::length(state.orientation) > 0.0))
+    {
+        throw std::invalid_argument("강체의 초기 상태를 확인해 주세요.");
+    }
+
+    impl_->physics.GetBodyInterface().SetPositionRotationAndVelocity(
+        impl_->GetBody(body),
+        JPH::RVec3{ToJolt(state.positionMeters)},
+        ToJolt(state.orientation),
+        ToJolt(state.linearVelocityMetersPerSecond),
+        ToJolt(state.angularVelocityRadiansPerSecond));
+}
+
 void PhysicsWorld::ApplyForce(RigidBodyHandle body, const glm::dvec3& forceNewtons)
 {
     if (!IsFinite(forceNewtons))

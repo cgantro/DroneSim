@@ -52,6 +52,9 @@ public:
     /** @brief 상자 모양의 움직이는 물체나 고정된 장애물을 만든다. */
     [[nodiscard]] RigidBodyHandle CreateBox(const RigidBodyDefinition& definition);
 
+    /** @brief 기존 강체의 위치·자세·속도를 지정한 상태로 되돌린다. */
+    void SetState(RigidBodyHandle body, const RigidBodyState& state);
+
     /** @brief 물체 중심에 힘을 가한다. 한 번의 다음 물리 단계에 적용된다. */
     void ApplyForce(RigidBodyHandle body, const glm::dvec3& forceNewtons);
 

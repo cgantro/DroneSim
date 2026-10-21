@@ -1,5 +1,7 @@
 #include "simulation_core/SimulationCore.h"
+#if !defined(__EMSCRIPTEN__)
 #include "simulation_core/PhysicsWorld.h"
+#endif
 #include "simulation_core/QuadrotorModel.h"
 
 #include <flecs.h>
@@ -12,16 +14,21 @@ namespace aerosimlab::simulation
 {
 struct SimulationCore::EcsStorage
 {
+#if !defined(__EMSCRIPTEN__)
     struct PhysicsBody
     {
         RigidBodyHandle handle;
     };
+#endif
 
     SimulationDynamics dynamics;
     flecs::world world;
     flecs::entity drone;
     flecs::entity camera;
+#if !defined(__EMSCRIPTEN__)
     std::unique_ptr<PhysicsWorld> physics;
+    RigidBodyHandle physicsBody;
+#endif
     std::uint64_t tickCount = 0;
 
     explicit EcsStorage(SimulationDynamics selectedDynamics)
@@ -41,6 +48,7 @@ struct SimulationCore::EcsStorage
                     DroneModel::AdvanceOneTick(state, control);
                 });
         }
+#if !defined(__EMSCRIPTEN__)
         else
         {
             CreatePhysicsBody();
@@ -52,6 +60,7 @@ struct SimulationCore::EcsStorage
                     CopyPhysicsState(state, body.handle);
                 });
         }
+#endif
 
         world.system<CameraState>("AdvanceCamera")
             .kind(flecs::OnUpdate)
@@ -61,6 +70,7 @@ struct SimulationCore::EcsStorage
             });
     }
 
+#if !defined(__EMSCRIPTEN__)
     void CreatePhysicsBody()
     {
         const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
@@ -73,9 +83,17 @@ struct SimulationCore::EcsStorage
         definition.massKilograms = parameters.massKilograms;
         definition.principalInertiaKilogramMetersSquared =
             parameters.principalInertiaKilogramMetersSquared;
-        const RigidBodyHandle handle = physics->CreateBox(definition);
-        drone.set<PhysicsBody>({handle});
-        CopyPhysicsState(drone.get_mut<DroneState>(), handle);
+        physicsBody = physics->CreateBox(definition);
+        drone.set<PhysicsBody>({physicsBody});
+        CopyPhysicsState(drone.get_mut<DroneState>(), physicsBody);
+    }
+
+    void ResetPhysicsBody()
+    {
+        RigidBodyState initialState;
+        initialState.positionMeters = {0.0, 0.0, 0.05};
+        physics->SetState(physicsBody, initialState);
+        CopyPhysicsState(drone.get_mut<DroneState>(), physicsBody);
     }
 
     void CopyPhysicsState(DroneState& target, RigidBodyHandle body) const
@@ -90,6 +108,7 @@ struct SimulationCore::EcsStorage
             2.0 * (q.w * q.z + q.x * q.y),
             1.0 - 2.0 * (q.y * q.y + q.z * q.z));
     }
+#endif
 };
 
 std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
@@ -153,10 +172,12 @@ void SimulationCore::Reset() noexcept
     DroneModel::Reset(
         ecs_->drone.get_mut<DroneState>(),
         ecs_->drone.get_mut<DroneControlState>());
+#if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
-        ecs_->CreatePhysicsBody();
+        ecs_->ResetPhysicsBody();
     }
+#endif
     EoCameraModel::Reset(ecs_->camera.get_mut<CameraState>());
     ecs_->tickCount = 0;
     paused_ = false;
