@@ -1,16 +1,14 @@
+#include "GroundControlClient.h"
 #include "communication/Protocol.h"
-#include "communication/UdpSocket.h"
 #include "simulation_core/ScenarioRunner.h"
 
 #include <charconv>
-#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <vector>
 
 namespace
@@ -164,34 +162,12 @@ int main(int argc, char** argv)
             return 2;
         }
 
-        const auto destination = aerosimlab::communication::UdpSocket::Resolve(host, port);
-        aerosimlab::communication::UdpSocket socket(0);
-        const std::string datagram = aerosimlab::communication::EncodeCommand(packet);
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(4);
-        const auto requestStarted = std::chrono::steady_clock::now();
-        auto nextRetry = std::chrono::steady_clock::now();
-        while (std::chrono::steady_clock::now() < deadline)
-        {
-            if (std::chrono::steady_clock::now() >= nextRetry)
-            {
-                socket.Send(datagram, destination);
-                nextRetry = std::chrono::steady_clock::now() + std::chrono::milliseconds(400);
-            }
-            aerosimlab::communication::UdpPeer source;
-            if (const auto response = socket.Receive(source); response &&
-                source.addressNetworkOrder == destination.addressNetworkOrder &&
-                source.portNetworkOrder == destination.portNetworkOrder)
-            {
-                const auto reply = aerosimlab::communication::DecodeReply(*response);
-                if (reply.commandId != packet.commandId || reply.sequence != packet.sequence)
-                    continue;
-                const auto responseTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - requestStarted).count();
-                PrintReply(reply, static_cast<std::uint64_t>(responseTime));
-                return reply.accepted ? 0 : 1;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
+        const auto result = aerosimlab::ground_control::SendCommand(host, port, packet);
+        PrintReply(result.reply, result.responseTimeMilliseconds);
+        return result.reply.accepted ? 0 : 1;
+    }
+    catch (const aerosimlab::ground_control::CommandTimeout&)
+    {
         std::cerr << "지상통제 응답 시간 초과: 시뮬레이터가 실행 중인지 확인하세요.\n";
         return 3;
     }

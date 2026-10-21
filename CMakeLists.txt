@@ -86,8 +86,28 @@ if(NOT EMSCRIPTEN)
 endif()
 
 if(NOT EMSCRIPTEN)
-  add_executable(aerosimlab_ground_control apps/ground_control/main.cpp)
-  target_link_libraries(aerosimlab_ground_control PRIVATE aerosimlab_communication)
+  add_library(aerosimlab_ground_control_client STATIC
+    apps/ground_control/GroundControlClient.cpp
+  )
+  target_include_directories(aerosimlab_ground_control_client PUBLIC apps/ground_control)
+  target_link_libraries(aerosimlab_ground_control_client PUBLIC aerosimlab_communication)
+
+  if(WIN32)
+    add_executable(aerosimlab_ground_control WIN32
+      apps/ground_control/WindowsGroundControlApp.cpp
+    )
+    target_link_libraries(aerosimlab_ground_control PRIVATE
+      aerosimlab_ground_control_client
+      user32
+      gdi32
+    )
+
+    add_executable(aerosimlab_ground_control_cli apps/ground_control/main.cpp)
+    target_link_libraries(aerosimlab_ground_control_cli PRIVATE aerosimlab_ground_control_client)
+  else()
+    add_executable(aerosimlab_ground_control apps/ground_control/main.cpp)
+    target_link_libraries(aerosimlab_ground_control PRIVATE aerosimlab_ground_control_client)
+  endif()
 endif()
 
 add_executable(aerosimlab_headless apps/headless/main.cpp)
@@ -264,7 +284,7 @@ if(BUILD_TESTING)
       COMMAND ${AEROSIMLAB_POWERSHELL} -NoProfile -ExecutionPolicy Bypass
         -File "${CMAKE_SOURCE_DIR}/tests/communication/run_udp_smoke.ps1"
         -Simulator "$<TARGET_FILE:aerosimlab_simulator>"
-        -GroundControl "$<TARGET_FILE:aerosimlab_ground_control>")
+        -GroundControl "$<TARGET_FILE:aerosimlab_ground_control_cli>")
     set_tests_properties(GroundControlUdpSmoke PROPERTIES
       WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>"
       TIMEOUT 20
