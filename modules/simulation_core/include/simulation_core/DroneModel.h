@@ -72,7 +72,8 @@ enum class CommandResult
     InvalidValue,
     InvalidFlightMode,
     UnsupportedDynamics,
-    SimulationPaused
+    SimulationPaused,
+    DroneNotFound
 };
 
 /**

@@ -221,4 +221,14 @@ TEST(PhysicsWorld, RejectsInvalidPrincipalInertia)
 
     EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
 }
+
+TEST(PhysicsWorld, DestroyBodyInvalidatesItsHandle)
+{
+    PhysicsWorld world;
+    const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 1.0});
+
+    EXPECT_TRUE(world.DestroyBody(body));
+    EXPECT_FALSE(world.DestroyBody(body));
+    EXPECT_THROW((void)world.State(body), std::out_of_range);
+}
 }

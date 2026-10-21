@@ -22,6 +22,9 @@ enum class SimulationDynamics
     RigidBody
 };
 
+/** @brief 한 시뮬레이션 안에서 드론 하나를 식별한다. */
+using DroneId = std::uint64_t;
+
 /**
  * @brief 화면 프레임 시간을 고정 간격 모의 Tick 수로 바꾼다.
  * @details Tick보다 짧은 나머지 시간은 다음 프레임으로 넘긴다. 한 프레임에서 처리할 시간은 100ms로 제한해 화면이 멈춘 뒤 과도한 따라잡기를 막는다.
@@ -58,6 +61,21 @@ public:
     /** @brief 드론에 명령을 보내고 적용 결과를 반환한다. */
     [[nodiscard]] CommandResult Apply(const DroneCommand& command) noexcept;
 
+    /** @brief 지정한 드론에 명령을 보내고 적용 결과를 반환한다. */
+    [[nodiscard]] CommandResult Apply(DroneId droneId, const DroneCommand& command) noexcept;
+
+    /** @brief 지정한 월드 위치에 드론 하나를 추가하고 그 식별값을 반환한다. */
+    [[nodiscard]] DroneId AddDrone(const glm::dvec3& positionMeters);
+
+    /** @brief 드론과 연결된 물리 강체를 함께 제거한다. 마지막 드론은 제거할 수 없다. */
+    [[nodiscard]] bool RemoveDrone(DroneId droneId);
+
+    /** @brief 기본 단일 드론 호출이 대상으로 삼는 드론의 식별값을 반환한다. */
+    [[nodiscard]] DroneId PrimaryDroneId() const noexcept;
+
+    /** @brief 현재 시뮬레이션에 있는 드론 수를 반환한다. */
+    [[nodiscard]] std::size_t DroneCount() const noexcept;
+
     /** @brief 실행 중이면 고정 간격 한 단계만 진행하고, 일시정지 중이면 아무것도 바꾸지 않는다. */
     void AdvanceOneTick() noexcept;
 
@@ -72,6 +90,9 @@ public:
 
     /** @brief 현재 드론 상태를 반환한다. */
     [[nodiscard]] const DroneState& State() const noexcept;
+
+    /** @brief 지정한 드론 상태를 반환한다. 없는 식별값이면 예외를 던진다. */
+    [[nodiscard]] const DroneState& State(DroneId droneId) const;
 
     /** @brief 모의 카메라의 상태와 프레임 생성 정보를 반환한다. */
     [[nodiscard]] const CameraState& Camera() const noexcept;

@@ -11,11 +11,17 @@
 #include <cmath>
 #include <memory>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace aerosimlab::simulation
 {
 struct SimulationCore::EcsStorage
 {
+    struct InitialPosition
+    {
+        glm::dvec3 meters{0.0};
+    };
+
 #if !defined(__EMSCRIPTEN__)
     struct PhysicsBody
     {
@@ -31,27 +37,24 @@ struct SimulationCore::EcsStorage
 
     SimulationDynamics dynamics;
     flecs::world world;
-    flecs::entity drone;
+    std::unordered_map<DroneId, flecs::entity> drones;
+    DroneId primaryDroneId = 0;
+    DroneId nextDroneId = 1;
     flecs::entity camera;
     glm::dvec3 windVelocityMetersPerSecond{0.0};
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
 #if !defined(__EMSCRIPTEN__)
     std::unique_ptr<PhysicsWorld> physics;
-    RigidBodyHandle physicsBody;
 #endif
     std::uint64_t tickCount = 0;
 
     explicit EcsStorage(SimulationDynamics selectedDynamics)
         : dynamics(selectedDynamics)
     {
-        drone = world.entity("Drone")
-            .set<DroneState>({})
-            .set<DroneControlState>({});
-        camera = world.entity("EoCamera").set<CameraState>({});
-
         if (dynamics == SimulationDynamics::Kinematic)
         {
+            primaryDroneId = CreateDrone(glm::dvec3{0.0});
             world.system<DroneState, DroneControlState>("AdvanceKinematicDrone")
                 .kind(flecs::OnUpdate)
                 .each([](DroneState& state, DroneControlState& control)
@@ -62,9 +65,11 @@ struct SimulationCore::EcsStorage
 #if !defined(__EMSCRIPTEN__)
         else
         {
-            CreatePhysicsBody();
+            physics = std::make_unique<PhysicsWorld>();
+            primaryDroneId = CreateDrone(glm::dvec3{
+                0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters});
             world.system<DroneState, DroneControlState, PhysicsBody, DroneActuation>(
-                "AdvanceRigidBodyDrone")
+                "ApplyRigidBodyForces")
                 .kind(flecs::OnUpdate)
                 .each([this](
                     DroneState& state,
@@ -72,11 +77,17 @@ struct SimulationCore::EcsStorage
                     const PhysicsBody& body,
                     DroneActuation& actuation)
                 {
-                    AdvanceRigidBody(state, control, body.handle, actuation);
+                    ApplyRigidBodyForces(state, control, body.handle, actuation);
                 });
+        }
+#else
+        else
+        {
+            primaryDroneId = CreateDrone(glm::dvec3{0.0});
         }
 #endif
 
+        camera = world.entity("EoCamera").set<CameraState>({});
         world.system<CameraState>("AdvanceCamera")
             .kind(flecs::OnUpdate)
             .each([this](CameraState& state)
@@ -85,34 +96,87 @@ struct SimulationCore::EcsStorage
             });
     }
 
-#if !defined(__EMSCRIPTEN__)
-    void CreatePhysicsBody()
+    DroneId CreateDrone(const glm::dvec3& positionMeters)
     {
-        const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
-        physics = std::make_unique<PhysicsWorld>();
-        RigidBodyDefinition definition;
-        definition.positionMeters = {
-            0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters};
-        definition.massKilograms = parameters.massKilograms;
-        definition.principalInertiaKilogramMetersSquared =
-            parameters.principalInertiaKilogramMetersSquared;
-        physicsBody = physics->CreateCompoundBoxes(definition, parameters.collisionBoxes);
-        drone.set<PhysicsBody>({physicsBody});
-        drone.set<DroneActuation>({parameters, {}});
-        CopyPhysicsState(drone.get_mut<DroneState>(), physicsBody);
+        const DroneId id = nextDroneId++;
+        DroneState initialState;
+        initialState.positionMeters = positionMeters;
+        flecs::entity drone = world.entity()
+            .set<DroneState>(initialState)
+            .set<DroneControlState>({})
+            .set<InitialPosition>({positionMeters});
+
+#if !defined(__EMSCRIPTEN__)
+        if (dynamics == SimulationDynamics::RigidBody)
+        {
+            const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
+            RigidBodyDefinition definition;
+            definition.positionMeters = positionMeters;
+            definition.massKilograms = parameters.massKilograms;
+            definition.principalInertiaKilogramMetersSquared =
+                parameters.principalInertiaKilogramMetersSquared;
+            const RigidBodyHandle body = physics->CreateCompoundBoxes(
+                definition, parameters.collisionBoxes);
+            drone.set<PhysicsBody>({body});
+            drone.set<DroneActuation>({parameters, {}});
+            CopyPhysicsState(drone.get_mut<DroneState>(), body);
+        }
+#endif
+
+        drones.emplace(id, drone);
+        return id;
     }
 
-    void ResetPhysicsBody()
+    [[nodiscard]] flecs::entity& FindDrone(DroneId id)
+    {
+        const auto found = drones.find(id);
+        if (found == drones.end())
+            throw std::out_of_range("드론 식별값이 없습니다.");
+        return found->second;
+    }
+
+    [[nodiscard]] const flecs::entity& FindDrone(DroneId id) const
+    {
+        const auto found = drones.find(id);
+        if (found == drones.end())
+            throw std::out_of_range("드론 식별값이 없습니다.");
+        return found->second;
+    }
+
+    bool RemoveDrone(DroneId id)
+    {
+        if (drones.size() <= 1)
+            return false;
+        const auto found = drones.find(id);
+        if (found == drones.end())
+            return false;
+
+#if !defined(__EMSCRIPTEN__)
+        if (dynamics == SimulationDynamics::RigidBody
+            && !physics->DestroyBody(found->second.get<PhysicsBody>().handle))
+            return false;
+#endif
+
+        found->second.destruct();
+        const bool removedPrimary = id == primaryDroneId;
+        drones.erase(found);
+        if (removedPrimary)
+            primaryDroneId = drones.begin()->first;
+        return true;
+    }
+
+#if !defined(__EMSCRIPTEN__)
+    void ResetPhysicsBody(flecs::entity& drone)
     {
         RigidBodyState initialState;
-        initialState.positionMeters = {
-            0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters};
-        physics->SetState(physicsBody, initialState);
+        initialState.positionMeters = drone.get<InitialPosition>().meters;
+        const RigidBodyHandle body = drone.get<PhysicsBody>().handle;
+        physics->SetState(body, initialState);
         drone.get_mut<DroneActuation>().motors = {};
-        CopyPhysicsState(drone.get_mut<DroneState>(), physicsBody);
+        CopyPhysicsState(drone.get_mut<DroneState>(), body);
     }
 
-    void AdvanceRigidBody(
+    void ApplyRigidBodyForces(
         DroneState& state,
         DroneControlState& control,
         RigidBodyHandle body,
@@ -136,10 +200,13 @@ struct SimulationCore::EcsStorage
             airRelativeVelocityBody, angularVelocityBody);
         physics->ApplyForce(body, state.orientation * wrench.forceNewtons);
         physics->ApplyTorque(body, state.orientation * wrench.torqueNewtonMeters);
-        if (measurePhysicsStepDuration)
-            physics->Step(step, 1, &lastPhysicsStepDurationMicroseconds);
-        else
-            physics->Step(step);
+    }
+
+    void SynchronizeRigidBody(
+        DroneState& state,
+        DroneControlState& control,
+        RigidBodyHandle body)
+    {
         CopyPhysicsState(state, body);
 
         if (state.mode == FlightMode::TakingOff
@@ -177,6 +244,24 @@ struct SimulationCore::EcsStorage
             2.0 * (q.w * q.z + q.x * q.y),
             1.0 - 2.0 * (q.y * q.y + q.z * q.z));
     }
+
+    void AdvancePhysicsWorld()
+    {
+        if (measurePhysicsStepDuration)
+            physics->Step(DroneModel::fixedStepSeconds, 1,
+                &lastPhysicsStepDurationMicroseconds);
+        else
+            physics->Step(DroneModel::fixedStepSeconds);
+
+        for (auto& [id, drone] : drones)
+        {
+            (void)id;
+            SynchronizeRigidBody(
+                drone.get_mut<DroneState>(),
+                drone.get_mut<DroneControlState>(),
+                drone.get<PhysicsBody>().handle);
+        }
+    }
 #endif
 };
 
@@ -202,12 +287,22 @@ SimulationCore::~SimulationCore() = default;
 
 CommandResult SimulationCore::Apply(const DroneCommand& command) noexcept
 {
+    return Apply(ecs_->primaryDroneId, command);
+}
+
+CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command) noexcept
+{
     if (paused_)
     {
         return CommandResult::SimulationPaused;
     }
-    DroneState& state = ecs_->drone.get_mut<DroneState>();
-    DroneControlState& control = ecs_->drone.get_mut<DroneControlState>();
+    const auto found = ecs_->drones.find(droneId);
+    if (found == ecs_->drones.end())
+        return CommandResult::DroneNotFound;
+
+    flecs::entity& drone = found->second;
+    DroneState& state = drone.get_mut<DroneState>();
+    DroneControlState& control = drone.get_mut<DroneControlState>();
 #if defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         return CommandResult::UnsupportedDynamics;
@@ -217,10 +312,34 @@ CommandResult SimulationCore::Apply(const DroneCommand& command) noexcept
     if (result == CommandResult::Accepted
         && ecs_->dynamics == SimulationDynamics::RigidBody)
     {
-        ecs_->CopyPhysicsState(state, ecs_->physicsBody);
+        ecs_->CopyPhysicsState(state, drone.get<EcsStorage::PhysicsBody>().handle);
     }
 #endif
     return result;
+}
+
+DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters)
+{
+    if (!std::isfinite(positionMeters.x)
+        || !std::isfinite(positionMeters.y)
+        || !std::isfinite(positionMeters.z))
+        throw std::invalid_argument("드론 시작 위치는 유한한 값이어야 합니다.");
+    return ecs_->CreateDrone(positionMeters);
+}
+
+bool SimulationCore::RemoveDrone(DroneId droneId)
+{
+    return ecs_->RemoveDrone(droneId);
+}
+
+DroneId SimulationCore::PrimaryDroneId() const noexcept
+{
+    return ecs_->primaryDroneId;
+}
+
+std::size_t SimulationCore::DroneCount() const noexcept
+{
+    return ecs_->drones.size();
 }
 
 void SimulationCore::AdvanceOneTick() noexcept
@@ -231,6 +350,10 @@ void SimulationCore::AdvanceOneTick() noexcept
     }
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
     ecs_->world.progress(DroneModel::fixedStepSeconds);
+#if !defined(__EMSCRIPTEN__)
+    if (ecs_->dynamics == SimulationDynamics::RigidBody)
+        ecs_->AdvancePhysicsWorld();
+#endif
     ++ecs_->tickCount;
 }
 
@@ -246,15 +369,16 @@ void SimulationCore::Resume() noexcept
 
 void SimulationCore::Reset() noexcept
 {
-    DroneModel::Reset(
-        ecs_->drone.get_mut<DroneState>(),
-        ecs_->drone.get_mut<DroneControlState>());
-#if !defined(__EMSCRIPTEN__)
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
+    for (auto& [id, drone] : ecs_->drones)
     {
-        ecs_->ResetPhysicsBody();
-    }
+        (void)id;
+        DroneModel::Reset(drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>());
+        drone.get_mut<DroneState>().positionMeters = drone.get<EcsStorage::InitialPosition>().meters;
+#if !defined(__EMSCRIPTEN__)
+        if (ecs_->dynamics == SimulationDynamics::RigidBody)
+            ecs_->ResetPhysicsBody(drone);
 #endif
+    }
     EoCameraModel::Reset(ecs_->camera.get_mut<CameraState>());
     ecs_->tickCount = 0;
     paused_ = false;
@@ -262,7 +386,12 @@ void SimulationCore::Reset() noexcept
 
 const DroneState& SimulationCore::State() const noexcept
 {
-    return ecs_->drone.get<DroneState>();
+    return ecs_->drones.at(ecs_->primaryDroneId).get<DroneState>();
+}
+
+const DroneState& SimulationCore::State(DroneId droneId) const
+{
+    return ecs_->FindDrone(droneId).get<DroneState>();
 }
 
 const CameraState& SimulationCore::Camera() const noexcept

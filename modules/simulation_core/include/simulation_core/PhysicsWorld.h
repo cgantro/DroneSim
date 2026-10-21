@@ -89,6 +89,9 @@ public:
     /** @brief 고정 시간만큼 계산하고, 요청되면 Jolt 계산 시간을 마이크로초로 기록한다. */
     void Step(double seconds, int collisionSteps = 1, double* durationMicroseconds = nullptr);
 
+    /** @brief 물리 세계에서 강체를 제거한다. 이미 제거했거나 잘못된 핸들이면 false를 반환한다. */
+    [[nodiscard]] bool DestroyBody(RigidBodyHandle body);
+
     /** @brief 현재 물리엔진이 계산한 위치·자세·속도를 읽는다. */
     [[nodiscard]] RigidBodyState State(RigidBodyHandle body) const;
 

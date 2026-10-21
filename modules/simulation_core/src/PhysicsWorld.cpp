@@ -154,7 +154,7 @@ struct PhysicsWorld::Impl
     JPH::PhysicsSystem physics;
     JPH::TempAllocatorImpl tempAllocator{4 * 1024 * 1024};
     JPH::JobSystemSingleThreaded jobSystem{maximumPhysicsJobs};
-    std::vector<JPH::BodyID> bodies;
+    std::vector<std::optional<JPH::BodyID>> bodies;
     JPH::BodyID groundBody;
     JPH::BodyID terrainBody;
     bool hasTerrain = false;
@@ -191,9 +191,9 @@ struct PhysicsWorld::Impl
 
     JPH::BodyID GetBody(RigidBodyHandle body) const
     {
-        if (body.value >= bodies.size())
+        if (body.value >= bodies.size() || !bodies[body.value].has_value())
             throw std::out_of_range("존재하지 않는 강체 번호입니다.");
-        return bodies[body.value];
+        return *bodies[body.value];
     }
 };
 
@@ -290,7 +290,7 @@ RigidBodyHandle PhysicsWorld::CreateCompoundBoxes(
         throw std::runtime_error("Jolt 움직이는 강체를 만들지 못했습니다.");
 
     const auto handle = RigidBodyHandle{static_cast<std::uint32_t>(impl_->bodies.size())};
-    impl_->bodies.push_back(id);
+    impl_->bodies.emplace_back(id);
     return handle;
 }
 
@@ -410,6 +410,19 @@ void PhysicsWorld::Step(double seconds, int collisionSteps, double* durationMicr
         &impl_->tempAllocator, &impl_->jobSystem);
     *durationMicroseconds = std::chrono::duration<double, std::micro>(
         std::chrono::steady_clock::now() - start).count();
+}
+
+bool PhysicsWorld::DestroyBody(RigidBodyHandle body)
+{
+    if (body.value >= impl_->bodies.size() || !impl_->bodies[body.value].has_value())
+        return false;
+
+    const JPH::BodyID id = *impl_->bodies[body.value];
+    JPH::BodyInterface& bodyInterface = impl_->physics.GetBodyInterface();
+    bodyInterface.RemoveBody(id);
+    bodyInterface.DestroyBody(id);
+    impl_->bodies[body.value].reset();
+    return true;
 }
 
 RigidBodyState PhysicsWorld::State(RigidBodyHandle body) const

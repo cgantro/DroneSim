@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 namespace aerosimlab::simulation
 {
@@ -227,6 +228,75 @@ TEST(SimulationCore, RigidBodyModeUsesRotorForcesForTakeoffAndLanding)
     EXPECT_EQ(simulation.TickCount(), 0);
     EXPECT_NEAR(simulation.State().positionMeters.z,
         QuadrotorFlightController::groundedModelOriginHeightMeters, 1.0e-6);
+}
+
+TEST(SimulationCore, MultipleKinematicDronesKeepIndependentStateAndCommands)
+{
+    SimulationCore simulation;
+    const DroneId first = simulation.PrimaryDroneId();
+    const DroneId second = simulation.AddDrone(glm::dvec3{10.0, 0.0, 0.0});
+    ASSERT_EQ(simulation.DroneCount(), 2U);
+
+    ASSERT_EQ(simulation.Apply(first, Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+    ASSERT_EQ(simulation.Apply(second, Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 90; ++tick)
+        simulation.AdvanceOneTick();
+
+    ASSERT_EQ(simulation.State(first).mode, FlightMode::Hovering);
+    ASSERT_EQ(simulation.State(second).mode, FlightMode::Hovering);
+    EXPECT_DOUBLE_EQ(simulation.State(first).positionMeters.x, 0.0);
+    EXPECT_DOUBLE_EQ(simulation.State(second).positionMeters.x, 10.0);
+
+    ASSERT_EQ(simulation.Apply(first, Command(
+        DroneCommand::Kind::SetVelocity, glm::dvec3{1.0, 0.0, 0.0})),
+        CommandResult::Accepted);
+    ASSERT_EQ(simulation.Apply(second, Command(
+        DroneCommand::Kind::SetVelocity, glm::dvec3{-2.0, 0.0, 0.0})),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 30; ++tick)
+        simulation.AdvanceOneTick();
+
+    EXPECT_NEAR(simulation.State(first).positionMeters.x, 0.5, 1.0e-12);
+    EXPECT_NEAR(simulation.State(second).positionMeters.x, 9.0, 1.0e-12);
+    EXPECT_EQ(simulation.Apply(999, Command(DroneCommand::Kind::Stop)),
+        CommandResult::DroneNotFound);
+
+    ASSERT_TRUE(simulation.RemoveDrone(first));
+    EXPECT_EQ(simulation.DroneCount(), 1U);
+    EXPECT_EQ(simulation.PrimaryDroneId(), second);
+    EXPECT_NEAR(simulation.State().positionMeters.x, 9.0, 1.0e-12);
+    EXPECT_FALSE(simulation.RemoveDrone(second));
+    EXPECT_THROW((void)simulation.State(first), std::out_of_range);
+}
+
+TEST(SimulationCore, RigidBodyDronesShareOnePhysicsStepAndCanBeRemoved)
+{
+    SimulationCore simulation{SimulationDynamics::RigidBody};
+    const DroneId first = simulation.PrimaryDroneId();
+    const DroneId second = simulation.AddDrone(glm::dvec3{
+        2.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters});
+    ASSERT_EQ(simulation.Apply(first, Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+    ASSERT_EQ(simulation.Apply(second, Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+
+    for (int tick = 0; tick < 240; ++tick)
+        simulation.AdvanceOneTick();
+
+    ASSERT_EQ(simulation.State(first).mode, FlightMode::Hovering);
+    ASSERT_EQ(simulation.State(second).mode, FlightMode::Hovering);
+    EXPECT_NEAR(simulation.State(second).positionMeters.x
+            - simulation.State(first).positionMeters.x,
+        2.0, 0.02);
+    EXPECT_NEAR(simulation.State(second).positionMeters.z,
+        simulation.State(first).positionMeters.z, 0.02);
+
+    ASSERT_TRUE(simulation.RemoveDrone(second));
+    EXPECT_EQ(simulation.DroneCount(), 1U);
+    simulation.AdvanceOneTick();
+    EXPECT_TRUE(std::isfinite(simulation.State(first).positionMeters.z));
 }
 
 TEST(SimulationCore, SameRigidBodyCommandsProduceTheSameState)
