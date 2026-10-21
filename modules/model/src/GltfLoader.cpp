@@ -314,6 +314,13 @@ void RequireFinite(const glm::quat& value)
     }
 }
 
+bool HasDegenerateScale(const glm::vec3& scale)
+{
+    return std::abs(scale.x) <= GltfTransformLimits::tolerance ||
+        std::abs(scale.y) <= GltfTransformLimits::tolerance ||
+        std::abs(scale.z) <= GltfTransformLimits::tolerance;
+}
+
 float CheckedFloat(double value, const char* error)
 {
     if (!std::isfinite(value) || std::abs(value) > std::numeric_limits<float>::max())
@@ -693,9 +700,7 @@ void ReadMatrixTransform(
     RequireFinite(perspective);
 
     // 전단 변환은 한 축이 다른 축 방향으로 기울어진 상태다. TRS만 저장할 수 있어 이런 행렬은 거부한다.
-    if (std::abs(scale.x) <= GltfTransformLimits::tolerance ||
-        std::abs(scale.y) <= GltfTransformLimits::tolerance ||
-        std::abs(scale.z) <= GltfTransformLimits::tolerance ||
+    if (HasDegenerateScale(scale) ||
         glm::length(orientation) <= GltfTransformLimits::tolerance ||
         glm::length(skew) > GltfTransformLimits::tolerance ||
         std::abs(perspective.x) > GltfTransformLimits::tolerance ||
@@ -769,9 +774,7 @@ void ReadTrsTransform(
     RequireFinite(destination.translation);
     RequireFinite(destination.rotation);
     RequireFinite(destination.scale);
-    if (std::abs(destination.scale.x) <= GltfTransformLimits::tolerance ||
-        std::abs(destination.scale.y) <= GltfTransformLimits::tolerance ||
-        std::abs(destination.scale.z) <= GltfTransformLimits::tolerance)
+    if (HasDegenerateScale(destination.scale))
     {
         throw std::runtime_error(GltfLoaderErrorMessages::Node::degenerateScale);
     }
