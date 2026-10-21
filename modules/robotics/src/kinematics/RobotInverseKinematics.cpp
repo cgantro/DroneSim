@@ -558,8 +558,6 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
                     messages::nonFiniteNumericalStep);
                 break;
             }
-            if (sessionState_ != IkSessionState::Running)
-                break;
             if (step.status == FeasibleStepStatus::NoFeasibleDirection)
             {
                 sessionDamping_ *= solvedDampedSystem
@@ -572,7 +570,6 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
             for (std::size_t line = 0; line < solver_limits::maximumLineSearchSteps && !improved; ++line)
             {
                 const double fraction = feasibleFraction * std::ldexp(1.0, -line);
-                std::copy(angles.begin(), angles.end(), candidate.begin());
                 for (std::size_t i = 0; i < angles.size(); ++i)
                 {
                     const double requested = angles[i] + jointStep[i] * fraction;
