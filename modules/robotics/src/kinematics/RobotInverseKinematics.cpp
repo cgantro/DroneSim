@@ -477,6 +477,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
     auto& candidate = candidateScratch_;
     auto& active = activeJointScratch_;
     auto& columns = jacobianColumnsScratch_;
+    const double orientationWeight = OrientationWeight(sessionOptions_);
     const auto markConverged = [&]
     {
         sessionResult_.status = IkStatus::Success;
@@ -495,7 +496,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
     {
         const auto& state = forward_.Update(angles);
         const Pose3 current = Compose(state.toolFrameInBaseFrame, tcpInToolFrame_);
-        const Error error = Measure(sessionTarget_, current, OrientationWeight(sessionOptions_));
+        const Error error = Measure(sessionTarget_, current, orientationWeight);
         recordCurrentResult(error);
         if (HasConverged(error, sessionOptions_))
         {
@@ -523,7 +524,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
             const Vec3 axis = state.jointAxesInBaseFrame[i];
             columns[i] = JacobianColumn(specification_.joints[i], axis,
                 current.positionMeters, state.linkPosesInBaseFrame[i].positionMeters,
-                OrientationWeight(sessionOptions_));
+                orientationWeight);
         }
 
         bool improved = false;
@@ -566,7 +567,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
                         : requested;
                 }
                 const Error next = Measure(sessionTarget_, Compose(forward_.Update(candidate).toolFrameInBaseFrame, tcpInToolFrame_),
-                    OrientationWeight(sessionOptions_));
+                    orientationWeight);
                 if (next.cost < error.cost)
                 {
                     angles.swap(candidate);
@@ -623,7 +624,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
     {
         const auto& state = forward_.Update(angles);
         const Error error = Measure(sessionTarget_, Compose(state.toolFrameInBaseFrame, tcpInToolFrame_),
-            OrientationWeight(sessionOptions_));
+            orientationWeight);
         recordCurrentResult(error);
         if (HasConverged(error, sessionOptions_))
         {
