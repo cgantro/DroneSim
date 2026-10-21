@@ -282,8 +282,6 @@ bool ViewerApp::InitViewer()
 
 void ViewerApp::InitScene(Entity& robotRoot, Entity& floorEntity)
 {
-    Scene* scene = m_Scene.get();
-
     m_RobotShader = Shader::Create("shaders/Robot.glsl");
     auto gridShader = Shader::Create("shaders/Grid.glsl");
 
@@ -297,7 +295,7 @@ void ViewerApp::InitScene(Entity& robotRoot, Entity& floorEntity)
 
     // GLB의 node 부모 관계를 Flecs Entity 계층으로 복사해 모델에 정의된 관절과 링크를 찾는다.
     robotRoot = CreateModel(
-        *scene,
+        *m_Scene,
         m_RobotModel,
         *m_AssetManager,
         m_RobotShader);
@@ -307,7 +305,7 @@ void ViewerApp::InitScene(Entity& robotRoot, Entity& floorEntity)
     m_AssetManager->UploadModel(planeModel);
 
     floorEntity = CreateModel(
-        *scene,
+        *m_Scene,
         planeModel,
         *m_AssetManager,
         gridShader);
