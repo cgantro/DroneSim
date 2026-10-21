@@ -797,39 +797,28 @@ struct LinearPathPlanningJob::Impl
         CompleteCandidateValidation(pathInvalidity, std::move(diagnostic));
     }
 
-    void FinishContinuationSeeds()
+    void AppendAlternativeSeeds(const std::vector<PathCandidate>& previous,
+        const std::vector<std::vector<JointVector>>& alternativeSeeds)
     {
-        const auto& previous = layers.back();
-        for (std::size_t parent = 0; parent < previous.size(); ++parent)
-        {
-            if (!parentHasValidChild[parent] || !parentHasContinuation[parent])
-                parentNeedsSearch[parent] = true;
-        }
-        if (candidates.size() < previous.size())
-            std::fill(parentNeedsSearch.begin(), parentNeedsSearch.end(), true);
-
-        std::vector<std::vector<JointVector>> reflectedSeeds(previous.size());
-        for (std::size_t parent = 0; parent < previous.size(); ++parent)
-        {
-            if (parentNeedsSearch[parent])
-                reflectedSeeds[parent] = kinematics::detail::BuildAlternativeIkSeeds(
-                    previous[parent].joints, *specification);
-        }
         for (std::size_t branch = 0; seeds.size() < policy.maximumIkSeedAttemptsPerSample; ++branch)
         {
             bool addedSeed = false;
             for (std::size_t parent = 0; parent < previous.size() &&
                 seeds.size() < policy.maximumIkSeedAttemptsPerSample; ++parent)
             {
-                if (parentNeedsSearch[parent] && branch < reflectedSeeds[parent].size())
+                if (parentNeedsSearch[parent] && branch < alternativeSeeds[parent].size())
                 {
-                    seeds.push_back({parent, reflectedSeeds[parent][branch], false});
+                    seeds.push_back({parent, alternativeSeeds[parent][branch], false});
                     addedSeed = true;
                 }
             }
             if (!addedSeed)
                 break;
         }
+    }
+
+    void AppendRestartSeeds(const std::vector<PathCandidate>& previous)
+    {
         for (std::size_t restart = 1; seeds.size() < policy.maximumIkSeedAttemptsPerSample; ++restart)
         {
             bool addedSeed = false;
@@ -848,6 +837,28 @@ struct LinearPathPlanningJob::Impl
             if (!addedSeed)
                 break;
         }
+    }
+
+    void FinishContinuationSeeds()
+    {
+        const auto& previous = layers.back();
+        for (std::size_t parent = 0; parent < previous.size(); ++parent)
+        {
+            if (!parentHasValidChild[parent] || !parentHasContinuation[parent])
+                parentNeedsSearch[parent] = true;
+        }
+        if (candidates.size() < previous.size())
+            std::fill(parentNeedsSearch.begin(), parentNeedsSearch.end(), true);
+
+        std::vector<std::vector<JointVector>> reflectedSeeds(previous.size());
+        for (std::size_t parent = 0; parent < previous.size(); ++parent)
+        {
+            if (parentNeedsSearch[parent])
+                reflectedSeeds[parent] = kinematics::detail::BuildAlternativeIkSeeds(
+                    previous[parent].joints, *specification);
+        }
+        AppendAlternativeSeeds(previous, reflectedSeeds);
+        AppendRestartSeeds(previous);
         seedIndex = previous.size();
         expandedSeeds = true;
         phase = Phase::SolveSeed;
