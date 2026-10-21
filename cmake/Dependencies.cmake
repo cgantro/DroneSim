@@ -10,6 +10,19 @@ function(aerosimlab_add_common_dependencies)
   FetchContent_MakeAvailable(glm)
 endfunction()
 
+function(aerosimlab_add_ecs_dependencies)
+  set(FLECS_SHARED OFF CACHE BOOL "Build Flecs as a shared library" FORCE)
+  set(FLECS_STATIC ON CACHE BOOL "Build Flecs as a static library" FORCE)
+  set(FLECS_TESTS OFF CACHE BOOL "Disable Flecs tests" FORCE)
+  FetchContent_Declare(
+    flecs
+    GIT_REPOSITORY https://github.com/SanderMertens/flecs.git
+    GIT_TAG v4.1.6
+    GIT_SHALLOW TRUE
+  )
+  FetchContent_MakeAvailable(flecs)
+endfunction()
+
 function(aerosimlab_add_scenario_dependencies)
   set(JSON_BuildTests OFF CACHE INTERNAL "Disable dependency tests")
   set(JSON_Install OFF CACHE INTERNAL "Do not install a project-private dependency")

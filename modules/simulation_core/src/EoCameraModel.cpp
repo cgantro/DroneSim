@@ -2,41 +2,36 @@
 
 namespace aerosimlab::simulation
 {
-void EoCameraModel::AdvanceOneTick(std::uint64_t tick) noexcept
+void EoCameraModel::AdvanceOneTick(CameraState& state, std::uint64_t tick) noexcept
 {
-    if (state_.status != CameraStatus::Active)
+    if (state.status != CameraStatus::Active)
         return;
 
-    ++state_.frameCount;
-    state_.lastFrameTick = tick;
+    ++state.frameCount;
+    state.lastFrameTick = tick;
 }
 
-void EoCameraModel::SetEnabled(bool enabled) noexcept
+void EoCameraModel::SetEnabled(CameraState& state, bool enabled) noexcept
 {
-    if (state_.status == CameraStatus::Fault)
+    if (state.status == CameraStatus::Fault)
         return;
 
-    state_.status = enabled ? CameraStatus::Active : CameraStatus::Disabled;
+    state.status = enabled ? CameraStatus::Active : CameraStatus::Disabled;
 }
 
-void EoCameraModel::InjectFault() noexcept
+void EoCameraModel::InjectFault(CameraState& state) noexcept
 {
-    state_.status = CameraStatus::Fault;
+    state.status = CameraStatus::Fault;
 }
 
-void EoCameraModel::Recover() noexcept
+void EoCameraModel::Recover(CameraState& state) noexcept
 {
-    state_.status = CameraStatus::Active;
+    state.status = CameraStatus::Active;
 }
 
-void EoCameraModel::Reset() noexcept
+void EoCameraModel::Reset(CameraState& state) noexcept
 {
-    state_ = {};
-}
-
-const CameraState& EoCameraModel::State() const noexcept
-{
-    return state_;
+    state = {};
 }
 
 std::string_view ToString(CameraStatus status) noexcept

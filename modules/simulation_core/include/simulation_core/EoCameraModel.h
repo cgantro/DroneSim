@@ -25,30 +25,24 @@ struct CameraState
     std::uint64_t lastFrameTick = 0;
 };
 
-/** @brief 모의 시간에 맞춰 EO 카메라의 프레임 생성과 장애 상태를 갱신한다. */
+/** @brief Flecs의 카메라 상태 Component에 적용할 센서 동작을 제공한다. */
 class EoCameraModel
 {
 public:
     /** @brief 현재 Tick에서 영상 생성이 가능하면 프레임 번호를 갱신한다. */
-    void AdvanceOneTick(std::uint64_t tick) noexcept;
+    static void AdvanceOneTick(CameraState& state, std::uint64_t tick) noexcept;
 
     /** @brief 카메라를 켜거나 끈다. */
-    void SetEnabled(bool enabled) noexcept;
+    static void SetEnabled(CameraState& state, bool enabled) noexcept;
 
     /** @brief 카메라 고장을 주입한다. */
-    void InjectFault() noexcept;
+    static void InjectFault(CameraState& state) noexcept;
 
     /** @brief 고장을 해제하고 카메라를 다시 켠다. */
-    void Recover() noexcept;
+    static void Recover(CameraState& state) noexcept;
 
     /** @brief 프레임 번호와 센서 상태를 초기값으로 되돌린다. */
-    void Reset() noexcept;
-
-    /** @brief 현재 센서 상태를 반환한다. */
-    [[nodiscard]] const CameraState& State() const noexcept;
-
-private:
-    CameraState state_;
+    static void Reset(CameraState& state) noexcept;
 };
 
 /** @brief 센서 상태를 시나리오 결과와 사용자 화면에 쓸 짧은 이름으로 바꾼다. */

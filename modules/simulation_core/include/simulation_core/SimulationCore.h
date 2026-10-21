@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 namespace aerosimlab::simulation
 {
@@ -32,6 +33,15 @@ private:
 class SimulationCore
 {
 public:
+    /** @brief Flecs 실행 공간을 만들고 드론과 탑재 카메라를 준비한다. */
+    SimulationCore();
+
+    /** @brief 모의 객체와 Flecs 실행 공간을 함께 정리한다. */
+    ~SimulationCore();
+
+    SimulationCore(const SimulationCore&) = delete;
+    SimulationCore& operator=(const SimulationCore&) = delete;
+
     /** @brief 드론에 명령을 보내고 적용 결과를 반환한다. */
     [[nodiscard]] CommandResult Apply(const DroneCommand& command) noexcept;
 
@@ -69,9 +79,8 @@ public:
     [[nodiscard]] bool IsPaused() const noexcept;
 
 private:
-    DroneModel drone_;
-    EoCameraModel camera_;
-    std::uint64_t tickCount_ = 0;
+    struct EcsStorage;
+    std::unique_ptr<EcsStorage> ecs_;
     bool paused_ = false;
 };
 }

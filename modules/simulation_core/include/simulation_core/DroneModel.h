@@ -31,6 +31,13 @@ struct DroneState
     FlightMode mode = FlightMode::Grounded;
 };
 
+/** @brief 다음 모의 단계에 사용할 드론 제어 목표를 보관한다. */
+struct DroneControlState
+{
+    glm::dvec3 waypointMeters{0.0};
+    double commandedYawRateRadiansPerSecond = 0.0;
+};
+
 /**
  * @brief 지상통제·시나리오·수동 조작이 함께 사용할 드론 명령을 나타낸다.
  * @details vector에는 목표 속도 또는 월드 좌표의 경유점을 넣고, yawRate에는 라디안/초 단위 회전 속도를 넣는다.
@@ -63,9 +70,9 @@ enum class CommandResult
 };
 
 /**
- * @brief 고정 시간 간격으로 갱신하는 단순 쿼드콥터 운동 모델이다.
- * @details 실제 공기 흐름이나 모터 힘을 계산하지 않고 위치와 속도를 갱신한다. 한 단계는 1/60초이며,
- * 이 모델은 시나리오·명령 흐름을 시험하기 위한 것이므로 실제 비행 성능을 예측하지 않는다.
+ * @brief 현재 비행 규칙을 드론 상태 데이터에 적용한다.
+ * @details 실제 공기 흐름이나 모터 힘은 계산하지 않는다. 이 규칙은 시나리오·명령 흐름을 시험하기 위한 것으로,
+ * 실제 비행 성능을 예측하지 않는다.
  */
 class DroneModel
 {
@@ -74,17 +81,15 @@ public:
     static constexpr double maximumSpeedMetersPerSecond = 5.0;
     static constexpr double maximumYawRateRadiansPerSecond = 1.5;
 
-    /** @brief 현재 비행 상태를 반환한다. */
-    [[nodiscard]] const DroneState& State() const noexcept;
-
     /** @brief 허용되는 비행 상태와 입력 값인지 확인한 뒤 명령을 적용한다. */
-    [[nodiscard]] CommandResult Apply(const DroneCommand& command) noexcept;
+    [[nodiscard]] static CommandResult Apply(
+        DroneState& state, DroneControlState& control, const DroneCommand& command) noexcept;
 
     /** @brief 고정된 1/60초만큼 위치와 방향을 갱신한다. */
-    void AdvanceOneTick() noexcept;
+    static void AdvanceOneTick(DroneState& state, DroneControlState& control) noexcept;
 
     /** @brief 드론을 원점의 지상 상태로 되돌린다. */
-    void Reset() noexcept;
+    static void Reset(DroneState& state, DroneControlState& control) noexcept;
 
 private:
     static constexpr double takeoffHeightMeters = 1.5;
@@ -92,10 +97,6 @@ private:
     static constexpr double waypointToleranceMeters = 0.05;
     static constexpr double altitudeToleranceMeters = 1.0e-12;
 
-    [[nodiscard]] bool IsAirborne() const noexcept;
-
-    DroneState state_;
-    glm::dvec3 waypointMeters_{0.0};
-    double commandedYawRateRadiansPerSecond_ = 0.0;
+    [[nodiscard]] static bool IsAirborne(const DroneState& state) noexcept;
 };
 }

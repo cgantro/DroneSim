@@ -1,9 +1,42 @@
 #include "simulation_core/SimulationCore.h"
 
+#include <flecs.h>
+
 #include <algorithm>
+#include <memory>
 
 namespace aerosimlab::simulation
 {
+struct SimulationCore::EcsStorage
+{
+    flecs::world world;
+    flecs::entity drone;
+    flecs::entity camera;
+    std::uint64_t tickCount = 0;
+
+    EcsStorage()
+    {
+        drone = world.entity("Drone")
+            .set<DroneState>({})
+            .set<DroneControlState>({});
+        camera = world.entity("EoCamera").set<CameraState>({});
+
+        world.system<DroneState, DroneControlState>("AdvanceDrone")
+            .kind(flecs::OnUpdate)
+            .each([](DroneState& state, DroneControlState& control)
+            {
+                DroneModel::AdvanceOneTick(state, control);
+            });
+
+        world.system<CameraState>("AdvanceCamera")
+            .kind(flecs::OnUpdate)
+            .each([this](CameraState& state)
+            {
+                EoCameraModel::AdvanceOneTick(state, tickCount + 1);
+            });
+    }
+};
+
 std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
 {
     accumulatedSeconds_ += std::min(elapsedSeconds, maximumFrameSeconds);
@@ -17,13 +50,23 @@ std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
     return tickCount;
 }
 
+SimulationCore::SimulationCore()
+    : ecs_(std::make_unique<EcsStorage>())
+{
+}
+
+SimulationCore::~SimulationCore() = default;
+
 CommandResult SimulationCore::Apply(const DroneCommand& command) noexcept
 {
     if (paused_)
     {
         return CommandResult::SimulationPaused;
     }
-    return drone_.Apply(command);
+    return DroneModel::Apply(
+        ecs_->drone.get_mut<DroneState>(),
+        ecs_->drone.get_mut<DroneControlState>(),
+        command);
 }
 
 void SimulationCore::AdvanceOneTick() noexcept
@@ -32,9 +75,8 @@ void SimulationCore::AdvanceOneTick() noexcept
     {
         return;
     }
-    drone_.AdvanceOneTick();
-    camera_.AdvanceOneTick(tickCount_ + 1);
-    ++tickCount_;
+    ecs_->world.progress(DroneModel::fixedStepSeconds);
+    ++ecs_->tickCount;
 }
 
 void SimulationCore::Pause() noexcept
@@ -49,43 +91,45 @@ void SimulationCore::Resume() noexcept
 
 void SimulationCore::Reset() noexcept
 {
-    drone_.Reset();
-    camera_.Reset();
-    tickCount_ = 0;
+    DroneModel::Reset(
+        ecs_->drone.get_mut<DroneState>(),
+        ecs_->drone.get_mut<DroneControlState>());
+    EoCameraModel::Reset(ecs_->camera.get_mut<CameraState>());
+    ecs_->tickCount = 0;
     paused_ = false;
 }
 
 const DroneState& SimulationCore::State() const noexcept
 {
-    return drone_.State();
+    return ecs_->drone.get<DroneState>();
 }
 
 const CameraState& SimulationCore::Camera() const noexcept
 {
-    return camera_.State();
+    return ecs_->camera.get<CameraState>();
 }
 
 void SimulationCore::SetCameraEnabled(bool enabled) noexcept
 {
-    camera_.SetEnabled(enabled);
+    EoCameraModel::SetEnabled(ecs_->camera.get_mut<CameraState>(), enabled);
 }
 
 void SimulationCore::SetCameraFault(bool faulted) noexcept
 {
     if (faulted)
-        camera_.InjectFault();
+        EoCameraModel::InjectFault(ecs_->camera.get_mut<CameraState>());
     else
-        camera_.Recover();
+        EoCameraModel::Recover(ecs_->camera.get_mut<CameraState>());
 }
 
 std::uint64_t SimulationCore::TickCount() const noexcept
 {
-    return tickCount_;
+    return ecs_->tickCount;
 }
 
 double SimulationCore::SimulationTimeSeconds() const noexcept
 {
-    return static_cast<double>(tickCount_) * DroneModel::fixedStepSeconds;
+    return static_cast<double>(ecs_->tickCount) * DroneModel::fixedStepSeconds;
 }
 
 bool SimulationCore::IsPaused() const noexcept

@@ -39,6 +39,7 @@ endif()
 
 option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
 aerosimlab_add_common_dependencies()
+aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
 
 add_library(aerosimlab_simulation_core STATIC
@@ -50,7 +51,7 @@ add_library(aerosimlab_simulation_core STATIC
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm
-  PRIVATE nlohmann_json::nlohmann_json
+  PRIVATE nlohmann_json::nlohmann_json flecs::flecs_static
 )
 
 add_library(aerosimlab_communication STATIC
