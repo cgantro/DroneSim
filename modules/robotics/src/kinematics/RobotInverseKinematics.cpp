@@ -464,6 +464,12 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
     auto& candidate = candidateScratch_;
     auto& active = activeJointScratch_;
     auto& columns = jacobianColumnsScratch_;
+    const auto markConverged = [&]
+    {
+        sessionResult_.status = IkStatus::Success;
+        sessionResult_.terminationReason = IkTerminationReason::Converged;
+        sessionState_ = IkSessionState::Completed;
+    };
     const auto recordCurrentResult = [&](const Error& error)
     {
         sessionResult_.jointPositions = angles;
@@ -480,9 +486,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         recordCurrentResult(error);
         if (HasConverged(error, sessionOptions_))
         {
-            sessionResult_.status = IkStatus::Success;
-            sessionResult_.terminationReason = IkTerminationReason::Converged;
-            sessionState_ = IkSessionState::Completed;
+            markConverged();
             break;
         }
         if (!std::isfinite(error.cost))
@@ -610,9 +614,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         recordCurrentResult(error);
         if (HasConverged(error, sessionOptions_))
         {
-            sessionResult_.status = IkStatus::Success;
-            sessionResult_.terminationReason = IkTerminationReason::Converged;
-            sessionState_ = IkSessionState::Completed;
+            markConverged();
         }
         else
         {
