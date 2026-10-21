@@ -45,23 +45,40 @@ std::vector<glm::mat4> BuildNodeWorldTransforms(const ModelResource& model)
     std::vector<glm::mat4> transforms(model.nodes.size(), glm::mat4(1.0F));
     std::vector<bool> ready(model.nodes.size(), false);
     std::vector<bool> visiting(model.nodes.size(), false);
-    auto build = [&](auto&& self, std::size_t index) -> const glm::mat4&
+    std::vector<std::size_t> parentPath;
+    for (std::size_t start = 0; start < model.nodes.size(); ++start)
     {
-        if (ready[index]) return transforms[index];
-        if (visiting[index])
-            throw std::invalid_argument(ModelTransformErrorMessages::nodeCycle);
-        visiting[index] = true;
-        const NodeData& node = model.nodes[index];
-        if (node.parentIndex && *node.parentIndex >= model.nodes.size())
-            throw std::invalid_argument(ModelTransformErrorMessages::invalidParentNode);
-        transforms[index] = NodeLocalTransform(node);
-        if (node.parentIndex)
-            transforms[index] = self(self, *node.parentIndex) * transforms[index];
-        ready[index] = true;
-        visiting[index] = false;
-        return transforms[index];
-    };
-    for (std::size_t i = 0; i < model.nodes.size(); ++i) build(build, i);
+        if (ready[start])
+            continue;
+
+        parentPath.clear();
+        std::size_t current = start;
+        while (!ready[current])
+        {
+            if (visiting[current])
+                throw std::invalid_argument(ModelTransformErrorMessages::nodeCycle);
+
+            visiting[current] = true;
+            parentPath.push_back(current);
+            const NodeData& node = model.nodes[current];
+            if (!node.parentIndex)
+                break;
+            if (*node.parentIndex >= model.nodes.size())
+                throw std::invalid_argument(ModelTransformErrorMessages::invalidParentNode);
+            current = *node.parentIndex;
+        }
+
+        // 부모 경로를 모은 뒤 부모부터 변환을 계산해 깊은 GLB 계층도 호출 스택을 키우지 않는다.
+        for (auto node = parentPath.rbegin(); node != parentPath.rend(); ++node)
+        {
+            const NodeData& source = model.nodes[*node];
+            transforms[*node] = NodeLocalTransform(source);
+            if (source.parentIndex)
+                transforms[*node] = transforms[*source.parentIndex] * transforms[*node];
+            ready[*node] = true;
+            visiting[*node] = false;
+        }
+    }
     return transforms;
 }
 

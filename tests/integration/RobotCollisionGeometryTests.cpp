@@ -18,6 +18,7 @@
 #include "simulation/robotics/RobotEnvironmentCollisionGuard.h"
 #include "simulation/robotics/RobotSelfCollisionPolicy.h"
 #include "simulation/systems/PhysicsSystemModule.h"
+#include "CollisionGeometry.h"
 #include "robotics/backends/simulation/SimRobotController.h"
 #include "scene/TransformSystemModule.h"
 
@@ -81,6 +82,18 @@ RobotLink BoxLink(const char* name, const glm::dvec3& size)
 void CheckSyntheticGeometry()
 {
     using namespace grasplink::robotics;
+    constexpr std::size_t deepHierarchyNodeCount = 50'000;
+    grasplink::model::ModelResource deepHierarchy;
+    deepHierarchy.nodes.resize(deepHierarchyNodeCount);
+    for (std::size_t node = 0; node + 1 < deepHierarchyNodeCount; ++node)
+    {
+        deepHierarchy.nodes[node].parentIndex = node + 1;
+        deepHierarchy.nodes[node].translation.x = 0.001F;
+    }
+    const auto deepTransforms = grasplink::simulation::detail::BuildNodeWorldTransforms(deepHierarchy);
+    ASSERT_EQ(deepTransforms.size(), deepHierarchyNodeCount);
+    EXPECT_NEAR(deepTransforms.front()[3].x, 49.999F, 0.1F);
+
     RobotModel model;
     model.name = "TwoLink";
     model.baseLink = 0;
