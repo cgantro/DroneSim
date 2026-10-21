@@ -184,6 +184,9 @@ public:
     [[nodiscard]] CartesianPose EvaluateTcp(const JointVector& jointPositions);
 
 private:
+    void FinishSession(IkStatus status, IkTerminationReason reason, const char* message);
+    void FinishAtIterationLimit();
+
     const models::RobotSpecification& specification_;
     RobotKinematics forward_;
     models::Pose3 tcpInToolFrame_;

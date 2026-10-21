@@ -393,6 +393,39 @@ LevenbergMarquardtIk::SessionId LevenbergMarquardtIk::BeginSingleSeed(
     return activeSessionId_;
 }
 
+void LevenbergMarquardtIk::FinishSession(
+    IkStatus status, IkTerminationReason reason, const char* message)
+{
+    sessionResult_.status = status;
+    sessionResult_.message = message;
+    sessionResult_.terminationReason = reason;
+    if (status != IkStatus::Success && sessionOptions_.collectFailureJacobianDiagnostics &&
+        jointPositionsScratch_.size() == specification_.jointCount)
+    {
+        const auto& state = forward_.Update(jointPositionsScratch_);
+        const Pose3 current = Compose(state.toolFrameInBaseFrame, tcpInToolFrame_);
+        for (std::size_t joint = 0; joint < jacobianColumnsScratch_.size(); ++joint)
+        {
+            const Vec3 axis = state.jointAxesInBaseFrame[joint];
+            jacobianColumnsScratch_[joint] = JacobianColumn(specification_.joints[joint], axis,
+                current.positionMeters, state.linkPosesInBaseFrame[joint].positionMeters,
+                OrientationWeight(sessionOptions_));
+        }
+        const auto [minimum, condition] = JacobianCondition(jacobianColumnsScratch_);
+        sessionResult_.weightedJacobianMinimumSingularValue = minimum;
+        sessionResult_.weightedJacobianConditionNumber = condition;
+    }
+    sessionState_ = IkSessionState::Completed;
+}
+
+void LevenbergMarquardtIk::FinishAtIterationLimit()
+{
+    FinishSession(
+        sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
+        sessionActiveJointLimit_ ? IkTerminationReason::ActiveJointLimit : IkTerminationReason::IterationLimit,
+        sessionActiveJointLimit_ ? IkErrorMessages::constrainedIterationLimit : IkErrorMessages::iterationLimitReached);
+}
+
 IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size_t iterationBudget)
 {
     if (session != activeSessionId_)
@@ -412,34 +445,6 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         sessionResult_.positionErrorMeters = error.position;
         sessionResult_.orientationErrorRadians = error.orientation;
     };
-    const auto finish = [&](IkStatus status, IkTerminationReason reason, const char* message) {
-        sessionResult_.status = status;
-        sessionResult_.message = message;
-        sessionResult_.terminationReason = reason;
-        if (status != IkStatus::Success && sessionOptions_.collectFailureJacobianDiagnostics &&
-            angles.size() == specification_.jointCount)
-        {
-            const auto& state = forward_.Update(angles);
-            const Pose3 current = Compose(state.toolFrameInBaseFrame, tcpInToolFrame_);
-            for (std::size_t joint = 0; joint < columns.size(); ++joint)
-            {
-                const Vec3 axis = state.jointAxesInBaseFrame[joint];
-                columns[joint] = JacobianColumn(specification_.joints[joint], axis,
-                    current.positionMeters, state.linkPosesInBaseFrame[joint].positionMeters,
-                    OrientationWeight(sessionOptions_));
-            }
-            const auto [minimum, condition] = JacobianCondition(columns);
-            sessionResult_.weightedJacobianMinimumSingularValue = minimum;
-            sessionResult_.weightedJacobianConditionNumber = condition;
-        }
-        sessionState_ = IkSessionState::Completed;
-    };
-    const auto finishAtIterationLimit = [&]()
-    {
-        finish(sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
-            sessionActiveJointLimit_ ? IkTerminationReason::ActiveJointLimit : IkTerminationReason::IterationLimit,
-            sessionActiveJointLimit_ ? IkErrorMessages::constrainedIterationLimit : IkErrorMessages::iterationLimitReached);
-    };
     std::size_t iterationsUsed = 0;
     while (sessionState_ == IkSessionState::Running && iterationsUsed < iterationBudget)
     {
@@ -456,13 +461,13 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         }
         if (!std::isfinite(error.cost))
         {
-            finish(IkStatus::InvalidInput, IkTerminationReason::InvalidInput,
+            FinishSession(IkStatus::InvalidInput, IkTerminationReason::InvalidInput,
                 IkErrorMessages::numericRangeExceeded);
             break;
         }
         if (sessionIteration_ == sessionOptions_.maxIterations)
         {
-            finishAtIterationLimit();
+            FinishAtIterationLimit();
             break;
         }
 
@@ -490,7 +495,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
                 solvedDampedSystem, activeLimitBlockedThisIteration);
             if (stepStatus == FeasibleStepStatus::NonFiniteStep)
             {
-                finish(IkStatus::DidNotConverge, IkTerminationReason::NumericalFailure,
+                FinishSession(IkStatus::DidNotConverge, IkTerminationReason::NumericalFailure,
                     IkErrorMessages::nonFiniteNumericalStep);
                 break;
             }
@@ -567,7 +572,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         if (!improved)
         {
             sessionActiveJointLimit_ = activeLimitBlockedThisIteration;
-            finish(sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
+            FinishSession(sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
                 sessionActiveJointLimit_ ? IkTerminationReason::ActiveJointLimit : IkTerminationReason::Stagnation,
                 sessionActiveJointLimit_ ? IkErrorMessages::jointLimitsBlockImprovement : IkErrorMessages::localIterationStalled);
             break;
@@ -578,7 +583,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         sessionResult_.iterations = sessionIteration_;
         if (sessionStagnantIterations_ >= sessionOptions_.stagnationIterationLimit)
         {
-            finish(sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
+            FinishSession(sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
                 sessionActiveJointLimit_ ? IkTerminationReason::ActiveJointLimit : IkTerminationReason::Stagnation,
                 sessionActiveJointLimit_ ? IkErrorMessages::progressStalledByJointLimits : IkErrorMessages::progressStalled);
             break;
@@ -598,7 +603,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         }
         else
         {
-            finishAtIterationLimit();
+            FinishAtIterationLimit();
         }
     }
     return sessionState_;
