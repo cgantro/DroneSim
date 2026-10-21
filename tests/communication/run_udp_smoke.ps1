@@ -243,13 +243,15 @@ try {
     if ([AeroSimLabUiTestWindow]::ReadControlText($statusText) -notmatch '입력 기록을 시작했습니다') {
         throw '지상통제 창에서 입력 기록을 시작하지 못했습니다.'
     }
-    $takeoffResult = Invoke-GroundControlCli @('--port', "$port", '--command', 'takeoff')
-    if ($takeoffResult.ExitCode -ne 0) {
-        throw "기록 중 이륙 명령이 적용되지 않았습니다.`n$($takeoffResult.Output)"
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::TakeoffButton)
+    $takeoffTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($takeoffTelemetry -notmatch '비행 상태: taking_off') {
+        throw "지상통제 창의 이륙 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$takeoffTelemetry"
     }
-    $recordedLanding = Invoke-GroundControlCli @('--port', "$port", '--command', 'land')
-    if ($recordedLanding.ExitCode -ne 0) {
-        throw "기록 중 착륙 명령이 적용되지 않았습니다.`n$($recordedLanding.Output)"
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::LandButton)
+    $recordedLandingTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($recordedLandingTelemetry -notmatch '비행 상태: landing') {
+        throw "기록 중 지상통제 창의 착륙 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$recordedLandingTelemetry"
     }
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::RecordingStopButton)
     if ([AeroSimLabUiTestWindow]::ReadControlText($statusText) -notmatch '기록을 마쳤습니다') {
