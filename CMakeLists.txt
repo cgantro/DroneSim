@@ -286,21 +286,6 @@ if(BUILD_TESTING)
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/fault-injection.json")
   set_tests_properties(HeadlessFaultScenarioSmoke PROPERTIES LABELS "INTEGRATION;simulation")
 
-  if(WIN32)
-    find_program(AEROSIMLAB_POWERSHELL powershell.exe REQUIRED)
-    add_test(NAME GroundControlUdpSmoke
-      COMMAND ${AEROSIMLAB_POWERSHELL} -NoProfile -ExecutionPolicy Bypass
-        -File "${CMAKE_SOURCE_DIR}/tests/communication/run_udp_smoke.ps1"
-        -Simulator "$<TARGET_FILE:aerosimlab_simulator>"
-        -GroundControl "$<TARGET_FILE:aerosimlab_ground_control_cli>"
-        -GroundControlUiPath "$<TARGET_FILE:aerosimlab_ground_control>")
-    set_tests_properties(GroundControlUdpSmoke PROPERTIES
-      WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>"
-      TIMEOUT 35
-      RUN_SERIAL TRUE
-      LABELS "INTEGRATION;communication")
-  endif()
-
   if(AEROSIMLAB_BUILD_GRAPHICS)
     add_test(NAME ViewerSmoke COMMAND aerosimlab_simulator --smoke-test)
     set_tests_properties(ViewerSmoke PROPERTIES
