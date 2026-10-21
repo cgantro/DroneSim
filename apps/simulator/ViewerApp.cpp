@@ -746,7 +746,6 @@ void ViewerApp::Shutdown()
     m_Renderer.reset();
     m_Window.reset();
 
-    m_Logger.Flush();
     m_Logger.Shutdown();
 }
 

@@ -19,8 +19,6 @@ TEST(Logger, FlushesRecordsAndRejectsWritesAfterShutdown)
         grasplink::diagnostics::Logger logger({path.string(), 4});
         logger.Write(grasplink::diagnostics::LogLevel::Error, "arm\"control", "line 1\nline 2");
         logger.RecordMetric("solver_residual", std::numeric_limits<double>::quiet_NaN(), "m");
-        logger.Flush();
-
         logger.Shutdown();
         logger.Write(grasplink::diagnostics::LogLevel::Error, "test", "after shutdown");
 
