@@ -234,6 +234,14 @@ if(BUILD_TESTING)
   add_executable(aerosimlab_communication_tests
     tests/communication/ProtocolTests.cpp
   )
+  if(NOT EMSCRIPTEN)
+    target_sources(aerosimlab_communication_tests PRIVATE
+      tests/communication/GroundControlClientTests.cpp
+    )
+    target_link_libraries(aerosimlab_communication_tests PRIVATE
+      aerosimlab_ground_control_client
+    )
+  endif()
   target_link_libraries(aerosimlab_communication_tests PRIVATE
     aerosimlab_communication
     GTest::gtest_main
