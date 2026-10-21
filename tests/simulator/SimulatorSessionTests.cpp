@@ -34,7 +34,8 @@ TEST(SimulatorSession, RecordingReplayOverUdp)
                 .udpPort = simulatorPort,
                 .demoMode = false,
                 .networkEnabled = true,
-                .benchmarkMode = false
+                .benchmarkMode = false,
+                .groundControlCommandTimeoutTicks = 10
             });
             simulatorExit.set_value(app.Run());
         }
@@ -72,6 +73,31 @@ TEST(SimulatorSession, RecordingReplayOverUdp)
         });
         EXPECT_TRUE(takeoff.accepted);
         EXPECT_EQ(takeoff.status, "applied");
+
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        const auto velocity = send([](communication::CommandPacket& packet)
+        {
+            packet.droneCommand = simulation::DroneCommand{
+                simulation::DroneCommand::Kind::SetVelocity, {1.0, 0.0, 0.0}};
+        });
+        EXPECT_TRUE(velocity.accepted);
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        const auto stopped = send([](communication::CommandPacket& packet)
+        {
+            packet.cameraCommand = communication::CameraCommand::Enable;
+        });
+        EXPECT_TRUE(stopped.accepted);
+        EXPECT_EQ(stopped.telemetry.drone.mode, simulation::FlightMode::Hovering);
+        const double positionAfterStopMeters = stopped.telemetry.drone.positionMeters.x;
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        const auto settled = send([](communication::CommandPacket& packet)
+        {
+            packet.cameraCommand = communication::CameraCommand::Enable;
+        });
+        EXPECT_EQ(settled.telemetry.drone.mode, simulation::FlightMode::Hovering);
+        EXPECT_NEAR(settled.telemetry.drone.positionMeters.x, positionAfterStopMeters, 0.1);
 
         const auto land = send([](communication::CommandPacket& packet)
         {

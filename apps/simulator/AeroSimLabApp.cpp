@@ -259,8 +259,11 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
 AeroSimLabApp::AeroSimLabApp(Options options)
     : smokeTest_(options.smokeTest), demoMode_(options.demoMode),
       networkEnabled_(options.networkEnabled), benchmarkMode_(options.benchmarkMode),
+      groundControlCommandTimeoutTicks_(options.groundControlCommandTimeoutTicks),
       udpPort_(options.udpPort)
 {
+    if (groundControlCommandTimeoutTicks_ == 0)
+        throw std::invalid_argument("지상통제 명령 유효기간은 1 Tick 이상이어야 합니다.");
     if (benchmarkMode_)
         simulation_.SetPhysicsStepTimingEnabled(true);
 #ifndef __EMSCRIPTEN__
@@ -414,6 +417,7 @@ void AeroSimLabApp::AdvanceSimulationTick()
 {
     if (demoMode_ && !externalControl_)
         ApplyDemoCommands();
+    ExpireGroundControlCommand();
 #ifndef __EMSCRIPTEN__
     const bool hasGroundCommand = pendingCommand_.has_value();
 #else
@@ -807,6 +811,7 @@ bool AeroSimLabApp::ApplySessionCommand(
         }
 
         simulation_.Reset();
+        groundControlCommandExpiresAtTick_.reset();
         (void)commandRecording_.StartRecording();
         externalControl_ = true;
         window_->SetTitle("AeroSimLab | 입력 기록 중");
@@ -840,6 +845,7 @@ bool AeroSimLabApp::ApplySessionCommand(
         }
 
         simulation_.Reset();
+        groundControlCommandExpiresAtTick_.reset();
         smokeReplayStarted_ = smokeTest_;
         pendingControllerAction_.reset();
         pendingPilotCommand_.reset();
@@ -868,7 +874,25 @@ void AeroSimLabApp::ApplyDroneCommand(
     const auto result = simulation_.Apply(command);
     reply.accepted = result == aerosimlab::simulation::CommandResult::Accepted;
     if (reply.accepted)
+    {
         RecordCommand(command);
+        const bool velocityCommand = command.kind
+            == aerosimlab::simulation::DroneCommand::Kind::SetVelocity;
+        const bool yawRateCommand = command.kind
+            == aerosimlab::simulation::DroneCommand::Kind::SetYawRate;
+        const bool hasNonzeroInput = velocityCommand
+            ? glm::length(command.vector) > 0.0
+            : command.yawRateRadiansPerSecond != 0.0;
+        if ((velocityCommand || yawRateCommand) && hasNonzeroInput)
+        {
+            groundControlCommandExpiresAtTick_ = simulation_.TickCount()
+                + groundControlCommandTimeoutTicks_;
+        }
+        else
+        {
+            groundControlCommandExpiresAtTick_.reset();
+        }
+    }
 
     using Result = aerosimlab::simulation::CommandResult;
     switch (result)
@@ -896,6 +920,19 @@ void AeroSimLabApp::ApplyCameraCommand(
 
     reply.accepted = true;
     reply.status = "applied";
+}
+
+void AeroSimLabApp::ExpireGroundControlCommand()
+{
+    if (!groundControlCommandExpiresAtTick_
+        || simulation_.TickCount() < *groundControlCommandExpiresAtTick_)
+        return;
+
+    const aerosimlab::simulation::DroneCommand stop{
+        aerosimlab::simulation::DroneCommand::Kind::Stop};
+    if (simulation_.Apply(stop) == aerosimlab::simulation::CommandResult::Accepted)
+        RecordCommand(stop);
+    groundControlCommandExpiresAtTick_.reset();
 }
 
 void AeroSimLabApp::ApplyGroundCommand()
