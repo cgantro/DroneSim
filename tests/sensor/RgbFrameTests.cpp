@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 namespace aerosimlab::sensor
 {
 TEST(RgbFrame, ChecksDimensionsAndPixelCount)
@@ -11,6 +13,17 @@ TEST(RgbFrame, ChecksDimensionsAndPixelCount)
 
     frame.pixels.pop_back();
     EXPECT_FALSE(frame.IsValid());
+
+    frame = {
+        std::numeric_limits<int>::max(),
+        std::numeric_limits<int>::max(),
+        0,
+        {1, 2, 3}
+    };
+
+    EXPECT_FALSE(frame.IsValid());
+    frame.FlipVertical();
+    EXPECT_EQ(frame.pixels, (std::vector<std::uint8_t>{1, 2, 3}));
 }
 
 TEST(RgbFrame, ChangesOpenGlRowOrderToImageRowOrder)

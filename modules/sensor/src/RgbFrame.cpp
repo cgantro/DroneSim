@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 
 namespace aerosimlab::sensor
 {
@@ -10,8 +11,17 @@ bool RgbFrame::IsValid() const noexcept
     if (width <= 0 || height <= 0)
         return false;
 
-    const auto expectedBytes = static_cast<std::size_t>(width)
-        * static_cast<std::size_t>(height) * 3U;
+    const auto frameWidth = static_cast<std::size_t>(width);
+    const auto frameHeight = static_cast<std::size_t>(height);
+    const auto maximumSize = std::numeric_limits<std::size_t>::max();
+    if (frameWidth > maximumSize / 3U)
+        return false;
+
+    const auto rowBytes = frameWidth * 3U;
+    if (frameHeight > maximumSize / rowBytes)
+        return false;
+
+    const auto expectedBytes = rowBytes * frameHeight;
     return pixels.size() == expectedBytes;
 }
 
