@@ -215,11 +215,14 @@ try {
     }
 
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraFaultButton)
+    $commandStatusText = [AeroSimLabUiTestWindow]::GetDlgItem(
+        $uiWindow, [AeroSimLabUiTestWindow]::StatusText)
     $telemetryText = [AeroSimLabUiTestWindow]::GetDlgItem(
         $uiWindow, [AeroSimLabUiTestWindow]::TelemetryText)
     $faultTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
     if ($faultTelemetry -notmatch '카메라: fault') {
-        throw "지상통제 창에서 보낸 카메라 고장 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$faultTelemetry"
+        $commandStatus = [AeroSimLabUiTestWindow]::ReadControlText($commandStatusText)
+        throw "지상통제 창에서 보낸 카메라 고장 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$commandStatus`n$faultTelemetry"
     }
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraRecoverButton)
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraOffButton)
@@ -257,7 +260,8 @@ try {
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::LandButton)
     $landingTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
     if ($landingTelemetry -notmatch '비행 상태: landing' -or $landingTelemetry -notmatch '카메라: active') {
-        throw "지상통제 창의 착륙·카메라 복구 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$landingTelemetry"
+        $commandStatus = [AeroSimLabUiTestWindow]::ReadControlText($commandStatusText)
+        throw "지상통제 창의 착륙·카메라 복구 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$commandStatus`n$landingTelemetry"
     }
 
     $portConflictError = $null
@@ -280,8 +284,7 @@ try {
 
     Start-Sleep -Milliseconds 1800
 
-    $statusText = [AeroSimLabUiTestWindow]::GetDlgItem(
-        $uiWindow, [AeroSimLabUiTestWindow]::StatusText)
+    $statusText = $commandStatusText
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::RecordingStartButton)
     if ([AeroSimLabUiTestWindow]::ReadControlText($statusText) -notmatch '입력 기록을 시작했습니다') {
         throw '지상통제 창에서 입력 기록을 시작하지 못했습니다.'
