@@ -238,6 +238,21 @@ double WeightedIkResidual(const kinematics::IkResult& result, const kinematics::
         options.orientationWeightMetersPerRadian * result.orientationErrorRadians;
 }
 
+// 여러 시작 자세에서 나온 실패 가운데 목표 오차가 가장 작은 결과를 진단에 남긴다.
+void RecordBetterIkFailure(
+    kinematics::IkResult failure,
+    const kinematics::IkOptions& options,
+    double& bestResidual,
+    kinematics::IkResult& bestFailure)
+{
+    const double residual = WeightedIkResidual(failure, options);
+    if (residual < bestResidual)
+    {
+        bestResidual = residual;
+        bestFailure = std::move(failure);
+    }
+}
+
 bool SameJointCandidate(const JointVector& left, const JointVector& right)
 {
     for (std::size_t joint = 0; joint < left.size(); ++joint)
@@ -618,12 +633,7 @@ struct LinearPathPlanningJob::Impl
 
     void RecordIkFailure(kinematics::IkResult failure)
     {
-        const double residual = WeightedIkResidual(failure, options);
-        if (residual < bestFailureResidual)
-        {
-            bestFailureResidual = residual;
-            ikFailure = std::move(failure);
-        }
+        RecordBetterIkFailure(std::move(failure), options, bestFailureResidual, ikFailure);
         if (workingContinuation)
             parentNeedsSearch[workingParent] = true;
     }
@@ -1195,12 +1205,7 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
     {
         if (!solution)
         {
-            const double candidateResidual = WeightedIkResidual(solution, options);
-            if (candidateResidual < bestFailureResidual)
-            {
-                bestFailureResidual = candidateResidual;
-                ikFailure = std::move(solution);
-            }
+            RecordBetterIkFailure(std::move(solution), options, bestFailureResidual, ikFailure);
             return;
         }
 
