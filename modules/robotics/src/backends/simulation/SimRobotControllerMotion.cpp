@@ -15,6 +15,8 @@ namespace
 {
 constexpr double kRuntimeLinearIkPositionToleranceMeters = 1e-6;
 constexpr double kRuntimeLinearIkOrientationToleranceRadians = 1e-5;
+constexpr double kSegmentCompletionFractionTolerance = 1e-12;
+constexpr double kMinimumReorientationJointChange = 1e-12;
 
 bool JointInterpolationFollowsTcpLine(
     const JointVector& start,
@@ -286,7 +288,7 @@ void SimRobotController::UpdateLinear(double dtSeconds)
             continue;
         }
         remaining = usedSeconds >= remaining ? 0.0 : remaining - usedSeconds;
-        if (linearMotion_.segmentFraction >= 1.0 - 1e-12)
+        if (linearMotion_.segmentFraction >= 1.0 - kSegmentCompletionFractionTolerance)
         {
             linearMotion_.completedPathDurationSeconds +=
                 linearMotion_.path[linearMotion_.segment].durationSeconds;
@@ -447,7 +449,8 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         const bool remainingLineFollowsTcp = JointInterpolationFollowsTcpLine(
             solution.jointPositions, end.joints, pathTcp, plannedEndTcp, inverse_);
         const bool respectsVelocityLimits = ratio <= 1.0 + detail::kVelocityRatioTolerance;
-        const bool makesProgress = movement > 1e-12 && nextDistanceSquared < previousDistanceSquared;
+        const bool makesProgress = movement > kMinimumReorientationJointChange &&
+            nextDistanceSquared < previousDistanceSquared;
         const bool staysOnTcpPath = pathPositionError <= options.positionToleranceMeters &&
             pathOrientationError <= options.orientationToleranceRadians;
         if (respectsVelocityLimits && makesProgress && staysOnTcpPath && pathValid &&
