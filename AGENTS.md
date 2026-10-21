@@ -1,9 +1,37 @@
-# Repository Instructions
+# 저장소 작업 안내
 
-## Code Comments
+이 안내는 이 저장소에서 작업하는 사람과 코딩 도구를 위한 기본 규칙입니다.
 
-Before creating or changing source code, read and follow [docs/COMMENT_GUIDELINES.md](docs/COMMENT_GUIDELINES.md). Apply its rules to comments in every code change, including comments added while refactoring existing code.
+## 작업 공간
 
-## Model Selection
+- 사용자가 열어 둔 저장소와 작업 중인 내용을 그대로 사용합니다.
+- 별도 복사본, 임시 저장소, 작업용 복제 폴더를 만들지 않습니다. 사용자가 구체적으로 요청한 경우에만 만듭니다.
+- 빌드 결과와 자동 생성 파일은 저장소에서 정한 빌드 폴더에 둡니다.
+- 기존 폴더나 파일이 불필요해 보여도, 무엇인지 확인하고 사용자가 지운다고 한 경우에만 삭제합니다.
+- 사용자가 이미 바꾼 내용은 덮어쓰거나 되돌리지 않습니다.
 
-At the start of each task, read [docs/AI_AGENT_MODEL_GUIDE.md](docs/AI_AGENT_MODEL_GUIDE.md) and use it to choose an appropriate model and split of work when those options are available. Start with Luna for exploration and routine implementation; involve Sol for the complex decisions listed in that guide.
+## 코드와 주석
+
+- 코드를 고치기 전에 주변 코드와 관련 시험을 먼저 읽습니다.
+- 주석은 자연스럽고 친절한 한국어로 씁니다. Doxygen 형식과 기존 약속은 유지합니다.
+- 코드 한 줄을 그대로 되풀이하지 말고, 계산 이유와 값의 단위·좌표 기준·데이터 수명을 설명합니다.
+- 필요하지 않은 방어 코드, 추상화, 클래스, 문서는 추가하지 않습니다.
+
+## 검토 수준
+
+- 단순한 탐색과 반복 작업은 빠르고 가벼운 방식으로 처리합니다.
+- 구조 변경, C++ 메모리 수명, 통신, 물리·제어, 원인이 분명하지 않은 오류는 충분히 검토합니다.
+- 이 저장소에는 별도 주석 지침과 모델 선택 지침 파일이 없습니다. 필요한 기준은 이 안내에 직접 적습니다.
+
+## 확인과 기록
+
+- 바뀐 동작에 맞는 시험과 확인 방법을 고릅니다.
+- 직접 실행하지 않은 빌드·시험·성능 측정은 통과했다고 쓰지 않습니다.
+- 성능이 좋아졌다고 말하려면 같은 조건에서 얻은 측정 결과를 함께 제시합니다.
+- 사용자가 요청하지 않은 셸 스크립트는 만들지 않습니다.
+
+## 문서
+
+- 먼저 기존 문서를 살펴보고, 같은 내용을 다루는 문서를 새로 늘리지 않습니다.
+- 사용 안내는 쉬운 한국어로 쓰고 내부 개발 기록과 섞지 않습니다.
+- 내부 문서는 공개 안내의 필수 참조 대상으로 만들지 않습니다. 필수 규칙은 이 안내에 직접 적습니다.
