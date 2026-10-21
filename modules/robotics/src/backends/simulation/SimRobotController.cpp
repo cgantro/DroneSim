@@ -294,23 +294,22 @@ Result SimRobotController::MovePose(const CartesianPose& targetInBase, double ve
         targetInBase, state_.jointPositions,
         kinematics::RobotDefaultIkOptions(specification_), planning::kDefaultPlanningPolicy,
         invalidity, ikFailure);
-    if (!solution)
+    if (solution)
+        return MoveJointImpl({solution->jointPositions, velocityScale, accelerationScale},
+            JointMoveOrigin::PoseTargetCommand);
+
+    if (invalidity == planning::JointStateInvalidity::EnvironmentCollision)
     {
-        if (invalidity == planning::JointStateInvalidity::EnvironmentCollision)
-        {
-            return Failure(ErrorCode::EnvironmentContact,
-                SimRobotControllerMessages::noCollisionFreePosePath);
-        }
-        if (invalidity != planning::JointStateInvalidity::None)
-        {
-            Result result = planning::MapJointStateInvalidity(invalidity);
-            AppendValidityDiagnostic(result, jointStateValidityDiagnosticProvider_);
-            return result;
-        }
-        return planning::detail::MapIkFailure(ikFailure);
+        return Failure(ErrorCode::EnvironmentContact,
+            SimRobotControllerMessages::noCollisionFreePosePath);
     }
-    return MoveJointImpl({solution->jointPositions, velocityScale, accelerationScale},
-        JointMoveOrigin::PoseTargetCommand);
+    if (invalidity != planning::JointStateInvalidity::None)
+    {
+        Result result = planning::MapJointStateInvalidity(invalidity);
+        AppendValidityDiagnostic(result, jointStateValidityDiagnosticProvider_);
+        return result;
+    }
+    return planning::detail::MapIkFailure(ikFailure);
 }
 
 Result SimRobotController::BeginPosePlanning(
