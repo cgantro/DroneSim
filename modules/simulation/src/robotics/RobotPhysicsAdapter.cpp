@@ -54,29 +54,43 @@ RobotPhysicsAdapter::RobotPhysicsAdapter(
     if (!robotRoot)
         throw std::runtime_error(messages::invalidRobotRoot);
     auto geometry = robotics::collision_geometry::Build(model);
-    base_ = scene.CreateEntity(proxy_names::base);
-    base_.SetParent(robotRoot);
-    base_.Add<RobotCollisionProxy>();
-    base_.Add<RobotBaseEnvironmentProxy>();
-    base_.set<RigidBody>(RigidBody{
-            grasplink::physics::BodyMotionType::Static,
-            grasplink::physics::CollisionLayer::Environment})
-        .set<Colliders>(Colliders{std::move(geometry.baseShapes)});
-
     links_.reserve(geometry.links.size());
-    for (std::size_t i = 0; i < geometry.links.size(); ++i)
+    std::vector<Entity> createdEntities;
+    createdEntities.reserve(geometry.links.size() + 1U);
+
+    try
     {
-        auto& linkGeometry = geometry.links[i];
-        Entity entity = scene.CreateEntity(
-            linkGeometry.name + proxy_names::suffix);
-        // FK에서 나온 위치와 회전은 Robot base 기준이다. proxy를 robotRoot의 자식으로 두어 Scene에서 로봇에 설정한 배치 변환이 부모 계층을 통해 추가된다.
-        entity.SetParent(robotRoot);
-        entity.set<RobotCollisionProxy>(RobotCollisionProxy{i, linkGeometry.jointIndex})
-            .set<RigidBody>(RigidBody{
+        base_ = scene.CreateEntity(proxy_names::base);
+        createdEntities.push_back(base_);
+        base_.SetParent(robotRoot);
+        base_.Add<RobotCollisionProxy>();
+        base_.Add<RobotBaseEnvironmentProxy>();
+        base_.set<RigidBody>(RigidBody{
+                grasplink::physics::BodyMotionType::Static,
+                grasplink::physics::CollisionLayer::Environment})
+            .set<Colliders>(Colliders{std::move(geometry.baseShapes)});
+
+        for (std::size_t i = 0; i < geometry.links.size(); ++i)
+        {
+            auto& linkGeometry = geometry.links[i];
+            Entity entity = scene.CreateEntity(linkGeometry.name + proxy_names::suffix);
+            createdEntities.push_back(entity);
+            // FK 자세는 robotRoot 기준이므로 proxy를 그 자식으로 두어 로봇의 장면 배치가 함께 적용되게 한다.
+            entity.SetParent(robotRoot);
+            entity.set<RobotCollisionProxy>(RobotCollisionProxy{i, linkGeometry.jointIndex})
+                .set<RigidBody>(RigidBody{
                 grasplink::physics::BodyMotionType::Kinematic,
                 grasplink::physics::CollisionLayer::Robot})
-            .set<Colliders>(Colliders{std::move(linkGeometry.shapes)});
-        links_.push_back({entity, linkGeometry.jointIndex, linkGeometry.poseInJointFrame});
+                .set<Colliders>(Colliders{std::move(linkGeometry.shapes)});
+            links_.push_back({entity, linkGeometry.jointIndex, linkGeometry.poseInJointFrame});
+        }
+    }
+    catch (...)
+    {
+        // 생성 도중 실패하면 Scene과 물리 시스템에 남은 일부 proxy를 함께 정리한다.
+        for (auto entity = createdEntities.rbegin(); entity != createdEntities.rend(); ++entity)
+            entity->Destroy();
+        throw;
     }
 }
 
@@ -122,13 +136,10 @@ void RobotPhysicsAdapter::BuildCandidateWorldTransforms(
 {
     output.clear();
     ValidateState(state);
-    output.reserve(links_.size() + (base_ ? 1U : 0U));
-    if (base_)
-    {
-        const glm::mat4 local = grasplink::scene::TransformSystemModule::ComposeLocalMatrix(
-            base_.GetLocalPosition(), base_.GetLocalRotation(), base_.GetLocalScale());
-        output.push_back({base_, robotRootWorldTransform * local});
-    }
+    output.reserve(links_.size() + 1U);
+    const glm::mat4 baseLocal = grasplink::scene::TransformSystemModule::ComposeLocalMatrix(
+        base_.GetLocalPosition(), base_.GetLocalRotation(), base_.GetLocalScale());
+    output.push_back({base_, robotRootWorldTransform * baseLocal});
 
     for (const LinkBinding& link : links_)
     {
