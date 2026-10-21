@@ -521,6 +521,13 @@ TEST(SimulationCore, RigidBodyTakesOffFromTheSelectedTerrainStart)
         terrain.HeightAtLocalMeters(startMeters)
             + QuadrotorFlightController::groundedModelOriginHeightMeters,
         0.05);
+
+    simulation.Reset();
+    EXPECT_EQ(simulation.State().mode, FlightMode::Grounded);
+    EXPECT_NEAR(simulation.State().positionMeters.z,
+        terrain.HeightAtLocalMeters(startMeters)
+            + QuadrotorFlightController::groundedModelOriginHeightMeters,
+        1.0e-6);
 }
 
 TEST(SimulationCore, CameraStopsOnDisableOrFaultAndResumesAfterRecovery)
