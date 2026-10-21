@@ -54,7 +54,7 @@ struct RobotCollisionGeometry
 /**
  * @brief URDF 링크 이름과 충돌 도형, 화면 모델 연결 정보를 저장한다.
  * @details URDF 링크는 로봇 구조와 충돌 모양을 정의하고, GLB 노드는 화면에 보이는 부품을 제공한다. `visualNodeIndex`는 두 자료를 연결한다.
- * `base_link`와 `tool0`처럼 기준점만 나타내는 링크는 GLB에 대응 노드나 충돌 도형이 없을 수 있다.
+ * `base_link`는 GLB에 대응 노드가 없어도 되지만 충돌 도형은 필요하다. 끝점인 `tool0`는 화면 노드와 충돌 도형이 없어도 된다.
  */
 struct RobotLink
 {
