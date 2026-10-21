@@ -36,8 +36,20 @@ namespace aerosimlab::simulator
 class AeroSimLabApp
 {
 public:
-    explicit AeroSimLabApp(bool smokeTest, std::uint16_t udpPort, bool demoMode,
-        bool networkEnabled, bool benchmarkMode);
+    /**
+     * @brief 시뮬레이터의 실행 방식을 정한다.
+     * @details 검사·시연·측정 목적과 통신 설정을 이름 있는 값으로 전달해, 여러 참·거짓 인자의 순서를 외우지 않게 한다.
+     */
+    struct Options
+    {
+        bool smokeTest = false;
+        std::uint16_t udpPort = aerosimlab::communication::defaultPort;
+        bool demoMode = false;
+        bool networkEnabled = true;
+        bool benchmarkMode = false;
+    };
+
+    explicit AeroSimLabApp(Options options);
     ~AeroSimLabApp();
 
     /** @brief 그래픽 자원을 준비하고 창이 닫힐 때까지 모의를 실행한다. */

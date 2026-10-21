@@ -53,10 +53,10 @@ glm::mat4 CubeTransform(const glm::vec3& position, const glm::vec3& size)
 }
 }
 
-AeroSimLabApp::AeroSimLabApp(bool smokeTest, std::uint16_t udpPort, bool demoMode,
-    bool networkEnabled, bool benchmarkMode)
-    : smokeTest_(smokeTest), demoMode_(demoMode), networkEnabled_(networkEnabled),
-      benchmarkMode_(benchmarkMode), udpPort_(udpPort)
+AeroSimLabApp::AeroSimLabApp(Options options)
+    : smokeTest_(options.smokeTest), demoMode_(options.demoMode),
+      networkEnabled_(options.networkEnabled), benchmarkMode_(options.benchmarkMode),
+      udpPort_(options.udpPort)
 {
 }
 

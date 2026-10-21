@@ -83,8 +83,14 @@ int main(int argc, char** argv)
             std::cerr << command_line::unknownOptionPrefix << argument << '\n';
             return 2;
         }
-        aerosimlab::simulator::AeroSimLabApp app(
-            smokeTest, udpPort, demoMode, networkEnabled, benchmarkMode);
+        aerosimlab::simulator::AeroSimLabApp::Options options{
+            .smokeTest = smokeTest,
+            .udpPort = udpPort,
+            .demoMode = demoMode,
+            .networkEnabled = networkEnabled,
+            .benchmarkMode = benchmarkMode
+        };
+        aerosimlab::simulator::AeroSimLabApp app(options);
         return app.Run();
     }
     catch (const std::exception& e)
