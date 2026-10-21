@@ -19,9 +19,6 @@ public:
      * @param world Entity와 렌더링 Component가 저장된 Flecs World.
      */
     explicit RenderSystemModule(flecs::world& world);
-
-private:
-    void RegisterSystem(flecs::world& world);
 };
 
 } // namespace grasplink::rendering

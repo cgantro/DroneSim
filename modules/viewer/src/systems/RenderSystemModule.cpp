@@ -12,11 +12,6 @@ namespace grasplink::rendering
 RenderSystemModule::RenderSystemModule(flecs::world& world)
 {
     world.module<RenderSystemModule>();
-    RegisterSystem(world);
-}
-
-void RenderSystemModule::RegisterSystem(flecs::world& world)
-{
     // Flecs의 PreStore 단계에서 Scene OnUpdate 이후에 그린다. 변환 계산은 자동 단계가 아니므로 ViewerApp이 World 진행 전에 명시적으로 끝낸다.
     world
         .system<const MeshFilter, const MeshRenderer, const ::grasplink::scene::TransformMatrix>(
