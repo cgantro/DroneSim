@@ -116,13 +116,28 @@ function Invoke-GroundControlCli([string[]]$Arguments) {
 
 function Invoke-GroundControlButton([int]$ControlId) {
     $button = [AeroSimLabUiTestWindow]::GetDlgItem($uiWindow, $ControlId)
+    $statusText = [AeroSimLabUiTestWindow]::GetDlgItem(
+        $uiWindow, [AeroSimLabUiTestWindow]::StatusText)
+    $telemetryText = [AeroSimLabUiTestWindow]::GetDlgItem(
+        $uiWindow, [AeroSimLabUiTestWindow]::TelemetryText)
+    $previousStatus = [AeroSimLabUiTestWindow]::ReadControlText($statusText)
+    $previousTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
     [void][AeroSimLabUiTestWindow]::SendMessage(
         $button, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
-    if ([AeroSimLabUiTestWindow]::IsWindowEnabled($button)) {
-        throw "지상통제 명령($ControlId)이 시작되지 않았습니다."
-    }
 
     $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    while ([AeroSimLabUiTestWindow]::IsWindowEnabled($button)) {
+        $statusChanged = [AeroSimLabUiTestWindow]::ReadControlText($statusText) -ne $previousStatus
+        $telemetryChanged = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText) -ne $previousTelemetry
+        if ($statusChanged -or $telemetryChanged) {
+            return
+        }
+        if ([DateTime]::UtcNow -ge $deadline) {
+            throw "지상통제 명령($ControlId)이 시작되지 않았습니다."
+        }
+        Start-Sleep -Milliseconds 40
+    }
+
     while (-not [AeroSimLabUiTestWindow]::IsWindowEnabled($button)) {
         if ([DateTime]::UtcNow -ge $deadline) {
             throw "지상통제 명령($ControlId)에 시뮬레이터가 응답하지 않았습니다."
