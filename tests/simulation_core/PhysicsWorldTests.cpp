@@ -344,6 +344,17 @@ TEST(PhysicsWorld, RejectsFiniteValuesOutsideJoltFloatRange)
     EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
 }
 
+TEST(PhysicsWorld, NormalizesLargeFiniteOrientationBeforeJoltConversion)
+{
+    PhysicsWorld world;
+    RigidBodyDefinition definition;
+    definition.positionMeters = {0.0, 0.0, 10.0};
+    definition.orientation = glm::dquat{1.0e30, 0.0, 0.0, 0.0};
+
+    const RigidBodyHandle body = world.CreateBox(definition);
+    EXPECT_NEAR(std::abs(world.State(body).orientation.w), 1.0, 1.0e-6);
+}
+
 TEST(PhysicsWorld, DestroyBodyInvalidatesItsHandle)
 {
     PhysicsWorld world;

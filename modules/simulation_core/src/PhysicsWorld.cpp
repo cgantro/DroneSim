@@ -87,11 +87,23 @@ JPH::Vec3 ToJolt(const glm::vec3& value)
 
 JPH::Quat ToJolt(const glm::dquat& value)
 {
+    // 큰 값을 float으로 먼저 바꾸면 길이 제곱이 넘칠 수 있어 double 범위에서 정규화한다.
+    const double scale = std::max({
+        std::abs(value.w), std::abs(value.x), std::abs(value.y), std::abs(value.z)});
+    if (!std::isfinite(scale) || !(scale > 0.0))
+        throw std::invalid_argument("강체의 방향을 나타내는 값을 확인해 주세요.");
+
+    const double scaledW = value.w / scale;
+    const double scaledX = value.x / scale;
+    const double scaledY = value.y / scale;
+    const double scaledZ = value.z / scale;
+    const double length = std::sqrt(
+        scaledW * scaledW + scaledX * scaledX + scaledY * scaledY + scaledZ * scaledZ);
     return JPH::Quat{
-        static_cast<float>(value.x),
-        static_cast<float>(value.y),
-        static_cast<float>(value.z),
-        static_cast<float>(value.w)}.Normalized();
+        static_cast<float>(scaledX / length),
+        static_cast<float>(scaledY / length),
+        static_cast<float>(scaledZ / length),
+        static_cast<float>(scaledW / length)};
 }
 
 glm::dvec3 ToGlm(const JPH::Vec3& value)
@@ -254,7 +266,7 @@ RigidBodyHandle PhysicsWorld::CreateCompoundBoxes(
         }
         shapeSettings.AddShape(
             ToJolt(box.positionMeters),
-            ToJolt(glm::normalize(box.orientation)),
+            ToJolt(box.orientation),
             new JPH::BoxShape(ToJolt(box.halfExtentsMeters), 0.0F));
     }
 
