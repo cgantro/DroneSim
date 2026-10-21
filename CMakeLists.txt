@@ -41,6 +41,9 @@ option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
 aerosimlab_add_common_dependencies()
 aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
+if(NOT EMSCRIPTEN)
+  aerosimlab_add_physics_dependencies()
+endif()
 
 add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/DroneModel.cpp
@@ -53,6 +56,9 @@ target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm
   PRIVATE nlohmann_json::nlohmann_json flecs::flecs_static
 )
+if(NOT EMSCRIPTEN)
+  target_link_libraries(aerosimlab_simulation_core PRIVATE Jolt)
+endif()
 
 add_library(aerosimlab_communication STATIC
   modules/communication/src/Protocol.cpp
