@@ -145,6 +145,11 @@ TEST(GltfLoader, ReadsMeshMaterialAndIndexDataAndRejectsInvalidInputs)
     TriangleGlb invalidAccessor(invalidAccessorOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidAccessor.Path()), std::runtime_error);
 
+    TriangleGlbOptions negativeAccessorOptions;
+    negativeAccessorOptions.positionAccessorIndex = -1;
+    TriangleGlb negativeAccessor(negativeAccessorOptions);
+    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(negativeAccessor.Path()), std::runtime_error);
+
     TriangleGlbOptions invalidIndexAccessorOptions;
     invalidIndexAccessorOptions.includeByteIndices = true;
     invalidIndexAccessorOptions.indexAccessorIndex = 2;

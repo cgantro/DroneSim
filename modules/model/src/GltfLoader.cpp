@@ -198,6 +198,11 @@ struct AccessorView
     std::size_t count = 0;
 };
 
+bool IsIndexInRange(int index, std::size_t count)
+{
+    return index >= 0 && static_cast<std::size_t>(index) < count;
+}
+
 // Accessor의 마지막 값이 끝나는 byte 위치를 계산한다. count와 stride는 호출자가 양수인지 확인한다.
 std::optional<std::size_t> AccessorRangeEnd(
     std::size_t offset,
@@ -219,7 +224,7 @@ std::optional<std::size_t> AccessorRangeEnd(
 // 잘못된 번호를 vector 접근 전에 검사해 파일 오류를 일관된 예외로 바꾼다.
 const tinygltf::Accessor& GetAccessor(const tinygltf::Model& model, int accessorIndex)
 {
-    if (accessorIndex < 0 || accessorIndex >= static_cast<int>(model.accessors.size()))
+    if (!IsIndexInRange(accessorIndex, model.accessors.size()))
         throw std::runtime_error(error_messages::accessor::invalidIndex);
 
     return model.accessors[accessorIndex];
@@ -234,15 +239,13 @@ AccessorView GetAccessorView(
     if (accessor.sparse.isSparse)
         throw std::runtime_error(error_messages::accessor::sparseUnsupported);
 
-    if (accessor.bufferView < 0 ||
-        accessor.bufferView >= static_cast<int>(model.bufferViews.size()))
+    if (!IsIndexInRange(accessor.bufferView, model.bufferViews.size()))
     {
         throw std::runtime_error(error_messages::accessor::missingBufferView);
     }
 
     const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-    if (bufferView.buffer < 0 ||
-        bufferView.buffer >= static_cast<int>(model.buffers.size()))
+    if (!IsIndexInRange(bufferView.buffer, model.buffers.size()))
     {
         throw std::runtime_error(error_messages::accessor::invalidBufferIndex);
     }
@@ -453,8 +456,7 @@ TextureData ConvertTexture(
     result.uniqueID = ResourceID{
         resourcePrefix + resource_id_suffixes::texture + std::to_string(textureIndex)};
 
-    if (source.source < 0 ||
-        source.source >= static_cast<int>(model.images.size()))
+    if (!IsIndexInRange(source.source, model.images.size()))
     {
         throw std::runtime_error(error_messages::texture::invalidSource);
     }
@@ -852,7 +854,8 @@ void ReadNodeRecords(const tinygltf::Model& source, ModelResource& destination)
             ? "Node_" + std::to_string(i)
             : sourceNode.name;
 
-        if (sourceNode.mesh < -1 || sourceNode.mesh >= static_cast<int>(destination.meshes.size()))
+        if (sourceNode.mesh < -1 ||
+            (sourceNode.mesh >= 0 && !IsIndexInRange(sourceNode.mesh, destination.meshes.size())))
             throw std::runtime_error(error_messages::hierarchy::invalidMeshIndex);
         if (sourceNode.mesh >= 0)
             node.meshIndex = static_cast<std::size_t>(sourceNode.mesh);
@@ -863,7 +866,7 @@ void ReadNodeRecords(const tinygltf::Model& source, ModelResource& destination)
     {
         for (const int childIndex : source.nodes[parentIndex].children)
         {
-            if (childIndex < 0 || childIndex >= static_cast<int>(destination.nodes.size()))
+            if (!IsIndexInRange(childIndex, destination.nodes.size()))
                 throw std::runtime_error(error_messages::hierarchy::invalidChildIndex);
 
             NodeData& child = destination.nodes[static_cast<std::size_t>(childIndex)];
@@ -908,7 +911,7 @@ void SelectSceneRoot(const tinygltf::Model& source, ModelResource& model)
     if (sceneIndex < 0 && !source.scenes.empty())
         sceneIndex = 0;
 
-    if (sceneIndex >= static_cast<int>(source.scenes.size()))
+    if (sceneIndex >= 0 && !IsIndexInRange(sceneIndex, source.scenes.size()))
         throw std::runtime_error(error_messages::scene::invalidDefaultIndex);
 
     if (sceneIndex >= 0)
@@ -919,7 +922,7 @@ void SelectSceneRoot(const tinygltf::Model& source, ModelResource& model)
         if (scene.nodes.size() == 1)
         {
             const int rootIndex = scene.nodes.front();
-            if (rootIndex < 0 || rootIndex >= static_cast<int>(model.nodes.size()) ||
+            if (!IsIndexInRange(rootIndex, model.nodes.size()) ||
                 model.nodes[static_cast<std::size_t>(rootIndex)].parentIndex.has_value())
             {
                 throw std::runtime_error(error_messages::scene::invalidRootIndex);
