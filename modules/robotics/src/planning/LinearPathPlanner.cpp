@@ -157,13 +157,14 @@ void AppendIkFailureContext(std::string& context,
     for (std::size_t joint = 0; joint < ikFailure.jointPositions.size(); ++joint)
     {
         const auto& jointSpec = specification.joints[joint];
-        const double position = jointSpec.motionType == models::JointMotionType::Prismatic
+        const bool isPrismatic = jointSpec.motionType == models::JointMotionType::Prismatic;
+        const double position = isPrismatic
             ? ikFailure.jointPositions[joint]
             : ikFailure.jointPositions[joint] * math::degreesPerFullTurn /
                 math::fullTurnRadians;
         context += (joint == 0 ? "" : ",") + std::string(jointSpec.name) + "=" +
             std::to_string(position) +
-            (jointSpec.motionType == models::JointMotionType::Prismatic ? " m" : " deg");
+            (isPrismatic ? " m" : " deg");
     }
     context += "]";
 }
