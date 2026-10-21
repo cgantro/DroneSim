@@ -76,6 +76,20 @@ TEST(SimulationCore, KinematicVelocityCommandStopsAtGround)
     EXPECT_EQ(simulation.State().velocityMetersPerSecond, glm::dvec3{0.0});
 }
 
+#ifndef __EMSCRIPTEN__
+TEST(SimulationCore, RejectsTerrainWhenRigidBodyModeIsNotEnabled)
+{
+    SimulationCore simulation;
+    terrain::TerrainGrid terrain;
+    terrain.sampleCount = 3;
+    terrain.spacingXMeters = 1.0F;
+    terrain.spacingYMeters = 1.0F;
+    terrain.heightOffsetsMeters.assign(9, 0.0F);
+
+    EXPECT_THROW(simulation.SetTerrain(terrain), std::logic_error);
+}
+#endif
+
 TEST(FixedTickAccumulator, CarriesFractionalTimeAndLimitsCatchUp)
 {
     FixedTickAccumulator accumulator;

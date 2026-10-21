@@ -446,6 +446,9 @@ void SimulationCore::AddStaticObstacleBox(
 
 void SimulationCore::SetTerrain(const terrain::TerrainGrid& terrain)
 {
+    if (!ecs_->physics)
+        throw std::logic_error("지형 충돌은 강체 모의에서만 설정할 수 있습니다.");
+
     ecs_->physics->SetTerrain(terrain);
 }
 #endif

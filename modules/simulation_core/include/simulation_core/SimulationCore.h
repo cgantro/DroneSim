@@ -117,7 +117,7 @@ public:
     void AddStaticObstacleBox(
         const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters);
 
-    /** @brief 강체 모드의 평평한 바닥을 높이 자료에 맞는 충돌 지형으로 바꾼다. */
+    /** @brief 강체 모드의 바닥을 높이 자료로 바꾼다. 다른 모드에서는 예외를 던진다. */
     void SetTerrain(const terrain::TerrainGrid& terrain);
 #endif
 
