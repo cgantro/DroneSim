@@ -8,7 +8,9 @@ function(grasplink_add_common_dependencies)
     GIT_SHALLOW TRUE
   )
   FetchContent_MakeAvailable(glm)
+endfunction()
 
+function(grasplink_add_robotics_dependencies)
   set(EIGEN_BUILD_DOC OFF CACHE BOOL "Disable Eigen documentation" FORCE)
   set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "Disable Eigen pkg-config files" FORCE)
   FetchContent_Declare(
@@ -59,6 +61,18 @@ function(grasplink_add_model_dependencies)
     GIT_SHALLOW TRUE
   )
   FetchContent_MakeAvailable(tinyxml2)
+endfunction()
+
+function(aerosimlab_add_scenario_dependencies)
+  set(JSON_BuildTests OFF CACHE INTERNAL "Disable dependency tests")
+  set(JSON_Install OFF CACHE INTERNAL "Do not install a project-private dependency")
+  FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.12.0
+    GIT_SHALLOW TRUE
+  )
+  FetchContent_MakeAvailable(nlohmann_json)
 endfunction()
 
 function(grasplink_add_graphics_dependencies)

@@ -1,0 +1,77 @@
+#include "simulation_core/ScenarioRunner.h"
+
+#include <gtest/gtest.h>
+
+#include <stdexcept>
+#include <string_view>
+
+namespace aerosimlab::simulation
+{
+namespace
+{
+constexpr std::string_view completeFlightScenario = R"json(
+{
+  "version": 1,
+  "ticks": 300,
+  "commands": [
+    {"tick": 0, "type": "takeoff"},
+    {"tick": 90, "type": "set_waypoint", "position_meters": [3.0, 0.0, 1.5]},
+    {"tick": 150, "type": "stop"},
+    {"tick": 200, "type": "land"}
+  ],
+  "expected": {
+    "mode": "grounded",
+    "position_meters": [3.0, 0.0, 0.0],
+    "tolerance_meters": 0.000001
+  }
+})json";
+}
+
+TEST(ScenarioRunner, ReplaysFlightCommandsAndChecksFinalState)
+{
+    const ScenarioResult result = RunScenario(completeFlightScenario);
+    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    EXPECT_EQ(result.tickCount, 300);
+    EXPECT_DOUBLE_EQ(result.simulationTimeSeconds, 5.0);
+    EXPECT_EQ(result.finalState.mode, FlightMode::Grounded);
+    EXPECT_DOUBLE_EQ(result.finalState.positionMeters.x, 3.0);
+    EXPECT_DOUBLE_EQ(result.finalState.positionMeters.z, 0.0);
+}
+
+TEST(ScenarioRunner, RepeatingTheSameScenarioProducesTheSameResult)
+{
+    const ScenarioResult first = RunScenario(completeFlightScenario);
+    const ScenarioResult second = RunScenario(completeFlightScenario);
+    EXPECT_EQ(first.passed, second.passed);
+    EXPECT_EQ(first.tickCount, second.tickCount);
+    EXPECT_EQ(first.finalState.positionMeters, second.finalState.positionMeters);
+    EXPECT_EQ(first.finalState.mode, second.finalState.mode);
+    EXPECT_EQ(first.issues, second.issues);
+}
+
+TEST(ScenarioRunner, ReportsRejectedCommandsAndUnexpectedResults)
+{
+    constexpr std::string_view invalidFlight = R"json(
+    {"version":1,"ticks":1,
+     "commands":[{"tick":0,"type":"set_velocity","velocity_meters_per_second":[1,0,0]}],
+     "expected":{"mode":"grounded","position_meters":[0,0,0]}}
+    )json";
+    const ScenarioResult result = RunScenario(invalidFlight);
+    EXPECT_FALSE(result.passed);
+    ASSERT_EQ(result.issues.size(), 1);
+    EXPECT_NE(result.issues.front().find("tick 0"), std::string::npos);
+}
+
+TEST(ScenarioRunner, RejectsUnsupportedAndUnorderedScenarioData)
+{
+    EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":2})json")), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"ticks":3,"commands":[
+        {"tick":2,"type":"stop"},{"tick":1,"type":"stop"}],
+        "expected":{"mode":"grounded","position_meters":[0,0,0]}})json")),
+        std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(RunScenario("not json")), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"ticks":1,
+        "commands":[],"expected":{"mode":7,"position_meters":[0,0,0]}})json")),
+        std::invalid_argument);
+}
+}

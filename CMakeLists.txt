@@ -38,18 +38,29 @@ endif()
 
 include(cmake/Dependencies.cmake)
 grasplink_add_common_dependencies()
+aerosimlab_add_scenario_dependencies()
 include(CTest)
 
 option(GRASPLINK_BUILD_GRAPHICS "Build the OpenGL viewer" ON)
 option(GRASPLINK_ENABLE_TRACY "Enable Tracy runtime profiling" ON)
-option(GRASPLINK_BUILD_BENCHMARKS "Build FK, IK, and path-planning benchmarks" ${BUILD_TESTING})
+option(GRASPLINK_BUILD_BENCHMARKS "Build FK, IK, and path-planning benchmarks" OFF)
 
 add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/DroneModel.cpp
+  modules/simulation_core/src/ScenarioRunner.cpp
   modules/simulation_core/src/SimulationCore.cpp
 )
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
-target_link_libraries(aerosimlab_simulation_core PUBLIC glm::glm)
+target_link_libraries(aerosimlab_simulation_core
+  PUBLIC glm::glm
+  PRIVATE nlohmann_json::nlohmann_json
+)
+
+add_executable(aerosimlab_headless apps/headless/main.cpp)
+target_link_libraries(aerosimlab_headless PRIVATE
+  aerosimlab_simulation_core
+  nlohmann_json::nlohmann_json
+)
 
 if(GRASPLINK_BUILD_GRAPHICS AND GRASPLINK_ENABLE_TRACY)
   set(TRACY_ENABLE ON CACHE BOOL "Enable Tracy runtime profiling" FORCE)
@@ -114,6 +125,8 @@ target_link_libraries(grasplink_diagnostics PUBLIC Threads::Threads)
 # 이 라이브러리는 로봇과 그리퍼 모델 사양, 하드웨어·시뮬레이션 backend의 공통 계약을 제공한다.
 # Viewer, Flecs, GLM에 의존하지 않으므로 화면이나 ECS가 없는 로봇 코드에서도 사용할 수 있다.
 #
+grasplink_add_robotics_dependencies()
+
 add_library(grasplink_robotics STATIC
   modules/robotics/src/backends/simulation/SimRobotController.cpp
   modules/robotics/src/backends/simulation/SimRobotControllerMotion.cpp
@@ -212,6 +225,11 @@ if(BUILD_TESTING)
 
   grasplink_add_test(aerosimlab_simulation_core_tests SimulationCore
     tests/simulation_core/SimulationCoreTests.cpp aerosimlab_simulation_core GROUPED CATEGORY simulation)
+  grasplink_add_test(aerosimlab_scenario_tests ScenarioRunner
+    tests/simulation_core/ScenarioRunnerTests.cpp aerosimlab_simulation_core GROUPED CATEGORY simulation)
+  add_test(NAME HeadlessScenarioSmoke
+    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/normal-flight.json")
+  set_tests_properties(HeadlessScenarioSmoke PROPERTIES LABELS "INTEGRATION;simulation")
 
   grasplink_add_test(grasplink_diagnostics_tests Logger tests/diagnostics/LoggerTests.cpp grasplink_diagnostics CATEGORY diagnostics)
   grasplink_add_test(grasplink_control_tests ControlRuntime tests/robotics/ControlRuntimeTests.cpp grasplink_robotics CATEGORY robotics FILTER "ControlRuntimeTests.FixedLoopAndControllerContracts")

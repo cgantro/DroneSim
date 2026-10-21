@@ -93,6 +93,23 @@ TEST(SimulationCore, FollowsWaypointAndClampsCommandedSpeed)
     EXPECT_DOUBLE_EQ(glm::length(simulation.State().velocityMetersPerSecond), 5.0);
 }
 
+TEST(SimulationCore, LimitsYawSpeedAndStopsTurningOnZeroRate)
+{
+    SimulationCore simulation;
+    ReachHovering(simulation);
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::SetYawRate, glm::dvec3{0.0}, 100.0)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 60; ++tick)
+    {
+        simulation.AdvanceOneTick();
+    }
+    EXPECT_NEAR(simulation.State().yawRadians, 1.5, 1.0e-9);
+
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::SetYawRate)), CommandResult::Accepted);
+    simulation.AdvanceOneTick();
+    EXPECT_NEAR(simulation.State().yawRadians, 1.5, 1.0e-9);
+}
+
 TEST(SimulationCore, PauseResumeAndResetControlSimulationTime)
 {
     SimulationCore simulation;
