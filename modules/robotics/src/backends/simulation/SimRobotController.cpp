@@ -378,10 +378,9 @@ bool SimRobotController::StartNextPoseIkSeed()
 
 bool SimRobotController::StartPoseCandidateJointPath()
 {
-    planning::JointPathPlannerOptions options;
-    options.validationPolicy = planning::kDefaultPlanningPolicy;
     const Result begin = posePlanning_.jointPathJob.Begin(specification_,
-        state_.jointPositions, posePlanning_.candidateJoints, jointStateValidityChecker_, options);
+        state_.jointPositions, posePlanning_.candidateJoints, jointStateValidityChecker_,
+        planning::kDefaultPlanningPolicy);
     if (!begin)
     {
         posePlanning_.pathFailure = begin;

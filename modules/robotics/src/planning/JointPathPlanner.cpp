@@ -153,7 +153,7 @@ JointPathPlanningJob& JointPathPlanningJob::operator=(JointPathPlanningJob&&) no
 
 Result JointPathPlanningJob::Begin(const models::RobotSpecification& specification,
     const JointVector& start, const JointVector& goal,
-    const StateValidityChecker& stateValidityChecker, const JointPathPlannerOptions& options)
+    const StateValidityChecker& stateValidityChecker, const PlanningPolicy& policy)
 {
     auto& job = *impl_;
     job.specification = &specification;
@@ -167,7 +167,6 @@ Result JointPathPlanningJob::Begin(const models::RobotSpecification& specificati
     job.nextInterval = 1;
     job.state = JointPathPlanningState::Running;
 
-    const auto& policy = options.validationPolicy;
     if (specification.joints == nullptr || specification.jointCount == 0 ||
         !std::isfinite(policy.jointCollisionSampleSpacingRadians) ||
         policy.jointCollisionSampleSpacingRadians <= 0.0 ||
@@ -193,7 +192,7 @@ Result JointPathPlanningJob::Begin(const models::RobotSpecification& specificati
     }
 
     const auto intervals = detail::JointPathIntervalCount(
-        start, goal, specification, options.validationPolicy);
+        start, goal, specification, policy);
     if (!intervals)
     {
         job.result = {ErrorCode::InvalidCommand, "JointPathPlanner: path exceeds the sample limit"};

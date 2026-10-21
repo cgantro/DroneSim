@@ -279,10 +279,10 @@ void CheckPrismaticJointPathUsesMeterSpacing()
     specification.joints = joints.data();
     specification.jointCount = joints.size();
 
-    JointPathPlannerOptions options;
-    options.validationPolicy.maximumPathIntervals = 10;
-    options.validationPolicy.jointCollisionSampleSpacingRadians = 0.08;
-    options.validationPolicy.prismaticJointCollisionSampleSpacingMeters = 0.02;
+    PlanningPolicy policy;
+    policy.maximumPathIntervals = 10;
+    policy.jointCollisionSampleSpacingRadians = 0.08;
+    policy.prismaticJointCollisionSampleSpacingMeters = 0.02;
 
     std::vector<double> synchronousPositions;
     const StateValidityChecker synchronousChecker = [&](const JointVector& positions)
@@ -291,7 +291,7 @@ void CheckPrismaticJointPathUsesMeterSpacing()
         return JointStateInvalidity::None;
     };
     EXPECT_EQ(ValidateJointPath({0.0}, {0.1}, specification, synchronousChecker,
-        options.validationPolicy), JointStateInvalidity::None);
+        policy), JointStateInvalidity::None);
     ASSERT_EQ(synchronousPositions.size(), 5);
     EXPECT_NEAR(synchronousPositions[0], 0.02, 1e-12);
     EXPECT_NEAR(synchronousPositions[3], 0.08, 1e-12);
@@ -307,7 +307,7 @@ void CheckPrismaticJointPathUsesMeterSpacing()
     };
 
     JointPathPlanningJob job;
-    const Result begin = job.Begin(specification, {0.0}, {0.1}, checker, options);
+    const Result begin = job.Begin(specification, {0.0}, {0.1}, checker, policy);
     checkerContext.reset();
     checker = {};
     ASSERT_TRUE(static_cast<bool>(begin)) << begin.message;
@@ -327,7 +327,7 @@ void CheckPrismaticJointPathUsesMeterSpacing()
     JointPathPlanningJob stationaryJob;
     const JointVector stationaryPosition{0.05};
     ASSERT_TRUE(static_cast<bool>(stationaryJob.Begin(
-        specification, stationaryPosition, stationaryPosition, {}, options)));
+        specification, stationaryPosition, stationaryPosition, {}, policy)));
     EXPECT_EQ(stationaryJob.Advance(1), JointPathPlanningState::Running);
     EXPECT_EQ(stationaryJob.Advance(1), JointPathPlanningState::Completed);
     const auto stationaryPlan = stationaryJob.TakePlan();

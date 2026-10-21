@@ -367,8 +367,6 @@ void JoltMoveJDirectPath(benchmark::State& state)
     std::uint64_t rejected = 0;
     std::uint64_t joltQueries = 0;
     std::uint64_t plannerValidityChecks = 0;
-    JointPathPlannerOptions options;
-
     for (auto _ : state)
     {
         StateValidityChecker checker = [&](const JointVector& joints)
@@ -385,7 +383,7 @@ void JoltMoveJDirectPath(benchmark::State& state)
         };
 
         JointPathPlanningJob job;
-        const Result begin = job.Begin(kHcr12a, start, goal, checker, options);
+        const Result begin = job.Begin(kHcr12a, start, goal, checker);
         if (!begin)
         {
             state.SkipWithError("Jolt 기반 MoveJ 계획기가 유효한 벤치마크 끝점을 거부했습니다.");
