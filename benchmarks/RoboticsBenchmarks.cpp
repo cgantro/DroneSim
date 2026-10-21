@@ -62,6 +62,9 @@ int main(int argc, char** argv)
         ->Arg(64)
         ->Arg(256);
     benchmark::RegisterBenchmark("JoltMoveJDirectPath", JoltMoveJDirectPath)
+        ->ArgName("path_crosses_obstacle")
+        ->Arg(0)
+        ->Arg(1)
         ->Unit(benchmark::kNanosecond);
     benchmark::RegisterBenchmark("ControlPhysicsTick250Hz", ControlPhysicsTick250Hz)
         ->Unit(benchmark::kMicrosecond)

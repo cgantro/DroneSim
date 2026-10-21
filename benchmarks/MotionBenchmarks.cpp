@@ -328,7 +328,7 @@ void MoveJCompletion(benchmark::State& state)
     state.SetItemsProcessed(static_cast<std::int64_t>(totalCases));
 }
 
-// Jolt 물리 엔진에 둔 장애물로 관절 경로의 충돌을 검사합니다. 이 측정은 경로 검사 시간과 수락·거부 결과를 기록합니다.
+// 단순 상자 프록시가 장애물을 비켜 가거나 가로지르는 관절 경로를 검사한다.
 void JoltMoveJDirectPath(benchmark::State& state)
 {
     using grasplink::physics::BodyDescription;
@@ -337,6 +337,9 @@ void JoltMoveJDirectPath(benchmark::State& state)
     using grasplink::physics::CollisionLayer;
     using grasplink::physics::PhysicsWorld;
     using grasplink::physics::Transform;
+
+    const bool pathCrossesObstacle = state.range(0) != 0;
+    const float clearanceOffsetMeters = pathCrossesObstacle ? 0.0F : 0.4F;
 
     PhysicsWorld world;
     BoxBodyDescription obstacle;
@@ -350,7 +353,7 @@ void JoltMoveJDirectPath(benchmark::State& state)
     grasplink::physics::CollisionShapeDescription proxyShape;
     proxyShape.halfExtentsMeters = {0.035F, 0.06F, 0.035F};
     proxyDescription.shapes.push_back(proxyShape);
-    proxyDescription.transform.position = {-0.20F, 0.5F, -0.20F};
+    proxyDescription.transform.position = {-0.20F, 0.5F, -0.20F + clearanceOffsetMeters};
     proxyDescription.motionType = BodyMotionType::Kinematic;
     proxyDescription.collisionLayer = CollisionLayer::Robot;
     const auto proxy = world.CreateBody(proxyDescription);
@@ -367,6 +370,7 @@ void JoltMoveJDirectPath(benchmark::State& state)
     std::uint64_t rejected = 0;
     std::uint64_t joltQueries = 0;
     std::uint64_t plannerValidityChecks = 0;
+    bool collisionDetected = false;
     for (auto _ : state)
     {
         StateValidityChecker checker = [&](const JointVector& joints)
@@ -376,8 +380,9 @@ void JoltMoveJDirectPath(benchmark::State& state)
             candidate.position = {
                 static_cast<float>(joints[0] * 0.20),
                 0.5F,
-                static_cast<float>(joints[1] * 0.20)};
-            return world.OverlapsEnvironmentAt(proxy, candidate)
+                static_cast<float>(joints[1] * 0.20) + clearanceOffsetMeters};
+            collisionDetected = world.OverlapsEnvironmentAt(proxy, candidate);
+            return collisionDetected
                 ? JointStateInvalidity::EnvironmentCollision
                 : JointStateInvalidity::None;
         };
@@ -392,8 +397,15 @@ void JoltMoveJDirectPath(benchmark::State& state)
         for (std::size_t work = 0; work < 10000 && job.GetState() == JointPathPlanningState::Running; ++work)
             job.Advance(1);
 
+        const bool completed = job.GetState() == JointPathPlanningState::Completed;
+        if (completed != !pathCrossesObstacle || collisionDetected != pathCrossesObstacle)
+        {
+            state.SkipWithError("Jolt MoveJ 벤치마크 경로가 예상한 충돌 결과와 다릅니다.");
+            return;
+        }
+
         ++plannerRuns;
-        if (job.GetState() == JointPathPlanningState::Completed)
+        if (completed)
         {
             ++accepted;
             plannerValidityChecks += job.GetPlan().validityChecks;
@@ -413,7 +425,9 @@ void JoltMoveJDirectPath(benchmark::State& state)
         ? static_cast<double>(joltQueries) / static_cast<double>(plannerRuns) : 0.0;
     state.counters["validity_checks_per_accepted_run"] = accepted > 0
         ? static_cast<double>(plannerValidityChecks) / static_cast<double>(accepted) : 0.0;
+    state.counters["path_crosses_obstacle"] = pathCrossesObstacle ? 1.0 : 0.0;
     state.SetItemsProcessed(static_cast<std::int64_t>(plannerRuns));
+    state.SetLabel(pathCrossesObstacle ? "장애물 충돌 경로" : "장애물을 비켜 가는 경로");
 }
 
 // Viewer의 팔 제어, FK, 충돌 확인, Jolt Step, 계층 변환 갱신을 250 Hz tick으로 측정한다.
