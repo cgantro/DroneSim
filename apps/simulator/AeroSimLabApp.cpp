@@ -241,6 +241,12 @@ int AeroSimLabApp::Run()
     {
         return 5;
     }
+    const auto& camera = simulation_.Camera();
+    if (smokeTest_ && camera.status == aerosimlab::simulation::CameraStatus::Active
+        && eoFrame_.simulationTick != camera.lastFrameTick)
+    {
+        return 6;
+    }
     if (benchmarkMode_)
     {
         const double elapsedSeconds = std::chrono::duration<double>(
@@ -738,6 +744,7 @@ bool AeroSimLabApp::ApplySessionCommand(
         }
 
         simulation_.Reset();
+        eoFrame_ = {};
         groundControlCommandExpiresAtTick_.reset();
         (void)commandRecording_.StartRecording();
         externalControl_ = true;
@@ -772,6 +779,7 @@ bool AeroSimLabApp::ApplySessionCommand(
         }
 
         simulation_.Reset();
+        eoFrame_ = {};
         groundControlCommandExpiresAtTick_.reset();
         smokeReplayStarted_ = smokeTest_;
         pendingControllerAction_.reset();
