@@ -119,6 +119,48 @@
           "process_cpu_percent_approx": 100.0108090066523
         }
       ]
+    },
+    {
+      "measured_at": "2026-10-21T15:35:43Z",
+      "source_revision": "159012b",
+      "environment": {
+        "os": "Microsoft Windows 10.0.26200",
+        "architecture": "X64",
+        "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+        "build": "MSVC Release x64",
+        "framebuffer": "1280x720",
+        "opengl_renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "opengl_version": "3.3.0 NVIDIA 581.42"
+      },
+      "method": "5초 1회 측정. 숨김 창, VSync 끔, 드론 1대와 단순 도형으로 모의·렌더링·동기 OpenCV 밝기·대비 분석을 수행.",
+      "runs": [
+        {
+          "elapsed_seconds": 5.0004239,
+          "render_fps": 403.36580264725154,
+          "rendered_frames": 2017,
+          "simulation_ticks": 297,
+          "tick_duration_us": {
+            "deadline_misses_over_16_67ms": 0,
+            "p50": 0.2,
+            "p95": 0.4,
+            "p99": 1.0,
+            "samples": 297
+          },
+          "vision_analysis": {
+            "duration_us": {
+              "p50": 642.1,
+              "p95": 711.9,
+              "p99": 891.6,
+              "samples": 292
+            },
+            "mean_brightness": 165.02645833333366,
+            "mean_contrast": 71.3310116995504,
+            "samples": 292
+          },
+          "working_set_bytes": 64090112,
+          "process_cpu_percent_approx": 99.9915227187039
+        }
+      ]
     }
   ]
 }
