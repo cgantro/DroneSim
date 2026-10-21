@@ -481,6 +481,121 @@ void AeroSimLabApp::PollGamepad()
 #endif
 }
 
+bool AeroSimLabApp::ApplySessionCommand(
+    aerosimlab::communication::SessionCommand command,
+    aerosimlab::communication::CommandReply& reply)
+{
+    using Command = aerosimlab::communication::SessionCommand;
+    using FlightMode = aerosimlab::simulation::FlightMode;
+
+    switch (command)
+    {
+    case Command::StartRecording:
+        if (recordingActive_ || replaying_)
+        {
+            reply.status = "recording_unavailable";
+            return false;
+        }
+        if (simulation_.State().mode != FlightMode::Grounded)
+        {
+            reply.status = "recording_requires_grounded";
+            return false;
+        }
+
+        simulation_.Reset();
+        recordedCommands_.clear();
+        recordingTickCount_ = 0;
+        recordingActive_ = true;
+        externalControl_ = true;
+        window_->SetTitle("AeroSimLab | 입력 기록 중");
+        reply.accepted = true;
+        reply.status = "recording_started";
+        return false;
+
+    case Command::StopRecording:
+        if (!recordingActive_)
+        {
+            reply.status = "recording_not_active";
+            return false;
+        }
+
+        recordingActive_ = false;
+        window_->SetTitle("AeroSimLab | 입력 기록 완료");
+        reply.accepted = true;
+        reply.status = "recording_stopped";
+        return false;
+
+    case Command::ReplayRecording:
+        if (recordingActive_ || replaying_)
+        {
+            reply.status = "recording_unavailable";
+            return false;
+        }
+        if (recordedCommands_.empty() || recordingTickCount_ == 0)
+        {
+            reply.status = "recording_empty";
+            return false;
+        }
+
+        simulation_.Reset();
+        replaying_ = true;
+        replayTick_ = 0;
+        replayCommandIndex_ = 0;
+        pendingControllerAction_.reset();
+        pendingPilotCommand_.reset();
+        window_->SetTitle("AeroSimLab | 입력 기록 재생 중");
+        ApplyRecordedCommands();
+        ++replayTick_;
+        reply.accepted = true;
+        reply.status = "recording_replay_started";
+        return true;
+    }
+
+    return false;
+}
+
+void AeroSimLabApp::ApplyDroneCommand(
+    const aerosimlab::simulation::DroneCommand& command,
+    aerosimlab::communication::CommandReply& reply)
+{
+    if (replaying_)
+    {
+        replaying_ = false;
+        window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
+    }
+
+    const auto result = simulation_.Apply(command);
+    reply.accepted = result == aerosimlab::simulation::CommandResult::Accepted;
+    if (reply.accepted)
+        RecordCommand(command);
+
+    using Result = aerosimlab::simulation::CommandResult;
+    switch (result)
+    {
+    case Result::Accepted: reply.status = "applied"; break;
+    case Result::InvalidValue: reply.status = "invalid_value"; break;
+    case Result::InvalidFlightMode: reply.status = "invalid_flight_mode"; break;
+    case Result::SimulationPaused: reply.status = "simulation_paused"; break;
+    }
+}
+
+void AeroSimLabApp::ApplyCameraCommand(
+    aerosimlab::communication::CameraCommand command,
+    aerosimlab::communication::CommandReply& reply)
+{
+    using Command = aerosimlab::communication::CameraCommand;
+    switch (command)
+    {
+    case Command::Enable: simulation_.SetCameraEnabled(true); break;
+    case Command::Disable: simulation_.SetCameraEnabled(false); break;
+    case Command::InjectFault: simulation_.SetCameraFault(true); break;
+    case Command::Recover: simulation_.SetCameraFault(false); break;
+    }
+
+    reply.accepted = true;
+    reply.status = "applied";
+}
+
 void AeroSimLabApp::ApplyGroundCommand()
 {
 #ifdef __EMSCRIPTEN__
@@ -497,93 +612,11 @@ void AeroSimLabApp::ApplyGroundCommand()
 
     bool replayTickAdvanced = false;
     if (pending.packet.sessionCommand)
-    {
-        using Command = aerosimlab::communication::SessionCommand;
-        switch (*pending.packet.sessionCommand)
-        {
-        case Command::StartRecording:
-            if (recordingActive_ || replaying_)
-                reply.status = "recording_unavailable";
-            else if (simulation_.State().mode != aerosimlab::simulation::FlightMode::Grounded)
-                reply.status = "recording_requires_grounded";
-            else
-            {
-                simulation_.Reset();
-                recordedCommands_.clear();
-                recordingTickCount_ = 0;
-                recordingActive_ = true;
-                externalControl_ = true;
-                window_->SetTitle("AeroSimLab | 입력 기록 중");
-                reply.accepted = true;
-                reply.status = "recording_started";
-            }
-            break;
-        case Command::StopRecording:
-            if (!recordingActive_)
-                reply.status = "recording_not_active";
-            else
-            {
-                recordingActive_ = false;
-                window_->SetTitle("AeroSimLab | 입력 기록 완료");
-                reply.accepted = true;
-                reply.status = "recording_stopped";
-            }
-            break;
-        case Command::ReplayRecording:
-            if (recordingActive_ || replaying_)
-                reply.status = "recording_unavailable";
-            else if (recordedCommands_.empty() || recordingTickCount_ == 0)
-                reply.status = "recording_empty";
-            else
-            {
-                simulation_.Reset();
-                replaying_ = true;
-                replayTick_ = 0;
-                replayCommandIndex_ = 0;
-                pendingControllerAction_.reset();
-                pendingPilotCommand_.reset();
-                window_->SetTitle("AeroSimLab | 입력 기록 재생 중");
-                ApplyRecordedCommands();
-                ++replayTick_;
-                replayTickAdvanced = true;
-                reply.accepted = true;
-                reply.status = "recording_replay_started";
-            }
-            break;
-        }
-    }
+        replayTickAdvanced = ApplySessionCommand(*pending.packet.sessionCommand, reply);
     else if (pending.packet.droneCommand)
-    {
-        if (replaying_)
-        {
-            replaying_ = false;
-            window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
-        }
-        const auto result = simulation_.Apply(*pending.packet.droneCommand);
-        reply.accepted = result == aerosimlab::simulation::CommandResult::Accepted;
-        if (reply.accepted)
-            RecordCommand(*pending.packet.droneCommand);
-        switch (result)
-        {
-        case aerosimlab::simulation::CommandResult::Accepted: reply.status = "applied"; break;
-        case aerosimlab::simulation::CommandResult::InvalidValue: reply.status = "invalid_value"; break;
-        case aerosimlab::simulation::CommandResult::InvalidFlightMode: reply.status = "invalid_flight_mode"; break;
-        case aerosimlab::simulation::CommandResult::SimulationPaused: reply.status = "simulation_paused"; break;
-        }
-    }
+        ApplyDroneCommand(*pending.packet.droneCommand, reply);
     else if (pending.packet.cameraCommand)
-    {
-        using Command = aerosimlab::communication::CameraCommand;
-        switch (*pending.packet.cameraCommand)
-        {
-        case Command::Enable: simulation_.SetCameraEnabled(true); break;
-        case Command::Disable: simulation_.SetCameraEnabled(false); break;
-        case Command::InjectFault: simulation_.SetCameraFault(true); break;
-        case Command::Recover: simulation_.SetCameraFault(false); break;
-        }
-        reply.accepted = true;
-        reply.status = "applied";
-    }
+        ApplyCameraCommand(*pending.packet.cameraCommand, reply);
 
     if (!replayTickAdvanced)
         simulation_.AdvanceOneTick();

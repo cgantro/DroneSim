@@ -68,6 +68,17 @@ private:
     void ApplyDemoCommands();
     void PollGroundControl();
     void PollGamepad();
+    /**
+     * @brief 기록 시작·정지·재생 명령을 적용한다.
+     * @return true면 재생 시작 과정에서 첫 Tick까지 진행했으므로 바깥에서 한 번 더 진행하지 않는다.
+     */
+    [[nodiscard]] bool ApplySessionCommand(
+        aerosimlab::communication::SessionCommand command,
+        aerosimlab::communication::CommandReply& reply);
+    void ApplyDroneCommand(const aerosimlab::simulation::DroneCommand& command,
+        aerosimlab::communication::CommandReply& reply);
+    void ApplyCameraCommand(aerosimlab::communication::CameraCommand command,
+        aerosimlab::communication::CommandReply& reply);
     void ApplyGroundCommand();
     void ApplyRecordedCommands();
     void RecordCommand(const aerosimlab::simulation::DroneCommand& command);
