@@ -28,44 +28,44 @@ namespace
 {
 using namespace detail;
 // LM 계산에 쓰는 고정 기준입니다. 호출자가 조정하는 값은 IkOptions에 둡니다.
-struct IkSolverConstants final
+namespace solver_limits
 {
-    static constexpr std::size_t maximumDampingAttempts = 8;
-    static constexpr std::size_t maximumLineSearchSteps = 10;
-    static constexpr double singularSystemDampingGrowth = 10.0;
-    static constexpr double rejectedStepDampingGrowth = 4.0;
-    static constexpr double acceptedStepDampingDecay = 0.5;
-    static constexpr double minimumDampingRatio = 0.01;
-    static constexpr double jointLimitToleranceFloor = 1e-10;
-    static constexpr double jointLimitToleranceRatio = 1e-10;
-    static constexpr double minimumSingularValueForCondition = 1e-12;
-    static constexpr double negligibleJointStep = 1e-15;
-};
+inline constexpr std::size_t maximumDampingAttempts = 8;
+inline constexpr std::size_t maximumLineSearchSteps = 10;
+inline constexpr double singularSystemDampingGrowth = 10.0;
+inline constexpr double rejectedStepDampingGrowth = 4.0;
+inline constexpr double acceptedStepDampingDecay = 0.5;
+inline constexpr double minimumDampingRatio = 0.01;
+inline constexpr double jointLimitToleranceFloor = 1e-10;
+inline constexpr double jointLimitToleranceRatio = 1e-10;
+inline constexpr double minimumSingularValueForCondition = 1e-12;
+inline constexpr double negligibleJointStep = 1e-15;
+}
 
-struct IkErrorMessages final
+namespace messages
 {
-    inline static constexpr char inactiveSession[] = "IK: session is no longer active";
-    inline static constexpr char invalidTcpOffset[] = "LevenbergMarquardtIk: invalid TCP offset";
-    inline static constexpr char invalidJointLimits[] = "LevenbergMarquardtIk: invalid joint limits";
-    inline static constexpr char nonFiniteRobotReach[] = "LevenbergMarquardtIk: non-finite robot reach";
-    inline static constexpr char missingToolFrame[] = "LevenbergMarquardtIk: missing ToolFrame";
-    inline static constexpr char invalidSeedOrOptions[] = "IK: invalid seed size or solver options";
-    inline static constexpr char seedOutsideJointLimits[] = "IK: seed outside joint limits or non-finite";
-    inline static constexpr char invalidTargetPose[] = "IK: invalid target pose";
-    inline static constexpr char specificationMissingToolFrame[] = "IK: robot specification has no ToolFrame";
-    inline static constexpr char targetRadiusPrefix[] = "IK: target radius ";
-    inline static constexpr char targetRadiusExceededReach[] = " m exceeds conservative robot reach ";
-    inline static constexpr char metersSuffix[] = " m";
-    inline static constexpr char numericRangeExceeded[] = "IK: target or solver scaling exceeds numeric range";
-    inline static constexpr char constrainedIterationLimit[] = "IK: iteration limit while constrained by joint limits";
-    inline static constexpr char iterationLimitReached[] = "IK: iteration limit reached";
-    inline static constexpr char nonFiniteNumericalStep[] = "IK: non-finite numerical step";
-    inline static constexpr char jointLimitsBlockImprovement[] = "IK: joint limits block local improvement";
-    inline static constexpr char localIterationStalled[] = "IK: local iteration stalled";
-    inline static constexpr char progressStalledByJointLimits[] = "IK: progress stalled while constrained by joint limits";
-    inline static constexpr char progressStalled[] = "IK: progress stalled before reaching target";
-    inline static constexpr char cancelled[] = "IK: cancelled";
-};
+inline constexpr char inactiveSession[] = "IK: session is no longer active";
+inline constexpr char invalidTcpOffset[] = "LevenbergMarquardtIk: invalid TCP offset";
+inline constexpr char invalidJointLimits[] = "LevenbergMarquardtIk: invalid joint limits";
+inline constexpr char nonFiniteRobotReach[] = "LevenbergMarquardtIk: non-finite robot reach";
+inline constexpr char missingToolFrame[] = "LevenbergMarquardtIk: missing ToolFrame";
+inline constexpr char invalidSeedOrOptions[] = "IK: invalid seed size or solver options";
+inline constexpr char seedOutsideJointLimits[] = "IK: seed outside joint limits or non-finite";
+inline constexpr char invalidTargetPose[] = "IK: invalid target pose";
+inline constexpr char specificationMissingToolFrame[] = "IK: robot specification has no ToolFrame";
+inline constexpr char targetRadiusPrefix[] = "IK: target radius ";
+inline constexpr char targetRadiusExceededReach[] = " m exceeds conservative robot reach ";
+inline constexpr char metersSuffix[] = " m";
+inline constexpr char numericRangeExceeded[] = "IK: target or solver scaling exceeds numeric range";
+inline constexpr char constrainedIterationLimit[] = "IK: iteration limit while constrained by joint limits";
+inline constexpr char iterationLimitReached[] = "IK: iteration limit reached";
+inline constexpr char nonFiniteNumericalStep[] = "IK: non-finite numerical step";
+inline constexpr char jointLimitsBlockImprovement[] = "IK: joint limits block local improvement";
+inline constexpr char localIterationStalled[] = "IK: local iteration stalled";
+inline constexpr char progressStalledByJointLimits[] = "IK: progress stalled while constrained by joint limits";
+inline constexpr char progressStalled[] = "IK: progress stalled before reaching target";
+inline constexpr char cancelled[] = "IK: cancelled";
+}
 
 using SixVector = std::array<double, taskSpaceDimension>;
 using SixMatrix = std::array<SixVector, taskSpaceDimension>;
@@ -255,8 +255,8 @@ FeasibleJointStep FindFeasibleJointStep(
             const auto& limits = specification.joints[joint];
             if (!limits.HasPositionLimits())
                 continue;
-            const double boundaryTolerance = std::max(IkSolverConstants::jointLimitToleranceFloor,
-                (limits.maximumPosition - limits.minimumPosition) * IkSolverConstants::jointLimitToleranceRatio);
+            const double boundaryTolerance = std::max(solver_limits::jointLimitToleranceFloor,
+                (limits.maximumPosition - limits.minimumPosition) * solver_limits::jointLimitToleranceRatio);
             const double requested = angles[joint] + jointStep[joint] * result.scale;
             const bool atLowerLimit = angles[joint] <= limits.minimumPosition + boundaryTolerance;
             const bool atUpperLimit = angles[joint] >= limits.maximumPosition - boundaryTolerance;
@@ -287,7 +287,7 @@ double LimitStepToJointRanges(
     double feasibleFraction = stepScale;
     for (std::size_t joint = 0; joint < angles.size(); ++joint)
     {
-        if (active[joint] || std::abs(jointStep[joint]) <= IkSolverConstants::negligibleJointStep)
+        if (active[joint] || std::abs(jointStep[joint]) <= solver_limits::negligibleJointStep)
             continue;
         const auto& limits = specification.joints[joint];
         if (!limits.HasPositionLimits())
@@ -342,7 +342,7 @@ std::pair<double, double> JacobianCondition(const std::vector<SixVector>& column
     const double maximumEigenvalue = std::max(0.0, eigenvalues[static_cast<Eigen::Index>(taskSpaceDimension - 1)]);
     const double minimumSingularValue = std::sqrt(minimumEigenvalue);
     const double maximumSingularValue = std::sqrt(maximumEigenvalue);
-    const double conditionNumber = minimumSingularValue > IkSolverConstants::minimumSingularValueForCondition
+    const double conditionNumber = minimumSingularValue > solver_limits::minimumSingularValueForCondition
         ? maximumSingularValue / minimumSingularValue
         : std::numeric_limits<double>::infinity();
     return {minimumSingularValue, conditionNumber};
@@ -356,14 +356,14 @@ LevenbergMarquardtIk::LevenbergMarquardtIk(const models::RobotSpecification& spe
       jacobianColumnsScratch_(specification.jointCount)
 {
     if (!Finite(tcpInToolFrame_.positionMeters))
-        throw std::invalid_argument(IkErrorMessages::invalidTcpOffset);
+        throw std::invalid_argument(messages::invalidTcpOffset);
     tcpInToolFrame_.rotation = Normalize(tcpInToolFrame_.rotation);
     for (std::size_t i = 0; i < specification_.jointCount; ++i)
     {
         const auto& joint = specification_.joints[i];
         if (joint.HasPositionLimits() && (!std::isfinite(joint.minimumPosition) ||
             !std::isfinite(joint.maximumPosition) || joint.minimumPosition > joint.maximumPosition))
-            throw std::invalid_argument(IkErrorMessages::invalidJointLimits);
+            throw std::invalid_argument(messages::invalidJointLimits);
         if (i > 0)
             maximumReachMeters_ += Length(Subtract(joint.bindPivotMeters, specification_.joints[i - 1].bindPivotMeters));
         if (joint.motionType == models::JointMotionType::Prismatic)
@@ -373,13 +373,13 @@ LevenbergMarquardtIk::LevenbergMarquardtIk(const models::RobotSpecification& spe
     if (specification_.hasToolFrame)
         maximumReachMeters_ += Length(specification_.toolFrameInLastJoint.positionMeters) + Length(tcpInToolFrame_.positionMeters);
     if (!std::isfinite(maximumReachMeters_))
-        throw std::invalid_argument(IkErrorMessages::nonFiniteRobotReach);
+        throw std::invalid_argument(messages::nonFiniteRobotReach);
 }
 
 CartesianPose LevenbergMarquardtIk::EvaluateTcp(const JointVector& jointPositions)
 {
     if (!specification_.hasToolFrame)
-        throw std::invalid_argument(IkErrorMessages::missingToolFrame);
+        throw std::invalid_argument(messages::missingToolFrame);
     return ToCartesian(Compose(forward_.Update(jointPositions).toolFrameInBaseFrame, tcpInToolFrame_));
 }
 
@@ -414,24 +414,24 @@ LevenbergMarquardtIk::SessionId LevenbergMarquardtIk::BeginSingleSeed(
     };
     if (currentSeed.size() != specification_.jointCount || !ValidSolverOptions(options))
     {
-        fail(IkStatus::InvalidInput, IkErrorMessages::invalidSeedOrOptions);
+        fail(IkStatus::InvalidInput, messages::invalidSeedOrOptions);
         return activeSessionId_;
     }
     if (!SeedWithinJointLimits(specification_, currentSeed))
     {
-        fail(IkStatus::InvalidInput, IkErrorMessages::seedOutsideJointLimits);
+        fail(IkStatus::InvalidInput, messages::seedOutsideJointLimits);
         return activeSessionId_;
     }
     try { sessionTarget_ = FromCartesian(targetInBase); }
     catch (const std::invalid_argument&)
     {
-        fail(IkStatus::InvalidInput, IkErrorMessages::invalidTargetPose);
+        fail(IkStatus::InvalidInput, messages::invalidTargetPose);
         return activeSessionId_;
     }
     sessionResult_.jointPositions = currentSeed;
     if (!specification_.hasToolFrame)
     {
-        fail(IkStatus::MissingToolFrame, IkErrorMessages::specificationMissingToolFrame);
+        fail(IkStatus::MissingToolFrame, messages::specificationMissingToolFrame);
         return activeSessionId_;
     }
     const double targetRadius = Length(Subtract(sessionTarget_.positionMeters, specification_.joints[0].bindPivotMeters));
@@ -439,8 +439,8 @@ LevenbergMarquardtIk::SessionId LevenbergMarquardtIk::BeginSingleSeed(
     {
         sessionResult_.status = IkStatus::Unreachable;
         sessionResult_.terminationReason = IkTerminationReason::ConservativeReachExceeded;
-        sessionResult_.message = std::string{IkErrorMessages::targetRadiusPrefix} + std::to_string(targetRadius) +
-            IkErrorMessages::targetRadiusExceededReach + std::to_string(maximumReachMeters_) + IkErrorMessages::metersSuffix;
+        sessionResult_.message = std::string{messages::targetRadiusPrefix} + std::to_string(targetRadius) +
+            messages::targetRadiusExceededReach + std::to_string(maximumReachMeters_) + messages::metersSuffix;
         sessionState_ = IkSessionState::Completed;
         return activeSessionId_;
     }
@@ -479,13 +479,13 @@ void LevenbergMarquardtIk::FinishAtIterationLimit()
     FinishSession(
         sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
         sessionActiveJointLimit_ ? IkTerminationReason::ActiveJointLimit : IkTerminationReason::IterationLimit,
-        sessionActiveJointLimit_ ? IkErrorMessages::constrainedIterationLimit : IkErrorMessages::iterationLimitReached);
+        sessionActiveJointLimit_ ? messages::constrainedIterationLimit : messages::iterationLimitReached);
 }
 
 IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size_t iterationBudget)
 {
     if (session != activeSessionId_)
-        throw std::invalid_argument(IkErrorMessages::inactiveSession);
+        throw std::invalid_argument(messages::inactiveSession);
     if (sessionState_ != IkSessionState::Running || iterationBudget == 0)
         return sessionState_;
 
@@ -523,7 +523,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         if (!std::isfinite(error.cost))
         {
             FinishSession(IkStatus::InvalidInput, IkTerminationReason::InvalidInput,
-                IkErrorMessages::numericRangeExceeded);
+                messages::numericRangeExceeded);
             break;
         }
         if (sessionIteration_ == sessionOptions_.maxIterations)
@@ -547,7 +547,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         bool improved = false;
         bool activeLimitBlockedThisIteration = false;
         bool solvedDampedSystem = false;
-        for (std::size_t attempt = 0; attempt < IkSolverConstants::maximumDampingAttempts && !improved; ++attempt)
+        for (std::size_t attempt = 0; attempt < solver_limits::maximumDampingAttempts && !improved; ++attempt)
         {
             const FeasibleJointStep step = FindFeasibleJointStep(
                 specification_, sessionOptions_, columns, error.weighted, angles,
@@ -557,7 +557,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
             if (step.status == FeasibleStepStatus::NonFiniteStep)
             {
                 FinishSession(IkStatus::DidNotConverge, IkTerminationReason::NumericalFailure,
-                    IkErrorMessages::nonFiniteNumericalStep);
+                    messages::nonFiniteNumericalStep);
                 break;
             }
             if (sessionState_ != IkSessionState::Running)
@@ -565,13 +565,13 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
             if (step.status == FeasibleStepStatus::NoFeasibleDirection)
             {
                 sessionDamping_ *= solvedDampedSystem
-                    ? IkSolverConstants::rejectedStepDampingGrowth : IkSolverConstants::singularSystemDampingGrowth;
+                    ? solver_limits::rejectedStepDampingGrowth : solver_limits::singularSystemDampingGrowth;
                 continue;
             }
 
             const double feasibleFraction = LimitStepToJointRanges(
                 specification_, angles, jointStep, active, step.scale);
-            for (std::size_t line = 0; line < IkSolverConstants::maximumLineSearchSteps && !improved; ++line)
+            for (std::size_t line = 0; line < solver_limits::maximumLineSearchSteps && !improved; ++line)
             {
                 const double fraction = feasibleFraction * std::ldexp(1.0, -line);
                 std::copy(angles.begin(), angles.end(), candidate.begin());
@@ -590,8 +590,8 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
                     angles.swap(candidate);
                     // 감쇠값은 한 번에 관절을 얼마나 움직일지 조절한다. 목표 오차가 줄면 낮추고, 줄지 않으면 높인다.
                     // 감쇠값을 낮추면 관절이 크게 움직일 수 있으므로 한 번의 최대 관절 변화량도 제한한다.
-                    sessionDamping_ = std::max(sessionOptions_.damping * IkSolverConstants::minimumDampingRatio,
-                        sessionDamping_ * IkSolverConstants::acceptedStepDampingDecay);
+                    sessionDamping_ = std::max(sessionOptions_.damping * solver_limits::minimumDampingRatio,
+                        sessionDamping_ * solver_limits::acceptedStepDampingDecay);
                     double largestAcceptedStepRatio = 0.0;
                     for (std::size_t joint = 0; joint < jointStep.size(); ++joint)
                     {
@@ -613,7 +613,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
                 }
             }
             if (!improved)
-                sessionDamping_ *= IkSolverConstants::rejectedStepDampingGrowth;
+                sessionDamping_ *= solver_limits::rejectedStepDampingGrowth;
         }
         if (sessionState_ != IkSessionState::Running)
             break;
@@ -622,7 +622,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
             sessionActiveJointLimit_ = activeLimitBlockedThisIteration;
             FinishSession(sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
                 sessionActiveJointLimit_ ? IkTerminationReason::ActiveJointLimit : IkTerminationReason::Stagnation,
-                sessionActiveJointLimit_ ? IkErrorMessages::jointLimitsBlockImprovement : IkErrorMessages::localIterationStalled);
+                sessionActiveJointLimit_ ? messages::jointLimitsBlockImprovement : messages::localIterationStalled);
             break;
         }
         sessionActiveJointLimit_ = activeLimitBlockedThisIteration;
@@ -633,7 +633,7 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
         {
             FinishSession(sessionActiveJointLimit_ ? IkStatus::JointLimitReached : IkStatus::DidNotConverge,
                 sessionActiveJointLimit_ ? IkTerminationReason::ActiveJointLimit : IkTerminationReason::Stagnation,
-                sessionActiveJointLimit_ ? IkErrorMessages::progressStalledByJointLimits : IkErrorMessages::progressStalled);
+                sessionActiveJointLimit_ ? messages::progressStalledByJointLimits : messages::progressStalled);
             break;
         }
     }
@@ -658,19 +658,19 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
 void LevenbergMarquardtIk::CancelSingleSeed(SessionId session)
 {
     if (session != activeSessionId_)
-        throw std::invalid_argument(IkErrorMessages::inactiveSession);
+        throw std::invalid_argument(messages::inactiveSession);
     if (sessionState_ != IkSessionState::Running)
         return;
     sessionResult_.status = IkStatus::DidNotConverge;
     sessionResult_.terminationReason = IkTerminationReason::Cancelled;
-    sessionResult_.message = IkErrorMessages::cancelled;
+    sessionResult_.message = messages::cancelled;
     sessionState_ = IkSessionState::Cancelled;
 }
 
 const IkResult& LevenbergMarquardtIk::GetSingleSeedResult(SessionId session) const
 {
     if (session != activeSessionId_)
-        throw std::invalid_argument(IkErrorMessages::inactiveSession);
+        throw std::invalid_argument(messages::inactiveSession);
     return sessionResult_;
 }
 
