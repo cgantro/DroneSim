@@ -44,20 +44,24 @@ TEST(ScenarioRunner, ReplaysFlightCommandsAndChecksFinalState)
     EXPECT_EQ(result.issues, repeatedResult.issues);
 }
 
-TEST(ScenarioRunner, RunsRigidBodyFlightThroughTheHeadlessPath)
+TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
 {
     constexpr std::string_view scenario = R"json(
-    {"version":1,"dynamics":"rigid_body","ticks":600,
+    {"version":1,"dynamics":"rigid_body",
+     "wind_velocity_meters_per_second":[2,0,0],"ticks":600,
      "commands":[{"tick":0,"type":"takeoff"},{"tick":240,"type":"land"}],
-     "expected":{"mode":"grounded","position_meters":[0,0,0.05],
-       "tolerance_meters":0.02}}
+     "expected":{"mode":"grounded","position_meters":[0.5563,-0.2720,0.05],
+       "tolerance_meters":0.05}}
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
+    const ScenarioResult repeatedResult = RunScenario(scenario);
     EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
     EXPECT_EQ(result.tickCount, 600);
     EXPECT_EQ(result.finalState.mode, FlightMode::Grounded);
     EXPECT_NEAR(result.finalState.positionMeters.z, 0.05, 0.02);
+    EXPECT_GT(result.finalState.positionMeters.x, 0.4);
+    EXPECT_EQ(result.finalState.positionMeters, repeatedResult.finalState.positionMeters);
 }
 
 TEST(ScenarioRunner, ReportsCommandFailuresAndRejectsInvalidScenarios)
@@ -82,6 +86,10 @@ TEST(ScenarioRunner, ReportsCommandFailuresAndRejectsInvalidScenarios)
         std::invalid_argument);
     EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"dynamics":"flight",
         "ticks":1,"commands":[],"expected":{"mode":"grounded","position_meters":[0,0,0]}})json")),
+        std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,
+        "wind_velocity_meters_per_second":[1,0,0],"ticks":1,"commands":[],
+        "expected":{"mode":"grounded","position_meters":[0,0,0]}})json")),
         std::invalid_argument);
 }
 

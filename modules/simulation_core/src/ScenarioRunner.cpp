@@ -281,6 +281,13 @@ ScenarioResult RunScenario(std::string_view jsonText)
 
     const std::vector<ScheduledCommand> commands = ReadCommands(
         Required(document, "commands"), tickCount);
+    const SimulationDynamics dynamics = ReadDynamics(document);
+    const std::optional<glm::dvec3> windVelocity = document.contains("wind_velocity_meters_per_second")
+        ? std::optional<glm::dvec3>{ReadVector(
+            document["wind_velocity_meters_per_second"], "wind_velocity_meters_per_second")}
+        : std::nullopt;
+    if (windVelocity && dynamics != SimulationDynamics::RigidBody)
+        throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
     const std::vector<ScheduledCameraEvent> cameraEvents = ReadCameraEvents(document, tickCount);
     const Json& expected = Required(document, "expected");
     if (!expected.is_object())
@@ -305,7 +312,9 @@ ScenarioResult RunScenario(std::string_view jsonText)
         ? std::optional<std::uint64_t>{ReadUnsigned(expected["camera_frame_count"], "camera_frame_count")}
         : std::nullopt;
 
-    SimulationCore simulation{ReadDynamics(document)};
+    SimulationCore simulation{dynamics};
+    if (windVelocity)
+        simulation.SetWindVelocityMetersPerSecond(*windVelocity);
     ScenarioResult result;
     std::size_t nextCommand = 0;
     std::size_t nextCameraEvent = 0;

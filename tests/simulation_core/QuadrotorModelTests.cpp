@@ -49,4 +49,21 @@ TEST(QuadrotorModel, MotorResponseAndUnequalRotorsChangeWrench)
     EXPECT_NEAR(state.motorSpeedRadiansPerSecond[0],
         parameters.maximumMotorSpeedRadiansPerSecond * std::exp(-1.0), 1.0e-9);
 }
+
+TEST(QuadrotorModel, RotorDragOpposesAirRelativeVelocity)
+{
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    QuadrotorState state;
+    state.motorSpeedRadiansPerSecond.fill(500.0);
+
+    const QuadrotorWrench stillAir = QuadrotorModel::CalculateWrench(state, parameters);
+    const QuadrotorWrench forwardAirflow = QuadrotorModel::CalculateWrench(
+        state, parameters, glm::dvec3{5.0, 0.0, 0.0});
+
+    EXPECT_DOUBLE_EQ(stillAir.forceNewtons.x, 0.0);
+    EXPECT_LT(forwardAirflow.forceNewtons.x, 0.0);
+    EXPECT_NEAR(forwardAirflow.forceNewtons.x,
+        -4.0 * 500.0 * parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter * 5.0,
+        1.0e-12);
+}
 }

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <stdexcept>
 
 namespace aerosimlab::simulation
 {
@@ -32,6 +33,7 @@ struct SimulationCore::EcsStorage
     flecs::world world;
     flecs::entity drone;
     flecs::entity camera;
+    glm::dvec3 windVelocityMetersPerSecond{0.0};
 #if !defined(__EMSCRIPTEN__)
     std::unique_ptr<PhysicsWorld> physics;
     RigidBodyHandle physicsBody;
@@ -124,8 +126,14 @@ struct SimulationCore::EcsStorage
             state, control, actuation.parameters, step);
         QuadrotorModel::AdvanceMotors(
             actuation.motors, targetSpeeds, actuation.parameters, step);
-        const QuadrotorWrench wrench =
-            QuadrotorModel::CalculateWrench(actuation.motors, actuation.parameters);
+        const glm::dquat worldToBody = glm::inverse(state.orientation);
+        const glm::dvec3 airRelativeVelocityBody = worldToBody
+            * (state.velocityMetersPerSecond - windVelocityMetersPerSecond);
+        const glm::dvec3 angularVelocityBody =
+            worldToBody * state.angularVelocityRadiansPerSecond;
+        const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(
+            actuation.motors, actuation.parameters,
+            airRelativeVelocityBody, angularVelocityBody);
         physics->ApplyForce(body, state.orientation * wrench.forceNewtons);
         physics->ApplyTorque(body, state.orientation * wrench.torqueNewtonMeters);
         physics->Step(step);
@@ -269,6 +277,13 @@ void SimulationCore::SetCameraFault(bool faulted) noexcept
         EoCameraModel::InjectFault(ecs_->camera.get_mut<CameraState>());
     else
         EoCameraModel::Recover(ecs_->camera.get_mut<CameraState>());
+}
+
+void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
+{
+    if (!std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))
+        throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
+    ecs_->windVelocityMetersPerSecond = velocity;
 }
 
 std::uint64_t SimulationCore::TickCount() const noexcept

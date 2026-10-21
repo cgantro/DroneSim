@@ -40,6 +40,10 @@ struct QuadrotorParameters
     double motorTimeConstantUpSeconds = 0.0125;
     double motorTimeConstantDownSeconds = 0.025;
     double maximumMotorSpeedRadiansPerSecond = 1000.0;
+    /** @brief X500 Gazebo 설정의 로터 항력 계수다. 단위는 N·s²/m다. */
+    double rotorDragCoefficientNewtonSecondsSquaredPerMeter = 8.06428e-5;
+    /** @brief X500 Gazebo 설정의 로터 구름 모멘트 계수다. 단위는 N·m·s²/m다. */
+    double rollingMomentCoefficientNewtonMetersSecondsSquaredPerMeter = 1.0e-6;
 
     /** @brief PX4가 공개한 X500 Gazebo 모델의 중심 기체와 모터 설정값을 반환한다. */
     [[nodiscard]] static QuadrotorParameters X500Gazebo();
@@ -71,6 +75,8 @@ public:
     /** @brief 현재 로터 속도로 기체에 작용하는 힘과 토크를 계산한다. */
     [[nodiscard]] static QuadrotorWrench CalculateWrench(
         const QuadrotorState& state,
-        const QuadrotorParameters& parameters);
+        const QuadrotorParameters& parameters,
+        const glm::dvec3& airRelativeVelocityBodyMetersPerSecond = glm::dvec3{0.0},
+        const glm::dvec3& angularVelocityBodyRadiansPerSecond = glm::dvec3{0.0});
 };
 }

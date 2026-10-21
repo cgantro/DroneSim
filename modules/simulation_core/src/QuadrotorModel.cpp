@@ -33,7 +33,11 @@ void ValidateParameters(const QuadrotorParameters& parameters)
         || !std::isfinite(parameters.motorTimeConstantDownSeconds)
         || !(parameters.motorTimeConstantDownSeconds > 0.0)
         || !std::isfinite(parameters.maximumMotorSpeedRadiansPerSecond)
-        || !(parameters.maximumMotorSpeedRadiansPerSecond > 0.0))
+        || !(parameters.maximumMotorSpeedRadiansPerSecond > 0.0)
+        || !std::isfinite(parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter)
+        || parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter < 0.0
+        || !std::isfinite(parameters.rollingMomentCoefficientNewtonMetersSecondsSquaredPerMeter)
+        || parameters.rollingMomentCoefficientNewtonMetersSecondsSquaredPerMeter < 0.0)
     {
         throw std::invalid_argument("기체 질량, 관성, 로터와 모터 값을 확인해 주세요.");
     }
@@ -66,6 +70,8 @@ QuadrotorParameters QuadrotorParameters::X500Gazebo()
     parameters.motorTimeConstantUpSeconds = 0.0125;
     parameters.motorTimeConstantDownSeconds = 0.025;
     parameters.maximumMotorSpeedRadiansPerSecond = 1000.0;
+    parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter = 8.06428e-5;
+    parameters.rollingMomentCoefficientNewtonMetersSecondsSquaredPerMeter = 1.0e-6;
     return parameters;
 }
 
@@ -101,9 +107,17 @@ void QuadrotorModel::AdvanceMotors(
 
 QuadrotorWrench QuadrotorModel::CalculateWrench(
     const QuadrotorState& state,
-    const QuadrotorParameters& parameters)
+    const QuadrotorParameters& parameters,
+    const glm::dvec3& airRelativeVelocityBodyMetersPerSecond,
+    const glm::dvec3& angularVelocityBodyRadiansPerSecond)
 {
     ValidateParameters(parameters);
+    if (!IsFinite(airRelativeVelocityBodyMetersPerSecond)
+        || !IsFinite(angularVelocityBodyRadiansPerSecond))
+    {
+        throw std::invalid_argument("공기 상대 속도와 각속도는 유한한 값이어야 합니다.");
+    }
+
     QuadrotorWrench wrench;
     for (std::size_t rotor = 0; rotor < rotorCount; ++rotor)
     {
@@ -118,6 +132,24 @@ QuadrotorWrench QuadrotorModel::CalculateWrench(
         const glm::dvec3 rotorForce{0.0, 0.0, thrust};
         wrench.forceNewtons += rotorForce;
         wrench.torqueNewtonMeters += glm::cross(parameters.rotors[rotor].positionMeters, rotorForce);
+
+        const glm::dvec3 rotorVelocityBody = airRelativeVelocityBodyMetersPerSecond
+            + glm::cross(angularVelocityBodyRadiansPerSecond,
+                parameters.rotors[rotor].positionMeters);
+        const glm::dvec3 rotorAxisBody{0.0, 0.0, 1.0};
+        const glm::dvec3 crossFlowVelocityBody = rotorVelocityBody
+            - glm::dot(rotorVelocityBody, rotorAxisBody) * rotorAxisBody;
+        const double absoluteSpeed = std::abs(speed);
+        const glm::dvec3 rotorDragBody = -absoluteSpeed
+            * parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter
+            * crossFlowVelocityBody;
+        wrench.forceNewtons += rotorDragBody;
+        wrench.torqueNewtonMeters += glm::cross(
+            parameters.rotors[rotor].positionMeters, rotorDragBody);
+        wrench.torqueNewtonMeters -= absoluteSpeed
+            * parameters.rollingMomentCoefficientNewtonMetersSecondsSquaredPerMeter
+            * crossFlowVelocityBody;
+
         // 기체에는 프로펠러 회전 방향과 반대인 반작용 토크가 걸린다.
         wrench.torqueNewtonMeters.z -= DirectionSign(parameters.rotors[rotor].rotation)
             * parameters.momentToThrustRatio * thrust;

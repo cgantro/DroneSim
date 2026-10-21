@@ -3,6 +3,8 @@
 #include "simulation_core/DroneModel.h"
 #include "simulation_core/EoCameraModel.h"
 
+#include <glm/vec3.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -78,6 +80,9 @@ public:
 
     /** @brief 카메라 장애를 주입하거나 해제한다. */
     void SetCameraFault(bool faulted) noexcept;
+
+    /** @brief 강체 모드에서 사용할 월드 기준 바람 속도를 설정한다. */
+    void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity);
 
     /** @brief 지금까지 실행한 고정 간격 단계 수를 반환한다. */
     [[nodiscard]] std::uint64_t TickCount() const noexcept;

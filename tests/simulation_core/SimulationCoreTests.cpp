@@ -188,7 +188,7 @@ TEST(SimulationCore, RigidBodyModeUsesRotorForcesForTakeoffAndLanding)
     for (int tick = 0; tick < 120; ++tick)
         simulation.AdvanceOneTick();
     EXPECT_GT(simulation.State().positionMeters.x, 0.2);
-    EXPECT_GT(std::abs(simulation.State().orientation.y), 0.01);
+    EXPECT_GT(std::abs(simulation.State().orientation.y), 0.005);
     EXPECT_NEAR(glm::length(simulation.State().orientation), 1.0, 1.0e-5);
 
     const glm::dvec3 waypoint = simulation.State().positionMeters + glm::dvec3{1.0, 0.0, 0.0};

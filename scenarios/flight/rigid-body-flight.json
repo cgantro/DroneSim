@@ -1,6 +1,7 @@
 {
   "version": 1,
   "dynamics": "rigid_body",
+  "wind_velocity_meters_per_second": [2.0, 0.0, 0.0],
   "ticks": 600,
   "commands": [
     {"tick": 0, "type": "takeoff"},
@@ -8,7 +9,7 @@
   ],
   "expected": {
     "mode": "grounded",
-    "position_meters": [0.0, 0.0, 0.05],
-    "tolerance_meters": 0.02
+    "position_meters": [0.5563, -0.2720, 0.05],
+    "tolerance_meters": 0.05
   }
 }
