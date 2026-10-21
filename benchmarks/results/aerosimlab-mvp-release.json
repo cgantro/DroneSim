@@ -427,6 +427,53 @@
           "process_cpu_percent_approx": 99.99956000193599
         }
       ]
+    },
+    {
+      "measured_at": "2026-10-21T23:04:34Z",
+      "source_revision": "337957b6",
+      "committed_revision": "362675b6",
+      "source_state": "커밋 전 작업 트리에서 측정했으며, 측정된 코드와 자산을 362675b6에 그대로 커밋했습니다.",
+      "method": "숨김 OpenGL 창 1280×720, VSync 끔, X500·SRTM·OSM 건물 17개와 시설물 49개를 화면 및 Jolt에 연결한 Release 실행 파일을 5초씩 3회 측정했습니다. 시설물 GLB와 충돌 상자는 모두 로드된 상태입니다.",
+      "environment": {
+        "os": "Microsoft Windows 10.0.26200",
+        "architecture": "X64",
+        "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+        "build": "MSVC Release x64",
+        "framebuffer": "1280x720",
+        "opengl_renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "opengl_version": "3.3.0 NVIDIA 581.42",
+        "window": "OpenGL hidden window; VSync off"
+      },
+      "runs": [
+        {
+          "elapsed_seconds": 5.0016424,
+          "render_fps": 406.46648388937206,
+          "rendered_frames": 2033,
+          "simulation_ticks": 299,
+          "tick_duration_us": {"p50": 31.5, "p95": 54.6, "p99": 74.1, "samples": 299, "deadline_misses_over_16_67ms": 0},
+          "physics_step_duration_us": {"p50": 18.2, "p95": 39.7, "p99": 54.0, "samples": 299},
+          "working_set_bytes": 116322304
+        },
+        {
+          "elapsed_seconds": 5.0005416,
+          "render_fps": 398.35684998600954,
+          "rendered_frames": 1992,
+          "simulation_ticks": 298,
+          "tick_duration_us": {"p50": 30.8, "p95": 54.9, "p99": 73.1, "samples": 298, "deadline_misses_over_16_67ms": 0},
+          "physics_step_duration_us": {"p50": 17.9, "p95": 40.3, "p99": 58.6, "samples": 298},
+          "working_set_bytes": 116260864
+        },
+        {
+          "elapsed_seconds": 5.0002287,
+          "render_fps": 398.3817780174735,
+          "rendered_frames": 1992,
+          "simulation_ticks": 298,
+          "tick_duration_us": {"p50": 31.1, "p95": 55.1, "p99": 81.2, "samples": 298, "deadline_misses_over_16_67ms": 0},
+          "physics_step_duration_us": {"p50": 18.1, "p95": 40.8, "p99": 58.1, "samples": 298},
+          "working_set_bytes": 116359168
+        }
+      ],
+      "interpretation": "이전 시설물 미포함 단일 측정과 표본 수가 달라 성능 향상으로 해석하지 않습니다. 현재 세 번 측정의 FPS 범위는 398.4~406.5이며 Tick p95는 54.6~55.1µs, Jolt p95는 39.7~40.8µs입니다."
     }
   ],
   "entity_scaling": {
