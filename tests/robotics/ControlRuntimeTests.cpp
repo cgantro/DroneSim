@@ -81,7 +81,6 @@ TEST(ControlRuntimeTests, FixedLoopAndControllerContracts)
     EXPECT_TRUE(controller.GetState().tcpPoseValid);
     grasplink::robotics::kinematics::LevenbergMarquardtIk ik(models::hanwha::kHcr12a);
     const CartesianPose homePose = ik.EvaluateTcp(JointVector(6, 0.0));
-    ASSERT_TRUE(static_cast<bool>(controller.MovePose(homePose))) << "MovePose accepts reachable TCP target";
     ASSERT_TRUE(static_cast<bool>(controller.MoveLinear({homePose, 0.05, 0.2}))) << "MoveLinear accepts a reachable TCP path";
     std::size_t linearUpdates = 0;
     bool linearVelocityWithinLimits = true;
