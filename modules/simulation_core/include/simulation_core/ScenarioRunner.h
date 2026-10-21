@@ -4,6 +4,7 @@
 #include "simulation_core/EoCameraModel.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -23,6 +24,8 @@ struct ScenarioResult
     CameraState finalCamera;
     std::vector<std::string> issues;
     std::vector<std::string> eventLog;
+    /** @brief 기준을 요청한 시나리오에서 잰 최소 3차원 중심 간 거리다. */
+    std::optional<double> minimumDroneSeparationMeters;
     /** @brief 시나리오에서 이름으로 지정한 드론의 마지막 상태다. */
     struct Drone
     {

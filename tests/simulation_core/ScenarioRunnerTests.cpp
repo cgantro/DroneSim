@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <stdexcept>
+#include <string>
 #include <string_view>
 
 namespace aerosimlab::simulation
@@ -56,7 +57,7 @@ TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
        {"tick":0,"drone":"lead","type":"takeoff","delay_ticks":5},
        {"tick":0,"drone":"scout","type":"takeoff"},
        {"tick":90,"drone":"scout","type":"set_waypoint","position_meters":[12,0,1.5]}],
-     "expected":{"tolerance_meters":0.000001,"drones":[
+     "expected":{"tolerance_meters":0.000001,"minimum_drone_separation_meters":9.9,"drones":[
        {"name":"lead","mode":"hovering","position_meters":[0,0,1.5]},
        {"name":"scout","mode":"hovering","position_meters":[12,0,1.5]}]}}
     )json";
@@ -71,6 +72,15 @@ TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
     EXPECT_DOUBLE_EQ(result.drones[0].finalState.positionMeters.z, 1.5);
     EXPECT_DOUBLE_EQ(result.drones[1].finalState.positionMeters.x, 12.0);
     EXPECT_EQ(result.finalState.positionMeters, result.drones[0].finalState.positionMeters);
+    ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
+    EXPECT_NEAR(*result.minimumDroneSeparationMeters, 10.0, 1.0e-12);
+
+    std::string unsafeScenario{scenario};
+    unsafeScenario.replace(unsafeScenario.find("9.9"), 3, "10.1");
+    const ScenarioResult unsafeResult = RunScenario(unsafeScenario);
+    EXPECT_FALSE(unsafeResult.passed);
+    ASSERT_EQ(unsafeResult.issues.size(), 1);
+    EXPECT_NE(unsafeResult.issues.front().find("최소 거리"), std::string::npos);
 }
 
 TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)

@@ -411,6 +411,17 @@ ScenarioResult RunScenario(std::string_view jsonText)
     {
         throw std::invalid_argument("tolerance_meters는 0 이상이어야 합니다.");
     }
+    const std::optional<double> expectedMinimumDroneSeparationMeters =
+        expected.contains("minimum_drone_separation_meters")
+        ? std::optional<double>{ReadFiniteNumber(
+            expected["minimum_drone_separation_meters"], "minimum_drone_separation_meters")}
+        : std::nullopt;
+    if (expectedMinimumDroneSeparationMeters
+        && (*expectedMinimumDroneSeparationMeters < 0.0 || scenarioDrones.size() < 2))
+    {
+        throw std::invalid_argument(
+            "minimum_drone_separation_meters는 여러 드론이 있는 시나리오에서 0 이상이어야 합니다.");
+    }
 
     const std::optional<CameraStatus> expectedCameraStatus = expected.contains("camera_status")
         ? std::optional<CameraStatus>{ReadCameraStatus(expected["camera_status"])}
@@ -436,6 +447,27 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
 
     ScenarioResult result;
+    const auto recordMinimumDroneSeparation = [&]()
+    {
+        if (!expectedMinimumDroneSeparationMeters)
+            return;
+        for (std::size_t first = 0; first < scenarioDrones.size(); ++first)
+        {
+            for (std::size_t second = first + 1; second < scenarioDrones.size(); ++second)
+            {
+                const glm::dvec3 offset = simulation.State(droneIds.at(scenarioDrones[first].name))
+                    .positionMeters
+                    - simulation.State(droneIds.at(scenarioDrones[second].name)).positionMeters;
+                const double distanceMeters = glm::length(offset);
+                if (!result.minimumDroneSeparationMeters
+                    || distanceMeters < *result.minimumDroneSeparationMeters)
+                {
+                    result.minimumDroneSeparationMeters = distanceMeters;
+                }
+            }
+        }
+    };
+    recordMinimumDroneSeparation();
     std::size_t nextCommand = 0;
     std::size_t nextCameraEvent = 0;
     std::unordered_map<std::string, std::uint64_t> lastDeliveredSequence;
@@ -492,6 +524,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
             result.eventLog.push_back("tick " + std::to_string(tick) + ": 카메라 " + event.action);
         }
         simulation.AdvanceOneTick();
+        recordMinimumDroneSeparation();
     }
 
     result.tickCount = simulation.TickCount();
@@ -540,6 +573,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
     if (hasExpectedDrones && expectedDrones.size() != result.drones.size())
         result.issues.push_back("expected.drones 개수가 시나리오 드론 수와 다릅니다.");
+    if (expectedMinimumDroneSeparationMeters
+        && result.minimumDroneSeparationMeters
+        && *result.minimumDroneSeparationMeters < *expectedMinimumDroneSeparationMeters)
+    {
+        result.issues.push_back("드론 사이 최소 거리가 설정한 안전 간격보다 짧았습니다.");
+    }
     if (expectedCameraStatus && result.finalCamera.status != *expectedCameraStatus)
         result.issues.push_back("최종 카메라 상태가 예상값과 다릅니다.");
     if (expectedFrameCount && result.finalCamera.frameCount != *expectedFrameCount)

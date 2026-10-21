@@ -12,6 +12,7 @@
   ],
   "expected": {
     "tolerance_meters": 0.000001,
+    "minimum_drone_separation_meters": 9.9,
     "drones": [
       {"name": "lead", "mode": "hovering", "position_meters": [0, 0, 1.5]},
       {"name": "scout", "mode": "hovering", "position_meters": [12, 0, 1.5]}
