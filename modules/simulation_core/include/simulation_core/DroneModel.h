@@ -71,6 +71,8 @@ class DroneModel
 {
 public:
     static constexpr double fixedStepSeconds = 1.0 / 60.0;
+    static constexpr double maximumSpeedMetersPerSecond = 5.0;
+    static constexpr double maximumYawRateRadiansPerSecond = 1.5;
 
     /** @brief 현재 비행 상태를 반환한다. */
     [[nodiscard]] const DroneState& State() const noexcept;
@@ -87,8 +89,6 @@ public:
 private:
     static constexpr double takeoffHeightMeters = 1.5;
     static constexpr double climbSpeedMetersPerSecond = 1.0;
-    static constexpr double maximumSpeedMetersPerSecond = 5.0;
-    static constexpr double maximumYawRateRadiansPerSecond = 1.5;
     static constexpr double waypointToleranceMeters = 0.05;
     static constexpr double altitudeToleranceMeters = 1.0e-12;
 

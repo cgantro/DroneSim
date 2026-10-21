@@ -1,6 +1,7 @@
 #pragma once
 
 #include "communication/Protocol.h"
+#include "manual_control/GamepadCommandMapper.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
 #endif
@@ -46,6 +47,7 @@ private:
     void AdvanceSimulation(double elapsedSeconds);
     void ApplyDemoCommands();
     void PollGroundControl();
+    void PollGamepad();
     void ApplyGroundCommand();
     void WriteBenchmarkReport(double elapsedSeconds) const;
     [[nodiscard]] aerosimlab::communication::Telemetry CurrentTelemetry() const;
@@ -59,6 +61,12 @@ private:
     bool smokeTest_ = false;
     bool demoMode_ = false;
     bool externalControl_ = false;
+    bool groundControlActive_ = false;
+    bool gamepadConnected_ = false;
+    bool previousTakeoffButton_ = false;
+    bool previousLandButton_ = false;
+    std::optional<aerosimlab::simulation::DroneCommand> pendingControllerAction_;
+    std::optional<aerosimlab::manual_control::PilotCommand> pendingPilotCommand_;
     bool networkEnabled_ = false;
     std::size_t smokeCommandCount_ = 0;
     bool benchmarkMode_ = false;

@@ -44,6 +44,12 @@ if(WIN32)
   target_link_libraries(aerosimlab_communication PUBLIC ws2_32)
 endif()
 
+add_library(aerosimlab_manual_control STATIC
+  modules/manual_control/src/GamepadCommandMapper.cpp
+)
+target_include_directories(aerosimlab_manual_control PUBLIC modules/manual_control/include)
+target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_core)
+
 if(NOT EMSCRIPTEN)
   add_executable(aerosimlab_ground_control apps/ground_control/main.cpp)
   target_link_libraries(aerosimlab_ground_control PRIVATE aerosimlab_communication)
@@ -101,6 +107,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   target_link_libraries(aerosimlab_simulator PRIVATE
     aerosimlab_graphics
     aerosimlab_simulation_core
+    aerosimlab_manual_control
     aerosimlab_communication
     nlohmann_json::nlohmann_json
   )
@@ -160,6 +167,19 @@ if(BUILD_TESTING)
     TEST_PREFIX "Communication."
     DISCOVERY_TIMEOUT 60
     PROPERTIES LABELS "UNIT;communication"
+  )
+
+  add_executable(aerosimlab_manual_control_tests
+    tests/manual_control/GamepadCommandMapperTests.cpp
+  )
+  target_link_libraries(aerosimlab_manual_control_tests PRIVATE
+    aerosimlab_manual_control
+    GTest::gtest_main
+  )
+  gtest_discover_tests(aerosimlab_manual_control_tests
+    TEST_PREFIX "ManualControl."
+    DISCOVERY_TIMEOUT 60
+    PROPERTIES LABELS "UNIT;manual_control"
   )
 
   add_test(NAME HeadlessScenarioSmoke

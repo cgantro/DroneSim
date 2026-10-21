@@ -1,0 +1,37 @@
+#include "manual_control/GamepadCommandMapper.h"
+
+#include <gtest/gtest.h>
+
+#include <cmath>
+
+namespace aerosimlab::manual_control
+{
+TEST(GamepadCommandMapper, IgnoresSmallStickDriftAndScalesFullInput)
+{
+    EXPECT_DOUBLE_EQ(ApplyDeadZone(0.08), 0.0);
+    EXPECT_DOUBLE_EQ(ApplyDeadZone(-0.08), 0.0);
+    EXPECT_DOUBLE_EQ(ApplyDeadZone(1.0), 1.0);
+    EXPECT_DOUBLE_EQ(ApplyDeadZone(-1.0), -1.0);
+}
+
+TEST(GamepadCommandMapper, RotatesMovementIntoTheDroneHeading)
+{
+    const auto command = MapAxes(GamepadAxes{.forward = 1.0}, 0.5 * std::acos(-1.0));
+
+    EXPECT_NEAR(command.velocityMetersPerSecond.x, 0.0, 1.0e-12);
+    EXPECT_NEAR(command.velocityMetersPerSecond.y, simulation::DroneModel::maximumSpeedMetersPerSecond, 1.0e-12);
+}
+
+TEST(GamepadCommandMapper, LimitsDiagonalSpeedAndMapsHeightAndYaw)
+{
+    const auto command = MapAxes(
+        GamepadAxes{.forward = 1.0, .right = 1.0, .vertical = 0.5, .yaw = -1.0}, 0.0);
+
+    EXPECT_NEAR(std::hypot(command.velocityMetersPerSecond.x, command.velocityMetersPerSecond.y),
+        simulation::DroneModel::maximumSpeedMetersPerSecond, 1.0e-12);
+    EXPECT_NEAR(command.velocityMetersPerSecond.z,
+        ApplyDeadZone(0.5) * simulation::DroneModel::maximumSpeedMetersPerSecond, 1.0e-12);
+    EXPECT_DOUBLE_EQ(command.yawRateRadiansPerSecond,
+        -simulation::DroneModel::maximumYawRateRadiansPerSecond);
+}
+}

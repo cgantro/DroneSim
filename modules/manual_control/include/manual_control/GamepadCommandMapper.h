@@ -1,0 +1,33 @@
+#pragma once
+
+#include "simulation_core/DroneModel.h"
+
+namespace aerosimlab::manual_control
+{
+/**
+ * @brief GLFW 게임패드의 축 값을 드론 비행 명령으로 바꾼다.
+ * @details 축 값은 -1부터 1까지이며, 전진·좌우 이동은 조종기 기준으로 입력한다.
+ * 드론의 현재 방향을 적용해 월드 좌표 속도로 바꾸므로 실제 상태 변경은 SimulationCore가 맡는다.
+ */
+struct GamepadAxes
+{
+    double forward = 0.0;
+    double right = 0.0;
+    double vertical = 0.0;
+    double yaw = 0.0;
+};
+
+/** @brief 축 입력을 드론의 속도와 회전 명령 값으로 바꾼 결과다. */
+struct PilotCommand
+{
+    glm::dvec3 velocityMetersPerSecond{0.0};
+    double yawRateRadiansPerSecond = 0.0;
+};
+
+/** @brief 게임패드의 현재 축과 드론 방향을 월드 좌표의 조종 값으로 바꾼다. */
+[[nodiscard]] PilotCommand MapAxes(
+    const GamepadAxes& axes, double droneYawRadians) noexcept;
+
+/** @brief 축의 작은 흔들림은 무시하고 입력 범위를 -1부터 1까지 다시 맞춘다. */
+[[nodiscard]] double ApplyDeadZone(double value) noexcept;
+}

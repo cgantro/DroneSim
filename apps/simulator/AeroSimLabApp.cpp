@@ -6,7 +6,6 @@
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
-
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
@@ -23,6 +22,10 @@
 #define NOMINMAX
 #include <Windows.h>
 #include <Psapi.h>
+#endif
+
+#ifndef __EMSCRIPTEN__
+#include <GLFW/glfw3.h>
 #endif
 
 namespace aerosimlab::simulator
@@ -77,6 +80,7 @@ int AeroSimLabApp::Run()
     {
         window_->PollEvents();
         PollGroundControl();
+        PollGamepad();
         const auto now = std::chrono::steady_clock::now();
         const double frameSeconds = smokeTest_ && !benchmarkMode_
             ? fixedStepSeconds
@@ -153,6 +157,29 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
         constexpr bool hasGroundCommand = false;
 #endif
         ApplyGroundCommand();
+        if (!hasGroundCommand && !groundControlActive_)
+        {
+            if (pendingControllerAction_)
+            {
+                (void)simulation_.Apply(*pendingControllerAction_);
+                pendingControllerAction_.reset();
+            }
+            if (pendingPilotCommand_)
+            {
+                const auto mode = simulation_.State().mode;
+                if (mode == aerosimlab::simulation::FlightMode::Hovering
+                    || mode == aerosimlab::simulation::FlightMode::Flying)
+                {
+                    (void)simulation_.Apply({
+                        aerosimlab::simulation::DroneCommand::Kind::SetVelocity,
+                        pendingPilotCommand_->velocityMetersPerSecond});
+                    (void)simulation_.Apply({
+                        aerosimlab::simulation::DroneCommand::Kind::SetYawRate,
+                        glm::dvec3{0.0},
+                        pendingPilotCommand_->yawRateRadiansPerSecond});
+                }
+            }
+        }
         if (!hasGroundCommand)
             simulation_.AdvanceOneTick();
         if (benchmarkMode_)
@@ -292,7 +319,10 @@ void AeroSimLabApp::PollGroundControl()
             }
 
             sequenceGuard_.Commit(packet);
+            groundControlActive_ = true;
             externalControl_ = true;
+            pendingControllerAction_.reset();
+            pendingPilotCommand_.reset();
             const auto elapsed = std::chrono::steady_clock::now() - startTime_;
             const auto receivedAtMs = static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
@@ -303,6 +333,87 @@ void AeroSimLabApp::PollGroundControl()
             udpSocket_->Send(aerosimlab::communication::EncodeError(error.what()), peer);
         }
     }
+#endif
+}
+
+void AeroSimLabApp::PollGamepad()
+{
+#ifdef __EMSCRIPTEN__
+    return;
+#else
+    GLFWgamepadstate state{};
+    const bool connected = glfwJoystickIsGamepad(GLFW_JOYSTICK_1) == GLFW_TRUE
+        && glfwGetGamepadState(GLFW_JOYSTICK_1, &state) == GLFW_TRUE;
+
+    if (!connected)
+    {
+        pendingControllerAction_.reset();
+        if (gamepadConnected_)
+            std::cout << "게임패드 연결 해제" << (groundControlActive_ ? " (지상통제 입력 유지)" : "") << '\n';
+        if (gamepadConnected_ && !groundControlActive_)
+        {
+            // 조종기가 끊기면 남아 있던 속도 명령을 지워 제자리 호버링으로 전환한다.
+            const auto mode = simulation_.State().mode;
+            if (mode == aerosimlab::simulation::FlightMode::TakingOff)
+                pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
+                    aerosimlab::simulation::DroneCommand::Kind::Land};
+            else if (mode == aerosimlab::simulation::FlightMode::Hovering
+                || mode == aerosimlab::simulation::FlightMode::Flying)
+                pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
+                    aerosimlab::simulation::DroneCommand::Kind::Stop};
+            pendingPilotCommand_.reset();
+        }
+        gamepadConnected_ = false;
+        previousTakeoffButton_ = false;
+        previousLandButton_ = false;
+        return;
+    }
+
+    if (!gamepadConnected_)
+        std::cout << "게임패드 연결: GLFW 표준 매핑 사용" << '\n';
+    gamepadConnected_ = true;
+    externalControl_ = true;
+    const bool takeoffPressed = state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
+    const bool landPressed = state.buttons[GLFW_GAMEPAD_BUTTON_B] == GLFW_PRESS;
+
+    if (!groundControlActive_)
+    {
+        if (takeoffPressed && !previousTakeoffButton_
+            && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
+        {
+            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
+                aerosimlab::simulation::DroneCommand::Kind::TakeOff};
+        }
+        if (landPressed && !previousLandButton_
+            && simulation_.State().mode != aerosimlab::simulation::FlightMode::Grounded)
+        {
+            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
+                aerosimlab::simulation::DroneCommand::Kind::Land};
+        }
+
+        const auto mode = simulation_.State().mode;
+        const bool airborne = mode == aerosimlab::simulation::FlightMode::Hovering
+            || mode == aerosimlab::simulation::FlightMode::Flying;
+        if (airborne)
+        {
+            const auto triggerValue = [](float value)
+            {
+                return (static_cast<double>(value) + 1.0) * 0.5;
+            };
+            const aerosimlab::manual_control::GamepadAxes axes{
+                .forward = -static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]),
+                .right = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_X]),
+                .vertical = triggerValue(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER])
+                    - triggerValue(state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER]),
+                .yaw = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X])
+            };
+            pendingPilotCommand_ = aerosimlab::manual_control::MapAxes(
+                axes, simulation_.State().yawRadians);
+        }
+    }
+
+    previousTakeoffButton_ = takeoffPressed;
+    previousLandButton_ = landPressed;
 #endif
 }
 
