@@ -90,6 +90,15 @@ struct JointMoveCommand
 };
 
 // TCP는 공구 끝의 작업 기준점이다. TCP 목표에서 관절 목표를 구하는 역기구학(IK)과 경로 실행이 있어야 직선 이동할 수 있다.
+/** @brief 직선 이동 명령의 기본 속도와 가속도 요청값이다. */
+namespace linear_motion_defaults
+{
+inline constexpr double linearVelocityMetersPerSecond = 0.25;
+inline constexpr double angularVelocityRadiansPerSecond = 0.5;
+inline constexpr double linearAccelerationMetersPerSecondSquared = 12.0;
+inline constexpr double angularAccelerationRadiansPerSecondSquared = 60.0;
+}
+
 /** @brief TCP가 도착할 위치·방향과 직선 이동의 최대 속도·가속도를 요청한다. 관절 목표를 계산하는 IK와 경로 실행 기능이 제어 구현에 있어야 처리할 수 있다. */
 struct LinearMoveCommand
 {
@@ -97,16 +106,16 @@ struct LinearMoveCommand
     CartesianPose targetPose{};
 
     /// 직선 경로를 실행할 때 허용할 TCP 이동 속도 상한 [m/s]다.
-    double maxLinearVelocityMetersPerSecond = 0.25;
+    double maxLinearVelocityMetersPerSecond = linear_motion_defaults::linearVelocityMetersPerSecond;
 
     /// 직선 경로를 실행할 때 허용할 TCP 회전 속도 상한 [rad/s]다.
-    double maxAngularVelocityRadiansPerSecond = 0.5;
+    double maxAngularVelocityRadiansPerSecond = linear_motion_defaults::angularVelocityRadiansPerSecond;
 
     /// 직선 경로를 실행할 TCP 선가속도 상한 [m/s²]다.
-    double maxLinearAccelerationMetersPerSecondSquared = 12.0;
+    double maxLinearAccelerationMetersPerSecondSquared = linear_motion_defaults::linearAccelerationMetersPerSecondSquared;
 
     /// 직선 경로를 실행할 TCP 각가속도 상한 [rad/s²]다.
-    double maxAngularAccelerationRadiansPerSecondSquared = 60.0;
+    double maxAngularAccelerationRadiansPerSecondSquared = linear_motion_defaults::angularAccelerationRadiansPerSecondSquared;
 };
 
 /**
@@ -118,13 +127,13 @@ struct LinearPathMoveCommand
     /// TCP 자세는 로봇 도구 끝의 위치와 방향을 함께 나타낸다. 이 목록의 자세를 입력 순서대로 통과한다.
     std::vector<CartesianPose> targetPoses;
     /// 경로 전체에서 허용하는 TCP 직선 이동 속도 상한 [m/s]이다.
-    double maxLinearVelocityMetersPerSecond = 0.25;
+    double maxLinearVelocityMetersPerSecond = linear_motion_defaults::linearVelocityMetersPerSecond;
     /// 경로 전체에서 허용하는 TCP 회전 속도 상한 [rad/s]이다.
-    double maxAngularVelocityRadiansPerSecond = 0.5;
+    double maxAngularVelocityRadiansPerSecond = linear_motion_defaults::angularVelocityRadiansPerSecond;
     /// 경로 전체에서 허용하는 TCP 직선 가속도 상한 [m/s²]이다.
-    double maxLinearAccelerationMetersPerSecondSquared = 12.0;
+    double maxLinearAccelerationMetersPerSecondSquared = linear_motion_defaults::linearAccelerationMetersPerSecondSquared;
     /// 경로 전체에서 허용하는 TCP 회전 가속도 상한 [rad/s²]이다.
-    double maxAngularAccelerationRadiansPerSecondSquared = 60.0;
+    double maxAngularAccelerationRadiansPerSecondSquared = linear_motion_defaults::angularAccelerationRadiansPerSecondSquared;
 };
 
 /** @brief Controller가 연결되어 있는지, 움직이는 중인지, 정지했는지를 나타낸다. */
