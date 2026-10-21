@@ -57,7 +57,7 @@ std::mutex g_JoltRuntimeMutex;
 std::size_t g_JoltRuntimeUsers = 0;
 std::unique_ptr<JPH::Factory> g_JoltFactory;
 
-struct PhysicsWorldLimits final
+namespace world_limits
 {
     static constexpr JPH::ObjectLayer collisionCategoryCount =
         static_cast<JPH::ObjectLayer>(CollisionLayer::Count);
@@ -75,9 +75,9 @@ struct PhysicsWorldLimits final
     static constexpr unsigned int maximumWorkerThreads = 4;
     static constexpr int collisionStepsPerUpdate = 1;
     static constexpr std::size_t minimumConvexHullPointCount = 4;
-};
+}
 
-struct PhysicsWorldSettings final
+namespace world_settings
 {
     static constexpr float gravityYMetersPerSecondSquared = -9.81F;
     static constexpr float penetrationSlopMeters = 0.002F;
@@ -85,7 +85,7 @@ struct PhysicsWorldSettings final
     static constexpr float boxConvexRadiusExtentRatio = 0.1F;
     static constexpr float convexHullRadiusMeters = 0.0F;
     static constexpr float minimumRotationLengthSquared = 1.0e-12F;
-};
+}
 
 // 공개 API는 double을 받지만 Jolt는 float만 받으므로 변환해도 유한한 양수인지 먼저 확인한다.
 bool IsValidFixedDeltaSeconds(double seconds) noexcept
@@ -94,15 +94,15 @@ bool IsValidFixedDeltaSeconds(double seconds) noexcept
         seconds <= static_cast<double>(std::numeric_limits<float>::max());
 }
 
-struct PhysicsWorldIdentity final
+namespace world_identity
 {
     static constexpr std::uint64_t firstWorldToken = 1;
     static constexpr std::uint64_t firstConstraintId = 1;
-};
+}
 
-std::atomic<std::uint64_t> g_NextWorldToken{PhysicsWorldIdentity::firstWorldToken};
+std::atomic<std::uint64_t> g_NextWorldToken{world_identity::firstWorldToken};
 
-struct PhysicsErrorMessages final
+namespace error_messages
 {
     inline static constexpr char joltFactoryAlreadyInitialized[] = "Jolt Factory is already initialized.";
     inline static constexpr char unsupportedBodyMotionType[] = "Unsupported BodyMotionType.";
@@ -130,7 +130,7 @@ struct PhysicsErrorMessages final
         "MoveKinematic requires a kinematic body.";
     inline static constexpr char kinematicStopRequiresKinematicBody[] =
         "StopKinematic requires a kinematic body.";
-};
+}
 
 void AcquireJoltRuntime()
 {
@@ -145,7 +145,7 @@ void AcquireJoltRuntime()
     JPH::RegisterDefaultAllocator();
 
     if (JPH::Factory::sInstance != nullptr)
-        throw std::runtime_error(PhysicsErrorMessages::joltFactoryAlreadyInitialized);
+        throw std::runtime_error(error_messages::joltFactoryAlreadyInitialized);
 
     g_JoltFactory = std::make_unique<JPH::Factory>();
     JPH::Factory::sInstance = g_JoltFactory.get();
@@ -199,9 +199,9 @@ public:
 namespace ObjectLayers
 {
 
-constexpr JPH::ObjectLayer CategoryCount = PhysicsWorldLimits::collisionCategoryCount;
-constexpr JPH::ObjectLayer MovingOffset = PhysicsWorldLimits::movingLayerOffset;
-constexpr JPH::ObjectLayer Count = PhysicsWorldLimits::objectLayerCount;
+constexpr JPH::ObjectLayer CategoryCount = world_limits::collisionCategoryCount;
+constexpr JPH::ObjectLayer MovingOffset = world_limits::movingLayerOffset;
+constexpr JPH::ObjectLayer Count = world_limits::objectLayerCount;
 
 JPH::ObjectLayer Make(bool moving, CollisionLayer category)
 {
@@ -237,7 +237,7 @@ namespace BroadPhaseLayers
 
 constexpr JPH::BroadPhaseLayer NonMoving{0};
 constexpr JPH::BroadPhaseLayer Moving{1};
-constexpr JPH::uint Count = PhysicsWorldLimits::broadPhaseLayerCount;
+constexpr JPH::uint Count = world_limits::broadPhaseLayerCount;
 
 } // namespace BroadPhaseLayers
 
@@ -376,7 +376,7 @@ JPH::EMotionType ToJoltMotionType(BodyMotionType motionType)
         return JPH::EMotionType::Dynamic;
     }
 
-    throw std::invalid_argument(PhysicsErrorMessages::unsupportedBodyMotionType);
+    throw std::invalid_argument(error_messages::unsupportedBodyMotionType);
 }
 
 
@@ -401,31 +401,31 @@ JPH::RefConst<JPH::Shape> CreateJoltShape(const CollisionShapeDescription& descr
         if (!std::isfinite(halfExtents.x) || !std::isfinite(halfExtents.y) ||
             !std::isfinite(halfExtents.z) || halfExtents.x <= 0.0F ||
             halfExtents.y <= 0.0F || halfExtents.z <= 0.0F)
-            throw std::invalid_argument(PhysicsErrorMessages::invalidBoxHalfExtents);
+            throw std::invalid_argument(error_messages::invalidBoxHalfExtents);
 
         const float smallestExtent = std::min({halfExtents.x, halfExtents.y, halfExtents.z});
         const float convexRadius = std::min(
-            PhysicsWorldSettings::maximumBoxConvexRadiusMeters,
-            smallestExtent * PhysicsWorldSettings::boxConvexRadiusExtentRatio);
+            world_settings::maximumBoxConvexRadiusMeters,
+            smallestExtent * world_settings::boxConvexRadiusExtentRatio);
         JPH::RefConst<JPH::Shape> shape = new JPH::BoxShape(
             JPH::Vec3(halfExtents.x, halfExtents.y, halfExtents.z), convexRadius);
         return shape;
     }
     case CollisionShapeType::ConvexHull:
     {
-        if (description.pointsMeters.size() < PhysicsWorldLimits::minimumConvexHullPointCount)
-            throw std::invalid_argument(PhysicsErrorMessages::convexHullNeedsMorePoints);
+        if (description.pointsMeters.size() < world_limits::minimumConvexHullPointCount)
+            throw std::invalid_argument(error_messages::convexHullNeedsMorePoints);
 
         JPH::Array<JPH::Vec3> points;
         points.reserve(description.pointsMeters.size());
         for (const glm::vec3& point : description.pointsMeters)
         {
             if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z))
-                throw std::invalid_argument(PhysicsErrorMessages::nonFiniteConvexHullPoint);
+                throw std::invalid_argument(error_messages::nonFiniteConvexHullPoint);
             points.emplace_back(point.x, point.y, point.z);
         }
 
-        JPH::ConvexHullShapeSettings hullSettings(points, PhysicsWorldSettings::convexHullRadiusMeters);
+        JPH::ConvexHullShapeSettings hullSettings(points, world_settings::convexHullRadiusMeters);
         const auto hullResult = hullSettings.Create();
         if (hullResult.HasError())
             throw std::runtime_error(hullResult.GetError().c_str());
@@ -433,7 +433,7 @@ JPH::RefConst<JPH::Shape> CreateJoltShape(const CollisionShapeDescription& descr
     }
     }
 
-    throw std::invalid_argument(PhysicsErrorMessages::unsupportedCollisionShapeType);
+    throw std::invalid_argument(error_messages::unsupportedCollisionShapeType);
 }
 
 
@@ -549,7 +549,7 @@ struct PhysicsWorld::Impl
         JPH::Ref<JPH::TwoBodyConstraint> constraint;
     };
     std::unordered_map<std::uint64_t, FixedBinding> constraints;
-    std::uint64_t nextConstraint = PhysicsWorldIdentity::firstConstraintId;
+    std::uint64_t nextConstraint = world_identity::firstConstraintId;
 
     bool IsBodyValid(PhysicsBodyHandle handle) const
     {
@@ -570,7 +570,7 @@ struct PhysicsWorld::Impl
     JPH::BodyID RequireBodyID(PhysicsBodyHandle handle) const
     {
         if (!IsBodyValid(handle))
-            throw std::invalid_argument(PhysicsErrorMessages::invalidPhysicsBodyHandle);
+            throw std::invalid_argument(error_messages::invalidPhysicsBodyHandle);
         return ToBodyID(handle);
     }
 
@@ -608,7 +608,7 @@ struct PhysicsWorld::Impl
     }
 
     Impl()
-        : tempAllocator(PhysicsWorldLimits::temporaryAllocatorSizeBytes)
+        : tempAllocator(world_limits::temporaryAllocatorSizeBytes)
     {
 #if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
         jobSystem = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
@@ -616,11 +616,11 @@ struct PhysicsWorld::Impl
         const unsigned int hardwareThreads =
             std::thread::hardware_concurrency();
 
-        const int workerThreads = hardwareThreads > PhysicsWorldLimits::reservedWorkerThreads
+        const int workerThreads = hardwareThreads > world_limits::reservedWorkerThreads
             ? static_cast<int>(std::min(
-                hardwareThreads - PhysicsWorldLimits::reservedWorkerThreads,
-                PhysicsWorldLimits::maximumWorkerThreads))
-            : static_cast<int>(PhysicsWorldLimits::reservedWorkerThreads);
+                hardwareThreads - world_limits::reservedWorkerThreads,
+                world_limits::maximumWorkerThreads))
+            : static_cast<int>(world_limits::reservedWorkerThreads);
 
         // Jolt Update가 물리 계산을 나눠 실행할 작업자 pool이다. 메인 스레드와 별도로 최대 4개의 worker를 만든다.
         jobSystem = std::make_unique<JPH::JobSystemThreadPool>(
@@ -630,10 +630,10 @@ struct PhysicsWorld::Impl
 #endif
 
         physicsSystem.Init(
-            PhysicsWorldLimits::maximumBodies,
-            PhysicsWorldLimits::bodyMutexCount,
-            PhysicsWorldLimits::maximumBodyPairs,
-            PhysicsWorldLimits::maximumContactConstraints,
+            world_limits::maximumBodies,
+            world_limits::bodyMutexCount,
+            world_limits::maximumBodyPairs,
+            world_limits::maximumContactConstraints,
             broadPhaseLayerInterface,
             objectVsBroadPhaseLayerFilter,
             objectLayerPairFilter);
@@ -643,10 +643,10 @@ struct PhysicsWorld::Impl
 
         // 좌표: World의 +Y가 위쪽이다. 중력 벡터의 단위는 m/s²이며 각 Body의 가속도로 적용된다.
         physicsSystem.SetGravity(JPH::Vec3(
-            0.0F, PhysicsWorldSettings::gravityYMetersPerSecondSquared, 0.0F));
+            0.0F, world_settings::gravityYMetersPerSecondSquared, 0.0F));
 
         JPH::PhysicsSettings settings = physicsSystem.GetPhysicsSettings();
-        settings.mPenetrationSlop = PhysicsWorldSettings::penetrationSlopMeters;
+        settings.mPenetrationSlop = world_settings::penetrationSlopMeters;
         physicsSystem.SetPhysicsSettings(settings);
     }
 
@@ -682,7 +682,7 @@ void PhysicsWorld::Step(double fixedDeltaSeconds)
 
     impl_->physicsSystem.Update(
         static_cast<float>(fixedDeltaSeconds),
-        PhysicsWorldLimits::collisionStepsPerUpdate,
+        world_limits::collisionStepsPerUpdate,
         &impl_->tempAllocator,
         impl_->jobSystem.get());
 
@@ -710,17 +710,17 @@ void ValidateTransform(const Transform& transform)
     const float rotationLengthSquared = glm::dot(transform.rotation, transform.rotation);
     if (!std::isfinite(transform.position.x) || !std::isfinite(transform.position.y) ||
         !std::isfinite(transform.position.z) || !std::isfinite(rotationLengthSquared) ||
-        rotationLengthSquared <= PhysicsWorldSettings::minimumRotationLengthSquared)
-        throw std::invalid_argument(PhysicsErrorMessages::invalidTransform);
+        rotationLengthSquared <= world_settings::minimumRotationLengthSquared)
+        throw std::invalid_argument(error_messages::invalidTransform);
 }
 
 PhysicsBodyHandle PhysicsWorld::CreateBody(const BodyDescription& description)
 {
     if (description.shapes.empty())
-        throw std::invalid_argument(PhysicsErrorMessages::bodyNeedsCollisionShape);
+        throw std::invalid_argument(error_messages::bodyNeedsCollisionShape);
     ValidateTransform(description.transform);
     if (description.collisionLayer >= CollisionLayer::Count)
-        throw std::invalid_argument(PhysicsErrorMessages::unsupportedCollisionLayer);
+        throw std::invalid_argument(error_messages::unsupportedCollisionLayer);
 
     JPH::MutableCompoundShapeSettings compoundSettings;
     for (const CollisionShapeDescription& part : description.shapes)
@@ -750,7 +750,7 @@ PhysicsBodyHandle PhysicsWorld::CreateBody(const BodyDescription& description)
         : JPH::EActivation::Activate;
     const JPH::BodyID bodyID = bodyInterface.CreateAndAddBody(settings, activation);
     if (bodyID.IsInvalid())
-        throw std::runtime_error(PhysicsErrorMessages::failedToCreatePhysicsBody);
+        throw std::runtime_error(error_messages::failedToCreatePhysicsBody);
 
     return {bodyID.GetIndexAndSequenceNumber(), impl_->worldToken};
 }
@@ -769,7 +769,7 @@ BodyMotionType PhysicsWorld::GetBodyMotionType(PhysicsBodyHandle handle) const
     case JPH::EMotionType::Kinematic: return BodyMotionType::Kinematic;
     case JPH::EMotionType::Dynamic: return BodyMotionType::Dynamic;
     }
-    throw std::logic_error(PhysicsErrorMessages::unsupportedJoltMotionType);
+    throw std::logic_error(error_messages::unsupportedJoltMotionType);
 }
 
 CollisionLayer PhysicsWorld::GetCollisionLayer(PhysicsBodyHandle handle) const
@@ -795,17 +795,17 @@ PhysicsConstraintHandle PhysicsWorld::CreateFixedConstraint(PhysicsBodyHandle an
     const JPH::BodyID objectID = impl_->RequireBodyID(object);
     if (bodyInterface.GetMotionType(anchorID) != JPH::EMotionType::Kinematic ||
         bodyInterface.GetMotionType(objectID) != JPH::EMotionType::Dynamic)
-        throw std::invalid_argument(PhysicsErrorMessages::fixedGraspNeedsKinematicAndDynamic);
+        throw std::invalid_argument(error_messages::fixedGraspNeedsKinematicAndDynamic);
 
     JPH::Ref<JPH::TwoBodyConstraint> constraint;
     {
         const JPH::BodyID ids[]{anchorID, objectID};
         JPH::BodyLockMultiWrite lock(
-            impl_->physicsSystem.GetBodyLockInterface(), ids, PhysicsWorldLimits::bodyPairCount);
+            impl_->physicsSystem.GetBodyLockInterface(), ids, world_limits::bodyPairCount);
         JPH::Body* first = lock.GetBody(0);
         JPH::Body* second = lock.GetBody(1);
         if (!first || !second)
-            throw std::invalid_argument(PhysicsErrorMessages::fixedGraspBodyMissing);
+            throw std::invalid_argument(error_messages::fixedGraspBodyMissing);
 
         // WorldSpace는 장면 전체 좌표를 뜻한다. 양쪽 연결점을 물체의 현재 무게중심(COM) 위치에 같게 두면 생성 순간 물체가 뛰지 않는다.
         // 양쪽 기준 축도 같은 World 방향으로 두면 각 Body의 현재 회전 차이가 그대로 보존된다.
@@ -871,9 +871,9 @@ bool PhysicsWorld::OverlapsEnvironmentAt(
     PhysicsBodyHandle ignoredEnvironmentBody) const
 {
     if (!IsBodyValid(ignoredEnvironmentBody))
-        throw std::invalid_argument(PhysicsErrorMessages::invalidIgnoredEnvironmentBody);
+        throw std::invalid_argument(error_messages::invalidIgnoredEnvironmentBody);
     if (GetCollisionLayer(ignoredEnvironmentBody) != CollisionLayer::Environment)
-        throw std::invalid_argument(PhysicsErrorMessages::ignoredBodyMustBeEnvironment);
+        throw std::invalid_argument(error_messages::ignoredBodyMustBeEnvironment);
 
     return OverlapsEnvironmentAtImpl(handle, targetTransform, &ignoredEnvironmentBody);
 }
@@ -935,7 +935,7 @@ bool PhysicsWorld::OverlapsBodiesAt(
 
     const JPH::BodyID bodyIds[]{firstId, secondId};
     JPH::BodyLockMultiRead lock(
-        impl_->physicsSystem.GetBodyLockInterface(), bodyIds, PhysicsWorldLimits::bodyPairCount);
+        impl_->physicsSystem.GetBodyLockInterface(), bodyIds, world_limits::bodyPairCount);
     const JPH::Body* firstBody = lock.GetBody(0);
     const JPH::Body* secondBody = lock.GetBody(1);
     if (firstBody == nullptr || secondBody == nullptr)
@@ -999,14 +999,14 @@ void PhysicsWorld::MoveKinematic(
     ValidateTransform(targetTransform);
 
     if (!IsValidFixedDeltaSeconds(fixedDeltaSeconds))
-        throw std::invalid_argument(PhysicsErrorMessages::invalidFixedDeltaSeconds);
+        throw std::invalid_argument(error_messages::invalidFixedDeltaSeconds);
 
     auto& bodyInterface = impl_->physicsSystem.GetBodyInterface();
     const JPH::EMotionType motionType = bodyInterface.GetMotionType(bodyID);
 
     if (motionType != JPH::EMotionType::Kinematic)
     {
-        throw std::logic_error(PhysicsErrorMessages::moveKinematicRequiresKinematicBody);
+        throw std::logic_error(error_messages::moveKinematicRequiresKinematicBody);
     }
 
     // 목표 자세 역시 모델 Body 원점 기준이다. Jolt가 무게중심(COM) 이동을 내부에서 처리하고 목표와 시간 간격으로 필요한 속도를 계산한다.
@@ -1022,7 +1022,7 @@ void PhysicsWorld::StopKinematic(PhysicsBodyHandle handle)
     const JPH::BodyID bodyID = impl_->RequireBodyID(handle);
     auto& bodyInterface = impl_->physicsSystem.GetBodyInterface();
     if (bodyInterface.GetMotionType(bodyID) != JPH::EMotionType::Kinematic)
-        throw std::logic_error(PhysicsErrorMessages::kinematicStopRequiresKinematicBody);
+        throw std::logic_error(error_messages::kinematicStopRequiresKinematicBody);
     bodyInterface.SetLinearAndAngularVelocity(bodyID, JPH::Vec3::sZero(), JPH::Vec3::sZero());
 }
 
