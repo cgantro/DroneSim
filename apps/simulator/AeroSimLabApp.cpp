@@ -1026,7 +1026,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     std::sort(visionDurations.begin(), visionDurations.end());
 #endif
     nlohmann::json report{
-        {"configuration", "Windows Release; hidden OpenGL window; one drone; PX4 X500 visual mesh"},
+        {"configuration", "Windows Release; hidden OpenGL window; one drone; SRTM terrain; 17 OSM building boxes; PX4 X500 visual mesh"},
         {"source_revision", AEROSIMLAB_SOURCE_REVISION},
         {"framebuffer", {{"width", framebufferWidth}, {"height", framebufferHeight}}},
         {"opengl", {{"renderer", glString(GL_RENDERER)}, {"version", glString(GL_VERSION)}}},
