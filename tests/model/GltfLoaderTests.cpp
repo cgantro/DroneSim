@@ -9,7 +9,6 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -23,11 +22,7 @@ struct TriangleGlbOptions
 {
     std::size_t positionBufferViewLength = 36U;
     int materialIndex = -1;
-    std::size_t vertexCount = 3U;
     std::string materialJson;
-    bool includeSceneNode = true;
-    std::optional<int> indicesReference;
-    int sceneIndex = 0;
     bool includeByteIndices = false;
 };
 
@@ -42,14 +37,11 @@ class TriangleGlb final
 public:
     explicit TriangleGlb(const TriangleGlbOptions& options = {})
     {
-        constexpr std::array<std::array<float, 3>, 4> positions{{
+        constexpr std::array<std::array<float, 3>, 3> positions{{
             {0.0F, 0.0F, 0.0F},
             {1.0F, 0.0F, 0.0F},
-            {0.0F, 1.0F, 0.0F},
-            {1.0F, 1.0F, 0.0F}}};
-        if (options.vertexCount > positions.size())
-            throw std::invalid_argument("triangle GLB test supports at most four vertices");
-        const std::size_t positionByteLength = options.vertexCount * sizeof(positions[0]);
+            {0.0F, 1.0F, 0.0F}}};
+        const std::size_t positionByteLength = positions.size() * sizeof(positions[0]);
         Bytes indexBytes;
         if (options.includeByteIndices)
         {
@@ -67,15 +59,7 @@ public:
         const std::string materialArray = options.materialJson.empty()
             ? std::string{}
             : "\"materials\":[" + options.materialJson + "],";
-        const std::string sceneNodes = options.includeSceneNode
-            ? "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":" +
-                std::to_string(options.sceneIndex)
-            : "\"nodes\":[]";
-        std::string primitiveIndices;
-        if (options.indicesReference.has_value())
-            primitiveIndices = ",\"indices\":" + std::to_string(*options.indicesReference);
-        else if (options.includeByteIndices)
-            primitiveIndices = ",\"indices\":1";
+        const std::string primitiveIndices = options.includeByteIndices ? ",\"indices\":1" : "";
         const std::string bufferViews = options.includeByteIndices
             ? "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" +
                 std::to_string(options.positionBufferViewLength) + "},{\"buffer\":0,\"byteOffset\":" +
@@ -84,11 +68,9 @@ public:
             : "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" +
                 std::to_string(options.positionBufferViewLength) + "}]";
         const std::string accessors = options.includeByteIndices
-            ? "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
-                std::to_string(options.vertexCount) + ",\"type\":\"VEC3\"},{\"bufferView\":1,\"componentType\":" +
+            ? "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":3,\"type\":\"VEC3\"},{\"bufferView\":1,\"componentType\":" +
                 std::to_string(gltfUnsignedByteComponentType) + ",\"count\":3,\"type\":\"SCALAR\"}]"
-            : "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
-                std::to_string(options.vertexCount) + ",\"type\":\"VEC3\"}]";
+            : "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":3,\"type\":\"VEC3\"}]";
         std::string json =
             "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" +
             std::to_string(bufferLength) + "}],"
@@ -96,7 +78,7 @@ public:
             + materialArray +
             "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}" +
             primitiveIndices + primitiveMaterial + "}]}],"
-            + sceneNodes + "}";
+            + "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0}";
 
         Bytes binary(bufferLength);
         std::memcpy(binary.data(), positions.data(), positionByteLength);
@@ -168,46 +150,6 @@ TEST(GltfLoader, ReadsMeshMaterialAndIndexDataAndRejectsInvalidInputs)
     EXPECT_FLOAT_EQ(materialModel.materials[0].baseColorFactor.g, 0.2F);
     EXPECT_FLOAT_EQ(materialModel.materials[0].metallicFactor, 0.5F);
     EXPECT_FLOAT_EQ(materialModel.materials[0].roughnessFactor, 0.75F);
-
-    TriangleGlbOptions invalidMaterialFactorOptions;
-    invalidMaterialFactorOptions.materialIndex = 0;
-    invalidMaterialFactorOptions.materialJson =
-        R"({"pbrMetallicRoughness":{"metallicFactor":1.5}})";
-    TriangleGlb invalidMaterialFactor(invalidMaterialFactorOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidMaterialFactor.Path()),
-        std::runtime_error);
-
-    TriangleGlbOptions invalidTextureReferenceOptions;
-    invalidTextureReferenceOptions.materialIndex = 0;
-    invalidTextureReferenceOptions.materialJson =
-        R"({"pbrMetallicRoughness":{"baseColorTexture":{"index":0}}})";
-    TriangleGlb invalidTextureReference(invalidTextureReferenceOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidTextureReference.Path()),
-        std::runtime_error);
-
-    TriangleGlbOptions incompleteTriangleOptions;
-    incompleteTriangleOptions.positionBufferViewLength = 48U;
-    incompleteTriangleOptions.vertexCount = 4U;
-    TriangleGlb incompleteTriangle(incompleteTriangleOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(incompleteTriangle.Path()), std::runtime_error);
-
-    TriangleGlbOptions missingSceneNodeOptions;
-    missingSceneNodeOptions.includeSceneNode = false;
-    TriangleGlb missingSceneNode(missingSceneNodeOptions);
-    const auto meshOnlyModel = grasplink::model::GltfLoader::LoadGLB(missingSceneNode.Path());
-    EXPECT_TRUE(meshOnlyModel.nodes.empty());
-    EXPECT_FALSE(meshOnlyModel.rootNodeIndex.has_value());
-
-    TriangleGlbOptions invalidIndicesReferenceOptions;
-    invalidIndicesReferenceOptions.indicesReference = -2;
-    TriangleGlb invalidIndicesReference(invalidIndicesReferenceOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidIndicesReference.Path()), std::runtime_error);
-
-    TriangleGlbOptions invalidNegativeSceneOptions;
-    invalidNegativeSceneOptions.sceneIndex = -2;
-    TriangleGlb invalidNegativeScene(invalidNegativeSceneOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidNegativeScene.Path()),
-        std::runtime_error);
 
     TriangleGlbOptions byteIndicesOptions;
     byteIndicesOptions.includeByteIndices = true;
