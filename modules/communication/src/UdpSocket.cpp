@@ -203,6 +203,7 @@ std::uint16_t UdpSocket::LocalPort() const
 
 UdpPeer UdpSocket::Resolve(std::string_view host, std::uint16_t port)
 {
+    const std::string hostString(host);
 #ifdef _WIN32
     WSADATA data{};
     if (WSAStartup(MAKEWORD(2, 2), &data) != 0)
@@ -211,7 +212,6 @@ UdpPeer UdpSocket::Resolve(std::string_view host, std::uint16_t port)
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
-    const std::string hostString(host);
     if (inet_pton(AF_INET, hostString.c_str(), &address.sin_addr) != 1)
     {
 #ifdef _WIN32
