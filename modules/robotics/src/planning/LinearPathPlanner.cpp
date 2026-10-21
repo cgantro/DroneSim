@@ -86,7 +86,7 @@ namespace limits
     static constexpr std::size_t maximumTcpRefinementPasses = 12;
     static constexpr std::size_t maximumPathIntervals = detail::kMaximumJointPathIntervals;
     static constexpr std::size_t initialTcpSampleCapacity = 64;
-    static constexpr std::size_t finalTcpStraightnessProbeIndex = 3;
+    static constexpr std::size_t tcpStraightnessProbeCount = 3;
 }
 
 namespace math
@@ -327,7 +327,7 @@ struct LinearPathPlanningJob::Impl
     std::vector<bool> parentNeedsSearch;
     std::vector<bool> parentHasValidChild;
     std::size_t seedIndex = 0;
-    std::size_t tcpProbe = 0;
+    std::size_t tcpProbeCount = 0;
     // 후보 관절 자세를 계산할 때 같은 크기의 임시 벡터를 재사용한다.
     JointVector tcpProbeJoints;
     std::size_t refinementEdge = 0;
@@ -630,7 +630,7 @@ struct LinearPathPlanningJob::Impl
         parentNeedsSearch.assign(previous.size(), false);
         parentHasValidChild.assign(previous.size(), false);
         seedIndex = 0;
-        tcpProbe = 0;
+        tcpProbeCount = 0;
         refinementEdge = 0;
         bestFailureResidual = std::numeric_limits<double>::infinity();
         needsRefinement = false;
@@ -709,7 +709,7 @@ struct LinearPathPlanningJob::Impl
             }
         }
         evaluatedEdges.push_back({workingParent, workingSolution.jointPositions, false});
-        tcpProbe = 0;
+        tcpProbeCount = 0;
         phase = Phase::CheckTcp;
     }
 
@@ -717,7 +717,7 @@ struct LinearPathPlanningJob::Impl
     {
         auto& edge = evaluatedEdges.back();
         const auto& parent = layers.back()[workingParent];
-        if (tcpProbe < limits::finalTcpStraightnessProbeIndex)
+        if (tcpProbeCount < limits::tcpStraightnessProbeCount)
             return;
         edge.followsTcp = true;
         BeginPathValidation(parent.joints, workingSolution.jointPositions, ValidationPurpose::Candidate);
@@ -1085,7 +1085,7 @@ struct LinearPathPlanningJob::Impl
         const auto& parent = layers.back()[workingParent];
         JointVector& joints = tcpProbeJoints;
         const double fraction = math::tcpStraightnessProbeFraction *
-            static_cast<double>(tcpProbe + 1);
+            static_cast<double>(tcpProbeCount + 1);
         for (std::size_t joint = 0; joint < joints.size(); ++joint)
             joints[joint] = parent.joints[joint] +
                 (workingSolution.jointPositions[joint] - parent.joints[joint]) * fraction;
@@ -1100,7 +1100,7 @@ struct LinearPathPlanningJob::Impl
         maximumSamplePositionErrorMeters = std::max(maximumSamplePositionErrorMeters, positionError);
         maximumSampleOrientationErrorRadians = std::max(maximumSampleOrientationErrorRadians, orientationError);
         ++plan.tcpStraightnessChecks;
-        ++tcpProbe;
+        ++tcpProbeCount;
         ++work;
 
         if (positionError > policy.maximumLinearTcpErrorMeters ||
@@ -1114,7 +1114,7 @@ struct LinearPathPlanningJob::Impl
             return;
         }
 
-        if (tcpProbe == limits::finalTcpStraightnessProbeIndex)
+        if (tcpProbeCount == limits::tcpStraightnessProbeCount)
             FinishTcpCheck();
     }
 
