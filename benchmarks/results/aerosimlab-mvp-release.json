@@ -352,6 +352,31 @@
           "process_cpu_percent_approx": 100.00608193725016
         }
       ]
+    },
+    {
+      "measured_at": "2026-10-21T20:35Z",
+      "source_revision": "35b342c4",
+      "method": "동일 Release 실행 파일과 Jolt·모터·영상 경로에서 5초씩 3회 측정했습니다. 기준 측정에서는 화면의 X500 모델 표시만 임시로 일곱 개 상자로 바꿨습니다. GLB는 두 조건 모두 시작할 때 읽으므로 이 비교는 그리기 비용만 봅니다.",
+      "environment": {
+        "os": "Microsoft Windows 10.0.26200",
+        "architecture": "X64",
+        "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+        "build": "MSVC Release x64",
+        "framebuffer": "1280x720",
+        "opengl_renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "opengl_version": "3.3.0 NVIDIA 581.42",
+        "window": "OpenGL hidden window; VSync off"
+      },
+      "runs": [
+        {"elapsed_seconds":5.0023096,"render_fps":397.616333,"rendered_frames":1989,"simulation_ticks":298,"tick_duration_us":{"p50":30.4,"p95":59.4,"p99":128.4,"deadline_misses_over_16_67ms":0},"vision_duration_us":{"p50":1198.6,"p95":1425.7,"p99":1570.3},"working_set_bytes":107667456,"process_cpu_percent_approx":99.9938},
+        {"elapsed_seconds":5.0030563,"render_fps":399.355890,"rendered_frames":1998,"simulation_ticks":298,"tick_duration_us":{"p50":30.1,"p95":56.2,"p99":84.4,"deadline_misses_over_16_67ms":0},"vision_duration_us":{"p50":1185.1,"p95":1354.4,"p99":1742.6},"working_set_bytes":107667456,"process_cpu_percent_approx":99.9989},
+        {"elapsed_seconds":5.0006318,"render_fps":398.949589,"rendered_frames":1995,"simulation_ticks":298,"tick_duration_us":{"p50":30.3,"p95":53.5,"p99":73.3,"deadline_misses_over_16_67ms":0},"vision_duration_us":{"p50":1182.7,"p95":1367.1,"p99":1528.9},"working_set_bytes":107614208,"process_cpu_percent_approx":100.0074}
+      ],
+      "simple_cube_geometry_baseline_runs": [
+        {"elapsed_seconds":5.0008389,"render_fps":395.733604,"rendered_frames":1979,"simulation_ticks":297,"tick_duration_us":{"p50":30.0,"p95":53.6,"p99":104.0,"deadline_misses_over_16_67ms":0},"vision_duration_us":{"p50":1171.6,"p95":1295.3,"p99":1461.5},"working_set_bytes":107765760,"process_cpu_percent_approx":99.9832},
+        {"elapsed_seconds":5.0005845,"render_fps":397.953479,"rendered_frames":1990,"simulation_ticks":298,"tick_duration_us":{"p50":29.6,"p95":53.6,"p99":82.8,"deadline_misses_over_16_67ms":0},"vision_duration_us":{"p50":1178.2,"p95":1306.6,"p99":1428.2},"working_set_bytes":107700224,"process_cpu_percent_approx":100.0083},
+        {"elapsed_seconds":5.0021642,"render_fps":388.831698,"rendered_frames":1945,"simulation_ticks":298,"tick_duration_us":{"p50":29.7,"p95":54.7,"p99":121.5,"deadline_misses_over_16_67ms":0},"vision_duration_us":{"p50":1186.5,"p95":1402.9,"p99":1904.8},"working_set_bytes":107569152,"process_cpu_percent_approx":99.9967}
+      ]
     }
   ]
 }
