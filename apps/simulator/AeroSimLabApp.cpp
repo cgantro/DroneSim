@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #ifndef _WIN32
 #include <iostream>
@@ -82,7 +83,17 @@ nlohmann::json MeasureDroneScaling()
     constexpr std::array<std::size_t, 4> droneCounts{1U, 2U, 4U, 8U};
     constexpr std::size_t repetitions = 3U;
     constexpr std::size_t warmupTicks = 120U;
-    constexpr std::size_t measuredTicks = 300U;
+    constexpr std::size_t measuredTicks = 3000U;
+    const auto readWorkingSetBytes = []() -> std::optional<std::size_t>
+    {
+#ifdef _WIN32
+        PROCESS_MEMORY_COUNTERS memory{};
+        memory.cb = sizeof(memory);
+        if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
+            return memory.WorkingSetSize;
+#endif
+        return std::nullopt;
+    };
     nlohmann::json runs = nlohmann::json::array();
 
     for (const std::size_t droneCount : droneCounts)
@@ -120,6 +131,9 @@ nlohmann::json MeasureDroneScaling()
             std::vector<double> physicsDurations;
             tickDurations.reserve(measuredTicks);
             physicsDurations.reserve(measuredTicks);
+            const auto workingSetBefore = readWorkingSetBytes();
+            const std::clock_t cpuStart = std::clock();
+            const auto measurementStart = std::chrono::steady_clock::now();
             for (std::size_t tick = 0; tick < measuredTicks; ++tick)
             {
                 const auto tickStart = std::chrono::steady_clock::now();
@@ -130,18 +144,35 @@ nlohmann::json MeasureDroneScaling()
                     simulation.LastPhysicsStepDurationMicroseconds());
             }
 
-            runs.push_back({
+            const double wallSeconds = std::chrono::duration<double>(
+                std::chrono::steady_clock::now() - measurementStart).count();
+            const double cpuSeconds = static_cast<double>(std::clock() - cpuStart)
+                / CLOCKS_PER_SEC;
+            const auto workingSetAfter = readWorkingSetBytes();
+            nlohmann::json run{
                 {"drone_count", droneCount},
                 {"repetition", repetition + 1U},
                 {"warmup_ticks", warmupTicks},
                 {"measured_ticks", measuredTicks},
                 {"tick_duration_us", SummarizeDurations(std::move(tickDurations))},
-                {"physics_step_duration_us", SummarizeDurations(std::move(physicsDurations))}});
+                {"physics_step_duration_us", SummarizeDurations(std::move(physicsDurations))},
+                {"measurement_wall_seconds", wallSeconds},
+                {"process_cpu_percent_approx", wallSeconds > 0.0
+                    ? 100.0 * cpuSeconds / wallSeconds : 0.0}};
+            if (workingSetBefore && workingSetAfter)
+            {
+                run["process_working_set_before_bytes"] = *workingSetBefore;
+                run["process_working_set_after_bytes"] = *workingSetAfter;
+                run["process_working_set_change_bytes"] =
+                    static_cast<std::int64_t>(*workingSetAfter)
+                    - static_cast<std::int64_t>(*workingSetBefore);
+            }
+            runs.push_back(std::move(run));
         }
     }
 
     return {
-        {"method", "헤드리스 강체 모의; 한 Jolt 세계에서 모든 드론을 함께 갱신"},
+        {"method", "헤드리스 강체 모의; 한 Jolt 세계에서 모든 드론을 함께 갱신. 각 실행은 워밍업 뒤 3,000 Tick을 측정하고 프로세스 CPU 시간과 작업 집합을 기록"},
         {"counts", droneCounts},
         {"repetitions_per_count", repetitions},
         {"runs", std::move(runs)}};
