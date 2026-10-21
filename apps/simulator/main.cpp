@@ -137,6 +137,7 @@ int RunSimulator(int argc, char** argv)
 #ifdef _WIN32
             const std::string message = std::string(command_line::fatalErrorPrefix) + error.what() + "\n";
             OutputDebugStringA(message.c_str());
+            std::cerr << message;
 #else
             std::cerr << command_line::fatalErrorPrefix << error.what() << '\n';
 #endif

@@ -156,6 +156,7 @@ if ($timeoutResult.ExitCode -ne 3 -or $timeoutResult.Output -notmatch '응답 �
 $retryingClient = $null
 $server = $null
 $recoveredServer = $null
+$recoveredServerErrorLog = Join-Path $env:TEMP "AeroSimLab-smoke-$PID-$port.err"
 $groundControlUiProcess = $null
 $uiWindow = [IntPtr]::Zero
 
@@ -340,16 +341,19 @@ try {
     }
 
     Start-Sleep -Milliseconds 500
+    Remove-Item -LiteralPath $recoveredServerErrorLog -ErrorAction SilentlyContinue
     $recoveredServer = Start-Process -FilePath $Simulator `
         -ArgumentList @('--smoke-test', '--udp-port', "$port") `
         -WorkingDirectory $workingDirectory `
         -WindowStyle Hidden `
+        -RedirectStandardError $recoveredServerErrorLog `
         -PassThru
     $recoveryDeadline = [DateTime]::UtcNow.AddSeconds(5)
     while (-not [AeroSimLabUiTestWindow]::IsWindowEnabled($cameraOffButton)) {
         $recoveredServer.Refresh()
         if ($recoveredServer.HasExited) {
-            throw "시뮬레이터를 다시 시작하지 못했습니다. 종료 코드: $($recoveredServer.ExitCode)"
+            $startupError = Get-Content -LiteralPath $recoveredServerErrorLog -Raw -ErrorAction SilentlyContinue
+            throw "시뮬레이터를 다시 시작하지 못했습니다. 종료 코드: $($recoveredServer.ExitCode)`n$startupError"
         }
         if ([DateTime]::UtcNow -ge $recoveryDeadline) {
             throw '시뮬레이터를 다시 시작한 뒤에도 재시도 명령의 응답이 오지 않았습니다.'
@@ -382,6 +386,7 @@ finally {
     if ($null -ne $recoveredServer -and -not $recoveredServer.HasExited) {
         Stop-Process -Id $recoveredServer.Id -Force
     }
+    Remove-Item -LiteralPath $recoveredServerErrorLog -ErrorAction SilentlyContinue
     if ($uiWindow -ne [IntPtr]::Zero) {
         [AeroSimLabUiTestWindow]::PostMessage(
             $uiWindow, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
