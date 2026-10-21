@@ -31,13 +31,14 @@ TEST(QuadrotorModel, EqualRotorSpeedsBalanceWeightAndCancelTorque)
     EXPECT_NEAR(wrench.torqueNewtonMeters.z, 0.0, 1.0e-12);
 }
 
-TEST(QuadrotorModel, X500MotorTableEstimateMatchesPublishedThrustPoints)
+TEST(QuadrotorModel, X500MotorTableEstimateMatchesPublishedMotorPoints)
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
     constexpr double radiansPerSecondPerRpm = 0.10471975511965977;
-    // 공개된 Holybro 모터 표의 회전수(rpm)와 추력(g) 세 점이다.
+    // 공개된 Holybro 모터 표의 회전수(rpm), 추력(g), 토크(N·m) 세 점이다.
     constexpr std::array<double, 3> speedsRpm{4269.0, 6252.0, 10703.0};
     constexpr std::array<double, 3> thrustGrams{214.74, 470.2, 1367.04};
+    constexpr std::array<double, 3> torqueNewtonMeters{0.03, 0.07, 0.19};
 
     EXPECT_NEAR(parameters.maximumMotorSpeedRadiansPerSecond,
         speedsRpm.back() * radiansPerSecondPerRpm, 1.0e-6);
@@ -52,6 +53,14 @@ TEST(QuadrotorModel, X500MotorTableEstimateMatchesPublishedThrustPoints)
         const double expectedThrustNewtons = thrustGrams[point] / 1000.0 * 9.80665;
         EXPECT_NEAR(wrench.forceNewtons.z / QuadrotorModel::rotorCount,
             expectedThrustNewtons, expectedThrustNewtons * 0.02);
+
+        QuadrotorState singleRotorState;
+        singleRotorState.motorSpeedRadiansPerSecond[0] =
+            speedsRpm[point] * radiansPerSecondPerRpm;
+        const QuadrotorWrench singleRotorWrench = QuadrotorModel::CalculateWrench(
+            singleRotorState, parameters);
+        EXPECT_NEAR(std::abs(singleRotorWrench.torqueNewtonMeters.z),
+            torqueNewtonMeters[point], 0.0051);
     }
 }
 

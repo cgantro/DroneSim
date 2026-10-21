@@ -56,8 +56,8 @@ struct QuadrotorParameters
     [[nodiscard]] static QuadrotorParameters X500Gazebo();
 
     /**
-     * @brief 공개된 X500 모터 표에 맞춘 추력 계수와 속도 범위를 반환한다.
-     * @details 질량·관성·로터 배치·모터 응답·토크 비율·항력은 PX4 Gazebo 설정을 사용한다.
+     * @brief 공개된 X500 모터 표에 맞춘 추력·토크 계수와 속도 범위를 반환한다.
+     * @details 질량·관성·로터 배치·모터 응답·항력은 PX4 Gazebo 설정을 사용한다.
      */
     [[nodiscard]] static QuadrotorParameters X500MotorTableEstimate();
 };
