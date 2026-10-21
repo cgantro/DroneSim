@@ -27,3 +27,11 @@
 SRTM은 땅 표면뿐 아니라 나무와 건물의 영향을 받을 수 있는 디지털 표면 모델입니다. 이 구역은 약 30m 간격이라 작은 구조물과 급경사를 정밀하게 나타내지 못합니다. 이 자료로 실제 지형의 정확도나 비행 안전성을 보증하지 않습니다.
 
 출처 표기: NASA/JPL, NASA Shuttle Radar Topography Mission Global 1 Arc Second, Version 3.
+
+## 건물 외곽선 자료
+
+같은 범위의 OpenStreetMap 건물 외곽선을 받아 `buildings.geojson`에 넣었습니다. 2026년 10월 21일 자료에는 닫힌 외곽선 17개가 있습니다. 사찰 7개, 일반 건물 9개, 주차장 1개입니다.
+
+원본에는 건물 높이와 층수가 없습니다. 자료의 `height_m`와 `building_levels`가 `null`인 까닭입니다. 확인되지 않은 값을 실제 높이처럼 채우지 않았습니다. 건물 외곽선은 아직 화면이나 충돌 계산에 연결하지 않았고, 화면에는 기존 임시 상자가 남아 있습니다.
+
+OpenStreetMap 자료는 [Open Database License(ODbL)](https://www.openstreetmap.org/copyright)를 따릅니다. 출처는 `© OpenStreetMap contributors`입니다. 원본 조회 주소도 GeoJSON에 기록했습니다.
