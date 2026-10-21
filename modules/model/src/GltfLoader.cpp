@@ -955,7 +955,7 @@ void SelectSceneRoot(const tinygltf::Model& source, ModelResource& model)
 }
 } // namespace
 
-ModelResource GltfLoader::LoadGLB(const std::filesystem::path& path)
+ModelResource LoadGlb(const std::filesystem::path& path)
 {
     tinygltf::TinyGLTF loader;
     tinygltf::Model gltfModel;

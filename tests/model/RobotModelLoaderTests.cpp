@@ -338,5 +338,5 @@ TEST(RobotModelLoader, ReadsSupportedJointTypesAndRejectsMalformedModels)
     const auto modelPath = std::filesystem::path(GRASPLINK_SOURCE_DIR) /
         "tests/assets/robots/axis4/robot.glb";
     TemporaryGlb malformedModel{modelPath};
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(malformedModel.Path()), std::runtime_error);
+    EXPECT_THROW((void)grasplink::model::LoadGlb(malformedModel.Path()), std::runtime_error);
 }

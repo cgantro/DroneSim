@@ -129,7 +129,7 @@ private:
 TEST(GltfLoader, ReadsMeshMaterialAndIndexDataAndRejectsInvalidInputs)
 {
     TriangleGlb validFile;
-    const auto model = grasplink::model::GltfLoader::LoadGLB(validFile.Path());
+    const auto model = grasplink::model::LoadGlb(validFile.Path());
     ASSERT_EQ(model.meshes.size(), 1U);
     ASSERT_EQ(model.meshes.front().vertices.size(), 3U);
     EXPECT_FLOAT_EQ(model.meshes.front().vertices[1].position.x, 1.0F);
@@ -138,37 +138,37 @@ TEST(GltfLoader, ReadsMeshMaterialAndIndexDataAndRejectsInvalidInputs)
     TriangleGlbOptions shortViewOptions;
     shortViewOptions.positionBufferViewLength = 24U;
     TriangleGlb shortView(shortViewOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(shortView.Path()), std::runtime_error);
+    EXPECT_THROW((void)grasplink::model::LoadGlb(shortView.Path()), std::runtime_error);
 
     TriangleGlbOptions invalidAccessorOptions;
     invalidAccessorOptions.positionAccessorIndex = 1;
     TriangleGlb invalidAccessor(invalidAccessorOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidAccessor.Path()), std::runtime_error);
+    EXPECT_THROW((void)grasplink::model::LoadGlb(invalidAccessor.Path()), std::runtime_error);
 
     TriangleGlbOptions negativeAccessorOptions;
     negativeAccessorOptions.positionAccessorIndex = -1;
     TriangleGlb negativeAccessor(negativeAccessorOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(negativeAccessor.Path()), std::runtime_error);
+    EXPECT_THROW((void)grasplink::model::LoadGlb(negativeAccessor.Path()), std::runtime_error);
 
     TriangleGlbOptions invalidIndexAccessorOptions;
     invalidIndexAccessorOptions.includeByteIndices = true;
     invalidIndexAccessorOptions.indexAccessorIndex = 2;
     TriangleGlb invalidIndexAccessor(invalidIndexAccessorOptions);
     EXPECT_THROW(
-        grasplink::model::GltfLoader::LoadGLB(invalidIndexAccessor.Path()),
+        (void)grasplink::model::LoadGlb(invalidIndexAccessor.Path()),
         std::runtime_error);
 
     TriangleGlbOptions missingMaterialOptions;
     missingMaterialOptions.materialIndex = 0;
     TriangleGlb missingMaterial(missingMaterialOptions);
-    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(missingMaterial.Path()), std::runtime_error);
+    EXPECT_THROW((void)grasplink::model::LoadGlb(missingMaterial.Path()), std::runtime_error);
 
     TriangleGlbOptions validMaterialOptions;
     validMaterialOptions.materialIndex = 0;
     validMaterialOptions.materialJson =
         R"({"pbrMetallicRoughness":{"baseColorFactor":[0.1,0.2,0.3,0.4],"metallicFactor":0.5,"roughnessFactor":0.75}})";
     TriangleGlb validMaterial(validMaterialOptions);
-    const auto materialModel = grasplink::model::GltfLoader::LoadGLB(validMaterial.Path());
+    const auto materialModel = grasplink::model::LoadGlb(validMaterial.Path());
     ASSERT_EQ(materialModel.materials.size(), 1U);
     EXPECT_FLOAT_EQ(materialModel.materials[0].baseColorFactor.g, 0.2F);
     EXPECT_FLOAT_EQ(materialModel.materials[0].metallicFactor, 0.5F);
@@ -177,7 +177,7 @@ TEST(GltfLoader, ReadsMeshMaterialAndIndexDataAndRejectsInvalidInputs)
     TriangleGlbOptions byteIndicesOptions;
     byteIndicesOptions.includeByteIndices = true;
     TriangleGlb byteIndices(byteIndicesOptions);
-    const auto indexedModel = grasplink::model::GltfLoader::LoadGLB(byteIndices.Path());
+    const auto indexedModel = grasplink::model::LoadGlb(byteIndices.Path());
     ASSERT_EQ(indexedModel.meshes.size(), 1U);
     EXPECT_EQ(indexedModel.meshes.front().indices, (std::vector<std::uint32_t>{0U, 1U, 2U}));
 }

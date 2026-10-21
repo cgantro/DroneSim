@@ -75,7 +75,6 @@ using grasplink::graphics::OrbitCameraController;
 using grasplink::graphics::Renderer;
 using grasplink::graphics::Shader;
 using grasplink::graphics::Window;
-using grasplink::model::GltfLoader;
 using grasplink::model::ModelResource;
 using grasplink::rendering::AssetManager;
 using grasplink::rendering::RenderContext;
@@ -302,7 +301,7 @@ void ViewerApp::InitScene(Entity& robotRoot, Entity& floorEntity)
         m_RobotShader);
 
     // 바닥 Mesh를 만들고, InitPhysics()에서 같은 Entity에 움직이지 않는 Static Collider를 연결한다.
-    ModelResource planeModel = GltfLoader::LoadGLB("plane.glb");
+    ModelResource planeModel = grasplink::model::LoadGlb("plane.glb");
     m_AssetManager->UploadModel(planeModel);
 
     floorEntity = CreateModel(

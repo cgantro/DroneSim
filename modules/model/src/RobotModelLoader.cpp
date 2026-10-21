@@ -453,7 +453,7 @@ LoadedRobotModel RobotModelLoader::Load(const std::filesystem::path& directory)
         Invalid(glbPath, "robot.glb was not found");
 
     loaded.robot = LoadUrdf(urdfPath);
-    loaded.visual = GltfLoader::LoadGLB(glbPath);
+    loaded.visual = LoadGlb(glbPath);
     ConnectVisualTree(loaded.robot, loaded.visual, loaded.directory);
     return loaded;
 }
