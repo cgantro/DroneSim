@@ -30,6 +30,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -401,6 +402,18 @@ void CheckLoadedArmPipeline(std::size_t axisCount)
         physicsSystem.Step(0.004);
         TransformSystemModule::UpdateWorldTransforms(world);
     }
+
+    Entity robotBodyWithoutIdentity = scene.CreateEntity("RobotBodyWithoutCollisionIdentity");
+    robotBodyWithoutIdentity.SetParent(robotRoot);
+    robotBodyWithoutIdentity.set<RigidBody>(RigidBody{
+            physics::BodyMotionType::Kinematic, physics::CollisionLayer::Robot})
+        .set<Colliders>(Colliders{{physics::CollisionShapeDescription{}}});
+    EXPECT_THROW(
+        simulation::robotics::RobotEnvironmentCollisionGuard(
+            controller, kinematics, visualAdapter, collisionAdapter,
+            world, physicsWorld, physicsSystem, robotRoot, gripperSupport),
+        std::invalid_argument);
+    robotBodyWithoutIdentity.Destroy();
 
     simulation::robotics::RobotEnvironmentCollisionGuard collisionGuard(
         controller, kinematics, visualAdapter, collisionAdapter,

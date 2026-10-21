@@ -197,11 +197,11 @@ void RobotEnvironmentCollisionGuard::CollectCollisionProxies()
         {
         case grasplink::physics::CollisionLayer::Robot:
         {
-            m_CollisionEntities.push_back(entity.GetHandle());
             if (!entity.Has<RobotCollisionProxy>())
-                break;
+                throw std::invalid_argument(CollisionGuardMessages::missingRobotProxyIdentity);
 
             const auto& proxy = entity.Get<RobotCollisionProxy>();
+            m_CollisionEntities.push_back(entity.GetHandle());
             if (proxy.linkIndex == RobotCollisionProxy::InvalidLinkIndex ||
                 proxy.jointIndex == RobotCollisionProxy::InvalidLinkIndex)
                 throw std::invalid_argument(CollisionGuardMessages::missingRobotProxyIdentity);
