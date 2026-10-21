@@ -470,18 +470,16 @@ void ViewerApp::AdvanceSimulationTick(double fixedDeltaSeconds)
     TransformSystemModule::UpdateWorldTransforms(m_World);
 }
 
-bool ViewerApp::AdvancePlanningBudget()
+void ViewerApp::AdvancePlanningBudget()
 {
-    if (!m_RobotController->IsMotionPlanning())
-        return false;
-
+    // 호출자는 계획이 진행 중일 때만 들어온다. 한 프레임에서 계획이 화면 갱신 시간을 모두 쓰지 않도록 제한한다.
     using Clock = std::chrono::steady_clock;
-    const auto deadline = Clock::now() + std::chrono::microseconds(1500);
+    constexpr auto planningBudget = std::chrono::microseconds{1500};
+    const auto deadline = Clock::now() + planningBudget;
     do
     {
         m_RobotController->AdvanceMotionPlanning(1);
     } while (m_RobotController->IsMotionPlanning() && Clock::now() < deadline);
-    return true;
 }
 
 bool ViewerApp::UpdateMission()

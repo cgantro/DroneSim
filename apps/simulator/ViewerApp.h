@@ -145,7 +145,7 @@ private:
         float displayHeight, const grasplink::gui::RobotPanelView& view,
         const grasplink::simulation::GripperGraspState& graspState);
     void AdvanceSimulationTick(double fixedDeltaSeconds);
-    bool AdvancePlanningBudget();
+    void AdvancePlanningBudget();
     bool UpdateMission();
     void RandomizeScenario();
 
