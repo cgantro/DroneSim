@@ -21,13 +21,6 @@ using grasplink::scene::TransformSystemModule;
 #define ASSERT_NEAR_FINITE(actual, expected, tolerance, message) \
     ASSERT_TRUE(std::isfinite(actual) && std::abs((actual) - (expected)) <= (tolerance)) << message
 
-template<typename Exception, typename Function>
-void GTestExpectThrows(Function&& function, const std::string& message)
-{
-    EXPECT_THROW(function(), Exception) << message;
-}
-
-
 /**
  * @brief Scene에서 지정한 위치와 Jolt가 계산한 물리 위치가 올바른 순서로 전달되는지 확인한다.
  * @details Dynamic 상자는 위치·회전·크기가 없는 중간 부모 아래에서만 물리 위치를 받을 수 있다. Static 바닥과 Kinematic 목표 물체는 부모를 옮기거나 돌리면 그 변환을 따라간다.
@@ -185,8 +178,10 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
     unsupported.set<RigidBody>({BodyMotionType::Dynamic}).set<Colliders>({{physics_colliders::Box({0.05F, 0.05F, 0.05F})}});
     for (int i = 0; i < 20; ++i) step();
     ASSERT_NEAR_FINITE(unsupported.GetLocalPosition().y, 0.5, 1e-6, "Dynamic ancestor hierarchy rejected");
-    GTestExpectThrows<std::invalid_argument>([&] { falling.SetParent(Entity{world.entity("External")}); }, "cannot leave owning Scene");
-    GTestExpectThrows<std::invalid_argument>([&] { falling.SetParent(unsupported); }, "hierarchy cycle rejected");
+    EXPECT_THROW(falling.SetParent(Entity{world.entity("External")}), std::invalid_argument)
+        << "cannot leave owning Scene";
+    EXPECT_THROW(falling.SetParent(unsupported), std::invalid_argument)
+        << "hierarchy cycle rejected";
 
     // 바닥과 상자의 반쪽 높이를 더하면 접촉 중심은 바닥에서 0.2 m에 있어야 한다. 20 mm 범위는 계산 오차를 허용하면서 실제 접촉 높이를 확인한다.
     Entity floorParent = scene.CreateEntity("FloorParent");
