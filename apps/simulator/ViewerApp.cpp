@@ -286,7 +286,7 @@ void ViewerApp::InitScene(Entity& robotRoot, Entity& floorEntity)
     m_RobotShader = Shader::Create("shaders/Robot.glsl");
     auto gridShader = Shader::Create("shaders/Grid.glsl");
 
-    // GLB를 읽어 CPU 모델 자료를 만든 다음 Mesh와 Material을 OpenGL 자원으로 업로드한다.
+    // URDF는 로봇 링크·관절과 팔 충돌 형상을, GLB는 화면 부품을 제공한다. 현재 2F-85 그리퍼 충돌 외피는 GLB 메시에서 만든다.
     auto loadedRobot = grasplink::model::RobotModelLoader::Load(m_Options.robotDirectory);
     m_RobotDescription = std::move(loadedRobot.robot);
     m_RobotSpecificationAdapter = std::make_unique<grasplink::simulation::robotics::RobotModelAdapter>(
