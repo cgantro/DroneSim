@@ -13,6 +13,7 @@ struct RobotModelAdapterErrorMessages final
     inline static constexpr char invalidBaseOrToolLink[] = "URDF의 시작 링크 또는 tool0 위치가 잘못되었습니다.";
     inline static constexpr char noMovingJoint[] = "URDF의 base_link와 tool0 사이에 움직이는 관절이 없습니다.";
     inline static constexpr char invalidActiveJointIndex[] = "URDF의 움직이는 관절 위치가 잘못되었습니다.";
+    inline static constexpr char invalidActiveJointPath[] = "URDF의 움직이는 관절이 base_link부터 tool0까지 이어지지 않습니다.";
 };
 }
 
@@ -25,6 +26,48 @@ using grasplink::robotics::models::RobotSpecification;
 namespace
 {
 using grasplink::robotics::models::Pose3;
+
+bool IsFixedJointPath(
+    std::size_t link,
+    std::size_t ancestor,
+    const std::vector<std::size_t>& parentJoints,
+    const std::vector<RobotJoint>& joints)
+{
+    while (link != ancestor)
+    {
+        const std::size_t parentJointIndex = parentJoints[link];
+        if (parentJointIndex == joints.size())
+            return false;
+
+        const RobotJoint& parentJoint = joints[parentJointIndex];
+        if (parentJoint.type != RobotJointType::Fixed)
+            return false;
+        link = parentJoint.parentLink;
+    }
+    return true;
+}
+
+void ValidateActiveJointPath(const grasplink::model::RobotModel& model)
+{
+    std::vector<std::size_t> parentJoints(model.links.size(), model.joints.size());
+    for (std::size_t index = 0; index < model.joints.size(); ++index)
+        parentJoints[model.joints[index].childLink] = index;
+
+    std::size_t previousChildLink = model.baseLink;
+    for (const std::size_t jointIndex : model.activeJoints)
+    {
+        if (jointIndex >= model.joints.size())
+            throw std::runtime_error(RobotModelAdapterErrorMessages::invalidActiveJointIndex);
+
+        const RobotJoint& joint = model.joints[jointIndex];
+        if (!IsFixedJointPath(joint.parentLink, previousChildLink, parentJoints, model.joints))
+            throw std::runtime_error(RobotModelAdapterErrorMessages::invalidActiveJointPath);
+        previousChildLink = joint.childLink;
+    }
+
+    if (!IsFixedJointPath(model.toolLink, previousChildLink, parentJoints, model.joints))
+        throw std::runtime_error(RobotModelAdapterErrorMessages::invalidActiveJointPath);
+}
 
 grasplink::robotics::models::JointMotionType MotionType(RobotJointType type)
 {
@@ -48,6 +91,7 @@ RobotModelAdapter::RobotModelAdapter(const grasplink::model::RobotModel& model)
         throw std::runtime_error(RobotModelAdapterErrorMessages::noMovingJoint);
 
     const auto linkBindPoses = BuildRobotLinkBindPoses(model);
+    ValidateActiveJointPath(model);
     jointNames_.reserve(model.activeJoints.size());
     linkNames_.reserve(model.activeJoints.size());
     joints_.reserve(model.activeJoints.size());

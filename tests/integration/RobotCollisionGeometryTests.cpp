@@ -127,6 +127,12 @@ void CheckSyntheticGeometry()
     continuousModel.joints[1].lowerLimit = -std::numeric_limits<double>::infinity();
     continuousModel.joints[1].upperLimit = std::numeric_limits<double>::infinity();
     grasplink::simulation::robotics::RobotModelAdapter continuousAdapter(continuousModel);
+    auto outOfOrderModel = model;
+    outOfOrderModel.activeJoints = {3, 1};
+    EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(outOfOrderModel), std::runtime_error);
+    auto incompletePathModel = model;
+    incompletePathModel.activeJoints = {1};
+    EXPECT_THROW((void)grasplink::simulation::robotics::RobotModelAdapter(incompletePathModel), std::runtime_error);
     const auto& continuousJoint = continuousAdapter.Specification().joints[0];
     EXPECT_EQ(continuousJoint.motionType, models::JointMotionType::Continuous);
     EXPECT_FALSE(continuousJoint.HasPositionLimits());
