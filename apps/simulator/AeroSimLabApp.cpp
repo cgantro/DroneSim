@@ -478,14 +478,14 @@ void AeroSimLabApp::PollGamepad()
 
 void AeroSimLabApp::HandleGamepadDisconnected()
 {
+    if (!gamepadConnected_)
+        return;
+
     pendingControllerAction_.reset();
-    if (gamepadConnected_)
-    {
-        window_->SetTitle(groundControlActive_
-            ? "AeroSimLab | 지상통제 입력 사용 중"
-            : "AeroSimLab | 드론 관찰 · EO 영상");
-    }
-    if (gamepadConnected_ && !groundControlActive_)
+    window_->SetTitle(groundControlActive_
+        ? "AeroSimLab | 지상통제 입력 사용 중"
+        : "AeroSimLab | 드론 관찰 · EO 영상");
+    if (!groundControlActive_)
     {
         // 조종기가 끊기면 진행 중인 비행을 안전한 정지 동작으로 바꾼다.
         const auto mode = simulation_.State().mode;
