@@ -14,6 +14,7 @@ namespace aerosimlab::communication
 inline constexpr std::uint16_t defaultPort = 27015;
 inline constexpr std::size_t maximumDatagramBytes = 1200;
 
+/** @brief 지상통제가 카메라에 보낼 동작이다. */
 enum class CameraCommand
 {
     Enable,
@@ -22,13 +23,22 @@ enum class CameraCommand
     Recover
 };
 
-/** @brief UDP로 받은 한 번의 드론 또는 카메라 명령을 보관한다. */
+/** @brief 시뮬레이터의 게임 입력 기록과 재생을 제어한다. */
+enum class SessionCommand
+{
+    StartRecording,
+    StopRecording,
+    ReplayRecording
+};
+
+/** @brief UDP로 받은 한 번의 비행·카메라·기록 제어 명령을 보관한다. */
 struct CommandPacket
 {
     std::uint32_t commandId = 0;
     std::uint32_t sequence = 0;
     std::optional<simulation::DroneCommand> droneCommand;
     std::optional<CameraCommand> cameraCommand;
+    std::optional<SessionCommand> sessionCommand;
 };
 
 /** @brief 명령 응답에 실어 지상통제 프로그램으로 돌려보낼 모의 상태다. */

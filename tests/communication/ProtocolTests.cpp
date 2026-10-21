@@ -26,6 +26,13 @@ TEST(Protocol, RoundTripsCommandsAndReplyTelemetry)
     camera.cameraCommand = CameraCommand::InjectFault;
     EXPECT_EQ(DecodeCommand(EncodeCommand(camera)).cameraCommand, CameraCommand::InjectFault);
 
+    CommandPacket recording;
+    recording.commandId = 9;
+    recording.sequence = 13;
+    recording.sessionCommand = SessionCommand::ReplayRecording;
+    EXPECT_EQ(DecodeCommand(EncodeCommand(recording)).sessionCommand,
+        SessionCommand::ReplayRecording);
+
     CommandReply reply;
     reply.commandId = 3;
     reply.sequence = 5;
@@ -54,6 +61,9 @@ TEST(Protocol, RejectsInvalidPacketsAndSequenceNumbers)
     packet.sequence = 1;
     packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::TakeOff};
     const auto valid = EncodeCommand(packet);
+    packet.cameraCommand = CameraCommand::Enable;
+    EXPECT_THROW(static_cast<void>(EncodeCommand(packet)), std::invalid_argument);
+    packet.cameraCommand.reset();
     auto wrongLength = valid;
     const auto lengthPosition = wrongLength.find("\"length\":");
     ASSERT_NE(lengthPosition, std::string::npos);

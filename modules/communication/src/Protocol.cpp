@@ -116,8 +116,11 @@ std::uint32_t Read32(const Json& value, const char* name)
 
 std::string EncodeCommand(const CommandPacket& packet)
 {
-    if (packet.droneCommand.has_value() == packet.cameraCommand.has_value())
-        throw std::invalid_argument("한 메시지에는 드론 또는 카메라 명령 하나만 넣을 수 있습니다.");
+    const unsigned int targetCount = static_cast<unsigned int>(packet.droneCommand.has_value())
+        + static_cast<unsigned int>(packet.cameraCommand.has_value())
+        + static_cast<unsigned int>(packet.sessionCommand.has_value());
+    if (targetCount != 1)
+        throw std::invalid_argument("한 메시지에는 비행·카메라·기록 명령 중 하나만 넣을 수 있습니다.");
 
     Json payload{{"command_id", packet.commandId}, {"sequence", packet.sequence}};
     if (packet.droneCommand)
@@ -143,7 +146,7 @@ std::string EncodeCommand(const CommandPacket& packet)
         }
         payload["target"] = "drone";
     }
-    else
+    else if (packet.cameraCommand)
     {
         payload["target"] = "camera";
         switch (*packet.cameraCommand)
@@ -152,6 +155,16 @@ std::string EncodeCommand(const CommandPacket& packet)
         case CameraCommand::Disable: payload["action"] = "disable"; break;
         case CameraCommand::InjectFault: payload["action"] = "fault"; break;
         case CameraCommand::Recover: payload["action"] = "recover"; break;
+        }
+    }
+    else
+    {
+        payload["target"] = "session";
+        switch (*packet.sessionCommand)
+        {
+        case SessionCommand::StartRecording: payload["action"] = "record_start"; break;
+        case SessionCommand::StopRecording: payload["action"] = "record_stop"; break;
+        case SessionCommand::ReplayRecording: payload["action"] = "record_replay"; break;
         }
     }
     return Wrap("command", std::move(payload)).dump();
@@ -179,6 +192,14 @@ CommandPacket DecodeCommand(std::string_view datagram)
         else if (action == "fault") packet.cameraCommand = CameraCommand::InjectFault;
         else if (action == "recover") packet.cameraCommand = CameraCommand::Recover;
         else throw std::invalid_argument("알 수 없는 카메라 명령입니다.");
+        return packet;
+    }
+    if (target == "session")
+    {
+        if (action == "record_start") packet.sessionCommand = SessionCommand::StartRecording;
+        else if (action == "record_stop") packet.sessionCommand = SessionCommand::StopRecording;
+        else if (action == "record_replay") packet.sessionCommand = SessionCommand::ReplayRecording;
+        else throw std::invalid_argument("알 수 없는 기록 제어 명령입니다.");
         return packet;
     }
     if (target != "drone")
