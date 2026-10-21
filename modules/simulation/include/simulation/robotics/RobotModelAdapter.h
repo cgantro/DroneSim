@@ -24,6 +24,7 @@ public:
      */
     explicit RobotModelAdapter(const grasplink::model::RobotModel& model);
 
+    // RobotSpecification은 아래 벡터와 문자열을 복사하지 않고 가리키므로, 어댑터의 복사와 이동을 막아 수명을 보장한다.
     RobotModelAdapter(const RobotModelAdapter&) = delete;
     RobotModelAdapter& operator=(const RobotModelAdapter&) = delete;
     RobotModelAdapter(RobotModelAdapter&&) = delete;
