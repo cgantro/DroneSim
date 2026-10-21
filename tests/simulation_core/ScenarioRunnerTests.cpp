@@ -44,6 +44,22 @@ TEST(ScenarioRunner, ReplaysFlightCommandsAndChecksFinalState)
     EXPECT_EQ(result.issues, repeatedResult.issues);
 }
 
+TEST(ScenarioRunner, RunsRigidBodyFlightThroughTheHeadlessPath)
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"dynamics":"rigid_body","ticks":600,
+     "commands":[{"tick":0,"type":"takeoff"},{"tick":240,"type":"land"}],
+     "expected":{"mode":"grounded","position_meters":[0,0,0.05],
+       "tolerance_meters":0.02}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    EXPECT_EQ(result.tickCount, 600);
+    EXPECT_EQ(result.finalState.mode, FlightMode::Grounded);
+    EXPECT_NEAR(result.finalState.positionMeters.z, 0.05, 0.02);
+}
+
 TEST(ScenarioRunner, ReportsCommandFailuresAndRejectsInvalidScenarios)
 {
     constexpr std::string_view invalidFlight = R"json(
@@ -63,6 +79,9 @@ TEST(ScenarioRunner, ReportsCommandFailuresAndRejectsInvalidScenarios)
     EXPECT_THROW(static_cast<void>(RunScenario("not json")), std::invalid_argument);
     EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"ticks":1,
         "commands":[],"expected":{"mode":7,"position_meters":[0,0,0]}})json")),
+        std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"dynamics":"flight",
+        "ticks":1,"commands":[],"expected":{"mode":"grounded","position_meters":[0,0,0]}})json")),
         std::invalid_argument);
 }
 

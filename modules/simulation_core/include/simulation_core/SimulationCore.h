@@ -11,7 +11,7 @@ namespace aerosimlab::simulation
 {
 /**
  * @brief 기존 운동학 기준선과 Jolt 강체 경로 중 사용할 계산 방식을 고른다.
- * @details 강체 경로에는 아직 비행 제어기가 없어 드론 명령을 거부한다.
+ * @details 강체 경로는 모터와 비행 제어기를 거쳐 명령을 Jolt 물리에 적용한다.
  */
 enum class SimulationDynamics
 {

@@ -235,6 +235,20 @@ CameraStatus ReadCameraStatus(const Json& value)
     if (status == "fault") return CameraStatus::Fault;
     throw std::invalid_argument("알 수 없는 카메라 상태입니다: " + status);
 }
+
+SimulationDynamics ReadDynamics(const Json& document)
+{
+    const auto found = document.find("dynamics");
+    if (found == document.end())
+        return SimulationDynamics::Kinematic;
+    if (!found->is_string())
+        throw std::invalid_argument("dynamics는 kinematic 또는 rigid_body 문자열이어야 합니다.");
+
+    const std::string name = found->get<std::string>();
+    if (name == "kinematic") return SimulationDynamics::Kinematic;
+    if (name == "rigid_body") return SimulationDynamics::RigidBody;
+    throw std::invalid_argument("알 수 없는 dynamics 설정입니다: " + name);
+}
 }
 
 ScenarioResult RunScenario(std::string_view jsonText)
@@ -291,7 +305,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         ? std::optional<std::uint64_t>{ReadUnsigned(expected["camera_frame_count"], "camera_frame_count")}
         : std::nullopt;
 
-    SimulationCore simulation;
+    SimulationCore simulation{ReadDynamics(document)};
     ScenarioResult result;
     std::size_t nextCommand = 0;
     std::size_t nextCameraEvent = 0;
