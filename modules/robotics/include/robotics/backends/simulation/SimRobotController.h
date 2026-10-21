@@ -274,8 +274,8 @@ private:
 
     JointMotionState jointMotion_;
 
-    // MoveLinear tick에서 사용할 관절 보간 공간이다. Connect 때 크기를 정해 실행 중 vector 할당을 피한다.
-    JointVector linearInterpolationBuffer_;
+    // 선형 이동 중 관절 보간과 TCP 보정 IK 시드에 재사용한다. Connect 때 크기를 정해 이 임시 벡터의 tick 중 할당을 피한다.
+    JointVector linearMotionJointBuffer_;
 
     // 각 tick 시작 시 관절 위치를 보관해 실제 관절 속도를 계산한다.
     JointVector previousJointPositions_;

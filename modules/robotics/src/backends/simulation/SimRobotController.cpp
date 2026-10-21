@@ -171,7 +171,7 @@ Result SimRobotController::Connect()
     RefreshTcp();
 
     jointMotion_.Reset(state_.jointPositions);
-    linearInterpolationBuffer_.resize(specification_.jointCount);
+    linearMotionJointBuffer_.resize(specification_.jointCount);
     previousJointPositions_.resize(specification_.jointCount);
     connected_ = true;
     linearMotion_.ClearPath();

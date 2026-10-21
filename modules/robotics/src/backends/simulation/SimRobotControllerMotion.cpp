@@ -345,16 +345,16 @@ bool SimRobotController::TryAdvanceLinearSegment(double availableSeconds,
 
         // 명령을 받을 때 직선 TCP 목표마다 IK와 충돌 검사를 끝낸 경로 표본 사이를 보간해 매 tick IK 반복을 없앤다.
         for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
-            linearInterpolationBuffer_[joint] = begin.joints[joint] +
+            linearMotionJointBuffer_[joint] = begin.joints[joint] +
                 (end.joints[joint] - begin.joints[joint]) * nextSegmentFraction;
 
         double requiredSeconds = 0.0;
         for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
             requiredSeconds = std::max(requiredSeconds, planning::detail::RequiredTimeForVelocity(
-                linearInterpolationBuffer_[joint] - state_.jointPositions[joint],
+                linearMotionJointBuffer_[joint] - state_.jointPositions[joint],
                 specification_.joints[joint].maximumVelocity));
 
-        const Pose3 nextTcp = FromCartesian(inverse_.EvaluateTcp(linearInterpolationBuffer_));
+        const Pose3 nextTcp = FromCartesian(inverse_.EvaluateTcp(linearMotionJointBuffer_));
         requiredSeconds = std::max(requiredSeconds,
             planning::detail::RequiredTimeForVelocity(
                 Length(Subtract(nextTcp.positionMeters, currentTcp.positionMeters)), linearMotion_.linearVelocityLimit));
@@ -365,7 +365,7 @@ bool SimRobotController::TryAdvanceLinearSegment(double availableSeconds,
         const double ratio = std::max(1.0, requiredSeconds / availableSeconds);
         if (ratio <= 1.0 + detail::kVelocityRatioTolerance)
         {
-            state_.jointPositions = linearInterpolationBuffer_;
+            state_.jointPositions = linearMotionJointBuffer_;
             linearMotion_.segmentFraction = nextSegmentFraction;
             // 표본 끝에 남은 명목 시간이 아주 작아도 IK 허용 오차를 넘는 보정에는 실제 시간이 필요하다.
             // 남은 실제 tick 전체를 속도 예산으로 쓰고, 명목 진행 시간과 실제 변화에 필요한 시간 중 큰 값을 소비한다.
@@ -385,6 +385,7 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
 {
     using namespace kinematics::detail;
     const JointVector& current = state_.jointPositions;
+    JointVector& seed = linearMotionJointBuffer_;
     const Pose3 currentTcp = FromCartesian(inverse_.EvaluateTcp(current));
     const auto& begin = linearMotion_.path[linearMotion_.segment - 1];
     const auto& end = linearMotion_.path[linearMotion_.segment];
@@ -406,9 +407,8 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
     for (std::size_t attempt = 0;
         attempt < detail::kDefaultSimulationMotionPolicy.reorientationRetryAttempts; ++attempt)
     {
-        JointVector seed = current;
         for (std::size_t i = 0; i < current.size(); ++i)
-            seed[i] += (plannedJoints[i] - current[i]) * attraction;
+            seed[i] = current[i] + (plannedJoints[i] - current[i]) * attraction;
         // 이전 계산의 FK 결과가 아니라 경로에서 정한 TCP를 목표로 삼아 작은 IK 오차가 다음 tick에 쌓이지 않게 한다.
         const auto solution = inverse_.Solve(ToCartesian(pathTcp), seed, options);
         if (!solution)
