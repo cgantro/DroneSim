@@ -4,13 +4,15 @@
 
 #include <tinyxml2.h>
 
+#include <charconv>
 #include <cctype>
 #include <cmath>
-#include <cstdlib>
 #include <limits>
+#include <locale>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -46,17 +48,24 @@ const char* RequiredAttribute(const XMLElement& element, const char* name,
     return value;
 }
 
+// URDF는 점을 소수점으로 쓰며, double 범위를 벗어난 숫자는 0으로 바꾸지 않고 거부한다.
 double Number(const char* value, const std::filesystem::path& path, const std::string& field)
 {
     if (value == nullptr)
         Invalid(path, field + " is missing");
-    char* end = nullptr;
-    const double result = std::strtod(value, &end);
-    if (end == value)
-        Invalid(path, field + " must be a finite number");
-    while (std::isspace(static_cast<unsigned char>(*end)))
-        ++end;
-    if (*end != '\0' || !std::isfinite(result))
+
+    std::string_view text{value};
+    while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())))
+        text.remove_prefix(1);
+    while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
+        text.remove_suffix(1);
+    if (!text.empty() && text.front() == '+')
+        text.remove_prefix(1);
+
+    double result = 0.0;
+    const auto [end, error] = std::from_chars(
+        text.data(), text.data() + text.size(), result, std::chars_format::general);
+    if (error != std::errc{} || end != text.data() + text.size() || !std::isfinite(result))
         Invalid(path, field + " must be a finite number");
     return result;
 }
@@ -67,6 +76,7 @@ glm::dvec3 Vector3(const char* value, const std::filesystem::path& path,
     if (value == nullptr)
         return glm::dvec3{0.0};
     std::istringstream input(value);
+    input.imbue(std::locale::classic());
     glm::dvec3 result;
     if (!(input >> result.x >> result.y >> result.z))
         Invalid(path, field + " must contain three numbers");

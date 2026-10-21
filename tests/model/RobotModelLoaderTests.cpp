@@ -266,6 +266,15 @@ TEST(RobotModelLoader, ReadsSupportedJointTypesAndRejectsMalformedModels)
         "<joint name=\"tool_fixed\" type=\"fixed\"><parent link=\"arm\"/>"
         "<child link=\"tool0\"/></joint>";
     expectRejected(emptyNumericAttributeXml);
+
+    const std::string underflowNumericAttributeXml = Link("base_link") + Link("arm") + Link("tool0") +
+        "<joint name=\"arm_joint\" type=\"revolute\"><parent link=\"base_link\"/>"
+        "<child link=\"arm\"/><axis xyz=\"0 0 1\"/>"
+        "<limit lower=\"1e-9999\" upper=\"1e-9999\" velocity=\"1\"/></joint>" +
+        "<joint name=\"tool_fixed\" type=\"fixed\"><parent link=\"arm\"/>"
+        "<child link=\"tool0\"/></joint>";
+    expectRejected(underflowNumericAttributeXml);
+
     expectRejected(Link("base_link") + Link("base_link") + Link("tool0"));
     expectRejected(Link("base_link") + Link("tool0") +
         "<joint name=\"broken\" type=\"fixed\"><parent link=\"base_link\"/>"
