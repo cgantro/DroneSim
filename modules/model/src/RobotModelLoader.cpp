@@ -79,6 +79,7 @@ glm::dvec3 Vector3(const char* value, const glm::dvec3& fallback,
 
 glm::dquat RotationFromRpy(const glm::dvec3& rpy)
 {
+    // URDF의 RPY는 roll, pitch, yaw 순서다. 각 회전을 x·y·z축에 적용하므로 합성 순서는 z·y·x다.
     const glm::dquat x{std::cos(rpy.x * 0.5), std::sin(rpy.x * 0.5), 0.0, 0.0};
     const glm::dquat y{std::cos(rpy.y * 0.5), 0.0, std::sin(rpy.y * 0.5), 0.0};
     const glm::dquat z{std::cos(rpy.z * 0.5), 0.0, 0.0, std::sin(rpy.z * 0.5)};
@@ -186,6 +187,7 @@ LinkTree BuildLinkTree(const RobotModel& model, const std::filesystem::path& pat
         std::vector<std::vector<std::size_t>>(model.links.size())};
     for (std::size_t i = 0; i < model.joints.size(); ++i)
     {
+        // 각 자식 링크는 부모 관절을 하나만 가져야 한다. 역방향 탐색과 하위 링크 순회를 위해 양쪽 색인을 함께 만든다.
         const auto parent = model.joints[i].parentLink;
         const auto child = model.joints[i].childLink;
         if (tree.parentJoint[child])
@@ -199,6 +201,7 @@ LinkTree BuildLinkTree(const RobotModel& model, const std::filesystem::path& pat
 void ValidateLinksReachableFromBase(const RobotModel& model, const LinkTree& tree,
     const std::filesystem::path& path)
 {
+    // base_link부터 관절 트리를 한 번 순회해 순환과 연결되지 않은 링크를 함께 찾는다.
     std::vector<bool> reached(model.links.size(), false);
     std::vector<std::size_t> pending{model.baseLink};
     reached[model.baseLink] = true;
@@ -221,6 +224,7 @@ void ValidateLinksReachableFromBase(const RobotModel& model, const LinkTree& tre
 std::vector<std::size_t> FindActiveJoints(const RobotModel& model, const LinkTree& tree,
     const std::filesystem::path& path)
 {
+    // tool0에서 부모 쪽으로 거슬러 올라가므로, 제어 순서에 맞게 뒤집기 전까지는 관절 번호를 역순으로 모은다.
     std::vector<std::size_t> reversePath;
     std::vector<bool> linksOnArmPath(model.links.size(), false);
     std::size_t current = model.toolLink;
