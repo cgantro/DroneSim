@@ -41,8 +41,6 @@ namespace
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 창이 멈춘 뒤 밀린 시간을 전부 따라잡느라 다음 화면까지 늦어지지 않게 한다.
-constexpr double maximumFrameSeconds = 0.1;
-constexpr double fixedStepSeconds = 1.0 / 60.0;
 constexpr std::size_t smokeTestFrameLimit = 8;
 constexpr std::size_t demoLengthTicks = 900;
 constexpr double benchmarkDurationSeconds = 5.0;
@@ -92,11 +90,11 @@ int AeroSimLabApp::Run()
         PollGamepad();
         const auto now = std::chrono::steady_clock::now();
         const double frameSeconds = smokeTest_ && !benchmarkMode_
-            ? fixedStepSeconds
+            ? aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds
             : std::chrono::duration<double>(now - previousFrame).count();
         previousFrame = now;
 
-        AdvanceSimulation(std::min(frameSeconds, maximumFrameSeconds));
+        AdvanceSimulation(frameSeconds);
         RenderFrame();
         window_->SwapBuffers();
         ++renderedFrames_;
@@ -156,8 +154,8 @@ void AeroSimLabApp::InitializeGraphics()
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
 {
-    accumulatedSeconds_ += elapsedSeconds;
-    while (accumulatedSeconds_ >= fixedStepSeconds)
+    const std::size_t tickCount = fixedTickAccumulator_.Consume(elapsedSeconds);
+    for (std::size_t tick = 0; tick < tickCount; ++tick)
     {
         const auto tickStart = std::chrono::steady_clock::now();
         AdvanceSimulationTick();
@@ -166,7 +164,6 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
             tickDurationsMicroseconds_.push_back(std::chrono::duration<double, std::micro>(
                 std::chrono::steady_clock::now() - tickStart).count());
         }
-        accumulatedSeconds_ -= fixedStepSeconds;
     }
 }
 

@@ -1,7 +1,22 @@
 #include "simulation_core/SimulationCore.h"
 
+#include <algorithm>
+
 namespace aerosimlab::simulation
 {
+std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
+{
+    accumulatedSeconds_ += std::min(elapsedSeconds, maximumFrameSeconds);
+
+    std::size_t tickCount = 0;
+    while (accumulatedSeconds_ >= fixedStepSeconds)
+    {
+        accumulatedSeconds_ -= fixedStepSeconds;
+        ++tickCount;
+    }
+    return tickCount;
+}
+
 CommandResult SimulationCore::Apply(const DroneCommand& command) noexcept
 {
     if (paused_)

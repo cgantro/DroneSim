@@ -53,6 +53,18 @@ TEST(SimulationCore, ExecutesTakeoffMovementAndLandingOnFixedTicks)
     EXPECT_DOUBLE_EQ(simulation.State().positionMeters.z, 0.0);
 }
 
+TEST(FixedTickAccumulator, CarriesFractionalTimeAndLimitsCatchUp)
+{
+    FixedTickAccumulator accumulator;
+    const double halfTick = FixedTickAccumulator::fixedStepSeconds * 0.5;
+
+    EXPECT_EQ(accumulator.Consume(halfTick), 0);
+    EXPECT_EQ(accumulator.Consume(halfTick), 1);
+    EXPECT_EQ(accumulator.Consume(FixedTickAccumulator::maximumFrameSeconds), 6);
+    EXPECT_EQ(accumulator.Consume(1.0), 6);
+    EXPECT_EQ(accumulator.Consume(0.0), 0);
+}
+
 TEST(SimulationCore, RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers)
 {
     SimulationCore simulation;

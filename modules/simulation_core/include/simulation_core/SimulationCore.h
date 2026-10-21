@@ -3,10 +3,28 @@
 #include "simulation_core/DroneModel.h"
 #include "simulation_core/EoCameraModel.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace aerosimlab::simulation
 {
+/**
+ * @brief 화면 프레임 시간을 고정 간격 모의 Tick 수로 바꾼다.
+ * @details Tick보다 짧은 나머지 시간은 다음 프레임으로 넘긴다. 한 프레임에서 처리할 시간은 100ms로 제한해 화면이 멈춘 뒤 과도한 따라잡기를 막는다.
+ */
+class FixedTickAccumulator
+{
+public:
+    static constexpr double fixedStepSeconds = DroneModel::fixedStepSeconds;
+    static constexpr double maximumFrameSeconds = 0.1;
+
+    /** @brief 지난 프레임 시간에 따라 지금 실행할 Tick 수를 반환한다. */
+    [[nodiscard]] std::size_t Consume(double elapsedSeconds) noexcept;
+
+private:
+    double accumulatedSeconds_ = 0.0;
+};
+
 /**
  * @brief 화면이 없어도 같은 순서로 한 단계씩 실행할 수 있는 드론 모의 코어다.
  * @details 호출자가 AdvanceOneTick을 부를 때마다 모의 시간이 1/60초 진행된다. 일시정지 중에는 상태와 시간이 바뀌지 않는다.

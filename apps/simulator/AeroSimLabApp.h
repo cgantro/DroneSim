@@ -114,6 +114,7 @@ private:
         const glm::mat4& view, const glm::mat4& projection);
 
     bool smokeTest_ = false;
+    aerosimlab::simulation::FixedTickAccumulator fixedTickAccumulator_;
     bool demoMode_ = false;
     bool externalControl_ = false;
     bool groundControlActive_ = false;
@@ -127,7 +128,6 @@ private:
     bool smokeReplayStarted_ = false;
     bool benchmarkMode_ = false;
     std::size_t renderedFrames_ = 0;
-    double accumulatedSeconds_ = 0.0;
     std::clock_t benchmarkCpuStart_ = 0;
     std::vector<double> tickDurationsMicroseconds_;
 #ifndef __EMSCRIPTEN__
