@@ -79,6 +79,7 @@ public:
 
 private:
     const models::RobotSpecification& specification_;
+    std::vector<models::Axis3> normalizedJointAxes_;
     RobotKinematicState state_;
 };
 
