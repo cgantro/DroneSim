@@ -496,6 +496,11 @@ void PosePlanWithRobotCollisions(benchmark::State& state)
     std::unique_ptr<ControlPhysicsTickFixture> fixture;
     std::vector<RuntimePathCase> cases;
     std::vector<double> planningFrameMicroseconds;
+    double maximumAdvanceCallMicroseconds = 0.0;
+    std::uint64_t advanceCallCount = 0;
+    std::uint64_t advanceCallsOver100Microseconds = 0;
+    std::uint64_t advanceCallsOver500Microseconds = 0;
+    std::uint64_t advanceCallsOverBudget = 0;
     try
     {
         state.PauseTiming();
@@ -534,7 +539,18 @@ void PosePlanWithRobotCollisions(benchmark::State& state)
                     // 이미 시작한 계획 작업 한 단위는 중간에 끊지 않으므로 마지막 단위만큼 예산을 넘길 수 있다.
                     do
                     {
+                        // 프레임 시간이 길어진 이유가 한 작업 단위인지 구분할 수 있도록 호출 시간의 최댓값도 잰다.
+                        const auto advanceStart = Clock::now();
                         controller.AdvanceMotionPlanning(1);
+                        const double advanceMicroseconds = std::chrono::duration<double, std::micro>(
+                            Clock::now() - advanceStart).count();
+                        maximumAdvanceCallMicroseconds = std::max(
+                            maximumAdvanceCallMicroseconds, advanceMicroseconds);
+                        ++advanceCallCount;
+                        advanceCallsOver100Microseconds += advanceMicroseconds > 100.0;
+                        advanceCallsOver500Microseconds += advanceMicroseconds > 500.0;
+                        advanceCallsOverBudget += advanceMicroseconds >
+                            std::chrono::duration<double, std::micro>(planningFrameBudget).count();
                     } while (controller.IsMotionPlanning() && Clock::now() < frameDeadline);
                     planningFrameMicroseconds.push_back(std::chrono::duration<double, std::micro>(
                         Clock::now() - frameStart).count());
@@ -573,6 +589,14 @@ void PosePlanWithRobotCollisions(benchmark::State& state)
             static_cast<double>(selfCollisionRejected);
         state.counters["pose_plan_other_rejected"] = static_cast<double>(otherRejected);
         state.counters["pose_plan_timeouts"] = static_cast<double>(timedOut);
+        state.counters["planning_advance_calls"] = static_cast<double>(advanceCallCount);
+        state.counters["planning_advance_call_max_us"] = maximumAdvanceCallMicroseconds;
+        state.counters["planning_advance_calls_over_100us"] =
+            static_cast<double>(advanceCallsOver100Microseconds);
+        state.counters["planning_advance_calls_over_500us"] =
+            static_cast<double>(advanceCallsOver500Microseconds);
+        state.counters["planning_advance_calls_over_1_5ms"] =
+            static_cast<double>(advanceCallsOverBudget);
         const auto overBudgetFrames = std::count_if(
             planningFrameMicroseconds.begin(), planningFrameMicroseconds.end(),
             [planningFrameBudget](double elapsedMicroseconds)
