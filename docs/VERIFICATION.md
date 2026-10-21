@@ -2,15 +2,15 @@
 
 ## 자동 시험
 
-Windows MSVC Release 빌드에서 CTest **20개가 모두 통과했습니다.** 시험은 드론 비행과 재현성, 카메라 상태와 RGB 행 순서, OpenCV 프레임 공유와 밝기·대비·선명도 계산, JSON 장애 시나리오, UDP 메시지와 지상통제 명령 왕복, 화면에서 카메라 픽셀을 읽는지 확인합니다.
+Windows MSVC Release 빌드에서 CTest **20개가 모두 통과했습니다.** 시험은 드론 비행과 재현성, 카메라 상태와 RGB 행 순서, OpenCV 프레임 공유와 밝기·대비·선명도 계산, JSON 장애 시나리오, UDP 메시지와 지상통제 명령 왕복, 조작 창의 카메라 고장·복구 버튼, 화면에서 카메라 픽셀을 읽는지 확인합니다.
 
-Visual Studio에서 프로젝트 폴더를 열고 `Ninja Release` 구성을 선택하면 빌드할 수 있습니다. 시험은 Visual Studio의 테스트 창에서 실행합니다. 정상 비행과 장애 시나리오는 화면 없이 실행되는 별도 시험 프로그램으로 확인했습니다.
+Visual Studio에서 프로젝트 폴더를 열고 `Ninja Release` 구성을 선택하면 빌드할 수 있습니다. 시험은 Visual Studio의 테스트 창에서 실행합니다. 정상 비행과 장애 시나리오는 화면 없이 실행되는 별도 시험 프로그램으로 확인했습니다. Windows 시뮬레이터는 콘솔 없는 GUI 프로그램으로 빌드하며, 일반 실행 오류는 대화상자에 표시합니다.
 
 장애 시나리오는 이륙 명령 중복, 경유점 명령 지연, 착륙 명령 손실, 카메라 고장과 복구를 재현합니다. 결과에는 마지막 드론·카메라 상태와 이벤트 기록이 포함됩니다.
 
 ## Release 측정
 
-측정은 2026년 10월 21일, Windows x64와 MSVC Release에서 수행했습니다. CPU는 13th Gen Intel Core i5-13600KF이고 그래픽카드는 NVIDIA GeForce RTX 3060 Ti입니다. 1280×720 OpenGL 창을 화면에 표시하지 않고 VSync를 끈 채 매번 5초 동안 실행했습니다.
+측정 기능은 Visual Studio의 실행 설정에서 `--benchmark`를 지정해 시작합니다. 결과 JSON은 Visual Studio 디버그 출력 창에 표시됩니다. 측정은 2026년 10월 21일, Windows x64와 MSVC Release에서 수행했습니다. CPU는 13th Gen Intel Core i5-13600KF이고 그래픽카드는 NVIDIA GeForce RTX 3060 Ti입니다. 1280×720 OpenGL 창을 화면에 표시하지 않고 VSync를 끈 채 매번 5초 동안 실행했습니다.
 
 | 재측정 | 모의 Tick | Tick p50 / p95 / p99 | 16.67ms 초과 | 숨김 그리기 속도 | 메모리 |
 | --- | ---: | ---: | ---: | ---: | ---: |
