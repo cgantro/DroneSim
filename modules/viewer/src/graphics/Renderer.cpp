@@ -172,8 +172,10 @@ void Renderer::SetSceneViewport(int x, int y, int width, int height)
 
     const int left = std::clamp(x, 0, viewportWidth);
     const int bottom = std::clamp(y, 0, viewportHeight);
-    const int right = std::clamp(x + width, left, viewportWidth);
-    const int top = std::clamp(y + height, bottom, viewportHeight);
+    const int right = static_cast<int>(std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(x) + width, left, viewportWidth));
+    const int top = static_cast<int>(std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(y) + height, bottom, viewportHeight));
     m_SceneViewport = {left, bottom, right - left, top - bottom};
 }
 
