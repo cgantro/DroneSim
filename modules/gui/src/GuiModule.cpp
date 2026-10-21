@@ -6,6 +6,8 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 
+#include <stdexcept>
+
 namespace grasplink::gui
 {
 
@@ -36,13 +38,23 @@ struct GuiModule::Impl
         style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.10F, 0.31F, 0.40F, 1.0F);
         style.Colors[ImGuiCol_Header] = ImVec4(0.11F, 0.28F, 0.34F, 0.85F);
         style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.15F, 0.38F, 0.45F, 0.95F);
-        ImGui_ImplGlfw_InitForOpenGL(window.GetNativeHandle(), true);
+        if (!ImGui_ImplGlfw_InitForOpenGL(window.GetNativeHandle(), true))
+        {
+            ImGui::DestroyContext();
+            throw std::runtime_error("ImGui GLFW 백엔드를 시작하지 못했습니다.");
+        }
 #ifdef __EMSCRIPTEN__
         ImGui_ImplGlfw_InstallEmscriptenCallbacks(window.GetNativeHandle(), "#canvas");
-        ImGui_ImplOpenGL3_Init("#version 300 es");
+        const bool rendererInitialized = ImGui_ImplOpenGL3_Init("#version 300 es");
 #else
-        ImGui_ImplOpenGL3_Init("#version 330");
+        const bool rendererInitialized = ImGui_ImplOpenGL3_Init("#version 330");
 #endif
+        if (!rendererInitialized)
+        {
+            ImGui_ImplGlfw_Shutdown();
+            ImGui::DestroyContext();
+            throw std::runtime_error("ImGui OpenGL 백엔드를 시작하지 못했습니다.");
+        }
     }
 
     ~Impl()
