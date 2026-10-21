@@ -530,13 +530,117 @@ MaterialData ConvertMaterial(
     return result;
 }
 
-// Primitive는 재질 하나로 그리는 삼각형 묶음이다. 각 묶음에서 0부터 시작하는 연결 번호에 앞서 추가한 정점 수를 더해 하나의 Mesh 배열로 합친다.
+std::uint32_t AppendPrimitiveVertices(
+    MeshData& mesh,
+    const tinygltf::Model& model,
+    const tinygltf::Primitive& primitive)
+{
+    // POSITION은 표면 삼각형의 각 꼭짓점 위치다. 위치가 없으면 화면에 표면을 놓을 수 없다.
+    const auto positionIterator = primitive.attributes.find(attribute_names::position);
+    if (positionIterator == primitive.attributes.end())
+        throw std::runtime_error(error_messages::mesh::missingPosition);
+
+    const std::vector<glm::vec3> positions = ReadFloatVectorAccessor<glm::vec3, 3>(
+        model, positionIterator->second, TINYGLTF_TYPE_VEC3,
+        error_messages::accessor::expectedFloatVec3, [](const float* value) {
+            return glm::vec3{value[0], value[1], value[2]};
+        });
+
+    const std::size_t vertexCount = positions.size();
+    if (vertexCount == 0)
+        throw std::runtime_error(error_messages::mesh::noVertices);
+    if (vertexCount > mesh_limits::maximumMeshValue ||
+        mesh.vertices.size() > mesh_limits::maximumMeshValue - vertexCount)
+        throw std::runtime_error(error_messages::mesh::vertexRangeTooLarge);
+
+    // NORMAL은 표면 방향, TEXCOORD_0은 기본 색 이미지 좌표다. 선택 속성이 없으면 Vertex 기본값을 유지한다.
+    std::vector<glm::vec3> normals;
+    const auto normalIterator = primitive.attributes.find(attribute_names::normal);
+    if (normalIterator != primitive.attributes.end())
+    {
+        normals = ReadFloatVectorAccessor<glm::vec3, 3>(
+            model, normalIterator->second, TINYGLTF_TYPE_VEC3,
+            error_messages::accessor::expectedFloatVec3, [](const float* value) {
+                return glm::vec3{value[0], value[1], value[2]};
+            });
+        if (normals.size() != vertexCount)
+            throw std::runtime_error(error_messages::mesh::normalCountMismatch);
+    }
+
+    std::vector<glm::vec2> texCoords;
+    const auto texCoordIterator = primitive.attributes.find(attribute_names::textureCoordinates);
+    if (texCoordIterator != primitive.attributes.end())
+    {
+        texCoords = ReadFloatVectorAccessor<glm::vec2, 2>(
+            model, texCoordIterator->second, TINYGLTF_TYPE_VEC2,
+            error_messages::accessor::expectedFloatVec2, [](const float* value) {
+                return glm::vec2{value[0], value[1]};
+            });
+        if (texCoords.size() != vertexCount)
+            throw std::runtime_error(
+                error_messages::mesh::textureCoordinateCountMismatch);
+    }
+
+    const auto baseVertex = static_cast<std::uint32_t>(mesh.vertices.size());
+    mesh.vertices.reserve(mesh.vertices.size() + vertexCount);
+
+    for (std::size_t i = 0; i < vertexCount; ++i)
+    {
+        Vertex vertex;
+        vertex.position = positions[i];
+        if (!normals.empty()) vertex.normal = normals[i];
+        if (!texCoords.empty()) vertex.texCoord = texCoords[i];
+        mesh.vertices.push_back(vertex);
+    }
+
+    return baseVertex;
+}
+
+void AppendPrimitiveIndicesAndSubmesh(
+    MeshData& mesh,
+    const tinygltf::Model& model,
+    const tinygltf::Primitive& primitive,
+    std::size_t vertexCount,
+    std::uint32_t baseVertex)
+{
+    const std::vector<std::uint32_t> localIndices =
+        ReadIndices(model, primitive.indices, vertexCount);
+    if (localIndices.size() < mesh_limits::indicesPerTriangle ||
+        localIndices.size() % mesh_limits::indicesPerTriangle != 0)
+    {
+        throw std::runtime_error(error_messages::mesh::invalidTriangleIndexCount);
+    }
+
+    if (mesh.indices.size() > mesh_limits::maximumMeshValue ||
+        localIndices.size() > mesh_limits::maximumMeshValue - mesh.indices.size())
+    {
+        throw std::runtime_error(error_messages::mesh::indexRangeTooLarge);
+    }
+
+    const auto indexStart = static_cast<std::uint32_t>(mesh.indices.size());
+    mesh.indices.reserve(mesh.indices.size() + localIndices.size());
+    for (const std::uint32_t localIndex : localIndices)
+        mesh.indices.push_back(baseVertex + localIndex);
+
+    SubMeshInfo subMesh;
+    subMesh.indexStart = indexStart;
+    subMesh.indexCount = static_cast<std::uint32_t>(localIndices.size());
+    if (primitive.material < -1 ||
+        (primitive.material >= 0 &&
+            static_cast<std::size_t>(primitive.material) >= model.materials.size()))
+        throw std::runtime_error(error_messages::hierarchy::invalidMaterialIndex);
+    if (primitive.material >= 0)
+        subMesh.defaultMaterialIndex = static_cast<std::size_t>(primitive.material);
+    mesh.subMeshes.push_back(subMesh);
+}
+
 MeshData ConvertMesh(
     const tinygltf::Model& model,
     const tinygltf::Mesh& source,
     const std::string& resourcePrefix,
     std::size_t meshIndex)
 {
+    // Primitive는 재질 하나로 그리는 삼각형 묶음이다. 각 묶음의 연결 번호에 앞서 추가한 정점 수를 더해 하나의 Mesh 배열로 합친다.
     MeshData result;
     result.name = source.name;
     result.uniqueID = ResourceID{
@@ -548,100 +652,11 @@ MeshData ConvertMesh(
             primitive.mode != primitive_modes::unspecified)
             throw std::runtime_error(error_messages::mesh::unsupportedPrimitiveMode);
 
-        // POSITION은 표면 삼각형의 각 꼭짓점 위치다. 위치가 없으면 화면에 표면을 놓을 수 없다.
-        const auto positionIterator = primitive.attributes.find(attribute_names::position);
-        if (positionIterator == primitive.attributes.end())
-            throw std::runtime_error(error_messages::mesh::missingPosition);
-
-        const std::vector<glm::vec3> positions = ReadFloatVectorAccessor<glm::vec3, 3>(
-            model, positionIterator->second, TINYGLTF_TYPE_VEC3,
-            error_messages::accessor::expectedFloatVec3, [](const float* value) {
-                return glm::vec3{value[0], value[1], value[2]};
-            });
-
-        const std::size_t vertexCount = positions.size();
-        if (vertexCount == 0)
-            throw std::runtime_error(error_messages::mesh::noVertices);
-        if (vertexCount > mesh_limits::maximumMeshValue ||
-            result.vertices.size() > mesh_limits::maximumMeshValue - vertexCount)
-            throw std::runtime_error(error_messages::mesh::vertexRangeTooLarge);
-
-        // NORMAL은 표면 방향, TEXCOORD_0은 기본 색 이미지 좌표다. 선택 속성이 없으면 Vertex 기본값을 유지한다.
-        std::vector<glm::vec3> normals;
-        const auto normalIterator = primitive.attributes.find(attribute_names::normal);
-        if (normalIterator != primitive.attributes.end())
-        {
-            normals = ReadFloatVectorAccessor<glm::vec3, 3>(
-                model, normalIterator->second, TINYGLTF_TYPE_VEC3,
-                error_messages::accessor::expectedFloatVec3, [](const float* value) {
-                    return glm::vec3{value[0], value[1], value[2]};
-                });
-            if (normals.size() != vertexCount)
-                throw std::runtime_error(error_messages::mesh::normalCountMismatch);
-        }
-
-        std::vector<glm::vec2> texCoords;
-        const auto texCoordIterator = primitive.attributes.find(attribute_names::textureCoordinates);
-        if (texCoordIterator != primitive.attributes.end())
-        {
-            texCoords = ReadFloatVectorAccessor<glm::vec2, 2>(
-                model, texCoordIterator->second, TINYGLTF_TYPE_VEC2,
-                error_messages::accessor::expectedFloatVec2, [](const float* value) {
-                    return glm::vec2{value[0], value[1]};
-                });
-            if (texCoords.size() != vertexCount)
-                throw std::runtime_error(
-                    error_messages::mesh::textureCoordinateCountMismatch);
-        }
-
         const std::uint32_t baseVertex =
-            static_cast<std::uint32_t>(result.vertices.size());
-
-        result.vertices.reserve(result.vertices.size() + vertexCount);
-
-        for (std::size_t i = 0; i < vertexCount; ++i)
-        {
-            Vertex vertex;
-            vertex.position = positions[i];
-            if (!normals.empty()) vertex.normal = normals[i];
-            if (!texCoords.empty()) vertex.texCoord = texCoords[i];
-            result.vertices.push_back(vertex);
-        }
-
-        const std::vector<std::uint32_t> localIndices =
-            ReadIndices(model, primitive.indices, vertexCount);
-        if (localIndices.size() < mesh_limits::indicesPerTriangle ||
-            localIndices.size() % mesh_limits::indicesPerTriangle != 0)
-        {
-            throw std::runtime_error(error_messages::mesh::invalidTriangleIndexCount);
-        }
-
-        if (result.indices.size() > mesh_limits::maximumMeshValue ||
-            localIndices.size() > mesh_limits::maximumMeshValue - result.indices.size())
-        {
-            throw std::runtime_error(error_messages::mesh::indexRangeTooLarge);
-        }
-
-        const std::uint32_t indexStart =
-            static_cast<std::uint32_t>(result.indices.size());
-
-        result.indices.reserve(result.indices.size() + localIndices.size());
-
-        for (const std::uint32_t localIndex : localIndices)
-        {
-            result.indices.push_back(baseVertex + localIndex);
-        }
-
-        SubMeshInfo subMesh;
-        subMesh.indexStart = indexStart;
-        subMesh.indexCount = static_cast<std::uint32_t>(localIndices.size());
-        if (primitive.material < -1 ||
-            (primitive.material >= 0 &&
-                static_cast<std::size_t>(primitive.material) >= model.materials.size()))
-            throw std::runtime_error(error_messages::hierarchy::invalidMaterialIndex);
-        if (primitive.material >= 0)
-            subMesh.defaultMaterialIndex = static_cast<std::size_t>(primitive.material);
-        result.subMeshes.push_back(subMesh);
+            AppendPrimitiveVertices(result, model, primitive);
+        const std::size_t vertexCount = result.vertices.size() - baseVertex;
+        AppendPrimitiveIndicesAndSubmesh(
+            result, model, primitive, vertexCount, baseVertex);
     }
 
     return result;
