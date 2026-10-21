@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace
 {
@@ -17,22 +18,30 @@ constexpr std::string_view helpText =
     "        aerosimlab_headless --help\n";
 constexpr std::uintmax_t maximumScenarioFileBytes = 16 * 1024 * 1024;
 
+nlohmann::json ToJson(const aerosimlab::simulation::DroneState& state)
+{
+    return {
+        {"mode", aerosimlab::simulation::ToString(state.mode)},
+        {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
+        {"velocity_meters_per_second", {
+            state.velocityMetersPerSecond.x,
+            state.velocityMetersPerSecond.y,
+            state.velocityMetersPerSecond.z}},
+        {"yaw_radians", state.yawRadians}};
+}
+
 nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
 {
-    const auto& state = result.finalState;
+    nlohmann::json drones = nlohmann::json::array();
+    for (const auto& drone : result.drones)
+        drones.push_back({{"name", drone.name}, {"state", ToJson(drone.finalState)}});
+
     return {
         {"passed", result.passed},
         {"tick_count", result.tickCount},
         {"simulation_time_seconds", result.simulationTimeSeconds},
-        {"final_state", {
-            {"mode", aerosimlab::simulation::ToString(state.mode)},
-            {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
-            {"velocity_meters_per_second", {
-                state.velocityMetersPerSecond.x,
-                state.velocityMetersPerSecond.y,
-                state.velocityMetersPerSecond.z}},
-            {"yaw_radians", state.yawRadians}
-        }},
+        {"final_state", ToJson(result.finalState)},
+        {"drones", std::move(drones)},
         {"camera", {
             {"status", aerosimlab::simulation::ToString(result.finalCamera.status)},
             {"frame_count", result.finalCamera.frameCount},

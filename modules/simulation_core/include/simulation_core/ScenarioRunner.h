@@ -23,11 +23,19 @@ struct ScenarioResult
     CameraState finalCamera;
     std::vector<std::string> issues;
     std::vector<std::string> eventLog;
+    /** @brief 시나리오에서 이름으로 지정한 드론의 마지막 상태다. */
+    struct Drone
+    {
+        std::string name;
+        DroneState finalState;
+    };
+    /** @brief 시나리오에 등장한 드론의 마지막 상태를 입력 순서대로 보관한다. */
+    std::vector<Drone> drones;
 };
 
 /**
  * @brief JSON 문자열에 적힌 명령을 고정 tick에 적용하고 예상 결과와 비교한다.
- * @details 형식 버전은 1이다. 시나리오에는 실행 tick 수, tick 순서대로 정렬한 명령, 예상 최종 상태가 필요하다.
+ * @details 형식 버전은 1이다. 선택한 드론 목록이 있으면 이름별 위치와 명령을 시험하고, 없으면 기본 드론 한 대를 실행한다.
  * 잘못된 문법이나 빠진 필수 값은 std::invalid_argument로 알린다.
  */
 [[nodiscard]] ScenarioResult RunScenario(std::string_view jsonText);

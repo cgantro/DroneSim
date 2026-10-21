@@ -9,6 +9,9 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 
 namespace aerosimlab::simulation
 {
@@ -17,6 +20,13 @@ namespace
 using Json = nlohmann::json;
 
 constexpr std::uint64_t maximumScenarioTicks = 5'184'000;
+
+struct ExpectedDrone
+{
+    std::string name;
+    FlightMode mode;
+    glm::dvec3 positionMeters;
+};
 
 const Json& Required(const Json& object, const char* key)
 {
@@ -134,15 +144,48 @@ FlightMode ReadFlightMode(const Json& value)
     throw std::invalid_argument(std::string("알 수 없는 비행 상태입니다: ") + name);
 }
 
+std::vector<ExpectedDrone> ReadExpectedDrones(const Json& value)
+{
+    if (!value.is_array() || value.empty())
+        throw std::invalid_argument("expected.drones는 한 대 이상을 적은 배열이어야 합니다.");
+
+    std::vector<ExpectedDrone> drones;
+    std::unordered_set<std::string> names;
+    drones.reserve(value.size());
+    for (const Json& item : value)
+    {
+        if (!item.is_object())
+            throw std::invalid_argument("예상 드론 상태는 JSON 객체여야 합니다.");
+        const Json& nameValue = Required(item, "name");
+        if (!nameValue.is_string())
+            throw std::invalid_argument("예상 드론 name은 문자열이어야 합니다.");
+        std::string name = nameValue.get<std::string>();
+        if (name.empty() || !names.insert(name).second)
+            throw std::invalid_argument("예상 드론 name은 비어 있거나 중복될 수 없습니다.");
+        drones.push_back({
+            std::move(name),
+            ReadFlightMode(Required(item, "mode")),
+            ReadVector(Required(item, "position_meters"), "position_meters")});
+    }
+    return drones;
+}
+
 struct ScheduledCommand
 {
     std::uint64_t tick;
     std::uint64_t sendTick;
     std::uint64_t delayTicks;
     std::uint64_t sequence;
+    std::string droneName;
     DroneCommand command;
     bool dropped;
     bool duplicated;
+};
+
+struct ScenarioDrone
+{
+    std::string name;
+    glm::dvec3 initialPositionMeters;
 };
 
 struct ScheduledCameraEvent
@@ -151,7 +194,38 @@ struct ScheduledCameraEvent
     std::string action;
 };
 
-std::vector<ScheduledCommand> ReadCommands(const Json& commands, std::uint64_t tickCount)
+std::vector<ScenarioDrone> ReadDrones(const Json& document)
+{
+    const auto found = document.find("drones");
+    if (found == document.end())
+        return {};
+    if (!found->is_array() || found->empty())
+        throw std::invalid_argument("drones는 한 대 이상을 적은 배열이어야 합니다.");
+
+    std::vector<ScenarioDrone> drones;
+    std::unordered_set<std::string> names;
+    drones.reserve(found->size());
+    for (const Json& item : *found)
+    {
+        if (!item.is_object())
+            throw std::invalid_argument("각 드론은 JSON 객체여야 합니다.");
+        const Json& nameValue = Required(item, "name");
+        if (!nameValue.is_string())
+            throw std::invalid_argument("드론 name은 문자열이어야 합니다.");
+        std::string name = nameValue.get<std::string>();
+        if (name.empty() || !names.insert(name).second)
+            throw std::invalid_argument("드론 name은 비어 있거나 중복될 수 없습니다.");
+        drones.push_back({std::move(name), ReadVector(
+            Required(item, "initial_position_meters"), "initial_position_meters")});
+    }
+    return drones;
+}
+
+std::vector<ScheduledCommand> ReadCommands(
+    const Json& commands,
+    std::uint64_t tickCount,
+    const std::string& defaultDroneName,
+    const std::unordered_set<std::string>& droneNames)
 {
     if (!commands.is_array())
     {
@@ -181,9 +255,19 @@ std::vector<ScheduledCommand> ReadCommands(const Json& commands, std::uint64_t t
         if ((item.contains("drop") && !item["drop"].is_boolean())
             || (item.contains("duplicate") && !item["duplicate"].is_boolean()))
             throw std::invalid_argument("drop과 duplicate는 true 또는 false여야 합니다.");
+        std::string droneName = defaultDroneName;
+        if (item.contains("drone"))
+        {
+            if (!item["drone"].is_string())
+                throw std::invalid_argument("명령 drone은 드론 name 문자열이어야 합니다.");
+            droneName = item["drone"].get<std::string>();
+        }
+        if (!droneNames.contains(droneName))
+            throw std::invalid_argument("명령이 가리키는 드론을 찾을 수 없습니다: " + droneName);
         const bool dropped = item.contains("drop") && item["drop"].get<bool>();
         const bool duplicated = item.contains("duplicate") && item["duplicate"].get<bool>();
-        result.push_back({tick + delay, tick, delay, static_cast<std::uint64_t>(result.size()) + 1,
+        result.push_back({tick + delay, tick, delay,
+            static_cast<std::uint64_t>(result.size()) + 1, std::move(droneName),
             ReadCommand(item), dropped, duplicated});
         previousTick = tick;
         hasPreviousTick = true;
@@ -279,8 +363,17 @@ ScenarioResult RunScenario(std::string_view jsonText)
         throw std::invalid_argument("ticks는 1부터 5,184,000 사이여야 합니다.");
     }
 
+    const std::vector<ScenarioDrone> scenarioDrones = ReadDrones(document);
+    const std::string primaryDroneName = scenarioDrones.empty()
+        ? "drone" : scenarioDrones.front().name;
+    std::unordered_set<std::string> droneNames;
+    if (scenarioDrones.empty())
+        droneNames.insert(primaryDroneName);
+    else
+        for (const ScenarioDrone& drone : scenarioDrones)
+            droneNames.insert(drone.name);
     const std::vector<ScheduledCommand> commands = ReadCommands(
-        Required(document, "commands"), tickCount);
+        Required(document, "commands"), tickCount, primaryDroneName, droneNames);
     const SimulationDynamics dynamics = ReadDynamics(document);
     const std::optional<glm::dvec3> windVelocity = document.contains("wind_velocity_meters_per_second")
         ? std::optional<glm::dvec3>{ReadVector(
@@ -294,9 +387,23 @@ ScenarioResult RunScenario(std::string_view jsonText)
     {
         throw std::invalid_argument("expected는 JSON 객체여야 합니다.");
     }
-    const FlightMode expectedMode = ReadFlightMode(Required(expected, "mode"));
-    const glm::dvec3 expectedPosition = ReadVector(
-        Required(expected, "position_meters"), "position_meters");
+    const bool hasExpectedDrones = expected.contains("drones");
+    if (hasExpectedDrones && (expected.contains("mode") || expected.contains("position_meters")))
+        throw std::invalid_argument("expected에는 drones 목록 또는 단일 드론 상태 중 하나만 적어야 합니다.");
+    if (!hasExpectedDrones && !scenarioDrones.empty())
+        throw std::invalid_argument("여러 드론을 지정한 시나리오는 expected.drones가 필요합니다.");
+
+    std::vector<ExpectedDrone> expectedDrones;
+    std::optional<FlightMode> expectedMode;
+    std::optional<glm::dvec3> expectedPosition;
+    if (hasExpectedDrones)
+        expectedDrones = ReadExpectedDrones(expected["drones"]);
+    else
+    {
+        expectedMode = ReadFlightMode(Required(expected, "mode"));
+        expectedPosition = ReadVector(
+            Required(expected, "position_meters"), "position_meters");
+    }
     const double toleranceMeters = expected.contains("tolerance_meters")
         ? ReadFiniteNumber(expected["tolerance_meters"], "tolerance_meters")
         : 0.01;
@@ -315,10 +422,23 @@ ScenarioResult RunScenario(std::string_view jsonText)
     SimulationCore simulation{dynamics};
     if (windVelocity)
         simulation.SetWindVelocityMetersPerSecond(*windVelocity);
+
+    std::unordered_map<std::string, DroneId> droneIds;
+    if (scenarioDrones.empty())
+        droneIds.emplace(primaryDroneName, simulation.PrimaryDroneId());
+    else
+    {
+        const DroneId unusedDefaultDrone = simulation.PrimaryDroneId();
+        for (const ScenarioDrone& drone : scenarioDrones)
+            droneIds.emplace(drone.name, simulation.AddDrone(drone.initialPositionMeters));
+        if (!simulation.RemoveDrone(unusedDefaultDrone))
+            throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
+    }
+
     ScenarioResult result;
     std::size_t nextCommand = 0;
     std::size_t nextCameraEvent = 0;
-    std::uint64_t lastDeliveredSequence = 0;
+    std::unordered_map<std::string, std::uint64_t> lastDeliveredSequence;
     for (std::uint64_t tick = 0; tick < tickCount; ++tick)
     {
         while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
@@ -326,31 +446,39 @@ ScenarioResult RunScenario(std::string_view jsonText)
             const ScheduledCommand& scheduled = commands[nextCommand];
             if (scheduled.dropped)
             {
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": 통신 장애로 명령을 버렸습니다.");
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                    + scheduled.droneName + " 드론 명령을 통신 장애로 버렸습니다.");
                 ++nextCommand;
                 continue;
             }
 
-            if (scheduled.sequence <= lastDeliveredSequence)
+            std::uint64_t& lastSequence = lastDeliveredSequence[scheduled.droneName];
+            if (scheduled.sequence <= lastSequence)
             {
-                result.issues.push_back("tick " + std::to_string(tick) + "에서 역순 명령을 거부했습니다.");
+                result.issues.push_back("tick " + std::to_string(tick) + "에서 "
+                    + scheduled.droneName + " 드론의 역순 명령을 거부했습니다.");
                 ++nextCommand;
                 continue;
             }
-            lastDeliveredSequence = scheduled.sequence;
+            lastSequence = scheduled.sequence;
             if (scheduled.delayTicks > 0)
             {
-                result.eventLog.push_back("tick " + std::to_string(scheduled.sendTick)
+                result.eventLog.push_back(scheduled.droneName + " 드론에 tick "
+                    + std::to_string(scheduled.sendTick)
                     + "에 보낸 명령을 " + std::to_string(scheduled.delayTicks)
                     + " Tick 늦게 전달했습니다.");
             }
-            const CommandResult commandResult = simulation.Apply(scheduled.command);
+            const CommandResult commandResult = simulation.Apply(
+                droneIds.at(scheduled.droneName), scheduled.command);
             if (commandResult != CommandResult::Accepted)
-                result.issues.push_back("tick " + std::to_string(tick) + " 명령을 적용하지 못했습니다.");
+                result.issues.push_back("tick " + std::to_string(tick) + "에서 "
+                    + scheduled.droneName + " 드론 명령을 적용하지 못했습니다.");
             else
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": 명령을 적용했습니다.");
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                    + scheduled.droneName + " 드론 명령을 적용했습니다.");
             if (scheduled.duplicated)
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": 재전송된 중복 명령을 한 번만 처리했습니다.");
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                    + scheduled.droneName + " 드론의 중복 재전송 명령을 한 번만 처리했습니다.");
             ++nextCommand;
         }
 
@@ -368,18 +496,50 @@ ScenarioResult RunScenario(std::string_view jsonText)
 
     result.tickCount = simulation.TickCount();
     result.simulationTimeSeconds = simulation.SimulationTimeSeconds();
-    result.finalState = simulation.State();
+    if (scenarioDrones.empty())
+    {
+        result.drones.push_back({primaryDroneName,
+            simulation.State(droneIds.at(primaryDroneName))});
+    }
+    else
+    {
+        for (const ScenarioDrone& drone : scenarioDrones)
+            result.drones.push_back({drone.name, simulation.State(droneIds.at(drone.name))});
+    }
+    result.finalState = result.drones.front().finalState;
     result.finalCamera = simulation.Camera();
-    if (result.finalState.mode != expectedMode)
+    if (expectedMode && result.finalState.mode != *expectedMode)
     {
         result.issues.push_back(
-            "예상 비행 상태는 " + std::string(ToString(expectedMode))
+            "예상 비행 상태는 " + std::string(ToString(*expectedMode))
             + "이지만 실제 상태는 " + std::string(ToString(result.finalState.mode)) + "입니다.");
     }
-    if (glm::length(result.finalState.positionMeters - expectedPosition) > toleranceMeters)
+    if (expectedPosition
+        && glm::length(result.finalState.positionMeters - *expectedPosition) > toleranceMeters)
     {
         result.issues.push_back("최종 위치가 허용 오차를 벗어났습니다.");
     }
+    for (const ExpectedDrone& expectedDrone : expectedDrones)
+    {
+        const auto found = std::find_if(result.drones.begin(), result.drones.end(),
+            [&expectedDrone](const ScenarioResult::Drone& drone)
+            {
+                return drone.name == expectedDrone.name;
+            });
+        if (found == result.drones.end())
+        {
+            result.issues.push_back("예상 결과에 지정한 드론을 찾을 수 없습니다: "
+                + expectedDrone.name);
+            continue;
+        }
+        if (found->finalState.mode != expectedDrone.mode)
+            result.issues.push_back(expectedDrone.name + " 드론의 최종 비행 상태가 예상과 다릅니다.");
+        if (glm::length(found->finalState.positionMeters - expectedDrone.positionMeters)
+            > toleranceMeters)
+            result.issues.push_back(expectedDrone.name + " 드론의 최종 위치가 허용 오차를 벗어났습니다.");
+    }
+    if (hasExpectedDrones && expectedDrones.size() != result.drones.size())
+        result.issues.push_back("expected.drones 개수가 시나리오 드론 수와 다릅니다.");
     if (expectedCameraStatus && result.finalCamera.status != *expectedCameraStatus)
         result.issues.push_back("최종 카메라 상태가 예상값과 다릅니다.");
     if (expectedFrameCount && result.finalCamera.frameCount != *expectedFrameCount)

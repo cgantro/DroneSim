@@ -45,6 +45,34 @@ TEST(ScenarioRunner, ReplaysFlightCommandsAndChecksFinalState)
     EXPECT_EQ(result.issues, repeatedResult.issues);
 }
 
+TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"ticks":180,
+     "drones":[
+       {"name":"lead","initial_position_meters":[0,0,0]},
+       {"name":"scout","initial_position_meters":[10,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"lead","type":"takeoff","delay_ticks":5},
+       {"tick":0,"drone":"scout","type":"takeoff"},
+       {"tick":90,"drone":"scout","type":"set_waypoint","position_meters":[12,0,1.5]}],
+     "expected":{"tolerance_meters":0.000001,"drones":[
+       {"name":"lead","mode":"hovering","position_meters":[0,0,1.5]},
+       {"name":"scout","mode":"hovering","position_meters":[12,0,1.5]}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_EQ(result.drones.size(), 2);
+    EXPECT_EQ(result.drones[0].name, "lead");
+    EXPECT_EQ(result.drones[1].name, "scout");
+    EXPECT_EQ(result.drones[0].finalState.mode, FlightMode::Hovering);
+    EXPECT_EQ(result.drones[1].finalState.mode, FlightMode::Hovering);
+    EXPECT_DOUBLE_EQ(result.drones[0].finalState.positionMeters.z, 1.5);
+    EXPECT_DOUBLE_EQ(result.drones[1].finalState.positionMeters.x, 12.0);
+    EXPECT_EQ(result.finalState.positionMeters, result.drones[0].finalState.positionMeters);
+}
+
 TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
 {
     constexpr std::string_view scenario = R"json(
@@ -88,6 +116,11 @@ TEST(ScenarioRunner, ReportsCommandFailuresAndRejectsInvalidScenarios)
         std::invalid_argument);
     EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"dynamics":"flight",
         "ticks":1,"commands":[],"expected":{"mode":"grounded","position_meters":[0,0,0]}})json")),
+        std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"ticks":1,
+        "drones":[{"name":"lead","initial_position_meters":[0,0,0]}],
+        "commands":[{"tick":0,"drone":"missing","type":"takeoff"}],
+        "expected":{"drones":[{"name":"lead","mode":"grounded","position_meters":[0,0,0]}]}})json")),
         std::invalid_argument);
     EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,
         "wind_velocity_meters_per_second":[1,0,0],"ticks":1,"commands":[],

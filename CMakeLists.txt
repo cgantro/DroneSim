@@ -329,6 +329,12 @@ if(BUILD_TESTING)
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/fault-injection/fault-injection.json")
   set_tests_properties(HeadlessFaultScenarioSmoke PROPERTIES LABELS "INTEGRATION;simulation")
 
+  add_test(NAME HeadlessMultiDroneSmoke
+    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/independent-flight.json")
+  set_tests_properties(HeadlessMultiDroneSmoke PROPERTIES
+    LABELS "INTEGRATION;simulation"
+    PASS_REGULAR_EXPRESSION "lead.*scout")
+
   if(AEROSIMLAB_BUILD_GRAPHICS)
     add_test(NAME ViewerSmoke COMMAND aerosimlab_simulator --smoke-test)
     set_tests_properties(ViewerSmoke PROPERTIES
