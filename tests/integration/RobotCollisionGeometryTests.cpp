@@ -150,6 +150,12 @@ void CheckSyntheticGeometry()
         builtGeometry.links[0].shapes[1].type == grasplink::physics::CollisionShapeType::ConvexHull &&
         builtGeometry.links[0].shapes[2].type == grasplink::physics::CollisionShapeType::ConvexHull,
         "URDF keeps boxes and approximates spheres and cylinders with convex hulls");
+    const auto& spherePoints = builtGeometry.links[0].shapes[1].pointsMeters;
+    const auto& cylinderPoints = builtGeometry.links[0].shapes[2].pointsMeters;
+    EXPECT_GT(glm::length(spherePoints.front()), 0.05F)
+        << "the sphere hull encloses rather than cuts inside the URDF sphere";
+    EXPECT_GT(glm::length(glm::vec2{cylinderPoints.front()}), 0.025F)
+        << "the cylinder hull encloses rather than cuts inside the URDF cylinder";
     ASSERT_TRUE_MESSAGE(builtGeometry.baseShapes.size() == 2,
         "a fixed base child shares the static base collision body");
     ASSERT_NEAR_FINITE(builtGeometry.baseShapes[1].localTransform.position.y, 0.1, 1e-5,

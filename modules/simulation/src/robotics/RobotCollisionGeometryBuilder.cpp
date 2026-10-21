@@ -82,12 +82,14 @@ Shape BuildCylinder(const RobotCollisionGeometry& source)
     constexpr double pi = CollisionGeometryLimits::pi;
     const double radius = source.dimensionsMeters.x;
     const double halfLength = source.dimensionsMeters.y * 0.5;
-    result.pointsMeters.reserve(segments * 2);
+    // 정다각형의 꼭짓점을 바깥으로 옮겨 각 면이 원래 원통 단면을 감싸게 한다.
+    const double hullRadius = radius / std::cos(pi / segments);
+    result.pointsMeters.reserve(static_cast<std::size_t>(segments * 2));
     for (int side = 0; side < segments; ++side)
     {
         const double angle = 2.0 * pi * side / segments;
-        const float x = static_cast<float>(radius * std::cos(angle));
-        const float y = static_cast<float>(radius * std::sin(angle));
+        const float x = static_cast<float>(hullRadius * std::cos(angle));
+        const float y = static_cast<float>(hullRadius * std::sin(angle));
         result.pointsMeters.emplace_back(x, y, static_cast<float>(-halfLength));
         result.pointsMeters.emplace_back(x, y, static_cast<float>(halfLength));
     }
@@ -102,7 +104,9 @@ Shape BuildSphere(const RobotCollisionGeometry& source)
     constexpr int segments = CollisionGeometryLimits::sphereLongitudeSegments;
     constexpr int latitudeSegments = CollisionGeometryLimits::sphereLatitudeSegments;
     constexpr double pi = CollisionGeometryLimits::pi;
-    const double radius = source.dimensionsMeters.x;
+    // 모든 방향이 가장 가까운 표본과 이루는 각을 상한으로 잡아, 평평한 hull 면이 구 안쪽에 놓이지 않게 한다.
+    const double maximumAngularGap = pi / (2.0 * latitudeSegments) + pi / segments;
+    const double radius = source.dimensionsMeters.x / std::cos(maximumAngularGap);
     result.pointsMeters.reserve((latitudeSegments - 1) * segments + 2);
     result.pointsMeters.emplace_back(0.0F, 0.0F, static_cast<float>(-radius));
     for (int latitude = 1; latitude < latitudeSegments; ++latitude)
