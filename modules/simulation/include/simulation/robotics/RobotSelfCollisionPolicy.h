@@ -48,17 +48,25 @@ struct SelfCollisionIdentity
         return distance <= 1;
     }
 
-    if (first.part == SelfCollisionPart::Base && second.part == SelfCollisionPart::Link)
-        return second.jointIndex == 0;
-    if (second.part == SelfCollisionPart::Base && first.part == SelfCollisionPart::Link)
-        return first.jointIndex == 0;
+    const bool isBaseAndLink =
+        (first.part == SelfCollisionPart::Base && second.part == SelfCollisionPart::Link) ||
+        (second.part == SelfCollisionPart::Base && first.part == SelfCollisionPart::Link);
+    if (isBaseAndLink)
+    {
+        const SelfCollisionIdentity& link = first.part == SelfCollisionPart::Link ? first : second;
+        return link.jointIndex == 0;
+    }
 
-    if (first.part == SelfCollisionPart::Link && second.part == SelfCollisionPart::GripperBody)
-        return first.jointIndex != SelfCollisionIdentity::InvalidIndex &&
-            first.jointIndex == second.jointIndex;
-    if (second.part == SelfCollisionPart::Link && first.part == SelfCollisionPart::GripperBody)
-        return second.jointIndex != SelfCollisionIdentity::InvalidIndex &&
-            first.jointIndex == second.jointIndex;
+    const bool isLinkAndGripper =
+        (first.part == SelfCollisionPart::Link && second.part == SelfCollisionPart::GripperBody) ||
+        (second.part == SelfCollisionPart::Link && first.part == SelfCollisionPart::GripperBody);
+    if (isLinkAndGripper)
+    {
+        const SelfCollisionIdentity& link = first.part == SelfCollisionPart::Link ? first : second;
+        const SelfCollisionIdentity& gripper = first.part == SelfCollisionPart::GripperBody ? first : second;
+        return link.jointIndex != SelfCollisionIdentity::InvalidIndex &&
+            link.jointIndex == gripper.jointIndex;
+    }
 
     return false;
 }

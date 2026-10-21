@@ -513,15 +513,23 @@ TEST(RobotCollisionGeometry, AllowedCollisionMatrixExcludesOnlyConnectedPairs)
     EXPECT_TRUE(IsAllowedSelfCollision(
         {SelfCollisionPart::Link, 2, 4}, {SelfCollisionPart::Link, 7, 4}));
     EXPECT_TRUE(IsAllowedSelfCollision(
+        {SelfCollisionPart::Link, 7, 4}, {SelfCollisionPart::Link, 2, 4}));
+    EXPECT_TRUE(IsAllowedSelfCollision(
         {SelfCollisionPart::Link, 2, 4}, {SelfCollisionPart::Link, 8, 5}));
+    EXPECT_TRUE(IsAllowedSelfCollision(
+        {SelfCollisionPart::Link, 8, 5}, {SelfCollisionPart::Link, 2, 4}));
     EXPECT_FALSE(IsAllowedSelfCollision(
         {SelfCollisionPart::Link, 1, 4}, {SelfCollisionPart::Link, 3, 6}));
     EXPECT_TRUE(IsAllowedSelfCollision(
         {SelfCollisionPart::Base, 0}, {SelfCollisionPart::Link, 8, 0}));
+    EXPECT_TRUE(IsAllowedSelfCollision(
+        {SelfCollisionPart::Link, 8, 0}, {SelfCollisionPart::Base, 0}));
     EXPECT_FALSE(IsAllowedSelfCollision(
         {SelfCollisionPart::Base, 0}, {SelfCollisionPart::Link, 0, 1}));
     EXPECT_TRUE(IsAllowedSelfCollision(
         {SelfCollisionPart::Link, 5, 7}, {SelfCollisionPart::GripperBody, 9, 7}));
+    EXPECT_TRUE(IsAllowedSelfCollision(
+        {SelfCollisionPart::GripperBody, 9, 7}, {SelfCollisionPart::Link, 5, 7}));
     EXPECT_FALSE(IsAllowedSelfCollision(
         {SelfCollisionPart::Link, 4, 6}, {SelfCollisionPart::GripperBody, 9, 7}));
     EXPECT_FALSE(IsAllowedSelfCollision(
