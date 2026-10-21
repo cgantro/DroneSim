@@ -1,6 +1,9 @@
 #include "simulation_core/CommandRecording.h"
+#include "simulation_core/SimulationCore.h"
 
 #include <gtest/gtest.h>
+
+#include <optional>
 
 using namespace aerosimlab::simulation;
 
@@ -42,4 +45,70 @@ TEST(CommandRecording, DoesNotStartReplayWithoutRecordedCommands)
     ASSERT_TRUE(recording.StopRecording());
     recording.FinishTick(true);
     EXPECT_FALSE(recording.StartReplay());
+}
+
+TEST(CommandRecording, ReplayMatchesRecordedKinematicSimulation)
+{
+    SimulationCore recordedSimulation;
+    CommandRecording recording;
+    ASSERT_TRUE(recording.StartRecording());
+
+    recordedSimulation.Reset();
+    recordedSimulation.AdvanceOneTick();
+    recording.FinishTick();
+
+    auto advanceRecordedTick = [&](const std::optional<DroneCommand>& command = std::nullopt)
+    {
+        if (command)
+        {
+            recording.Record(*command);
+            ASSERT_EQ(recordedSimulation.Apply(*command), CommandResult::Accepted);
+        }
+        recordedSimulation.AdvanceOneTick();
+        recording.FinishTick();
+    };
+
+    advanceRecordedTick(DroneCommand{DroneCommand::Kind::TakeOff});
+    for (int tick = 0; tick < 100; ++tick)
+        advanceRecordedTick();
+    advanceRecordedTick(DroneCommand{
+        DroneCommand::Kind::SetVelocity, glm::dvec3{1.0, 0.2, 0.0}});
+    for (int tick = 0; tick < 30; ++tick)
+        advanceRecordedTick();
+    advanceRecordedTick(DroneCommand{DroneCommand::Kind::Land});
+    for (int tick = 0; tick < 120; ++tick)
+        advanceRecordedTick();
+
+    const bool wasRecordingAtTickStart = recording.IsRecording();
+    ASSERT_TRUE(recording.StopRecording());
+    recordedSimulation.AdvanceOneTick();
+    recording.FinishTick(wasRecordingAtTickStart);
+
+    SimulationCore replayedSimulation;
+    replayedSimulation.Reset();
+    ASSERT_TRUE(recording.StartReplay());
+    const auto applyReplayCommands = [&]
+    {
+        for (const auto& entry : recording.CommandsForReplayTick())
+            ASSERT_EQ(replayedSimulation.Apply(entry.command), CommandResult::Accepted);
+    };
+
+    applyReplayCommands();
+    replayedSimulation.AdvanceOneTick();
+    recording.AdvanceReplayTick();
+    while (!recording.ReplayFinished())
+    {
+        applyReplayCommands();
+        replayedSimulation.AdvanceOneTick();
+        recording.AdvanceReplayTick();
+    }
+    recording.StopReplay();
+
+    const auto& recordedState = recordedSimulation.State();
+    const auto& replayedState = replayedSimulation.State();
+    EXPECT_EQ(replayedSimulation.TickCount(), recordedSimulation.TickCount());
+    EXPECT_EQ(replayedState.mode, recordedState.mode);
+    EXPECT_EQ(replayedState.positionMeters, recordedState.positionMeters);
+    EXPECT_EQ(replayedState.velocityMetersPerSecond, recordedState.velocityMetersPerSecond);
+    EXPECT_EQ(replayedState.orientation, recordedState.orientation);
 }
