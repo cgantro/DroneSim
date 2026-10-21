@@ -21,6 +21,7 @@
 #include "rendering/assets/PrefabFactory.h"
 
 #include "physics/PhysicsWorld.h"
+#include "application/PickPlaceMission.h"
 #include "gui/GuiModule.h"
 #include "gui/panels/GripperPanel.h"
 #include "gui/panels/RobotPanel.h"

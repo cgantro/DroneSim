@@ -4,8 +4,6 @@
 #include "diagnostics/Logger.h"
 #include "model/ModelResource.h"
 #include "model/RobotModel.h"
-#include "application/PickPlaceMission.h"
-#include "application/PickPlaceScenarioSampler.h"
 #include "scene/Entity.h"
 
 #include <flecs.h>
@@ -49,6 +47,7 @@ class PhysicsWorld;
 
 namespace grasplink::robotics
 {
+struct CartesianPose;
 namespace kinematics { class RobotKinematics; class GripperKinematics; }
 }
 
@@ -85,6 +84,12 @@ struct GripperGraspState;
 }
 
 namespace grasplink::simulation::robotics { class RobotEnvironmentCollisionGuard; }
+
+namespace grasplink::application
+{
+class PickPlaceMission;
+class PickPlaceScenarioSampler;
+}
 
 namespace grasplink::simulator
 {
