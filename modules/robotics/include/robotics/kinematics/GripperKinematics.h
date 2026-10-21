@@ -50,6 +50,8 @@ public:
      * @throws std::invalid_argument 이름 중복, 길이가 0인 축, 유효하지 않은 배율 또는 관절 제한이 기준 각을 포함하지 않을 때 발생한다.
      */
     explicit GripperKinematics(const models::GripperSpecification& specification);
+    /// 계산기 수명 동안 사양을 빌리므로 임시 사양은 받을 수 없다.
+    GripperKinematics(models::GripperSpecification&&) = delete;
 
     /**
      * @brief Controller 상태의 개폐 비율로 각 관절의 각도와 Local 회전을 계산한다.

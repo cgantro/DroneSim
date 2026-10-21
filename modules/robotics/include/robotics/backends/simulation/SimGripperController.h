@@ -44,6 +44,9 @@ public:
     explicit SimGripperController(
         const models::GripperSpecification& specification,
         SimGripperMotionSettings settings = {});
+    /// 제어기 수명 동안 사양을 빌리므로 임시 사양은 받을 수 없다.
+    SimGripperController(models::GripperSpecification&&,
+        SimGripperMotionSettings = {}) = delete;
 
     /** @brief 연결 전이면 열린 위치의 유효한 Inactive snapshot을 만들고, 연결 상태면 현재 상태를 보존한다. */
     Result Connect() override;

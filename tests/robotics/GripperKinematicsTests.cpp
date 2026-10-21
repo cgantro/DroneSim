@@ -1,12 +1,21 @@
 #include "robotics/kinematics/GripperKinematics.h"
+#include "robotics/backends/simulation/SimGripperController.h"
 #include "robotics/models/robotiq/TwoF85.h"
 
 #include <cmath>
 #include <gtest/gtest.h>
 #include <stdexcept>
+#include <type_traits>
 
 namespace
 {
+using grasplink::robotics::backends::simulation::SimGripperController;
+using grasplink::robotics::kinematics::GripperKinematics;
+using grasplink::robotics::models::GripperSpecification;
+
+static_assert(!std::is_constructible_v<GripperKinematics, GripperSpecification&&>);
+static_assert(!std::is_constructible_v<SimGripperController, GripperSpecification&&>);
+
 grasplink::robotics::GripperState ClosedFraction(double fraction)
 {
     grasplink::robotics::GripperState state;
