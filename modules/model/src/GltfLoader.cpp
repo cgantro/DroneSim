@@ -216,17 +216,21 @@ std::optional<std::size_t> AccessorRangeEnd(
     return offset + lastElement * stride + elementSize;
 }
 
-// Accessor가 가리키는 byte가 실제 Buffer 범위 안에 있는지 확인해 읽을 주소를 만든다. 기존 값 일부를 덮어쓰는 Sparse 형식은 현재 지원하지 않는다.
-AccessorView GetAccessorView(
-    const tinygltf::Model& model,
-    int accessorIndex,
-    std::size_t elementSize)
+// 잘못된 번호를 vector 접근 전에 검사해 파일 오류를 일관된 예외로 바꾼다.
+const tinygltf::Accessor& GetAccessor(const tinygltf::Model& model, int accessorIndex)
 {
     if (accessorIndex < 0 || accessorIndex >= static_cast<int>(model.accessors.size()))
         throw std::runtime_error(error_messages::accessor::invalidIndex);
 
-    const tinygltf::Accessor& accessor = model.accessors[accessorIndex];
+    return model.accessors[accessorIndex];
+}
 
+// Accessor가 가리키는 byte가 실제 Buffer 범위 안에 있는지 확인해 읽을 주소를 만든다. 기존 값 일부를 덮어쓰는 Sparse 형식은 현재 지원하지 않는다.
+AccessorView GetAccessorView(
+    const tinygltf::Model& model,
+    const tinygltf::Accessor& accessor,
+    std::size_t elementSize)
+{
     if (accessor.sparse.isSparse)
         throw std::runtime_error(error_messages::accessor::sparseUnsupported);
 
@@ -337,12 +341,12 @@ std::vector<Vector> ReadFloatVectorAccessor(
     const char* expectedTypeName,
     Convert convert)
 {
-    const tinygltf::Accessor& accessor = model.accessors.at(accessorIndex);
+    const tinygltf::Accessor& accessor = GetAccessor(model, accessorIndex);
     if (accessor.type != expectedType ||
         accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
         throw std::runtime_error(expectedTypeName);
 
-    const AccessorView view = GetAccessorView(model, accessorIndex, sizeof(float) * ComponentCount);
+    const AccessorView view = GetAccessorView(model, accessor, sizeof(float) * ComponentCount);
     std::vector<Vector> result(view.count);
 
     for (std::size_t i = 0; i < view.count; ++i)
@@ -413,13 +417,13 @@ std::vector<std::uint32_t> ReadIndices(
     if (accessorIndex < -1)
         throw std::runtime_error(error_messages::index::invalidAccessorIndex);
 
-    const tinygltf::Accessor& accessor = model.accessors.at(accessorIndex);
+    const tinygltf::Accessor& accessor = GetAccessor(model, accessorIndex);
     if (accessor.type != TINYGLTF_TYPE_SCALAR)
         throw std::runtime_error(error_messages::index::expectedScalar);
 
     const AccessorView view = GetAccessorView(
         model,
-        accessorIndex,
+        accessor,
         GetIndexComponentSize(accessor.componentType));
     std::vector<std::uint32_t> result;
     result.reserve(view.count);

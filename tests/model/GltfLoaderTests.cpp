@@ -21,6 +21,8 @@ constexpr int gltfUnsignedByteComponentType = 5121;
 struct TriangleGlbOptions
 {
     std::size_t positionBufferViewLength = 36U;
+    int positionAccessorIndex = 0;
+    int indexAccessorIndex = 1;
     int materialIndex = -1;
     std::string materialJson;
     bool includeByteIndices = false;
@@ -59,7 +61,9 @@ public:
         const std::string materialArray = options.materialJson.empty()
             ? std::string{}
             : "\"materials\":[" + options.materialJson + "],";
-        const std::string primitiveIndices = options.includeByteIndices ? ",\"indices\":1" : "";
+        const std::string primitiveIndices = options.includeByteIndices
+            ? ",\"indices\":" + std::to_string(options.indexAccessorIndex)
+            : "";
         const std::string bufferViews = options.includeByteIndices
             ? "\"bufferViews\":[{\"buffer\":0,\"byteLength\":" +
                 std::to_string(options.positionBufferViewLength) + "},{\"buffer\":0,\"byteOffset\":" +
@@ -76,7 +80,8 @@ public:
             std::to_string(bufferLength) + "}],"
             + bufferViews + "," + accessors + ","
             + materialArray +
-            "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}" +
+            "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":" +
+                std::to_string(options.positionAccessorIndex) + "}" +
             primitiveIndices + primitiveMaterial + "}]}],"
             + "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0}";
 
@@ -134,6 +139,19 @@ TEST(GltfLoader, ReadsMeshMaterialAndIndexDataAndRejectsInvalidInputs)
     shortViewOptions.positionBufferViewLength = 24U;
     TriangleGlb shortView(shortViewOptions);
     EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(shortView.Path()), std::runtime_error);
+
+    TriangleGlbOptions invalidAccessorOptions;
+    invalidAccessorOptions.positionAccessorIndex = 1;
+    TriangleGlb invalidAccessor(invalidAccessorOptions);
+    EXPECT_THROW(grasplink::model::GltfLoader::LoadGLB(invalidAccessor.Path()), std::runtime_error);
+
+    TriangleGlbOptions invalidIndexAccessorOptions;
+    invalidIndexAccessorOptions.includeByteIndices = true;
+    invalidIndexAccessorOptions.indexAccessorIndex = 2;
+    TriangleGlb invalidIndexAccessor(invalidIndexAccessorOptions);
+    EXPECT_THROW(
+        grasplink::model::GltfLoader::LoadGLB(invalidIndexAccessor.Path()),
+        std::runtime_error);
 
     TriangleGlbOptions missingMaterialOptions;
     missingMaterialOptions.materialIndex = 0;
