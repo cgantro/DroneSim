@@ -113,6 +113,10 @@ public:
     [[nodiscard]] double LastPhysicsStepDurationMicroseconds() const noexcept;
 
 #ifndef __EMSCRIPTEN__
+    /** @brief 강체 모드에 지도 건물 같은 고정 상자 장애물을 추가한다. */
+    void AddStaticObstacleBox(
+        const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters);
+
     /** @brief 강체 모드의 평평한 바닥을 높이 자료에 맞는 충돌 지형으로 바꾼다. */
     void SetTerrain(const terrain::TerrainGrid& terrain);
 #endif

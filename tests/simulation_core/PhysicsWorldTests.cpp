@@ -1,4 +1,5 @@
 #include "simulation_core/PhysicsWorld.h"
+#include "terrain/BuildingFootprint.h"
 #include "terrain/TerrainGrid.h"
 #include "simulation_core/QuadrotorModel.h"
 
@@ -203,6 +204,53 @@ TEST(PhysicsWorld, TerrainHeightFieldStopsABodyAtTheHighestPointInTheTestArea)
     EXPECT_NEAR(world.State(body).positionMeters.x, peakX, 0.05);
     EXPECT_NEAR(world.State(body).positionMeters.y, peakY, 0.05);
     EXPECT_NEAR(world.State(body).positionMeters.z, peakHeight + 0.1, 0.12);
+}
+
+TEST(PhysicsWorld, OSMBuildingBoxStopsABodyAboveItsTerrainSample)
+{
+    const std::filesystem::path root{AEROSIMLAB_SOURCE_DIR};
+    const aerosimlab::terrain::TerrainGrid terrain =
+        aerosimlab::terrain::TerrainGrid::Load(
+            root / "assets/maps/bukhansan-demo/terrain.grid");
+    const auto buildings = aerosimlab::terrain::LoadBuildingFootprints(
+        root / "assets/maps/bukhansan-demo/buildings.geojson", terrain);
+    ASSERT_FALSE(buildings.empty());
+
+    glm::dvec2 minimum = buildings.front().outlineMeters.front();
+    glm::dvec2 maximum = minimum;
+    for (const glm::dvec2& point : buildings.front().outlineMeters)
+    {
+        minimum = glm::min(minimum, point);
+        maximum = glm::max(maximum, point);
+    }
+    const glm::dvec2 footprintCenter = (minimum + maximum) * 0.5;
+    constexpr float assumedBuildingHeightMeters = 3.0F;
+    const double groundHeightMeters = terrain.HeightAtLocalMeters(footprintCenter);
+
+    PhysicsWorld world;
+    world.SetTerrain(terrain);
+    RigidBodyDefinition building;
+    building.isStatic = true;
+    building.positionMeters = {
+        footprintCenter.x, footprintCenter.y,
+        groundHeightMeters + assumedBuildingHeightMeters * 0.5};
+    building.halfExtentsMeters = {
+        static_cast<float>(maximum.x - minimum.x) * 0.5F,
+        static_cast<float>(maximum.y - minimum.y) * 0.5F,
+        assumedBuildingHeightMeters * 0.5F};
+    static_cast<void>(world.CreateBox(building));
+
+    const RigidBodyHandle body = MakeBody(
+        world, {footprintCenter.x, footprintCenter.y, groundHeightMeters + 10.0});
+    for (int tick = 0; tick < 240; ++tick)
+        world.Step(1.0 / 60.0);
+
+    const RigidBodyState result = world.State(body);
+    EXPECT_GE(result.positionMeters.z,
+        groundHeightMeters + assumedBuildingHeightMeters - 0.2);
+    EXPECT_LT(result.positionMeters.z,
+        groundHeightMeters + assumedBuildingHeightMeters + 1.0);
+    EXPECT_LT(std::abs(result.linearVelocityMetersPerSecond.z), 0.1);
 }
 
 TEST(PhysicsWorld, RejectsInvalidBodySize)

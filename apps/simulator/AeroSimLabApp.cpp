@@ -12,6 +12,7 @@
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
+#include "terrain/BuildingFootprint.h"
 #include <glm/gtc/quaternion.hpp>
 #ifndef __EMSCRIPTEN__
 #include "vision/RgbFrameQuality.h"
@@ -52,6 +53,8 @@ constexpr int windowHeight = 720;
 constexpr std::size_t smokeTestFrameLimit = 8;
 constexpr std::size_t demoLengthTicks = 900;
 constexpr double benchmarkDurationSeconds = 5.0;
+// OSM에 높이가 없어서 시연 상자에만 쓰는 명시적 가정이다. 실측값이 아니다.
+constexpr float missingBuildingHeightProxyMeters = 3.0F;
 
 double Percentile(const std::vector<double>& sortedDurations, double fraction)
 {
@@ -331,7 +334,8 @@ void AeroSimLabApp::InitializeGraphics()
 {
     window_ = std::make_unique<aerosimlab::graphics::Window>(
         aerosimlab::graphics::Window::Properties{windowWidth, windowHeight,
-            "AeroSimLab | 드론 관찰 · EO 영상", !smokeTest_ && !benchmarkMode_,
+            "AeroSimLab | 드론 관찰 · EO 영상 | © OpenStreetMap contributors",
+            !smokeTest_ && !benchmarkMode_,
             !smokeTest_ && !benchmarkMode_});
 
     int framebufferWidth = 0;
@@ -349,9 +353,39 @@ void AeroSimLabApp::InitializeGraphics()
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb("models/drones/x500/visual.glb");
     terrain_ = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
     terrainMesh_ = CreateTerrainMesh(terrain_);
+    const auto buildings = aerosimlab::terrain::LoadBuildingFootprints(
+        "maps/bukhansan-demo/buildings.geojson", terrain_);
 #ifndef __EMSCRIPTEN__
     simulation_.SetTerrain(terrain_);
 #endif
+    buildingTransforms_.reserve(buildings.size());
+    for (const auto& building : buildings)
+    {
+        glm::dvec2 minimum = building.outlineMeters.front();
+        glm::dvec2 maximum = minimum;
+        for (const glm::dvec2& point : building.outlineMeters)
+        {
+            minimum = glm::min(minimum, point);
+            maximum = glm::max(maximum, point);
+        }
+
+        const glm::dvec2 footprintSize = maximum - minimum;
+        const glm::dvec2 center = (minimum + maximum) * 0.5;
+        const float heightMeters = building.heightMeters.value_or(
+            missingBuildingHeightProxyMeters);
+        const double groundHeightMeters = terrain_.HeightAtLocalMeters(center);
+        const glm::dvec3 centerMeters{
+            center.x, center.y, groundHeightMeters + heightMeters * 0.5};
+        const glm::vec3 sizeMeters{
+            static_cast<float>(footprintSize.x), heightMeters,
+            static_cast<float>(footprintSize.y)};
+
+#ifndef __EMSCRIPTEN__
+        simulation_.AddStaticObstacleBox(centerMeters, sizeMeters * 0.5F);
+#endif
+        buildingTransforms_.push_back(CubeTransform(
+            ToRenderPosition(centerMeters), sizeMeters));
+    }
     shader_ = std::make_unique<aerosimlab::graphics::Shader>("shaders/Scene.glsl");
 }
 
@@ -952,12 +986,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 {
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
         view, projection, cameraPosition);
-    DrawCube(CubeTransform({6.0F, 1.5F, -3.0F}, {2.0F, 3.0F, 2.0F}), cameraPosition,
-        buildingMaterial_, view, projection);
-    DrawCube(CubeTransform({-5.0F, 2.0F, -7.0F}, {3.0F, 4.0F, 2.0F}), cameraPosition,
-        buildingMaterial_, view, projection);
-    DrawCube(CubeTransform({12.0F, 2.5F, 5.0F}, {2.5F, 5.0F, 2.5F}), cameraPosition,
-        buildingMaterial_, view, projection);
+    for (const glm::mat4& transform : buildingTransforms_)
+        DrawCube(transform, cameraPosition, buildingMaterial_, view, projection);
 
     const glm::vec3 position = ToRenderPosition(simulation_.State().positionMeters);
     const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *

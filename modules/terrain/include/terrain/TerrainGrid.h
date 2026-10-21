@@ -28,6 +28,9 @@ struct TerrainGrid
     /** @brief 북쪽부터 센 행과 서쪽부터 센 열의 높이를 반환한다. */
     [[nodiscard]] float HeightAt(std::uint32_t row, std::uint32_t column) const;
 
+    /** @brief 지도 중심 기준의 동쪽·북쪽 위치에서 격자 높이를 보간해 반환한다. */
+    [[nodiscard]] float HeightAtLocalMeters(const glm::dvec2& positionMeters) const;
+
     /** @brief 위도·경도를 지형 중심 기준의 동쪽·북쪽 미터 좌표로 바꾼다. */
     [[nodiscard]] glm::dvec2 ToLocalMeters(
         double latitudeDegrees, double longitudeDegrees) const;

@@ -173,6 +173,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
+    std::vector<glm::mat4> buildingTransforms_;
     aerosimlab::terrain::TerrainGrid terrain_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{

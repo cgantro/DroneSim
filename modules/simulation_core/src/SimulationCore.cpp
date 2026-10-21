@@ -431,6 +431,19 @@ double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 }
 
 #ifndef __EMSCRIPTEN__
+void SimulationCore::AddStaticObstacleBox(
+    const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
+{
+    if (!ecs_->physics)
+        throw std::logic_error("고정 장애물은 강체 모의에서만 추가할 수 있습니다.");
+
+    RigidBodyDefinition definition;
+    definition.positionMeters = centerMeters;
+    definition.halfExtentsMeters = halfExtentsMeters;
+    definition.isStatic = true;
+    static_cast<void>(ecs_->physics->CreateBox(definition));
+}
+
 void SimulationCore::SetTerrain(const terrain::TerrainGrid& terrain)
 {
     ecs_->physics->SetTerrain(terrain);

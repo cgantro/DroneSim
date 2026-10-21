@@ -1,3 +1,4 @@
+#include "terrain/BuildingFootprint.h"
 #include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
@@ -43,5 +44,39 @@ TEST(TerrainGrid, RejectsARequestedSampleOutsideTheGrid)
     terrain.heightOffsetsMeters.resize(9);
 
     EXPECT_THROW(static_cast<void>(terrain.HeightAt(3, 0)), std::out_of_range);
+}
+
+TEST(TerrainGrid, InterpolatesHeightAtALocalPosition)
+{
+    TerrainGrid terrain;
+    terrain.sampleCount = 3;
+    terrain.spacingXMeters = 2.0F;
+    terrain.spacingYMeters = 2.0F;
+    terrain.heightOffsetsMeters = {0, 2, 4, 2, 4, 6, 4, 6, 8};
+
+    EXPECT_FLOAT_EQ(4.0F, terrain.HeightAtLocalMeters({0.0, 0.0}));
+    EXPECT_FLOAT_EQ(2.0F, terrain.HeightAtLocalMeters({-1.0, 1.0}));
+    EXPECT_THROW(static_cast<void>(terrain.HeightAtLocalMeters({2.1, 0.0})),
+        std::out_of_range);
+}
+
+TEST(BuildingFootprint, LoadsThePublicMapWithoutInventingMissingHeights)
+{
+    const std::filesystem::path root{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/bukhansan-demo/terrain.grid");
+    const std::vector<BuildingFootprint> buildings = LoadBuildingFootprints(
+        root / "assets/maps/bukhansan-demo/buildings.geojson", terrain);
+
+    ASSERT_EQ(buildings.size(), 17U);
+    for (const BuildingFootprint& building : buildings)
+    {
+        EXPECT_FALSE(building.osmId.empty());
+        EXPECT_FALSE(building.buildingType.empty());
+        ASSERT_GE(building.outlineMeters.size(), 4U);
+        EXPECT_DOUBLE_EQ(building.outlineMeters.front().x, building.outlineMeters.back().x);
+        EXPECT_DOUBLE_EQ(building.outlineMeters.front().y, building.outlineMeters.back().y);
+        EXPECT_FALSE(building.heightMeters.has_value());
+    }
 }
 }
