@@ -532,8 +532,6 @@ IkSessionState LevenbergMarquardtIk::StepSingleSeed(SessionId session, std::size
             break;
         }
 
-        for (auto& column : columns)
-            column.fill(0.0);
         // 야코비안은 관절을 조금 돌렸을 때 공구 끝(TCP)이 얼마나 움직이는지 나타내는 표다.
         // 관절마다 열 하나를 만들기 때문에 관절 수가 달라도 같은 계산을 쓸 수 있다. TCP와 공구 장착점의 차이도 반영한다.
         for (std::size_t i = 0; i < columns.size(); ++i)
