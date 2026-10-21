@@ -40,6 +40,7 @@ namespace
 {
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
+// 창이 멈춘 뒤 밀린 시간을 전부 따라잡느라 다음 화면까지 늦어지지 않게 한다.
 constexpr double maximumFrameSeconds = 0.1;
 constexpr double fixedStepSeconds = 1.0 / 60.0;
 constexpr std::size_t smokeTestFrameLimit = 8;
