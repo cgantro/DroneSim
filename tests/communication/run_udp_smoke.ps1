@@ -8,9 +8,6 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -TypeDefinition @'
 using System;
-using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -93,50 +90,6 @@ public static class AeroSimLabUiTestWindow
     }
 
 }
-
-public static class AeroSimLabSessionTestClient
-{
-    private static readonly UdpClient client = new UdpClient(0);
-
-    static AeroSimLabSessionTestClient()
-    {
-        client.Client.ReceiveTimeout = 400;
-    }
-
-    public static string Send(int port, uint commandId, uint sequence, string action)
-    {
-        var payload = String.Format(CultureInfo.InvariantCulture,
-            "{{\"action\":\"{0}\",\"command_id\":{1},\"sequence\":{2},\"target\":\"session\"}}",
-            action, commandId, sequence);
-        var payloadLength = Encoding.UTF8.GetByteCount(payload);
-        var message = String.Format(CultureInfo.InvariantCulture,
-            "{{\"length\":{0},\"payload\":{1},\"type\":\"command\",\"version\":1}}",
-            payloadLength, payload);
-        var bytes = Encoding.UTF8.GetBytes(message);
-        var destination = new IPEndPoint(IPAddress.Loopback, port);
-        var deadline = DateTime.UtcNow.AddSeconds(4);
-
-        while (DateTime.UtcNow < deadline)
-        {
-            client.Send(bytes, bytes.Length, destination);
-            try
-            {
-                IPEndPoint source = new IPEndPoint(IPAddress.Any, 0);
-                var response = client.Receive(ref source);
-                if (source.Address.Equals(IPAddress.Loopback) && source.Port == port)
-                    return Encoding.UTF8.GetString(response);
-            }
-            catch (SocketException error)
-            {
-                if (error.SocketErrorCode != SocketError.TimedOut
-                    && error.SocketErrorCode != SocketError.WouldBlock)
-                    throw;
-            }
-        }
-
-        throw new TimeoutException("기록 명령에 시뮬레이터가 응답하지 않았습니다.");
-    }
-}
 '@
 
 function Invoke-GroundControlCli([string[]]$Arguments) {
@@ -168,19 +121,6 @@ function Invoke-GroundControlButton([int]$ControlId) {
             throw "지상통제 명령($ControlId)에 시뮬레이터가 응답하지 않았습니다."
         }
         Start-Sleep -Milliseconds 40
-    }
-}
-
-$sessionCommandId = 1
-$sessionSequence = 1
-function Invoke-SessionCommand([string]$Action, [string]$ExpectedStatus) {
-    $response = [AeroSimLabSessionTestClient]::Send(
-        $port, $script:sessionCommandId, $script:sessionSequence, $Action)
-    $script:sessionCommandId++
-    $script:sessionSequence++
-    $reply = $response | ConvertFrom-Json
-    if ($reply.payload.status -ne $ExpectedStatus) {
-        throw "기록 명령 '$Action' 결과가 예상과 다릅니다: $($reply.payload.status)"
     }
 }
 
@@ -297,19 +237,28 @@ try {
 
     Start-Sleep -Milliseconds 1800
 
-    Invoke-SessionCommand 'record_start' 'recording_started'
+    $statusText = [AeroSimLabUiTestWindow]::GetDlgItem(
+        $uiWindow, [AeroSimLabUiTestWindow]::StatusText)
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::RecordingStartButton)
+    if ([AeroSimLabUiTestWindow]::ReadControlText($statusText) -notmatch '입력 기록을 시작했습니다') {
+        throw '지상통제 창에서 입력 기록을 시작하지 못했습니다.'
+    }
     $takeoffResult = Invoke-GroundControlCli @('--port', "$port", '--command', 'takeoff')
     if ($takeoffResult.ExitCode -ne 0) {
         throw "기록 중 이륙 명령이 적용되지 않았습니다.`n$($takeoffResult.Output)"
     }
-    Start-Sleep -Milliseconds 1800
     $recordedLanding = Invoke-GroundControlCli @('--port', "$port", '--command', 'land')
     if ($recordedLanding.ExitCode -ne 0) {
         throw "기록 중 착륙 명령이 적용되지 않았습니다.`n$($recordedLanding.Output)"
     }
-    Start-Sleep -Milliseconds 1800
-    Invoke-SessionCommand 'record_stop' 'recording_stopped'
-    Invoke-SessionCommand 'record_replay' 'recording_replay_started'
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::RecordingStopButton)
+    if ([AeroSimLabUiTestWindow]::ReadControlText($statusText) -notmatch '기록을 마쳤습니다') {
+        throw '지상통제 창에서 입력 기록을 마치지 못했습니다.'
+    }
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::RecordingReplayButton)
+    if ([AeroSimLabUiTestWindow]::ReadControlText($statusText) -notmatch '입력 기록을 재생합니다') {
+        throw '지상통제 창에서 입력 기록을 재생하지 못했습니다.'
+    }
 
     if (-not $server.WaitForExit(5000)) {
         throw '기록한 비행을 다시 재생한 뒤 시험 시뮬레이터가 종료되지 않았습니다.'
@@ -319,7 +268,7 @@ try {
         throw "시뮬레이터 시험 서버가 오류로 종료했습니다: $($server.ExitCode)"
     }
 
-    Write-Output '지상통제 창의 착륙·카메라 고장·복구 명령과 시뮬레이터 상태를 확인했습니다.'
+    Write-Output '지상통제 창의 비행·카메라·기록 명령과 시뮬레이터 상태를 확인했습니다.'
 }
 finally {
     if ($null -ne $retryingClient) {
