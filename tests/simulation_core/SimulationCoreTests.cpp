@@ -5,6 +5,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -243,6 +245,45 @@ TEST(SimulationCore, SameRigidBodyCommandsProduceTheSameState)
     EXPECT_EQ(first.State().orientation, second.State().orientation);
     EXPECT_EQ(first.State().angularVelocityRadiansPerSecond,
         second.State().angularVelocityRadiansPerSecond);
+}
+
+TEST(SimulationCore, RigidBodyHoverStaysStableForTenMinutes)
+{
+    SimulationCore simulation{SimulationDynamics::RigidBody};
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
+    for (int tick = 0; tick < 240; ++tick)
+        simulation.AdvanceOneTick();
+    ASSERT_EQ(simulation.State().mode, FlightMode::Hovering);
+
+    constexpr int ticksPerSecond = 60;
+    constexpr int hoverSeconds = 10 * 60;
+    for (int second = 0; second < hoverSeconds; ++second)
+    {
+        for (int tick = 0; tick < ticksPerSecond; ++tick)
+            simulation.AdvanceOneTick();
+
+        const DroneState& state = simulation.State();
+        const std::array stateValues{
+            state.positionMeters.x, state.positionMeters.y, state.positionMeters.z,
+            state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y,
+            state.velocityMetersPerSecond.z, state.orientation.w, state.orientation.x,
+            state.orientation.y, state.orientation.z,
+            state.angularVelocityRadiansPerSecond.x,
+            state.angularVelocityRadiansPerSecond.y,
+            state.angularVelocityRadiansPerSecond.z};
+        ASSERT_TRUE(std::all_of(stateValues.begin(), stateValues.end(), [](double value)
+        {
+            return std::isfinite(value);
+        })) << "simulated second " << second + 1;
+        ASSERT_EQ(state.mode, FlightMode::Hovering);
+        EXPECT_NEAR(state.positionMeters.z, DroneModel::takeoffHeightMeters, 0.08)
+            << "simulated second " << second + 1;
+        EXPECT_NEAR(glm::length(state.orientation), 1.0, 1.0e-5)
+            << "simulated second " << second + 1;
+    }
+
+    EXPECT_EQ(simulation.TickCount(), 240 + hoverSeconds * ticksPerSecond);
+    EXPECT_LT(glm::length(simulation.State().velocityMetersPerSecond), 0.15);
 }
 
 TEST(SimulationCore, CameraStopsOnDisableOrFaultAndResumesAfterRecovery)
