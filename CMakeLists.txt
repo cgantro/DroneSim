@@ -284,7 +284,8 @@ if(BUILD_TESTING)
       COMMAND ${AEROSIMLAB_POWERSHELL} -NoProfile -ExecutionPolicy Bypass
         -File "${CMAKE_SOURCE_DIR}/tests/communication/run_udp_smoke.ps1"
         -Simulator "$<TARGET_FILE:aerosimlab_simulator>"
-        -GroundControl "$<TARGET_FILE:aerosimlab_ground_control_cli>")
+        -GroundControl "$<TARGET_FILE:aerosimlab_ground_control_cli>"
+        -GroundControlUi "$<TARGET_FILE:aerosimlab_ground_control>")
     set_tests_properties(GroundControlUdpSmoke PROPERTIES
       WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>"
       TIMEOUT 20
