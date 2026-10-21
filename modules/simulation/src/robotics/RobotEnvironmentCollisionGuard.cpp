@@ -366,7 +366,7 @@ bool RobotEnvironmentCollisionGuard::RobotAssemblyHasSelfCollision()
 }
 
 bool RobotEnvironmentCollisionGuard::RobotAssemblyHasSelfCollision(
-    const std::vector<Transform>& candidateTransforms) const
+    const std::vector<Transform>& candidateTransforms)
 {
     ZoneScopedN("SelfCollisionCheck");
     std::fill(m_SelfCollisionBodyHandleCache.begin(),

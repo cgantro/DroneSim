@@ -100,7 +100,7 @@ private:
         const std::vector<grasplink::physics::Transform>& candidateTransforms) const;
     [[nodiscard]] bool RobotAssemblyHasSelfCollision();
     [[nodiscard]] bool RobotAssemblyHasSelfCollision(
-        const std::vector<grasplink::physics::Transform>& candidateTransforms) const;
+        const std::vector<grasplink::physics::Transform>& candidateTransforms);
     [[nodiscard]] std::string DescribeSelfCollision() const;
     void BuildCandidateProxyTransforms(
         const grasplink::robotics::kinematics::RobotKinematicState& robotState);
@@ -117,14 +117,14 @@ private:
     std::vector<flecs::entity> m_CollisionEntities;
     std::vector<SelfCollisionProxy> m_SelfCollisionProxies;
     /// 물리 설정 변경으로 Body handle이 바뀔 수 있어 한 번의 충돌 검사 안에서만 재사용한다.
-    mutable std::vector<std::optional<grasplink::physics::PhysicsBodyHandle>> m_SelfCollisionBodyHandleCache;
+    std::vector<std::optional<grasplink::physics::PhysicsBodyHandle>> m_SelfCollisionBodyHandleCache;
     std::vector<grasplink::scene::Entity> m_GripperCollisionEntities;
     std::vector<grasplink::simulation::RobotPhysicsAdapter::CandidateWorldTransform> m_CandidateProxyWorldTransforms;
     std::vector<glm::mat4> m_CandidateGripperWorldTransforms;
     std::vector<grasplink::physics::Transform> m_CandidateCollisionTransforms;
     std::vector<grasplink::physics::Transform> m_CandidateSelfCollisionTransforms;
     grasplink::scene::Entity m_RobotRoot;
-    mutable std::string m_LastSelfCollisionDescription;
+    std::string m_LastSelfCollisionDescription;
     std::optional<EndLinkProxy> m_EndLinkProxy;
     flecs::entity m_BaseEnvironmentEntity;
     grasplink::simulation::PhysicsSystemModule& m_PhysicsSystem;
