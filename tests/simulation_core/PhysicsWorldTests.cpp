@@ -1,9 +1,13 @@
 #include "simulation_core/PhysicsWorld.h"
+#include "terrain/TerrainGrid.h"
 #include "simulation_core/QuadrotorModel.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <iterator>
 #include <stdexcept>
 
 namespace aerosimlab::simulation
@@ -137,6 +141,38 @@ TEST(PhysicsWorld, GroundStopsAFallingBody)
     const RigidBodyState state = world.State(body);
     EXPECT_GE(state.positionMeters.z, 0.08);
     EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.1);
+}
+
+TEST(PhysicsWorld, TerrainHeightFieldStopsABodyAtTheHighestPointInTheTestArea)
+{
+    const aerosimlab::terrain::TerrainGrid terrain = aerosimlab::terrain::TerrainGrid::Load(
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+        / "assets/maps/bukhansan-demo/terrain.grid");
+    const auto peak = std::max_element(
+        terrain.heightOffsetsMeters.begin(), terrain.heightOffsetsMeters.end());
+    const std::size_t peakIndex = static_cast<std::size_t>(
+        std::distance(terrain.heightOffsetsMeters.begin(), peak));
+    const std::size_t peakRow = peakIndex / terrain.sampleCount;
+    const std::size_t peakColumn = peakIndex % terrain.sampleCount;
+    const double peakX = (static_cast<double>(peakColumn)
+        - static_cast<double>(terrain.sampleCount - 1U) * 0.5)
+        * terrain.spacingXMeters;
+    const double peakY = (static_cast<double>(terrain.sampleCount - 1U) * 0.5
+        - static_cast<double>(peakRow)) * terrain.spacingYMeters;
+    const double peakHeight = *peak;
+
+    PhysicsWorld world;
+    world.SetTerrain(terrain);
+    RigidBodyDefinition bodyDefinition;
+    bodyDefinition.positionMeters = {peakX, peakY, peakHeight + 5.0};
+    bodyDefinition.halfExtentsMeters = glm::vec3{0.1F};
+    const RigidBodyHandle body = world.CreateBox(bodyDefinition);
+    for (int step = 0; step < 240; ++step)
+        world.Step(1.0 / 60.0);
+
+    EXPECT_NEAR(world.State(body).positionMeters.x, peakX, 0.05);
+    EXPECT_NEAR(world.State(body).positionMeters.y, peakY, 0.05);
+    EXPECT_NEAR(world.State(body).positionMeters.z, peakHeight + 0.1, 0.12);
 }
 
 TEST(PhysicsWorld, RejectsInvalidBodySize)

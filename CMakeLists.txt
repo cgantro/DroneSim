@@ -45,6 +45,12 @@ if(NOT EMSCRIPTEN)
   aerosimlab_add_physics_dependencies()
 endif()
 
+add_library(aerosimlab_terrain STATIC
+  modules/terrain/src/TerrainGrid.cpp
+)
+target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
+target_link_libraries(aerosimlab_terrain PUBLIC glm::glm)
+
 add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/DroneModel.cpp
   modules/simulation_core/src/EoCameraModel.cpp
@@ -58,7 +64,7 @@ if(NOT EMSCRIPTEN)
 endif()
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core
-  PUBLIC glm::glm
+  PUBLIC glm::glm aerosimlab_terrain
   PRIVATE nlohmann_json::nlohmann_json flecs::flecs_static
 )
 if(NOT EMSCRIPTEN)
@@ -206,12 +212,16 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     target_link_options(aerosimlab_simulator PRIVATE
       "-sALLOW_MEMORY_GROWTH=1"
       "--preload-file" "${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
+      "--preload-file" "${CMAKE_SOURCE_DIR}/assets/maps@maps"
     )
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets/shaders"
         "$<TARGET_FILE_DIR:aerosimlab_simulator>/shaders"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets/maps"
+        "$<TARGET_FILE_DIR:aerosimlab_simulator>/maps"
       VERBATIM
     )
   endif()
@@ -233,6 +243,10 @@ if(BUILD_TESTING)
     tests/simulation_core/SimulationCoreTests.cpp
     tests/simulation_core/ScenarioRunnerTests.cpp
     tests/simulation_core/QuadrotorModelTests.cpp
+    tests/terrain/TerrainGridTests.cpp
+  )
+  target_compile_definitions(aerosimlab_simulation_tests PRIVATE
+    AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   )
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_simulation_tests PRIVATE tests/simulation_core/PhysicsWorldTests.cpp)

@@ -2,6 +2,7 @@
 
 #include "simulation_core/DroneModel.h"
 #include "simulation_core/EoCameraModel.h"
+#include "terrain/TerrainGrid.h"
 
 #include <glm/vec3.hpp>
 
@@ -83,6 +84,11 @@ public:
 
     /** @brief 강체 모드에서 사용할 월드 기준 바람 속도를 설정한다. */
     void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity);
+
+#ifndef __EMSCRIPTEN__
+    /** @brief 강체 모드의 평평한 바닥을 높이 자료에 맞는 충돌 지형으로 바꾼다. */
+    void SetTerrain(const terrain::TerrainGrid& terrain);
+#endif
 
     /** @brief 지금까지 실행한 고정 간격 단계 수를 반환한다. */
     [[nodiscard]] std::uint64_t TickCount() const noexcept;

@@ -3,6 +3,8 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
+#include "terrain/TerrainGrid.h"
+
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -51,6 +53,9 @@ public:
 
     /** @brief 상자 모양의 움직이는 물체나 고정된 장애물을 만든다. */
     [[nodiscard]] RigidBodyHandle CreateBox(const RigidBodyDefinition& definition);
+
+    /** @brief 평평한 바닥을 지형 높이 자료로 바꿔 정적 충돌 지형을 만든다. */
+    void SetTerrain(const terrain::TerrainGrid& terrain);
 
     /** @brief 기존 강체의 위치·자세·속도를 지정한 상태로 되돌린다. */
     void SetState(RigidBodyHandle body, const RigidBodyState& state);

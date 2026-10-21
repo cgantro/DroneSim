@@ -286,6 +286,13 @@ void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
     ecs_->windVelocityMetersPerSecond = velocity;
 }
 
+#ifndef __EMSCRIPTEN__
+void SimulationCore::SetTerrain(const terrain::TerrainGrid& terrain)
+{
+    ecs_->physics->SetTerrain(terrain);
+}
+#endif
+
 std::uint64_t SimulationCore::TickCount() const noexcept
 {
     return ecs_->tickCount;

@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #ifndef _WIN32
 #include <iostream>
@@ -30,6 +31,7 @@
 #include <ctime>
 #include <cmath>
 #include <nlohmann/json.hpp>
+#include <vector>
 
 #ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
@@ -70,6 +72,71 @@ glm::quat ToRenderOrientation(const glm::dquat& orientation)
 glm::mat4 CubeTransform(const glm::vec3& position, const glm::vec3& size)
 {
     return glm::translate(glm::mat4{1.0F}, position) * glm::scale(glm::mat4{1.0F}, size);
+}
+
+/**
+ * @brief 북쪽부터 기록한 높이 격자를 화면의 삼각형 지형으로 바꾼다.
+ * @details 화면은 Y축을 위로 쓰므로 높이를 Y에 둔다. 북쪽은 화면의 -Z 방향이다.
+ */
+std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
+    const aerosimlab::terrain::TerrainGrid& terrain)
+{
+    const std::size_t sampleCount = terrain.sampleCount;
+    const std::size_t vertexCount = sampleCount * sampleCount;
+    std::vector<aerosimlab::graphics::Vertex> vertices(vertexCount);
+    const auto heightAt = [&terrain, sampleCount](std::size_t row, std::size_t column)
+    {
+        return terrain.heightOffsetsMeters[row * sampleCount + column];
+    };
+
+    const float center = static_cast<float>(sampleCount - 1U) * 0.5F;
+    for (std::size_t row = 0; row < sampleCount; ++row)
+    {
+        const std::size_t beforeRow = row == 0U ? row : row - 1U;
+        const std::size_t afterRow = std::min(row + 1U, sampleCount - 1U);
+        for (std::size_t column = 0; column < sampleCount; ++column)
+        {
+            const std::size_t beforeColumn = column == 0U ? column : column - 1U;
+            const std::size_t afterColumn = std::min(column + 1U, sampleCount - 1U);
+            const float eastWestDistance = static_cast<float>(afterColumn - beforeColumn)
+                * terrain.spacingXMeters;
+            const float northSouthDistance = static_cast<float>(afterRow - beforeRow)
+                * terrain.spacingYMeters;
+            const float slopeEast = eastWestDistance > 0.0F
+                ? (heightAt(row, afterColumn) - heightAt(row, beforeColumn)) / eastWestDistance
+                : 0.0F;
+            const float slopeSouth = northSouthDistance > 0.0F
+                ? (heightAt(afterRow, column) - heightAt(beforeRow, column)) / northSouthDistance
+                : 0.0F;
+            const glm::vec3 normal = glm::normalize(glm::vec3{-slopeEast, 1.0F, -slopeSouth});
+            vertices[row * sampleCount + column] = {
+                glm::vec3{
+                    (static_cast<float>(column) - center) * terrain.spacingXMeters,
+                    heightAt(row, column),
+                    (static_cast<float>(row) - center) * terrain.spacingYMeters},
+                normal};
+        }
+    }
+
+    std::vector<std::uint32_t> indices;
+    indices.reserve((sampleCount - 1U) * (sampleCount - 1U) * 6U);
+    for (std::size_t row = 0; row + 1U < sampleCount; ++row)
+    {
+        for (std::size_t column = 0; column + 1U < sampleCount; ++column)
+        {
+            const auto northWest = static_cast<std::uint32_t>(row * sampleCount + column);
+            const auto northEast = northWest + 1U;
+            const auto southWest = northWest + static_cast<std::uint32_t>(sampleCount);
+            const auto southEast = southWest + 1U;
+            indices.insert(indices.end(), {
+                northWest, southWest, northEast,
+                northEast, southWest, southEast});
+        }
+    }
+
+    return std::make_unique<aerosimlab::graphics::Mesh>(
+        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
+        indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
 }
 
@@ -164,6 +231,11 @@ void AeroSimLabApp::InitializeGraphics()
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
 
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
+    terrain_ = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
+    terrainMesh_ = CreateTerrainMesh(terrain_);
+#ifndef __EMSCRIPTEN__
+    simulation_.SetTerrain(terrain_);
+#endif
     shader_ = std::make_unique<aerosimlab::graphics::Shader>("shaders/Scene.glsl");
 }
 
@@ -756,8 +828,8 @@ aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
 void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition)
 {
-    DrawCube(CubeTransform({0.0F, -0.2F, 0.0F}, {80.0F, 0.2F, 80.0F}), cameraPosition,
-        groundMaterial_, view, projection);
+    renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
+        view, projection, cameraPosition);
     DrawCube(CubeTransform({6.0F, 1.5F, -3.0F}, {2.0F, 3.0F, 2.0F}), cameraPosition,
         buildingMaterial_, view, projection);
     DrawCube(CubeTransform({-5.0F, 2.0F, -7.0F}, {3.0F, 4.0F, 2.0F}), cameraPosition,

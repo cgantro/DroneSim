@@ -8,6 +8,7 @@
 #include "communication/UdpSocket.h"
 #endif
 #include "simulation_core/SimulationCore.h"
+#include "terrain/TerrainGrid.h"
 
 #include <glm/glm.hpp>
 
@@ -169,6 +170,8 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
+    aerosimlab::terrain::TerrainGrid terrain_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{0.12F, 0.48F, 0.32F, 1.0F}, 0.0F, 0.75F};

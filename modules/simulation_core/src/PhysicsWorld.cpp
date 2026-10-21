@@ -10,13 +10,16 @@
 #include <Jolt/Physics/Collision/BroadPhase/ObjectVsBroadPhaseLayerFilterTable.h>
 #include <Jolt/Physics/Collision/ObjectLayerPairFilterTable.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
 #include <glm/geometric.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace aerosimlab::simulation
@@ -150,6 +153,9 @@ struct PhysicsWorld::Impl
     JPH::TempAllocatorImpl tempAllocator{4 * 1024 * 1024};
     JPH::JobSystemSingleThreaded jobSystem{maximumPhysicsJobs};
     std::vector<JPH::BodyID> bodies;
+    JPH::BodyID groundBody;
+    JPH::BodyID terrainBody;
+    bool hasTerrain = false;
 
     Impl()
         : runtime(Runtime())
@@ -175,9 +181,9 @@ struct PhysicsWorld::Impl
             JPH::EMotionType::Static,
             staticLayer};
         settings.mFriction = 0.8F;
-        const JPH::BodyID ground = physics.GetBodyInterface().CreateAndAddBody(
+        groundBody = physics.GetBodyInterface().CreateAndAddBody(
             settings, JPH::EActivation::DontActivate);
-        if (ground.IsInvalid())
+        if (groundBody.IsInvalid())
             throw std::runtime_error("Jolt 바닥 강체를 만들지 못했습니다.");
     }
 
@@ -255,6 +261,61 @@ RigidBodyHandle PhysicsWorld::CreateBox(const RigidBodyDefinition& definition)
     const auto handle = RigidBodyHandle{static_cast<std::uint32_t>(impl_->bodies.size())};
     impl_->bodies.push_back(id);
     return handle;
+}
+
+void PhysicsWorld::SetTerrain(const terrain::TerrainGrid& terrain)
+{
+    if (terrain.sampleCount < 3U
+        || terrain.heightOffsetsMeters.size()
+            != static_cast<std::size_t>(terrain.sampleCount) * terrain.sampleCount
+        || !std::isfinite(terrain.spacingXMeters) || !(terrain.spacingXMeters > 0.0F)
+        || !std::isfinite(terrain.spacingYMeters) || !(terrain.spacingYMeters > 0.0F)
+        || !std::all_of(terrain.heightOffsetsMeters.begin(), terrain.heightOffsetsMeters.end(),
+            [](float height) { return std::isfinite(height); }))
+    {
+        throw std::invalid_argument("지형 격자 크기, 간격 또는 높이 값을 확인해 주세요.");
+    }
+
+    const float halfWidth = static_cast<float>(terrain.sampleCount - 1U)
+        * terrain.spacingXMeters * 0.5F;
+    const float halfDepth = static_cast<float>(terrain.sampleCount - 1U)
+        * terrain.spacingYMeters * 0.5F;
+    JPH::HeightFieldShapeSettings shapeSettings{
+        terrain.heightOffsetsMeters.data(),
+        JPH::Vec3{-halfWidth, 0.0F, -halfDepth},
+        JPH::Vec3{terrain.spacingXMeters, 1.0F, terrain.spacingYMeters},
+        terrain.sampleCount};
+    shapeSettings.mBitsPerSample = 16;
+    const JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+    if (shapeResult.HasError())
+        throw std::runtime_error(std::string("Jolt 지형 충돌 모양을 만들지 못했습니다: ")
+            + shapeResult.GetError().c_str());
+
+    const JPH::Quat simulationUpRotation = JPH::Quat::sRotation(
+        JPH::Vec3::sAxisX(), JPH::DegreesToRadians(90.0F));
+    JPH::BodyCreationSettings settings{
+        shapeResult.Get(), JPH::RVec3::sZero(), simulationUpRotation,
+        JPH::EMotionType::Static, staticLayer};
+    settings.mFriction = 0.8F;
+
+    JPH::BodyInterface& bodyInterface = impl_->physics.GetBodyInterface();
+    const JPH::BodyID newTerrainBody = bodyInterface.CreateAndAddBody(
+        settings, JPH::EActivation::DontActivate);
+    if (newTerrainBody.IsInvalid())
+        throw std::runtime_error("Jolt 지형 충돌체를 만들지 못했습니다.");
+
+    if (impl_->hasTerrain)
+    {
+        bodyInterface.RemoveBody(impl_->terrainBody);
+        bodyInterface.DestroyBody(impl_->terrainBody);
+    }
+    else
+    {
+        bodyInterface.RemoveBody(impl_->groundBody);
+        bodyInterface.DestroyBody(impl_->groundBody);
+    }
+    impl_->terrainBody = newTerrainBody;
+    impl_->hasTerrain = true;
 }
 
 void PhysicsWorld::SetState(RigidBodyHandle body, const RigidBodyState& state)
