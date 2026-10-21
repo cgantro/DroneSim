@@ -2,6 +2,7 @@
 
 #include "robotics/runtime/FixedControlLoop.h"
 #include "diagnostics/Logger.h"
+#include "gui/panels/GripperPanel.h"
 #include "model/ModelResource.h"
 #include "model/RobotModel.h"
 #include "scene/Entity.h"
@@ -67,7 +68,6 @@ class RobotModelAdapter;
 namespace grasplink::gui
 {
 class GuiModule;
-class GripperPanel;
 class PhysicsDebugPanel;
 class ColliderOverlay;
 struct RobotPanelView;
@@ -218,7 +218,7 @@ private:
 
     // ImGui backend, 조작 패널, 디버그 패널과 Collider overlay의 수명을 앱이 함께 관리한다.
     std::unique_ptr<grasplink::gui::GuiModule> m_GuiModule;
-    std::unique_ptr<grasplink::gui::GripperPanel> m_GripperPanel;
+    grasplink::gui::GripperPanel m_GripperPanel;
     std::unique_ptr<grasplink::application::PickPlaceMission> m_PickPlaceMission;
     std::unique_ptr<grasplink::application::PickPlaceScenarioSampler> m_ScenarioSampler;
     std::unique_ptr<grasplink::gui::PhysicsDebugPanel> m_PhysicsDebugPanel;
