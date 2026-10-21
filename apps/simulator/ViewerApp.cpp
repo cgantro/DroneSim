@@ -482,13 +482,9 @@ void ViewerApp::AdvancePlanningBudget()
     } while (m_RobotController->IsMotionPlanning() && Clock::now() < deadline);
 }
 
-bool ViewerApp::UpdateMission()
+bool ViewerApp::UpdateMission(const grasplink::robotics::CartesianPose& boxPose,
+    const grasplink::robotics::CartesianPose& placementPose)
 {
-    if (!m_PickPlaceMission)
-        return false;
-    const auto boxPose = ToRobotBasePose(m_RobotRoot, m_GraspBox.GetWorldMatrix(), 0.0F);
-    const auto placementPose = ToRobotBasePose(m_RobotRoot, m_PlacementArea.GetWorldMatrix(),
-        grasplink::application::pick_place::config::boxSideMeters * 0.5F);
     m_PickPlaceMission->Update(m_RobotController->GetStateView(), *m_RobotController,
         *m_GripperController, m_GripperGraspAdapter->GetState().grasped, boxPose, placementPose);
     if (!m_PickPlaceMission->ConsumeSuccessEvent())
@@ -624,7 +620,6 @@ void ViewerApp::MainLoopFrame()
         });
     }
 
-    UpdateMission();
     grasplink::robotics::CartesianPose boxPose{};
     grasplink::robotics::CartesianPose placementPose{};
     if (m_PickPlaceMission)
@@ -632,6 +627,12 @@ void ViewerApp::MainLoopFrame()
         boxPose = ToRobotBasePose(m_RobotRoot, m_GraspBox.GetWorldMatrix(), 0.0F);
         placementPose = ToRobotBasePose(m_RobotRoot, m_PlacementArea.GetWorldMatrix(),
             grasplink::application::pick_place::config::boxSideMeters * 0.5F);
+        if (UpdateMission(boxPose, placementPose))
+        {
+            boxPose = ToRobotBasePose(m_RobotRoot, m_GraspBox.GetWorldMatrix(), 0.0F);
+            placementPose = ToRobotBasePose(m_RobotRoot, m_PlacementArea.GetWorldMatrix(),
+                grasplink::application::pick_place::config::boxSideMeters * 0.5F);
+        }
     }
     int framebufferWidth = 0;
     int framebufferHeight = 0;

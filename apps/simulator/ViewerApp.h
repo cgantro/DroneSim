@@ -146,7 +146,8 @@ private:
         const grasplink::simulation::GripperGraspState& graspState);
     void AdvanceSimulationTick(double fixedDeltaSeconds);
     void AdvancePlanningBudget();
-    bool UpdateMission();
+    bool UpdateMission(const grasplink::robotics::CartesianPose& boxPose,
+        const grasplink::robotics::CartesianPose& placementPose);
     void RandomizeScenario();
 
     // 초기화가 일부만 성공한 경우에도 호출된다. ECS observer가 Body를 정리하고 GPU 자원이 해제될 수 있도록 World와 OpenGL Context 수명을 고려해 정리한다.
