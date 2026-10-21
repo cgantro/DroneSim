@@ -48,11 +48,11 @@ PilotCommand MapAxes(const GamepadAxes& axes, double droneYawRadians) noexcept
 }
 
 GamepadDisconnectAction ResolveGamepadDisconnectAction(
-    bool wasConnected, bool groundControlActive, simulation::FlightMode flightMode) noexcept
+    bool wasConnected, bool manualControlBlocked, simulation::FlightMode flightMode) noexcept
 {
     if (!wasConnected)
         return GamepadDisconnectAction::NoChange;
-    if (groundControlActive)
+    if (manualControlBlocked)
         return GamepadDisconnectAction::ClearPendingAction;
     if (flightMode == simulation::FlightMode::TakingOff)
         return GamepadDisconnectAction::Land;
@@ -60,5 +60,10 @@ GamepadDisconnectAction ResolveGamepadDisconnectAction(
         || flightMode == simulation::FlightMode::Flying)
         return GamepadDisconnectAction::Stop;
     return GamepadDisconnectAction::ClearPendingAction;
+}
+
+bool CanGamepadControlSimulation(bool groundControlActive, bool replaying) noexcept
+{
+    return !groundControlActive && !replaying;
 }
 }

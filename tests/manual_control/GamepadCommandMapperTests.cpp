@@ -31,11 +31,14 @@ TEST(GamepadCommandMapper, LimitsSpeedAndMapsHeightAndYaw)
         -simulation::DroneModel::maximumYawRateRadiansPerSecond);
 }
 
-TEST(GamepadCommandMapper, ResolvesDisconnectActionFromConnectionAndFlightState)
+TEST(GamepadCommandMapper, RespectsControlSourceAndResolvesDisconnectAction)
 {
     using Action = GamepadDisconnectAction;
     using Mode = simulation::FlightMode;
 
+    EXPECT_TRUE(CanGamepadControlSimulation(false, false));
+    EXPECT_FALSE(CanGamepadControlSimulation(true, false));
+    EXPECT_FALSE(CanGamepadControlSimulation(false, true));
     EXPECT_EQ(ResolveGamepadDisconnectAction(false, false, Mode::Hovering), Action::NoChange);
     EXPECT_EQ(ResolveGamepadDisconnectAction(true, false, Mode::TakingOff), Action::Land);
     EXPECT_EQ(ResolveGamepadDisconnectAction(true, false, Mode::Flying), Action::Stop);
