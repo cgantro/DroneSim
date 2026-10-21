@@ -384,7 +384,7 @@ bool SimRobotController::TryAdvanceLinearSegment(double availableSeconds,
 bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plannedJoints, double availableSeconds)
 {
     using namespace kinematics::detail;
-    const JointVector current = state_.jointPositions;
+    const JointVector& current = state_.jointPositions;
     const Pose3 currentTcp = FromCartesian(inverse_.EvaluateTcp(current));
     const auto& begin = linearMotion_.path[linearMotion_.segment - 1];
     const auto& end = linearMotion_.path[linearMotion_.segment];
