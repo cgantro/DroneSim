@@ -10,22 +10,39 @@ if ($LASTEXITCODE -ne 3 -or $timeoutReply -notmatch '응답 시간 초과') {
     throw "시뮬레이터가 없을 때 지상통제 프로그램이 시간 초과로 끝나지 않았습니다.`n$timeoutReply"
 }
 
-$server = Start-Process -FilePath $Simulator `
-    -ArgumentList @('--smoke-test', '--udp-port', "$port") `
-    -WorkingDirectory $workingDirectory `
-    -WindowStyle Hidden `
-    -PassThru
+$retryingClient = $null
+$server = $null
 
 try {
+    $retryingClient = Start-Process -FilePath $GroundControl `
+        -ArgumentList @('--port', "$port", '--command', 'takeoff') `
+        -WorkingDirectory $workingDirectory `
+        -WindowStyle Hidden `
+        -PassThru
+    Start-Sleep -Milliseconds 500
+
+    $server = Start-Process -FilePath $Simulator `
+        -ArgumentList @('--smoke-test', '--udp-port', "$port") `
+        -WorkingDirectory $workingDirectory `
+        -WindowStyle Hidden `
+        -PassThru
+
     Start-Sleep -Milliseconds 200
     $server.Refresh()
     if ($server.HasExited) {
         throw "시뮬레이터가 UDP 시험 서버를 시작하지 못했습니다. 종료 코드: $($server.ExitCode)"
     }
 
+    if (-not $retryingClient.WaitForExit(3000)) {
+        throw '시뮬레이터가 켜진 뒤에도 재전송 명령에 응답하지 않았습니다.'
+    }
+    $retryingClient.Refresh()
+    if ($retryingClient.ExitCode -ne 0) {
+        throw "재전송 명령이 서버 시작 뒤 적용되지 않았습니다. 종료 코드: $($retryingClient.ExitCode)"
+    }
+
     $replies = @()
     $calls = @(
-        @('--port', "$port", '--command', 'takeoff'),
         @('--port', "$port", '--camera', 'fault'),
         @('--port', "$port", '--camera', 'recover')
     )
@@ -37,7 +54,7 @@ try {
         }
         $replies += $reply
     }
-    if ($replies[1] -notmatch '카메라: fault' -or $replies[2] -notmatch '카메라: active') {
+    if ($replies[0] -notmatch '카메라: fault' -or $replies[1] -notmatch '카메라: active') {
         throw "카메라 장애와 복구 상태가 응답에 반영되지 않았습니다.`n$($replies -join "`n")"
     }
 
@@ -51,8 +68,16 @@ try {
     Write-Output ($replies -join "`n")
 }
 finally {
-    $server.Refresh()
-    if (-not $server.HasExited) {
+    if ($null -ne $retryingClient) {
+        $retryingClient.Refresh()
+    }
+    if ($null -ne $retryingClient -and -not $retryingClient.HasExited) {
+        Stop-Process -Id $retryingClient.Id -Force
+    }
+    if ($null -ne $server) {
+        $server.Refresh()
+    }
+    if ($null -ne $server -and -not $server.HasExited) {
         Stop-Process -Id $server.Id -Force
     }
 }
