@@ -5,6 +5,7 @@
 #include <charconv>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -35,6 +36,66 @@ double ParseNumber(std::string_view text)
     if (error != std::errc{} || end != text.data() + text.size() || !std::isfinite(value))
         throw std::invalid_argument("좌표와 속도는 유한한 숫자여야 합니다.");
     return value;
+}
+
+aerosimlab::simulation::DroneCommand ParseDroneCommand(
+    std::string_view name, const std::vector<std::string_view>& values)
+{
+    using Command = aerosimlab::simulation::DroneCommand;
+    using Kind = Command::Kind;
+
+    Command command;
+    std::size_t expectedValueCount = 0;
+    if (name == "takeoff")
+        command.kind = Kind::TakeOff;
+    else if (name == "land")
+        command.kind = Kind::Land;
+    else if (name == "stop")
+        command.kind = Kind::Stop;
+    else if (name == "velocity")
+    {
+        command.kind = Kind::SetVelocity;
+        expectedValueCount = 3;
+    }
+    else if (name == "waypoint")
+    {
+        command.kind = Kind::SetWaypoint;
+        expectedValueCount = 3;
+    }
+    else if (name == "yaw-rate")
+    {
+        command.kind = Kind::SetYawRate;
+        expectedValueCount = 1;
+    }
+    else
+        throw std::invalid_argument("지원하지 않는 드론 동작입니다.");
+
+    if (values.size() != expectedValueCount)
+        throw std::invalid_argument("동작에 필요한 좌표·속도 값의 개수가 맞지 않습니다.");
+
+    switch (command.kind)
+    {
+    case Kind::SetVelocity:
+    case Kind::SetWaypoint:
+        command.vector = {ParseNumber(values[0]), ParseNumber(values[1]), ParseNumber(values[2])};
+        break;
+    case Kind::SetYawRate:
+        command.yawRateRadiansPerSecond = ParseNumber(values[0]);
+        break;
+    default:
+        break;
+    }
+    return command;
+}
+
+aerosimlab::communication::CameraCommand ParseCameraCommand(std::string_view name)
+{
+    using aerosimlab::communication::CameraCommand;
+    if (name == "on") return CameraCommand::Enable;
+    if (name == "off") return CameraCommand::Disable;
+    if (name == "fault") return CameraCommand::InjectFault;
+    if (name == "recover") return CameraCommand::Recover;
+    throw std::invalid_argument("카메라 동작은 on, off, fault, recover 중 하나여야 합니다.");
 }
 
 void PrintReply(const aerosimlab::communication::CommandReply& reply, std::uint64_t responseTimeMilliseconds)
@@ -91,33 +152,11 @@ int main(int argc, char** argv)
         packet.sequence = 1;
         if (!commandName.empty() && cameraName.empty())
         {
-            aerosimlab::simulation::DroneCommand command;
-            int valuesNeeded = 0;
-            if (commandName == "takeoff") command.kind = aerosimlab::simulation::DroneCommand::Kind::TakeOff;
-            else if (commandName == "land") command.kind = aerosimlab::simulation::DroneCommand::Kind::Land;
-            else if (commandName == "stop") command.kind = aerosimlab::simulation::DroneCommand::Kind::Stop;
-            else if (commandName == "velocity") { command.kind = aerosimlab::simulation::DroneCommand::Kind::SetVelocity; valuesNeeded = 3; }
-            else if (commandName == "waypoint") { command.kind = aerosimlab::simulation::DroneCommand::Kind::SetWaypoint; valuesNeeded = 3; }
-            else if (commandName == "yaw-rate") { command.kind = aerosimlab::simulation::DroneCommand::Kind::SetYawRate; valuesNeeded = 1; }
-            else throw std::invalid_argument("지원하지 않는 드론 동작입니다.");
-
-            if (actionValues.size() != static_cast<std::size_t>(valuesNeeded))
-                throw std::invalid_argument("동작에 필요한 좌표·속도 값의 개수가 맞지 않습니다.");
-            if (valuesNeeded == 3)
-                command.vector = {ParseNumber(actionValues[0]), ParseNumber(actionValues[1]),
-                    ParseNumber(actionValues[2])};
-            if (valuesNeeded == 1)
-                command.yawRateRadiansPerSecond = ParseNumber(actionValues[0]);
-            packet.droneCommand = command;
+            packet.droneCommand = ParseDroneCommand(commandName, actionValues);
         }
         else if (commandName.empty() && !cameraName.empty())
         {
-            using aerosimlab::communication::CameraCommand;
-            if (cameraName == "on") packet.cameraCommand = CameraCommand::Enable;
-            else if (cameraName == "off") packet.cameraCommand = CameraCommand::Disable;
-            else if (cameraName == "fault") packet.cameraCommand = CameraCommand::InjectFault;
-            else if (cameraName == "recover") packet.cameraCommand = CameraCommand::Recover;
-            else throw std::invalid_argument("카메라 동작은 on, off, fault, recover 중 하나여야 합니다.");
+            packet.cameraCommand = ParseCameraCommand(cameraName);
         }
         else
         {
