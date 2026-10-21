@@ -20,6 +20,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -34,6 +35,7 @@
 #include <ctime>
 #include <cmath>
 #include <nlohmann/json.hpp>
+#include <utility>
 #include <vector>
 
 #ifndef __EMSCRIPTEN__
@@ -50,6 +52,98 @@ constexpr int windowHeight = 720;
 constexpr std::size_t smokeTestFrameLimit = 8;
 constexpr std::size_t demoLengthTicks = 900;
 constexpr double benchmarkDurationSeconds = 5.0;
+
+double Percentile(const std::vector<double>& sortedDurations, double fraction)
+{
+    if (sortedDurations.empty())
+        return 0.0;
+
+    const std::size_t index = static_cast<std::size_t>(
+        std::ceil(fraction * static_cast<double>(sortedDurations.size()))) - 1U;
+    return sortedDurations[std::min(index, sortedDurations.size() - 1U)];
+}
+
+nlohmann::json SummarizeDurations(std::vector<double> durations)
+{
+    std::sort(durations.begin(), durations.end());
+    return {
+        {"p50", Percentile(durations, 0.50)},
+        {"p95", Percentile(durations, 0.95)},
+        {"p99", Percentile(durations, 0.99)},
+        {"samples", durations.size()}};
+}
+
+#ifndef __EMSCRIPTEN__
+nlohmann::json MeasureDroneScaling()
+{
+    constexpr std::array<std::size_t, 4> droneCounts{1U, 2U, 4U, 8U};
+    constexpr std::size_t repetitions = 3U;
+    constexpr std::size_t warmupTicks = 120U;
+    constexpr std::size_t measuredTicks = 300U;
+    nlohmann::json runs = nlohmann::json::array();
+
+    for (const std::size_t droneCount : droneCounts)
+    {
+        for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
+        {
+            aerosimlab::simulation::SimulationCore simulation{
+                aerosimlab::simulation::SimulationDynamics::RigidBody};
+            simulation.SetPhysicsStepTimingEnabled(true);
+
+            std::vector<aerosimlab::simulation::DroneId> droneIds;
+            droneIds.reserve(droneCount);
+            droneIds.push_back(simulation.PrimaryDroneId());
+            const double groundOriginMeters = simulation.State().positionMeters.z;
+            for (std::size_t index = 1; index < droneCount; ++index)
+            {
+                const auto xMeters = static_cast<double>(index) * 2.5;
+                droneIds.push_back(simulation.AddDrone(
+                    glm::dvec3{xMeters, 0.0, groundOriginMeters}));
+            }
+
+            const aerosimlab::simulation::DroneCommand takeoff{
+                aerosimlab::simulation::DroneCommand::Kind::TakeOff};
+            for (const aerosimlab::simulation::DroneId droneId : droneIds)
+            {
+                if (simulation.Apply(droneId, takeoff)
+                    != aerosimlab::simulation::CommandResult::Accepted)
+                    throw std::runtime_error("멀티드론 성능 측정용 이륙 명령을 적용하지 못했습니다.");
+            }
+
+            for (std::size_t tick = 0; tick < warmupTicks; ++tick)
+                simulation.AdvanceOneTick();
+
+            std::vector<double> tickDurations;
+            std::vector<double> physicsDurations;
+            tickDurations.reserve(measuredTicks);
+            physicsDurations.reserve(measuredTicks);
+            for (std::size_t tick = 0; tick < measuredTicks; ++tick)
+            {
+                const auto tickStart = std::chrono::steady_clock::now();
+                simulation.AdvanceOneTick();
+                tickDurations.push_back(std::chrono::duration<double, std::micro>(
+                    std::chrono::steady_clock::now() - tickStart).count());
+                physicsDurations.push_back(
+                    simulation.LastPhysicsStepDurationMicroseconds());
+            }
+
+            runs.push_back({
+                {"drone_count", droneCount},
+                {"repetition", repetition + 1U},
+                {"warmup_ticks", warmupTicks},
+                {"measured_ticks", measuredTicks},
+                {"tick_duration_us", SummarizeDurations(std::move(tickDurations))},
+                {"physics_step_duration_us", SummarizeDurations(std::move(physicsDurations))}});
+        }
+    }
+
+    return {
+        {"method", "헤드리스 강체 모의; 한 Jolt 세계에서 모든 드론을 함께 갱신"},
+        {"counts", droneCounts},
+        {"repetitions_per_count", repetitions},
+        {"runs", std::move(runs)}};
+}
+#endif
 
 std::filesystem::path BenchmarkOutputPath()
 {
@@ -890,17 +984,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         return reinterpret_cast<const char*>(glGetString(name));
     };
 
-    const auto percentile = [](const std::vector<double>& sortedDurations, double fraction)
-    {
-        if (sortedDurations.empty())
-            return 0.0;
-        const std::size_t index = static_cast<std::size_t>(
-            std::ceil(fraction * static_cast<double>(sortedDurations.size()))) - 1;
-        return sortedDurations[std::min(index, sortedDurations.size() - 1)];
-    };
-
     std::vector<double> durations = tickDurationsMicroseconds_;
-    std::sort(durations.begin(), durations.end());
     const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
         durations.begin(), durations.end(), [](double duration)
         {
@@ -908,7 +992,6 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         }));
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurations = physicsStepDurationsMicroseconds_;
-    std::sort(physicsStepDurations.begin(), physicsStepDurations.end());
     std::vector<double> visionDurations = visionDurationsMicroseconds_;
     std::sort(visionDurations.begin(), visionDurations.end());
 #endif
@@ -921,20 +1004,13 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         {"simulation_ticks", simulation_.TickCount()},
         {"rendered_frames", renderedFrames_},
         {"render_fps", elapsedSeconds > 0.0 ? static_cast<double>(renderedFrames_) / elapsedSeconds : 0.0},
-        {"tick_duration_us", {
-            {"p50", percentile(durations, 0.50)},
-            {"p95", percentile(durations, 0.95)},
-            {"p99", percentile(durations, 0.99)},
-            {"samples", durations.size()}, {"deadline_misses_over_16_67ms", deadlineMisses}}},
+        {"tick_duration_us", SummarizeDurations(std::move(durations))},
         {"process_cpu_percent_approx", elapsedSeconds > 0.0
             ? 100.0 * static_cast<double>(std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC / elapsedSeconds : 0.0}
     };
+    report["tick_duration_us"]["deadline_misses_over_16_67ms"] = deadlineMisses;
 #ifndef __EMSCRIPTEN__
-    report["physics_step_duration_us"] = {
-        {"p50", percentile(physicsStepDurations, 0.50)},
-        {"p95", percentile(physicsStepDurations, 0.95)},
-        {"p99", percentile(physicsStepDurations, 0.99)},
-        {"samples", physicsStepDurations.size()}};
+    report["physics_step_duration_us"] = SummarizeDurations(std::move(physicsStepDurations));
     report["vision_analysis"] = {
         {"samples", visionSampleCount_},
         {"mean_brightness", visionSampleCount_ > 0
@@ -944,9 +1020,9 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         {"mean_sharpness", visionSampleCount_ > 0
             ? totalSharpness_ / static_cast<double>(visionSampleCount_) : 0.0},
         {"duration_us", {
-            {"p50", percentile(visionDurations, 0.50)},
-            {"p95", percentile(visionDurations, 0.95)},
-            {"p99", percentile(visionDurations, 0.99)},
+            {"p50", Percentile(visionDurations, 0.50)},
+            {"p95", Percentile(visionDurations, 0.95)},
+            {"p99", Percentile(visionDurations, 0.99)},
             {"samples", visionDurations.size()}}}
     };
 #endif
@@ -955,6 +1031,9 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     memory.cb = sizeof(memory);
     if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
         report["working_set_bytes"] = memory.WorkingSetSize;
+#endif
+#ifndef __EMSCRIPTEN__
+    report["entity_scaling"] = MeasureDroneScaling();
 #endif
     const std::string output = report.dump(2) + '\n';
     std::ofstream resultFile(BenchmarkOutputPath(), std::ios::binary | std::ios::trunc);
