@@ -10,6 +10,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <numbers>
 #include <stdexcept>
 
 namespace aerosimlab::simulation
@@ -32,6 +33,15 @@ void ReachHovering(SimulationCore& simulation)
         simulation.AdvanceOneTick();
     }
     ASSERT_EQ(simulation.State().mode, FlightMode::Hovering);
+}
+
+void ReachHovering(SimulationCore& simulation, DroneId droneId)
+{
+    ASSERT_EQ(simulation.Apply(droneId, Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 120; ++tick)
+        simulation.AdvanceOneTick();
+    ASSERT_EQ(simulation.State(droneId).mode, FlightMode::Hovering);
 }
 }
 
@@ -287,6 +297,33 @@ TEST(SimulationCore, RigidBodyModeUsesRotorForcesForTakeoffAndLanding)
     EXPECT_NEAR(simulation.State().positionMeters.z,
         QuadrotorFlightController::groundedModelOriginHeightMeters, 1.0e-6);
 }
+
+#ifndef __EMSCRIPTEN__
+TEST(SimulationCore, WorldWindMovesRotatedHoveringDroneDownwind)
+{
+    constexpr double yawRadians = std::numbers::pi / 2.0;
+    const glm::dvec3 startPosition{5.0, 0.0, 1.5};
+    const glm::dvec3 windVelocity{2.0, 0.0, 0.0};
+
+    SimulationCore calmAir{SimulationDynamics::RigidBody};
+    SimulationCore withWind{SimulationDynamics::RigidBody};
+    const DroneId calmDrone = calmAir.AddDrone(startPosition, yawRadians);
+    const DroneId windDrone = withWind.AddDrone(startPosition, yawRadians);
+    ReachHovering(calmAir, calmDrone);
+    ReachHovering(withWind, windDrone);
+
+    withWind.SetWindVelocityMetersPerSecond(windVelocity);
+    calmAir.AdvanceOneTick();
+    withWind.AdvanceOneTick();
+
+    // Yaw가 90°이면 월드 +X 바람은 기체 옆으로 흐르고, 드론을 바람 방향으로 밉니다.
+    const glm::dvec3 velocityChange =
+        withWind.State(windDrone).velocityMetersPerSecond
+        - calmAir.State(calmDrone).velocityMetersPerSecond;
+    EXPECT_GT(velocityChange.x, 1.0e-5);
+    EXPECT_NEAR(velocityChange.y, 0.0, 1.0e-5);
+}
+#endif
 
 TEST(SimulationCore, MultipleKinematicDronesKeepIndependentStateAndCommands)
 {
