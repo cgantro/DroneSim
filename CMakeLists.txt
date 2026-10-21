@@ -77,8 +77,9 @@ target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_cor
 add_library(aerosimlab_sensor STATIC modules/sensor/src/RgbFrame.cpp)
 target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
 if(NOT EMSCRIPTEN)
-  target_include_directories(aerosimlab_sensor PUBLIC ${OpenCV_INCLUDE_DIRS})
-  target_link_libraries(aerosimlab_sensor PUBLIC ${OpenCV_LIBS})
+  add_library(aerosimlab_vision STATIC modules/vision/src/RgbFrameView.cpp)
+  target_include_directories(aerosimlab_vision PUBLIC modules/vision/include)
+  target_link_libraries(aerosimlab_vision PUBLIC aerosimlab_sensor ${OpenCV_LIBS})
 endif()
 
 if(NOT EMSCRIPTEN)
@@ -229,6 +230,16 @@ if(BUILD_TESTING)
     DISCOVERY_TIMEOUT 60
     PROPERTIES LABELS "UNIT;sensor"
   )
+
+  if(NOT EMSCRIPTEN)
+    add_executable(aerosimlab_vision_tests tests/vision/RgbFrameViewTests.cpp)
+    target_link_libraries(aerosimlab_vision_tests PRIVATE aerosimlab_vision GTest::gtest_main)
+    gtest_discover_tests(aerosimlab_vision_tests
+      TEST_PREFIX "Vision."
+      DISCOVERY_TIMEOUT 60
+      PROPERTIES LABELS "UNIT;vision"
+    )
+  endif()
 
   add_test(NAME HeadlessScenarioSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/normal-flight.json")
