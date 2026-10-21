@@ -820,18 +820,6 @@ const RobotState& SimRobotController::GetStateView() const noexcept
     return state_;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 const models::RobotSpecification& SimRobotController::GetSpecification() const noexcept
 {
     // 생성 시 받은 사양을 복사하지 않고 참조한다. 따라서 사양 데이터를 가진 저장소는 이 Controller보다 오래 살아 있어야 한다.
