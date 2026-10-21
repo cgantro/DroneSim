@@ -32,7 +32,6 @@ struct IkSolverConstants final
 {
     static constexpr std::size_t maximumDampingAttempts = 8;
     static constexpr std::size_t maximumLineSearchSteps = 10;
-    static constexpr std::size_t maximumJacobiSweeps = 64;
     static constexpr double singularSystemDampingGrowth = 10.0;
     static constexpr double rejectedStepDampingGrowth = 4.0;
     static constexpr double acceptedStepDampingDecay = 0.5;
