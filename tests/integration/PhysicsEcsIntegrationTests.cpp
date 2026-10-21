@@ -48,11 +48,16 @@ TEST(PhysicsEcsIntegration, SceneHierarchyPhysicsContactsAndLifetime)
     grasplink::physics::BoxBodyDescription objectDescription;
     objectDescription.motionType = BodyMotionType::Dynamic;
     const auto object = physics.CreateBox(objectDescription);
+    const auto secondObject = physics.CreateBox(objectDescription);
     const auto graspConstraint = physics.CreateFixedConstraint(anchor, object);
+    const auto secondGraspConstraint = physics.CreateFixedConstraint(anchor, secondObject);
     ASSERT_TRUE(physics.IsConstraintValid(graspConstraint));
+    ASSERT_TRUE(physics.IsConstraintValid(secondGraspConstraint));
     physics.DestroyBody(anchor);
     EXPECT_FALSE(physics.IsConstraintValid(graspConstraint));
+    EXPECT_FALSE(physics.IsConstraintValid(secondGraspConstraint));
     physics.DestroyBody(object);
+    physics.DestroyBody(secondObject);
 
     {
         grasplink::physics::PhysicsWorld oversizedMovePhysics;
