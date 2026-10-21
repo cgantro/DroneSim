@@ -45,11 +45,11 @@ _deps/
 *.user
 *.userosscache
 *.sln.docstates
-# Private working notes. Keep these files outside the public repository.
+# Personal notes and source material are local-only. Maintained internal project guidance lives in docs/private/.
 /docs/diary/
 /docs/history/
 /docs/DOCUMENTATION_AUDIT_2026-10-09.md
-
+_workspace
 # Operating system files
 .DS_Store
 Thumbs.db
@@ -66,3 +66,4 @@ Desktop.ini
 # documented template so a developer's LAN address and Wi-Fi secrets never
 # become repository data.
 .env
+graphify-out
