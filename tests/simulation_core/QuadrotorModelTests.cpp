@@ -94,9 +94,20 @@ TEST(QuadrotorModel, MotorResponseAndUnequalRotorsChangeWrench)
         parameters.maximumMotorSpeedRadiansPerSecond, 0.0, 0.0, 0.0};
     state.motorSpeedRadiansPerSecond = differentialSpeeds;
     const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(state, parameters);
-    EXPECT_GT(std::abs(wrench.torqueNewtonMeters.x), 0.1);
-    EXPECT_GT(std::abs(wrench.torqueNewtonMeters.y), 0.1);
-    EXPECT_GT(std::abs(wrench.torqueNewtonMeters.z), 0.1);
+    // 첫 로터의 위치 외적은 roll/pitch 토크를, 회전 방향은 반작용 yaw 토크를 만든다.
+    const double rotorThrustNewtons = parameters.thrustCoefficientNewtonsPerSpeedSquared
+        * parameters.maximumMotorSpeedRadiansPerSecond
+        * parameters.maximumMotorSpeedRadiansPerSecond;
+    const glm::dvec3& rotorPosition = parameters.rotors[0].positionMeters;
+    EXPECT_NEAR(wrench.torqueNewtonMeters.x,
+        rotorPosition.y * rotorThrustNewtons,
+        1.0e-12);
+    EXPECT_NEAR(wrench.torqueNewtonMeters.y,
+        -rotorPosition.x * rotorThrustNewtons,
+        1.0e-12);
+    EXPECT_NEAR(wrench.torqueNewtonMeters.z,
+        -parameters.momentToThrustRatio * rotorThrustNewtons,
+        1.0e-12);
 
     targetSpeeds.fill(0.0);
     QuadrotorModel::AdvanceMotors(
