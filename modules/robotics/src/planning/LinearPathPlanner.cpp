@@ -379,6 +379,12 @@ struct LinearPathPlanningJob::Impl
         phase = Phase::SolveSeed;
     }
 
+    void MarkWorkingContinuation()
+    {
+        if (workingContinuation)
+            parentHasContinuation[workingParent] = true;
+    }
+
     void CancelActiveIkSession() noexcept
     {
         if (ikSession == 0 || inverse == nullptr)
@@ -676,8 +682,7 @@ struct LinearPathPlanningJob::Impl
             if (duplicate->previousCandidate == workingParent)
             {
                 parentHasValidChild[workingParent] = true;
-                if (workingContinuation)
-                    parentHasContinuation[workingParent] = true;
+                MarkWorkingContinuation();
             }
             AdvanceToNextSeed();
             return;
@@ -698,8 +703,7 @@ struct LinearPathPlanningJob::Impl
                 std::equal(workingSolution.jointPositions.begin(),
                     workingSolution.jointPositions.end(), edge.joints.begin()))
             {
-                if (workingContinuation)
-                    parentHasContinuation[workingParent] = true;
+                MarkWorkingContinuation();
                 AdvanceToNextSeed();
                 return;
             }
@@ -767,8 +771,7 @@ struct LinearPathPlanningJob::Impl
             invalidityDiagnostic = std::move(diagnostic);
         }
         parentNeedsSearch[workingParent] = true;
-        if (workingContinuation)
-            parentHasContinuation[workingParent] = true;
+        MarkWorkingContinuation();
         AdvanceToNextSeed();
     }
 
