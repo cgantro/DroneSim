@@ -29,6 +29,8 @@ using WorldTransformCache = std::unordered_map<flecs::entity_t, CachedTransform>
 using TransformQuery = flecs::query<const Position, const Rotation, const Scale,
     TransformMatrix, TransformMatrix>;
 
+// Flecs world가 이 임시 자료를 소유하므로 호출 사이에도 남아 용량을 재사용한다.
+// 각 Flecs world가 따로 보관해 서로 다른 장면의 변환이 섞이지 않게 한다.
 struct TransformSystemScratch final
 {
     std::vector<TransformInput> transformedEntities;
