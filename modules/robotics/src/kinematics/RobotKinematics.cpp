@@ -8,23 +8,23 @@ namespace grasplink::robotics::kinematics
 {
 namespace
 {
-struct RobotKinematicsConstants final
+namespace tolerances
 {
     // 축이 이보다 짧으면 방향을 계산할 수 없는 값으로 본다.
-    inline static constexpr double minimumAxisLength = 1.0e-12;
-};
+    inline constexpr double minimumAxisLength = 1.0e-12;
+}
 
-struct RobotKinematicsErrorMessages final
+namespace messages
 {
-    inline static constexpr char invalidJointAxis[] = "RobotKinematics: invalid joint axis";
-    inline static constexpr char emptySpecification[] = "RobotKinematics: empty robot specification";
-    inline static constexpr char nonFiniteBindPivot[] = "RobotKinematics: non-finite bind pivot";
-    inline static constexpr char nonFiniteJointOrigin[] = "RobotKinematics: non-finite joint origin";
-    inline static constexpr char nonFiniteToolOffset[] = "RobotKinematics: non-finite tool offset";
-    inline static constexpr char invalidRobotState[] = "RobotKinematics: invalid RobotState";
-    inline static constexpr char jointCountMismatch[] = "RobotKinematics: joint count mismatch";
-    inline static constexpr char nonFiniteJointPosition[] = "RobotKinematics: non-finite joint position";
-};
+inline constexpr char invalidJointAxis[] = "RobotKinematics: invalid joint axis";
+inline constexpr char emptySpecification[] = "RobotKinematics: empty robot specification";
+inline constexpr char nonFiniteBindPivot[] = "RobotKinematics: non-finite bind pivot";
+inline constexpr char nonFiniteJointOrigin[] = "RobotKinematics: non-finite joint origin";
+inline constexpr char nonFiniteToolOffset[] = "RobotKinematics: non-finite tool offset";
+inline constexpr char invalidRobotState[] = "RobotKinematics: invalid RobotState";
+inline constexpr char jointCountMismatch[] = "RobotKinematics: joint count mismatch";
+inline constexpr char nonFiniteJointPosition[] = "RobotKinematics: non-finite joint position";
+}
 
 using models::Axis3;
 using models::Pose3;
@@ -39,8 +39,8 @@ using detail::Subtract;
 Axis3 NormalizeAxis(const Axis3& axis)
 {
     const double length = Length(axis);
-    if (!std::isfinite(length) || length <= RobotKinematicsConstants::minimumAxisLength)
-        throw std::invalid_argument(RobotKinematicsErrorMessages::invalidJointAxis);
+    if (!std::isfinite(length) || length <= tolerances::minimumAxisLength)
+        throw std::invalid_argument(messages::invalidJointAxis);
 
     return {axis.x / length, axis.y / length, axis.z / length};
 }
@@ -59,7 +59,7 @@ RobotKinematics::RobotKinematics(const models::RobotSpecification& specification
 {
     // FK(정방향 기구학)는 관절각에서 각 링크 자세를 계산한다. 계산에 앞서 모델에 관절 pivot(회전 중심), 축, 선택적 ToolFrame이 유효하게 정의되어 있는지 확인한다.
     if (specification_.joints == nullptr || specification_.jointCount == 0)
-        throw std::invalid_argument(RobotKinematicsErrorMessages::emptySpecification);
+        throw std::invalid_argument(messages::emptySpecification);
 
     normalizedJointAxes_.reserve(specification_.jointCount);
     for (std::size_t i = 0; i < specification_.jointCount; ++i)
@@ -67,14 +67,14 @@ RobotKinematics::RobotKinematics(const models::RobotSpecification& specification
         const auto& joint = specification_.joints[i];
         if (!std::isfinite(joint.bindPivotMeters.x) || !std::isfinite(joint.bindPivotMeters.y) ||
             !std::isfinite(joint.bindPivotMeters.z))
-            throw std::invalid_argument(RobotKinematicsErrorMessages::nonFiniteBindPivot);
+            throw std::invalid_argument(messages::nonFiniteBindPivot);
         normalizedJointAxes_.push_back(NormalizeAxis(joint.axis));
         if (joint.parentToJointOrigin)
         {
             const auto& origin = *joint.parentToJointOrigin;
             if (!std::isfinite(origin.positionMeters.x) || !std::isfinite(origin.positionMeters.y) ||
                 !std::isfinite(origin.positionMeters.z))
-                throw std::invalid_argument(RobotKinematicsErrorMessages::nonFiniteJointOrigin);
+                throw std::invalid_argument(messages::nonFiniteJointOrigin);
             Normalize(origin.rotation);
         }
     }
@@ -83,7 +83,7 @@ RobotKinematics::RobotKinematics(const models::RobotSpecification& specification
         const auto& tool = specification_.toolFrameInLastJoint;
         if (!std::isfinite(tool.positionMeters.x) || !std::isfinite(tool.positionMeters.y) ||
             !std::isfinite(tool.positionMeters.z))
-            throw std::invalid_argument(RobotKinematicsErrorMessages::nonFiniteToolOffset);
+            throw std::invalid_argument(messages::nonFiniteToolOffset);
         Normalize(tool.rotation);
     }
 
@@ -97,17 +97,17 @@ const RobotKinematicState& RobotKinematics::Update(const RobotState& state)
 {
     // 결과 위치와 회전은 Robot base 기준이다. Scene에서 robotRoot에 적용한 배치 위치와 회전은 아직 포함하지 않는다.
     if (!state.valid)
-        throw std::invalid_argument(RobotKinematicsErrorMessages::invalidRobotState);
+        throw std::invalid_argument(messages::invalidRobotState);
     return Update(state.jointPositions);
 }
 
 const RobotKinematicState& RobotKinematics::Update(const JointVector& jointPositions)
 {
     if (jointPositions.size() != specification_.jointCount)
-        throw std::invalid_argument(RobotKinematicsErrorMessages::jointCountMismatch);
+        throw std::invalid_argument(messages::jointCountMismatch);
     for (double position : jointPositions)
         if (!std::isfinite(position))
-            throw std::invalid_argument(RobotKinematicsErrorMessages::nonFiniteJointPosition);
+            throw std::invalid_argument(messages::nonFiniteJointPosition);
 
     state_.jointPositions = jointPositions;
 
