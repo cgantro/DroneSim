@@ -77,7 +77,10 @@ target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_cor
 add_library(aerosimlab_sensor STATIC modules/sensor/src/RgbFrame.cpp)
 target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
 if(NOT EMSCRIPTEN)
-  add_library(aerosimlab_vision STATIC modules/vision/src/RgbFrameView.cpp)
+  add_library(aerosimlab_vision STATIC
+    modules/vision/src/RgbFrameView.cpp
+    modules/vision/src/RgbFrameQuality.cpp
+  )
   target_include_directories(aerosimlab_vision PUBLIC modules/vision/include)
   target_link_libraries(aerosimlab_vision PUBLIC aerosimlab_sensor ${OpenCV_LIBS})
 endif()
@@ -232,7 +235,10 @@ if(BUILD_TESTING)
   )
 
   if(NOT EMSCRIPTEN)
-    add_executable(aerosimlab_vision_tests tests/vision/RgbFrameViewTests.cpp)
+    add_executable(aerosimlab_vision_tests
+      tests/vision/RgbFrameViewTests.cpp
+      tests/vision/RgbFrameQualityTests.cpp
+    )
     target_link_libraries(aerosimlab_vision_tests PRIVATE aerosimlab_vision GTest::gtest_main)
     gtest_discover_tests(aerosimlab_vision_tests
       TEST_PREFIX "Vision."
