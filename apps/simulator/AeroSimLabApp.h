@@ -15,6 +15,7 @@
 #include <ctime>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace aerosimlab::graphics
@@ -67,6 +68,10 @@ private:
     void AdvanceSimulation(double elapsedSeconds);
     void ApplyDemoCommands();
     void PollGroundControl();
+#ifndef __EMSCRIPTEN__
+    void ProcessGroundDatagram(const std::string& datagram,
+        const aerosimlab::communication::UdpPeer& peer);
+#endif
     void PollGamepad();
     /**
      * @brief 기록 시작·정지·재생 명령을 적용한다.
