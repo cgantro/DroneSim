@@ -7,6 +7,21 @@ endif()
 
 project(AeroSimLab VERSION 0.1.0 LANGUAGES C CXX)
 
+set(AEROSIMLAB_SOURCE_REVISION "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE AEROSIMLAB_SOURCE_REVISION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(NOT AEROSIMLAB_SOURCE_REVISION)
+    set(AEROSIMLAB_SOURCE_REVISION "unknown")
+  endif()
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -127,6 +142,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     aerosimlab_sensor
     aerosimlab_communication
     nlohmann_json::nlohmann_json
+  )
+  target_compile_definitions(aerosimlab_simulator PRIVATE
+    AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"
   )
   if(WIN32)
     target_link_libraries(aerosimlab_simulator PRIVATE Psapi)

@@ -574,6 +574,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         }));
     nlohmann::json report{
         {"configuration", "Windows Release; hidden OpenGL window; one drone; simple geometry"},
+        {"source_revision", AEROSIMLAB_SOURCE_REVISION},
         {"framebuffer", {{"width", framebufferWidth}, {"height", framebufferHeight}}},
         {"opengl", {{"renderer", glString(GL_RENDERER)}, {"version", glString(GL_VERSION)}}},
         {"elapsed_seconds", elapsedSeconds},
