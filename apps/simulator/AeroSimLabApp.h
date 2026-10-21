@@ -103,6 +103,10 @@ private:
     void WriteBenchmarkReport(double elapsedSeconds) const;
     [[nodiscard]] aerosimlab::communication::Telemetry CurrentTelemetry() const;
     void RenderFrame();
+    /** @brief 드론의 현재 자세에 맞춰 관찰 카메라와 EO 카메라를 배치한다. */
+    void UpdateCameraTransforms(int observerWidth, int eoWidth, int height);
+    /** @brief 새 EO 화면을 픽셀로 읽고 지원되는 빌드에서는 영상 품질도 계산한다. */
+    void CaptureEoFrame(int observerWidth, int eoWidth, int height);
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition);
     void DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,

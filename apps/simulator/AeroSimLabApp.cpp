@@ -280,6 +280,24 @@ void AeroSimLabApp::RenderFrame()
     renderer_->Resize(width, height);
     const int observerWidth = width / 2;
     const int eoWidth = width - observerWidth;
+    UpdateCameraTransforms(observerWidth, eoWidth, height);
+
+    renderer_->BeginFrame();
+    renderer_->SetSceneViewport(0, 0, observerWidth, height);
+    DrawWorld(observerCamera_->GetViewMatrix(), observerCamera_->GetProjectionMatrix(),
+        observerCamera_->GetPosition());
+    renderer_->SetSceneViewport(observerWidth, 0, eoWidth, height);
+    if (simulation_.Camera().status == aerosimlab::simulation::CameraStatus::Active)
+        DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
+            eoCamera_->GetPosition());
+    renderer_->SetSceneViewport(0, 0, width, height);
+    renderer_->EndFrame();
+
+    CaptureEoFrame(observerWidth, eoWidth, height);
+}
+
+void AeroSimLabApp::UpdateCameraTransforms(int observerWidth, int eoWidth, int height)
+{
     const auto& state = simulation_.State();
     const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
     const glm::mat4 heading = glm::rotate(glm::mat4{1.0F},
@@ -295,18 +313,10 @@ void AeroSimLabApp::RenderFrame()
     eoCamera_->SetPosition(cameraPosition);
     eoCamera_->SetTarget(cameraPosition + forward * 25.0F + glm::vec3{0.0F, -2.5F, 0.0F});
     eoCamera_->SetAspectRatio(static_cast<float>(eoWidth) / static_cast<float>(height));
+}
 
-    renderer_->BeginFrame();
-    renderer_->SetSceneViewport(0, 0, observerWidth, height);
-    DrawWorld(observerCamera_->GetViewMatrix(), observerCamera_->GetProjectionMatrix(),
-        observerCamera_->GetPosition());
-    renderer_->SetSceneViewport(observerWidth, 0, eoWidth, height);
-    if (simulation_.Camera().status == aerosimlab::simulation::CameraStatus::Active)
-        DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
-            eoCamera_->GetPosition());
-    renderer_->SetSceneViewport(0, 0, width, height);
-    renderer_->EndFrame();
-
+void AeroSimLabApp::CaptureEoFrame(int observerWidth, int eoWidth, int height)
+{
     const auto& camera = simulation_.Camera();
     if (camera.status == aerosimlab::simulation::CameraStatus::Active
         && camera.lastFrameTick > eoFrame_.simulationTick)
