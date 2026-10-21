@@ -8,6 +8,9 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -TypeDefinition @'
 using System;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -78,6 +81,50 @@ public static class AeroSimLabUiTestWindow
         return text.ToString();
     }
 }
+
+public static class AeroSimLabSessionTestClient
+{
+    private static readonly UdpClient client = new UdpClient(0);
+
+    static AeroSimLabSessionTestClient()
+    {
+        client.Client.ReceiveTimeout = 400;
+    }
+
+    public static string Send(int port, uint commandId, uint sequence, string action)
+    {
+        var payload = String.Format(CultureInfo.InvariantCulture,
+            "{{\"action\":\"{0}\",\"command_id\":{1},\"sequence\":{2},\"target\":\"session\"}}",
+            action, commandId, sequence);
+        var payloadLength = Encoding.UTF8.GetByteCount(payload);
+        var message = String.Format(CultureInfo.InvariantCulture,
+            "{{\"length\":{0},\"payload\":{1},\"type\":\"command\",\"version\":1}}",
+            payloadLength, payload);
+        var bytes = Encoding.UTF8.GetBytes(message);
+        var destination = new IPEndPoint(IPAddress.Loopback, port);
+        var deadline = DateTime.UtcNow.AddSeconds(4);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            client.Send(bytes, bytes.Length, destination);
+            try
+            {
+                IPEndPoint source = new IPEndPoint(IPAddress.Any, 0);
+                var response = client.Receive(ref source);
+                if (source.Address.Equals(IPAddress.Loopback) && source.Port == port)
+                    return Encoding.UTF8.GetString(response);
+            }
+            catch (SocketException error)
+            {
+                if (error.SocketErrorCode != SocketError.TimedOut
+                    && error.SocketErrorCode != SocketError.WouldBlock)
+                    throw;
+            }
+        }
+
+        throw new TimeoutException("기록 명령에 시뮬레이터가 응답하지 않았습니다.");
+    }
+}
 '@
 
 function Invoke-GroundControlCli([string[]]$Arguments) {
@@ -92,6 +139,19 @@ function Invoke-GroundControlCli([string[]]$Arguments) {
     }
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
+$sessionCommandId = 1
+$sessionSequence = 1
+function Invoke-SessionCommand([string]$Action, [string]$ExpectedStatus) {
+    $response = [AeroSimLabSessionTestClient]::Send(
+        $port, $script:sessionCommandId, $script:sessionSequence, $Action)
+    $script:sessionCommandId++
+    $script:sessionSequence++
+    $reply = $response | ConvertFrom-Json
+    if ($reply.payload.status -ne $ExpectedStatus) {
+        throw "기록 명령 '$Action' 결과가 예상과 다릅니다: $($reply.payload.status)"
     }
 }
 
@@ -135,7 +195,7 @@ try {
         throw "재전송 명령이 서버 시작 뒤 적용되지 않았습니다. 종료 코드: $($retryingClient.ExitCode)"
     }
 
-    Start-Sleep -Milliseconds 1200
+    Start-Sleep -Milliseconds 1800
     $faultResult = Invoke-GroundControlCli @('--port', "$port", '--camera', 'fault')
     if ($faultResult.ExitCode -ne 0 -or $faultResult.Output -notmatch '카메라: fault') {
         throw "카메라 고장 명령이 적용되지 않았습니다.`n$($faultResult.Output)"
@@ -167,9 +227,24 @@ try {
     if ($landingResult.ExitCode -ne 0) {
         throw "착륙 명령이 적용되지 않았습니다.`n$($landingResult.Output)"
     }
+    Start-Sleep -Milliseconds 1800
+
+    Invoke-SessionCommand 'record_start' 'recording_started'
+    $takeoffResult = Invoke-GroundControlCli @('--port', "$port", '--command', 'takeoff')
+    if ($takeoffResult.ExitCode -ne 0) {
+        throw "기록 중 이륙 명령이 적용되지 않았습니다.`n$($takeoffResult.Output)"
+    }
+    Start-Sleep -Milliseconds 1800
+    $recordedLanding = Invoke-GroundControlCli @('--port', "$port", '--command', 'land')
+    if ($recordedLanding.ExitCode -ne 0) {
+        throw "기록 중 착륙 명령이 적용되지 않았습니다.`n$($recordedLanding.Output)"
+    }
+    Start-Sleep -Milliseconds 1800
+    Invoke-SessionCommand 'record_stop' 'recording_stopped'
+    Invoke-SessionCommand 'record_replay' 'recording_replay_started'
 
     if (-not $server.WaitForExit(5000)) {
-        throw '드론이 착륙한 뒤 시험 시뮬레이터가 종료되지 않았습니다.'
+        throw '기록한 비행을 다시 재생한 뒤 시험 시뮬레이터가 종료되지 않았습니다.'
     }
     $server.Refresh()
     if ($server.ExitCode -ne 0) {

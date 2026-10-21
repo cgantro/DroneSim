@@ -102,7 +102,7 @@ int AeroSimLabApp::Run()
 
         if (smokeTest_ && !networkEnabled_ && renderedFrames_ >= smokeTestFrameLimit)
             break;
-        if (smokeTest_ && networkEnabled_ && smokeCommandCount_ >= 4
+        if (smokeTest_ && networkEnabled_ && smokeCommandCount_ >= 9
             && !recordingActive_ && !replaying_
             && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
             break;

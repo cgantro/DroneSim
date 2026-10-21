@@ -296,7 +296,7 @@ if(BUILD_TESTING)
         -GroundControlUiPath "$<TARGET_FILE:aerosimlab_ground_control>")
     set_tests_properties(GroundControlUdpSmoke PROPERTIES
       WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>"
-      TIMEOUT 20
+      TIMEOUT 35
       RUN_SERIAL TRUE
       LABELS "INTEGRATION;communication")
   endif()
