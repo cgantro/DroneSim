@@ -35,17 +35,21 @@ double YawDegrees(const std::array<double, 4>& xyzw)
 RobotPanelActions RobotPanel::DrawContents(const RobotPanelView& view)
 {
     RobotPanelActions actions;
-    ImGui::SeparatorText("Pick and place");
     const auto& state = view.state;
     const auto& graspBoxPoseInBase = view.graspBoxPoseInBase;
     const auto& placementPoseInBase = view.placementPoseInBase;
-    if (state.valid && state.tcpPoseValid)
-        ImGui::Text("TCP: %.3f, %.3f, %.3f m", state.tcpPose.positionMeters[0], state.tcpPose.positionMeters[1], state.tcpPose.positionMeters[2]);
-    ImGui::Text("Box X/Z: %.3f, %.3f m", graspBoxPoseInBase.positionMeters[0], graspBoxPoseInBase.positionMeters[2]);
-    ImGui::Text("Box yaw: %.1f deg", YawDegrees(graspBoxPoseInBase.orientationXyzw));
-    ImGui::Text("Goal X/Z: %.3f, %.3f m", placementPoseInBase.positionMeters[0], placementPoseInBase.positionMeters[2]);
-    ImGui::Text("Goal yaw: %.1f deg", YawDegrees(placementPoseInBase.orientationXyzw));
-    ImGui::Text("TCP ceilings: %.1f m/s, %.1f rad/s", view.mission.maxLinearVelocityMetersPerSecond, view.mission.maxAngularVelocityRadiansPerSecond);
+    if (view.mission)
+    {
+        const RobotPanelMissionView& mission = *view.mission;
+        ImGui::SeparatorText("Pick and place");
+        if (state.valid && state.tcpPoseValid)
+            ImGui::Text("TCP: %.3f, %.3f, %.3f m", state.tcpPose.positionMeters[0], state.tcpPose.positionMeters[1], state.tcpPose.positionMeters[2]);
+        ImGui::Text("Box X/Z: %.3f, %.3f m", graspBoxPoseInBase.positionMeters[0], graspBoxPoseInBase.positionMeters[2]);
+        ImGui::Text("Box yaw: %.1f deg", YawDegrees(graspBoxPoseInBase.orientationXyzw));
+        ImGui::Text("Goal X/Z: %.3f, %.3f m", placementPoseInBase.positionMeters[0], placementPoseInBase.positionMeters[2]);
+        ImGui::Text("Goal yaw: %.1f deg", YawDegrees(placementPoseInBase.orientationXyzw));
+        ImGui::Text("TCP ceilings: %.1f m/s, %.1f rad/s", mission.maxLinearVelocityMetersPerSecond, mission.maxAngularVelocityRadiansPerSecond);
+    }
     const auto& specification = view.specification;
     if (ImGui::BeginTable("Joint positions", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
     {
@@ -80,21 +84,37 @@ RobotPanelActions RobotPanel::DrawContents(const RobotPanelView& view)
         ImGui::EndTable();
     }
     ImGui::TextUnformatted("Joint values show angles or travel distance, not percentages.");
-    if (view.mission.canStart && ImGui::Button("Run random pick and place"))
-        actions.start = true;
-    if (view.mission.paused)
+    if (view.mission)
     {
-        ImGui::SameLine();
-        if (ImGui::Button("Resume task"))
-            actions.resume = true;
+        const RobotPanelMissionView& mission = *view.mission;
+        if (mission.canStart && ImGui::Button("Run random pick and place"))
+            actions.start = true;
+        if (mission.paused)
+        {
+            ImGui::SameLine();
+            if (ImGui::Button("Resume task"))
+                actions.resume = true;
+        }
+        else
+        {
+            ImGui::SameLine();
+            if (ImGui::Button("Stop robot"))
+                actions.stop = true;
+        }
+        ImGui::Text("Task: %s", mission.paused ? "Paused" : mission.stageLabel.data());
+        if (mission.paused)
+            ImGui::Text("Paused at: %s", mission.stageLabel.data());
+        ImGui::Text("Mission success: %s", mission.missionSucceeded ? "YES" : "NO");
+        ImGui::Text("Successful missions: %llu", static_cast<unsigned long long>(mission.completedCount));
+        ImGui::Text("Automatic repeat: %s", mission.autoRepeat ? "ON" : "OFF");
+        if (mission.hasResult)
+        {
+            ImGui::Text("Last command: %s", mission.lastRequestAccepted ? "accepted" : "failed");
+            ImGui::TextWrapped("Accepted means the controller received the command; the mode above shows whether it is still moving.");
+            if (!mission.lastMessage.empty())
+                ImGui::TextWrapped("%.*s", static_cast<int>(mission.lastMessage.size()), mission.lastMessage.data());
+        }
     }
-    else
-    {
-        ImGui::SameLine();
-        if (ImGui::Button("Stop robot"))
-            actions.stop = true;
-    }
-    ImGui::Text("Task: %s", view.mission.paused ? "Paused" : view.mission.stageLabel.data());
     ImGui::Text("Controller: %s", RobotModeName(state.mode));
     std::size_t fastestJoint = 0;
     double maximumJointSpeed = 0.0;
@@ -118,22 +138,10 @@ RobotPanelActions RobotPanel::DrawContents(const RobotPanelView& view)
             ImGui::Text("Joint speed: %.*s %.1f deg/s",
                 static_cast<int>(jointName.size()), jointName.data(), glm::degrees(maximumJointSpeed));
     }
-    if (view.mission.paused)
-        ImGui::Text("Paused at: %s", view.mission.stageLabel.data());
-    ImGui::Text("Mission success: %s", view.mission.missionSucceeded ? "YES" : "NO");
-    ImGui::Text("Successful missions: %llu", static_cast<unsigned long long>(view.mission.completedCount));
-    ImGui::Text("Automatic repeat: %s", view.mission.autoRepeat ? "ON" : "OFF");
     if (state.errorCode == robotics::ErrorCode::EnvironmentContact ||
         state.errorCode == robotics::ErrorCode::SelfCollision ||
         state.errorCode == robotics::ErrorCode::AttachedObjectCollision)
-        ImGui::TextWrapped("A collision stopped the arm at its last safe pose. The task is retracting to the previous safe height.");
-    if (view.mission.hasResult)
-    {
-        ImGui::Text("Last command: %s", view.mission.lastRequestAccepted ? "accepted" : "failed");
-        ImGui::TextWrapped("Accepted means the controller received the command; the mode above shows whether it is still moving.");
-        if (!view.mission.lastMessage.empty())
-            ImGui::TextWrapped("%.*s", static_cast<int>(view.mission.lastMessage.size()), view.mission.lastMessage.data());
-    }
+        ImGui::TextWrapped("A collision stopped the robot at its last safe pose.");
     return actions;
 }
 }

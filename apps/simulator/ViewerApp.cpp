@@ -671,13 +671,16 @@ void ViewerApp::MainLoopFrame()
             ? m_GripperGraspAdapter->GetState()
             : grasplink::simulation::GripperGraspState{};
         const auto& robotState = m_RobotController->GetStateView();
-        const auto mission = m_PickPlaceMission
-            ? m_PickPlaceMission->Snapshot()
-            : grasplink::application::PickPlaceMissionSnapshot{};
-        const grasplink::gui::RobotPanelMissionView missionView{mission.stageLabel, mission.lastMessage,
-            mission.completedCount, grasplink::application::pick_place::config::linearVelocityMetersPerSecond,
-            grasplink::application::pick_place::config::angularVelocityRadiansPerSecond, mission.paused, mission.missionSucceeded,
-            mission.autoRepeat, mission.hasResult, mission.lastRequestAccepted, mission.canStart};
+        std::optional<grasplink::gui::RobotPanelMissionView> missionView;
+        if (m_PickPlaceMission)
+        {
+            const auto mission = m_PickPlaceMission->Snapshot();
+            missionView.emplace(grasplink::gui::RobotPanelMissionView{mission.stageLabel, mission.lastMessage,
+                mission.completedCount, grasplink::application::pick_place::config::linearVelocityMetersPerSecond,
+                grasplink::application::pick_place::config::angularVelocityRadiansPerSecond, mission.paused,
+                mission.missionSucceeded, mission.autoRepeat, mission.hasResult,
+                mission.lastRequestAccepted, mission.canStart});
+        }
         const grasplink::gui::RobotPanelView robotPanelView{robotState,
             m_RobotController->GetSpecification(), boxPose, placementPose, missionView};
         const auto panelActions = DrawControlPanel(sceneDisplayWidth, sidebarWidth, displayHeight,

@@ -4,6 +4,7 @@
 #include "robotics/models/RobotSpecification.h"
 
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace grasplink::gui
@@ -29,7 +30,7 @@ struct RobotPanelView
     const robotics::models::RobotSpecification& specification;
     const robotics::CartesianPose& graspBoxPoseInBase;
     const robotics::CartesianPose& placementPoseInBase;
-    RobotPanelMissionView mission;
+    std::optional<RobotPanelMissionView> mission;
 };
 
 struct RobotPanelActions
