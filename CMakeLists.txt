@@ -91,6 +91,11 @@ target_link_libraries(aerosimlab_headless PRIVATE
   aerosimlab_simulation_core
   nlohmann_json::nlohmann_json
 )
+if(EMSCRIPTEN)
+  target_link_options(aerosimlab_headless PRIVATE
+    "--preload-file" "${CMAKE_SOURCE_DIR}/scenarios@scenarios"
+  )
+endif()
 
 if(AEROSIMLAB_BUILD_GRAPHICS)
   aerosimlab_add_graphics_dependencies()
