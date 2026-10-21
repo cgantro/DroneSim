@@ -26,23 +26,23 @@ using grasplink::scene::Scale;
 using grasplink::scene::TransformMatrix;
 using grasplink::scene::World;
 
-struct PhysicsSystemTolerances final
+namespace tolerances
 {
-    static constexpr float targetTransformComponentDifference = 1.0e-6F;
-    static constexpr float parentIdentityDifference = 1.0e-6F;
-    static constexpr float unitScaleDifference = 1.0e-4F;
-    static constexpr float unitScaleValue = 1.0F;
-};
+inline constexpr float targetTransformComponentDifference = 1.0e-6F;
+inline constexpr float parentIdentityDifference = 1.0e-6F;
+inline constexpr float unitScaleDifference = 1.0e-4F;
+inline constexpr float unitScaleValue = 1.0F;
+}
 
-struct PhysicsSystemMessages final
+namespace messages
 {
-    inline static constexpr char bodyConfigurationLogCategory[] = "physics.body_configuration";
-    inline static constexpr char unsupportedScaleOrParentHierarchy[] =
-        "unsupported scale or parent hierarchy (Dynamic requires identity ancestors)";
-    inline static constexpr char worldTransformUnavailable[] =
-        "could not calculate Entity World Transform";
-    inline static constexpr char bodyCreationFailed[] = "failed to create Body";
-};
+inline constexpr char bodyConfigurationLogCategory[] = "physics.body_configuration";
+inline constexpr char unsupportedScaleOrParentHierarchy[] =
+    "unsupported scale or parent hierarchy (Dynamic requires identity ancestors)";
+inline constexpr char worldTransformUnavailable[] =
+    "could not calculate Entity World Transform";
+inline constexpr char bodyCreationFailed[] = "failed to create Body";
+}
 
 struct BodySnapshot
 {
@@ -65,7 +65,7 @@ bool SameTarget(const Transform& left, const Transform& right)
 bool ReachedTarget(const Transform& actual, const Transform& target)
 {
     // Jolt가 float로 적분하면서 생기는 작은 수치 차이는 허용한다. 같은 목표에 도달했는지 보는 기준은 위치 1 μm와 quaternion 성분 1e-6이다.
-    constexpr float tolerance = PhysicsSystemTolerances::targetTransformComponentDifference;
+    constexpr float tolerance = tolerances::targetTransformComponentDifference;
     const glm::quat signedActual = glm::dot(actual.rotation, target.rotation) < 0.0F
         ? -actual.rotation : actual.rotation;
     return glm::all(glm::lessThanEqual(glm::abs(actual.position - target.position), glm::vec3{tolerance})) &&
@@ -92,8 +92,8 @@ bool HasUnitScale(flecs::entity entity, bool allowEntityScale)
         {
             const glm::vec3 scale = entity.get<Scale, Local>();
             if (!IsFinite(scale) || glm::any(glm::greaterThan(
-                glm::abs(scale - glm::vec3{PhysicsSystemTolerances::unitScaleValue}),
-                glm::vec3{PhysicsSystemTolerances::unitScaleDifference})))
+                glm::abs(scale - glm::vec3{tolerances::unitScaleValue}),
+                glm::vec3{tolerances::unitScaleDifference})))
                 return false;
         }
 
@@ -108,7 +108,7 @@ bool HasUnitScale(flecs::entity entity, bool allowEntityScale)
 
 bool HasIdentityParentPose(flecs::entity parent)
 {
-    constexpr float tolerance = PhysicsSystemTolerances::parentIdentityDifference;
+    constexpr float tolerance = tolerances::parentIdentityDifference;
     if (parent.has<Position, Local>())
     {
         const glm::vec3 position = parent.get<Position, Local>();
@@ -165,7 +165,7 @@ bool TryGetPhysicsTransform(
 
     // TransformSystem이 갱신한 World 행렬에서 위치와 회전을 읽는다. 물리 Body의 기준점은 Entity 원점이며 내부 계산용 무게중심(COM)과 다를 수 있다.
     const glm::mat4 worldMatrix = entity.get<TransformMatrix, World>();
-    glm::vec3 scale{PhysicsSystemTolerances::unitScaleValue};
+    glm::vec3 scale{tolerances::unitScaleValue};
     glm::quat rotation{1.0F, 0.0F, 0.0F, 0.0F};
     glm::vec3 translation{0.0F};
     glm::vec3 skew{0.0F};
@@ -302,14 +302,14 @@ struct PhysicsSystemModule::Impl
         if (!HasSupportedBodyPlacement(entity, rigidBody))
         {
             LogBodyIssue(grasplink::diagnostics::LogLevel::Warning,
-                PhysicsSystemMessages::unsupportedScaleOrParentHierarchy, entity.id());
+                messages::unsupportedScaleOrParentHierarchy, entity.id());
             return false;
         }
         Transform bodyTransform;
         if (!TryGetPhysicsTransform(entity, bodyTransform))
         {
             LogBodyIssue(grasplink::diagnostics::LogLevel::Error,
-                PhysicsSystemMessages::worldTransformUnavailable, entity.id());
+                messages::worldTransformUnavailable, entity.id());
             return false;
         }
 
@@ -333,7 +333,7 @@ struct PhysicsSystemModule::Impl
             if (newHandle.IsValid())
                 DestroyOwnedBody(newHandle);
             LogBodyIssue(grasplink::diagnostics::LogLevel::Error,
-                PhysicsSystemMessages::bodyCreationFailed, entity.id(), error.what());
+                messages::bodyCreationFailed, entity.id(), error.what());
             return false;
         }
     }
@@ -354,7 +354,7 @@ struct PhysicsSystemModule::Impl
                 entry += ": ";
                 entry += detail;
             }
-            logger->Write(level, PhysicsSystemMessages::bodyConfigurationLogCategory, entry);
+            logger->Write(level, messages::bodyConfigurationLogCategory, entry);
         }
         catch (...)
         {
