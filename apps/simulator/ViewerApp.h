@@ -3,6 +3,7 @@
 #include "robotics/runtime/FixedControlLoop.h"
 #include "diagnostics/Logger.h"
 #include "gui/panels/GripperPanel.h"
+#include "gui/panels/PhysicsDebugPanel.h"
 #include "model/ModelResource.h"
 #include "model/RobotModel.h"
 #include "scene/Entity.h"
@@ -68,7 +69,6 @@ class RobotModelAdapter;
 namespace grasplink::gui
 {
 class GuiModule;
-class PhysicsDebugPanel;
 class ColliderOverlay;
 struct RobotPanelView;
 struct RobotPanelActions;
@@ -221,7 +221,7 @@ private:
     grasplink::gui::GripperPanel m_GripperPanel;
     std::unique_ptr<grasplink::application::PickPlaceMission> m_PickPlaceMission;
     std::unique_ptr<grasplink::application::PickPlaceScenarioSampler> m_ScenarioSampler;
-    std::unique_ptr<grasplink::gui::PhysicsDebugPanel> m_PhysicsDebugPanel;
+    grasplink::gui::PhysicsDebugPanel m_PhysicsDebugPanel;
     std::unique_ptr<grasplink::gui::ColliderOverlay> m_ColliderOverlay;
 
     // GUI가 장면 속 로봇 기준점과 파지 상자의 World 위치를 매 프레임 읽는다. wrapper는 Entity를 소유하지 않는다.

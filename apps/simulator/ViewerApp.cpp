@@ -260,7 +260,6 @@ bool ViewerApp::InitViewer()
     m_Camera = std::make_unique<Camera>(
         viewer_camera::position, viewer_camera::target, aspectRatio);
     m_GuiModule = std::make_unique<grasplink::gui::GuiModule>(*m_Window);
-    m_PhysicsDebugPanel = std::make_unique<grasplink::gui::PhysicsDebugPanel>();
     m_ColliderOverlay = std::make_unique<grasplink::gui::ColliderOverlay>(m_World);
 
     m_CameraController = std::make_unique<OrbitCameraController>(*m_Camera, *m_Window);
@@ -575,7 +574,7 @@ grasplink::gui::RobotPanelActions ViewerApp::DrawControlPanel(float sceneDisplay
         }
         if (ImGui::BeginTabItem("Physics"))
         {
-            m_PhysicsDebugPanel->DrawContents();
+            m_PhysicsDebugPanel.DrawContents();
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -688,7 +687,7 @@ void ViewerApp::MainLoopFrame()
             m_PickPlaceMission->ApplyActions(grasplink::application::PickPlaceMissionActions{
                 panelActions.start, panelActions.resume, panelActions.stop},
                 m_RobotController->GetStateView(), *m_RobotController, graspState.grasped, boxPose);
-        m_ColliderOverlay->Draw(*m_Camera, m_PhysicsDebugPanel->IsColliderVisible(),
+        m_ColliderOverlay->Draw(*m_Camera, m_PhysicsDebugPanel.IsColliderVisible(),
             ImVec2(sceneDisplayWidth, displayHeight));
         m_Renderer->EndFrame();
         m_GuiModule->EndFrame();
@@ -701,7 +700,7 @@ void ViewerApp::Shutdown()
 {
     // GUI와 GPU 객체를 모두 정리한 다음 Window를 파괴해 OpenGL Context를 마지막에 닫는다.
     m_ColliderOverlay.reset();
-    m_PhysicsDebugPanel.reset();
+    m_PhysicsDebugPanel = {};
     m_GripperPanel = {};
     // 파지 제약은 연결된 Body와 PhysicsWorld를 빌려 쓰므로 Scene, Controller, 물리 시스템이 살아 있을 때 먼저 해제한다.
     m_GripperGraspAdapter.reset();
