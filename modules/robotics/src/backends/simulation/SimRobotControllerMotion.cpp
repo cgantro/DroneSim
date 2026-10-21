@@ -13,6 +13,9 @@ namespace grasplink::robotics::backends::simulation
 namespace planning = grasplink::robotics::planning;
 namespace
 {
+constexpr double kRuntimeLinearIkPositionToleranceMeters = 1e-6;
+constexpr double kRuntimeLinearIkOrientationToleranceRadians = 1e-5;
+
 bool JointInterpolationFollowsTcpLine(
     const JointVector& start,
     const JointVector& end,
@@ -42,9 +45,10 @@ bool JointInterpolationFollowsTcpLine(
 kinematics::IkOptions RuntimeLinearIkOptions(const models::RobotSpecification& specification)
 {
     kinematics::IkOptions options = planning::PathIkOptions(specification);
-    // 특이 자세에서 관절을 재배치하는 보조 IK에 완화한 오차를 사용해 반복 횟수를 제한한다.
-    options.positionToleranceMeters = 1e-6;
-    options.orientationToleranceRadians = 1e-5;
+    // 보조 IK 결과가 명목 TCP 경로에서 벗어나는 정도를 더 작게 제한한다.
+    // 같은 허용 오차를 IK 수렴 판정과 후보 자세 검증에 함께 사용한다.
+    options.positionToleranceMeters = kRuntimeLinearIkPositionToleranceMeters;
+    options.orientationToleranceRadians = kRuntimeLinearIkOrientationToleranceRadians;
     return options;
 }
 
