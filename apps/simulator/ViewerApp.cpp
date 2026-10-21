@@ -399,32 +399,14 @@ void ViewerApp::InitPhysics(const Entity& robotRoot, Entity& floorEntity)
     pick_place::ConfigureFloor(floorEntity);
     m_RobotPhysicsAdapter = std::make_unique<grasplink::simulation::RobotPhysicsAdapter>(
         *m_Scene, robotRoot, m_RobotDescription);
-    // 팔 충돌 도형은 URDF에서 읽고 그리퍼 도형은 별도 그리퍼 자료에서 만든다.
-    // 그리퍼 본체와 여섯 관절에 Scene이 목표 자세를 정하는 Kinematic Body 설정을 만든다.
-    // 충돌용 단순 형상은 원본 관절 Entity의 자식으로 두어 그 관절을 따라가게 한다.
-    // GripperState에서 계산한 Local 회전을 원본 관절에 적용한 뒤 World 행렬을 갱신하면 자식인 충돌용 단순 형상도 함께 움직인다.
-    // 각 충돌 형상은 원본 관절의 자식이므로 관절 자세를 전달하는 별도 adapter는 필요하지 않다. 접촉 정지와 물체 파지는 아래 GripperGraspAdapter가 물리 계산 결과를 받아 처리한다.
-    // GUI의 보라색 선은 ECS에 지정한 shape를 깊이 가림 없이 그린 근사다. 화면 Mesh나 Jolt가 최종 생성한 hull을 직접 보여 주지는 않는다.
-    if (m_GripperController)
-    {
-        grasplink::simulation::ConfigureTwoF85Colliders(*m_Scene, robotRoot, m_RobotModel);
-        m_GraspBox = pick_place::CreateGraspBox(*m_Scene, m_RobotShader);
-        m_PlacementArea = pick_place::CreatePlacementArea(*m_Scene, m_RobotShader);
-        m_ScenarioSampler = std::make_unique<grasplink::application::PickPlaceScenarioSampler>();
-        pick_place::RandomizePickPlaceScene(m_GraspBox, m_PlacementArea, *m_ScenarioSampler);
-    }
+    InitGripperScene(robotRoot);
+
     // Physics Body를 만들기 전에 첫 FK 자세와 계층 World 행렬을 계산해 화면 Entity와 Kinematic 목표를 같은 위치에 맞춘다.
     ApplyControllerPoses();
     TransformSystemModule::UpdateWorldTransforms(m_World);
     m_PhysicsSystemModule = std::make_unique<grasplink::simulation::PhysicsSystemModule>(
         m_World, *m_PhysicsWorld, &m_Logger);
-    if (m_GripperController)
-    {
-        m_GripperGraspAdapter = std::make_unique<grasplink::simulation::GripperGraspAdapter>(
-            *m_PhysicsWorld, *m_PhysicsSystemModule, *m_GripperController);
-        if (!m_GripperGraspAdapter->Bind(robotRoot))
-            throw std::runtime_error("그리퍼 충돌 관절을 물리 계산에 연결하지 못했습니다.");
-    }
+    InitGripperPhysics(robotRoot);
 
     std::optional<grasplink::simulation::robotics::RobotEnvironmentCollisionGuard::GripperSupport>
         gripperSupport;
@@ -438,6 +420,31 @@ void ViewerApp::InitPhysics(const Entity& robotRoot, Entity& floorEntity)
     m_RobotCollisionGuard = std::make_unique<grasplink::simulation::robotics::RobotEnvironmentCollisionGuard>(
         *m_RobotController, *m_RobotKinematics, *m_RobotTransformAdapter, *m_RobotPhysicsAdapter,
         m_World, *m_PhysicsWorld, *m_PhysicsSystemModule, robotRoot, std::move(gripperSupport));
+}
+
+void ViewerApp::InitGripperScene(const Entity& robotRoot)
+{
+    if (!m_GripperController)
+        return;
+
+    // 현재 2F-85 예제는 GLB 메시에서 충돌용 외피를 만들고, 원본 관절 Entity의 자식으로 붙인다.
+    // 그래서 관절 회전과 Scene 변환 갱신 뒤에 충돌 외피도 같은 자세를 따른다.
+    grasplink::simulation::ConfigureTwoF85Colliders(*m_Scene, robotRoot, m_RobotModel);
+    m_GraspBox = pick_place::CreateGraspBox(*m_Scene, m_RobotShader);
+    m_PlacementArea = pick_place::CreatePlacementArea(*m_Scene, m_RobotShader);
+    m_ScenarioSampler = std::make_unique<grasplink::application::PickPlaceScenarioSampler>();
+    pick_place::RandomizePickPlaceScene(m_GraspBox, m_PlacementArea, *m_ScenarioSampler);
+}
+
+void ViewerApp::InitGripperPhysics(const Entity& robotRoot)
+{
+    if (!m_GripperController)
+        return;
+
+    m_GripperGraspAdapter = std::make_unique<grasplink::simulation::GripperGraspAdapter>(
+        *m_PhysicsWorld, *m_PhysicsSystemModule, *m_GripperController);
+    if (!m_GripperGraspAdapter->Bind(robotRoot))
+        throw std::runtime_error("그리퍼 충돌 관절을 물리 계산에 연결하지 못했습니다.");
 }
 
 

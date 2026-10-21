@@ -129,6 +129,12 @@ private:
     // ECS의 충돌 모양 설정에서 Jolt 물체를 만들고, 초기 위치를 화면 물체 및 화면 모델을 따라가는 충돌용 물체에 맞춘다.
     void InitPhysics(const grasplink::scene::Entity& robotRoot, grasplink::scene::Entity& floorEntity);
 
+    // 물리 Body를 만들기 전에 그리퍼 충돌 모양과 집기 시연용 장면 물체를 준비한다.
+    void InitGripperScene(const grasplink::scene::Entity& robotRoot);
+
+    // PhysicsSystemModule이 만들어진 뒤 그리퍼 접촉 처리를 물리 Body에 연결한다.
+    void InitGripperPhysics(const grasplink::scene::Entity& robotRoot);
+
     // Controller 상태에서 계산한 로봇과 그리퍼 위치·방향을 장면 물체에 적용한다. 호출자는 이후 Scene 전체 행렬을 다시 계산한다.
     void ApplyControllerPoses();
 
