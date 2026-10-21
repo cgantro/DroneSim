@@ -23,7 +23,10 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <stdexcept>
 #ifndef _WIN32
 #include <iostream>
 #endif
@@ -47,6 +50,22 @@ constexpr int windowHeight = 720;
 constexpr std::size_t smokeTestFrameLimit = 8;
 constexpr std::size_t demoLengthTicks = 900;
 constexpr double benchmarkDurationSeconds = 5.0;
+
+std::filesystem::path BenchmarkOutputPath()
+{
+#ifdef _WIN32
+    std::wstring executablePath(32768U, L'\0');
+    const DWORD pathLength = GetModuleFileNameW(
+        nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
+    if (pathLength == 0U || pathLength >= executablePath.size())
+        throw std::runtime_error("실행 파일의 위치를 확인할 수 없습니다.");
+
+    executablePath.resize(pathLength);
+    return std::filesystem::path(executablePath).parent_path() / L"benchmark-latest.json";
+#else
+    return std::filesystem::current_path() / "benchmark-latest.json";
+#endif
+}
 
 glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
 {
@@ -923,6 +942,12 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         report["working_set_bytes"] = memory.WorkingSetSize;
 #endif
     const std::string output = report.dump(2) + '\n';
+    std::ofstream resultFile(BenchmarkOutputPath(), std::ios::binary | std::ios::trunc);
+    if (!resultFile)
+        throw std::runtime_error("성능 측정 결과 파일을 저장할 수 없습니다.");
+    resultFile.write(output.data(), static_cast<std::streamsize>(output.size()));
+    if (!resultFile)
+        throw std::runtime_error("성능 측정 결과를 파일에 모두 쓰지 못했습니다.");
 #ifdef _WIN32
     OutputDebugStringA(output.c_str());
 #else
