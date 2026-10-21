@@ -121,15 +121,7 @@ int main()
 
 경로가 수락됐다는 사실만으로 끝점까지 확인되지는 않는다. 검증할 때는 시작과 완료 시점의 `RobotState`에서 `valid`, `tcpPoseValid`, `mode`를 확인한다. 최종 관절각을 `DampedLeastSquaresIk::EvaluateTcp`에 다시 넣어 요청한 TCP 끝점과 비교하고, 경로 중간 표본이 요청한 직선에서 얼마나 벗어나는지도 확인한다. 기본 경로 정책은 TCP 위치 오차 1 mm, 방향 오차 0.001 rad 이하를 기준으로 표본을 보정한다. 이는 표본 사이 모든 자세를 증명하거나 모든 환경에서 성공한다는 뜻은 아니다. 충돌을 확인하려면 실제 앱의 Jolt 검사 callback도 연결해야 한다.
 
-관련 테스트는 `tests/robotics/RobotMotionTests.cpp`와 `tests/robotics/LinearPathPlannerTests.cpp`에 있다. 특히 `RobotMotion.IncrementalLinearPlanningDoesNotCommitBeforePathValidation`은 계획이 끝나기 전 관절 상태를 바꾸지 않는다는 계약을 확인한다. Windows Developer PowerShell에서 실행할 명령은 다음과 같다.
-
-```powershell
-cmake --preset ninja-debug
-cmake --build --preset ninja-debug
-ctest --test-dir build-ninja-debug --output-on-failure -R "RobotMotion|LinearPathPlanner"
-```
-
-위 명령은 테스트를 실행하는 방법을 안내한다. 이 문서를 작성하면서 빌드나 테스트를 실행하지 않았으며, 현재 통과 결과를 주장하지 않는다.
+관련 시험은 계획이 끝나기 전에 관절 상태를 바꾸지 않는지 확인한다. 이 문서의 예제는 작성할 때 빌드하거나 실행하지 않았으므로, 현재 동작을 검증했다고 볼 수 없다.
 
 ## 실패를 읽는 법
 
