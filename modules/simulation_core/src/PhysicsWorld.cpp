@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -65,12 +66,18 @@ JoltRuntime& Runtime()
     return runtime;
 }
 
+/** @brief Jolt가 쓰는 float 범위를 확인한 뒤 변환합니다. */
+float ToJoltFloat(double value)
+{
+    constexpr double maximumFloat = std::numeric_limits<float>::max();
+    if (!std::isfinite(value) || value > maximumFloat || value < -maximumFloat)
+        throw std::invalid_argument("물리 값이 Jolt가 표현할 수 있는 범위를 벗어났습니다.");
+    return static_cast<float>(value);
+}
+
 JPH::Vec3 ToJolt(const glm::dvec3& value)
 {
-    return {
-        static_cast<float>(value.x),
-        static_cast<float>(value.y),
-        static_cast<float>(value.z)};
+    return {ToJoltFloat(value.x), ToJoltFloat(value.y), ToJoltFloat(value.z)};
 }
 
 JPH::Vec3 ToJolt(const glm::vec3& value)
@@ -271,7 +278,7 @@ RigidBodyHandle PhysicsWorld::CreateCompoundBoxes(
     settings.mAllowSleeping = false;
     if (!definition.isStatic)
     {
-        settings.mMassPropertiesOverride.mMass = static_cast<float>(definition.massKilograms);
+        settings.mMassPropertiesOverride.mMass = ToJoltFloat(definition.massKilograms);
         if (definition.principalInertiaKilogramMetersSquared.has_value())
         {
             settings.mOverrideMassProperties = JPH::EOverrideMassProperties::MassAndInertiaProvided;
@@ -398,15 +405,19 @@ void PhysicsWorld::Step(double seconds, int collisionSteps, double* durationMicr
     if (!std::isfinite(seconds) || !(seconds > 0.0) || collisionSteps <= 0)
         throw std::invalid_argument("물리 시간 간격과 충돌 계산 횟수를 확인해 주세요.");
 
+    const float stepSeconds = ToJoltFloat(seconds);
+    if (!(stepSeconds > 0.0F))
+        throw std::invalid_argument("물리 시간 간격이 Jolt에서 0초로 줄어듭니다.");
+
     if (durationMicroseconds == nullptr)
     {
-        impl_->physics.Update(static_cast<float>(seconds), collisionSteps,
+        impl_->physics.Update(stepSeconds, collisionSteps,
             &impl_->tempAllocator, &impl_->jobSystem);
         return;
     }
 
     const auto start = std::chrono::steady_clock::now();
-    impl_->physics.Update(static_cast<float>(seconds), collisionSteps,
+    impl_->physics.Update(stepSeconds, collisionSteps,
         &impl_->tempAllocator, &impl_->jobSystem);
     *durationMicroseconds = std::chrono::duration<double, std::micro>(
         std::chrono::steady_clock::now() - start).count();

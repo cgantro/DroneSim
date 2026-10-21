@@ -11,6 +11,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -322,6 +323,24 @@ TEST(PhysicsWorld, RejectsInvalidPrincipalInertia)
     RigidBodyDefinition definition;
     definition.principalInertiaKilogramMetersSquared = {0.02, 0.0, 0.04};
 
+    EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
+}
+
+TEST(PhysicsWorld, RejectsFiniteValuesOutsideJoltFloatRange)
+{
+    PhysicsWorld world;
+    const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 10.0});
+    const double beyondFloatRange =
+        static_cast<double>(std::numeric_limits<float>::max()) * 2.0;
+
+    EXPECT_THROW(
+        world.ApplyForce(body, {beyondFloatRange, 0.0, 0.0}),
+        std::invalid_argument);
+    EXPECT_THROW(world.Step(beyondFloatRange), std::invalid_argument);
+
+    RigidBodyDefinition definition;
+    definition.positionMeters = {0.0, 0.0, 10.0};
+    definition.massKilograms = beyondFloatRange;
     EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
 }
 
