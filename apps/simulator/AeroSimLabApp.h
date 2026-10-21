@@ -170,6 +170,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> facilityMesh_;
     std::vector<glm::mat4> buildingTransforms_;
     aerosimlab::terrain::TerrainGrid terrain_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
@@ -179,6 +180,8 @@ private:
         glm::vec4{0.35F, 0.39F, 0.34F, 1.0F}, 0.0F, 1.0F};
     aerosimlab::graphics::Material buildingMaterial_{
         glm::vec4{0.63F, 0.59F, 0.48F, 1.0F}, 0.0F, 0.9F};
+    aerosimlab::graphics::Material facilityMaterial_{
+        glm::vec4{0.48F, 0.52F, 0.38F, 1.0F}, 0.0F, 0.85F};
 #ifndef __EMSCRIPTEN__
     aerosimlab::simulation::SimulationCore simulation_{
         aerosimlab::simulation::SimulationDynamics::RigidBody};

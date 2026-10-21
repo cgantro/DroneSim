@@ -13,6 +13,7 @@
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
 #include "terrain/BuildingFootprint.h"
+#include "terrain/StaticFacility.h"
 #include <glm/gtc/quaternion.hpp>
 #ifndef __EMSCRIPTEN__
 #include "vision/RgbFrameQuality.h"
@@ -387,10 +388,17 @@ void AeroSimLabApp::InitializeGraphics()
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb("models/drones/x500/visual.glb");
     terrain_ = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
     terrainMesh_ = CreateTerrainMesh(terrain_);
+    facilityMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
+        "maps/bukhansan-demo/facilities.glb");
     const auto buildings = aerosimlab::terrain::LoadBuildingFootprints(
         "maps/bukhansan-demo/buildings.geojson", terrain_);
+    const auto facilities = aerosimlab::terrain::LoadStaticFacilities(
+        "maps/bukhansan-demo/facilities.json");
 #ifndef __EMSCRIPTEN__
     simulation_.SetTerrain(terrain_);
+    for (const auto& facility : facilities)
+        simulation_.AddStaticObstacleBox(
+            facility.centerMeters, facility.halfExtentsMeters);
 #endif
     buildingTransforms_.reserve(buildings.size());
     for (const auto& building : buildings)
@@ -1049,6 +1057,11 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     for (const glm::mat4& transform : buildingTransforms_)
         DrawCube(transform, cameraPosition, buildingMaterial_, view, projection);
 
+    const glm::mat4 simulationToRender = glm::rotate(
+        glm::mat4{1.0F}, -1.57079632679F, glm::vec3{1.0F, 0.0F, 0.0F});
+    renderer_->Draw(simulationToRender, *facilityMesh_, facilityMaterial_, *shader_,
+        view, projection, cameraPosition);
+
     const glm::vec3 position = ToRenderPosition(simulation_.State().positionMeters);
     const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
         glm::mat4_cast(ToRenderOrientation(simulation_.State().orientation));
@@ -1086,7 +1099,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     std::sort(visionDurations.begin(), visionDurations.end());
 #endif
     nlohmann::json report{
-        {"configuration", "Windows Release; hidden OpenGL window; one drone; SRTM terrain; 17 OSM building boxes; PX4 X500 visual mesh"},
+        {"configuration", "Windows Release; hidden OpenGL window; one drone; SRTM terrain; 17 OSM building boxes; 49 park facilities; PX4 X500 and park facility meshes"},
         {"source_revision", AEROSIMLAB_SOURCE_REVISION},
         {"framebuffer", {{"width", framebufferWidth}, {"height", framebufferHeight}}},
         {"opengl", {{"renderer", glString(GL_RENDERER)}, {"version", glString(GL_VERSION)}}},

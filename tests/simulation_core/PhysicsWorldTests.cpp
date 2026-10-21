@@ -1,5 +1,6 @@
 #include "simulation_core/PhysicsWorld.h"
 #include "terrain/BuildingFootprint.h"
+#include "terrain/StaticFacility.h"
 #include "terrain/TerrainGrid.h"
 #include "simulation_core/QuadrotorModel.h"
 
@@ -11,6 +12,7 @@
 #include <filesystem>
 #include <iterator>
 #include <stdexcept>
+#include <vector>
 
 namespace aerosimlab::simulation
 {
@@ -278,6 +280,32 @@ TEST(PhysicsWorld, OSMBuildingBoxStopsABodyAboveItsTerrainSample)
     EXPECT_LT(result.positionMeters.z,
         groundHeightMeters + assumedBuildingHeightMeters + 1.0);
     EXPECT_LT(std::abs(result.linearVelocityMetersPerSecond.z), 0.1);
+}
+
+TEST(PhysicsWorld, SurveyedFacilityBoundsStopAFallingBody)
+{
+    const std::vector<aerosimlab::terrain::StaticFacility> facilities =
+        aerosimlab::terrain::LoadStaticFacilities(
+            std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+            / "assets/maps/bukhansan-demo/facilities.json");
+    const auto facility = std::find_if(facilities.begin(), facilities.end(),
+        [](const auto& value) { return value.id == "B-M-01"; });
+    ASSERT_NE(facility, facilities.end());
+
+    PhysicsWorld world;
+    RigidBodyDefinition obstacle;
+    obstacle.isStatic = true;
+    obstacle.positionMeters = facility->centerMeters + glm::dvec3{0.0, 0.0, 100.0};
+    obstacle.halfExtentsMeters = facility->halfExtentsMeters;
+    static_cast<void>(world.CreateBox(obstacle));
+
+    const glm::dvec3 center = obstacle.positionMeters;
+    const double top = center.z + facility->halfExtentsMeters.z;
+    const RigidBodyHandle body = MakeBody(world, {center.x, center.y, top + 5.0});
+    for (int tick = 0; tick < 240; ++tick)
+        world.Step(1.0 / 60.0);
+
+    EXPECT_NEAR(world.State(body).positionMeters.z, top + 0.1, 0.1);
 }
 
 TEST(PhysicsWorld, RejectsInvalidBodySize)

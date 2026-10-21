@@ -1,9 +1,11 @@
 #include "terrain/BuildingFootprint.h"
+#include "terrain/StaticFacility.h"
 #include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 
 namespace aerosimlab::terrain
@@ -77,6 +79,28 @@ TEST(BuildingFootprint, LoadsThePublicMapWithoutInventingMissingHeights)
         EXPECT_DOUBLE_EQ(building.outlineMeters.front().x, building.outlineMeters.back().x);
         EXPECT_DOUBLE_EQ(building.outlineMeters.front().y, building.outlineMeters.back().y);
         EXPECT_FALSE(building.heightMeters.has_value());
+    }
+}
+
+TEST(StaticFacility, LoadsTheSurveyedParkFeaturesAndCollisionBounds)
+{
+    const std::vector<StaticFacility> facilities = LoadStaticFacilities(
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+        / "assets/maps/bukhansan-demo/facilities.json");
+
+    ASSERT_EQ(facilities.size(), 49U);
+    for (const StaticFacility& facility : facilities)
+    {
+        EXPECT_FALSE(facility.id.empty());
+        EXPECT_FALSE(facility.type.empty());
+        EXPECT_TRUE(std::isfinite(facility.centerMeters.x));
+        EXPECT_TRUE(std::isfinite(facility.centerMeters.y));
+        EXPECT_TRUE(std::isfinite(facility.centerMeters.z));
+        EXPECT_GT(facility.halfExtentsMeters.x, 0.0F);
+        EXPECT_GT(facility.halfExtentsMeters.y, 0.0F);
+        EXPECT_GT(facility.halfExtentsMeters.z, 0.0F);
+        EXPECT_LT(std::abs(facility.centerMeters.x), 800.0);
+        EXPECT_LT(std::abs(facility.centerMeters.y), 1'000.0);
     }
 }
 }

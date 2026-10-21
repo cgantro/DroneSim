@@ -47,6 +47,7 @@ endif()
 
 add_library(aerosimlab_terrain STATIC
   modules/terrain/src/BuildingFootprint.cpp
+  modules/terrain/src/StaticFacility.cpp
   modules/terrain/src/TerrainGrid.cpp
 )
 target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
