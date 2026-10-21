@@ -195,6 +195,9 @@ QuadrotorWrench QuadrotorModel::CalculateWrench(
         wrench.torqueNewtonMeters.z -= DirectionSign(parameters.rotors[rotor].rotation)
             * parameters.momentToThrustRatio * thrust;
     }
+
+    if (!IsFinite(wrench.forceNewtons) || !IsFinite(wrench.torqueNewtonMeters))
+        throw std::invalid_argument("계산된 로터 힘과 토크가 표현 범위를 벗어났습니다.");
     return wrench;
 }
 }

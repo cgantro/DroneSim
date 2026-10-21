@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <limits>
+#include <stdexcept>
 
 namespace aerosimlab::simulation
 {
@@ -153,5 +155,19 @@ TEST(QuadrotorModel, RotorDragOpposesAirRelativeVelocity)
     EXPECT_NEAR(forwardAirflow.forceNewtons.x,
         -4.0 * 500.0 * parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter * 5.0,
         1.0e-12);
+}
+
+TEST(QuadrotorModel, RejectsWrenchThatOverflowsDoubleRange)
+{
+    QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    parameters.thrustCoefficientNewtonsPerSpeedSquared =
+        std::numeric_limits<double>::max();
+
+    QuadrotorState state;
+    state.motorSpeedRadiansPerSecond.fill(2.0);
+
+    EXPECT_THROW(
+        static_cast<void>(QuadrotorModel::CalculateWrench(state, parameters)),
+        std::invalid_argument);
 }
 }
