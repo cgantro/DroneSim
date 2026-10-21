@@ -168,7 +168,8 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   target_include_directories(aerosimlab_graphics PUBLIC
     modules/graphics/include
   )
-  target_link_libraries(aerosimlab_graphics PUBLIC glfw glm::glm)
+  target_link_libraries(aerosimlab_graphics PUBLIC glfw glm::glm
+    PRIVATE nlohmann_json::nlohmann_json)
   if(EMSCRIPTEN)
     target_link_libraries(aerosimlab_graphics PUBLIC OpenGL::GL)
     target_link_options(aerosimlab_graphics INTERFACE "-sUSE_GLFW=3" "-sFULL_ES3=1")
@@ -213,6 +214,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "-sALLOW_MEMORY_GROWTH=1"
       "--preload-file" "${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
       "--preload-file" "${CMAKE_SOURCE_DIR}/assets/maps@maps"
+      "--preload-file" "${CMAKE_SOURCE_DIR}/assets/models/drones@models/drones"
     )
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
@@ -222,6 +224,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets/maps"
         "$<TARGET_FILE_DIR:aerosimlab_simulator>/maps"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets/models/drones"
+        "$<TARGET_FILE_DIR:aerosimlab_simulator>/models/drones"
       VERBATIM
     )
   endif()

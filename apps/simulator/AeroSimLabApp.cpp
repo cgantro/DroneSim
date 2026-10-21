@@ -231,6 +231,7 @@ void AeroSimLabApp::InitializeGraphics()
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
 
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
+    droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb("models/drones/x500/visual.glb");
     terrain_ = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
     terrainMesh_ = CreateTerrainMesh(terrain_);
 #ifndef __EMSCRIPTEN__
@@ -840,20 +841,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     const glm::vec3 position = ToRenderPosition(simulation_.State().positionMeters);
     const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
         glm::mat4_cast(ToRenderOrientation(simulation_.State().orientation));
-    const auto drawPart = [&](const glm::vec3& offset, const glm::vec3& size,
-                              const aerosimlab::graphics::Material& material)
-    {
-        DrawCube(heading * glm::translate(glm::mat4{1.0F}, offset) *
-            glm::scale(glm::mat4{1.0F}, size), cameraPosition, material, view, projection);
-    };
-
-    drawPart({0.0F, 0.0F, 0.0F}, {0.55F, 0.16F, 0.42F}, droneMaterial_);
-    drawPart({0.0F, 0.0F, -0.35F}, {0.50F, 0.05F, 0.05F}, droneMaterial_);
-    drawPart({0.0F, 0.0F, 0.35F}, {0.50F, 0.05F, 0.05F}, droneMaterial_);
-    drawPart({-0.32F, 0.08F, -0.32F}, {0.18F, 0.04F, 0.18F}, propellerMaterial_);
-    drawPart({0.32F, 0.08F, -0.32F}, {0.18F, 0.04F, 0.18F}, propellerMaterial_);
-    drawPart({-0.32F, 0.08F, 0.32F}, {0.18F, 0.04F, 0.18F}, propellerMaterial_);
-    drawPart({0.32F, 0.08F, 0.32F}, {0.18F, 0.04F, 0.18F}, propellerMaterial_);
+    renderer_->Draw(heading, *droneMesh_, droneMaterial_, *shader_,
+        view, projection, cameraPosition);
 }
 
 void AeroSimLabApp::DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
@@ -895,7 +884,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     std::sort(visionDurations.begin(), visionDurations.end());
 #endif
     nlohmann::json report{
-        {"configuration", "Windows Release; hidden OpenGL window; one drone; simple geometry"},
+        {"configuration", "Windows Release; hidden OpenGL window; one drone; PX4 X500 visual mesh"},
         {"source_revision", AEROSIMLAB_SOURCE_REVISION},
         {"framebuffer", {{"width", framebufferWidth}, {"height", framebufferHeight}}},
         {"opengl", {{"renderer", glString(GL_RENDERER)}, {"version", glString(GL_VERSION)}}},

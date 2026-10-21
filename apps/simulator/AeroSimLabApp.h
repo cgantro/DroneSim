@@ -170,13 +170,12 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
     aerosimlab::terrain::TerrainGrid terrain_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{0.12F, 0.48F, 0.32F, 1.0F}, 0.0F, 0.75F};
-    aerosimlab::graphics::Material propellerMaterial_{
-        glm::vec4{0.08F, 0.09F, 0.10F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material groundMaterial_{
         glm::vec4{0.35F, 0.39F, 0.34F, 1.0F}, 0.0F, 1.0F};
     aerosimlab::graphics::Material buildingMaterial_{
