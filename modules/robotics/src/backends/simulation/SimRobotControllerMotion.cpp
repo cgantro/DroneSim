@@ -156,10 +156,12 @@ void SimRobotController::Update(double dtSeconds)
 
 void SimRobotController::AdvanceJointMove(double dtSeconds)
 {
+    // 관절마다 이동 거리가 달라도 공통 진행률을 계산한 뒤 각 관절의 변위에 적용한다.
     double nextProgress = jointMotion_.progress;
     double nextVelocity = 0.0;
     if (jointMotion_.braking)
     {
+        // 공통 진행률을 감속해 정지 목표에 맞춘다. v² = v₀² - 2aΔs를 풀어 한 tick의 진행량을 구한다.
         nextVelocity = std::max(0.0,
             jointMotion_.progressVelocity - jointMotion_.progressAcceleration * dtSeconds);
         nextProgress += (jointMotion_.progressVelocity * jointMotion_.progressVelocity -
@@ -179,17 +181,20 @@ void SimRobotController::AdvanceJointMove(double dtSeconds)
             jointMotion_.accelerationTimeSeconds * jointMotion_.accelerationTimeSeconds;
         if (elapsed < jointMotion_.accelerationTimeSeconds)
         {
+            // 가속도가 일정한 구간에서 진행률은 s = ½at², 속도는 v = at이다.
             nextProgress = 0.5 * jointMotion_.progressAcceleration * elapsed * elapsed;
             nextVelocity = jointMotion_.progressAcceleration * elapsed;
         }
         else if (elapsed < jointMotion_.accelerationTimeSeconds + jointMotion_.cruiseTimeSeconds)
         {
+            // 등속도 구간은 가속 구간의 끝에서 일정한 속도로 이어 간다.
             nextProgress = accelerationDistance + jointMotion_.peakProgressVelocity *
                 (elapsed - jointMotion_.accelerationTimeSeconds);
             nextVelocity = jointMotion_.peakProgressVelocity;
         }
         else
         {
+            // 감속은 목표 진행률 1에서 남은 시간을 거꾸로 계산해 속도가 0으로 끝나게 한다.
             const double decelerationTime = jointMotion_.profileDurationSeconds - elapsed;
             nextProgress = 1.0 - 0.5 * jointMotion_.progressAcceleration *
                 decelerationTime * decelerationTime;
