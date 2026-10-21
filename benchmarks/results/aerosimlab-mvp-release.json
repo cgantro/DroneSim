@@ -61,7 +61,7 @@
   "rechecks": [
     {
       "measured_at": "2026-10-21T14:39:28Z",
-      "source_revision": "00d9e8f plus local benchmark metadata change",
+      "source_revision": "5ca4f19",
       "environment": {
         "os": "Microsoft Windows NT 10.0.26200.0",
         "architecture": "X64",
