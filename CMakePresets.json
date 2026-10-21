@@ -9,7 +9,7 @@
       "binaryDir": "${sourceDir}/build-ninja-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "GRASPLINK_BUILD_GRAPHICS": "ON"
+        "AEROSIMLAB_BUILD_GRAPHICS": "ON"
       }
     },
     {
@@ -20,7 +20,7 @@
       "binaryDir": "${sourceDir}/build-ninja-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "GRASPLINK_BUILD_GRAPHICS": "ON"
+        "AEROSIMLAB_BUILD_GRAPHICS": "ON"
       }
     },
     {
@@ -44,9 +44,7 @@
         "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
-        "GRASPLINK_BUILD_GRAPHICS": "OFF",
-        "GRASPLINK_ENABLE_TRACY": "OFF",
-        "GRASPLINK_BUILD_BENCHMARKS": "OFF",
+        "AEROSIMLAB_BUILD_GRAPHICS": "OFF",
         "BUILD_TESTING": "ON"
       }
     },
@@ -71,9 +69,7 @@
         "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
-        "GRASPLINK_BUILD_GRAPHICS": "OFF",
-        "GRASPLINK_ENABLE_TRACY": "OFF",
-        "GRASPLINK_BUILD_BENCHMARKS": "OFF",
+        "AEROSIMLAB_BUILD_GRAPHICS": "OFF",
         "BUILD_TESTING": "ON"
       }
     },
@@ -98,9 +94,7 @@
         "CMAKE_CXX_FLAGS": "--coverage -O0 -g",
         "CMAKE_EXE_LINKER_FLAGS": "--coverage",
         "CMAKE_SHARED_LINKER_FLAGS": "--coverage",
-        "GRASPLINK_BUILD_GRAPHICS": "OFF",
-        "GRASPLINK_ENABLE_TRACY": "OFF",
-        "GRASPLINK_BUILD_BENCHMARKS": "OFF",
+        "AEROSIMLAB_BUILD_GRAPHICS": "OFF",
         "BUILD_TESTING": "ON"
       }
     },
@@ -125,24 +119,8 @@
         "CMAKE_CXX_FLAGS": "--coverage -O0 -g",
         "CMAKE_EXE_LINKER_FLAGS": "--coverage",
         "CMAKE_SHARED_LINKER_FLAGS": "--coverage",
-        "GRASPLINK_BUILD_GRAPHICS": "OFF",
-        "GRASPLINK_ENABLE_TRACY": "OFF",
-        "GRASPLINK_BUILD_BENCHMARKS": "OFF",
+        "AEROSIMLAB_BUILD_GRAPHICS": "OFF",
         "BUILD_TESTING": "ON"
-      }
-    },
-    {
-      "name": "emscripten-web",
-      "displayName": "Emscripten Web Release",
-      "description": "Configure the threaded browser simulator with Emscripten",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-emscripten-web",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "GRASPLINK_BUILD_GRAPHICS": "ON",
-        "GRASPLINK_ENABLE_TRACY": "OFF",
-        "GRASPLINK_BUILD_BENCHMARKS": "OFF",
-        "BUILD_TESTING": "OFF"
       }
     },
     {
@@ -153,10 +131,7 @@
       "binaryDir": "${sourceDir}/build-emscripten-single-thread",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "GRASPLINK_BUILD_GRAPHICS": "ON",
-        "GRASPLINK_ENABLE_TRACY": "OFF",
-        "GRASPLINK_BUILD_BENCHMARKS": "OFF",
-        "GRASPLINK_WEB_PTHREADS": "OFF",
+        "AEROSIMLAB_BUILD_GRAPHICS": "ON",
         "BUILD_TESTING": "OFF"
       }
     }
@@ -196,12 +171,6 @@
       "name": "linux-clang-coverage",
       "displayName": "Build Linux Clang Coverage",
       "configurePreset": "linux-clang-coverage",
-      "jobs": 4
-    },
-    {
-      "name": "emscripten-web",
-      "displayName": "Build Emscripten Web Release",
-      "configurePreset": "emscripten-web",
       "jobs": 4
     },
     {

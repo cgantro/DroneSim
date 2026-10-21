@@ -1,9 +1,16 @@
 # AeroSimLab
 
-AeroSimLab은 가상 드론의 비행과 탑재 카메라 화면을 시험하는 C++ 시뮬레이터입니다. 현재는 60Hz 운동 모형, JSON 시나리오 실행, 간단한 3D 화면을 제공합니다. 별도 지상통제 프로그램과 UDP 연동은 아직 없습니다.
+AeroSimLab은 가상 드론과 탑재 RGB 카메라를 운용하고 시험하는 작은 C++ 시뮬레이터입니다. 화면 프로그램, 별도 지상통제 프로그램, 화면 없이 실행하는 시나리오 시험을 제공합니다.
 
-화면 왼쪽에는 드론과 주변 환경이 보이고, 오른쪽에는 기체 방향을 따라가는 RGB 카메라 화면이 보입니다. 드론과 건물은 단순한 상자 모양이며, 실제 공기 흐름이나 모터 힘은 계산하지 않습니다.
-화면은 이착륙과 경유점 이동을 자동으로 반복합니다. 조종 입력은 아직 없습니다.
+## 지금 되는 기능
+
+- 60Hz 고정 간격으로 드론의 이륙·이동·경유점 비행·착륙을 계산합니다.
+- 왼쪽에는 주변을 보는 화면, 오른쪽에는 드론에 붙은 EO 카메라 시점을 그립니다.
+- 카메라 켜기·끄기, 고장 주입과 복구를 모의합니다. 카메라가 꺼지거나 고장 나면 오른쪽 영상이 멈춥니다.
+- 지상통제 프로그램에서 UDP로 드론과 카메라를 제어하고, 적용 Tick과 상태를 확인합니다.
+- JSON 시나리오에서 통신 지연·손실·중복과 카메라 고장·복구를 재생합니다.
+
+드론은 상자 모양이고 운동은 단순한 위치·속도 계산입니다. 공기역학, 실제 비행 성능, GLB 모델 불러오기와 영상 파일 저장은 구현하지 않았습니다.
 
 ## 빌드
 
@@ -12,19 +19,12 @@ Windows에서는 Visual Studio 개발자 PowerShell에서 실행합니다.
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
 ## 실행
 
-화면 없이 예제 비행을 시험합니다.
-
-```powershell
-.\build\aerosimlab_headless.exe --scenario scenarios/normal-flight.json
-```
-
-결과의 `passed`가 `true`면 명령 재생과 예상 상태 비교가 통과한 것입니다.
-
-화면 프로그램은 실행 파일이 있는 폴더에서 시작합니다.
+시뮬레이터는 실행 파일이 있는 폴더에서 시작합니다. 기본 UDP 포트는 27015입니다.
 
 ```powershell
 Push-Location .\build
@@ -32,14 +32,40 @@ Push-Location .\build
 Pop-Location
 ```
 
-## 시험
+자동 비행 시연을 보려면 `--demo`를 추가합니다. 다른 포트를 쓰려면 `--udp-port 번호`를 지정합니다.
+
+별도 PowerShell 창에서 지상통제 명령을 보냅니다.
 
 ```powershell
-ctest --test-dir build --output-on-failure
+.\build\aerosimlab_ground_control.exe --command takeoff
+# 드론이 뜰 때까지 1.5초 정도 기다립니다.
+.\build\aerosimlab_ground_control.exe --command waypoint 2 0 1.5
+.\build\aerosimlab_ground_control.exe --camera fault
+.\build\aerosimlab_ground_control.exe --camera recover
+.\build\aerosimlab_ground_control.exe --command land
 ```
 
-12개 시험에서 드론 상태 전이, 명령, 시나리오 반복 결과와 화면 시작을 확인합니다. UDP 통신, 센서 고장, 성능 분포는 아직 시험하지 않습니다.
+다른 시뮬레이터 주소나 포트는 `--host IPv4`와 `--port 번호`로 지정합니다. 지상통제 프로그램은 명령 결과, 적용 Tick, 드론 상태와 카메라 상태를 출력합니다.
 
-## 문서
+화면 없이 정상 비행이나 장애 시나리오를 실행할 수 있습니다.
 
-[구조 안내](docs/ARCHITECTURE.md) · [요구사항](docs/REQUIREMENTS.md) · [검증 결과](docs/VERIFICATION.md)
+```powershell
+.\build\aerosimlab_headless.exe --scenario scenarios/normal-flight.json
+.\build\aerosimlab_headless.exe --scenario scenarios/fault-injection.json
+```
+
+## 성능 확인
+
+아래 명령은 숨김 OpenGL 창에서 5초 동안 모의와 그리기를 측정하고 JSON 결과를 출력합니다.
+
+```powershell
+Push-Location .\build
+.\aerosimlab_simulator.exe --benchmark
+Pop-Location
+```
+
+현재 세 번 측정한 결과는 [측정 기록](benchmarks/results/aerosimlab-mvp-release.json)에 있습니다. 숨김 창의 FPS는 실제 화면 출력 속도를 뜻하지 않으며, 이전 GraspLink 수치와 비교할 수도 없습니다.
+
+## 관련 문서
+
+[구조 안내](docs/ARCHITECTURE.md) · [요구사항과 상태](docs/REQUIREMENTS.md) · [검증과 측정](docs/VERIFICATION.md)

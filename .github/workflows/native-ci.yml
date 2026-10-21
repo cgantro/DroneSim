@@ -39,7 +39,7 @@ jobs:
             xauth
 
       - name: Configure native Debug build
-        run: cmake --preset ninja -DGRASPLINK_BUILD_BENCHMARKS=OFF
+        run: cmake --preset ninja
 
       - name: Build native targets
         run: cmake --build --preset ninja-debug --parallel 4

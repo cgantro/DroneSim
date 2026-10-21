@@ -1,0 +1,61 @@
+{
+  "measured_at": "2026-10-21T14:08:28Z",
+  "environment": {
+    "os": "Microsoft Windows NT 10.0.26200.0",
+    "architecture": "X64",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+    "build": "MSVC Release x64",
+    "window": "OpenGL hidden window, 1280x720, vsync off"
+  },
+  "method": "각 5초 측정, 매 실행 드론 1대와 단순 도형을 고정 Tick으로 갱신하고 렌더링. 3회 반복.",
+  "runs": [
+    {
+      "configuration": "Windows Release; hidden OpenGL window; one drone; simple geometry",
+      "elapsed_seconds": 5.0450154,
+      "process_cpu_percent_approx": 99.99969474820632,
+      "render_fps": 35.08413472831025,
+      "rendered_frames": 177,
+      "simulation_ticks": 299,
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "p50": 0.1,
+        "p95": 0.5,
+        "p99": 0.6,
+        "samples": 299
+      },
+      "working_set_bytes": 59199488
+    },
+    {
+      "configuration": "Windows Release; hidden OpenGL window; one drone; simple geometry",
+      "elapsed_seconds": 5.0454128,
+      "process_cpu_percent_approx": 100.01163829449197,
+      "render_fps": 38.847168263417416,
+      "rendered_frames": 196,
+      "simulation_ticks": 299,
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "p50": 0.1,
+        "p95": 0.5,
+        "p99": 0.7,
+        "samples": 299
+      },
+      "working_set_bytes": 59158528
+    },
+    {
+      "configuration": "Windows Release; hidden OpenGL window; one drone; simple geometry",
+      "elapsed_seconds": 5.049172,
+      "process_cpu_percent_approx": 99.99659350087498,
+      "render_fps": 26.142900261666664,
+      "rendered_frames": 132,
+      "simulation_ticks": 299,
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "p50": 0.0,
+        "p95": 0.5,
+        "p99": 0.6,
+        "samples": 299
+      },
+      "working_set_bytes": 59170816
+    }
+  ]
+}
