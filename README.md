@@ -16,7 +16,7 @@ CMake, Ninja, MSVC가 설치된 Visual Studio Developer PowerShell에서 실행�
 cmake --preset ninja
 cmake --build --preset ninja-debug
 cd build-ninja-debug
-.\grasplink_simulator.exe
+.\aerosimlab_simulator.exe
 ```
 
 ### 웹

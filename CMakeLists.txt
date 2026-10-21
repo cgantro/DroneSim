@@ -424,55 +424,55 @@ if(GRASPLINK_BUILD_GRAPHICS)
     apps/simulator/PickPlaceScenario.cpp
   )
 
-  add_executable(grasplink_simulator
+  add_executable(aerosimlab_simulator
     ${GRASPLINK_APP_SOURCES}
   )
 
   if(EMSCRIPTEN)
-    set_target_properties(grasplink_simulator PROPERTIES
+    set_target_properties(aerosimlab_simulator PROPERTIES
       OUTPUT_NAME index
       SUFFIX .html
     )
-    target_link_options(grasplink_simulator PRIVATE
+    target_link_options(aerosimlab_simulator PRIVATE
       "--shell-file=${GRASPLINK_WEB_SHELL}"
     )
-    set_property(TARGET grasplink_simulator APPEND PROPERTY LINK_DEPENDS
+    set_property(TARGET aerosimlab_simulator APPEND PROPERTY LINK_DEPENDS
       "${GRASPLINK_WEB_SHELL}"
       "${CMAKE_SOURCE_DIR}/cmake/EmbedEmscriptenPackage.py"
     )
     if(GRASPLINK_WEB_PTHREADS)
-      set_property(TARGET grasplink_simulator APPEND PROPERTY LINK_DEPENDS
+      set_property(TARGET aerosimlab_simulator APPEND PROPERTY LINK_DEPENDS
         "${CMAKE_SOURCE_DIR}/third_party/coi-serviceworker.min.js"
       )
     endif()
-  target_link_options(grasplink_simulator PRIVATE
+  target_link_options(aerosimlab_simulator PRIVATE
       "--preload-file=${CMAKE_SOURCE_DIR}/assets/shaders@/shaders"
       "--preload-file=${CMAKE_SOURCE_DIR}/assets/robots@/robots"
       "--preload-file=${CMAKE_SOURCE_DIR}/assets/plane.glb@/plane.glb"
     )
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    add_custom_command(TARGET grasplink_simulator POST_BUILD
+    add_custom_command(TARGET aerosimlab_simulator POST_BUILD
       COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/cmake/EmbedEmscriptenPackage.py"
-        "$<TARGET_FILE:grasplink_simulator>"
-        "$<TARGET_FILE_DIR:grasplink_simulator>/index.data"
+        "$<TARGET_FILE:aerosimlab_simulator>"
+        "$<TARGET_FILE_DIR:aerosimlab_simulator>/index.data"
       VERBATIM
     )
     if(GRASPLINK_WEB_PTHREADS)
-      add_custom_command(TARGET grasplink_simulator POST_BUILD
+      add_custom_command(TARGET aerosimlab_simulator POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "${CMAKE_SOURCE_DIR}/third_party/coi-serviceworker.min.js"
-          "$<TARGET_FILE_DIR:grasplink_simulator>/coi-serviceworker.min.js"
+          "$<TARGET_FILE_DIR:aerosimlab_simulator>/coi-serviceworker.min.js"
         VERBATIM
       )
     endif()
   endif()
 
-  target_include_directories(grasplink_simulator PRIVATE
+  target_include_directories(aerosimlab_simulator PRIVATE
     apps/simulator
   )
 
-  target_link_libraries(grasplink_simulator PRIVATE
+  target_link_libraries(aerosimlab_simulator PRIVATE
     grasplink_gui
     grasplink_graphics
     grasplink_imgui_backend
@@ -513,11 +513,11 @@ if(GRASPLINK_BUILD_GRAPHICS)
     )
   endif()
 
-  target_compile_definitions(grasplink_simulator PRIVATE
+  target_compile_definitions(aerosimlab_simulator PRIVATE
     GRASPLINK_ENABLE_TRACY=$<BOOL:${GRASPLINK_ENABLE_TRACY}>
   )
   if(GRASPLINK_ENABLE_TRACY)
-    target_link_libraries(grasplink_simulator PRIVATE Tracy::TracyClient)
+    target_link_libraries(aerosimlab_simulator PRIVATE Tracy::TracyClient)
   endif()
 
 
@@ -529,39 +529,39 @@ if(GRASPLINK_BUILD_GRAPHICS)
   #
   if(NOT EMSCRIPTEN)
   add_custom_command(
-    TARGET grasplink_simulator
+    TARGET aerosimlab_simulator
     POST_BUILD
 
     COMMAND ${CMAKE_COMMAND} -E copy_directory
       ${CMAKE_SOURCE_DIR}/assets/shaders
-      $<TARGET_FILE_DIR:grasplink_simulator>/shaders
+      $<TARGET_FILE_DIR:aerosimlab_simulator>/shaders
 
     COMMAND ${CMAKE_COMMAND} -E copy_directory
       ${CMAKE_SOURCE_DIR}/assets/robots
-      $<TARGET_FILE_DIR:grasplink_simulator>/robots
+      $<TARGET_FILE_DIR:aerosimlab_simulator>/robots
 
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       ${CMAKE_SOURCE_DIR}/assets/plane.glb
-      $<TARGET_FILE_DIR:grasplink_simulator>/plane.glb
+      $<TARGET_FILE_DIR:aerosimlab_simulator>/plane.glb
   )
   endif()
 
   if(BUILD_TESTING)
     if(NOT EMSCRIPTEN)
-      grasplink_add_test(grasplink_texture_state_tests GraphicsResource tests/viewer/TextureStateTests.cpp grasplink_graphics grasplink_rendering INTEGRATION RUN_SERIAL CATEGORY graphics TIMEOUT 60 WORKING_DIRECTORY "$<TARGET_FILE_DIR:grasplink_simulator>")
+      grasplink_add_test(grasplink_texture_state_tests GraphicsResource tests/viewer/TextureStateTests.cpp grasplink_graphics grasplink_rendering INTEGRATION RUN_SERIAL CATEGORY graphics TIMEOUT 60 WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>")
     endif()
 
     foreach(axis_count IN ITEMS 4 7)
       add_test(NAME ViewerSmoke${axis_count}Axis
-        COMMAND grasplink_simulator --smoke-test --robot "${CMAKE_SOURCE_DIR}/tests/assets/robots/axis${axis_count}")
+        COMMAND aerosimlab_simulator --smoke-test --robot "${CMAKE_SOURCE_DIR}/tests/assets/robots/axis${axis_count}")
       set_tests_properties(ViewerSmoke${axis_count}Axis PROPERTIES
-        WORKING_DIRECTORY "$<TARGET_FILE_DIR:grasplink_simulator>" TIMEOUT 60 RUN_SERIAL TRUE LABELS "INTEGRATION;e2e")
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>" TIMEOUT 60 RUN_SERIAL TRUE LABELS "INTEGRATION;e2e")
     endforeach()
 
     add_test(NAME ViewerSmoke6Axis
-      COMMAND grasplink_simulator --smoke-test --robot "${CMAKE_SOURCE_DIR}/assets/robots/HCR12A")
+      COMMAND aerosimlab_simulator --smoke-test --robot "${CMAKE_SOURCE_DIR}/assets/robots/HCR12A")
     set_tests_properties(ViewerSmoke6Axis PROPERTIES
-      WORKING_DIRECTORY "$<TARGET_FILE_DIR:grasplink_simulator>" TIMEOUT 60 RUN_SERIAL TRUE LABELS "INTEGRATION;e2e")
+      WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>" TIMEOUT 60 RUN_SERIAL TRUE LABELS "INTEGRATION;e2e")
 
   endif()
 

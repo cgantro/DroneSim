@@ -12,7 +12,7 @@ inline constexpr std::string_view helpOption = "--help";
 inline constexpr std::string_view smokeTestOption = "--smoke-test";
 inline constexpr std::string_view robotDirectoryOption = "--robot";
 inline constexpr std::string_view usage =
-    "사용법: grasplink_simulator [--robot <모델 폴더>] [--smoke-test] [--help]\n";
+    "사용법: aerosimlab_simulator [--robot <모델 폴더>] [--smoke-test] [--help]\n";
 inline constexpr std::string_view unknownOptionPrefix = "알 수 없는 옵션: ";
 inline constexpr std::string_view missingRobotDirectory =
     "--robot 뒤에 모델 폴더 경로를 지정해 주세요.\n";
