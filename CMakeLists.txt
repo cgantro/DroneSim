@@ -180,20 +180,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   endif()
   target_compile_definitions(aerosimlab_graphics PUBLIC GLFW_INCLUDE_NONE)
 
-  if(WIN32)
-    add_executable(aerosimlab_simulator WIN32
-      apps/simulator/main.cpp
-      apps/simulator/AeroSimLabApp.cpp
-    )
-    target_link_libraries(aerosimlab_simulator PRIVATE shell32)
-  else()
-    add_executable(aerosimlab_simulator
-      apps/simulator/main.cpp
-      apps/simulator/AeroSimLabApp.cpp
-    )
-  endif()
-  target_include_directories(aerosimlab_simulator PRIVATE apps/simulator)
-  target_link_libraries(aerosimlab_simulator PRIVATE
+  add_library(aerosimlab_simulator_app STATIC apps/simulator/AeroSimLabApp.cpp)
+  target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator)
+  target_link_libraries(aerosimlab_simulator_app PUBLIC
     aerosimlab_graphics
     aerosimlab_simulation_core
     aerosimlab_manual_control
@@ -202,13 +191,21 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     nlohmann_json::nlohmann_json
   )
   if(NOT EMSCRIPTEN)
-    target_link_libraries(aerosimlab_simulator PRIVATE aerosimlab_vision)
+    target_link_libraries(aerosimlab_simulator_app PRIVATE aerosimlab_vision)
   endif()
-  target_compile_definitions(aerosimlab_simulator PRIVATE
+  target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"
   )
   if(WIN32)
-    target_link_libraries(aerosimlab_simulator PRIVATE Psapi)
+    target_link_libraries(aerosimlab_simulator_app PRIVATE Psapi)
+  endif()
+
+  if(WIN32)
+    add_executable(aerosimlab_simulator WIN32 apps/simulator/main.cpp)
+    target_link_libraries(aerosimlab_simulator PRIVATE aerosimlab_simulator_app shell32)
+  else()
+    add_executable(aerosimlab_simulator apps/simulator/main.cpp)
+    target_link_libraries(aerosimlab_simulator PRIVATE aerosimlab_simulator_app)
   endif()
   if(EMSCRIPTEN)
     set_target_properties(aerosimlab_simulator PROPERTIES SUFFIX ".html")
@@ -357,5 +354,25 @@ if(BUILD_TESTING)
       TIMEOUT 60
       RUN_SERIAL TRUE
       LABELS "INTEGRATION;graphics")
+
+    if(NOT EMSCRIPTEN)
+      add_executable(aerosimlab_simulator_integration_tests
+        tests/simulator/SimulatorSessionTests.cpp
+      )
+      target_link_libraries(aerosimlab_simulator_integration_tests PRIVATE
+        aerosimlab_simulator_app
+        aerosimlab_ground_control_client
+        GTest::gtest_main
+      )
+      gtest_discover_tests(aerosimlab_simulator_integration_tests
+        TEST_PREFIX "Simulator."
+        DISCOVERY_TIMEOUT 60
+        PROPERTIES
+          LABELS "INTEGRATION;simulator"
+          WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>"
+          TIMEOUT 30
+          RUN_SERIAL TRUE)
+      add_dependencies(aerosimlab_simulator_integration_tests aerosimlab_simulator)
+    endif()
   endif()
 endif()
