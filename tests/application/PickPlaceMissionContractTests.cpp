@@ -90,24 +90,60 @@ public:
 
     GripperCommand lastCommand{};
 };
+
+struct PickPlaceMissionHarness
+{
+    grasplink::application::PickPlaceMission mission;
+    RecordingRobotController robot;
+    RecordingGripperController gripper;
+    CartesianPose graspPose{{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
+    CartesianPose placementPose{{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
+    std::chrono::steady_clock::time_point now{};
+
+    PickPlaceMissionHarness()
+    {
+        robot.state.mode = RobotMode::Idle;
+        robot.state.valid = true;
+        robot.state.tcpPoseValid = true;
+    }
+
+    void Update(bool boxGrasped = false)
+    {
+        mission.Update(robot.state, robot, gripper, boxGrasped,
+            graspPose, placementPose, now);
+    }
+
+    void Apply(const grasplink::application::PickPlaceMissionActions& actions,
+        bool boxGrasped = false)
+    {
+        mission.ApplyActions(actions, robot.state, robot, boxGrasped, graspPose);
+    }
+
+    void Start()
+    {
+        Update();
+        grasplink::application::PickPlaceMissionActions actions;
+        actions.start = true;
+        Apply(actions);
+    }
+
+    void CompletePlanningAndUpdate(grasplink::robotics::Result result = {})
+    {
+        robot.CompletePlanning(std::move(result));
+        Update();
+    }
+};
 }
 
 TEST(PickPlaceMission, PlanningPauseAndResumeFollowControllerContract)
 {
     using namespace grasplink;
-    application::PickPlaceMission mission;
-    RecordingRobotController controller;
-    RecordingGripperController gripper;
-    controller.state.mode = robotics::RobotMode::Idle;
-    controller.state.valid = true;
-    controller.state.tcpPoseValid = true;
-
-    const robotics::CartesianPose graspPose{{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
-    const robotics::CartesianPose placementPose{{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
-    mission.Update(controller.state, controller, gripper, false, graspPose, placementPose);
+    PickPlaceMissionHarness harness;
+    auto& mission = harness.mission;
+    auto& controller = harness.robot;
+    auto& gripper = harness.gripper;
     application::PickPlaceMissionActions actions;
-    actions.start = true;
-    mission.ApplyActions(actions, controller.state, controller, false, graspPose);
+    harness.Start();
 
     EXPECT_EQ(controller.planningRequests, 1U);
     ASSERT_EQ(controller.requestedContinuation.targetPoses.size(), 1U);
@@ -115,104 +151,70 @@ TEST(PickPlaceMission, PlanningPauseAndResumeFollowControllerContract)
         controller.requestedContinuation.targetPoses.front().positionMeters[1]);
     EXPECT_EQ(mission.Snapshot().stageLabel, "Planning motion");
 
-    controller.CompletePlanning({});
-    mission.Update(controller.state, controller, gripper, false, graspPose, placementPose);
+    harness.CompletePlanningAndUpdate();
     EXPECT_EQ(mission.Snapshot().stageLabel, "Moving above the box");
 
     actions.stop = true;
-    mission.ApplyActions(actions, controller.state, controller, false, graspPose);
+    harness.Apply(actions);
     ASSERT_TRUE(mission.Snapshot().paused);
 
     actions = {};
     for (int frame = 0; frame < 2; ++frame)
-        mission.Update(controller.state, controller, gripper, false, graspPose, placementPose);
+        harness.Update();
 
     EXPECT_EQ(controller.planningRequests, 1U);
     EXPECT_EQ(mission.Snapshot().stageLabel, "Moving above the box");
 
     actions.resume = true;
-    mission.ApplyActions(actions, controller.state, controller, false, graspPose);
+    harness.Apply(actions);
 
     EXPECT_FALSE(mission.Snapshot().paused);
     EXPECT_EQ(controller.planningRequests, 2U);
     EXPECT_EQ(mission.Snapshot().stageLabel, "Planning motion");
 
-    controller.CompletePlanning({robotics::ErrorCode::Unreachable, "test planning failure"});
-    mission.Update(controller.state, controller, gripper, false, graspPose, placementPose);
+    harness.CompletePlanningAndUpdate(
+        {robotics::ErrorCode::Unreachable, "test planning failure"});
 
     EXPECT_EQ(mission.Snapshot().stageLabel, "Failed");
     EXPECT_EQ(mission.Snapshot().lastMessage, "test planning failure");
 
-    application::PickPlaceMission attachedBoxMission;
-    RecordingRobotController attachedBoxController;
-    RecordingGripperController attachedBoxGripper;
-    attachedBoxController.state.mode = robotics::RobotMode::Idle;
-    attachedBoxController.state.valid = true;
-    attachedBoxController.state.tcpPoseValid = true;
-
-    attachedBoxMission.Update(attachedBoxController.state, attachedBoxController,
-        attachedBoxGripper, false, graspPose, placementPose);
-    actions = {};
-    actions.start = true;
-    attachedBoxMission.ApplyActions(actions, attachedBoxController.state,
-        attachedBoxController, false, graspPose);
-    attachedBoxController.CompletePlanning({});
-    attachedBoxMission.Update(attachedBoxController.state, attachedBoxController,
-        attachedBoxGripper, false, graspPose, placementPose);
-    attachedBoxMission.Update(attachedBoxController.state, attachedBoxController,
-        attachedBoxGripper, false, graspPose, placementPose);
-    attachedBoxMission.Update(attachedBoxController.state, attachedBoxController,
-        attachedBoxGripper, false, graspPose, placementPose);
-    attachedBoxMission.Update(attachedBoxController.state, attachedBoxController,
-        attachedBoxGripper, true, graspPose, placementPose);
-    EXPECT_EQ(attachedBoxMission.Snapshot().stageLabel, "Lifting the box");
-    EXPECT_EQ(attachedBoxGripper.lastCommand.positionRequest,
+    PickPlaceMissionHarness attachedBox;
+    attachedBox.Start();
+    attachedBox.CompletePlanningAndUpdate();
+    attachedBox.Update();
+    attachedBox.Update();
+    attachedBox.Update(true);
+    EXPECT_EQ(attachedBox.mission.Snapshot().stageLabel, "Lifting the box");
+    EXPECT_EQ(attachedBox.gripper.lastCommand.positionRequest,
         static_cast<std::uint8_t>(application::pick_place::config::GripperCommandSettings::PositionRequest::Closed));
-    const auto linearPathRequestsBeforeResume = attachedBoxController.linearPathRequests;
+    const auto linearPathRequestsBeforeResume = attachedBox.robot.linearPathRequests;
 
     actions = {};
     actions.stop = true;
-    attachedBoxMission.ApplyActions(actions, attachedBoxController.state,
-        attachedBoxController, true, graspPose);
+    attachedBox.Apply(actions, true);
     actions = {};
     actions.resume = true;
-    attachedBoxMission.ApplyActions(actions, attachedBoxController.state,
-        attachedBoxController, true, graspPose);
+    attachedBox.Apply(actions, true);
 
-    EXPECT_FALSE(attachedBoxMission.Snapshot().paused);
-    EXPECT_EQ(attachedBoxMission.Snapshot().stageLabel, "Lifting to resume height");
-    EXPECT_EQ(attachedBoxController.linearPathRequests, linearPathRequestsBeforeResume + 1U);
-    ASSERT_EQ(attachedBoxController.requestedLinearPath.targetPoses.size(), 1U);
+    EXPECT_FALSE(attachedBox.mission.Snapshot().paused);
+    EXPECT_EQ(attachedBox.mission.Snapshot().stageLabel, "Lifting to resume height");
+    EXPECT_EQ(attachedBox.robot.linearPathRequests, linearPathRequestsBeforeResume + 1U);
+    ASSERT_EQ(attachedBox.robot.requestedLinearPath.targetPoses.size(), 1U);
 
     const auto verifyCollisionRecovery = [&](ErrorCode collision)
     {
-        application::PickPlaceMission collisionMission;
-        RecordingRobotController collisionController;
-        RecordingGripperController collisionGripper;
-        collisionController.state.mode = RobotMode::Idle;
-        collisionController.state.valid = true;
-        collisionController.state.tcpPoseValid = true;
-        collisionMission.Update(collisionController.state, collisionController, collisionGripper,
-            false, graspPose, placementPose);
+        PickPlaceMissionHarness collisionHarness;
+        collisionHarness.Start();
+        collisionHarness.CompletePlanningAndUpdate();
 
-        application::PickPlaceMissionActions start;
-        start.start = true;
-        collisionMission.ApplyActions(start, collisionController.state, collisionController,
-            false, graspPose);
-        collisionController.CompletePlanning({});
-        collisionMission.Update(collisionController.state, collisionController, collisionGripper,
-            false, graspPose, placementPose);
+        collisionHarness.robot.state.errorCode = collision;
+        collisionHarness.Update();
+        EXPECT_EQ(collisionHarness.mission.Snapshot().stageLabel, "Retracting after collision");
+        EXPECT_EQ(collisionHarness.robot.linearPathRequests, 1U);
 
-        collisionController.state.errorCode = collision;
-        collisionMission.Update(collisionController.state, collisionController, collisionGripper,
-            false, graspPose, placementPose);
-        EXPECT_EQ(collisionMission.Snapshot().stageLabel, "Retracting after collision");
-        EXPECT_EQ(collisionController.linearPathRequests, 1U);
-
-        collisionController.state.errorCode = ErrorCode::None;
-        collisionMission.Update(collisionController.state, collisionController, collisionGripper,
-            false, graspPose, placementPose);
-        EXPECT_EQ(collisionMission.Snapshot().stageLabel, "Retracting from goal");
+        collisionHarness.robot.state.errorCode = ErrorCode::None;
+        collisionHarness.Update();
+        EXPECT_EQ(collisionHarness.mission.Snapshot().stageLabel, "Retracting from goal");
     };
 
     verifyCollisionRecovery(ErrorCode::SelfCollision);
@@ -222,41 +224,27 @@ TEST(PickPlaceMission, PlanningPauseAndResumeFollowControllerContract)
 TEST(PickPlaceMission, CompleteStageReportsSuccessAndRaisesOneEvent)
 {
     using namespace grasplink;
-    application::PickPlaceMission mission;
-    RecordingRobotController controller;
-    RecordingGripperController gripper;
-    controller.state.mode = robotics::RobotMode::Idle;
-    controller.state.valid = true;
-    controller.state.tcpPoseValid = true;
+    PickPlaceMissionHarness harness;
+    auto& mission = harness.mission;
+    auto& controller = harness.robot;
+    harness.Start();
 
-    const robotics::CartesianPose boxPose{{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
-    auto now = std::chrono::steady_clock::time_point{};
-    const auto update = [&](bool boxGrasped)
-    {
-        mission.Update(controller.state, controller, gripper, boxGrasped, boxPose, boxPose, now);
-    };
-    update(false);
-    application::PickPlaceMissionActions actions;
-    actions.start = true;
-    mission.ApplyActions(actions, controller.state, controller, false, boxPose);
+    harness.CompletePlanningAndUpdate();
+    harness.Update();
+    harness.Update();
+    harness.Update(true);
+    harness.Update(true);
+    harness.Update(true);
+    harness.Update(true);
+    harness.CompletePlanningAndUpdate();
+    harness.Update(true);
+    harness.Update(true);
+    harness.Update(true);
 
-    controller.CompletePlanning({});
-    update(false);
-    update(false);
-    update(false);
-    update(true);
-    update(true);
-    update(true);
-    update(true);
-    controller.CompletePlanning({});
-    update(true);
-    update(true);
-    update(true);
-
-    now += application::pick_place::config::PlacementSettings::settleDuration;
-    update(true);
-    update(false);
-    update(false);
+    harness.now += application::pick_place::config::PlacementSettings::settleDuration;
+    harness.Update(true);
+    harness.Update();
+    harness.Update();
 
     const auto completed = mission.Snapshot();
     EXPECT_EQ(completed.stageLabel, "Complete");
