@@ -83,6 +83,35 @@ TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
     EXPECT_NE(unsafeResult.issues.front().find("최소 거리"), std::string::npos);
 }
 
+TEST(ScenarioRunner, FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward)
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"ticks":300,
+     "drones":[
+       {"name":"lead","initial_position_meters":[0,0,0]},
+       {"name":"wing","initial_position_meters":[-2,0,0]}],
+     "formation_links":[
+       {"leader":"lead","follower":"wing","offset_meters":[-2,0,0],
+        "outages":[{"start_tick":120,"end_tick":180}]}],
+     "commands":[
+       {"tick":0,"drone":"lead","type":"takeoff"},
+       {"tick":0,"drone":"wing","type":"takeoff"},
+       {"tick":90,"drone":"lead","type":"set_waypoint","position_meters":[4,0,1.5]}],
+     "expected":{"tolerance_meters":0.05,"minimum_drone_separation_meters":1.9,
+       "drones":[
+         {"name":"lead","mode":"hovering","position_meters":[4,0,1.5]},
+         {"name":"wing","mode":"hovering","position_meters":[2,0,1.5]}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
+    EXPECT_GT(*result.minimumDroneSeparationMeters, 1.9);
+    ASSERT_EQ(result.eventLog.size(), 5);
+    EXPECT_NE(result.eventLog[3].find("위치 공유가 끊겼습니다"), std::string::npos);
+    EXPECT_NE(result.eventLog[4].find("위치 공유가 복구됐습니다"), std::string::npos);
+}
+
 TEST(ScenarioRunner, RunsWindyRigidBodyFlightThroughTheHeadlessPath)
 {
     constexpr std::string_view scenario = R"json(
@@ -136,6 +165,12 @@ TEST(ScenarioRunner, ReportsCommandFailuresAndRejectsInvalidScenarios)
         "wind_velocity_meters_per_second":[1,0,0],"ticks":1,"commands":[],
         "expected":{"mode":"grounded","position_meters":[0,0,0]}})json")),
         std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"ticks":3,
+        "drones":[{"name":"lead","initial_position_meters":[0,0,0]},
+                  {"name":"wing","initial_position_meters":[-2,0,0]}],
+        "formation_links":[{"leader":"lead","follower":"wing",
+          "offset_meters":[-2,0,0],"outages":[{"start_tick":1,"end_tick":4}]}],
+        "commands":[]})json")), std::invalid_argument);
 }
 
 TEST(ScenarioRunner, ReplaysDelayLossDuplicateAndCameraRecovery)

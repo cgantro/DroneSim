@@ -188,6 +188,20 @@ struct ScenarioDrone
     glm::dvec3 initialPositionMeters;
 };
 
+struct FormationOutage
+{
+    std::uint64_t startTick;
+    std::uint64_t endTick;
+};
+
+struct FormationLink
+{
+    std::string leaderName;
+    std::string followerName;
+    glm::dvec3 offsetMeters;
+    std::vector<FormationOutage> outages;
+};
+
 struct ScheduledCameraEvent
 {
     std::uint64_t tick;
@@ -219,6 +233,74 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
             Required(item, "initial_position_meters"), "initial_position_meters")});
     }
     return drones;
+}
+
+std::vector<FormationLink> ReadFormationLinks(
+    const Json& document,
+    std::uint64_t tickCount,
+    const std::unordered_set<std::string>& droneNames)
+{
+    const auto found = document.find("formation_links");
+    if (found == document.end())
+        return {};
+    if (!found->is_array() || found->empty())
+        throw std::invalid_argument("formation_links는 한 개 이상의 링크를 적은 배열이어야 합니다.");
+
+    std::vector<FormationLink> links;
+    std::unordered_set<std::string> followers;
+    links.reserve(found->size());
+    for (const Json& item : *found)
+    {
+        if (!item.is_object())
+            throw std::invalid_argument("각 formation link는 JSON 객체여야 합니다.");
+        const Json& leaderValue = Required(item, "leader");
+        const Json& followerValue = Required(item, "follower");
+        if (!leaderValue.is_string() || !followerValue.is_string())
+            throw std::invalid_argument("formation link의 leader와 follower는 이름 문자열이어야 합니다.");
+
+        std::string leader = leaderValue.get<std::string>();
+        std::string follower = followerValue.get<std::string>();
+        if (!droneNames.contains(leader) || !droneNames.contains(follower)
+            || leader == follower || !followers.insert(follower).second)
+        {
+            throw std::invalid_argument(
+                "formation link는 서로 다른 드론을 지정하고, follower마다 하나만 설정해야 합니다.");
+        }
+
+        FormationLink link{
+            std::move(leader),
+            std::move(follower),
+            ReadVector(Required(item, "offset_meters"), "offset_meters"),
+            {}};
+        const auto outages = item.find("outages");
+        if (outages != item.end())
+        {
+            if (!outages->is_array())
+                throw std::invalid_argument("formation link의 outages는 배열이어야 합니다.");
+            std::uint64_t previousEndTick = 0;
+            bool hasPreviousOutage = false;
+            for (const Json& outage : *outages)
+            {
+                if (!outage.is_object())
+                    throw std::invalid_argument("각 통신 장애 구간은 JSON 객체여야 합니다.");
+                const std::uint64_t startTick = ReadUnsigned(
+                    Required(outage, "start_tick"), "start_tick");
+                const std::uint64_t endTick = ReadUnsigned(
+                    Required(outage, "end_tick"), "end_tick");
+                if (startTick >= endTick || endTick > tickCount
+                    || (hasPreviousOutage && startTick < previousEndTick))
+                {
+                    throw std::invalid_argument(
+                        "통신 장애 구간은 겹치지 않는 오름차순 범위이며 시나리오 안에 있어야 합니다.");
+                }
+                link.outages.push_back({startTick, endTick});
+                previousEndTick = endTick;
+                hasPreviousOutage = true;
+            }
+        }
+        links.push_back(std::move(link));
+    }
+    return links;
 }
 
 std::vector<ScheduledCommand> ReadCommands(
@@ -374,6 +456,10 @@ ScenarioResult RunScenario(std::string_view jsonText)
             droneNames.insert(drone.name);
     const std::vector<ScheduledCommand> commands = ReadCommands(
         Required(document, "commands"), tickCount, primaryDroneName, droneNames);
+    const std::vector<FormationLink> formationLinks = ReadFormationLinks(
+        document, tickCount, droneNames);
+    if (!formationLinks.empty() && scenarioDrones.size() < 2)
+        throw std::invalid_argument("formation_links를 쓰려면 drones에 두 대 이상을 적어야 합니다.");
     const SimulationDynamics dynamics = ReadDynamics(document);
     const std::optional<glm::dvec3> windVelocity = document.contains("wind_velocity_meters_per_second")
         ? std::optional<glm::dvec3>{ReadVector(
@@ -512,6 +598,50 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                     + scheduled.droneName + " 드론의 중복 재전송 명령을 한 번만 처리했습니다.");
             ++nextCommand;
+        }
+
+        for (const FormationLink& link : formationLinks)
+        {
+            bool linkAvailable = true;
+            for (const FormationOutage& outage : link.outages)
+            {
+                if (tick == outage.startTick)
+                {
+                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                        + link.leaderName + " 드론과 " + link.followerName
+                        + " 드론 사이의 위치 공유가 끊겼습니다.");
+                }
+                if (tick == outage.endTick)
+                {
+                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                        + link.leaderName + " 드론과 " + link.followerName
+                        + " 드론 사이의 위치 공유가 복구됐습니다.");
+                }
+                if (tick >= outage.startTick && tick < outage.endTick)
+                    linkAvailable = false;
+            }
+
+            if (!linkAvailable)
+                continue;
+            const DroneState& leaderState = simulation.State(droneIds.at(link.leaderName));
+            const DroneState& followerState = simulation.State(droneIds.at(link.followerName));
+            const auto isAirborne = [](FlightMode mode)
+            {
+                return mode == FlightMode::Hovering
+                    || mode == FlightMode::Flying
+                    || mode == FlightMode::FollowingWaypoint;
+            };
+            if (!isAirborne(leaderState.mode) || !isAirborne(followerState.mode))
+                continue;
+
+            const CommandResult followResult = simulation.Apply(
+                droneIds.at(link.followerName),
+                {DroneCommand::Kind::SetWaypoint, leaderState.positionMeters + link.offsetMeters});
+            if (followResult != CommandResult::Accepted)
+            {
+                result.issues.push_back(link.followerName
+                    + " 드론이 공유 위치를 따라가지 못했습니다.");
+            }
         }
 
         while (nextCameraEvent < cameraEvents.size() && cameraEvents[nextCameraEvent].tick == tick)
