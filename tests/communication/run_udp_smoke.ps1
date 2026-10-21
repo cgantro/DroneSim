@@ -18,7 +18,12 @@ public static class AeroSimLabUiTestWindow
     public const int StatusText = 113;
     public const int TelemetryText = 114;
     public const int TakeoffButton = 105;
+    public const int StopButton = 106;
     public const int LandButton = 107;
+    public const int WaypointButton = 108;
+    public const int WaypointXInput = 102;
+    public const int WaypointYInput = 103;
+    public const int WaypointZInput = 104;
     public const int RecordingStartButton = 115;
     public const int RecordingStopButton = 116;
     public const int RecordingReplayButton = 117;
@@ -187,7 +192,9 @@ try {
 
     $requiredControls = @(
         [AeroSimLabUiTestWindow]::TakeoffButton,
+        [AeroSimLabUiTestWindow]::StopButton,
         [AeroSimLabUiTestWindow]::LandButton,
+        [AeroSimLabUiTestWindow]::WaypointButton,
         [AeroSimLabUiTestWindow]::CameraFaultButton,
         [AeroSimLabUiTestWindow]::CameraRecoverButton,
         [AeroSimLabUiTestWindow]::RecordingStartButton,
@@ -210,7 +217,28 @@ try {
         throw "지상통제 창에서 보낸 카메라 고장 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$faultTelemetry"
     }
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::CameraRecoverButton)
-    Start-Sleep -Milliseconds 1800
+    $waypointInputIds = @(
+        [AeroSimLabUiTestWindow]::WaypointXInput,
+        [AeroSimLabUiTestWindow]::WaypointYInput,
+        [AeroSimLabUiTestWindow]::WaypointZInput
+    )
+    $waypointValues = @('2', '0', '1.5')
+    foreach ($index in 0..2) {
+        $waypointInput = [AeroSimLabUiTestWindow]::GetDlgItem($uiWindow, $waypointInputIds[$index])
+        if (-not [AeroSimLabUiTestWindow]::SetText($waypointInput, $waypointValues[$index])) {
+            throw '경유점 좌표를 입력하지 못했습니다.'
+        }
+    }
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::WaypointButton)
+    $waypointTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($waypointTelemetry -notmatch '비행 상태: following_waypoint') {
+        throw "지상통제 창의 경유점 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$waypointTelemetry"
+    }
+    Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::StopButton)
+    $stopTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
+    if ($stopTelemetry -notmatch '비행 상태: hovering') {
+        throw "지상통제 창의 정지 명령이 시뮬레이터 상태에 반영되지 않았습니다.`n$stopTelemetry"
+    }
     Invoke-GroundControlButton ([AeroSimLabUiTestWindow]::LandButton)
     $landingTelemetry = [AeroSimLabUiTestWindow]::ReadControlText($telemetryText)
     if ($landingTelemetry -notmatch '비행 상태: landing' -or $landingTelemetry -notmatch '카메라: active') {

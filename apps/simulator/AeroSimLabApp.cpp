@@ -102,7 +102,7 @@ int AeroSimLabApp::Run()
 
         if (smokeTest_ && !networkEnabled_ && renderedFrames_ >= smokeTestFrameLimit)
             break;
-        if (smokeTest_ && networkEnabled_ && smokeCommandCount_ >= 9
+        if (smokeTest_ && networkEnabled_ && smokeReplayStarted_
             && !recordingActive_ && !replaying_
             && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
             break;
@@ -582,6 +582,7 @@ bool AeroSimLabApp::ApplySessionCommand(
 
         simulation_.Reset();
         replaying_ = true;
+        smokeReplayStarted_ = smokeTest_;
         replayTick_ = 0;
         replayCommandIndex_ = 0;
         pendingControllerAction_.reset();
@@ -688,7 +689,6 @@ void AeroSimLabApp::ApplyGroundCommand()
 #endif
     }
     pendingCommand_.reset();
-    ++smokeCommandCount_;
 #endif
 }
 

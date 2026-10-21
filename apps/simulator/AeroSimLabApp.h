@@ -120,7 +120,7 @@ private:
     std::optional<aerosimlab::manual_control::PilotCommand> pendingPilotCommand_;
     aerosimlab::sensor::RgbFrame eoFrame_;
     bool networkEnabled_ = false;
-    std::size_t smokeCommandCount_ = 0;
+    bool smokeReplayStarted_ = false;
     bool benchmarkMode_ = false;
     std::size_t renderedFrames_ = 0;
     double accumulatedSeconds_ = 0.0;
