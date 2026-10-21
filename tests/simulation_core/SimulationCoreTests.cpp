@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <filesystem>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
@@ -492,6 +493,34 @@ TEST(SimulationCore, RigidBodyHoverStaysStableForTenMinutes)
 
     EXPECT_EQ(simulation.TickCount(), 240 + hoverSeconds * ticksPerSecond);
     EXPECT_LT(glm::length(simulation.State().velocityMetersPerSecond), 0.15);
+}
+
+TEST(SimulationCore, RigidBodyTakesOffFromTheSelectedTerrainStart)
+{
+    SimulationCore simulation{SimulationDynamics::RigidBody};
+    const aerosimlab::terrain::TerrainGrid terrain = aerosimlab::terrain::TerrainGrid::Load(
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+        / "assets/maps/bukhansan-demo/terrain.grid");
+    simulation.SetTerrain(terrain);
+    const glm::dvec2 startMeters{171.3545, -92.7667};
+    simulation.SetInitialPose({startMeters,
+        terrain.HeightAtLocalMeters(startMeters)
+            + QuadrotorFlightController::groundedModelOriginHeightMeters});
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
+    for (int tick = 0; tick < 240; ++tick)
+        simulation.AdvanceOneTick();
+
+    EXPECT_EQ(simulation.State().mode, FlightMode::Hovering)
+        << "height=" << simulation.State().positionMeters.z;
+
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::Land)), CommandResult::Accepted);
+    for (int tick = 0; tick < 240; ++tick)
+        simulation.AdvanceOneTick();
+    EXPECT_EQ(simulation.State().mode, FlightMode::Grounded);
+    EXPECT_NEAR(simulation.State().positionMeters.z,
+        terrain.HeightAtLocalMeters(startMeters)
+            + QuadrotorFlightController::groundedModelOriginHeightMeters,
+        0.05);
 }
 
 TEST(SimulationCore, CameraStopsOnDisableOrFaultAndResumesAfterRecovery)

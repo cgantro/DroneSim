@@ -12,6 +12,7 @@
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
+#include "simulation_core/QuadrotorFlightController.h"
 #include "terrain/BuildingFootprint.h"
 #include "terrain/StaticFacility.h"
 #include <glm/gtc/quaternion.hpp>
@@ -54,6 +55,8 @@ constexpr int windowHeight = 720;
 // 창이 멈춘 뒤 밀린 시간을 전부 따라잡느라 다음 화면까지 늦어지지 않게 한다.
 constexpr std::size_t smokeTestFrameLimit = 8;
 constexpr std::size_t demoLengthTicks = 900;
+// 지도 원점은 경사가 급해 이륙이 막히므로 주변에서 고른 완만한 지점을 쓴다.
+constexpr glm::dvec2 demoDroneStartMeters{171.3545, -92.7667};
 constexpr double benchmarkDurationSeconds = 5.0;
 // OSM에 높이가 없어서 시연 상자에만 쓰는 명시적 가정이다. 실측값이 아니다.
 constexpr float missingBuildingHeightProxyMeters = 3.0F;
@@ -324,9 +327,13 @@ int AeroSimLabApp::Run()
         PollGroundControl();
         PollGamepad();
         const auto now = std::chrono::steady_clock::now();
+        const double elapsedSeconds = std::chrono::duration<double>(now - previousFrame).count();
+        // 화면 스모크는 프레임마다 한 Tick, 네트워크 스모크는 프레임마다 최대 따라잡기만큼 진행한다.
         const double frameSeconds = smokeTest_ && !benchmarkMode_
-            ? aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds
-            : std::chrono::duration<double>(now - previousFrame).count();
+            ? (networkEnabled_
+                ? aerosimlab::simulation::FixedTickAccumulator::maximumFrameSeconds
+                : aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds)
+            : elapsedSeconds;
         previousFrame = now;
 
         AdvanceSimulation(frameSeconds);
@@ -396,6 +403,9 @@ void AeroSimLabApp::InitializeGraphics()
         "maps/bukhansan-demo/facilities.json");
 #ifndef __EMSCRIPTEN__
     simulation_.SetTerrain(terrain_);
+    simulation_.SetInitialPose({demoDroneStartMeters,
+        terrain_.HeightAtLocalMeters(demoDroneStartMeters)
+            + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
     for (const auto& facility : facilities)
         simulation_.AddStaticObstacleBox(
             facility.centerMeters, facility.halfExtentsMeters);

@@ -68,6 +68,9 @@ public:
     [[nodiscard]] DroneId AddDrone(
         const glm::dvec3& positionMeters, double yawRadians = 0.0);
 
+    /** @brief 첫 Tick 전에 주 드론의 시작 위치와 방향을 지정한다. */
+    void SetInitialPose(const glm::dvec3& positionMeters, double yawRadians = 0.0);
+
     /** @brief 드론과 연결된 물리 강체를 함께 제거한다. 마지막 드론은 제거할 수 없다. */
     [[nodiscard]] bool RemoveDrone(DroneId droneId);
 

@@ -4,6 +4,7 @@
 #include "communication/Protocol.h"
 #include "communication/UdpSocket.h"
 
+#include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -56,6 +57,24 @@ TEST(SimulatorSession, RecordingReplayOverUdp)
             "127.0.0.1", simulatorPort, packet, clientSocket,
             std::chrono::seconds(5)).reply;
     };
+    const auto requestTelemetry = [&]
+    {
+        return send([](communication::CommandPacket& packet)
+        {
+            packet.cameraCommand = communication::CameraCommand::Enable;
+        });
+    };
+    const auto waitForTelemetry = [&](const auto& isReady, std::chrono::milliseconds timeout)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        auto reply = requestTelemetry();
+        while (!isReady(reply) && std::chrono::steady_clock::now() < deadline)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            reply = requestTelemetry();
+        }
+        return reply;
+    };
 
     std::exception_ptr commandFailure;
     try
@@ -74,7 +93,17 @@ TEST(SimulatorSession, RecordingReplayOverUdp)
         EXPECT_TRUE(takeoff.accepted);
         EXPECT_EQ(takeoff.status, "applied");
 
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        const auto hovering = waitForTelemetry([](const communication::CommandReply& reply)
+        {
+            return reply.telemetry.drone.mode == simulation::FlightMode::Hovering;
+        }, std::chrono::seconds(5));
+        EXPECT_TRUE(hovering.accepted);
+        EXPECT_EQ(hovering.telemetry.drone.mode, simulation::FlightMode::Hovering)
+            << "tick=" << hovering.telemetry.tick
+            << ", height=" << hovering.telemetry.drone.positionMeters.z
+            << " m, vertical speed="
+            << hovering.telemetry.drone.velocityMetersPerSecond.z << " m/s";
+
         const auto velocity = send([](communication::CommandPacket& packet)
         {
             packet.droneCommand = simulation::DroneCommand{
@@ -82,20 +111,21 @@ TEST(SimulatorSession, RecordingReplayOverUdp)
         });
         EXPECT_TRUE(velocity.accepted);
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        const auto stopped = send([](communication::CommandPacket& packet)
+        const auto stopped = waitForTelemetry([&](const communication::CommandReply& reply)
         {
-            packet.cameraCommand = communication::CameraCommand::Enable;
-        });
+            return reply.telemetry.tick >= velocity.appliedTick + 12
+                && reply.telemetry.drone.mode == simulation::FlightMode::Hovering
+                && glm::length(reply.telemetry.drone.velocityMetersPerSecond) < 0.05;
+        }, std::chrono::seconds(5));
         EXPECT_TRUE(stopped.accepted);
         EXPECT_EQ(stopped.telemetry.drone.mode, simulation::FlightMode::Hovering);
+        EXPECT_LT(glm::length(stopped.telemetry.drone.velocityMetersPerSecond), 0.05);
         const double positionAfterStopMeters = stopped.telemetry.drone.positionMeters.x;
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        const auto settled = send([](communication::CommandPacket& packet)
+        const auto settled = waitForTelemetry([&](const communication::CommandReply& reply)
         {
-            packet.cameraCommand = communication::CameraCommand::Enable;
-        });
+            return reply.telemetry.tick >= stopped.telemetry.tick + 60;
+        }, std::chrono::seconds(5));
         EXPECT_EQ(settled.telemetry.drone.mode, simulation::FlightMode::Hovering);
         EXPECT_NEAR(settled.telemetry.drone.positionMeters.x, positionAfterStopMeters, 0.1);
 
@@ -119,6 +149,15 @@ TEST(SimulatorSession, RecordingReplayOverUdp)
         });
         EXPECT_TRUE(replay.accepted);
         EXPECT_EQ(replay.status, "recording_replay_started");
+
+        const auto replayedLanding = waitForTelemetry([](const communication::CommandReply& reply)
+        {
+            return reply.telemetry.drone.mode == simulation::FlightMode::Grounded;
+        }, std::chrono::seconds(10));
+        EXPECT_TRUE(replayedLanding.accepted);
+        EXPECT_EQ(replayedLanding.telemetry.drone.mode, simulation::FlightMode::Grounded)
+            << "tick=" << replayedLanding.telemetry.tick
+            << ", height=" << replayedLanding.telemetry.drone.positionMeters.z;
     }
     catch (...)
     {

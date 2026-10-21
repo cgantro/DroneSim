@@ -41,6 +41,7 @@ struct DroneControlState
     glm::dvec3 targetVelocityMetersPerSecond{0.0};
     double commandedYawRateRadiansPerSecond = 0.0;
     double desiredYawRadians = 0.0;
+    double groundElevationMeters = 0.0;
 };
 
 /**

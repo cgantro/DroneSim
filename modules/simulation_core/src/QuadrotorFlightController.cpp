@@ -145,14 +145,16 @@ std::array<double, QuadrotorModel::rotorCount> QuadrotorFlightController::MotorT
     if (state.mode == FlightMode::TakingOff)
     {
         const glm::dvec3 targetPosition{
-            state.positionMeters.x, state.positionMeters.y, DroneModel::takeoffHeightMeters};
+            state.positionMeters.x, state.positionMeters.y,
+            control.groundElevationMeters + DroneModel::takeoffHeightMeters};
         desiredAcceleration = positionGain * (targetPosition - state.positionMeters)
             - velocityGain * state.velocityMetersPerSecond;
     }
     else if (state.mode == FlightMode::Landing)
     {
         const glm::dvec3 targetPosition{
-            state.positionMeters.x, state.positionMeters.y, groundedModelOriginHeightMeters};
+            state.positionMeters.x, state.positionMeters.y,
+            control.groundElevationMeters + groundedModelOriginHeightMeters};
         desiredAcceleration = positionGain * (targetPosition - state.positionMeters)
             - velocityGain * state.velocityMetersPerSecond;
     }
