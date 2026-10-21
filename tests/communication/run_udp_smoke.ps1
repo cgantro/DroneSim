@@ -1,12 +1,10 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)][string]$Simulator,
     [Parameter(Mandatory = $true)][string]$GroundControl
 )
 
 $port = 31000 + (Get-Random -Minimum 0 -Maximum 18000)
 $workingDirectory = Get-Location
-$stdoutPath = Join-Path $workingDirectory 'udp-smoke.stdout.txt'
-$stderrPath = Join-Path $workingDirectory 'udp-smoke.stderr.txt'
 $timeoutReply = (& $GroundControl @('--port', "$port", '--command', 'takeoff') 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 3 -or $timeoutReply -notmatch '응답 시간 초과') {
     throw "시뮬레이터가 없을 때 지상통제 프로그램이 시간 초과로 끝나지 않았습니다.`n$timeoutReply"
@@ -16,15 +14,13 @@ $server = Start-Process -FilePath $Simulator `
     -ArgumentList @('--smoke-test', '--udp-port', "$port") `
     -WorkingDirectory $workingDirectory `
     -WindowStyle Hidden `
-    -PassThru `
-    -RedirectStandardOutput $stdoutPath `
-    -RedirectStandardError $stderrPath
+    -PassThru
 
 try {
     Start-Sleep -Milliseconds 200
     $server.Refresh()
     if ($server.HasExited) {
-        throw "시뮬레이터가 UDP 시험 서버를 시작하지 못했습니다. $([System.IO.File]::ReadAllText($stderrPath))"
+        throw "시뮬레이터가 UDP 시험 서버를 시작하지 못했습니다. 종료 코드: $($server.ExitCode)"
     }
 
     $replies = @()
@@ -59,5 +55,4 @@ finally {
     if (-not $server.HasExited) {
         Stop-Process -Id $server.Id -Force
     }
-    Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
 }
