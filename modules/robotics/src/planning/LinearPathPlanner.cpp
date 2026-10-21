@@ -1,5 +1,6 @@
 #include "robotics/planning/LinearPathPlanner.h"
 #include "robotics/planning/JointPathPlanner.h"
+#include "planning/detail/LinearPathPlannerSupport.h"
 
 #include "robotics/kinematics/detail/PoseMath.h"
 #include "robotics/kinematics/detail/AlternativeIkSeeds.h"
@@ -22,7 +23,16 @@
 
 namespace grasplink::robotics::planning
 {
+using detail::AlignEquivalentJointAngles;
+using detail::MapIkFailure;
+using detail::PathIkOptions;
+using detail::RequiredTimeForVelocity;
+using detail::SolveCollisionFreeIk;
+using detail::ValidateLinearPathCommand;
+using detail::VelocityRatio;
 
+namespace detail
+{
 kinematics::IkOptions PathIkOptions(const models::RobotSpecification& specification)
 {
     // 기본 IK 허용 오차는 경로 직선 오차 예산보다 위치는 100배, 방향은 10배 작다.
@@ -62,6 +72,7 @@ Result MapIkFailure(const kinematics::IkResult& result)
     }
     return {code, result.message};
 }
+} // namespace detail
 
 namespace
 {
@@ -1138,6 +1149,8 @@ struct LinearPathPlanningJob::Impl
     }
 };
 
+namespace detail
+{
 void AlignEquivalentJointAngles(
     JointVector& target,
     const JointVector& reference,
@@ -1257,6 +1270,7 @@ std::optional<kinematics::IkResult> SolveCollisionFreeIk(
         return bestSolution;
     return std::nullopt;
 }
+} // namespace detail
 
 LinearPathPlanningJob::LinearPathPlanningJob() : impl_(std::make_unique<Impl>()) {}
 LinearPathPlanningJob::~LinearPathPlanningJob() = default;

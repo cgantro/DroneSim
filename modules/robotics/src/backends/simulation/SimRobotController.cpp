@@ -2,6 +2,7 @@
 #include "robotics/backends/simulation/detail/SimulationMotionPolicy.h"
 #include "robotics/kinematics/detail/AlternativeIkSeeds.h"
 #include "robotics/kinematics/detail/PoseMath.h"
+#include "planning/detail/LinearPathPlannerSupport.h"
 
 #include <algorithm>
 #include <cmath>
@@ -232,7 +233,7 @@ Result SimRobotController::MoveJointImpl(const JointMoveCommand& command, JointM
     // 명령을 받는 순간 관절각 q를 바꾸지 않는다. 이후 Update 호출이 정해진 속도 안에서 현재 상태를 목표까지 진행시킨다.
     // 움직이는 도중 새 명령이 들어오면 대기열에 쌓지 않고 현재 목표를 새 목표로 바꾼다.
     JointVector targetPositions = command.targetPositions;
-    planning::AlignEquivalentJointAngles(targetPositions, state_.jointPositions, specification_);
+    planning::detail::AlignEquivalentJointAngles(targetPositions, state_.jointPositions, specification_);
 
     const bool canBrakeJointPath = state_.mode == RobotMode::Moving && linearMotion_.path.empty() &&
         jointMotion_.progressVelocity > detail::kMotionEpsilon && jointMotion_.progressAcceleration > 0.0;
@@ -289,7 +290,7 @@ Result SimRobotController::MovePose(const CartesianPose& targetInBase, double ve
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::invalidScale);
     planning::JointStateInvalidity invalidity = planning::JointStateInvalidity::None;
     kinematics::IkResult ikFailure;
-    auto solution = planning::SolveCollisionFreeIk(inverse_, specification_, jointStateValidityChecker_,
+    auto solution = planning::detail::SolveCollisionFreeIk(inverse_, specification_, jointStateValidityChecker_,
         targetInBase, state_.jointPositions,
         kinematics::RobotDefaultIkOptions(specification_), planning::kDefaultPlanningPolicy,
         invalidity, ikFailure);
@@ -306,7 +307,7 @@ Result SimRobotController::MovePose(const CartesianPose& targetInBase, double ve
             AppendValidityDiagnostic(result, jointStateValidityDiagnosticProvider_);
             return result;
         }
-        return planning::MapIkFailure(ikFailure);
+        return planning::detail::MapIkFailure(ikFailure);
     }
     return MoveJointImpl({solution->jointPositions, velocityScale, accelerationScale},
         JointMoveOrigin::PoseTargetCommand);
@@ -336,7 +337,7 @@ Result SimRobotController::BeginPosePlanningImpl(
         return Failure(ErrorCode::InvalidCommand, SimRobotControllerMessages::invalidScale);
     if (continuation)
     {
-        const Result validation = planning::ValidateLinearPathCommand(*continuation);
+        const Result validation = planning::detail::ValidateLinearPathCommand(*continuation);
         if (!validation)
             return validation;
     }
@@ -506,7 +507,7 @@ void SimRobotController::AdvancePoseIkPlanning(std::size_t workBudget)
     const auto& ikResult = inverse_.GetSingleSeedResult(posePlanning_.ikSession);
     if (!ikResult)
     {
-        RetryPosePlanningOrFinish(planning::MapIkFailure(ikResult));
+        RetryPosePlanningOrFinish(planning::detail::MapIkFailure(ikResult));
         return;
     }
 
@@ -705,7 +706,7 @@ Result SimRobotController::ValidateLinearPathRequest(
     const Result availability = ValidateCommandAvailability();
     if (!availability)
         return availability;
-    const Result validation = planning::ValidateLinearPathCommand(command);
+    const Result validation = planning::detail::ValidateLinearPathCommand(command);
     if (!validation)
         return validation;
     if (!specification_.hasToolFrame)

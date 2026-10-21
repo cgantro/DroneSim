@@ -6,7 +6,6 @@
 #include "robotics/kinematics/RobotInverseKinematics.h"
 #include "robotics/models/RobotSpecification.h"
 
-#include <cmath>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -15,27 +14,6 @@
 
 namespace grasplink::robotics::planning
 {
-
-/** @brief 직선 경로의 각 표본을 더 엄격한 위치·방향 오차로 맞추는 IK 설정을 만든다. */
-kinematics::IkOptions PathIkOptions(const models::RobotSpecification& specification);
-
-/** @brief TCP 경로가 비어 있지 않고 속도·가속도 상한이 모두 유효한지 확인한다. */
-Result ValidateLinearPathCommand(const LinearPathMoveCommand& command);
-
-/** @brief IK 실패 상태를 공통 Controller 결과 코드로 바꾼다. */
-Result MapIkFailure(const kinematics::IkResult& result);
-
-/** @brief 변위를 지정한 최대 속도 이하로 이동하는 데 필요한 최소 시간 [s]를 계산한다. */
-inline double RequiredTimeForVelocity(double displacement, double maximumVelocity)
-{
-    return std::abs(displacement) / maximumVelocity;
-}
-
-/** @brief 주어진 시간 동안 이동할 때 최대 속도에 대한 요구 속도 비율을 계산한다. */
-inline double VelocityRatio(double displacement, double availableSeconds, double maximumVelocity)
-{
-    return std::abs(displacement) / availableSeconds / maximumVelocity;
-}
 
 /** @brief 계획된 관절 자세와 TCP 자세, 이전 표본에서 이동하는 최소 시간을 보관한다. */
 struct LinearPathPoint
@@ -114,24 +92,6 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
-
-/** @brief 허용 관절 범위 안에서 기준 자세에 가장 가까운 2π 등가 목표각을 선택한다. */
-void AlignEquivalentJointAngles(
-    JointVector& target,
-    const JointVector& reference,
-    const models::RobotSpecification& specification);
-
-/** @brief TCP 목표 IK 해 가운데 시작 자세부터의 관절 경로가 유효한 해를 선택한다. */
-std::optional<kinematics::IkResult> SolveCollisionFreeIk(
-    kinematics::LevenbergMarquardtIk& inverse,
-    const models::RobotSpecification& specification,
-    const StateValidityChecker& stateValidityChecker,
-    const CartesianPose& target,
-    const JointVector& start,
-    const kinematics::IkOptions& options,
-    const PlanningPolicy& policy,
-    JointStateInvalidity& invalidity,
-    kinematics::IkResult& ikFailure);
 
 /**
  * @brief TCP 직선 경로를 IK 표본과 관절 경로 검증으로 바꾼다.

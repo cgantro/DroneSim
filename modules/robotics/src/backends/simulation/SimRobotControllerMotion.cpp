@@ -1,6 +1,7 @@
 #include "robotics/backends/simulation/SimRobotController.h"
 #include "robotics/backends/simulation/detail/SimulationMotionPolicy.h"
 #include "robotics/kinematics/detail/PoseMath.h"
+#include "planning/detail/LinearPathPlannerSupport.h"
 
 #include <algorithm>
 #include <array>
@@ -46,7 +47,7 @@ bool JointInterpolationFollowsTcpLine(
 
 kinematics::IkOptions RuntimeLinearIkOptions(const models::RobotSpecification& specification)
 {
-    kinematics::IkOptions options = planning::PathIkOptions(specification);
+    kinematics::IkOptions options = planning::detail::PathIkOptions(specification);
     // 보조 IK 결과가 명목 TCP 경로에서 벗어나는 정도를 더 작게 제한한다.
     // 같은 허용 오차를 IK 수렴 판정과 후보 자세 검증에 함께 사용한다.
     options.positionToleranceMeters = kRuntimeLinearIkPositionToleranceMeters;
@@ -349,16 +350,16 @@ bool SimRobotController::TryAdvanceLinearSegment(double availableSeconds,
 
         double requiredSeconds = 0.0;
         for (std::size_t joint = 0; joint < specification_.jointCount; ++joint)
-            requiredSeconds = std::max(requiredSeconds, planning::RequiredTimeForVelocity(
+            requiredSeconds = std::max(requiredSeconds, planning::detail::RequiredTimeForVelocity(
                 linearInterpolationBuffer_[joint] - state_.jointPositions[joint],
                 specification_.joints[joint].maximumVelocity));
 
         const Pose3 nextTcp = FromCartesian(inverse_.EvaluateTcp(linearInterpolationBuffer_));
         requiredSeconds = std::max(requiredSeconds,
-            planning::RequiredTimeForVelocity(
+            planning::detail::RequiredTimeForVelocity(
                 Length(Subtract(nextTcp.positionMeters, currentTcp.positionMeters)), linearMotion_.linearVelocityLimit));
         requiredSeconds = std::max(requiredSeconds,
-            planning::RequiredTimeForVelocity(
+            planning::detail::RequiredTimeForVelocity(
                 Length(RotationError(nextTcp.rotation, currentTcp.rotation)), linearMotion_.angularVelocityLimit));
 
         const double ratio = std::max(1.0, requiredSeconds / availableSeconds);
@@ -422,7 +423,7 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         for (std::size_t i = 0; i < current.size(); ++i)
         {
             const double change = solution.jointPositions[i] - current[i];
-            ratio = std::max(ratio, planning::VelocityRatio(
+            ratio = std::max(ratio, planning::detail::VelocityRatio(
                 change, availableSeconds, specification_.joints[i].maximumVelocity));
             movement = std::max(movement, std::abs(change));
             const double residual = plannedJoints[i] - solution.jointPositions[i];
@@ -431,10 +432,10 @@ bool SimRobotController::TryAdjustJointsAlongLinearPath(const JointVector& plann
         const Pose3 nextTcp = FromCartesian(inverse_.EvaluateTcp(solution.jointPositions));
         const double pathPositionError = Length(Subtract(nextTcp.positionMeters, pathTcp.positionMeters));
         const double pathOrientationError = Length(RotationError(nextTcp.rotation, pathTcp.rotation));
-        ratio = std::max(ratio, planning::VelocityRatio(
+        ratio = std::max(ratio, planning::detail::VelocityRatio(
             Length(Subtract(nextTcp.positionMeters, currentTcp.positionMeters)),
             availableSeconds, linearMotion_.linearVelocityLimit));
-        ratio = std::max(ratio, planning::VelocityRatio(
+        ratio = std::max(ratio, planning::detail::VelocityRatio(
             Length(RotationError(nextTcp.rotation, currentTcp.rotation)),
             availableSeconds, linearMotion_.angularVelocityLimit));
         const bool pathValid = planning::ValidateJointPath(

@@ -121,6 +121,7 @@ add_library(grasplink_robotics STATIC
 
 target_include_directories(grasplink_robotics PUBLIC
   modules/robotics/include
+  PRIVATE modules/robotics/src
 )
 target_link_libraries(grasplink_robotics PUBLIC Eigen3::Eigen)
 if(GRASPLINK_BUILD_GRAPHICS AND GRASPLINK_ENABLE_TRACY)
