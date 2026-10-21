@@ -74,32 +74,42 @@ struct JointPathPlanningJob::Impl
 
     void AdvanceOne()
     {
-        if (endpoint != EndpointCheckStage::IntermediateSamples)
+        switch (endpoint)
         {
-            const bool checkingStart = endpoint == EndpointCheckStage::Start;
-            const JointVector& joints = checkingStart ? start : goal;
-            endpoint = checkingStart ? EndpointCheckStage::Goal
-                                     : EndpointCheckStage::IntermediateSamples;
-            const auto invalidity = Check(joints);
+        case EndpointCheckStage::Start:
+        {
+            endpoint = EndpointCheckStage::Goal;
+            const auto invalidity = Check(start);
             if (invalidity != JointStateInvalidity::None)
                 Fail(invalidity);
-            else if (endpoint == EndpointCheckStage::IntermediateSamples &&
-                (start == goal || intervalCount == 1))
-                Complete();
-            return;
+            break;
         }
-
-        // 시작점과 끝점은 따로 검사했으므로 내부 표본만 확인한다.
-        const auto invalidity = Check(Interpolate(start, goal,
-            static_cast<double>(nextInterval) / static_cast<double>(intervalCount)));
-        if (invalidity != JointStateInvalidity::None)
+        case EndpointCheckStage::Goal:
         {
-            Fail(invalidity);
-            return;
+            endpoint = EndpointCheckStage::IntermediateSamples;
+            const auto invalidity = Check(goal);
+            if (invalidity != JointStateInvalidity::None)
+                Fail(invalidity);
+            else if (start == goal || intervalCount == 1)
+                Complete();
+            break;
         }
-        ++nextInterval;
-        if (nextInterval >= intervalCount)
-            Complete();
+        case EndpointCheckStage::IntermediateSamples:
+        {
+            // 시작점과 끝점은 따로 검사했으므로 내부 표본만 확인한다.
+            const auto invalidity = Check(Interpolate(start, goal,
+                static_cast<double>(nextInterval) / static_cast<double>(intervalCount)));
+            if (invalidity != JointStateInvalidity::None)
+            {
+                Fail(invalidity);
+                return;
+            }
+            ++nextInterval;
+            if (nextInterval >= intervalCount)
+                Complete();
+            break;
+        }
+        }
     }
 };
 
