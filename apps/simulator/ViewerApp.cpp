@@ -261,7 +261,6 @@ bool ViewerApp::InitViewer()
         viewer_camera::position, viewer_camera::target, aspectRatio);
     m_GuiModule = std::make_unique<grasplink::gui::GuiModule>(*m_Window);
     m_GripperPanel = std::make_unique<grasplink::gui::GripperPanel>();
-    m_RobotPanel = std::make_unique<grasplink::gui::RobotPanel>();
     m_PhysicsDebugPanel = std::make_unique<grasplink::gui::PhysicsDebugPanel>();
     m_ColliderOverlay = std::make_unique<grasplink::gui::ColliderOverlay>(m_World);
 
@@ -566,7 +565,7 @@ grasplink::gui::RobotPanelActions ViewerApp::DrawControlPanel(float sceneDisplay
     {
         if (ImGui::BeginTabItem("Robot"))
         {
-            actions = m_RobotPanel->DrawContents(view);
+            actions = grasplink::gui::DrawRobotPanelContents(view);
             ImGui::EndTabItem();
         }
         if (m_GripperController && ImGui::BeginTabItem("Gripper"))
@@ -705,7 +704,6 @@ void ViewerApp::Shutdown()
     m_ColliderOverlay.reset();
     m_PhysicsDebugPanel.reset();
     m_GripperPanel.reset();
-    m_RobotPanel.reset();
     // 파지 제약은 연결된 Body와 PhysicsWorld를 빌려 쓰므로 Scene, Controller, 물리 시스템이 살아 있을 때 먼저 해제한다.
     m_GripperGraspAdapter.reset();
     // Controller가 검증 함수를 보관하므로 guard 소멸자가 참조를 해제할 때까지 Controller가 살아 있어야 한다.

@@ -32,7 +32,7 @@ double YawDegrees(const std::array<double, 4>& xyzw)
 }
 }
 
-RobotPanelActions RobotPanel::DrawContents(const RobotPanelView& view)
+RobotPanelActions DrawRobotPanelContents(const RobotPanelView& view)
 {
     RobotPanelActions actions;
     const auto& state = view.state;

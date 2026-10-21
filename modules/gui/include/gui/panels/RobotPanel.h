@@ -40,15 +40,9 @@ struct RobotPanelActions
     bool stop = false;
 };
 /**
- * @brief 로봇 상태와 임무 정보를 표시하고 버튼 입력을 반환한다.
- * @details 임무 진행과 로봇 명령은 ViewerApp이 처리한다. 패널은 전달받은 값을 표시하고 사용자 입력을 RobotPanelActions로 돌려준다.
+ * @brief 로봇과 임무 상태를 표시하고 이번 프레임에 누른 버튼을 반환한다.
+ * @details 임무 진행과 로봇 명령은 호출한 쪽에서 처리한다. 이 함수는 상태를 보관하지 않으므로 호출 사이에 유지할 객체가 필요 없다.
  */
-class RobotPanel final
-{
-public:
-    /** @brief 현재 로봇과 임무 상태를 표시하고 이번 프레임의 버튼 입력을 반환한다. */
-    [[nodiscard]] RobotPanelActions DrawContents(const RobotPanelView& view);
-
-};
+[[nodiscard]] RobotPanelActions DrawRobotPanelContents(const RobotPanelView& view);
 
 }
