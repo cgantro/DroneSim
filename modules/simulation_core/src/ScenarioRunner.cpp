@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -26,6 +27,7 @@ struct ExpectedDrone
     std::string name;
     FlightMode mode;
     glm::dvec3 positionMeters;
+    std::optional<glm::dquat> orientation;
 };
 
 bool CanReceiveWaypoint(FlightMode mode) noexcept
@@ -83,6 +85,40 @@ glm::dvec3 ReadVector(const Json& value, const char* name)
         ReadFiniteNumber(value[1], name),
         ReadFiniteNumber(value[2], name)
     };
+}
+
+glm::dquat ReadOrientationQuaternion(const Json& value)
+{
+    constexpr const char* fieldName = "orientation_quaternion_wxyz";
+    if (!value.is_array() || value.size() != 4)
+        throw std::invalid_argument(std::string(fieldName) + "에는 숫자 4개가 필요합니다.");
+
+    const glm::dquat input{
+        ReadFiniteNumber(value[0], fieldName),
+        ReadFiniteNumber(value[1], fieldName),
+        ReadFiniteNumber(value[2], fieldName),
+        ReadFiniteNumber(value[3], fieldName)};
+    const double scale = std::max({
+        std::abs(input.w), std::abs(input.x), std::abs(input.y), std::abs(input.z)});
+    if (scale == 0.0)
+        throw std::invalid_argument(std::string(fieldName) + "은 0이 아닌 사원수여야 합니다.");
+
+    const glm::dquat scaled{
+        input.w / scale, input.x / scale, input.y / scale, input.z / scale};
+    const double length = std::sqrt(
+        scaled.w * scaled.w + scaled.x * scaled.x
+        + scaled.y * scaled.y + scaled.z * scaled.z);
+    return {
+        scaled.w / length, scaled.x / length, scaled.y / length, scaled.z / length};
+}
+
+double OrientationErrorRadians(
+    const glm::dquat& actual, const glm::dquat& expected) noexcept
+{
+    const double dot = std::abs(
+        actual.w * expected.w + actual.x * expected.x
+        + actual.y * expected.y + actual.z * expected.z);
+    return 2.0 * std::acos(std::clamp(dot, 0.0, 1.0));
 }
 
 DroneCommand ReadCommand(const Json& value)
@@ -169,10 +205,14 @@ std::vector<ExpectedDrone> ReadExpectedDrones(const Json& value)
         std::string name = nameValue.get<std::string>();
         if (name.empty() || !names.insert(name).second)
             throw std::invalid_argument("예상 드론 name은 비어 있거나 중복될 수 없습니다.");
+        const auto orientation = item.find("orientation_quaternion_wxyz");
         drones.push_back({
             std::move(name),
             ReadFlightMode(Required(item, "mode")),
-            ReadVector(Required(item, "position_meters"), "position_meters")});
+            ReadVector(Required(item, "position_meters"), "position_meters"),
+            orientation == item.end()
+                ? std::nullopt
+                : std::optional<glm::dquat>{ReadOrientationQuaternion(*orientation)}});
     }
     return drones;
 }
@@ -574,7 +614,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
         throw std::invalid_argument("expected는 JSON 객체여야 합니다.");
     }
     const bool hasExpectedDrones = expected.contains("drones");
-    if (hasExpectedDrones && (expected.contains("mode") || expected.contains("position_meters")))
+    if (hasExpectedDrones && (expected.contains("mode") || expected.contains("position_meters")
+        || expected.contains("orientation_quaternion_wxyz")))
         throw std::invalid_argument("expected에는 drones 목록 또는 단일 드론 상태 중 하나만 적어야 합니다.");
     if (!hasExpectedDrones && !scenarioDrones.empty())
         throw std::invalid_argument("여러 드론을 지정한 시나리오는 expected.drones가 필요합니다.");
@@ -582,6 +623,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
     std::vector<ExpectedDrone> expectedDrones;
     std::optional<FlightMode> expectedMode;
     std::optional<glm::dvec3> expectedPosition;
+    std::optional<glm::dquat> expectedOrientation;
     if (hasExpectedDrones)
         expectedDrones = ReadExpectedDrones(expected["drones"]);
     else
@@ -589,6 +631,9 @@ ScenarioResult RunScenario(std::string_view jsonText)
         expectedMode = ReadFlightMode(Required(expected, "mode"));
         expectedPosition = ReadVector(
             Required(expected, "position_meters"), "position_meters");
+        if (expected.contains("orientation_quaternion_wxyz"))
+            expectedOrientation = ReadOrientationQuaternion(
+                expected["orientation_quaternion_wxyz"]);
     }
     const double toleranceMeters = expected.contains("tolerance_meters")
         ? ReadFiniteNumber(expected["tolerance_meters"], "tolerance_meters")
@@ -596,6 +641,16 @@ ScenarioResult RunScenario(std::string_view jsonText)
     if (toleranceMeters < 0.0)
     {
         throw std::invalid_argument("tolerance_meters는 0 이상이어야 합니다.");
+    }
+    const double orientationToleranceRadians = expected.contains("orientation_tolerance_radians")
+        ? ReadFiniteNumber(expected["orientation_tolerance_radians"],
+            "orientation_tolerance_radians")
+        : 0.01;
+    if (orientationToleranceRadians < 0.0
+        || orientationToleranceRadians > std::numbers::pi)
+    {
+        throw std::invalid_argument(
+            "orientation_tolerance_radians는 0부터 π 사이여야 합니다.");
     }
     const std::optional<double> expectedMinimumDroneSeparationMeters =
         expected.contains("minimum_drone_separation_meters")
@@ -848,6 +903,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
     {
         result.issues.push_back("최종 위치가 허용 오차를 벗어났습니다.");
     }
+    if (expectedOrientation
+        && OrientationErrorRadians(result.finalState.orientation, *expectedOrientation)
+            > orientationToleranceRadians)
+    {
+        result.issues.push_back("최종 자세가 허용 각도 오차를 벗어났습니다.");
+    }
     for (const ExpectedDrone& expectedDrone : expectedDrones)
     {
         const auto found = std::find_if(result.drones.begin(), result.drones.end(),
@@ -866,6 +927,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
         if (glm::length(found->finalState.positionMeters - expectedDrone.positionMeters)
             > toleranceMeters)
             result.issues.push_back(expectedDrone.name + " 드론의 최종 위치가 허용 오차를 벗어났습니다.");
+        if (expectedDrone.orientation
+            && OrientationErrorRadians(found->finalState.orientation, *expectedDrone.orientation)
+                > orientationToleranceRadians)
+        {
+            result.issues.push_back(expectedDrone.name + " 드론의 최종 자세가 허용 각도 오차를 벗어났습니다.");
+        }
     }
     if (hasExpectedDrones && expectedDrones.size() != result.drones.size())
         result.issues.push_back("expected.drones 개수가 시나리오 드론 수와 다릅니다.");

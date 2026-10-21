@@ -24,6 +24,8 @@ constexpr std::string_view completeFlightScenario = R"json(
   "expected": {
     "mode": "grounded",
     "position_meters": [3.0, 0.0, 0.0],
+    "orientation_quaternion_wxyz": [1.0, 0.0, 0.0, 0.0],
+    "orientation_tolerance_radians": 0.000001,
     "tolerance_meters": 0.000001
   }
 })json";
@@ -67,9 +69,11 @@ TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
        {"tick":0,"drone":"lead","type":"takeoff","delay_ticks":5},
        {"tick":0,"drone":"scout","type":"takeoff"},
        {"tick":90,"drone":"scout","type":"set_waypoint","position_meters":[12,0,1.5]}],
-     "expected":{"tolerance_meters":0.000001,"minimum_drone_separation_meters":9.9,"drones":[
+     "expected":{"tolerance_meters":0.000001,"orientation_tolerance_radians":0.000001,
+       "minimum_drone_separation_meters":9.9,"drones":[
        {"name":"lead","mode":"hovering","position_meters":[0,0,1.5]},
-       {"name":"scout","mode":"hovering","position_meters":[12,0,1.5]}]}}
+       {"name":"scout","mode":"hovering","position_meters":[12,0,1.5],
+        "orientation_quaternion_wxyz":[-0.8253356149096783,0,0,-0.5646424733950354]}]}}
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
@@ -79,6 +83,7 @@ TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
     EXPECT_EQ(result.drones[1].name, "scout");
     EXPECT_EQ(result.drones[0].finalState.mode, FlightMode::Hovering);
     EXPECT_EQ(result.drones[1].finalState.mode, FlightMode::Hovering);
+    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
     EXPECT_NEAR(result.drones[1].finalState.yawRadians, 1.2, 1.0e-12);
     EXPECT_DOUBLE_EQ(result.drones[0].finalState.positionMeters.z, 1.5);
     EXPECT_DOUBLE_EQ(result.drones[1].finalState.positionMeters.x, 12.0);
@@ -92,6 +97,16 @@ TEST(ScenarioRunner, RunsNamedDronesWithIndependentCommandsAndDeliveryOrder)
     EXPECT_FALSE(unsafeResult.passed);
     ASSERT_EQ(unsafeResult.issues.size(), 1);
     EXPECT_NE(unsafeResult.issues.front().find("최소 거리"), std::string::npos);
+
+    std::string wrongOrientationScenario{scenario};
+    const std::string expectedOrientation =
+        "-0.8253356149096783,0,0,-0.5646424733950354";
+    wrongOrientationScenario.replace(
+        wrongOrientationScenario.find(expectedOrientation), expectedOrientation.size(), "1,0,0,0");
+    const ScenarioResult wrongOrientationResult = RunScenario(wrongOrientationScenario);
+    EXPECT_FALSE(wrongOrientationResult.passed);
+    ASSERT_EQ(wrongOrientationResult.issues.size(), 1);
+    EXPECT_NE(wrongOrientationResult.issues.front().find("최종 자세"), std::string::npos);
 }
 
 TEST(ScenarioRunner, FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward)
@@ -268,6 +283,9 @@ TEST(ScenarioRunner, ReportsCommandFailuresAndRejectsInvalidScenarios)
     EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"ticks":1,
         "commands":[],"expected":{"mode":7,"position_meters":[0,0,0]}})json")),
         std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"ticks":0,
+        "commands":[],"expected":{"mode":"grounded","position_meters":[0,0,0],
+        "orientation_quaternion_wxyz":[0,0,0,0]}})json")), std::invalid_argument);
     EXPECT_THROW(static_cast<void>(RunScenario(R"json({"version":1,"dynamics":"flight",
         "ticks":1,"commands":[],"expected":{"mode":"grounded","position_meters":[0,0,0]}})json")),
         std::invalid_argument);

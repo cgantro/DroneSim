@@ -13,7 +13,7 @@ namespace aerosimlab::simulation
 {
 /**
  * @brief JSON 시나리오 실행의 최종 상태와 시험 결과를 돌려준다.
- * @details 통과 여부는 시나리오 명령이 모두 받아들여지고, 마지막 비행 상태와 위치가 예상값 범위에 들었는지로 정한다.
+ * @details 통과 여부는 명령 처리와 마지막 상태·위치·선택한 자세 기대값으로 정한다.
  */
 struct ScenarioResult
 {

@@ -27,6 +27,11 @@ nlohmann::json ToJson(const aerosimlab::simulation::DroneState& state)
             state.velocityMetersPerSecond.x,
             state.velocityMetersPerSecond.y,
             state.velocityMetersPerSecond.z}},
+        {"orientation_quaternion_wxyz", {
+            state.orientation.w,
+            state.orientation.x,
+            state.orientation.y,
+            state.orientation.z}},
         {"yaw_radians", state.yawRadians}};
 }
 
