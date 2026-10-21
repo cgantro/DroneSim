@@ -45,7 +45,7 @@ _deps/
 *.user
 *.userosscache
 *.sln.docstates
-# Personal notes and source material are local-only. Maintained internal project guidance lives in docs/private/.
+# Personal notes and source material are local-only.
 /docs/diary/
 /docs/history/
 /docs/DOCUMENTATION_AUDIT_2026-10-09.md
@@ -61,9 +61,6 @@ Desktop.ini
 *.temp
 *.swp
 *~
-
-# 내부 문서는 이 컴퓨터에만 둡니다.
-/docs/private/
 
 # Local simulator and controller endpoints/credentials.  Commit only the
 # documented template so a developer's LAN address and Wi-Fi secrets never
