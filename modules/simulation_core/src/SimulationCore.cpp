@@ -237,28 +237,41 @@ struct SimulationCore::EcsStorage
     {
         CopyPhysicsState(state, body);
 
-        if (state.mode == FlightMode::TakingOff
-            && state.positionMeters.z >= control.groundElevationMeters
-                + DroneModel::takeoffHeightMeters - 0.03
-            && std::abs(state.velocityMetersPerSecond.z) < 0.15)
+        switch (state.mode)
         {
-            state.mode = FlightMode::Hovering;
-        }
-        else if (state.mode == FlightMode::FollowingWaypoint
-            && glm::length(control.waypointMeters - state.positionMeters) < 0.15
-            && glm::length(state.velocityMetersPerSecond) < 0.15)
-        {
-            state.mode = FlightMode::Hovering;
-            control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
-        }
-        else if (state.mode == FlightMode::Landing
-            && state.positionMeters.z <= control.groundElevationMeters
-                + QuadrotorFlightController::groundedModelOriginHeightMeters + 0.02
-            && std::abs(state.velocityMetersPerSecond.z) < 0.15)
-        {
-            state.mode = FlightMode::Grounded;
-            control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
-            control.commandedYawRateRadiansPerSecond = 0.0;
+        case FlightMode::TakingOff:
+            if (state.positionMeters.z >= control.groundElevationMeters
+                    + DroneModel::takeoffHeightMeters - 0.03
+                && std::abs(state.velocityMetersPerSecond.z) < 0.15)
+            {
+                state.mode = FlightMode::Hovering;
+            }
+            break;
+
+        case FlightMode::FollowingWaypoint:
+            if (glm::length(control.waypointMeters - state.positionMeters) < 0.15
+                && glm::length(state.velocityMetersPerSecond) < 0.15)
+            {
+                state.mode = FlightMode::Hovering;
+                control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
+            }
+            break;
+
+        case FlightMode::Landing:
+            if (state.positionMeters.z <= control.groundElevationMeters
+                    + QuadrotorFlightController::groundedModelOriginHeightMeters + 0.02
+                && std::abs(state.velocityMetersPerSecond.z) < 0.15)
+            {
+                state.mode = FlightMode::Grounded;
+                control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
+                control.commandedYawRateRadiansPerSecond = 0.0;
+            }
+            break;
+
+        case FlightMode::Grounded:
+        case FlightMode::Hovering:
+        case FlightMode::Flying:
+            break;
         }
     }
 
