@@ -39,6 +39,60 @@ double DirectionSign(RotorRotation direction)
     return direction == RotorRotation::CounterClockwise ? 1.0 : -1.0;
 }
 
+/** @brief 위치 오차로 목표점에 다가가고 현재 속도로 지나침을 줄인다. */
+glm::dvec3 PositionControlAcceleration(
+    const DroneState& state, const glm::dvec3& targetPosition)
+{
+    return positionGain * (targetPosition - state.positionMeters)
+        - velocityGain * state.velocityMetersPerSecond;
+}
+
+/** @brief 로터 추력 방향을 기체 위쪽 축에 맞추고 yaw 방향을 유지한다. */
+glm::dquat DesiredOrientation(const glm::dvec3& worldThrust, double yawRadians)
+{
+    glm::dvec3 bodyZ = glm::normalize(worldThrust);
+    const glm::dvec3 heading{std::cos(yawRadians), std::sin(yawRadians), 0.0};
+    glm::dvec3 bodyX = heading - bodyZ * glm::dot(heading, bodyZ);
+    if (glm::length(bodyX) < 1.0e-8)
+        bodyX = glm::dvec3{1.0, 0.0, 0.0} - bodyZ * bodyZ.x;
+    bodyX = glm::normalize(bodyX);
+    const glm::dvec3 bodyY = glm::normalize(glm::cross(bodyZ, bodyX));
+    return glm::normalize(glm::quat_cast(glm::dmat3{bodyX, bodyY, bodyZ}));
+}
+
+/** @brief 가장 짧은 자세 오차와 각속도로 기체 축 기준 토크를 계산한다. */
+glm::dvec3 AttitudeTorque(
+    const DroneState& state,
+    const QuadrotorParameters& parameters,
+    const glm::dquat& desiredOrientation)
+{
+    const glm::dquat currentOrientation = glm::normalize(state.orientation);
+    glm::dquat error = glm::normalize(glm::inverse(currentOrientation) * desiredOrientation);
+    if (error.w < 0.0)
+        error = -error;
+
+    const glm::dvec3 vectorPart{error.x, error.y, error.z};
+    const double vectorLength = glm::length(vectorPart);
+    glm::dvec3 angleError{0.0};
+    if (vectorLength > 1.0e-10)
+    {
+        const double angle = 2.0 * std::atan2(vectorLength, error.w);
+        angleError = vectorPart * (angle / vectorLength);
+    }
+
+    const glm::dvec3 angularVelocityBody =
+        glm::inverse(currentOrientation) * state.angularVelocityRadiansPerSecond;
+    const glm::dvec3 angularAcceleration =
+        attitudeGain * angleError - angularRateGain * angularVelocityBody;
+    return LimitMagnitude(
+        parameters.principalInertiaKilogramMetersSquared * angularAcceleration,
+        maximumTorqueNewtonMeters);
+}
+
+/**
+ * @brief 네 로터로 목표 수직 힘과 세 축 토크를 나눈다.
+ * @details 각 단계에서 절댓값이 가장 큰 계수를 기준으로 행을 바꿔 연립식을 푼다.
+ */
 std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
     const DesiredWrench& desiredWrench,
     const QuadrotorParameters& parameters)
@@ -60,7 +114,6 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
     equation[2][rotorCount] = desiredWrench.torqueNewtonMeters.y;
     equation[3][rotorCount] = desiredWrench.torqueNewtonMeters.z;
 
-    // 네 로터가 만드는 힘과 세 축 토크를 한 번에 풀어 각 로터의 추력을 얻는다.
     for (std::size_t column = 0; column < rotorCount; ++column)
     {
         std::size_t pivot = column;
@@ -92,46 +145,6 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
         thrusts[rotor] = std::max(0.0, equation[rotor][rotorCount]);
     return thrusts;
 }
-
-glm::dquat DesiredOrientation(const glm::dvec3& worldThrust, double yawRadians)
-{
-    glm::dvec3 bodyZ = glm::normalize(worldThrust);
-    const glm::dvec3 heading{std::cos(yawRadians), std::sin(yawRadians), 0.0};
-    glm::dvec3 bodyX = heading - bodyZ * glm::dot(heading, bodyZ);
-    if (glm::length(bodyX) < 1.0e-8)
-        bodyX = glm::dvec3{1.0, 0.0, 0.0} - bodyZ * bodyZ.x;
-    bodyX = glm::normalize(bodyX);
-    const glm::dvec3 bodyY = glm::normalize(glm::cross(bodyZ, bodyX));
-    return glm::normalize(glm::quat_cast(glm::dmat3{bodyX, bodyY, bodyZ}));
-}
-
-glm::dvec3 AttitudeTorque(
-    const DroneState& state,
-    const QuadrotorParameters& parameters,
-    const glm::dquat& desiredOrientation)
-{
-    const glm::dquat currentOrientation = glm::normalize(state.orientation);
-    glm::dquat error = glm::normalize(glm::inverse(currentOrientation) * desiredOrientation);
-    if (error.w < 0.0)
-        error = -error;
-
-    const glm::dvec3 vectorPart{error.x, error.y, error.z};
-    const double vectorLength = glm::length(vectorPart);
-    glm::dvec3 angleError{0.0};
-    if (vectorLength > 1.0e-10)
-    {
-        const double angle = 2.0 * std::atan2(vectorLength, error.w);
-        angleError = vectorPart * (angle / vectorLength);
-    }
-
-    const glm::dvec3 angularVelocityBody =
-        glm::inverse(currentOrientation) * state.angularVelocityRadiansPerSecond;
-    const glm::dvec3 angularAcceleration =
-        attitudeGain * angleError - angularRateGain * angularVelocityBody;
-    return LimitMagnitude(
-        parameters.principalInertiaKilogramMetersSquared * angularAcceleration,
-        maximumTorqueNewtonMeters);
-}
 }
 
 std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::MotorTargets(
@@ -139,37 +152,35 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
     const DroneControlState& control,
     const QuadrotorParameters& parameters)
 {
-    if (state.mode == FlightMode::Grounded)
-        return {};
-
     glm::dvec3 desiredAcceleration{0.0};
-    glm::dvec3 desiredVelocity = control.targetVelocityMetersPerSecond;
-    if (state.mode == FlightMode::TakingOff)
+    switch (state.mode)
+    {
+    case FlightMode::Grounded:
+        return {};
+    case FlightMode::TakingOff:
     {
         const glm::dvec3 targetPosition{
             state.positionMeters.x, state.positionMeters.y,
             control.groundElevationMeters + DroneModel::takeoffHeightMeters};
-        desiredAcceleration = positionGain * (targetPosition - state.positionMeters)
-            - velocityGain * state.velocityMetersPerSecond;
+        desiredAcceleration = PositionControlAcceleration(state, targetPosition);
+        break;
     }
-    else if (state.mode == FlightMode::Landing)
+    case FlightMode::Landing:
     {
         const glm::dvec3 targetPosition{
             state.positionMeters.x, state.positionMeters.y,
             control.groundElevationMeters + groundedModelOriginHeightMeters};
-        desiredAcceleration = positionGain * (targetPosition - state.positionMeters)
-            - velocityGain * state.velocityMetersPerSecond;
+        desiredAcceleration = PositionControlAcceleration(state, targetPosition);
+        break;
     }
-    else if (state.mode == FlightMode::FollowingWaypoint)
-    {
-        const glm::dvec3 positionError = control.waypointMeters - state.positionMeters;
-        desiredAcceleration = positionGain * positionError
-            - velocityGain * state.velocityMetersPerSecond;
-    }
-    else
-    {
-        desiredAcceleration = velocityGain
-            * (desiredVelocity - state.velocityMetersPerSecond);
+    case FlightMode::FollowingWaypoint:
+        desiredAcceleration = PositionControlAcceleration(state, control.waypointMeters);
+        break;
+    case FlightMode::Hovering:
+    case FlightMode::Flying:
+        desiredAcceleration = velocityGain * (
+            control.targetVelocityMetersPerSecond - state.velocityMetersPerSecond);
+        break;
     }
 
     desiredAcceleration = LimitMagnitude(
