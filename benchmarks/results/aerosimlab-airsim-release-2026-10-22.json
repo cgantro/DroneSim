@@ -1,0 +1,339 @@
+{
+  "configuration": "hidden OpenGL window; one drone; SRTM terrain; 17 OSM building boxes; 49 park facilities; PX4 X500 and park facility meshes",
+  "elapsed_seconds": 5.0007948,
+  "entity_scaling": {
+    "counts": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "method": "헤드리스 AirSim 강체 모의; 한 물리 세계에서 모든 드론을 함께 갱신. 각 실행은 워밍업 뒤 30,000 Tick을 측정하고 프로세스 CPU 시간과 작업 집합을 기록",
+    "repetitions_per_count": 3,
+    "runs": [
+      {
+        "drone_count": 1,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.0798491,
+        "physics_step_duration_us": {
+          "p50": 0.8,
+          "p95": 1.0,
+          "p99": 1.5,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.18898146629078,
+        "process_working_set_after_bytes": 116572160,
+        "process_working_set_before_bytes": 116105216,
+        "process_working_set_change_bytes": 466944,
+        "repetition": 1,
+        "tick_duration_us": {
+          "p50": 2.5,
+          "p95": 3.0,
+          "p99": 6.5,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 1,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.0818708,
+        "physics_step_duration_us": {
+          "p50": 0.8,
+          "p95": 1.0,
+          "p99": 1.6,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.15780962198978,
+        "process_working_set_after_bytes": 116826112,
+        "process_working_set_before_bytes": 116363264,
+        "process_working_set_change_bytes": 462848,
+        "repetition": 2,
+        "tick_duration_us": {
+          "p50": 2.5,
+          "p95": 3.0,
+          "p99": 7.3,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 1,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.0814109,
+        "physics_step_duration_us": {
+          "p50": 0.8,
+          "p95": 1.0,
+          "p99": 1.3,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.49527643104302,
+        "process_working_set_after_bytes": 116805632,
+        "process_working_set_before_bytes": 116334592,
+        "process_working_set_change_bytes": 471040,
+        "repetition": 3,
+        "tick_duration_us": {
+          "p50": 2.5,
+          "p95": 3.0,
+          "p99": 5.6,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 2,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.122977,
+        "physics_step_duration_us": {
+          "p50": 1.8,
+          "p95": 2.1,
+          "p99": 3.8,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.01870268424177,
+        "process_working_set_after_bytes": 116711424,
+        "process_working_set_before_bytes": 116240384,
+        "process_working_set_change_bytes": 471040,
+        "repetition": 1,
+        "tick_duration_us": {
+          "p50": 3.7,
+          "p95": 4.6,
+          "p99": 13.6,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 2,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.1283232,
+        "physics_step_duration_us": {
+          "p50": 1.8,
+          "p95": 2.2,
+          "p99": 4.9,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.5274182688711,
+        "process_working_set_after_bytes": 116789248,
+        "process_working_set_before_bytes": 116318208,
+        "process_working_set_change_bytes": 471040,
+        "repetition": 2,
+        "tick_duration_us": {
+          "p50": 3.8,
+          "p95": 4.6,
+          "p99": 17.7,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 2,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.128314,
+        "physics_step_duration_us": {
+          "p50": 1.7,
+          "p95": 2.2,
+          "p99": 5.0,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.75528780959209,
+        "process_working_set_after_bytes": 116695040,
+        "process_working_set_before_bytes": 116228096,
+        "process_working_set_change_bytes": 466944,
+        "repetition": 3,
+        "tick_duration_us": {
+          "p50": 3.8,
+          "p95": 4.7,
+          "p99": 19.4,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 4,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.2208379,
+        "physics_step_duration_us": {
+          "p50": 4.0,
+          "p95": 4.8,
+          "p99": 14.5,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.07340225568166,
+        "process_working_set_after_bytes": 116764672,
+        "process_working_set_before_bytes": 116297728,
+        "process_working_set_change_bytes": 466944,
+        "repetition": 1,
+        "tick_duration_us": {
+          "p50": 6.7,
+          "p95": 8.2,
+          "p99": 26.6,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 4,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.2046942,
+        "physics_step_duration_us": {
+          "p50": 3.8,
+          "p95": 4.6,
+          "p99": 13.2,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.66085995597335,
+        "process_working_set_after_bytes": 115744768,
+        "process_working_set_before_bytes": 116338688,
+        "process_working_set_change_bytes": -593920,
+        "repetition": 2,
+        "tick_duration_us": {
+          "p50": 6.4,
+          "p95": 7.9,
+          "p99": 24.3,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 4,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.2102684,
+        "physics_step_duration_us": {
+          "p50": 3.9,
+          "p95": 4.7,
+          "p99": 13.3,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.87235362042038,
+        "process_working_set_after_bytes": 115732480,
+        "process_working_set_before_bytes": 115261440,
+        "process_working_set_change_bytes": 471040,
+        "repetition": 3,
+        "tick_duration_us": {
+          "p50": 6.5,
+          "p95": 8.0,
+          "p99": 24.3,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 8,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.4693378,
+        "physics_step_duration_us": {
+          "p50": 10.4,
+          "p95": 12.7,
+          "p99": 37.1,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.92802625315923,
+        "process_working_set_after_bytes": 115757056,
+        "process_working_set_before_bytes": 115286016,
+        "process_working_set_change_bytes": 471040,
+        "repetition": 1,
+        "tick_duration_us": {
+          "p50": 14.5,
+          "p95": 19.4,
+          "p99": 55.0,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 8,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.470816,
+        "physics_step_duration_us": {
+          "p50": 10.3,
+          "p95": 12.9,
+          "p99": 41.7,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.03908108475497,
+        "process_working_set_after_bytes": 115838976,
+        "process_working_set_before_bytes": 115367936,
+        "process_working_set_change_bytes": 471040,
+        "repetition": 2,
+        "tick_duration_us": {
+          "p50": 14.4,
+          "p95": 20.4,
+          "p99": 62.1,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 8,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.4588428,
+        "physics_step_duration_us": {
+          "p50": 10.0,
+          "p95": 12.5,
+          "p99": 38.7,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.03426009953735,
+        "process_working_set_after_bytes": 115716096,
+        "process_working_set_before_bytes": 115245056,
+        "process_working_set_change_bytes": 471040,
+        "repetition": 3,
+        "tick_duration_us": {
+          "p50": 14.1,
+          "p95": 19.8,
+          "p99": 59.0,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      }
+    ]
+  },
+  "framebuffer": {
+    "height": 720,
+    "width": 1280
+  },
+  "opengl": {
+    "renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+    "version": "3.3.0 NVIDIA 581.42"
+  },
+  "physics_step_duration_us": {
+    "p50": 9.6,
+    "p95": 13.0,
+    "p99": 37.1,
+    "samples": 299
+  },
+  "process_cpu_percent_approx": 99.98410652642654,
+  "render_fps": 374.9403994740996,
+  "rendered_frames": 1875,
+  "simulation_ticks": 299,
+  "source_revision": "e6e75b9d-dirty",
+  "tick_duration_us": {
+    "deadline_misses_over_16_67ms": 0,
+    "p50": 23.0,
+    "p95": 31.2,
+    "p99": 72.4,
+    "samples": 299
+  },
+  "vision_analysis": {
+    "duration_us": {
+      "p50": 1671.2,
+      "p95": 2216.2,
+      "p99": 2668.8,
+      "samples": 292
+    },
+    "mean_brightness": 129.58667922671683,
+    "mean_contrast": 86.17593051012601,
+    "mean_sharpness": 47.06455680115605,
+    "samples": 292
+  },
+  "working_set_bytes": 115318784,
+  "measured_at": "2026-10-22T06:40:29Z",
+  "environment": {
+    "os": "Microsoft Windows 11 Pro 10.0.26200 x64",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+    "build": "MSVC Release x64",
+    "renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+    "opengl": "3.3.0 NVIDIA 581.42"
+  }
+}
