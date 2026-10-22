@@ -284,7 +284,7 @@ void UpdateMissionResults(
     }
 }
 
-void CheckExpectedResults(
+void PopulateFinalSnapshot(
     const ScenarioDefinition& definition,
     const SimulationCore& simulation,
     const DroneIds& droneIds,
@@ -304,6 +304,12 @@ void CheckExpectedResults(
     }
     result.finalState = result.drones.front().finalState;
     result.finalCamera = simulation.Camera();
+}
+
+void CheckExpectedResults(
+    const ScenarioDefinition& definition,
+    ScenarioResult& result)
+{
     if (result.mission)
     {
         result.mission->passed = std::all_of(
@@ -414,7 +420,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
         UpdateMissionResults(tick, result.mission, simulation, droneIds, result);
     }
 
-    CheckExpectedResults(definition, simulation, droneIds, result);
+    PopulateFinalSnapshot(definition, simulation, droneIds, result);
+    CheckExpectedResults(definition, result);
     return result;
 }
 
