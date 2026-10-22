@@ -137,12 +137,8 @@ glm::dvec3 AttitudeTorque(
 std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::MotorTargets(
     const DroneState& state,
     const DroneControlState& control,
-    const QuadrotorParameters& parameters,
-    double stepSeconds)
+    const QuadrotorParameters& parameters)
 {
-    if (!std::isfinite(stepSeconds) || !(stepSeconds > 0.0))
-        throw std::invalid_argument("제어기 시간 간격은 0보다 큰 유한한 값이어야 합니다.");
-
     if (state.mode == FlightMode::Grounded)
         return {};
 

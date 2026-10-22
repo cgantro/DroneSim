@@ -245,7 +245,7 @@ struct SimulationCore::EcsStorage
             control.desiredYawRadians += control.commandedYawRateRadiansPerSecond * step;
 
         const auto targetSpeeds = QuadrotorFlightController::MotorTargets(
-            state, control, actuation.parameters, step);
+            state, control, actuation.parameters);
         physics->SetMotorTargets(body, targetSpeeds);
     }
 

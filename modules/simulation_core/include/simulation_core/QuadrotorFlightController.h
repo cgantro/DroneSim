@@ -21,7 +21,6 @@ public:
     [[nodiscard]] static std::array<double, QuadrotorParameters::rotorCount> MotorTargets(
         const DroneState& state,
         const DroneControlState& control,
-        const QuadrotorParameters& parameters,
-        double stepSeconds);
+        const QuadrotorParameters& parameters);
 };
 }
