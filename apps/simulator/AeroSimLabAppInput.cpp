@@ -283,6 +283,12 @@ bool AeroSimLabApp::ApplySessionCommand(
 {
     using Command = aerosimlab::communication::SessionCommand;
     using FlightMode = aerosimlab::simulation::FlightMode;
+    const auto resetSimulationState = [this]
+    {
+        simulation_.Reset();
+        eoFrame_ = {};
+        groundControlCommandExpiresAtTick_.reset();
+    };
 
     switch (command)
     {
@@ -298,9 +304,7 @@ bool AeroSimLabApp::ApplySessionCommand(
             return false;
         }
 
-        simulation_.Reset();
-        eoFrame_ = {};
-        groundControlCommandExpiresAtTick_.reset();
+        resetSimulationState();
         (void)commandRecording_.StartRecording();
         externalControl_ = true;
         window_->SetTitle("AeroSimLab | 입력 기록 중");
@@ -333,9 +337,7 @@ bool AeroSimLabApp::ApplySessionCommand(
             return false;
         }
 
-        simulation_.Reset();
-        eoFrame_ = {};
-        groundControlCommandExpiresAtTick_.reset();
+        resetSimulationState();
         smokeReplayStarted_ = smokeTest_;
         pendingControllerAction_.reset();
         pendingPilotCommand_.reset();
