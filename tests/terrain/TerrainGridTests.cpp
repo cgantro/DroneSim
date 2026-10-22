@@ -16,7 +16,7 @@ void Verify_TerrainGrid_LoadsThePublicTestAreaWithItsLocalHeightOrigin()
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
         / "assets/maps/bukhansan-demo/terrain.grid");
 
-    ASSERT_EQ(terrain.sampleCount, 385U);
+    ASSERT_EQ(terrain.sampleCount, 769U);
     EXPECT_NEAR(terrain.centerLatitudeDegrees, 37.661111, 1.0e-5);
     EXPECT_NEAR(terrain.centerLongitudeDegrees, 126.983889, 1.0e-5);
     EXPECT_NEAR(terrain.ToLocalMeters(
@@ -28,11 +28,11 @@ void Verify_TerrainGrid_LoadsThePublicTestAreaWithItsLocalHeightOrigin()
         terrain.centerLatitudeDegrees,
         terrain.centerLongitudeDegrees + 1.0 / 3600.0).x, terrain.spacingXMeters, 0.01);
     EXPECT_NEAR(terrain.referenceElevationMeters, 504.0F, 1.0e-5F);
-    EXPECT_NEAR(terrain.HeightAt(192, 192), 0.0F, 1.0e-5F);
+    EXPECT_NEAR(terrain.HeightAt(384, 384), 0.0F, 1.0e-5F);
     EXPECT_NEAR((terrain.sampleCount - 1U) * terrain.spacingXMeters,
-        9399.4F, 1.0F);
+        18800.0F, 1.0F);
     EXPECT_NEAR((terrain.sampleCount - 1U) * terrain.spacingYMeters,
-        11874.1F, 1.0F);
+        23748.3F, 1.0F);
     EXPECT_GT(terrain.spacingXMeters, 24.0F);
     EXPECT_LT(terrain.spacingXMeters, 25.0F);
     EXPECT_GT(terrain.spacingYMeters, 30.0F);
