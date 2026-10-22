@@ -34,10 +34,13 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <ctime>
 #include <cmath>
 #include <nlohmann/json.hpp>
@@ -60,6 +63,32 @@ constexpr glm::dvec2 demoDroneStartMeters{171.3545, -92.7667};
 constexpr double benchmarkDurationSeconds = 5.0;
 // OSM에 높이가 없어서 시연 상자에만 쓰는 명시적 가정이다. 실측값이 아니다.
 constexpr float missingBuildingHeightProxyMeters = 3.0F;
+
+std::filesystem::path ApplicationDirectory()
+{
+#ifdef _WIN32
+    std::wstring executablePath(32768U, L'\0');
+    const DWORD pathLength = GetModuleFileNameW(
+        nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
+    if (pathLength == 0U || pathLength >= executablePath.size())
+        throw std::runtime_error("프로그램이 있는 폴더를 확인하지 못했습니다.");
+    executablePath.resize(pathLength);
+    return std::filesystem::path(executablePath).parent_path();
+#elif defined(__EMSCRIPTEN__)
+    return {};
+#else
+    std::error_code error;
+    const auto executablePath = std::filesystem::read_symlink("/proc/self/exe", error);
+    if (error)
+        throw std::runtime_error("프로그램이 있는 폴더를 확인하지 못했습니다.");
+    return executablePath.parent_path();
+#endif
+}
+
+std::filesystem::path AssetPath(std::string_view relativePath)
+{
+    return ApplicationDirectory() / relativePath;
+}
 
 glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
 {
@@ -281,8 +310,10 @@ void AeroSimLabApp::InitializeGraphics()
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
 
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
-    droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb("models/drones/x500/visual.glb");
-    terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
+    droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
+        AssetPath("models/drones/x500/visual.glb").string());
+    terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load(
+        AssetPath("maps/bukhansan-demo/terrain.grid"));
     missionGoalMeters_ = {
         demoDroneStartMeters.x + 10.0,
         demoDroneStartMeters.y,
@@ -290,15 +321,15 @@ void AeroSimLabApp::InitializeGraphics()
             demoDroneStartMeters.y})};
     terrainMesh_ = CreateTerrainMesh(terrainGrid_);
     terrainTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
-        "maps/bukhansan-demo/terrain-satellite.ppm");
+        AssetPath("maps/bukhansan-demo/terrain-satellite.ppm"));
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
-        "models/drones/x500/carbon-weave.ppm");
+        AssetPath("models/drones/x500/carbon-weave.ppm"));
     facilityMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
-        "maps/bukhansan-demo/facilities.glb");
+        AssetPath("maps/bukhansan-demo/facilities.glb").string());
     const auto buildings = aerosimlab::terrain::LoadBuildingFootprints(
-        "maps/bukhansan-demo/buildings.geojson", terrainGrid_);
+        AssetPath("maps/bukhansan-demo/buildings.geojson"), terrainGrid_);
     const auto facilities = aerosimlab::terrain::LoadStaticFacilities(
-        "maps/bukhansan-demo/facilities.json");
+        AssetPath("maps/bukhansan-demo/facilities.json"));
 #ifndef __EMSCRIPTEN__
     simulation_.SetInitialPose({demoDroneStartMeters,
         terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters)
@@ -340,7 +371,8 @@ void AeroSimLabApp::InitializeGraphics()
     // 웹 빌드는 운동학 모드라 충돌 물리 월드에만 필요한 지형 설정을 건너뛴다.
     simulation_.SetTerrain(terrainGrid_);
 #endif
-    shader_ = std::make_unique<aerosimlab::graphics::Shader>("shaders/Scene.glsl");
+    shader_ = std::make_unique<aerosimlab::graphics::Shader>(
+        AssetPath("shaders/Scene.glsl").string());
 #ifndef __EMSCRIPTEN__
     hud_ = std::make_unique<SimulatorHud>(window_->GetNativeHandle());
 #endif

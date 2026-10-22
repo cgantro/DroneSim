@@ -6,6 +6,8 @@ AeroSimLab은 가상 드론의 비행과 카메라 화면, 지상통제 명령�
 
 처음 사용하는 분은 [처음 실행하고 조작하기](docs/public/시작하기.md)부터 읽어 주세요.
 
+![장면과 카메라 패널, 비행 상태를 보여 주는 시뮬레이터 화면](docs/public/images/simulator-overview.jpg)
+
 ## 문서
 
 - [사용 안내](docs/public/시작하기.md): 빌드, 실행, 조작, 시나리오 사용법
