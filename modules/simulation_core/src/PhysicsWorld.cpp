@@ -345,6 +345,8 @@ struct PhysicsWorld::Impl
         msr::airlib::Environment environment;
         std::unique_ptr<AirSimBody> model;
         std::vector<RigidBodyBox> collisionBoxes;
+        std::vector<OrientedBox> worldCollisionBoxes;
+        RigidBodyState collisionState;
         double collisionRadiusMeters = 0.0;
         double maximumMotorSpeed = 0.0;
         bool updatedSinceReset = false;
@@ -354,6 +356,7 @@ struct PhysicsWorld::Impl
               kinematics(ToAirSimState({definition.positionMeters,
                   definition.orientation, {}, {}})),
               collisionBoxes(quadrotor.collisionBoxes.begin(), quadrotor.collisionBoxes.end()),
+              worldCollisionBoxes(collisionBoxes.size()),
               collisionRadiusMeters(CollisionRadius(collisionBoxes)),
               maximumMotorSpeed(quadrotor.maximumMotorSpeedRadiansPerSecond)
         {
@@ -412,7 +415,11 @@ struct PhysicsWorld::Impl
         return *bodies[handle.value];
     }
 
-    double OrderBodiesAlongXAxis()
+    /**
+     * @brief 각 강체 상태를 한 번 읽고 충돌 상자를 월드 좌표로 바꾼 뒤 X축으로 정렬한다.
+     * @details 한 Tick의 모든 충돌 검사가 AirSim 적분 전 같은 위치와 자세를 사용한다.
+     */
+    double PrepareCollisionData()
     {
         bodyPositionsByX.clear();
         bodyPositionsByX.reserve(bodies.size());
@@ -422,10 +429,20 @@ struct PhysicsWorld::Impl
             if (!bodies[index])
                 continue;
 
+            Body& body = *bodies[index];
+            body.collisionState = ToProjectState(body.kinematics.getState());
+            for (std::size_t boxIndex = 0;
+                boxIndex < body.collisionBoxes.size(); ++boxIndex)
+            {
+                body.worldCollisionBoxes[boxIndex] = ToWorldBox(
+                    body.collisionState.positionMeters,
+                    body.collisionState.orientation,
+                    body.collisionBoxes[boxIndex]);
+            }
             bodyPositionsByX.emplace_back(
-                bodies[index]->kinematics.getPose().position.x(), index);
+                body.collisionState.positionMeters.x, index);
             largestCollisionRadius = std::max(
-                largestCollisionRadius, bodies[index]->collisionRadiusMeters);
+                largestCollisionRadius, body.collisionRadiusMeters);
         }
         std::sort(bodyPositionsByX.begin(), bodyPositionsByX.end());
         return largestCollisionRadius;
@@ -475,14 +492,13 @@ struct PhysicsWorld::Impl
      * @details 가장 깊은 한 곳을 AirSim에 넘겨 위치, 방향, 겹친 깊이로 쓰게 한다.
      */
     std::optional<msr::airlib::CollisionInfo> FindTerrainContact(
-        const Body& body, const RigidBodyState& state, std::uint64_t timestamp) const
+        const Body& body, std::uint64_t timestamp) const
     {
         std::optional<msr::airlib::CollisionInfo> contactInfo;
         double greatestPenetration = 0.0;
-        for (const RigidBodyBox& box : body.collisionBoxes)
+        const RigidBodyState& state = body.collisionState;
+        for (const OrientedBox& worldBox : body.worldCollisionBoxes)
         {
-            const OrientedBox worldBox = ToWorldBox(
-                state.positionMeters, state.orientation, box);
             for (unsigned int cornerIndex = 0; cornerIndex < 8U; ++cornerIndex)
             {
                 glm::dvec3 corner = worldBox.centerMeters;
@@ -520,11 +536,11 @@ struct PhysicsWorld::Impl
         std::size_t bodyIndex,
         double largestCollisionRadius) const
     {
-        const RigidBodyState state = ToProjectState(body.kinematics.getState());
+        const RigidBodyState& state = body.collisionState;
         const glm::dvec3 center = state.positionMeters;
         const std::uint64_t timestamp = stepCount + 1;
 
-        if (auto groundContact = FindTerrainContact(body, state, timestamp))
+        if (auto groundContact = FindTerrainContact(body, timestamp))
             return *groundContact;
 
         // 경계 반경은 멀리 떨어진 후보만 빠르게 거른다. 실제 겹침은 아래 상자 검사로 결정한다.
@@ -547,10 +563,9 @@ struct PhysicsWorld::Impl
                 obstacle.halfExtentsMeters,
                 {glm::dvec3{1.0, 0.0, 0.0}, glm::dvec3{0.0, 1.0, 0.0},
                     glm::dvec3{0.0, 0.0, 1.0}}};
-            for (const RigidBodyBox& box : body.collisionBoxes)
+            for (const OrientedBox& worldBox : body.worldCollisionBoxes)
             {
-                const auto contact = FindBoxContact(
-                    ToWorldBox(center, state.orientation, box), obstacleBox);
+                const auto contact = FindBoxContact(worldBox, obstacleBox);
                 if (!contact || contact->penetrationMeters <= greatestPenetration)
                     continue;
 
@@ -584,20 +599,17 @@ struct PhysicsWorld::Impl
                 continue;
 
             const Body& otherBody = *bodies[index];
-            const RigidBodyState other = ToProjectState(otherBody.kinematics.getState());
+            const RigidBodyState& other = otherBody.collisionState;
             const double combinedRadius = bodyRadius + otherBody.collisionRadiusMeters;
             const glm::dvec3 centerOffset = center - other.positionMeters;
             if (glm::dot(centerOffset, centerOffset) >= combinedRadius * combinedRadius)
                 continue;
 
-            for (const RigidBodyBox& ownBox : body.collisionBoxes)
+            for (const OrientedBox& ownBox : body.worldCollisionBoxes)
             {
-                const OrientedBox worldOwnBox = ToWorldBox(
-                    center, state.orientation, ownBox);
-                for (const RigidBodyBox& otherBox : bodies[index]->collisionBoxes)
+                for (const OrientedBox& otherBox : otherBody.worldCollisionBoxes)
                 {
-                    const auto contact = FindBoxContact(worldOwnBox,
-                        ToWorldBox(other.positionMeters, other.orientation, otherBox));
+                    const auto contact = FindBoxContact(ownBox, otherBox);
                     if (!contact || contact->penetrationMeters <= greatestPenetration)
                         continue;
 
@@ -754,7 +766,7 @@ void PhysicsWorld::Step(
         const auto bodyOrderingStart = contactGenerationMicroseconds != nullptr
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        const double largestCollisionRadius = impl_->OrderBodiesAlongXAxis();
+        const double largestCollisionRadius = impl_->PrepareCollisionData();
         if (contactGenerationMicroseconds != nullptr)
         {
             *contactGenerationMicroseconds += std::chrono::duration<double, std::micro>(
