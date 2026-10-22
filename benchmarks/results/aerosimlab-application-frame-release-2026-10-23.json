@@ -1,0 +1,42 @@
+{
+  "source_revision": "5f508e87",
+  "date": "2026-10-23",
+  "build": "Release",
+  "run_count": 1,
+  "measurement_seconds": 5.0018,
+  "window": "hidden",
+  "framebuffer": "1280x720",
+  "scene": "one PX4 X500; SRTM terrain; 17 building boxes; 49 park facilities; EO pixel readback enabled",
+  "hardware": {
+    "operating_system": "Windows 11 Pro 10.0.26200",
+    "cpu": "Intel Core i5-13600KF",
+    "cpu_cores": 14,
+    "logical_processors": 20,
+    "memory_gib": 31.8,
+    "gpu": "NVIDIA GeForce RTX 3060 Ti",
+    "graphics_api": "OpenGL 3.3.0, NVIDIA driver 581.42"
+  },
+  "application_frame_ms": {
+    "definition": "one loop iteration from before event polling through input polling, simulation updates, rendering, and buffer swap",
+    "samples": 1812,
+    "p50": 2.3979,
+    "p95": 4.0562,
+    "p99": 5.4665,
+    "maximum": 98.1753
+  },
+  "render_frame_ms": {
+    "definition": "RenderFrame and buffer swap only",
+    "samples": 1812,
+    "p50": 2.3862,
+    "p95": 4.0437,
+    "p99": 5.4217,
+    "maximum": 92.8617
+  },
+  "render_fps": 362.27,
+  "limitations": [
+    "Single run; this is not a repeated benchmark median.",
+    "The hidden window does not represent visible display or input-to-screen latency.",
+    "The GPU may continue work asynchronously after the CPU submits rendering commands.",
+    "Earlier reports measured render time only, so they cannot provide a before-and-after comparison for the full application frame metric."
+  ]
+}
