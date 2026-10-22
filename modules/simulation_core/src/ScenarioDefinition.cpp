@@ -418,6 +418,15 @@ std::vector<ScheduledCommand> ReadCommands(
     return result;
 }
 
+CameraEventAction ReadCameraEventAction(const std::string& action)
+{
+    if (action == "enable") return CameraEventAction::Enable;
+    if (action == "disable") return CameraEventAction::Disable;
+    if (action == "fault") return CameraEventAction::Fault;
+    if (action == "recover") return CameraEventAction::Recover;
+    throw std::invalid_argument("알 수 없는 카메라 이벤트입니다: " + action);
+}
+
 std::vector<ScheduledCameraEvent> ReadCameraEvents(const Json& document, std::uint64_t tickCount)
 {
     const auto found = document.find("camera_events");
@@ -439,9 +448,7 @@ std::vector<ScheduledCameraEvent> ReadCameraEvents(const Json& document, std::ui
         if (hasPreviousTick && tick < previousTick)
             throw std::invalid_argument("카메라 이벤트는 tick 순서대로 작성해야 합니다.");
         const std::string action = actionValue.get<std::string>();
-        if (action != "enable" && action != "disable" && action != "fault" && action != "recover")
-            throw std::invalid_argument("알 수 없는 카메라 이벤트입니다: " + action);
-        events.push_back({tick, action});
+        events.push_back({tick, ReadCameraEventAction(action)});
         previousTick = tick;
         hasPreviousTick = true;
     }

@@ -52,10 +52,19 @@ struct FormationLink
     std::vector<FormationOutage> outages;
 };
 
+/** @brief JSON 카메라 동작을 실행 단계에서 안전하게 구분한다. */
+enum class CameraEventAction
+{
+    Enable,
+    Disable,
+    Fault,
+    Recover
+};
+
 struct ScheduledCameraEvent
 {
     std::uint64_t tick;
-    std::string action;
+    CameraEventAction action;
 };
 
 /** @brief JSON 시나리오를 실행하기 전에 읽고 검증한 값이다. */

@@ -31,6 +31,29 @@ bool CanReceiveWaypoint(FlightMode mode) noexcept
         || mode == FlightMode::FollowingWaypoint;
 }
 
+/** @brief 카메라 동작을 적용하고 실행 기록에 쓸 이름을 돌려준다. */
+std::string_view ApplyCameraEvent(
+    SimulationCore& simulation, detail::CameraEventAction action)
+{
+    using Action = detail::CameraEventAction;
+    switch (action)
+    {
+    case Action::Enable:
+        simulation.SetCameraEnabled(true);
+        return "enable";
+    case Action::Disable:
+        simulation.SetCameraEnabled(false);
+        return "disable";
+    case Action::Fault:
+        simulation.SetCameraFault(true);
+        return "fault";
+    case Action::Recover:
+        simulation.SetCameraFault(false);
+        return "recover";
+    }
+    return "unknown";
+}
+
 double OrientationErrorRadians(
     const glm::dquat& actual, const glm::dquat& expected) noexcept
 {
@@ -225,11 +248,9 @@ ScenarioResult RunScenario(std::string_view jsonText)
         while (nextCameraEvent < cameraEvents.size() && cameraEvents[nextCameraEvent].tick == tick)
         {
             const auto& event = cameraEvents[nextCameraEvent++];
-            if (event.action == "enable") simulation.SetCameraEnabled(true);
-            else if (event.action == "disable") simulation.SetCameraEnabled(false);
-            else if (event.action == "fault") simulation.SetCameraFault(true);
-            else simulation.SetCameraFault(false);
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": 카메라 " + event.action);
+            const std::string_view actionName = ApplyCameraEvent(simulation, event.action);
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": 카메라 "
+                + std::string(actionName));
         }
         simulation.AdvanceOneTick();
         recordMinimumDroneSeparation();
