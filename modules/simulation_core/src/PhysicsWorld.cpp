@@ -345,6 +345,7 @@ struct PhysicsWorld::Impl
         msr::airlib::Environment environment;
         std::unique_ptr<AirSimBody> model;
         std::vector<RigidBodyBox> collisionBoxes;
+        double collisionRadiusMeters = 0.0;
         double maximumMotorSpeed = 0.0;
         bool updatedSinceReset = false;
 
@@ -353,6 +354,7 @@ struct PhysicsWorld::Impl
               kinematics(ToAirSimState({definition.positionMeters,
                   definition.orientation, {}, {}})),
               collisionBoxes(quadrotor.collisionBoxes.begin(), quadrotor.collisionBoxes.end()),
+              collisionRadiusMeters(CollisionRadius(collisionBoxes)),
               maximumMotorSpeed(quadrotor.maximumMotorSpeedRadiansPerSecond)
         {
             parameters.Configure();
@@ -385,6 +387,7 @@ struct PhysicsWorld::Impl
     std::shared_ptr<msr::airlib::SteppableClock> clock = CreateSimulationClock();
     msr::airlib::FastPhysicsEngine physicsEngine{true};
     std::vector<std::unique_ptr<Body>> bodies;
+    std::vector<std::pair<double, std::size_t>> bodyPositionsByX;
     std::vector<Obstacle> obstacles;
     std::optional<terrain::TerrainGrid> terrain;
     std::uint64_t stepCount = 0;
@@ -407,6 +410,25 @@ struct PhysicsWorld::Impl
         if (handle.value >= bodies.size() || !bodies[handle.value])
             throw std::out_of_range("존재하지 않는 강체 번호입니다.");
         return *bodies[handle.value];
+    }
+
+    double OrderBodiesAlongXAxis()
+    {
+        bodyPositionsByX.clear();
+        bodyPositionsByX.reserve(bodies.size());
+        double largestCollisionRadius = 0.0;
+        for (std::size_t index = 0; index < bodies.size(); ++index)
+        {
+            if (!bodies[index])
+                continue;
+
+            bodyPositionsByX.emplace_back(
+                bodies[index]->kinematics.getPose().position.x(), index);
+            largestCollisionRadius = std::max(
+                largestCollisionRadius, bodies[index]->collisionRadiusMeters);
+        }
+        std::sort(bodyPositionsByX.begin(), bodyPositionsByX.end());
+        return largestCollisionRadius;
     }
 
     double GroundHeight(const glm::dvec2& position) const
@@ -494,7 +516,9 @@ struct PhysicsWorld::Impl
 
     // 단독 실행에서는 Unreal이 접촉 정보를 만들지 않으므로, 장면과의 접촉만 찾아 AirSim에 넘긴다.
     msr::airlib::CollisionInfo BuildAirSimContactInfo(
-        const Body& body, std::size_t bodyIndex) const
+        const Body& body,
+        std::size_t bodyIndex,
+        double largestCollisionRadius) const
     {
         const RigidBodyState state = ToProjectState(body.kinematics.getState());
         const glm::dvec3 center = state.positionMeters;
@@ -504,7 +528,7 @@ struct PhysicsWorld::Impl
             return *groundContact;
 
         // 경계 반경은 멀리 떨어진 후보만 빠르게 거른다. 실제 겹침은 아래 상자 검사로 결정한다.
-        const double bodyRadius = CollisionRadius(body.collisionBoxes);
+        const double bodyRadius = body.collisionRadiusMeters;
         std::optional<msr::airlib::CollisionInfo> deepestContact;
         double greatestPenetration = -1.0;
         for (std::size_t index = 0; index < obstacles.size(); ++index)
@@ -542,14 +566,26 @@ struct PhysicsWorld::Impl
                     static_cast<int>(index + 1)};
             }
         }
-        for (std::size_t index = 0; index < bodies.size(); ++index)
+        // X축 범위가 겹치는 기체만 비교한다. 충돌 모양을 감싸는 반경으로 후보를 거른 뒤 기존 상자 검사를 한다.
+        const double searchDistance = bodyRadius + largestCollisionRadius;
+        const auto firstCandidate = std::lower_bound(
+            bodyPositionsByX.begin(), bodyPositionsByX.end(), center.x - searchDistance,
+            [](const auto& candidate, double minimumX)
+            {
+                return candidate.first < minimumX;
+            });
+        for (auto candidate = firstCandidate;
+            candidate != bodyPositionsByX.end()
+                && candidate->first <= center.x + searchDistance;
+            ++candidate)
         {
-            if (index == bodyIndex || !bodies[index])
+            const std::size_t index = candidate->second;
+            if (index == bodyIndex)
                 continue;
 
-            const RigidBodyState other = ToProjectState(bodies[index]->kinematics.getState());
-            const double combinedRadius = bodyRadius
-                + CollisionRadius(bodies[index]->collisionBoxes);
+            const Body& otherBody = *bodies[index];
+            const RigidBodyState other = ToProjectState(otherBody.kinematics.getState());
+            const double combinedRadius = bodyRadius + otherBody.collisionRadiusMeters;
             const glm::dvec3 centerOffset = center - other.positionMeters;
             if (glm::dot(centerOffset, centerOffset) >= combinedRadius * combinedRadius)
                 continue;
@@ -710,6 +746,7 @@ void PhysicsWorld::Step(double seconds, double* durationMicroseconds)
     auto advance = [&]
     {
         ++impl_->stepCount;
+        const double largestCollisionRadius = impl_->OrderBodiesAlongXAxis();
         for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
         {
             auto& body = impl_->bodies[index];
@@ -718,7 +755,7 @@ void PhysicsWorld::Step(double seconds, double* durationMicroseconds)
             body->environment.setPosition(body->kinematics.getPose().position);
             body->environment.update();
             body->model->setCollisionInfo(
-                impl_->BuildAirSimContactInfo(*body, index));
+                impl_->BuildAirSimContactInfo(*body, index, largestCollisionRadius));
             body->ApplyMotorTargets();
             body->model->update();
             body->updatedSinceReset = true;
