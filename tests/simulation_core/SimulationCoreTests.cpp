@@ -373,6 +373,19 @@ void Verify_SimulationCore_MultipleKinematicDronesKeepIndependentStateAndCommand
     EXPECT_THROW((void)simulation.State(first), std::out_of_range);
 }
 
+void Verify_SimulationCore_PromotesOldestRemainingDroneToPrimary()
+{
+    SimulationCore simulation{SimulationDynamics::Kinematic};
+    const DroneId first = simulation.PrimaryDroneId();
+    const DroneId second = simulation.AddDrone(glm::dvec3{10.0, 0.0, 0.0});
+    static_cast<void>(simulation.AddDrone(glm::dvec3{20.0, 0.0, 0.0}));
+
+    ASSERT_TRUE(simulation.RemoveDrone(first));
+
+    EXPECT_EQ(simulation.PrimaryDroneId(), second);
+    ExpectCameraPoseMatchesPrimaryDrone(simulation);
+}
+
 void Verify_SimulationCore_RigidBodyDronesShareOnePhysicsStepAndCanBeRemoved()
 {
     SimulationCore simulation{SimulationDynamics::RigidBody};
@@ -571,6 +584,7 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_WorldWindMovesRotatedHoveringDroneDownwind());
 #endif
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_MultipleKinematicDronesKeepIndependentStateAndCommands());
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_PromotesOldestRemainingDroneToPrimary());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RigidBodyDronesShareOnePhysicsStepAndCanBeRemoved());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_CollidingRigidBodyDronesRemainSeparated());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RigidBodyRemainsStableDuringOneMinuteHover());

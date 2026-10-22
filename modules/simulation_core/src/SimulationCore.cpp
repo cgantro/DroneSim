@@ -215,7 +215,13 @@ struct SimulationCore::EcsStorage
         drones.erase(found);
         if (removedPrimary)
         {
-            primaryDroneId = drones.begin()->first;
+            const auto nextPrimary = std::min_element(
+                drones.begin(), drones.end(),
+                [](const auto& first, const auto& second)
+                {
+                    return first.first < second.first;
+                });
+            primaryDroneId = nextPrimary->first;
             SynchronizeCameraPose();
         }
         return true;
