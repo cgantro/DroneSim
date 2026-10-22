@@ -196,6 +196,7 @@ private:
     std::vector<glm::mat4> buildingTransforms_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
+    glm::dvec3 missionGoalMeters_{0.0};
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};
@@ -205,6 +206,8 @@ private:
         glm::vec4{0.63F, 0.59F, 0.48F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material facilityMaterial_{
         glm::vec4{0.48F, 0.52F, 0.38F, 1.0F}, 0.0F, 0.85F};
+    aerosimlab::graphics::Material missionMarkerMaterial_{
+        glm::vec4{1.0F, 0.65F, 0.05F, 1.0F}, 0.0F, 0.55F};
 #ifndef __EMSCRIPTEN__
     aerosimlab::simulation::SimulationCore simulation_{
         aerosimlab::simulation::SimulationDynamics::RigidBody};

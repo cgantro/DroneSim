@@ -88,6 +88,7 @@ SimulatorHud::~SimulatorHud()
 void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     bool gamepadConnected, bool groundControlConnected, bool cameraActive,
     int cameraImageWidth, int cameraImageHeight,
+    double missionDistanceMeters, bool missionComplete,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t()>& renderCamera)
 {
@@ -193,6 +194,18 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         ImGui::Text("모의 시간: %.2f초   진행 Tick: %llu",
             simulation.SimulationTimeSeconds(),
             static_cast<unsigned long long>(simulation.TickCount()));
+        ImGui::Separator();
+        ImGui::Text("연습 미션: 노란 표식에 착륙하기");
+        if (missionComplete)
+            ImGui::Text("미션 완료! 표식 안에 착륙했습니다.");
+        else if (primary.mode == simulation::FlightMode::Grounded)
+            ImGui::Text("A로 이륙한 뒤, 노란 표식까지 이동하세요.");
+        else if (missionDistanceMeters <= 1.5)
+            ImGui::Text("도착했습니다. B를 눌러 착륙하세요.");
+        else
+            ImGui::Text("목표까지 %.1f m 남았습니다. 노란 표식 방향으로 이동하세요.",
+                missionDistanceMeters);
+        ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();
         ImGui::Text("게임패드: %s   지상통제: %s",
             gamepadConnected ? "연결됨" : "연결 안 됨",

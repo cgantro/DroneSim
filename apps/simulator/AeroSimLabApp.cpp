@@ -283,6 +283,11 @@ void AeroSimLabApp::InitializeGraphics()
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb("models/drones/x500/visual.glb");
     terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
+    missionGoalMeters_ = {
+        demoDroneStartMeters.x + 10.0,
+        demoDroneStartMeters.y,
+        terrainGrid_.HeightAtLocalMeters({demoDroneStartMeters.x + 10.0,
+            demoDroneStartMeters.y})};
     terrainMesh_ = CreateTerrainMesh(terrainGrid_);
     terrainTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
         "maps/bukhansan-demo/terrain-satellite.ppm");
@@ -497,8 +502,16 @@ void AeroSimLabApp::RenderFrame()
         const bool cameraActive = simulation_.Camera().status
             == aerosimlab::simulation::CameraStatus::Active;
         const auto& camera = simulation_.Camera();
+        const glm::dvec3& dronePosition = simulation_.State().positionMeters;
+        const double missionDistanceMeters = std::hypot(
+            missionGoalMeters_.x - dronePosition.x,
+            missionGoalMeters_.y - dronePosition.y);
+        const bool missionComplete = simulation_.State().mode
+                == aerosimlab::simulation::FlightMode::Grounded
+            && missionDistanceMeters <= 1.5;
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
             camera.imageWidthPixels, camera.imageHeightPixels,
+            missionDistanceMeters, missionComplete,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this] { return RenderCameraPanel(); });
     }
@@ -601,6 +614,14 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         * glm::scale(glm::mat4{1.0F}, glm::vec3{1.0F, 1.0F, terrainReliefScale});
     renderer_->Draw(simulationToRender, *facilityMesh_, facilityMaterial_, *shader_,
         view, projection, cameraPosition);
+
+    const glm::vec3 goal = ToRenderPosition(missionGoalMeters_);
+    DrawCube(CubeTransform(goal + glm::vec3{0.0F, 0.09F, 0.0F},
+        glm::vec3{2.4F, 0.18F, 2.4F}), cameraPosition,
+        missionMarkerMaterial_, view, projection);
+    DrawCube(CubeTransform(goal + glm::vec3{0.0F, 1.6F, 0.0F},
+        glm::vec3{0.18F, 3.0F, 0.18F}), cameraPosition,
+        missionMarkerMaterial_, view, projection);
 
     for (const aerosimlab::simulation::DroneId id : fleetDroneIds_)
     {
