@@ -7,10 +7,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace aerosimlab::simulation
 {
@@ -23,6 +25,7 @@ using detail::ScenarioDefinition;
 using detail::ScenarioDrone;
 using detail::ScheduledCameraEvent;
 using detail::ScheduledCommand;
+using DroneIds = std::unordered_map<std::string, DroneId>;
 
 bool CanReceiveWaypoint(FlightMode mode) noexcept
 {
@@ -62,234 +65,241 @@ double OrientationErrorRadians(
         + actual.y * expected.y + actual.z * expected.z);
     return 2.0 * std::acos(std::clamp(dot, 0.0, 1.0));
 }
+
+void RecordMinimumDroneSeparation(
+    const ScenarioDefinition& definition,
+    const SimulationCore& simulation,
+    const DroneIds& droneIds,
+    ScenarioResult& result)
+{
+    if (!definition.minimumDroneSeparationMeters)
+        return;
+
+    for (std::size_t first = 0; first < definition.drones.size(); ++first)
+    {
+        for (std::size_t second = first + 1; second < definition.drones.size(); ++second)
+        {
+            const glm::dvec3 offset = simulation.State(droneIds.at(definition.drones[first].name))
+                .positionMeters
+                - simulation.State(droneIds.at(definition.drones[second].name)).positionMeters;
+            const double distanceMeters = glm::length(offset);
+            if (!result.minimumDroneSeparationMeters
+                || distanceMeters < *result.minimumDroneSeparationMeters)
+            {
+                result.minimumDroneSeparationMeters = distanceMeters;
+            }
+        }
+    }
 }
 
-ScenarioResult RunScenario(std::string_view jsonText)
+void ApplyScheduledCommands(
+    std::uint64_t tick,
+    const std::vector<ScheduledCommand>& commands,
+    SimulationCore& simulation,
+    const DroneIds& droneIds,
+    std::size_t& nextCommand,
+    std::unordered_map<std::string, std::uint64_t>& lastDeliveredSequence,
+    ScenarioResult& result)
 {
-    ScenarioDefinition definition = detail::ReadScenarioDefinition(jsonText);
-    const std::uint64_t tickCount = definition.tickCount;
-    const auto& scenarioDrones = definition.drones;
-    const auto& primaryDroneName = definition.primaryDroneName;
-    const auto& commands = definition.commands;
-    const auto& formationLinks = definition.formationLinks;
-    const auto& cameraEvents = definition.cameraEvents;
-    const auto& expectedDrones = definition.expectedDrones;
-    const bool hasExpectedDrones = definition.hasExpectedDrones;
-    const double toleranceMeters = definition.toleranceMeters;
-    const double orientationToleranceRadians = definition.orientationToleranceRadians;
-    const auto& expectedMinimumDroneSeparationMeters = definition.minimumDroneSeparationMeters;
-    const auto& expectedCameraStatus = definition.expectedCameraStatus;
-    const auto& expectedFrameCount = definition.expectedFrameCount;
-
-    SimulationCore simulation{definition.dynamics};
-    if (definition.windVelocity)
-        simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
-
-    std::unordered_map<std::string, DroneId> droneIds;
-    if (scenarioDrones.empty())
-        droneIds.emplace(primaryDroneName, simulation.PrimaryDroneId());
-    else
+    while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
     {
-        const DroneId unusedDefaultDrone = simulation.PrimaryDroneId();
-        for (const ScenarioDrone& drone : scenarioDrones)
-            droneIds.emplace(drone.name, simulation.AddDrone(
-                drone.initialPositionMeters, drone.initialYawRadians));
-        if (!simulation.RemoveDrone(unusedDefaultDrone))
-            throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
-    }
-
-    ScenarioResult result;
-    result.mission = std::move(definition.mission);
-    const auto recordMinimumDroneSeparation = [&]()
-    {
-        if (!expectedMinimumDroneSeparationMeters)
-            return;
-        for (std::size_t first = 0; first < scenarioDrones.size(); ++first)
+        const ScheduledCommand& scheduled = commands[nextCommand];
+        if (scheduled.dropped)
         {
-            for (std::size_t second = first + 1; second < scenarioDrones.size(); ++second)
-            {
-                const glm::dvec3 offset = simulation.State(droneIds.at(scenarioDrones[first].name))
-                    .positionMeters
-                    - simulation.State(droneIds.at(scenarioDrones[second].name)).positionMeters;
-                const double distanceMeters = glm::length(offset);
-                if (!result.minimumDroneSeparationMeters
-                    || distanceMeters < *result.minimumDroneSeparationMeters)
-                {
-                    result.minimumDroneSeparationMeters = distanceMeters;
-                }
-            }
-        }
-    };
-    recordMinimumDroneSeparation();
-    std::size_t nextCommand = 0;
-    std::size_t nextCameraEvent = 0;
-    std::unordered_map<std::string, std::uint64_t> lastDeliveredSequence;
-    for (std::uint64_t tick = 0; tick < tickCount; ++tick)
-    {
-        while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
-        {
-            const ScheduledCommand& scheduled = commands[nextCommand];
-            if (scheduled.dropped)
-            {
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                    + scheduled.droneName + " 드론 명령을 통신 장애로 버렸습니다.");
-                ++nextCommand;
-                continue;
-            }
-
-            std::uint64_t& lastSequence = lastDeliveredSequence[scheduled.droneName];
-            if (scheduled.sequence <= lastSequence)
-            {
-                result.issues.push_back("tick " + std::to_string(tick) + "에서 "
-                    + scheduled.droneName + " 드론의 역순 명령을 거부했습니다.");
-                ++nextCommand;
-                continue;
-            }
-            lastSequence = scheduled.sequence;
-            if (scheduled.delayTicks > 0)
-            {
-                result.eventLog.push_back(scheduled.droneName + " 드론에 tick "
-                    + std::to_string(scheduled.sendTick)
-                    + "에 보낸 명령을 " + std::to_string(scheduled.delayTicks)
-                    + " Tick 늦게 전달했습니다.");
-            }
-            const CommandResult commandResult = simulation.Apply(
-                droneIds.at(scheduled.droneName), scheduled.command);
-            if (commandResult != CommandResult::Accepted)
-                result.issues.push_back("tick " + std::to_string(tick) + "에서 "
-                    + scheduled.droneName + " 드론 명령을 적용하지 못했습니다.");
-            else
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                    + scheduled.droneName + " 드론 명령을 적용했습니다.");
-            if (scheduled.duplicated)
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                    + scheduled.droneName + " 드론의 중복 재전송 명령을 한 번만 처리했습니다.");
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + scheduled.droneName + " 드론 명령을 통신 장애로 버렸습니다.");
             ++nextCommand;
+            continue;
         }
 
-        if (result.mission)
+        std::uint64_t& lastSequence = lastDeliveredSequence[scheduled.droneName];
+        if (scheduled.sequence <= lastSequence)
         {
-            for (ScenarioResult::MissionTask& task : result.mission->tasks)
-            {
-                if (task.completed || task.failed || tick < task.startTick)
-                    continue;
-
-                const DroneId droneId = droneIds.at(task.droneName);
-                if (!task.started)
-                {
-                    if (!CanReceiveWaypoint(simulation.State(droneId).mode))
-                    {
-                        task.failed = true;
-                        result.issues.push_back(task.droneName
-                            + " 드론이 비행 중이 아니어서 임무를 시작하지 못했습니다.");
-                        continue;
-                    }
-                    task.started = true;
-                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                        + task.droneName + " 드론이 '" + task.role + "' 임무를 시작했습니다.");
-                }
-                else if (!CanReceiveWaypoint(simulation.State(droneId).mode))
-                {
-                    task.failed = true;
-                    result.issues.push_back(task.droneName
-                        + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다.");
-                    continue;
-                }
-
-                const CommandResult moveResult = simulation.Apply(droneId,
-                    {DroneCommand::Kind::SetWaypoint, task.targetPositionMeters});
-                if (moveResult != CommandResult::Accepted)
-                {
-                    task.failed = true;
-                    result.issues.push_back(task.droneName + " 드론에 임무 목표를 전달하지 못했습니다.");
-                }
-            }
+            result.issues.push_back("tick " + std::to_string(tick) + "에서 "
+                + scheduled.droneName + " 드론의 역순 명령을 거부했습니다.");
+            ++nextCommand;
+            continue;
         }
-
-        for (const FormationLink& link : formationLinks)
+        lastSequence = scheduled.sequence;
+        if (scheduled.delayTicks > 0)
         {
-            bool linkAvailable = true;
-            for (const FormationOutage& outage : link.outages)
-            {
-                if (tick == outage.startTick)
-                {
-                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                        + link.leaderName + " 드론과 " + link.followerName
-                        + " 드론 사이의 위치 공유가 끊겼습니다.");
-                }
-                if (tick == outage.endTick)
-                {
-                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                        + link.leaderName + " 드론과 " + link.followerName
-                        + " 드론 사이의 위치 공유가 복구됐습니다.");
-                }
-                if (tick >= outage.startTick && tick < outage.endTick)
-                    linkAvailable = false;
-            }
+            result.eventLog.push_back(scheduled.droneName + " 드론에 tick "
+                + std::to_string(scheduled.sendTick)
+                + "에 보낸 명령을 " + std::to_string(scheduled.delayTicks)
+                + " Tick 늦게 전달했습니다.");
+        }
+        const CommandResult commandResult = simulation.Apply(
+            droneIds.at(scheduled.droneName), scheduled.command);
+        if (commandResult != CommandResult::Accepted)
+            result.issues.push_back("tick " + std::to_string(tick) + "에서 "
+                + scheduled.droneName + " 드론 명령을 적용하지 못했습니다.");
+        else
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + scheduled.droneName + " 드론 명령을 적용했습니다.");
+        if (scheduled.duplicated)
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + scheduled.droneName + " 드론의 중복 재전송 명령을 한 번만 처리했습니다.");
+        ++nextCommand;
+    }
+}
 
-            if (!linkAvailable)
+void UpdateMissionCommands(
+    std::uint64_t tick,
+    std::optional<ScenarioResult::Mission>& mission,
+    SimulationCore& simulation,
+    const DroneIds& droneIds,
+    ScenarioResult& result)
+{
+    if (!mission)
+        return;
+
+    for (ScenarioResult::MissionTask& task : mission->tasks)
+    {
+        if (task.completed || task.failed || tick < task.startTick)
+            continue;
+
+        const DroneId droneId = droneIds.at(task.droneName);
+        if (!task.started)
+        {
+            if (!CanReceiveWaypoint(simulation.State(droneId).mode))
+            {
+                task.failed = true;
+                result.issues.push_back(task.droneName
+                    + " 드론이 비행 중이 아니어서 임무를 시작하지 못했습니다.");
                 continue;
-            const DroneState& leaderState = simulation.State(droneIds.at(link.leaderName));
-            const DroneState& followerState = simulation.State(droneIds.at(link.followerName));
-            if (!CanReceiveWaypoint(leaderState.mode)
-                || !CanReceiveWaypoint(followerState.mode))
-                continue;
-
-            const CommandResult followResult = simulation.Apply(
-                droneIds.at(link.followerName),
-                {DroneCommand::Kind::SetWaypoint, leaderState.positionMeters + link.offsetMeters});
-            if (followResult != CommandResult::Accepted)
-            {
-                result.issues.push_back(link.followerName
-                    + " 드론이 공유 위치를 따라가지 못했습니다.");
             }
+            task.started = true;
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + task.droneName + " 드론이 '" + task.role + "' 임무를 시작했습니다.");
+        }
+        else if (!CanReceiveWaypoint(simulation.State(droneId).mode))
+        {
+            task.failed = true;
+            result.issues.push_back(task.droneName
+                + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다.");
+            continue;
         }
 
-        while (nextCameraEvent < cameraEvents.size() && cameraEvents[nextCameraEvent].tick == tick)
+        const CommandResult moveResult = simulation.Apply(droneId,
+            {DroneCommand::Kind::SetWaypoint, task.targetPositionMeters});
+        if (moveResult != CommandResult::Accepted)
         {
-            const auto& event = cameraEvents[nextCameraEvent++];
-            const std::string_view actionName = ApplyCameraEvent(simulation, event.action);
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": 카메라 "
-                + std::string(actionName));
-        }
-        simulation.AdvanceOneTick();
-        recordMinimumDroneSeparation();
-
-        if (result.mission)
-        {
-            for (ScenarioResult::MissionTask& task : result.mission->tasks)
-            {
-                if (!task.started || task.completed || task.failed)
-                    continue;
-
-                const glm::dvec3 distance = simulation.State(droneIds.at(task.droneName))
-                    .positionMeters - task.targetPositionMeters;
-                if (glm::length(distance) <= task.toleranceMeters)
-                {
-                    task.completed = true;
-                    task.completedTick = tick;
-                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                        + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
-                }
-                else if (tick >= task.deadlineTick)
-                {
-                    task.failed = true;
-                    result.issues.push_back(task.droneName + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
-                }
-            }
+            task.failed = true;
+            result.issues.push_back(task.droneName + " 드론에 임무 목표를 전달하지 못했습니다.");
         }
     }
+}
 
+void UpdateFormationLinks(
+    std::uint64_t tick,
+    const std::vector<FormationLink>& formationLinks,
+    SimulationCore& simulation,
+    const DroneIds& droneIds,
+    ScenarioResult& result)
+{
+    for (const FormationLink& link : formationLinks)
+    {
+        bool linkAvailable = true;
+        for (const FormationOutage& outage : link.outages)
+        {
+            if (tick == outage.startTick)
+            {
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                    + link.leaderName + " 드론과 " + link.followerName
+                    + " 드론 사이의 위치 공유가 끊겼습니다.");
+            }
+            if (tick == outage.endTick)
+            {
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                    + link.leaderName + " 드론과 " + link.followerName
+                    + " 드론 사이의 위치 공유가 복구됐습니다.");
+            }
+            if (tick >= outage.startTick && tick < outage.endTick)
+                linkAvailable = false;
+        }
+
+        if (!linkAvailable)
+            continue;
+        const DroneState& leaderState = simulation.State(droneIds.at(link.leaderName));
+        const DroneState& followerState = simulation.State(droneIds.at(link.followerName));
+        if (!CanReceiveWaypoint(leaderState.mode)
+            || !CanReceiveWaypoint(followerState.mode))
+            continue;
+
+        const CommandResult followResult = simulation.Apply(
+            droneIds.at(link.followerName),
+            {DroneCommand::Kind::SetWaypoint, leaderState.positionMeters + link.offsetMeters});
+        if (followResult != CommandResult::Accepted)
+            result.issues.push_back(link.followerName
+                + " 드론이 공유 위치를 따라가지 못했습니다.");
+    }
+}
+
+void ApplyCameraEvents(
+    std::uint64_t tick,
+    const std::vector<ScheduledCameraEvent>& cameraEvents,
+    SimulationCore& simulation,
+    std::size_t& nextCameraEvent,
+    ScenarioResult& result)
+{
+    while (nextCameraEvent < cameraEvents.size()
+        && cameraEvents[nextCameraEvent].tick == tick)
+    {
+        const ScheduledCameraEvent& event = cameraEvents[nextCameraEvent++];
+        const std::string_view actionName = ApplyCameraEvent(simulation, event.action);
+        result.eventLog.push_back("tick " + std::to_string(tick) + ": 카메라 "
+            + std::string(actionName));
+    }
+}
+
+void UpdateMissionResults(
+    std::uint64_t tick,
+    std::optional<ScenarioResult::Mission>& mission,
+    const SimulationCore& simulation,
+    const DroneIds& droneIds,
+    ScenarioResult& result)
+{
+    if (!mission)
+        return;
+
+    for (ScenarioResult::MissionTask& task : mission->tasks)
+    {
+        if (!task.started || task.completed || task.failed)
+            continue;
+
+        const glm::dvec3 distance = simulation.State(droneIds.at(task.droneName))
+            .positionMeters - task.targetPositionMeters;
+        if (glm::length(distance) <= task.toleranceMeters)
+        {
+            task.completed = true;
+            task.completedTick = tick;
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
+        }
+        else if (tick >= task.deadlineTick)
+        {
+            task.failed = true;
+            result.issues.push_back(task.droneName + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
+        }
+    }
+}
+
+void CheckExpectedResults(
+    const ScenarioDefinition& definition,
+    const SimulationCore& simulation,
+    const DroneIds& droneIds,
+    ScenarioResult& result)
+{
     result.tickCount = simulation.TickCount();
     result.simulationTimeSeconds = simulation.SimulationTimeSeconds();
-    if (scenarioDrones.empty())
+    if (definition.drones.empty())
     {
-        result.drones.push_back({primaryDroneName,
-            simulation.State(droneIds.at(primaryDroneName))});
+        result.drones.push_back({definition.primaryDroneName,
+            simulation.State(droneIds.at(definition.primaryDroneName))});
     }
     else
     {
-        for (const ScenarioDrone& drone : scenarioDrones)
+        for (const ScenarioDrone& drone : definition.drones)
             result.drones.push_back({drone.name, simulation.State(droneIds.at(drone.name))});
     }
     result.finalState = result.drones.front().finalState;
@@ -300,7 +310,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
             result.mission->tasks.begin(), result.mission->tasks.end(),
             [](const ScenarioResult::MissionTask& task) { return task.completed; });
     }
-    for (const ExpectedDrone& expectedDrone : expectedDrones)
+
+    for (const ExpectedDrone& expectedDrone : definition.expectedDrones)
     {
         const auto found = std::find_if(result.drones.begin(), result.drones.end(),
             [&expectedDrone](const ScenarioResult::Drone& drone)
@@ -313,12 +324,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 + expectedDrone.name);
             continue;
         }
-        const std::string dronePrefix = hasExpectedDrones
+        const std::string dronePrefix = definition.hasExpectedDrones
             ? expectedDrone.name + " 드론의 "
             : "";
         if (found->finalState.mode != expectedDrone.mode)
         {
-            if (hasExpectedDrones)
+            if (definition.hasExpectedDrones)
                 result.issues.push_back(dronePrefix + "최종 비행 상태가 예상과 다릅니다.");
             else
                 result.issues.push_back(
@@ -327,30 +338,83 @@ ScenarioResult RunScenario(std::string_view jsonText)
                     + std::string(ToString(found->finalState.mode)) + "입니다.");
         }
         if (glm::length(found->finalState.positionMeters - expectedDrone.positionMeters)
-            > toleranceMeters)
+            > definition.toleranceMeters)
         {
             result.issues.push_back(dronePrefix + "최종 위치가 허용 오차를 벗어났습니다.");
         }
         if (expectedDrone.orientation
             && OrientationErrorRadians(found->finalState.orientation, *expectedDrone.orientation)
-                > orientationToleranceRadians)
+                > definition.orientationToleranceRadians)
         {
             result.issues.push_back(dronePrefix + "최종 자세가 허용 각도 오차를 벗어났습니다.");
         }
     }
-    if (hasExpectedDrones && expectedDrones.size() != result.drones.size())
+    if (definition.hasExpectedDrones
+        && definition.expectedDrones.size() != result.drones.size())
+    {
         result.issues.push_back("expected.drones 개수가 시나리오 드론 수와 다릅니다.");
-    if (expectedMinimumDroneSeparationMeters
+    }
+    if (definition.minimumDroneSeparationMeters
         && result.minimumDroneSeparationMeters
-        && *result.minimumDroneSeparationMeters < *expectedMinimumDroneSeparationMeters)
+        && *result.minimumDroneSeparationMeters
+            < *definition.minimumDroneSeparationMeters)
     {
         result.issues.push_back("드론 사이 최소 거리가 설정한 안전 간격보다 짧았습니다.");
     }
-    if (expectedCameraStatus && result.finalCamera.status != *expectedCameraStatus)
+    if (definition.expectedCameraStatus
+        && result.finalCamera.status != *definition.expectedCameraStatus)
+    {
         result.issues.push_back("최종 카메라 상태가 예상값과 다릅니다.");
-    if (expectedFrameCount && result.finalCamera.frameCount != *expectedFrameCount)
+    }
+    if (definition.expectedFrameCount
+        && result.finalCamera.frameCount != *definition.expectedFrameCount)
+    {
         result.issues.push_back("카메라 프레임 수가 예상값과 다릅니다.");
+    }
     result.passed = result.issues.empty();
+}
+}
+
+ScenarioResult RunScenario(std::string_view jsonText)
+{
+    ScenarioDefinition definition = detail::ReadScenarioDefinition(jsonText);
+    const std::uint64_t tickCount = definition.tickCount;
+    SimulationCore simulation{definition.dynamics};
+    if (definition.windVelocity)
+        simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
+
+    DroneIds droneIds;
+    if (definition.drones.empty())
+        droneIds.emplace(definition.primaryDroneName, simulation.PrimaryDroneId());
+    else
+    {
+        const DroneId unusedDefaultDrone = simulation.PrimaryDroneId();
+        for (const ScenarioDrone& drone : definition.drones)
+            droneIds.emplace(drone.name, simulation.AddDrone(
+                drone.initialPositionMeters, drone.initialYawRadians));
+        if (!simulation.RemoveDrone(unusedDefaultDrone))
+            throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
+    }
+
+    ScenarioResult result;
+    result.mission = std::move(definition.mission);
+    std::size_t nextCommand = 0;
+    std::size_t nextCameraEvent = 0;
+    std::unordered_map<std::string, std::uint64_t> lastDeliveredSequence;
+    RecordMinimumDroneSeparation(definition, simulation, droneIds, result);
+    for (std::uint64_t tick = 0; tick < tickCount; ++tick)
+    {
+        ApplyScheduledCommands(tick, definition.commands, simulation, droneIds,
+            nextCommand, lastDeliveredSequence, result);
+        UpdateMissionCommands(tick, result.mission, simulation, droneIds, result);
+        UpdateFormationLinks(tick, definition.formationLinks, simulation, droneIds, result);
+        ApplyCameraEvents(tick, definition.cameraEvents, simulation, nextCameraEvent, result);
+        simulation.AdvanceOneTick();
+        RecordMinimumDroneSeparation(definition, simulation, droneIds, result);
+        UpdateMissionResults(tick, result.mission, simulation, droneIds, result);
+    }
+
+    CheckExpectedResults(definition, simulation, droneIds, result);
     return result;
 }
 
