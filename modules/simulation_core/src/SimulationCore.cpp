@@ -99,7 +99,8 @@ struct SimulationCore::EcsStorage
         SynchronizeCameraPose();
     }
 
-    DroneId CreateDrone(const glm::dvec3& positionMeters, double yawRadians)
+    DroneId CreateDrone(
+        const glm::dvec3& positionMeters, double yawRadians, double groundElevationMeters = 0.0)
     {
         const DroneId id = nextDroneId++;
         DroneState initialState;
@@ -108,10 +109,11 @@ struct SimulationCore::EcsStorage
         initialState.orientation = glm::angleAxis(yawRadians, glm::dvec3{0.0, 0.0, 1.0});
         DroneControlState initialControl;
         initialControl.desiredYawRadians = yawRadians;
+        initialControl.groundElevationMeters = groundElevationMeters;
         flecs::entity drone = world.entity()
             .set<DroneState>(initialState)
             .set<DroneControlState>(initialControl)
-            .set<InitialPose>({positionMeters, yawRadians, 0.0});
+            .set<InitialPose>({positionMeters, yawRadians, groundElevationMeters});
 
 #if !defined(__EMSCRIPTEN__)
         if (dynamics == SimulationDynamics::RigidBody)
@@ -341,12 +343,7 @@ DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters,
         throw std::invalid_argument("드론 시작 위치와 방향은 유한한 값이어야 합니다.");
     if (!std::isfinite(groundElevationMeters))
         throw std::invalid_argument("드론 지면 높이는 유한한 값이어야 합니다.");
-    const DroneId id = ecs_->CreateDrone(positionMeters, yawRadians);
-    auto& drone = ecs_->FindDrone(id);
-    drone.set<EcsStorage::InitialPose>(
-        {positionMeters, yawRadians, groundElevationMeters});
-    drone.get_mut<DroneControlState>().groundElevationMeters = groundElevationMeters;
-    return id;
+    return ecs_->CreateDrone(positionMeters, yawRadians, groundElevationMeters);
 }
 
 void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yawRadians)
