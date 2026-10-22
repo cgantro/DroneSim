@@ -175,6 +175,33 @@ void Verify_ScenarioRunner_AssignsDroneRolesAndJudgesMissionDeadlines()
     EXPECT_LE(*success.mission->tasks[0].completedTick, 150);
     EXPECT_LE(*success.mission->tasks[1].completedTick, 150);
 
+    constexpr std::string_view missionCannotStart = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":2,
+     "drones":[{"name":"lead","initial_position_meters":[0,0,0]},
+       {"name":"wing","initial_position_meters":[2,0,0]}],
+     "commands":[],
+     "mission":{"name":"not-airborne","tasks":[
+       {"name":"survey","role":"survey","drone":"lead",
+        "target_position_meters":[1,0,1],"start_tick":0,
+        "deadline_tick":1,"tolerance_meters":0.05},
+       {"name":"scout","role":"scout","drone":"wing",
+        "target_position_meters":[3,0,1],"start_tick":0,
+        "deadline_tick":1,"tolerance_meters":0.05}]},
+     "expected":{"tolerance_meters":0.05,"drones":[
+       {"name":"lead","mode":"grounded","position_meters":[0,0,0]},
+       {"name":"wing","mode":"grounded","position_meters":[2,0,0]}]}}
+    )json";
+
+    const ScenarioResult failedToStart = RunScenario(missionCannotStart);
+    ASSERT_TRUE(failedToStart.mission.has_value());
+    EXPECT_FALSE(failedToStart.passed);
+    EXPECT_FALSE(failedToStart.mission->passed);
+    EXPECT_TRUE(failedToStart.mission->tasks[0].failed);
+    EXPECT_FALSE(failedToStart.mission->tasks[0].started);
+    ASSERT_FALSE(failedToStart.issues.empty());
+    EXPECT_NE(failedToStart.issues.front().find("임무를 시작하지 못했습니다"),
+        std::string::npos);
+
     constexpr std::string_view missionMissesDeadline = R"json(
     {"version":1,"dynamics":"kinematic","ticks":92,
      "drones":[

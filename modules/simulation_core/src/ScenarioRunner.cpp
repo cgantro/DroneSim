@@ -159,25 +159,20 @@ void UpdateMissionCommands(
             continue;
 
         const DroneId droneId = droneIds.at(task.droneName);
+        if (!CanReceiveWaypoint(simulation.State(droneId).mode))
+        {
+            task.failed = true;
+            result.issues.push_back(task.started
+                ? task.droneName + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다."
+                : task.droneName + " 드론이 비행 중이 아니어서 임무를 시작하지 못했습니다.");
+            continue;
+        }
+
         if (!task.started)
         {
-            if (!CanReceiveWaypoint(simulation.State(droneId).mode))
-            {
-                task.failed = true;
-                result.issues.push_back(task.droneName
-                    + " 드론이 비행 중이 아니어서 임무를 시작하지 못했습니다.");
-                continue;
-            }
             task.started = true;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + task.droneName + " 드론이 '" + task.role + "' 임무를 시작했습니다.");
-        }
-        else if (!CanReceiveWaypoint(simulation.State(droneId).mode))
-        {
-            task.failed = true;
-            result.issues.push_back(task.droneName
-                + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다.");
-            continue;
         }
 
         const CommandResult moveResult = simulation.Apply(droneId,
