@@ -63,6 +63,7 @@ struct AppState
     bool statusRequest = false;
     std::uint32_t nextCommandId = 1;
     std::uint32_t nextSequence = 1;
+    /** @brief 비동기 작업이 빌려 쓴다. 뒤에 선언된 future가 먼저 파괴되어, 작업이 끝난 뒤 소켓이 닫힌다. */
     std::optional<aerosimlab::communication::UdpSocket> socket;
     std::optional<aerosimlab::communication::CommandPacket> queuedCommand;
     std::stop_source requestStopSource;
