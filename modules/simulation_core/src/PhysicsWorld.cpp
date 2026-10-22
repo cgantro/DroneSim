@@ -554,13 +554,16 @@ struct PhysicsWorld::Impl
         const RigidBodyState& state = body.collisionState;
         for (const OrientedBox& worldBox : body.worldCollisionBoxes)
         {
-            for (unsigned int cornerIndex = 0; cornerIndex < 8U; ++cornerIndex)
+            // 높이 격자가 없으면 바닥은 z=0인 평면이므로 가장 낮은 꼭짓점만 확인한다.
+            const unsigned int cornerCount = terrain ? 8U : 1U;
+            for (unsigned int cornerIndex = 0; cornerIndex < cornerCount; ++cornerIndex)
             {
                 glm::dvec3 corner = worldBox.centerMeters;
                 for (std::size_t axisIndex = 0; axisIndex < worldBox.axes.size(); ++axisIndex)
                 {
-                    const double direction = (cornerIndex & (1U << axisIndex)) != 0U
-                        ? 1.0 : -1.0;
+                    const double direction = terrain
+                        ? ((cornerIndex & (1U << axisIndex)) != 0U ? 1.0 : -1.0)
+                        : (worldBox.axes[axisIndex].z >= 0.0 ? -1.0 : 1.0);
                     corner += worldBox.axes[axisIndex]
                         * (direction * worldBox.halfExtentsMeters[axisIndex]);
                 }
