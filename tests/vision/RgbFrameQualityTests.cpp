@@ -1,6 +1,7 @@
 #include "vision/RgbFrameQuality.h"
 
 #include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include <gtest/gtest.h>
 
@@ -22,6 +23,14 @@ void Verify_RgbFrameQuality_MeasuresGrayscaleAndSharpnessWithoutChangingInput()
     EXPECT_DOUBLE_EQ(quality.meanBrightness, 120.25);
     EXPECT_GT(quality.meanContrast, 0.0);
     EXPECT_GT(quality.sharpness, 0.0);
+
+    cv::Mat verticallyFlippedImage;
+    cv::flip(image, verticallyFlippedImage, 0);
+    const RgbFrameQuality flippedQuality = analyzer.Analyze(verticallyFlippedImage);
+    EXPECT_DOUBLE_EQ(flippedQuality.meanBrightness, quality.meanBrightness);
+    EXPECT_DOUBLE_EQ(flippedQuality.meanContrast, quality.meanContrast);
+    EXPECT_DOUBLE_EQ(flippedQuality.sharpness, quality.sharpness);
+
     EXPECT_EQ(image.at<cv::Vec3b>(0, 0), cv::Vec3b(0, 0, 0));
     EXPECT_EQ(image.at<cv::Vec3b>(0, 1), cv::Vec3b(255, 255, 255));
     EXPECT_THROW(static_cast<void>(analyzer.Analyze(cv::Mat{})), std::invalid_argument);

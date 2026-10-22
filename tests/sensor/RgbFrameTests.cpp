@@ -20,7 +20,12 @@ void Verify_RgbFrame_ValidatesFrameAndFlipsOpenGlRowOrder()
     frame.FlipVertical();
 
     EXPECT_EQ(frame.pixels, (std::vector<std::uint8_t>{20, 21, 22, 10, 11, 12}));
+    EXPECT_EQ(frame.rowOrder, RgbFrameRowOrder::BottomToTop);
     EXPECT_EQ(frame.simulationTick, 7U);
+
+    frame.FlipVertical();
+    EXPECT_EQ(frame.pixels, (std::vector<std::uint8_t>{10, 11, 12, 20, 21, 22}));
+    EXPECT_EQ(frame.rowOrder, RgbFrameRowOrder::TopToBottom);
 
     frame = {std::numeric_limits<int>::max(), std::numeric_limits<int>::max(), 0, {1, 2, 3}};
     EXPECT_FALSE(frame.IsValid());

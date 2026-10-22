@@ -716,7 +716,8 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
     eoFrame_.width = cameraTarget_->GetWidth();
     eoFrame_.height = cameraTarget_->GetHeight();
     eoFrame_.simulationTick = simulationTick;
-    eoFrame_.FlipVertical();
+    // 밝기·대비·선명도는 행 방향과 무관하므로 OpenGL 픽셀을 그대로 분석한다.
+    eoFrame_.rowOrder = aerosimlab::sensor::RgbFrameRowOrder::BottomToTop;
 #ifndef __EMSCRIPTEN__
     double analysisDurationMicroseconds = 0.0;
     // OpenCV는 현재 프레임 메모리를 빌려 쓴다. 분석이 끝날 때까지 픽셀을 바꾸지 않는다.

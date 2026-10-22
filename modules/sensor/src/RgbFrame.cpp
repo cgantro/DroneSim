@@ -38,5 +38,9 @@ void RgbFrame::FlipVertical()
             * static_cast<std::ptrdiff_t>(rowBytes);
         std::swap_ranges(top, top + static_cast<std::ptrdiff_t>(rowBytes), bottom);
     }
+
+    rowOrder = rowOrder == RgbFrameRowOrder::TopToBottom
+        ? RgbFrameRowOrder::BottomToTop
+        : RgbFrameRowOrder::TopToBottom;
 }
 }
