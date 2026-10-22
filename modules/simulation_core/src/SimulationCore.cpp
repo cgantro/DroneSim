@@ -46,6 +46,7 @@ struct SimulationCore::EcsStorage
     flecs::entity camera;
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
+    double lastContactGenerationDurationMicroseconds = 0.0;
 #if !defined(__EMSCRIPTEN__)
     std::unique_ptr<PhysicsWorld> physics;
 #endif
@@ -268,7 +269,8 @@ struct SimulationCore::EcsStorage
     {
         if (measurePhysicsStepDuration)
             physics->Step(DroneModel::fixedStepSeconds,
-                &lastPhysicsStepDurationMicroseconds);
+                &lastPhysicsStepDurationMicroseconds,
+                &lastContactGenerationDurationMicroseconds);
         else
             physics->Step(DroneModel::fixedStepSeconds);
 
@@ -414,6 +416,7 @@ void SimulationCore::AdvanceOneTick() noexcept
         return;
     }
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
+    ecs_->lastContactGenerationDurationMicroseconds = 0.0;
     ecs_->world.progress(DroneModel::fixedStepSeconds);
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
@@ -495,11 +498,17 @@ void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept
 {
     ecs_->measurePhysicsStepDuration = enabled;
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
+    ecs_->lastContactGenerationDurationMicroseconds = 0.0;
 }
 
 double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 {
     return ecs_->lastPhysicsStepDurationMicroseconds;
+}
+
+double SimulationCore::LastContactGenerationDurationMicroseconds() const noexcept
+{
+    return ecs_->lastContactGenerationDurationMicroseconds;
 }
 
 #ifndef __EMSCRIPTEN__

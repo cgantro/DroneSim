@@ -133,6 +133,9 @@ public:
     /** @brief 마지막 Tick의 AirSim 물리 계산 시간을 마이크로초로 반환한다. */
     [[nodiscard]] double LastPhysicsStepDurationMicroseconds() const noexcept;
 
+    /** @brief 마지막 Tick에서 접촉 정보를 찾는 데 든 시간을 마이크로초로 반환한다. */
+    [[nodiscard]] double LastContactGenerationDurationMicroseconds() const noexcept;
+
 #ifndef __EMSCRIPTEN__
     /** @brief 강체 모드에 지도 건물 같은 고정 상자 장애물을 추가한다. */
     void AddStaticObstacleBox(

@@ -80,7 +80,10 @@ public:
     void SetState(RigidBodyHandle body, const RigidBodyState& state);
 
     /** @brief AirSim이 힘, 이동, 회전과 접촉 반응을 고정 시간만큼 계산한다. */
-    void Step(double seconds, double* durationMicroseconds = nullptr);
+    void Step(
+        double seconds,
+        double* durationMicroseconds = nullptr,
+        double* contactGenerationMicroseconds = nullptr);
 
     /** @brief 물리 세계에서 강체를 제거한다. 이미 제거했거나 잘못된 핸들이면 false를 반환한다. */
     [[nodiscard]] bool DestroyBody(RigidBodyHandle body);

@@ -218,8 +218,10 @@ nlohmann::json MeasureDroneScaling(
 
             std::vector<double> tickDurations;
             std::vector<double> physicsDurations;
+            std::vector<double> contactGenerationDurations;
             tickDurations.reserve(measuredTicks);
             physicsDurations.reserve(measuredTicks);
+            contactGenerationDurations.reserve(measuredTicks);
             const auto workingSetBefore = readWorkingSetBytes();
             const std::clock_t cpuStart = std::clock();
             const auto measurementStart = std::chrono::steady_clock::now();
@@ -231,8 +233,12 @@ nlohmann::json MeasureDroneScaling(
                 tickDurations.push_back(std::chrono::duration<double, std::micro>(
                     std::chrono::steady_clock::now() - tickStart).count());
                 if (usesRigidBodyPhysics)
+                {
                     physicsDurations.push_back(
                         simulation.LastPhysicsStepDurationMicroseconds());
+                    contactGenerationDurations.push_back(
+                        simulation.LastContactGenerationDurationMicroseconds());
+                }
 
                 if ((tick + 1U) % 1000U == 0U
                     && std::chrono::steady_clock::now() - measurementStart >= runTimeLimit)
@@ -280,6 +286,8 @@ nlohmann::json MeasureDroneScaling(
             {
                 run["physics_step_duration_us"] = SummarizeDurations(
                     std::move(physicsDurations));
+                run["contact_generation_duration_us"] = SummarizeDurations(
+                    std::move(contactGenerationDurations));
             }
             if (workingSetBefore && workingSetAfter)
             {

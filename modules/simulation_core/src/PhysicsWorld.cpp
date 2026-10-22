@@ -736,26 +736,47 @@ void PhysicsWorld::SetState(RigidBodyHandle handle, const RigidBodyState& state)
     body.model->setCollisionInfo({});
 }
 
-void PhysicsWorld::Step(double seconds, double* durationMicroseconds)
+void PhysicsWorld::Step(
+    double seconds,
+    double* durationMicroseconds,
+    double* contactGenerationMicroseconds)
 {
     if (!std::isfinite(seconds) || !(seconds > 0.0))
         throw std::invalid_argument("물리 시간 간격을 확인해 주세요.");
     static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
     static_cast<void>(impl_->clock->stepBy(seconds));
+    if (contactGenerationMicroseconds != nullptr)
+        *contactGenerationMicroseconds = 0.0;
 
     auto advance = [&]
     {
         ++impl_->stepCount;
+        const auto bodyOrderingStart = contactGenerationMicroseconds != nullptr
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         const double largestCollisionRadius = impl_->OrderBodiesAlongXAxis();
+        if (contactGenerationMicroseconds != nullptr)
+        {
+            *contactGenerationMicroseconds += std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - bodyOrderingStart).count();
+        }
         for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
         {
             auto& body = impl_->bodies[index];
             if (!body)
                 continue;
+            const auto contactStart = contactGenerationMicroseconds != nullptr
+                ? std::chrono::steady_clock::now()
+                : std::chrono::steady_clock::time_point{};
             body->environment.setPosition(body->kinematics.getPose().position);
             body->environment.update();
             body->model->setCollisionInfo(
                 impl_->BuildAirSimContactInfo(*body, index, largestCollisionRadius));
+            if (contactGenerationMicroseconds != nullptr)
+            {
+                *contactGenerationMicroseconds += std::chrono::duration<double, std::micro>(
+                    std::chrono::steady_clock::now() - contactStart).count();
+            }
             body->ApplyMotorTargets();
             body->model->update();
             body->updatedSinceReset = true;
