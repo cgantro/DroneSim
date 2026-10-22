@@ -10,12 +10,72 @@
         "CMAKE_BUILD_TYPE": "Release",
         "AEROSIMLAB_BUILD_GRAPHICS": "ON"
       }
+    },
+    {
+      "name": "linux-gcc-debug",
+      "displayName": "Linux GCC Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-linux-gcc-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "AEROSIMLAB_BUILD_GRAPHICS": "ON"
+      }
+    },
+    {
+      "name": "linux-gcc-asan-ubsan",
+      "displayName": "Linux GCC Address and Undefined Behavior Sanitizers",
+      "inherits": "linux-gcc-debug",
+      "binaryDir": "${sourceDir}/build-linux-gcc-asan-ubsan",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
+      "name": "linux-gcc-coverage",
+      "displayName": "Linux GCC Coverage",
+      "inherits": "linux-gcc-debug",
+      "binaryDir": "${sourceDir}/build-linux-gcc-coverage",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_C_FLAGS": "--coverage",
+        "CMAKE_CXX_FLAGS": "--coverage",
+        "CMAKE_EXE_LINKER_FLAGS": "--coverage"
+      }
+    },
+    {
+      "name": "emscripten-single-thread",
+      "displayName": "Emscripten Single Thread Release",
+      "inherits": "ninja-release",
+      "binaryDir": "${sourceDir}/build-emscripten-single-thread"
     }
   ],
   "buildPresets": [
     {
       "name": "ninja-release",
       "configurePreset": "ninja-release"
+    },
+    {
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc-debug"
+    },
+    {
+      "name": "linux-gcc-asan-ubsan",
+      "configurePreset": "linux-gcc-asan-ubsan"
+    },
+    {
+      "name": "linux-gcc-coverage",
+      "configurePreset": "linux-gcc-coverage"
+    },
+    {
+      "name": "emscripten-single-thread",
+      "configurePreset": "emscripten-single-thread"
     }
   ]
 }

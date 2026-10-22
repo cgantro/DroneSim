@@ -2,9 +2,9 @@ name: Native CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -40,15 +40,15 @@ jobs:
             xauth
 
       - name: Configure native Debug build
-        run: cmake --preset ninja
+        run: cmake --preset linux-gcc-debug
 
       - name: Build native targets
-        run: cmake --build --preset ninja-debug --parallel 4
+        run: cmake --build --preset linux-gcc-debug --parallel 4
 
       - name: Run labeled CTest suite with virtual display
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: >-
           xvfb-run -a -s "-screen 0 1280x1024x24"
-          ctest --test-dir build-ninja-debug
+          ctest --test-dir build-linux-gcc-debug
           --output-on-failure --timeout 120
