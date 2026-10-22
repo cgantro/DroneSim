@@ -536,9 +536,29 @@ SimulationDynamics ReadDynamics(const Json& document)
     if (name == "rigid_body") return SimulationDynamics::RigidBody;
     throw std::invalid_argument("알 수 없는 dynamics 설정입니다: " + name);
 }
-}
 
-ScenarioResult RunScenario(std::string_view jsonText)
+struct ScenarioDefinition
+{
+    std::uint64_t tickCount = 0;
+    std::vector<ScenarioDrone> drones;
+    std::string primaryDroneName;
+    std::vector<ScheduledCommand> commands;
+    std::vector<FormationLink> formationLinks;
+    std::optional<ScenarioResult::Mission> mission;
+    SimulationDynamics dynamics = defaultSimulationDynamics;
+    std::optional<glm::dvec3> windVelocity;
+    std::vector<ScheduledCameraEvent> cameraEvents;
+    std::vector<ExpectedDrone> expectedDrones;
+    bool hasExpectedDrones = false;
+    double toleranceMeters = 0.01;
+    double orientationToleranceRadians = 0.01;
+    std::optional<double> minimumDroneSeparationMeters;
+    std::optional<CameraStatus> expectedCameraStatus;
+    std::optional<std::uint64_t> expectedFrameCount;
+};
+
+/** @brief JSON 문법과 설정을 확인한 뒤 실행에 필요한 자료만 묶어 돌려준다. */
+ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
 {
     Json document;
     try
@@ -550,131 +570,149 @@ ScenarioResult RunScenario(std::string_view jsonText)
         throw std::invalid_argument(std::string("JSON을 읽지 못했습니다: ") + error.what());
     }
     if (!document.is_object())
-    {
         throw std::invalid_argument("시나리오의 첫 항목은 JSON 객체여야 합니다.");
-    }
 
     const std::uint64_t version = ReadUnsigned(Required(document, "version"), "version");
     if (version != 1)
-    {
         throw std::invalid_argument("지원하는 시나리오 형식은 version 1입니다.");
-    }
 
-    const std::uint64_t tickCount = ReadUnsigned(Required(document, "ticks"), "ticks");
-    if (tickCount == 0 || tickCount > maximumScenarioTicks)
-    {
+    ScenarioDefinition definition;
+    definition.tickCount = ReadUnsigned(Required(document, "ticks"), "ticks");
+    if (definition.tickCount == 0 || definition.tickCount > maximumScenarioTicks)
         throw std::invalid_argument("ticks는 1부터 5,184,000 사이여야 합니다.");
-    }
 
-    const std::vector<ScenarioDrone> scenarioDrones = ReadDrones(document);
-    const std::string primaryDroneName = scenarioDrones.empty()
-        ? "drone" : scenarioDrones.front().name;
+    definition.drones = ReadDrones(document);
+    definition.primaryDroneName = definition.drones.empty()
+        ? "drone" : definition.drones.front().name;
     std::unordered_set<std::string> droneNames;
-    if (scenarioDrones.empty())
-        droneNames.insert(primaryDroneName);
+    if (definition.drones.empty())
+        droneNames.insert(definition.primaryDroneName);
     else
-        for (const ScenarioDrone& drone : scenarioDrones)
+        for (const ScenarioDrone& drone : definition.drones)
             droneNames.insert(drone.name);
-    const std::vector<ScheduledCommand> commands = ReadCommands(
-        Required(document, "commands"), tickCount, primaryDroneName, droneNames);
-    const std::vector<FormationLink> formationLinks = ReadFormationLinks(
-        document, tickCount, droneNames);
-    if (!formationLinks.empty() && scenarioDrones.size() < 2)
+
+    definition.commands = ReadCommands(
+        Required(document, "commands"), definition.tickCount,
+        definition.primaryDroneName, droneNames);
+    definition.formationLinks = ReadFormationLinks(
+        document, definition.tickCount, droneNames);
+    if (!definition.formationLinks.empty() && definition.drones.size() < 2)
         throw std::invalid_argument("formation_links를 쓰려면 drones에 두 대 이상을 적어야 합니다.");
-    std::optional<ScenarioResult::Mission> mission = ReadMission(
-        document, tickCount, droneNames);
-    if (mission)
+
+    definition.mission = ReadMission(document, definition.tickCount, droneNames);
+    if (definition.mission)
     {
-        for (const FormationLink& link : formationLinks)
+        for (const FormationLink& link : definition.formationLinks)
         {
             const bool followerHasMission = std::any_of(
-                mission->tasks.begin(), mission->tasks.end(),
+                definition.mission->tasks.begin(), definition.mission->tasks.end(),
                 [&link](const ScenarioResult::MissionTask& task)
                 {
                     return task.droneName == link.followerName;
                 });
             if (followerHasMission)
-            {
                 throw std::invalid_argument(
                     "같은 드론에 formation link와 mission 목표를 함께 지정할 수 없습니다.");
-            }
         }
     }
-    const SimulationDynamics dynamics = ReadDynamics(document);
-    const std::optional<glm::dvec3> windVelocity = document.contains("wind_velocity_meters_per_second")
-        ? std::optional<glm::dvec3>{ReadVector(
-            document["wind_velocity_meters_per_second"], "wind_velocity_meters_per_second")}
-        : std::nullopt;
-    if (windVelocity && dynamics != SimulationDynamics::RigidBody)
+
+    definition.dynamics = ReadDynamics(document);
+    if (document.contains("wind_velocity_meters_per_second"))
+    {
+        definition.windVelocity = ReadVector(
+            document["wind_velocity_meters_per_second"],
+            "wind_velocity_meters_per_second");
+    }
+    if (definition.windVelocity
+        && definition.dynamics != SimulationDynamics::RigidBody)
         throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
-    const std::vector<ScheduledCameraEvent> cameraEvents = ReadCameraEvents(document, tickCount);
+
+    definition.cameraEvents = ReadCameraEvents(document, definition.tickCount);
     const Json& expected = Required(document, "expected");
     if (!expected.is_object())
-    {
         throw std::invalid_argument("expected는 JSON 객체여야 합니다.");
-    }
-    const bool hasExpectedDrones = expected.contains("drones");
-    if (hasExpectedDrones && (expected.contains("mode") || expected.contains("position_meters")
-        || expected.contains("orientation_quaternion_wxyz")))
-        throw std::invalid_argument("expected에는 drones 목록 또는 단일 드론 상태 중 하나만 적어야 합니다.");
-    if (!hasExpectedDrones && !scenarioDrones.empty())
+
+    definition.hasExpectedDrones = expected.contains("drones");
+    if (definition.hasExpectedDrones
+        && (expected.contains("mode") || expected.contains("position_meters")
+            || expected.contains("orientation_quaternion_wxyz")))
+        throw std::invalid_argument(
+            "expected에는 drones 목록 또는 단일 드론 상태 중 하나만 적어야 합니다.");
+    if (!definition.hasExpectedDrones && !definition.drones.empty())
         throw std::invalid_argument("여러 드론을 지정한 시나리오는 expected.drones가 필요합니다.");
 
-    std::vector<ExpectedDrone> expectedDrones;
-    if (hasExpectedDrones)
+    if (definition.hasExpectedDrones)
     {
-        expectedDrones = ReadExpectedDrones(expected["drones"]);
+        definition.expectedDrones = ReadExpectedDrones(expected["drones"]);
     }
     else
     {
         std::optional<glm::dquat> orientation;
         if (expected.contains("orientation_quaternion_wxyz"))
             orientation = ReadOrientationQuaternion(expected["orientation_quaternion_wxyz"]);
-        expectedDrones.push_back({
-            primaryDroneName,
+        definition.expectedDrones.push_back({
+            definition.primaryDroneName,
             ReadFlightMode(Required(expected, "mode")),
             ReadVector(Required(expected, "position_meters"), "position_meters"),
             orientation});
     }
-    const double toleranceMeters = expected.contains("tolerance_meters")
-        ? ReadFiniteNumber(expected["tolerance_meters"], "tolerance_meters")
-        : 0.01;
-    if (toleranceMeters < 0.0)
-    {
+
+    if (expected.contains("tolerance_meters"))
+        definition.toleranceMeters = ReadFiniteNumber(expected["tolerance_meters"], "tolerance_meters");
+    if (definition.toleranceMeters < 0.0)
         throw std::invalid_argument("tolerance_meters는 0 이상이어야 합니다.");
-    }
-    const double orientationToleranceRadians = expected.contains("orientation_tolerance_radians")
-        ? ReadFiniteNumber(expected["orientation_tolerance_radians"],
-            "orientation_tolerance_radians")
-        : 0.01;
-    if (orientationToleranceRadians < 0.0
-        || orientationToleranceRadians > std::numbers::pi)
+
+    if (expected.contains("orientation_tolerance_radians"))
     {
-        throw std::invalid_argument(
-            "orientation_tolerance_radians는 0부터 π 사이여야 합니다.");
+        definition.orientationToleranceRadians = ReadFiniteNumber(
+            expected["orientation_tolerance_radians"], "orientation_tolerance_radians");
     }
-    const std::optional<double> expectedMinimumDroneSeparationMeters =
-        expected.contains("minimum_drone_separation_meters")
-        ? std::optional<double>{ReadFiniteNumber(
-            expected["minimum_drone_separation_meters"], "minimum_drone_separation_meters")}
-        : std::nullopt;
-    if (expectedMinimumDroneSeparationMeters
-        && (*expectedMinimumDroneSeparationMeters < 0.0 || scenarioDrones.size() < 2))
+    if (definition.orientationToleranceRadians < 0.0
+        || definition.orientationToleranceRadians > std::numbers::pi)
+        throw std::invalid_argument("orientation_tolerance_radians는 0부터 π 사이여야 합니다.");
+
+    if (expected.contains("minimum_drone_separation_meters"))
     {
+        definition.minimumDroneSeparationMeters = ReadFiniteNumber(
+            expected["minimum_drone_separation_meters"],
+            "minimum_drone_separation_meters");
+    }
+    if (definition.minimumDroneSeparationMeters
+        && (*definition.minimumDroneSeparationMeters < 0.0 || definition.drones.size() < 2))
         throw std::invalid_argument(
             "minimum_drone_separation_meters는 여러 드론이 있는 시나리오에서 0 이상이어야 합니다.");
+
+    if (expected.contains("camera_status"))
+        definition.expectedCameraStatus = ReadCameraStatus(expected["camera_status"]);
+    if (expected.contains("camera_frame_count"))
+    {
+        definition.expectedFrameCount = ReadUnsigned(
+            expected["camera_frame_count"], "camera_frame_count");
     }
+    return definition;
+}
+}
 
-    const std::optional<CameraStatus> expectedCameraStatus = expected.contains("camera_status")
-        ? std::optional<CameraStatus>{ReadCameraStatus(expected["camera_status"])}
-        : std::nullopt;
-    const std::optional<std::uint64_t> expectedFrameCount = expected.contains("camera_frame_count")
-        ? std::optional<std::uint64_t>{ReadUnsigned(expected["camera_frame_count"], "camera_frame_count")}
-        : std::nullopt;
+ScenarioResult RunScenario(std::string_view jsonText)
+{
+    ScenarioDefinition definition = ReadScenarioDefinition(jsonText);
+    const std::uint64_t tickCount = definition.tickCount;
+    const auto& scenarioDrones = definition.drones;
+    const auto& primaryDroneName = definition.primaryDroneName;
+    const auto& commands = definition.commands;
+    const auto& formationLinks = definition.formationLinks;
+    const auto& cameraEvents = definition.cameraEvents;
+    const auto& expectedDrones = definition.expectedDrones;
+    const bool hasExpectedDrones = definition.hasExpectedDrones;
+    const double toleranceMeters = definition.toleranceMeters;
+    const double orientationToleranceRadians = definition.orientationToleranceRadians;
+    const auto& expectedMinimumDroneSeparationMeters = definition.minimumDroneSeparationMeters;
+    const auto& expectedCameraStatus = definition.expectedCameraStatus;
+    const auto& expectedFrameCount = definition.expectedFrameCount;
 
-    SimulationCore simulation{dynamics};
-    if (windVelocity)
-        simulation.SetWindVelocityMetersPerSecond(*windVelocity);
+    SimulationCore simulation{definition.dynamics};
+    if (definition.windVelocity)
+        simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
 
     std::unordered_map<std::string, DroneId> droneIds;
     if (scenarioDrones.empty())
@@ -690,7 +728,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
 
     ScenarioResult result;
-    result.mission = std::move(mission);
+    result.mission = std::move(definition.mission);
     const auto recordMinimumDroneSeparation = [&]()
     {
         if (!expectedMinimumDroneSeparationMeters)
