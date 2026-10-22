@@ -1,12 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace aerosimlab::graphics
 {
 
 /**
- * @brief 다중 표본 framebuffer는 창에 바로 표시하지 않고 GPU가 여러 색·깊이 표본을 임시 저장하는 출력 대상이다.
+ * @brief MSAA 색·깊이를 저장하고, 화면용 질감을 따로 만들어 장면 패널에 보여 준다.
  * @details Framebuffer는 그려진 색과 깊이를 저장할 GPU 대상이며 실제 창 화면과 다르다. 색은 픽셀마다 RGBA 채널 각각 8 bit, 카메라 앞뒤 비교용 깊이는 24 bit, stencil 표식은 8 bit로 저장한다.
  * Stencil은 그리기 중 특정 픽셀을 표시하거나 가려 이후 그릴 영역을 제한하는 값이다. 현재 Renderer는 이 표식을 사용하지 않는다.
  * MSAA는 한 픽셀 안 여러 지점에서 삼각형이 덮는지 검사해 가장자리가 차지하는 비율을 구하고 계단 모양을 줄인다.
@@ -58,6 +59,15 @@ public:
     /** @brief 지정한 픽셀 사각형의 색만 창 출력 대상으로 복사한다. */
     void ResolveToDefault(int x, int y, int width, int height) const;
 
+    /** @brief 여러 색 표본을 일반 색 텍스처에 합쳐 ImGui 패널에 표시할 수 있게 한다. */
+    void ResolveToTexture() const;
+
+    /** @brief 최근에 합성한 화면을 ImGui에서 사용할 OpenGL 텍스처 번호로 돌려준다. */
+    [[nodiscard]] std::uint32_t GetTextureId() const { return m_ResolvedColorTexture; }
+
+    /** @brief 합성된 화면의 RGB 픽셀을 아래 행부터 읽는다. */
+    void ReadRgbPixels(std::vector<std::uint8_t>& pixels) const;
+
     /** @brief 생성 또는 마지막 크기 변경에 지정한 너비 [pixel]를 반환한다. */
     int GetWidth() const { return m_Width; }
     /** @brief 생성 또는 마지막 크기 변경에 지정한 높이 [pixel]를 반환한다. */
@@ -76,6 +86,9 @@ private:
     std::uint32_t m_Framebuffer = 0;
 
     std::uint32_t m_ColorTexture = 0;
+
+    std::uint32_t m_ResolvedFramebuffer = 0;
+    std::uint32_t m_ResolvedColorTexture = 0;
 
     std::uint32_t m_DepthStencilBuffer = 0;
 

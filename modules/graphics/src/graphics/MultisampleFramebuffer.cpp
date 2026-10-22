@@ -54,6 +54,20 @@ void MultisampleFramebuffer::Create()
         m_ColorTexture,
         0);
 
+    // ImGui는 일반 2D 텍스처를 표시하므로, MSAA 결과를 받을 화면도 준비한다.
+    glGenFramebuffers(1, &m_ResolvedFramebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_ResolvedFramebuffer);
+    glGenTextures(1, &m_ResolvedColorTexture);
+    glBindTexture(GL_TEXTURE_2D, m_ResolvedColorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_Width, m_Height, 0,
+        GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+        GL_TEXTURE_2D, m_ResolvedColorTexture, 0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Framebuffer);
+
     glGenRenderbuffers(1, &m_DepthStencilBuffer);
     glBindRenderbuffer(GL_RENDERBUFFER, m_DepthStencilBuffer);
     glRenderbufferStorageMultisample(
@@ -69,7 +83,12 @@ void MultisampleFramebuffer::Create()
         GL_RENDERBUFFER,
         m_DepthStencilBuffer);
 
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    const bool msaaComplete =
+        glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    glBindFramebuffer(GL_FRAMEBUFFER, m_ResolvedFramebuffer);
+    const bool resolvedComplete =
+        glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    if (!msaaComplete || !resolvedComplete)
     {
         // 사용할 수 없는 framebuffer를 남기지 않도록 지금까지 만든 GPU 객체를 해제한 뒤 생성 실패를 알린다.
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -82,6 +101,10 @@ void MultisampleFramebuffer::Create()
 
 void MultisampleFramebuffer::Destroy()
 {
+    if (m_ResolvedColorTexture != 0)
+        glDeleteTextures(1, &m_ResolvedColorTexture);
+    if (m_ResolvedFramebuffer != 0)
+        glDeleteFramebuffers(1, &m_ResolvedFramebuffer);
     if (m_DepthStencilBuffer != 0)
         glDeleteRenderbuffers(1, &m_DepthStencilBuffer);
     if (m_ColorTexture != 0)
@@ -91,6 +114,8 @@ void MultisampleFramebuffer::Destroy()
 
     m_DepthStencilBuffer = 0;
     m_ColorTexture = 0;
+    m_ResolvedColorTexture = 0;
+    m_ResolvedFramebuffer = 0;
     m_Framebuffer = 0;
 }
 
@@ -128,6 +153,28 @@ void MultisampleFramebuffer::ResolveToDefault(int x, int y, int width, int heigh
         GL_COLOR_BUFFER_BIT,
         GL_NEAREST);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void MultisampleFramebuffer::ResolveToTexture() const
+{
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_Framebuffer);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_ResolvedFramebuffer);
+    glBlitFramebuffer(0, 0, m_Width, m_Height,
+        0, 0, m_Width, m_Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void MultisampleFramebuffer::ReadRgbPixels(std::vector<std::uint8_t>& pixels) const
+{
+    pixels.resize(static_cast<std::size_t>(m_Width) * static_cast<std::size_t>(m_Height) * 3U);
+    GLint previousPackAlignment = 4;
+    glGetIntegerv(GL_PACK_ALIGNMENT, &previousPackAlignment);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ResolvedFramebuffer);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glReadPixels(0, 0, m_Width, m_Height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
 }
 
 void MultisampleFramebuffer::Resize(int width, int height)

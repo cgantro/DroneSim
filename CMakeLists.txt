@@ -165,7 +165,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     FetchContent_Declare(
       aerosimlab_imgui_source
       GIT_REPOSITORY https://github.com/ocornut/imgui.git
-      GIT_TAG c1aaac65e896a45f81f47a4d68f9959e0f86c859
+      GIT_TAG d88f238d1d363ef387382b2e29ad12cf96f826ac
       GIT_SHALLOW TRUE
     )
     FetchContent_GetProperties(aerosimlab_imgui_source)

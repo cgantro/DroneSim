@@ -4,6 +4,9 @@
 #include "simulation_core/SimulationCore.h"
 
 #include <vector>
+#include <cstdint>
+#include <functional>
+#include <string>
 
 struct GLFWwindow;
 
@@ -20,9 +23,12 @@ public:
     SimulatorHud& operator=(const SimulatorHud&) = delete;
 
     void Render(const simulation::SimulationCore& simulation,
-        bool gamepadConnected, bool groundControlConnected);
+        bool gamepadConnected, bool groundControlConnected, bool cameraActive,
+        const std::function<std::uint32_t(int, int)>& renderScene,
+        const std::function<std::uint32_t(int, int)>& renderCamera);
 
 private:
     bool initialized_ = false;
+    std::string layoutFile_;
 };
 }

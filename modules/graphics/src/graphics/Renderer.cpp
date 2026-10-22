@@ -24,7 +24,6 @@ namespace
 {
 struct RendererDefaults final
 {
-    inline static constexpr int multisampleCount = 4;
     inline static constexpr float clearRed = 0.50F;
     inline static constexpr float clearGreen = 0.68F;
     inline static constexpr float clearBlue = 0.79F;
@@ -87,31 +86,24 @@ void Renderer::Init(int framebufferWidth, int framebufferHeight)
 {
     // 깊이 검사를 끄면 멀리 있는 삼각형도 그린 순서가 나중이라는 이유만으로 가까운 물체 앞에 표시된다.
     glEnable(GL_DEPTH_TEST);
-#ifndef __EMSCRIPTEN__
-    glEnable(GL_MULTISAMPLE);
-
-    // 화면 그리기 단계(Main pass)는 픽셀마다 네 표본을 가진 대상을 사용한다. 프레임 끝에 표본을 합쳐 Window 기본 framebuffer로 복사한다.
-    m_MSAAFramebuffer = std::make_unique<MultisampleFramebuffer>(
-        framebufferWidth,
-        framebufferHeight,
-        RendererDefaults::multisampleCount);
-#else
+#ifdef __EMSCRIPTEN__
     m_FramebufferWidth = framebufferWidth;
     m_FramebufferHeight = framebufferHeight;
+#else
+    (void)framebufferWidth;
+    (void)framebufferHeight;
+    glEnable(GL_MULTISAMPLE);
 #endif
 
     m_LightDirection = glm::normalize(m_LightDirection);
 }
 
+#ifdef __EMSCRIPTEN__
 void Renderer::BeginFrame()
 {
     glDisable(GL_SCISSOR_TEST);
-#ifdef __EMSCRIPTEN__
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, m_FramebufferWidth, m_FramebufferHeight);
-#else
-    m_MSAAFramebuffer->Bind();
-#endif
 
     glClearColor(
         RendererDefaults::clearRed,
@@ -124,23 +116,30 @@ void Renderer::BeginFrame()
 void Renderer::EndFrame()
 {
     glDisable(GL_SCISSOR_TEST);
-#ifdef __EMSCRIPTEN__
     return;
-#else
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, m_MSAAFramebuffer->GetWidth(), m_MSAAFramebuffer->GetHeight());
-    glClearColor(
-        RendererDefaults::clearRed,
-        RendererDefaults::clearGreen,
-        RendererDefaults::clearBlue,
-        RendererDefaults::clearAlpha);
-    glClear(GL_COLOR_BUFFER_BIT);
-    m_MSAAFramebuffer->ResolveToDefault(
-        m_SceneViewport.x, m_SceneViewport.y,
-        m_SceneViewport.z, m_SceneViewport.w);
+}
 #endif
+
+#ifndef __EMSCRIPTEN__
+void Renderer::BeginView(MultisampleFramebuffer& target)
+{
+    target.Bind();
+    m_SceneViewport = {0, 0, target.GetWidth(), target.GetHeight()};
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(RendererDefaults::clearRed, RendererDefaults::clearGreen,
+        RendererDefaults::clearBlue, RendererDefaults::clearAlpha);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
+void Renderer::EndView(MultisampleFramebuffer& target)
+{
+    glDisable(GL_SCISSOR_TEST);
+    target.ResolveToTexture();
+    m_SceneViewport = {0, 0, 0, 0};
+}
+#endif
+
+#ifdef __EMSCRIPTEN__
 void Renderer::ReadRgbPixels(int x, int y, int width, int height,
     std::vector<std::uint8_t>& pixels) const
 {
@@ -161,18 +160,11 @@ void Renderer::ReadRgbPixels(int x, int y, int width, int height,
 
 void Renderer::Resize(int width, int height)
 {
-#ifdef __EMSCRIPTEN__
     m_FramebufferWidth = width;
     m_FramebufferHeight = height;
     m_SceneViewport = {0, 0, width, height};
-#else
-    if (m_MSAAFramebuffer)
-    {
-        m_MSAAFramebuffer->Resize(width, height);
-        m_SceneViewport = {0, 0, width, height};
-    }
-#endif
 }
+#endif
 
 void Renderer::SetSceneViewport(int x, int y, int width, int height)
 {
@@ -181,13 +173,6 @@ void Renderer::SetSceneViewport(int x, int y, int width, int height)
         return;
     const int viewportWidth = m_FramebufferWidth;
     const int viewportHeight = m_FramebufferHeight;
-#else
-    if (!m_MSAAFramebuffer || width <= 0 || height <= 0)
-        return;
-    const int viewportWidth = m_MSAAFramebuffer->GetWidth();
-    const int viewportHeight = m_MSAAFramebuffer->GetHeight();
-#endif
-
     const int left = std::clamp(x, 0, viewportWidth);
     const int bottom = std::clamp(y, 0, viewportHeight);
     const int right = static_cast<int>(std::clamp<std::int64_t>(
@@ -195,6 +180,12 @@ void Renderer::SetSceneViewport(int x, int y, int width, int height)
     const int top = static_cast<int>(std::clamp<std::int64_t>(
         static_cast<std::int64_t>(y) + height, bottom, viewportHeight));
     m_SceneViewport = {left, bottom, right - left, top - bottom};
+#else
+    (void)x;
+    (void)y;
+    (void)width;
+    (void)height;
+#endif
 }
 
 void Renderer::Draw(

@@ -2,10 +2,12 @@
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 #include "simulation_core/ScenarioRunner.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
@@ -44,6 +46,19 @@ SimulatorHud::SimulatorHud(GLFWwindow* window)
     ImGui::StyleColorsDark();
     LoadWindowsKoreanFont();
 
+    if (const char* localAppData = std::getenv("LOCALAPPDATA"))
+    {
+        std::error_code error;
+        const auto settingsDirectory = std::filesystem::path(localAppData) / "AeroSimLab";
+        std::filesystem::create_directories(settingsDirectory, error);
+        if (!error)
+        {
+            layoutFile_ = (settingsDirectory / "imgui.ini").string();
+            ImGui::GetIO().IniFilename = layoutFile_.c_str();
+        }
+    }
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true))
     {
         ImGui::DestroyContext();
@@ -63,17 +78,66 @@ SimulatorHud::~SimulatorHud()
     if (!initialized_)
         return;
 
+    if (!layoutFile_.empty())
+        ImGui::SaveIniSettingsToDisk(layoutFile_.c_str());
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
 
 void SimulatorHud::Render(const simulation::SimulationCore& simulation,
-    bool gamepadConnected, bool groundControlConnected)
+    bool gamepadConnected, bool groundControlConnected, bool cameraActive,
+    const std::function<std::uint32_t(int, int)>& renderScene,
+    const std::function<std::uint32_t(int, int)>& renderCamera)
 {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspace");
+    if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
+    {
+        ImGui::DockBuilderAddNode(dockspaceId,
+            ImGuiDockNodeFlags_DockSpace | ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
+        ImGuiID sceneNode = dockspaceId;
+        ImGuiID cameraNode = 0;
+        ImGui::DockBuilderSplitNode(dockspaceId, ImGuiDir_Right, 1.0F / 3.0F,
+            &cameraNode, &sceneNode);
+        ImGui::DockBuilderDockWindow("장면", sceneNode);
+        ImGui::DockBuilderDockWindow("카메라", cameraNode);
+        ImGui::DockBuilderFinish(dockspaceId);
+    }
+    ImGui::DockSpaceOverViewport(dockspaceId, viewport);
+
+    const auto drawPanel = [](const char* title,
+        const std::function<std::uint32_t(int, int)>& drawView,
+        bool enabled, const char* disabledMessage)
+    {
+        if (ImGui::Begin(title))
+        {
+            const ImVec2 available = ImGui::GetContentRegionAvail();
+            const ImVec2 imageSize{std::max(1.0F, available.x),
+                std::max(1.0F, available.y)};
+            const int width = static_cast<int>(imageSize.x);
+            const int height = static_cast<int>(imageSize.y);
+            if (enabled)
+            {
+                const std::uint32_t texture = drawView(width, height);
+                ImGui::Image(static_cast<ImTextureID>(texture), imageSize,
+                    ImVec2{0.0F, 1.0F}, ImVec2{1.0F, 0.0F});
+            }
+            else
+            {
+                ImGui::TextUnformatted(disabledMessage);
+            }
+        }
+        ImGui::End();
+    };
+
+    drawPanel("장면", renderScene, true, "장면을 표시할 수 없습니다.");
+    drawPanel("카메라", renderCamera, cameraActive, "카메라가 꺼져 있습니다.");
 
     ImGui::SetNextWindowPos(ImVec2{14.0F, 14.0F}, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.86F);

@@ -8,6 +8,9 @@
 #include "graphics/Camera.h"
 #include "graphics/GlApi.h"
 #include "graphics/Mesh.h"
+#ifndef __EMSCRIPTEN__
+#include "graphics/MultisampleFramebuffer.h"
+#endif
 #include "graphics/Renderer.h"
 #include "graphics/Texture2D.h"
 #include "graphics/Shader.h"
@@ -265,6 +268,12 @@ void AeroSimLabApp::InitializeGraphics()
 
     renderer_ = std::make_unique<aerosimlab::graphics::Renderer>();
     renderer_->Init(framebufferWidth, framebufferHeight);
+#ifndef __EMSCRIPTEN__
+    sceneTarget_ = std::make_unique<aerosimlab::graphics::MultisampleFramebuffer>(
+        framebufferWidth, framebufferHeight);
+    cameraTarget_ = std::make_unique<aerosimlab::graphics::MultisampleFramebuffer>(
+        framebufferWidth, framebufferHeight);
+#endif
     observerCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{7.0F, 5.0F, 7.0F}, glm::vec3{0.0F}, 1.0F,
         45.0F, 0.5F, 25000.0F);
@@ -459,6 +468,7 @@ void AeroSimLabApp::ApplyDemoCommands()
 
 void AeroSimLabApp::RenderFrame()
 {
+#ifdef __EMSCRIPTEN__
     int width = 0;
     int height = 0;
     window_->GetFramebufferSize(width, height);
@@ -467,44 +477,47 @@ void AeroSimLabApp::RenderFrame()
 
     renderer_->Resize(width, height);
     const int observerWidth = width * 2 / 3;
-    const int eoWidth = width - observerWidth;
-    UpdateCameraTransforms(observerWidth, eoWidth, height);
-
+    const int cameraWidth = width - observerWidth;
+    UpdateObserverCamera(observerWidth, height);
+    UpdateEoCamera(cameraWidth, height);
     renderer_->BeginFrame();
     renderer_->SetSceneViewport(0, 0, observerWidth, height);
     DrawWorld(observerCamera_->GetViewMatrix(), observerCamera_->GetProjectionMatrix(),
         observerCamera_->GetPosition());
-    renderer_->SetSceneViewport(observerWidth, 0, eoWidth, height);
-    if (simulation_.Camera().status == aerosimlab::simulation::CameraStatus::Active)
-        DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
-            eoCamera_->GetPosition());
-    renderer_->SetSceneViewport(0, 0, width, height);
+    renderer_->SetSceneViewport(observerWidth, 0, cameraWidth, height);
+    DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
+        eoCamera_->GetPosition());
     renderer_->EndFrame();
-
-    CaptureEoFrame(observerWidth, eoWidth, height);
-#ifndef __EMSCRIPTEN__
+#else
     if (hud_)
     {
         const bool groundControlConnected = lastGroundControlMessage_
             && std::chrono::steady_clock::now() - *lastGroundControlMessage_
                 < std::chrono::seconds(2);
-        hud_->Render(simulation_, gamepadConnected_, groundControlConnected);
+        const bool cameraActive = simulation_.Camera().status
+            == aerosimlab::simulation::CameraStatus::Active;
+        hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
+            [this](int width, int height) { return RenderScenePanel(width, height); },
+            [this](int width, int height) { return RenderCameraPanel(width, height); });
     }
 #endif
 }
 
-void AeroSimLabApp::UpdateCameraTransforms(int observerWidth, int eoWidth, int height)
+void AeroSimLabApp::UpdateObserverCamera(int width, int height)
 {
     const auto& state = simulation_.State();
-    const auto& cameraState = simulation_.Camera();
     const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
+    observerCamera_->SetPosition(dronePosition + glm::vec3{80.0F, 45.0F, 80.0F});
+    observerCamera_->SetTarget(dronePosition + glm::vec3{0.0F, 0.2F, 0.0F});
+    observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
+}
+
+void AeroSimLabApp::UpdateEoCamera(int width, int height)
+{
+    const auto& cameraState = simulation_.Camera();
     const glm::vec3 cameraPosition = ToRenderPosition(cameraState.positionMeters);
     const glm::mat4 cameraOrientation = glm::mat4_cast(
         ToRenderOrientation(cameraState.orientation));
-
-    observerCamera_->SetPosition(dronePosition + glm::vec3{80.0F, 45.0F, 80.0F});
-    observerCamera_->SetTarget(dronePosition + glm::vec3{0.0F, 0.2F, 0.0F});
-    observerCamera_->SetAspectRatio(static_cast<float>(observerWidth) / static_cast<float>(height));
 
     const glm::vec3 viewDirection = glm::vec3{
         cameraOrientation * glm::vec4{25.0F, -2.5F, 0.0F, 0.0F}};
@@ -513,19 +526,43 @@ void AeroSimLabApp::UpdateCameraTransforms(int observerWidth, int eoWidth, int h
     eoCamera_->SetPosition(cameraPosition);
     eoCamera_->SetTarget(cameraPosition + viewDirection);
     eoCamera_->SetUp(cameraUp);
-    eoCamera_->SetAspectRatio(static_cast<float>(eoWidth) / static_cast<float>(height));
+    eoCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
 }
 
-void AeroSimLabApp::CaptureEoFrame(int observerWidth, int eoWidth, int height)
+#ifndef __EMSCRIPTEN__
+std::uint32_t AeroSimLabApp::RenderScenePanel(int width, int height)
+{
+    sceneTarget_->Resize(width, height);
+    UpdateObserverCamera(width, height);
+    renderer_->BeginView(*sceneTarget_);
+    DrawWorld(observerCamera_->GetViewMatrix(), observerCamera_->GetProjectionMatrix(),
+        observerCamera_->GetPosition());
+    renderer_->EndView(*sceneTarget_);
+    return sceneTarget_->GetTextureId();
+}
+
+std::uint32_t AeroSimLabApp::RenderCameraPanel(int width, int height)
+{
+    cameraTarget_->Resize(width, height);
+    UpdateEoCamera(width, height);
+    renderer_->BeginView(*cameraTarget_);
+    DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
+        eoCamera_->GetPosition());
+    renderer_->EndView(*cameraTarget_);
+    CaptureEoFrame();
+    return cameraTarget_->GetTextureId();
+}
+
+void AeroSimLabApp::CaptureEoFrame()
 {
     const auto& camera = simulation_.Camera();
     if (camera.status == aerosimlab::simulation::CameraStatus::Active
         && camera.lastFrameTick > eoFrame_.simulationTick)
     {
-        eoFrame_.width = eoWidth;
-        eoFrame_.height = height;
+        eoFrame_.width = cameraTarget_->GetWidth();
+        eoFrame_.height = cameraTarget_->GetHeight();
         eoFrame_.simulationTick = camera.lastFrameTick;
-        renderer_->ReadRgbPixels(observerWidth, 0, eoWidth, height, eoFrame_.pixels);
+        cameraTarget_->ReadRgbPixels(eoFrame_.pixels);
         eoFrame_.FlipVertical();
 #ifndef __EMSCRIPTEN__
         const auto analysisStart = std::chrono::steady_clock::now();
@@ -544,6 +581,7 @@ void AeroSimLabApp::CaptureEoFrame(int observerWidth, int eoWidth, int height)
 #endif
     }
 }
+#endif
 
 void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition)

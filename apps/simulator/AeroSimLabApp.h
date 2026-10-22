@@ -24,6 +24,7 @@ namespace aerosimlab::graphics
 {
 class Camera;
 class Mesh;
+class MultisampleFramebuffer;
 class Renderer;
 class Shader;
 class Texture2D;
@@ -42,8 +43,8 @@ namespace aerosimlab::simulator
 class SimulatorHud;
 
 /**
- * @brief 드론 모의를 진행하고 관찰 화면과 탑재 카메라 화면을 나란히 그린다.
- * @details 드론 위치는 미터, 모의 간격은 1/60초다. 왼쪽 화면은 드론 주변을 보는 관찰자 시점이고 오른쪽은 기체 앞쪽에 고정한 RGB 카메라 시점이다.
+ * @brief 드론 모의를 진행하고 장면과 탑재 카메라 영상을 시뮬레이터 창에 그린다.
+ * @details 드론 위치는 미터, 모의 간격은 1/60초다. 장면과 카메라 영상은 크기와 위치를 바꿀 수 있는 별도 패널에 표시한다.
  * 화면 갱신 속도와 모의 속도를 분리해, 렌더링이 느려져도 같은 고정 간격으로 드론 상태를 계산한다.
  */
 class AeroSimLabApp
@@ -111,10 +112,16 @@ private:
     void WriteBenchmarkReport(double elapsedSeconds) const;
     [[nodiscard]] aerosimlab::communication::Telemetry CurrentTelemetry() const;
     void RenderFrame();
-    /** @brief 드론의 현재 자세에 맞춰 관찰 카메라와 EO 카메라를 배치한다. */
-    void UpdateCameraTransforms(int observerWidth, int eoWidth, int height);
-    /** @brief 새 EO 화면을 픽셀로 읽고 지원되는 빌드에서는 영상 품질도 계산한다. */
-    void CaptureEoFrame(int observerWidth, int eoWidth, int height);
+    /** @brief 화면 크기에 맞춰 관찰 카메라의 시야 비율을 갱신한다. */
+    void UpdateObserverCamera(int width, int height);
+    /** @brief 화면 크기에 맞춰 EO 카메라의 시야 비율을 갱신한다. */
+    void UpdateEoCamera(int width, int height);
+#ifndef __EMSCRIPTEN__
+    [[nodiscard]] std::uint32_t RenderScenePanel(int width, int height);
+    [[nodiscard]] std::uint32_t RenderCameraPanel(int width, int height);
+    /** @brief 새 EO 화면을 픽셀로 읽고 영상 품질을 계산한다. */
+    void CaptureEoFrame();
+#endif
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition);
     void DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
@@ -174,6 +181,10 @@ private:
     std::unique_ptr<SimulatorHud> hud_;
 #endif
     std::unique_ptr<aerosimlab::graphics::Renderer> renderer_;
+#ifndef __EMSCRIPTEN__
+    std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> sceneTarget_;
+    std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> cameraTarget_;
+#endif
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
