@@ -3,7 +3,6 @@
 #ifdef _WIN32
 #define NOMINMAX
 #include <Windows.h>
-#include <Psapi.h>
 #endif
 
 #include "graphics/Camera.h"
@@ -29,24 +28,15 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
-#ifndef _WIN32
-#include <iostream>
-#endif
 #include <string>
 #include <ctime>
 #include <cmath>
 #include <nlohmann/json.hpp>
 #include <utility>
 #include <vector>
-
-#ifndef __EMSCRIPTEN__
-#include <GLFW/glfw3.h>
-#endif
 
 namespace aerosimlab::simulator
 {
@@ -62,22 +52,6 @@ constexpr glm::dvec2 demoDroneStartMeters{171.3545, -92.7667};
 constexpr double benchmarkDurationSeconds = 5.0;
 // OSM에 높이가 없어서 시연 상자에만 쓰는 명시적 가정이다. 실측값이 아니다.
 constexpr float missingBuildingHeightProxyMeters = 3.0F;
-
-std::filesystem::path BenchmarkOutputPath()
-{
-#ifdef _WIN32
-    std::wstring executablePath(32768U, L'\0');
-    const DWORD pathLength = GetModuleFileNameW(
-        nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
-    if (pathLength == 0U || pathLength >= executablePath.size())
-        throw std::runtime_error("실행 파일의 위치를 확인할 수 없습니다.");
-
-    executablePath.resize(pathLength);
-    return std::filesystem::path(executablePath).parent_path() / L"benchmark-latest.json";
-#else
-    return std::filesystem::current_path() / "benchmark-latest.json";
-#endif
-}
 
 glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
 {
@@ -220,8 +194,15 @@ int AeroSimLabApp::Run()
         previousFrame = now;
 
         AdvanceSimulation(frameSeconds);
+        const auto renderStart = std::chrono::steady_clock::now();
         RenderFrame();
         window_->SwapBuffers();
+        if (benchmarkMode_)
+        {
+            renderFrameDurationsMicroseconds_.push_back(
+                std::chrono::duration<double, std::micro>(
+                    std::chrono::steady_clock::now() - renderStart).count());
+        }
         ++renderedFrames_;
 
         if (smokeTest_ && !networkEnabled_ && renderedFrames_ >= smokeTestFrameLimit)
@@ -366,6 +347,13 @@ void AeroSimLabApp::AdvanceSimulationTick()
 #else
     constexpr bool hasGroundCommand = false;
 #endif
+    if (!hasGroundCommand && !groundControlCommandExpiresAtTick_ && groundControlActive_)
+    {
+        groundControlActive_ = false;
+        window_->SetTitle(gamepadConnected_
+            ? "AeroSimLab | 게임패드 연결됨"
+            : "AeroSimLab | 드론 관찰 · EO 영상");
+    }
     ApplyGroundCommand();
     if (hasGroundCommand)
         return;
@@ -535,431 +523,6 @@ void AeroSimLabApp::CaptureEoFrame(int observerWidth, int eoWidth, int height)
     }
 }
 
-void AeroSimLabApp::PollGroundControl()
-{
-#ifdef __EMSCRIPTEN__
-    return;
-#else
-    if (!udpSocket_)
-        return;
-
-    for (int receivedCount = 0; receivedCount < 16; ++receivedCount)
-    {
-        aerosimlab::communication::UdpPeer peer;
-        const auto datagram = udpSocket_->Receive(peer);
-        if (!datagram)
-            return;
-
-        ProcessGroundDatagram(*datagram, peer);
-    }
-#endif
-}
-
-#ifndef __EMSCRIPTEN__
-void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
-    const aerosimlab::communication::UdpPeer& peer)
-{
-    try
-    {
-        const auto packet = aerosimlab::communication::DecodeCommand(datagram);
-        if (activePeer_ && (activePeer_->addressNetworkOrder != peer.addressNetworkOrder
-            || activePeer_->portNetworkOrder != peer.portNetworkOrder) && !pendingCommand_)
-        {
-            activePeer_ = peer;
-            sequenceGuard_ = {};
-            lastReply_.reset();
-        }
-        else if (!activePeer_)
-        {
-            activePeer_ = peer;
-        }
-
-        const auto decision = sequenceGuard_.Inspect(packet);
-        if (decision == aerosimlab::communication::SequenceGuard::Decision::Duplicate)
-        {
-            if (lastReply_)
-                udpSocket_->Send(aerosimlab::communication::EncodeReply(*lastReply_), peer);
-            return;
-        }
-        if (decision == aerosimlab::communication::SequenceGuard::Decision::OutOfOrder)
-        {
-            aerosimlab::communication::CommandReply reply;
-            reply.commandId = packet.commandId;
-            reply.sequence = packet.sequence;
-            reply.status = "rejected_sequence";
-            reply.telemetry = CurrentTelemetry();
-            udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
-            return;
-        }
-        if (pendingCommand_)
-        {
-            aerosimlab::communication::CommandReply reply;
-            reply.commandId = packet.commandId;
-            reply.sequence = packet.sequence;
-            reply.status = "busy";
-            reply.telemetry = CurrentTelemetry();
-            udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
-            return;
-        }
-
-        sequenceGuard_.Commit(packet);
-        externalControl_ = true;
-        if (!packet.sessionCommand)
-        {
-            groundControlActive_ = true;
-            window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
-        }
-        pendingControllerAction_.reset();
-        pendingPilotCommand_.reset();
-        const auto elapsed = std::chrono::steady_clock::now() - startTime_;
-        const auto receivedAtMs = static_cast<std::uint64_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
-        pendingCommand_ = PendingGroundCommand{packet, peer, receivedAtMs};
-    }
-    catch (const std::exception& error)
-    {
-        udpSocket_->Send(aerosimlab::communication::EncodeError(error.what()), peer);
-    }
-}
-#endif
-
-void AeroSimLabApp::PollGamepad()
-{
-#ifdef __EMSCRIPTEN__
-    return;
-#else
-    GLFWgamepadstate state{};
-    const bool connected = glfwJoystickIsGamepad(GLFW_JOYSTICK_1) == GLFW_TRUE
-        && glfwGetGamepadState(GLFW_JOYSTICK_1, &state) == GLFW_TRUE;
-
-    if (!connected)
-    {
-        HandleGamepadDisconnected();
-        return;
-    }
-
-    const bool takeoffPressed = state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
-    const bool landPressed = state.buttons[GLFW_GAMEPAD_BUTTON_B] == GLFW_PRESS;
-    std::optional<aerosimlab::manual_control::GamepadAxes> pilotAxes;
-    if (!groundControlActive_)
-    {
-        const auto mode = simulation_.State().mode;
-        const bool airborne = mode == aerosimlab::simulation::FlightMode::Hovering
-            || mode == aerosimlab::simulation::FlightMode::Flying;
-        if (airborne)
-        {
-            // GLFW 트리거 값은 -1부터 시작하므로 0~1로 바꾼 뒤 양쪽 입력 차이를 높이 명령으로 쓴다.
-            const auto triggerValue = [](float value)
-            {
-                return (static_cast<double>(value) + 1.0) * 0.5;
-            };
-            pilotAxes = aerosimlab::manual_control::GamepadAxes{
-                .forward = -static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]),
-                .right = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_X]),
-                .vertical = triggerValue(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER])
-                    - triggerValue(state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER]),
-                .yaw = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X])
-            };
-        }
-    }
-    HandleGamepadConnected(takeoffPressed, landPressed, pilotAxes);
-#endif
-}
-
-void AeroSimLabApp::HandleGamepadDisconnected()
-{
-    using DisconnectAction = aerosimlab::manual_control::GamepadDisconnectAction;
-    const auto action = aerosimlab::manual_control::ResolveGamepadDisconnectAction(
-        gamepadConnected_, groundControlActive_ || commandRecording_.IsReplaying(), simulation_.State().mode);
-    if (action == DisconnectAction::NoChange)
-        return;
-
-    pendingControllerAction_.reset();
-    window_->SetTitle(groundControlActive_
-        ? "AeroSimLab | 지상통제 입력 사용 중"
-        : "AeroSimLab | 드론 관찰 · EO 영상");
-    switch (action)
-    {
-    case DisconnectAction::Land:
-        pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-            aerosimlab::simulation::DroneCommand::Kind::Land};
-        break;
-    case DisconnectAction::Stop:
-        pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-            aerosimlab::simulation::DroneCommand::Kind::Stop};
-        break;
-    case DisconnectAction::NoChange:
-    case DisconnectAction::ClearPendingAction:
-        break;
-    }
-    if (!groundControlActive_)
-        pendingPilotCommand_.reset();
-    gamepadConnected_ = false;
-    previousTakeoffButton_ = false;
-    previousLandButton_ = false;
-}
-
-void AeroSimLabApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed,
-    const std::optional<aerosimlab::manual_control::GamepadAxes>& pilotAxes)
-{
-    if (!gamepadConnected_ && !groundControlActive_)
-        window_->SetTitle("AeroSimLab | 게임패드 연결됨");
-    gamepadConnected_ = true;
-    externalControl_ = true;
-
-    if (aerosimlab::manual_control::CanGamepadControlSimulation(
-            groundControlActive_, commandRecording_.IsReplaying()))
-    {
-        if (takeoffPressed && !previousTakeoffButton_
-            && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
-        {
-            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-                aerosimlab::simulation::DroneCommand::Kind::TakeOff};
-        }
-        if (landPressed && !previousLandButton_
-            && simulation_.State().mode != aerosimlab::simulation::FlightMode::Grounded)
-        {
-            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-                aerosimlab::simulation::DroneCommand::Kind::Land};
-        }
-
-        if (pilotAxes)
-            pendingPilotCommand_ = aerosimlab::manual_control::MapAxes(
-                *pilotAxes, simulation_.State().yawRadians);
-    }
-    else if (commandRecording_.IsReplaying())
-    {
-        pendingControllerAction_.reset();
-        pendingPilotCommand_.reset();
-    }
-
-    previousTakeoffButton_ = takeoffPressed;
-    previousLandButton_ = landPressed;
-}
-
-bool AeroSimLabApp::ApplySessionCommand(
-    aerosimlab::communication::SessionCommand command,
-    aerosimlab::communication::CommandReply& reply)
-{
-    using Command = aerosimlab::communication::SessionCommand;
-    using FlightMode = aerosimlab::simulation::FlightMode;
-
-    switch (command)
-    {
-    case Command::StartRecording:
-        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
-        {
-            reply.status = "recording_unavailable";
-            return false;
-        }
-        if (simulation_.State().mode != FlightMode::Grounded)
-        {
-            reply.status = "recording_requires_grounded";
-            return false;
-        }
-
-        simulation_.Reset();
-        eoFrame_ = {};
-        groundControlCommandExpiresAtTick_.reset();
-        (void)commandRecording_.StartRecording();
-        externalControl_ = true;
-        window_->SetTitle("AeroSimLab | 입력 기록 중");
-        reply.accepted = true;
-        reply.status = "recording_started";
-        return false;
-
-    case Command::StopRecording:
-        if (!commandRecording_.IsRecording())
-        {
-            reply.status = "recording_not_active";
-            return false;
-        }
-
-        (void)commandRecording_.StopRecording();
-        window_->SetTitle("AeroSimLab | 입력 기록 완료");
-        reply.accepted = true;
-        reply.status = "recording_stopped";
-        return false;
-
-    case Command::ReplayRecording:
-        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
-        {
-            reply.status = "recording_unavailable";
-            return false;
-        }
-        if (!commandRecording_.StartReplay())
-        {
-            reply.status = "recording_empty";
-            return false;
-        }
-
-        simulation_.Reset();
-        eoFrame_ = {};
-        groundControlCommandExpiresAtTick_.reset();
-        smokeReplayStarted_ = smokeTest_;
-        pendingControllerAction_.reset();
-        pendingPilotCommand_.reset();
-        window_->SetTitle("AeroSimLab | 입력 기록 재생 중");
-        ApplyRecordedCommands();
-        simulation_.AdvanceOneTick();
-        commandRecording_.AdvanceReplayTick();
-        reply.accepted = true;
-        reply.status = "recording_replay_started";
-        return true;
-    }
-
-    return false;
-}
-
-void AeroSimLabApp::ApplyDroneCommand(
-    const aerosimlab::simulation::DroneCommand& command,
-    aerosimlab::communication::CommandReply& reply)
-{
-    if (commandRecording_.IsReplaying())
-    {
-        commandRecording_.StopReplay();
-        window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
-    }
-
-    const auto result = simulation_.Apply(command);
-    reply.accepted = result == aerosimlab::simulation::CommandResult::Accepted;
-    if (reply.accepted)
-    {
-        RecordCommand(command);
-        const bool velocityCommand = command.kind
-            == aerosimlab::simulation::DroneCommand::Kind::SetVelocity;
-        const bool yawRateCommand = command.kind
-            == aerosimlab::simulation::DroneCommand::Kind::SetYawRate;
-        const bool hasNonzeroInput = velocityCommand
-            ? glm::length(command.vector) > 0.0
-            : command.yawRateRadiansPerSecond != 0.0;
-        if ((velocityCommand || yawRateCommand) && hasNonzeroInput)
-        {
-            groundControlCommandExpiresAtTick_ = simulation_.TickCount()
-                + groundControlCommandTimeoutTicks_;
-        }
-        else
-        {
-            groundControlCommandExpiresAtTick_.reset();
-        }
-    }
-
-    using Result = aerosimlab::simulation::CommandResult;
-    switch (result)
-    {
-    case Result::Accepted: reply.status = "applied"; break;
-    case Result::InvalidValue: reply.status = "invalid_value"; break;
-    case Result::InvalidFlightMode: reply.status = "invalid_flight_mode"; break;
-    case Result::UnsupportedDynamics: reply.status = "unsupported_dynamics"; break;
-    case Result::SimulationPaused: reply.status = "simulation_paused"; break;
-    }
-}
-
-void AeroSimLabApp::ApplyCameraCommand(
-    aerosimlab::communication::CameraCommand command,
-    aerosimlab::communication::CommandReply& reply)
-{
-    using Command = aerosimlab::communication::CameraCommand;
-    switch (command)
-    {
-    case Command::Enable: simulation_.SetCameraEnabled(true); break;
-    case Command::Disable: simulation_.SetCameraEnabled(false); break;
-    case Command::InjectFault: simulation_.SetCameraFault(true); break;
-    case Command::Recover: simulation_.SetCameraFault(false); break;
-    }
-
-    reply.accepted = true;
-    reply.status = "applied";
-}
-
-void AeroSimLabApp::ExpireGroundControlCommand()
-{
-    if (!groundControlCommandExpiresAtTick_
-        || simulation_.TickCount() < *groundControlCommandExpiresAtTick_)
-        return;
-
-    const aerosimlab::simulation::DroneCommand stop{
-        aerosimlab::simulation::DroneCommand::Kind::Stop};
-    if (simulation_.Apply(stop) == aerosimlab::simulation::CommandResult::Accepted)
-        RecordCommand(stop);
-    groundControlCommandExpiresAtTick_.reset();
-}
-
-void AeroSimLabApp::ApplyGroundCommand()
-{
-#ifdef __EMSCRIPTEN__
-    return;
-#else
-    if (!pendingCommand_)
-        return;
-
-    const auto& pending = *pendingCommand_;
-    aerosimlab::communication::CommandReply reply;
-    reply.commandId = pending.packet.commandId;
-    reply.sequence = pending.packet.sequence;
-    reply.receivedAtMilliseconds = pending.receivedAtMilliseconds;
-
-    const bool wasRecordingAtTickStart = commandRecording_.IsRecording();
-    bool replayTickAdvanced = false;
-    if (pending.packet.sessionCommand)
-        replayTickAdvanced = ApplySessionCommand(*pending.packet.sessionCommand, reply);
-    else if (pending.packet.droneCommand)
-        ApplyDroneCommand(*pending.packet.droneCommand, reply);
-    else if (pending.packet.cameraCommand)
-        ApplyCameraCommand(*pending.packet.cameraCommand, reply);
-
-    if (!replayTickAdvanced)
-        simulation_.AdvanceOneTick();
-    commandRecording_.FinishTick(wasRecordingAtTickStart);
-
-    if (commandRecording_.IsReplaying() && commandRecording_.ReplayFinished())
-    {
-        commandRecording_.StopReplay();
-        window_->SetTitle("AeroSimLab | 기록 재생 완료");
-    }
-    reply.appliedTick = simulation_.TickCount();
-    reply.telemetry = CurrentTelemetry();
-    lastReply_ = reply;
-    try
-    {
-        udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), pending.peer);
-    }
-    catch (const std::exception& error)
-    {
-#ifdef _WIN32
-        const std::string message = std::string("지상통제 응답 전송 실패: ") + error.what() + "\n";
-        OutputDebugStringA(message.c_str());
-#else
-        (void)error;
-#endif
-    }
-    pendingCommand_.reset();
-#endif
-}
-
-void AeroSimLabApp::ApplyRecordedCommands()
-{
-    for (const auto& entry : commandRecording_.CommandsForReplayTick())
-    {
-        (void)simulation_.Apply(entry.command);
-    }
-}
-
-void AeroSimLabApp::RecordCommand(const aerosimlab::simulation::DroneCommand& command)
-{
-    commandRecording_.Record(command);
-}
-
-aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
-{
-    aerosimlab::communication::Telemetry telemetry;
-    telemetry.tick = simulation_.TickCount();
-    telemetry.simulationTimeSeconds = simulation_.SimulationTimeSeconds();
-    telemetry.drone = simulation_.State();
-    telemetry.camera = simulation_.Camera();
-    return telemetry;
-}
-
 void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition)
 {
@@ -998,63 +561,35 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         return reinterpret_cast<const char*>(glGetString(name));
     };
 
-    std::vector<double> durations = tickDurationsMicroseconds_;
-    const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
-        durations.begin(), durations.end(), [](double duration)
-        {
-            return duration > 1'000'000.0 / 60.0;
-        }));
+    ViewerBenchmarkMeasurements measurements;
+    measurements.sourceRevision = AEROSIMLAB_SOURCE_REVISION;
+    measurements.framebufferWidth = framebufferWidth;
+    measurements.framebufferHeight = framebufferHeight;
+    measurements.graphicsRenderer = glString(GL_RENDERER);
+    measurements.graphicsVersion = glString(GL_VERSION);
+    measurements.elapsedSeconds = elapsedSeconds;
+    measurements.simulationTicks = simulation_.TickCount();
+    measurements.renderedFrames = renderedFrames_;
+    measurements.processCpuSeconds = static_cast<double>(
+        std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC;
+    measurements.tickDurationsMicroseconds = tickDurationsMicroseconds_;
+    measurements.renderFrameDurationsMicroseconds = renderFrameDurationsMicroseconds_;
 #ifndef __EMSCRIPTEN__
-    std::vector<double> physicsStepDurations = physicsStepDurationsMicroseconds_;
-    std::vector<double> visionDurations = visionDurationsMicroseconds_;
+    measurements.physicsStepDurationsMicroseconds = physicsStepDurationsMicroseconds_;
+    measurements.visionDurationsMicroseconds = visionDurationsMicroseconds_;
+    measurements.visionSampleCount = visionSampleCount_;
+    if (visionSampleCount_ > 0)
+    {
+        const double sampleCount = static_cast<double>(visionSampleCount_);
+        measurements.meanBrightness = totalMeanBrightness_ / sampleCount;
+        measurements.meanContrast = totalMeanContrast_ / sampleCount;
+        measurements.meanSharpness = totalSharpness_ / sampleCount;
+    }
 #endif
-    nlohmann::json report{
-        {"configuration", "Windows Release; hidden OpenGL window; one drone; SRTM terrain; 17 OSM building boxes; 49 park facilities; PX4 X500 and park facility meshes"},
-        {"source_revision", AEROSIMLAB_SOURCE_REVISION},
-        {"framebuffer", {{"width", framebufferWidth}, {"height", framebufferHeight}}},
-        {"opengl", {{"renderer", glString(GL_RENDERER)}, {"version", glString(GL_VERSION)}}},
-        {"elapsed_seconds", elapsedSeconds},
-        {"simulation_ticks", simulation_.TickCount()},
-        {"rendered_frames", renderedFrames_},
-        {"render_fps", elapsedSeconds > 0.0 ? static_cast<double>(renderedFrames_) / elapsedSeconds : 0.0},
-        {"tick_duration_us", SummarizeDurations(std::move(durations))},
-        {"process_cpu_percent_approx", elapsedSeconds > 0.0
-            ? 100.0 * static_cast<double>(std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC / elapsedSeconds : 0.0}
-    };
-    report["tick_duration_us"]["deadline_misses_over_16_67ms"] = deadlineMisses;
-#ifndef __EMSCRIPTEN__
-    report["physics_step_duration_us"] = SummarizeDurations(std::move(physicsStepDurations));
-    report["vision_analysis"] = {
-        {"samples", visionSampleCount_},
-        {"mean_brightness", visionSampleCount_ > 0
-            ? totalMeanBrightness_ / static_cast<double>(visionSampleCount_) : 0.0},
-        {"mean_contrast", visionSampleCount_ > 0
-            ? totalMeanContrast_ / static_cast<double>(visionSampleCount_) : 0.0},
-        {"mean_sharpness", visionSampleCount_ > 0
-            ? totalSharpness_ / static_cast<double>(visionSampleCount_) : 0.0},
-        {"duration_us", SummarizeDurations(std::move(visionDurations))}
-    };
-#endif
-#ifdef _WIN32
-    PROCESS_MEMORY_COUNTERS memory{};
-    memory.cb = sizeof(memory);
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
-        report["working_set_bytes"] = memory.WorkingSetSize;
-#endif
+    nlohmann::json report = BuildViewerBenchmarkReport(std::move(measurements));
 #ifndef __EMSCRIPTEN__
     report["entity_scaling"] = MeasureDroneScaling();
 #endif
-    const std::string output = report.dump(2) + '\n';
-    std::ofstream resultFile(BenchmarkOutputPath(), std::ios::binary | std::ios::trunc);
-    if (!resultFile)
-        throw std::runtime_error("성능 측정 결과 파일을 저장할 수 없습니다.");
-    resultFile.write(output.data(), static_cast<std::streamsize>(output.size()));
-    if (!resultFile)
-        throw std::runtime_error("성능 측정 결과를 파일에 모두 쓰지 못했습니다.");
-#ifdef _WIN32
-    OutputDebugStringA(output.c_str());
-#else
-    std::cout << output;
-#endif
+    SaveViewerBenchmarkReport(report);
 }
 }

@@ -6,7 +6,7 @@
 
 namespace aerosimlab::vision
 {
-TEST(RgbFrameView, SharesValidPixelsAndRejectsInvalidFrames)
+void Verify_RgbFrameView_SharesValidPixelsAndRejectsInvalidFrames()
 {
     sensor::RgbFrame frame{2, 1, 3, {1, 2, 3, 4, 5, 6}};
 
@@ -22,4 +22,10 @@ TEST(RgbFrameView, SharesValidPixelsAndRejectsInvalidFrames)
     sensor::RgbFrame invalidFrame{2, 1, 0, {1, 2, 3}};
     EXPECT_THROW(static_cast<void>(MakeRgbFrameView(invalidFrame)), std::invalid_argument);
 }
+
+TEST(RgbFrameViewTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_RgbFrameView_SharesValidPixelsAndRejectsInvalidFrames());
+}
+
 }

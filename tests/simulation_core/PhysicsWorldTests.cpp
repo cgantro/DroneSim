@@ -1,8 +1,7 @@
 #include "simulation_core/PhysicsWorld.h"
-#include "terrain/BuildingFootprint.h"
-#include "terrain/StaticFacility.h"
-#include "terrain/TerrainGrid.h"
 #include "simulation_core/QuadrotorModel.h"
+#include "terrain/BuildingFootprint.h"
+#include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
 
@@ -10,358 +9,252 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
-#include <iterator>
-#include <limits>
 #include <stdexcept>
-#include <vector>
+#include <utility>
 
 namespace aerosimlab::simulation
 {
 namespace
 {
-RigidBodyHandle MakeBody(PhysicsWorld& world, glm::dvec3 position)
-{
-    RigidBodyDefinition definition;
-    definition.halfExtentsMeters = {0.1F, 0.1F, 0.1F};
-    definition.positionMeters = position;
-    definition.massKilograms = 2.0;
-    return world.CreateBox(definition);
-}
-}
-
-TEST(PhysicsWorld, GravityAcceleratesAFreeBodyDownward)
-{
-    PhysicsWorld world;
-    constexpr double stepSeconds = 1.0 / 60.0;
-    constexpr int tickCount = 60;
-    constexpr double gravityMetersPerSecondSquared = 9.81;
-    const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 10.0});
-
-    double physicsStepDurationMicroseconds = 0.0;
-    world.Step(stepSeconds, 1, &physicsStepDurationMicroseconds);
-    EXPECT_GT(physicsStepDurationMicroseconds, 0.0);
-    for (int tick = 1; tick < tickCount; ++tick)
-        world.Step(stepSeconds);
-
-    const RigidBodyState state = world.State(body);
-    // Jolt는 매 단계에서 속도를 먼저 갱신한 뒤, 그 속도로 위치를 움직인다.
-    const double expectedPosition = 10.0
-        - gravityMetersPerSecondSquared * stepSeconds * stepSeconds
-            * tickCount * (tickCount + 1) / 2.0;
-    EXPECT_NEAR(state.linearVelocityMetersPerSecond.z,
-        -gravityMetersPerSecondSquared * tickCount * stepSeconds, 0.03);
-    EXPECT_NEAR(state.positionMeters.z, expectedPosition, 0.01);
-}
-
-TEST(PhysicsWorld, ConstantForceProducesMassDependentAcceleration)
-{
-    PhysicsWorld world;
-    RigidBodyDefinition lightDefinition;
-    lightDefinition.positionMeters = {-1.0, 0.0, 10.0};
-    lightDefinition.massKilograms = 2.0;
-    const RigidBodyHandle lightBody = world.CreateBox(lightDefinition);
-
-    RigidBodyDefinition heavyDefinition;
-    heavyDefinition.positionMeters = {1.0, 0.0, 10.0};
-    heavyDefinition.massKilograms = 4.0;
-    const RigidBodyHandle heavyBody = world.CreateBox(heavyDefinition);
-
-    for (int tick = 0; tick < 60; ++tick)
-    {
-        world.ApplyForce(lightBody, {0.0, 0.0, 24.0});
-        world.ApplyForce(heavyBody, {0.0, 0.0, 24.0});
-        world.Step(1.0 / 60.0);
-    }
-
-    // 위쪽을 양수로 두면 가속도는 힘/질량에서 중력을 뺀 값이다.
-    const double gravityMetersPerSecondSquared = 9.81;
-    // Z축에만 토크를 주므로 각가속도는 토크/해당 축 관성이다.
-    const double elapsedSeconds = 1.0;
-    const double lightExpectedVelocity = (24.0 / 2.0 - gravityMetersPerSecondSquared)
-        * elapsedSeconds;
-    const double heavyExpectedVelocity = (24.0 / 4.0 - gravityMetersPerSecondSquared)
-        * elapsedSeconds;
-    EXPECT_NEAR(world.State(lightBody).linearVelocityMetersPerSecond.z,
-        lightExpectedVelocity, 0.03);
-    EXPECT_NEAR(world.State(heavyBody).linearVelocityMetersPerSecond.z,
-        heavyExpectedVelocity, 0.03);
-}
-
-TEST(PhysicsWorld, X500RotorThrustKeepsTheBodyHovering)
+RigidBodyHandle MakeX500(PhysicsWorld& world, double heightMeters)
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    const double hoverSpeed = std::sqrt(
-        parameters.massKilograms * 9.81
-        / (QuadrotorModel::rotorCount * parameters.thrustCoefficientNewtonsPerSpeedSquared));
-    QuadrotorState motors;
-    motors.motorSpeedRadiansPerSecond.fill(hoverSpeed);
-    const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(motors, parameters);
+    RigidBodyDefinition definition;
+    definition.positionMeters.z = heightMeters;
+    return world.CreateQuadrotor(definition, parameters);
+}
 
+RigidBodyState SimulateMotorInput(
+    const QuadrotorParameters& parameters,
+    const std::array<double, QuadrotorParameters::rotorCount>& motorTargets)
+{
     PhysicsWorld world;
     RigidBodyDefinition definition;
-    definition.positionMeters = {0.0, 0.0, 2.0};
-    definition.massKilograms = parameters.massKilograms;
-    definition.principalInertiaKilogramMetersSquared =
-        parameters.principalInertiaKilogramMetersSquared;
-    const RigidBodyHandle body = world.CreateBox(definition);
-
-    for (int tick = 0; tick < 120; ++tick)
-    {
-        world.ApplyForce(body, wrench.forceNewtons);
-        world.ApplyTorque(body, wrench.torqueNewtonMeters);
+    definition.positionMeters.z = 10.0;
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    world.SetMotorTargets(drone, motorTargets);
+    for (int tick = 0; tick < 12; ++tick)
         world.Step(1.0 / 60.0);
-    }
-
-    const RigidBodyState result = world.State(body);
-    EXPECT_NEAR(result.positionMeters.z, 2.0, 0.01);
-    EXPECT_NEAR(result.linearVelocityMetersPerSecond.z, 0.0, 0.01);
+    return world.State(drone);
+}
 }
 
-TEST(PhysicsWorld, AngularResponseUsesProvidedInertia)
+void Verify_AirSimPhysics_GravityMovesTheDroneDown()
 {
     PhysicsWorld world;
-    RigidBodyDefinition lowInertiaDefinition;
-    lowInertiaDefinition.positionMeters = {-1.0, 0.0, 10.0};
-    lowInertiaDefinition.principalInertiaKilogramMetersSquared = {0.02, 0.02, 0.02};
-    const RigidBodyHandle lowInertiaBody = world.CreateBox(lowInertiaDefinition);
-
-    RigidBodyDefinition highInertiaDefinition;
-    highInertiaDefinition.positionMeters = {1.0, 0.0, 10.0};
-    highInertiaDefinition.principalInertiaKilogramMetersSquared = {0.02, 0.02, 0.08};
-    const RigidBodyHandle highInertiaBody = world.CreateBox(highInertiaDefinition);
+    const RigidBodyHandle drone = MakeX500(world, 10.0);
 
     for (int tick = 0; tick < 60; ++tick)
-    {
-        world.ApplyTorque(lowInertiaBody, {0.0, 0.0, 0.2});
-        world.ApplyTorque(highInertiaBody, {0.0, 0.0, 0.2});
         world.Step(1.0 / 60.0);
-    }
 
-    const double elapsedSeconds = 1.0;
-    const double appliedTorqueNewtonMeters = 0.2;
-    EXPECT_NEAR(
-        world.State(lowInertiaBody).angularVelocityRadiansPerSecond.z,
-        appliedTorqueNewtonMeters / 0.02 * elapsedSeconds,
-        0.05);
-    EXPECT_NEAR(
-        world.State(highInertiaBody).angularVelocityRadiansPerSecond.z,
-        appliedTorqueNewtonMeters / 0.08 * elapsedSeconds,
-        0.05);
+    const RigidBodyState state = world.State(drone);
+    EXPECT_LT(state.positionMeters.z, 6.0);
+    EXPECT_LT(state.linearVelocityMetersPerSecond.z, -8.0);
 }
 
-TEST(PhysicsWorld, TorqueChangesAngularVelocityAndOrientation)
+void Verify_AirSimPhysics_RotorTargetsLiftTheDrone()
 {
     PhysicsWorld world;
-    const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 10.0});
+    const RigidBodyHandle drone = MakeX500(world, 2.0);
+    const auto parameters = QuadrotorParameters::X500Gazebo();
+    const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
+        / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(hoverSpeed * 1.2);
+    world.SetMotorTargets(drone, motorTargets);
 
-    for (int tick = 0; tick < 30; ++tick)
-    {
-        world.ApplyTorque(body, {0.0, 0.0, 0.2});
+    for (int tick = 0; tick < 120; ++tick)
         world.Step(1.0 / 60.0);
-    }
 
-    const RigidBodyState state = world.State(body);
-    EXPECT_GT(state.angularVelocityRadiansPerSecond.z, 0.1);
-    EXPECT_GT(std::abs(state.orientation.z), 0.01);
+    EXPECT_GT(world.State(drone).positionMeters.z, 2.0);
 }
 
-TEST(PhysicsWorld, GroundStopsAFallingBody)
+void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
+{
+    constexpr double stepSeconds = 1.0 / 60.0;
+    PhysicsWorld world;
+    const RigidBodyHandle drone = MakeX500(world, 2.0);
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(800.0);
+    world.SetMotorTargets(drone, motorTargets);
+
+    world.Step(stepSeconds);
+    const double speedAfterFirstStep = world.MotorSpeedsRadiansPerSecond(drone)[0];
+    world.Step(stepSeconds);
+    const double speedAfterSecondStep = world.MotorSpeedsRadiansPerSecond(drone)[0];
+    const double expectedFirstOrderResponse = motorTargets[0] * std::sqrt(
+        1.0 - std::exp(-stepSeconds
+            / QuadrotorParameters::X500Gazebo().motorTimeConstantUpSeconds));
+    EXPECT_LT(speedAfterFirstStep, speedAfterSecondStep);
+    EXPECT_NEAR(speedAfterSecondStep, expectedFirstOrderResponse, 1.0);
+
+    for (int tick = 0; tick < 10; ++tick)
+        world.Step(1.0 / 60.0);
+    const double laterSpeed = world.MotorSpeedsRadiansPerSecond(drone)[0];
+
+    EXPECT_LT(speedAfterSecondStep, laterSpeed);
+    EXPECT_LT(laterSpeed, motorTargets[0]);
+}
+
+void Verify_AirSimPhysics_TerrainContactStopsTheDrone()
 {
     PhysicsWorld world;
-    const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 2.0});
+    const RigidBodyHandle drone = MakeX500(world, 2.0);
 
     for (int tick = 0; tick < 240; ++tick)
         world.Step(1.0 / 60.0);
 
-    const RigidBodyState state = world.State(body);
-    EXPECT_GE(state.positionMeters.z, 0.08);
-    EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.1);
+    const RigidBodyState state = world.State(drone);
+    EXPECT_GT(state.positionMeters.z, 0.0);
+    EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.2);
 }
 
-TEST(PhysicsWorld, CompoundBoxesCanRestOnSeparatedRaisedPlatforms)
+void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
 {
-    PhysicsWorld world;
-    RigidBodyDefinition platform;
-    platform.isStatic = true;
-    platform.halfExtentsMeters = {0.2F, 0.2F, 0.5F};
-    platform.positionMeters = {-0.5, 0.0, 0.5};
-    static_cast<void>(world.CreateBox(platform));
-    platform.positionMeters.x = 0.5;
-    static_cast<void>(world.CreateBox(platform));
+    const std::filesystem::path mapPath = std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+        / "assets/maps/bukhansan-demo";
+    auto terrain = terrain::TerrainGrid::Load(mapPath / "terrain.grid");
+    const auto buildings = terrain::LoadBuildingFootprints(
+        mapPath / "buildings.geojson", terrain);
+    const auto building = std::find_if(buildings.begin(), buildings.end(),
+        [](const terrain::BuildingFootprint& footprint)
+        {
+            return footprint.buildingType == "temple";
+        });
+    ASSERT_NE(building, buildings.end());
 
-    const std::array<RigidBodyBox, 2> collisionBoxes{{
-        {{0.1F, 0.1F, 0.1F}, {-0.5, 0.0, 0.0}, {1.0, 0.0, 0.0, 0.0}},
-        {{0.1F, 0.1F, 0.1F}, {0.5, 0.0, 0.0}, {1.0, 0.0, 0.0, 0.0}}}};
-    RigidBodyDefinition bodyDefinition;
-    bodyDefinition.positionMeters = {0.0, 0.0, 3.0};
-    const RigidBodyHandle body = world.CreateCompoundBoxes(bodyDefinition, collisionBoxes);
-
-    for (int tick = 0; tick < 240; ++tick)
-        world.Step(1.0 / 60.0);
-
-    const RigidBodyState state = world.State(body);
-    EXPECT_NEAR(state.positionMeters.z, 1.1, 0.03);
-    EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.1);
-}
-
-TEST(PhysicsWorld, TerrainHeightFieldStopsABodyAtTheHighestPointInTheTestArea)
-{
-    const aerosimlab::terrain::TerrainGrid terrain = aerosimlab::terrain::TerrainGrid::Load(
-        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-        / "assets/maps/bukhansan-demo/terrain.grid");
-    const auto peak = std::max_element(
-        terrain.heightOffsetsMeters.begin(), terrain.heightOffsetsMeters.end());
-    const std::size_t peakIndex = static_cast<std::size_t>(
-        std::distance(terrain.heightOffsetsMeters.begin(), peak));
-    const std::size_t peakRow = peakIndex / terrain.sampleCount;
-    const std::size_t peakColumn = peakIndex % terrain.sampleCount;
-    const double peakX = (static_cast<double>(peakColumn)
-        - static_cast<double>(terrain.sampleCount - 1U) * 0.5)
-        * terrain.spacingXMeters;
-    const double peakY = (static_cast<double>(terrain.sampleCount - 1U) * 0.5
-        - static_cast<double>(peakRow)) * terrain.spacingYMeters;
-    const double peakHeight = *peak;
-
-    PhysicsWorld world;
-    world.SetTerrain(terrain);
-    RigidBodyDefinition bodyDefinition;
-    bodyDefinition.positionMeters = {peakX, peakY, peakHeight + 5.0};
-    bodyDefinition.halfExtentsMeters = glm::vec3{0.1F};
-    const RigidBodyHandle body = world.CreateBox(bodyDefinition);
-    for (int step = 0; step < 240; ++step)
-        world.Step(1.0 / 60.0);
-
-    EXPECT_NEAR(world.State(body).positionMeters.x, peakX, 0.05);
-    EXPECT_NEAR(world.State(body).positionMeters.y, peakY, 0.05);
-    EXPECT_NEAR(world.State(body).positionMeters.z, peakHeight + 0.1, 0.12);
-}
-
-TEST(PhysicsWorld, OSMBuildingBoxStopsABodyAboveItsTerrainSample)
-{
-    const std::filesystem::path root{AEROSIMLAB_SOURCE_DIR};
-    const aerosimlab::terrain::TerrainGrid terrain =
-        aerosimlab::terrain::TerrainGrid::Load(
-            root / "assets/maps/bukhansan-demo/terrain.grid");
-    const auto buildings = aerosimlab::terrain::LoadBuildingFootprints(
-        root / "assets/maps/bukhansan-demo/buildings.geojson", terrain);
-    ASSERT_FALSE(buildings.empty());
-
-    glm::dvec2 minimum = buildings.front().outlineMeters.front();
-    glm::dvec2 maximum = minimum;
-    for (const glm::dvec2& point : buildings.front().outlineMeters)
+    const auto& outline = building->outlineMeters;
+    glm::dvec2 minimum = outline.front();
+    glm::dvec2 maximum = outline.front();
+    for (const glm::dvec2& point : outline)
     {
         minimum = glm::min(minimum, point);
         maximum = glm::max(maximum, point);
     }
-    const glm::dvec2 footprintCenter = (minimum + maximum) * 0.5;
-    constexpr float assumedBuildingHeightMeters = 3.0F;
-    const double groundHeightMeters = terrain.HeightAtLocalMeters(footprintCenter);
+    const glm::dvec2 center = (minimum + maximum) * 0.5;
+    const double ground = terrain.HeightAtLocalMeters(center);
+    constexpr double buildingHeightMeters = 3.0;
 
     PhysicsWorld world;
-    world.SetTerrain(terrain);
-    RigidBodyDefinition building;
-    building.isStatic = true;
-    building.positionMeters = {
-        footprintCenter.x, footprintCenter.y,
-        groundHeightMeters + assumedBuildingHeightMeters * 0.5};
-    building.halfExtentsMeters = {
-        static_cast<float>(maximum.x - minimum.x) * 0.5F,
-        static_cast<float>(maximum.y - minimum.y) * 0.5F,
-        assumedBuildingHeightMeters * 0.5F};
-    static_cast<void>(world.CreateBox(building));
+    world.SetTerrain(std::move(terrain));
+    world.AddStaticObstacleBox(
+        {center.x, center.y, ground + buildingHeightMeters * 0.5},
+        {static_cast<float>((maximum.x - minimum.x) * 0.5),
+            static_cast<float>(buildingHeightMeters * 0.5),
+            static_cast<float>((maximum.y - minimum.y) * 0.5)});
 
-    const RigidBodyHandle body = MakeBody(
-        world, {footprintCenter.x, footprintCenter.y, groundHeightMeters + 10.0});
-    for (int tick = 0; tick < 240; ++tick)
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    RigidBodyDefinition droneDefinition;
+    droneDefinition.positionMeters = {
+        minimum.x - 0.8, center.y, ground + buildingHeightMeters * 0.5};
+    const RigidBodyHandle drone = world.CreateQuadrotor(droneDefinition, parameters);
+    const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
+        / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(hoverSpeed);
+    world.SetMotorTargets(drone, motorTargets);
+
+    RigidBodyState state = world.State(drone);
+    state.linearVelocityMetersPerSecond.x = 2.0;
+    world.SetState(drone, state);
+
+    for (int tick = 0; tick < 60; ++tick)
         world.Step(1.0 / 60.0);
 
-    const RigidBodyState result = world.State(body);
-    EXPECT_GE(result.positionMeters.z,
-        groundHeightMeters + assumedBuildingHeightMeters - 0.2);
-    EXPECT_LT(result.positionMeters.z,
-        groundHeightMeters + assumedBuildingHeightMeters + 1.0);
-    EXPECT_LT(std::abs(result.linearVelocityMetersPerSecond.z), 0.1);
+    state = world.State(drone);
+    EXPECT_LT(state.positionMeters.x, minimum.x);
+    EXPECT_LT(state.linearVelocityMetersPerSecond.x, 0.5);
 }
 
-TEST(PhysicsWorld, SurveyedFacilityBoundsStopAFallingBody)
-{
-    const std::vector<aerosimlab::terrain::StaticFacility> facilities =
-        aerosimlab::terrain::LoadStaticFacilities(
-            std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-            / "assets/maps/bukhansan-demo/facilities.json");
-    const auto facility = std::find_if(facilities.begin(), facilities.end(),
-        [](const auto& value) { return value.id == "B-M-01"; });
-    ASSERT_NE(facility, facilities.end());
-
-    PhysicsWorld world;
-    RigidBodyDefinition obstacle;
-    obstacle.isStatic = true;
-    obstacle.positionMeters = facility->centerMeters + glm::dvec3{0.0, 0.0, 100.0};
-    obstacle.halfExtentsMeters = facility->halfExtentsMeters;
-    static_cast<void>(world.CreateBox(obstacle));
-
-    const glm::dvec3 center = obstacle.positionMeters;
-    const double top = center.z + facility->halfExtentsMeters.z;
-    const RigidBodyHandle body = MakeBody(world, {center.x, center.y, top + 5.0});
-    for (int tick = 0; tick < 240; ++tick)
-        world.Step(1.0 / 60.0);
-
-    EXPECT_NEAR(world.State(body).positionMeters.z, top + 0.1, 0.1);
-}
-
-TEST(PhysicsWorld, RejectsInvalidBodySize)
+void Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere()
 {
     PhysicsWorld world;
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
     RigidBodyDefinition definition;
-    definition.halfExtentsMeters.x = 0.0F;
-    EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
+    definition.positionMeters.z = 10.0;
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    world.AddStaticObstacleBox({0.45, 0.15, 10.0}, {0.1F, 0.1F, 0.3F});
+
+    RigidBodyState state = world.State(drone);
+    state.linearVelocityMetersPerSecond.x = 1.0;
+    world.SetState(drone, state);
+    world.Step(1.0 / 60.0);
+
+    state = world.State(drone);
+    EXPECT_GT(state.positionMeters.x, 0.0);
+    EXPECT_GT(state.linearVelocityMetersPerSecond.x, 0.8);
 }
 
-TEST(PhysicsWorld, RejectsInvalidPrincipalInertia)
+void Verify_AirSimPhysics_RejectsInvalidVehicleConfiguration()
 {
     PhysicsWorld world;
-    RigidBodyDefinition definition;
-    definition.principalInertiaKilogramMetersSquared = {0.02, 0.0, 0.04};
+    QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    parameters.massKilograms = 0.0;
 
-    EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
-}
-
-TEST(PhysicsWorld, RejectsFiniteValuesOutsideJoltFloatRange)
-{
-    PhysicsWorld world;
-    const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 10.0});
-    const double beyondFloatRange =
-        static_cast<double>(std::numeric_limits<float>::max()) * 2.0;
-
-    EXPECT_THROW(
-        world.ApplyForce(body, {beyondFloatRange, 0.0, 0.0}),
+    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
+        RigidBodyDefinition{}, parameters)),
         std::invalid_argument);
-    EXPECT_THROW(world.Step(beyondFloatRange), std::invalid_argument);
 
-    RigidBodyDefinition definition;
-    definition.positionMeters = {0.0, 0.0, 10.0};
-    definition.massKilograms = beyondFloatRange;
-    EXPECT_THROW(static_cast<void>(world.CreateBox(definition)), std::invalid_argument);
+    parameters = QuadrotorParameters::X500Gazebo();
+    parameters.maximumMotorSpeedRadiansPerSecond = 0.0;
+    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
+        RigidBodyDefinition{}, parameters)),
+        std::invalid_argument);
+
+    RigidBodyDefinition invalidPose;
+    invalidPose.orientation = {0.0, 0.0, 0.0, 0.0};
+    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
+        invalidPose, QuadrotorParameters::X500Gazebo())),
+        std::invalid_argument);
 }
 
-TEST(PhysicsWorld, NormalizesLargeFiniteOrientationBeforeJoltConversion)
+void Verify_AirSimPhysics_DifferentialRotorInputAndInertiaChangeVehicleResponse()
 {
-    PhysicsWorld world;
-    RigidBodyDefinition definition;
-    definition.positionMeters = {0.0, 0.0, 10.0};
-    definition.orientation = glm::dquat{1.0e30, 0.0, 0.0, 0.0};
+    const QuadrotorParameters standard = QuadrotorParameters::X500Gazebo();
+    QuadrotorParameters heavier = standard;
+    heavier.massKilograms *= 2.0;
+    heavier.principalInertiaKilogramMetersSquared *= 2.0;
 
-    const RigidBodyHandle body = world.CreateBox(definition);
-    EXPECT_NEAR(std::abs(world.State(body).orientation.w), 1.0, 1.0e-6);
+    const double hoverSpeed = std::sqrt(standard.massKilograms * 9.81
+        / (QuadrotorParameters::rotorCount
+            * standard.thrustCoefficientNewtonsPerSpeedSquared));
+    std::array<double, QuadrotorParameters::rotorCount> equalMotorTargets{};
+    equalMotorTargets.fill(hoverSpeed * 1.1);
+    const RigidBodyState standardMassState = SimulateMotorInput(standard, equalMotorTargets);
+    const RigidBodyState heavierState = SimulateMotorInput(heavier, equalMotorTargets);
+    EXPECT_GT(standardMassState.linearVelocityMetersPerSecond.z,
+        heavierState.linearVelocityMetersPerSecond.z + 0.1);
+
+    constexpr std::array<double, QuadrotorParameters::rotorCount> unevenMotorTargets{
+        500.0, 700.0, 900.0, 1100.0};
+    QuadrotorParameters higherInertia = standard;
+    higherInertia.principalInertiaKilogramMetersSquared *= 4.0;
+    const RigidBodyState standardInertiaState =
+        SimulateMotorInput(standard, unevenMotorTargets);
+    const RigidBodyState higherInertiaState =
+        SimulateMotorInput(higherInertia, unevenMotorTargets);
+    const auto angularSpeed = [](const glm::dvec3& velocity)
+    {
+        return std::sqrt(velocity.x * velocity.x
+            + velocity.y * velocity.y + velocity.z * velocity.z);
+    };
+    EXPECT_GT(angularSpeed(standardInertiaState.angularVelocityRadiansPerSecond), 1.0e-6);
+    EXPECT_GT(glm::length(glm::dvec3{standardInertiaState.orientation.x,
+        standardInertiaState.orientation.y, standardInertiaState.orientation.z}), 1.0e-7);
+    EXPECT_GT(angularSpeed(standardInertiaState.angularVelocityRadiansPerSecond),
+        angularSpeed(higherInertiaState.angularVelocityRadiansPerSecond));
 }
 
-TEST(PhysicsWorld, DestroyBodyInvalidatesItsHandle)
+TEST(PhysicsWorldTests, CoreScenarios)
 {
-    PhysicsWorld world;
-    const RigidBodyHandle body = MakeBody(world, {0.0, 0.0, 1.0});
-
-    EXPECT_TRUE(world.DestroyBody(body));
-    EXPECT_FALSE(world.DestroyBody(body));
-    EXPECT_THROW((void)world.State(body), std::out_of_range);
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_GravityMovesTheDroneDown());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorTargetsLiftTheDrone());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RejectsInvalidVehicleConfiguration());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_DifferentialRotorInputAndInertiaChangeVehicleResponse());
 }
+
 }

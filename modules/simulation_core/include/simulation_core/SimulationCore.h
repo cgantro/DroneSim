@@ -13,14 +13,23 @@
 namespace aerosimlab::simulation
 {
 /**
- * @brief 기존 운동학 기준선과 Jolt 강체 경로 중 사용할 계산 방식을 고른다.
- * @details 강체 경로는 모터와 비행 제어기를 거쳐 명령을 Jolt 물리에 적용한다.
+ * @brief 운동학 기준선과 AirSim 강체 경로 중 사용할 계산 방식을 고른다.
+ * @details 강체 경로에서는 AirSim이 로터 힘, 이동, 회전과 접촉 반응을 계산한다.
  */
 enum class SimulationDynamics
 {
     Kinematic,
     RigidBody
 };
+
+/** @brief 네이티브는 AirSim, WebAssembly는 운동학 기준선을 기본으로 사용한다. */
+#if defined(__EMSCRIPTEN__)
+inline constexpr SimulationDynamics defaultSimulationDynamics =
+    SimulationDynamics::Kinematic;
+#else
+inline constexpr SimulationDynamics defaultSimulationDynamics =
+    SimulationDynamics::RigidBody;
+#endif
 
 /** @brief 한 시뮬레이션 안에서 드론 하나를 식별한다. */
 using DroneId = std::uint64_t;
@@ -50,7 +59,7 @@ class SimulationCore
 {
 public:
     /** @brief Flecs 실행 공간을 만들고 드론과 탑재 카메라를 준비한다. */
-    explicit SimulationCore(SimulationDynamics dynamics = SimulationDynamics::Kinematic);
+    explicit SimulationCore(SimulationDynamics dynamics = defaultSimulationDynamics);
 
     /** @brief 모의 객체와 Flecs 실행 공간을 함께 정리한다. */
     ~SimulationCore();
@@ -113,7 +122,7 @@ public:
     /** @brief 벤치마크에서 물리 단계 시간 측정을 켜거나 끈다. */
     void SetPhysicsStepTimingEnabled(bool enabled) noexcept;
 
-    /** @brief 마지막 Tick의 Jolt 물리 계산 시간을 마이크로초로 반환한다. */
+    /** @brief 마지막 Tick의 AirSim 물리 계산 시간을 마이크로초로 반환한다. */
     [[nodiscard]] double LastPhysicsStepDurationMicroseconds() const noexcept;
 
 #ifndef __EMSCRIPTEN__
@@ -122,7 +131,7 @@ public:
         const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters);
 
     /** @brief 강체 모드의 바닥을 높이 자료로 바꾼다. 다른 모드에서는 예외를 던진다. */
-    void SetTerrain(const terrain::TerrainGrid& terrain);
+    void SetTerrain(terrain::TerrainGrid terrain);
 #endif
 
     /** @brief 지금까지 실행한 고정 간격 단계 수를 반환한다. */

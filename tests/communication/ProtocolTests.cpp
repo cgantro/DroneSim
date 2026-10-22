@@ -6,7 +6,7 @@
 
 namespace aerosimlab::communication
 {
-TEST(Protocol, RoundTripsCommandsAndReplyTelemetry)
+void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
 {
     CommandPacket drone;
     drone.commandId = 7;
@@ -46,6 +46,7 @@ TEST(Protocol, RoundTripsCommandsAndReplyTelemetry)
     reply.telemetry.drone.positionMeters = {1.0, 2.0, 3.0};
     reply.telemetry.drone.orientation = {0.9238795325, 0.0, 0.0, 0.3826834324};
     reply.telemetry.drone.angularVelocityRadiansPerSecond = {0.1, -0.2, 0.3};
+    reply.telemetry.drone.motorSpeedsRadiansPerSecond = {120.0, 121.0, 119.0, 122.0};
     reply.telemetry.camera.status = simulation::CameraStatus::Fault;
     reply.telemetry.camera.frameCount = 8;
     const std::string encodedReply = EncodeReply(reply);
@@ -59,10 +60,12 @@ TEST(Protocol, RoundTripsCommandsAndReplyTelemetry)
     EXPECT_EQ(
         decoded.telemetry.drone.angularVelocityRadiansPerSecond,
         reply.telemetry.drone.angularVelocityRadiansPerSecond);
+    EXPECT_EQ(decoded.telemetry.drone.motorSpeedsRadiansPerSecond,
+        reply.telemetry.drone.motorSpeedsRadiansPerSecond);
     EXPECT_EQ(decoded.telemetry.camera.status, simulation::CameraStatus::Fault);
 }
 
-TEST(Protocol, RejectsInvalidPacketsAndSequenceNumbers)
+void Verify_Protocol_RejectsInvalidPacketsAndSequenceNumbers()
 {
     CommandPacket packet;
     packet.commandId = 1;
@@ -89,4 +92,11 @@ TEST(Protocol, RejectsInvalidPacketsAndSequenceNumbers)
     EXPECT_EQ(guard.Inspect(CommandPacket{11, 4}), SequenceGuard::Decision::OutOfOrder);
     EXPECT_EQ(guard.Inspect(CommandPacket{11, 5}), SequenceGuard::Decision::New);
 }
+
+TEST(ProtocolTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_Protocol_RoundTripsCommandsAndReplyTelemetry());
+    EXPECT_NO_FATAL_FAILURE(Verify_Protocol_RejectsInvalidPacketsAndSequenceNumbers());
+}
+
 }

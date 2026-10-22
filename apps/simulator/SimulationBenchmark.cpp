@@ -15,8 +15,12 @@
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -33,6 +37,23 @@ double Percentile(const std::vector<double>& sortedDurations, double fraction)
         std::ceil(fraction * static_cast<double>(sortedDurations.size()))) - 1U;
     return sortedDurations[std::min(index, sortedDurations.size() - 1U)];
 }
+
+std::filesystem::path DefaultBenchmarkOutputPath()
+{
+#ifdef _WIN32
+    std::wstring executablePath(32768U, L'\0');
+    const DWORD pathLength = GetModuleFileNameW(
+        nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
+    if (pathLength == 0U || pathLength >= executablePath.size())
+        throw std::runtime_error("실행 파일의 위치를 확인할 수 없습니다.");
+
+    executablePath.resize(pathLength);
+    return std::filesystem::path(executablePath).parent_path()
+        / L"benchmark-latest.json";
+#else
+    return std::filesystem::current_path() / "benchmark-latest.json";
+#endif
+}
 }
 
 nlohmann::json SummarizeDurations(std::vector<double> durations)
@@ -43,6 +64,78 @@ nlohmann::json SummarizeDurations(std::vector<double> durations)
         {"p95", Percentile(durations, 0.95)},
         {"p99", Percentile(durations, 0.99)},
         {"samples", durations.size()}};
+}
+
+nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measurements)
+{
+    const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
+        measurements.tickDurationsMicroseconds.begin(),
+        measurements.tickDurationsMicroseconds.end(), [](double duration)
+        {
+            return duration > 1'000'000.0 / 60.0;
+        }));
+
+    nlohmann::json report{
+        {"configuration", "hidden OpenGL window; one drone; 9.4km x 11.9km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes"},
+        {"source_revision", measurements.sourceRevision},
+        {"framebuffer", {
+            {"width", measurements.framebufferWidth},
+            {"height", measurements.framebufferHeight}}},
+        {"opengl", {
+            {"renderer", measurements.graphicsRenderer},
+            {"version", measurements.graphicsVersion}}},
+        {"elapsed_seconds", measurements.elapsedSeconds},
+        {"simulation_ticks", measurements.simulationTicks},
+        {"rendered_frames", measurements.renderedFrames},
+        {"render_fps", measurements.elapsedSeconds > 0.0
+            ? static_cast<double>(measurements.renderedFrames) / measurements.elapsedSeconds : 0.0},
+        {"tick_duration_us", SummarizeDurations(
+            std::move(measurements.tickDurationsMicroseconds))},
+        {"render_frame_duration_us", SummarizeDurations(
+            std::move(measurements.renderFrameDurationsMicroseconds))},
+        {"process_cpu_percent_approx", measurements.elapsedSeconds > 0.0
+            ? 100.0 * measurements.processCpuSeconds / measurements.elapsedSeconds : 0.0}};
+    report["tick_duration_us"]["deadline_misses_over_16_67ms"] = deadlineMisses;
+
+#ifndef __EMSCRIPTEN__
+    report["physics_step_duration_us"] = SummarizeDurations(
+        std::move(measurements.physicsStepDurationsMicroseconds));
+    report["vision_analysis"] = {
+        {"samples", measurements.visionSampleCount},
+        {"mean_brightness", measurements.meanBrightness},
+        {"mean_contrast", measurements.meanContrast},
+        {"mean_sharpness", measurements.meanSharpness},
+        {"duration_us", SummarizeDurations(
+            std::move(measurements.visionDurationsMicroseconds))}};
+#endif
+
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS memory{};
+    memory.cb = sizeof(memory);
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
+        report["working_set_bytes"] = memory.WorkingSetSize;
+#endif
+    return report;
+}
+
+void SaveViewerBenchmarkReport(
+    const nlohmann::json& report, const std::filesystem::path& outputPath)
+{
+    const std::string output = report.dump(2) + '\n';
+    const std::filesystem::path destination = outputPath.empty()
+        ? DefaultBenchmarkOutputPath()
+        : outputPath;
+    std::ofstream resultFile(destination, std::ios::binary | std::ios::trunc);
+    if (!resultFile)
+        throw std::runtime_error("성능 측정 결과 파일을 저장할 수 없습니다.");
+    resultFile.write(output.data(), static_cast<std::streamsize>(output.size()));
+    if (!resultFile)
+        throw std::runtime_error("성능 측정 결과를 파일에 모두 쓰지 못했습니다.");
+#ifdef _WIN32
+    OutputDebugStringA(output.c_str());
+#else
+    std::cout << output;
+#endif
 }
 
 #ifndef __EMSCRIPTEN__
@@ -140,7 +233,7 @@ nlohmann::json MeasureDroneScaling()
     }
 
     return {
-        {"method", "헤드리스 강체 모의; 한 Jolt 세계에서 모든 드론을 함께 갱신. 각 실행은 워밍업 뒤 30,000 Tick을 측정하고 프로세스 CPU 시간과 작업 집합을 기록"},
+        {"method", "헤드리스 AirSim 강체 모의; 한 물리 세계에서 모든 드론을 함께 갱신. 각 실행은 워밍업 뒤 30,000 Tick을 측정하고 프로세스 CPU 시간과 작업 집합을 기록"},
         {"counts", droneCounts},
         {"repetitions_per_count", repetitions},
         {"runs", std::move(runs)}};

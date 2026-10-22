@@ -87,7 +87,7 @@ void ReplayMatchesRecordedSimulation(SimulationDynamics dynamics)
 }
 }
 
-TEST(CommandRecording, ReplaysEveryTickIncludingStartAndStopTicks)
+void Verify_CommandRecording_ReplaysEveryTickIncludingStartAndStopTicks()
 {
     CommandRecording recording;
     ASSERT_TRUE(recording.StartRecording());
@@ -115,7 +115,7 @@ TEST(CommandRecording, ReplaysEveryTickIncludingStartAndStopTicks)
     EXPECT_TRUE(recording.ReplayFinished());
 }
 
-TEST(CommandRecording, DoesNotStartReplayWithoutRecordedCommands)
+void Verify_CommandRecording_DoesNotStartReplayWithoutRecordedCommands()
 {
     CommandRecording recording;
     EXPECT_FALSE(recording.StartReplay());
@@ -127,14 +127,24 @@ TEST(CommandRecording, DoesNotStartReplayWithoutRecordedCommands)
     EXPECT_FALSE(recording.StartReplay());
 }
 
-TEST(CommandRecording, ReplayMatchesRecordedKinematicSimulation)
+void Verify_CommandRecording_ReplayMatchesRecordedKinematicSimulation()
 {
     ReplayMatchesRecordedSimulation(SimulationDynamics::Kinematic);
 }
 
 #ifndef __EMSCRIPTEN__
-TEST(CommandRecording, ReplayMatchesRecordedRigidBodySimulation)
+void Verify_CommandRecording_ReplayMatchesRecordedRigidBodySimulation()
 {
     ReplayMatchesRecordedSimulation(SimulationDynamics::RigidBody);
 }
 #endif
+
+TEST(CommandRecordingTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_CommandRecording_ReplaysEveryTickIncludingStartAndStopTicks());
+    EXPECT_NO_FATAL_FAILURE(Verify_CommandRecording_DoesNotStartReplayWithoutRecordedCommands());
+    EXPECT_NO_FATAL_FAILURE(Verify_CommandRecording_ReplayMatchesRecordedKinematicSimulation());
+#ifndef __EMSCRIPTEN__
+    EXPECT_NO_FATAL_FAILURE(Verify_CommandRecording_ReplayMatchesRecordedRigidBodySimulation());
+#endif
+}

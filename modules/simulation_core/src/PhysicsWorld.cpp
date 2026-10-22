@@ -1,218 +1,547 @@
 #include "simulation_core/PhysicsWorld.h"
 
-#include <Jolt/Jolt.h>
-#include <Jolt/Core/Factory.h>
-#include <Jolt/Core/JobSystemSingleThreaded.h>
-#include <Jolt/Core/TempAllocator.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
-#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
-#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayerInterfaceTable.h>
-#include <Jolt/Physics/Collision/BroadPhase/ObjectVsBroadPhaseLayerFilterTable.h>
-#include <Jolt/Physics/Collision/ObjectLayerPairFilterTable.h>
-#include <Jolt/Physics/Collision/Shape/BoxShape.h>
-#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
-#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
-#include <Jolt/Physics/PhysicsSystem.h>
-#include <Jolt/RegisterTypes.h>
+#include "simulation_core/DroneModel.h"
+#include "simulation_core/QuadrotorModel.h"
 
-#include <glm/geometric.hpp>
+#include <mutex>
+#include <common/ClockFactory.hpp>
+#include <common/SteppableClock.hpp>
+#include <physics/Environment.hpp>
+#include <physics/FastPhysicsEngine.hpp>
+#include <physics/Kinematics.hpp>
+#include <sensors/SensorFactory.hpp>
+#include <vehicles/multirotor/RotorActuator.hpp>
+#include <vehicles/multirotor/MultiRotorParams.hpp>
+#include <vehicles/multirotor/MultiRotorPhysicsBody.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace aerosimlab::simulation
 {
 namespace
 {
-constexpr JPH::ObjectLayer staticLayer = 0;
-constexpr JPH::ObjectLayer movingLayer = 1;
-constexpr JPH::uint layerCount = 2;
-constexpr JPH::uint maximumBodies = 1024;
-constexpr JPH::uint maximumBodyPairs = 1024;
-constexpr JPH::uint maximumContacts = 1024;
-constexpr JPH::uint maximumPhysicsJobs = 1024;
-constexpr float gravityMetersPerSecondSquared = 9.81F;
+using AirSimBody = msr::airlib::MultiRotorPhysicsBody;
+using AirSimVector = msr::airlib::Vector3r;
 
-/** @brief Jolt에는 한 번만 전역 형식을 등록하고 프로그램이 끝날 때 해제한다. */
-class JoltRuntime
-{
-public:
-    JoltRuntime()
-    {
-        JPH::RegisterDefaultAllocator();
-        factory_ = std::make_unique<JPH::Factory>();
-        JPH::Factory::sInstance = factory_.get();
-        JPH::RegisterTypes();
-    }
-
-    ~JoltRuntime()
-    {
-        JPH::UnregisterTypes();
-        JPH::Factory::sInstance = nullptr;
-    }
-
-private:
-    std::unique_ptr<JPH::Factory> factory_;
-};
-
-JoltRuntime& Runtime()
-{
-    static JoltRuntime runtime;
-    return runtime;
-}
-
-/** @brief Jolt가 쓰는 float 범위를 확인한 뒤 변환합니다. */
-float ToJoltFloat(double value)
-{
-    constexpr double maximumFloat = std::numeric_limits<float>::max();
-    if (!std::isfinite(value) || value > maximumFloat || value < -maximumFloat)
-        throw std::invalid_argument("물리 값이 Jolt가 표현할 수 있는 범위를 벗어났습니다.");
-    return static_cast<float>(value);
-}
-
-JPH::Vec3 ToJolt(const glm::dvec3& value)
-{
-    return {ToJoltFloat(value.x), ToJoltFloat(value.y), ToJoltFloat(value.z)};
-}
-
-JPH::Vec3 ToJolt(const glm::vec3& value)
-{
-    return {value.x, value.y, value.z};
-}
-
-JPH::Quat ToJolt(const glm::dquat& value)
-{
-    // 큰 값을 float으로 먼저 바꾸면 길이 제곱이 넘칠 수 있어 double 범위에서 정규화한다.
-    const double scale = std::max({
-        std::abs(value.w), std::abs(value.x), std::abs(value.y), std::abs(value.z)});
-    if (!std::isfinite(scale) || !(scale > 0.0))
-        throw std::invalid_argument("강체의 방향을 나타내는 값을 확인해 주세요.");
-
-    const double scaledW = value.w / scale;
-    const double scaledX = value.x / scale;
-    const double scaledY = value.y / scale;
-    const double scaledZ = value.z / scale;
-    const double length = std::sqrt(
-        scaledW * scaledW + scaledX * scaledX + scaledY * scaledY + scaledZ * scaledZ);
-    return JPH::Quat{
-        static_cast<float>(scaledX / length),
-        static_cast<float>(scaledY / length),
-        static_cast<float>(scaledZ / length),
-        static_cast<float>(scaledW / length)};
-}
-
-glm::dvec3 ToGlm(const JPH::Vec3& value)
-{
-    return {value.GetX(), value.GetY(), value.GetZ()};
-}
-
-glm::dquat ToGlm(const JPH::Quat& value)
-{
-    return {value.GetW(), value.GetX(), value.GetY(), value.GetZ()};
-}
-
-class ObjectLayerPairFilter final : public JPH::ObjectLayerPairFilter
-{
-public:
-    bool ShouldCollide(JPH::ObjectLayer first, JPH::ObjectLayer second) const override
-    {
-        return first == movingLayer || second == movingLayer;
-    }
-};
-
-class AppBroadPhaseLayerInterface final : public JPH::BroadPhaseLayerInterface
-{
-public:
-    JPH::uint GetNumBroadPhaseLayers() const override { return layerCount; }
-
-    JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override
-    {
-        return JPH::BroadPhaseLayer{static_cast<JPH::BroadPhaseLayer::Type>(layer)};
-    }
-
-#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-    const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer layer) const override
-    {
-        switch (static_cast<JPH::BroadPhaseLayer::Type>(layer))
-        {
-        case staticLayer: return "static";
-        case movingLayer: return "moving";
-        default: return "unknown";
-        }
-    }
-#endif
-};
-
-class AppObjectVsBroadPhaseFilter final : public JPH::ObjectVsBroadPhaseLayerFilter
-{
-public:
-    bool ShouldCollide(JPH::ObjectLayer object, JPH::BroadPhaseLayer broadPhase) const override
-    {
-        return object == movingLayer
-            || static_cast<JPH::BroadPhaseLayer::Type>(broadPhase) == movingLayer;
-    }
-};
+const glm::dmat3 axisReflection{
+    {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, -1.0}};
 
 bool IsFinite(const glm::dvec3& value)
 {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
+
+bool IsValidOrientation(const glm::dquat& value)
+{
+    const double lengthSquared = glm::dot(value, value);
+    return std::isfinite(value.w) && std::isfinite(value.x)
+        && std::isfinite(value.y) && std::isfinite(value.z)
+        && std::isfinite(lengthSquared) && lengthSquared > 0.0;
+}
+
+AirSimVector ToAirSimPosition(const glm::dvec3& value)
+{
+    return {static_cast<float>(value.x), static_cast<float>(value.y),
+        static_cast<float>(-value.z)};
+}
+
+AirSimVector ToAirSimAngularVector(const glm::dvec3& value)
+{
+    return {static_cast<float>(-value.x), static_cast<float>(-value.y),
+        static_cast<float>(value.z)};
+}
+
+glm::dvec3 ToProjectPosition(const AirSimVector& value)
+{
+    return {value.x(), value.y(), -value.z()};
+}
+
+glm::dvec3 ToProjectAngularVector(const AirSimVector& value)
+{
+    return {-value.x(), -value.y(), value.z()};
+}
+
+msr::airlib::Quaternionr ToAirSimOrientation(const glm::dquat& value)
+{
+    const glm::dmat3 rotation = glm::mat3_cast(glm::normalize(value));
+    const glm::dquat converted = glm::quat_cast(
+        axisReflection * rotation * axisReflection);
+    return {static_cast<float>(converted.w), static_cast<float>(converted.x),
+        static_cast<float>(converted.y), static_cast<float>(converted.z)};
+}
+
+glm::dquat ToProjectOrientation(const msr::airlib::Quaternionr& value)
+{
+    const glm::dmat3 rotation = glm::mat3_cast(glm::dquat{
+        value.w(), value.x(), value.y(), value.z()});
+    return glm::normalize(glm::quat_cast(
+        axisReflection * rotation * axisReflection));
+}
+
+msr::airlib::Kinematics::State ToAirSimState(const RigidBodyState& value)
+{
+    auto result = msr::airlib::Kinematics::State::zero();
+    result.pose.position = ToAirSimPosition(value.positionMeters);
+    result.pose.orientation = ToAirSimOrientation(value.orientation);
+    result.twist.linear = ToAirSimPosition(value.linearVelocityMetersPerSecond);
+    result.twist.angular = ToAirSimAngularVector(value.angularVelocityRadiansPerSecond);
+    return result;
+}
+
+RigidBodyState ToProjectState(const msr::airlib::Kinematics::State& value)
+{
+    return {
+        ToProjectPosition(value.pose.position),
+        ToProjectOrientation(value.pose.orientation),
+        ToProjectPosition(value.twist.linear),
+        ToProjectAngularVector(value.twist.angular)};
+}
+
+std::shared_ptr<msr::airlib::SteppableClock> CreateSimulationClock()
+{
+    return std::make_shared<msr::airlib::SteppableClock>(
+        DroneModel::fixedStepSeconds);
+}
+
+/** @brief 시뮬레이터의 목표 모터 속도를 AirSim이 받는 0~1 신호로 바꾼다. */
+class ActuationApi final : public msr::airlib::VehicleApiBase
+{
+public:
+    void SetMotorTargets(
+        const std::array<double, QuadrotorParameters::rotorCount>& speeds,
+        double maximumSpeed)
+    {
+        for (std::size_t index = 0; index < signals_.size(); ++index)
+        {
+            const double ratio = std::clamp(speeds[index] / maximumSpeed, 0.0, 1.0);
+            signals_[index] = static_cast<float>(ratio * ratio);
+        }
+    }
+
+    void enableApiControl(bool enabled) override { apiControlEnabled_ = enabled; }
+    bool isApiControlEnabled() const override { return apiControlEnabled_; }
+    bool armDisarm(bool armed) override { armed_ = armed; return true; }
+    msr::airlib::GeoPoint getHomeGeoPoint() const override { return home_; }
+    std::size_t getActuatorCount() const override { return signals_.size(); }
+    msr::airlib::real_T getActuation(unsigned int index) const override
+    {
+        return signals_.at(index);
+    }
+
+protected:
+    void resetImplementation() override
+    {
+        signals_.fill(0.0F);
+        apiControlEnabled_ = false;
+        armed_ = false;
+    }
+
+private:
+    std::array<float, QuadrotorParameters::rotorCount> signals_{};
+    msr::airlib::GeoPoint home_{0.0, 0.0, 0.0F};
+    bool apiControlEnabled_ = false;
+    bool armed_ = false;
+};
+
+/** @brief 현재 기체 설정을 AirSim 다중 로터 모델의 입력 형식으로 맞춘다. */
+class QuadrotorParametersAdapter final : public msr::airlib::MultiRotorParams
+{
+public:
+    explicit QuadrotorParametersAdapter(const QuadrotorParameters& source)
+        : source_(source)
+    {
+    }
+
+    void Configure()
+    {
+        setupParams();
+    }
+
+    std::unique_ptr<msr::airlib::MultirotorApiBase> createMultirotorApi() override
+    {
+        return {};
+    }
+
+protected:
+    void setupParams() override
+    {
+        Params& target = getParams();
+        target.rotor_count = static_cast<msr::airlib::uint>(source_.rotors.size());
+        target.mass = static_cast<float>(source_.massKilograms);
+        target.inertia = msr::airlib::Matrix3x3r::Zero();
+        target.inertia.diagonal() << source_.principalInertiaKilogramMetersSquared.x,
+            source_.principalInertiaKilogramMetersSquared.y,
+            source_.principalInertiaKilogramMetersSquared.z;
+        target.body_box = AirSimVector{static_cast<float>(source_.bodySizeMeters.x),
+            static_cast<float>(source_.bodySizeMeters.y),
+            static_cast<float>(source_.bodySizeMeters.z)};
+        target.rotor_params.max_rpm = static_cast<float>(
+            source_.maximumMotorSpeedRadiansPerSecond * 60.0 / (2.0 * M_PI));
+        target.rotor_params.calculateMaxThrust();
+        target.rotor_params.max_speed_square = static_cast<float>(
+            source_.maximumMotorSpeedRadiansPerSecond
+                * source_.maximumMotorSpeedRadiansPerSecond);
+        target.rotor_params.max_thrust = static_cast<float>(
+            source_.thrustCoefficientNewtonsPerSpeedSquared
+                * target.rotor_params.max_speed_square);
+        target.rotor_params.max_torque = static_cast<float>(
+            source_.momentToThrustRatio * target.rotor_params.max_thrust);
+        target.rotor_params.control_signal_filter_tc = static_cast<float>(
+            source_.motorTimeConstantUpSeconds);
+        for (const RotorDefinition& rotor : source_.rotors)
+        {
+            const auto direction = rotor.rotation == RotorRotation::CounterClockwise
+                ? msr::airlib::RotorTurningDirection::RotorTurningDirectionCW
+                : msr::airlib::RotorTurningDirection::RotorTurningDirectionCCW;
+            target.rotor_poses.emplace_back(
+                ToAirSimPosition(rotor.positionMeters),
+                AirSimVector{0.0F, 0.0F, -1.0F}, direction);
+        }
+    }
+
+    const msr::airlib::SensorFactory* getSensorFactory() const override
+    {
+        return &sensorFactory_;
+    }
+
+private:
+    QuadrotorParameters source_;
+    msr::airlib::SensorFactory sensorFactory_;
+};
+
+struct Obstacle
+{
+    glm::dvec3 centerMeters;
+    glm::dvec3 halfExtentsMeters;
+};
+
+struct OrientedBox
+{
+    glm::dvec3 centerMeters;
+    glm::dvec3 halfExtentsMeters;
+    std::array<glm::dvec3, 3> axes;
+};
+
+struct BoxContact
+{
+    glm::dvec3 normal;
+    glm::dvec3 impactPointMeters;
+    double penetrationMeters = 0.0;
+};
+
+double CollisionRadius(std::span<const RigidBodyBox> boxes)
+{
+    double radius = 0.0;
+    for (const RigidBodyBox& box : boxes)
+    {
+        radius = std::max(radius, glm::length(box.positionMeters)
+            + glm::length(glm::dvec3{box.halfExtentsMeters}));
+    }
+    return radius;
+}
+
+OrientedBox ToWorldBox(
+    const glm::dvec3& bodyPosition,
+    const glm::dquat& bodyOrientation,
+    const RigidBodyBox& box)
+{
+    const glm::dquat orientation = glm::normalize(bodyOrientation * box.orientation);
+    return {
+        bodyPosition + bodyOrientation * box.positionMeters,
+        glm::dvec3{box.halfExtentsMeters},
+        {orientation * glm::dvec3{1.0, 0.0, 0.0},
+            orientation * glm::dvec3{0.0, 1.0, 0.0},
+            orientation * glm::dvec3{0.0, 0.0, 1.0}}};
+}
+
+/**
+ * @brief 두 회전 상자의 겹침, 바깥쪽 방향, 기체 쪽 접촉점을 찾는다.
+ * @details 분리축 정리는 상자 면 방향과 두 상자의 모서리 방향을 확인한다. 첫 번째 상자는 움직이는 기체여서 법선은 두 번째 상자에서 기체 바깥을 향한다.
+ */
+std::optional<BoxContact> FindBoxContact(
+    const OrientedBox& droneBox,
+    const OrientedBox& otherBox)
+{
+    std::array<glm::dvec3, 15> candidateAxes{};
+    std::size_t axisCount = 0;
+    for (const glm::dvec3& axis : droneBox.axes)
+        candidateAxes[axisCount++] = axis;
+    for (const glm::dvec3& axis : otherBox.axes)
+        candidateAxes[axisCount++] = axis;
+    for (const glm::dvec3& droneAxis : droneBox.axes)
+    {
+        for (const glm::dvec3& otherAxis : otherBox.axes)
+            candidateAxes[axisCount++] = glm::cross(droneAxis, otherAxis);
+    }
+
+    const glm::dvec3 centerOffset = otherBox.centerMeters - droneBox.centerMeters;
+    double smallestPenetration = std::numeric_limits<double>::infinity();
+    glm::dvec3 collisionNormal{0.0};
+    for (std::size_t axisIndex = 0; axisIndex < axisCount; ++axisIndex)
+    {
+        const glm::dvec3& candidate = candidateAxes[axisIndex];
+        const double axisLengthSquared = glm::dot(candidate, candidate);
+        if (axisLengthSquared < 1.0e-12)
+            continue;
+
+        const glm::dvec3 axis = candidate / std::sqrt(axisLengthSquared);
+        const auto projectedRadius = [&axis](const OrientedBox& box)
+        {
+            return std::abs(glm::dot(axis, box.axes[0])) * box.halfExtentsMeters.x
+                + std::abs(glm::dot(axis, box.axes[1])) * box.halfExtentsMeters.y
+                + std::abs(glm::dot(axis, box.axes[2])) * box.halfExtentsMeters.z;
+        };
+        const double centerDistance = glm::dot(centerOffset, axis);
+        const double penetration = projectedRadius(droneBox)
+            + projectedRadius(otherBox) - std::abs(centerDistance);
+        if (penetration < 0.0)
+            return std::nullopt;
+
+        if (penetration < smallestPenetration)
+        {
+            smallestPenetration = penetration;
+            collisionNormal = axis * (centerDistance >= 0.0 ? -1.0 : 1.0);
+        }
+    }
+
+    if (!std::isfinite(smallestPenetration))
+        return std::nullopt;
+
+    const glm::dvec3 towardOther = -collisionNormal;
+    glm::dvec3 impactPoint = droneBox.centerMeters;
+    for (std::size_t axis = 0; axis < droneBox.axes.size(); ++axis)
+    {
+        const double side = glm::dot(towardOther, droneBox.axes[axis]) >= 0.0
+            ? 1.0 : -1.0;
+        impactPoint += droneBox.axes[axis]
+            * (side * droneBox.halfExtentsMeters[axis]);
+    }
+    return BoxContact{collisionNormal, impactPoint, smallestPenetration};
+}
+
+double BottomExtent(std::span<const RigidBodyBox> boxes, const glm::dquat& orientation)
+{
+    double extent = 0.0;
+    for (const RigidBodyBox& box : boxes)
+    {
+        const glm::dvec3 localOffset = orientation * box.positionMeters;
+        const glm::dmat3 boxRotation = glm::mat3_cast(
+            orientation * box.orientation);
+        const glm::dvec3 halfExtents{box.halfExtentsMeters};
+        const glm::dvec3 worldHalf = glm::abs(boxRotation[0]) * halfExtents.x
+            + glm::abs(boxRotation[1]) * halfExtents.y
+            + glm::abs(boxRotation[2]) * halfExtents.z;
+        extent = std::max(extent, -localOffset.z + worldHalf.z);
+    }
+    return extent;
+}
 }
 
 struct PhysicsWorld::Impl
 {
-    JoltRuntime& runtime;
-    AppBroadPhaseLayerInterface broadPhaseLayers;
-    ObjectLayerPairFilter objectLayerPairFilter;
-    AppObjectVsBroadPhaseFilter objectVsBroadPhaseFilter;
-    JPH::PhysicsSystem physics;
-    JPH::TempAllocatorImpl tempAllocator{4 * 1024 * 1024};
-    JPH::JobSystemSingleThreaded jobSystem{maximumPhysicsJobs};
-    std::vector<std::optional<JPH::BodyID>> bodies;
-    JPH::BodyID groundBody;
-    JPH::BodyID terrainBody;
-    bool hasTerrain = false;
+    struct Body
+    {
+        QuadrotorParametersAdapter parameters;
+        ActuationApi actuation;
+        msr::airlib::Kinematics kinematics;
+        msr::airlib::Environment environment;
+        std::unique_ptr<AirSimBody> model;
+        std::vector<RigidBodyBox> collisionBoxes;
+        double maximumMotorSpeed = 0.0;
+        bool updatedSinceReset = false;
+
+        Body(const RigidBodyDefinition& definition, const QuadrotorParameters& quadrotor)
+            : parameters(quadrotor),
+              kinematics(ToAirSimState({definition.positionMeters,
+                  definition.orientation, {}, {}})),
+              collisionBoxes(quadrotor.collisionBoxes.begin(), quadrotor.collisionBoxes.end()),
+              maximumMotorSpeed(quadrotor.maximumMotorSpeedRadiansPerSecond)
+        {
+            parameters.Configure();
+            msr::airlib::Environment::State environmentState;
+            environmentState.position = ToAirSimPosition(definition.positionMeters);
+            environmentState.geo_point.set(0.0, 0.0, 0.0F);
+            environment.initialize(environmentState);
+            kinematics.reset();
+            actuation.reset();
+            model = std::make_unique<AirSimBody>(
+                &parameters, &actuation, &kinematics, &environment);
+            model->reset();
+            model->setPose({ToAirSimPosition(definition.positionMeters),
+                ToAirSimOrientation(definition.orientation)});
+        }
+
+        void ApplyMotorTargets()
+        {
+            // AirSim normally copies controller output after integrating the body.
+            // This simulator already has the command at the start of the fixed step.
+            for (msr::airlib::uint index = 0; index < parameters.getParams().rotor_count; ++index)
+            {
+                auto& rotor = static_cast<msr::airlib::RotorActuator&>(
+                    model->getWrenchVertex(index));
+                rotor.setControlSignal(actuation.getActuation(index));
+            }
+        }
+    };
+
+    std::shared_ptr<msr::airlib::SteppableClock> clock = CreateSimulationClock();
+    msr::airlib::FastPhysicsEngine physicsEngine{true};
+    std::vector<std::unique_ptr<Body>> bodies;
+    std::vector<Obstacle> obstacles;
+    std::optional<terrain::TerrainGrid> terrain;
+    std::uint64_t stepCount = 0;
 
     Impl()
-        : runtime(Runtime())
     {
-        physics.Init(
-            maximumBodies,
-            0,
-            maximumBodyPairs,
-            maximumContacts,
-            broadPhaseLayers,
-            objectVsBroadPhaseFilter,
-            objectLayerPairFilter);
-        physics.SetGravity(JPH::Vec3{0.0F, 0.0F, -gravityMetersPerSecondSquared});
-        CreateGround();
+        static_cast<void>(msr::airlib::ClockFactory::get(clock));
+        physicsEngine.reset();
     }
 
-    void CreateGround()
+    Body& GetBody(RigidBodyHandle handle)
     {
-        JPH::BodyCreationSettings settings{
-            new JPH::BoxShape(JPH::Vec3{100.0F, 100.0F, 0.5F}, 0.0F),
-            JPH::RVec3{0.0F, 0.0F, -0.5F},
-            JPH::Quat::sIdentity(),
-            JPH::EMotionType::Static,
-            staticLayer};
-        settings.mFriction = 0.8F;
-        groundBody = physics.GetBodyInterface().CreateAndAddBody(
-            settings, JPH::EActivation::DontActivate);
-        if (groundBody.IsInvalid())
-            throw std::runtime_error("Jolt 바닥 강체를 만들지 못했습니다.");
-    }
-
-    JPH::BodyID GetBody(RigidBodyHandle body) const
-    {
-        if (body.value >= bodies.size() || !bodies[body.value].has_value())
+        if (handle.value >= bodies.size() || !bodies[handle.value])
             throw std::out_of_range("존재하지 않는 강체 번호입니다.");
-        return *bodies[body.value];
+        return *bodies[handle.value];
+    }
+
+    const Body& GetBody(RigidBodyHandle handle) const
+    {
+        if (handle.value >= bodies.size() || !bodies[handle.value])
+            throw std::out_of_range("존재하지 않는 강체 번호입니다.");
+        return *bodies[handle.value];
+    }
+
+    double GroundHeight(const glm::dvec2& position) const
+    {
+        if (!terrain)
+            return 0.0;
+        try
+        {
+            return terrain->HeightAtLocalMeters(position);
+        }
+        catch (const std::out_of_range&)
+        {
+            return 0.0;
+        }
+    }
+
+    // 단독 실행에서는 Unreal이 접촉 정보를 만들지 않으므로, 장면과의 접촉만 찾아 AirSim에 넘긴다.
+    msr::airlib::CollisionInfo BuildAirSimContactInfo(
+        const Body& body, std::size_t bodyIndex) const
+    {
+        const RigidBodyState state = ToProjectState(body.kinematics.getState());
+        const glm::dvec3 center = state.positionMeters;
+        const double bottom = center.z - BottomExtent(body.collisionBoxes, state.orientation);
+        const double ground = GroundHeight({center.x, center.y});
+        const std::uint64_t timestamp = stepCount + 1;
+
+        if (bottom < ground)
+        {
+            const double extent = BottomExtent(body.collisionBoxes, state.orientation);
+            const double centerHeight = ground + extent;
+            return {
+                true,
+                AirSimVector{0.0F, 0.0F, -1.0F},
+                AirSimVector{static_cast<float>(center.x), static_cast<float>(center.y),
+                    static_cast<float>(-ground)},
+                AirSimVector{static_cast<float>(center.x), static_cast<float>(center.y),
+                    static_cast<float>(-centerHeight)},
+                static_cast<float>(ground - bottom),
+                timestamp,
+                "ground",
+                0};
+        }
+
+        // 경계 반경은 멀리 떨어진 후보만 빠르게 거른다. 실제 겹침은 아래 상자 검사로 결정한다.
+        const double bodyRadius = CollisionRadius(body.collisionBoxes);
+        std::optional<msr::airlib::CollisionInfo> deepestContact;
+        double greatestPenetration = -1.0;
+        for (std::size_t index = 0; index < obstacles.size(); ++index)
+        {
+            const Obstacle& obstacle = obstacles[index];
+            const glm::dvec3 nearest = glm::clamp(center,
+                obstacle.centerMeters - obstacle.halfExtentsMeters,
+                obstacle.centerMeters + obstacle.halfExtentsMeters);
+            const glm::dvec3 distanceToObstacle = center - nearest;
+            if (glm::dot(distanceToObstacle, distanceToObstacle)
+                >= bodyRadius * bodyRadius)
+                continue;
+
+            const OrientedBox obstacleBox{
+                obstacle.centerMeters,
+                obstacle.halfExtentsMeters,
+                {glm::dvec3{1.0, 0.0, 0.0}, glm::dvec3{0.0, 1.0, 0.0},
+                    glm::dvec3{0.0, 0.0, 1.0}}};
+            for (const RigidBodyBox& box : body.collisionBoxes)
+            {
+                const auto contact = FindBoxContact(
+                    ToWorldBox(center, state.orientation, box), obstacleBox);
+                if (!contact || contact->penetrationMeters <= greatestPenetration)
+                    continue;
+
+                greatestPenetration = contact->penetrationMeters;
+                deepestContact = msr::airlib::CollisionInfo{
+                    true,
+                    ToAirSimPosition(contact->normal),
+                    ToAirSimPosition(contact->impactPointMeters),
+                    ToAirSimPosition(center),
+                    static_cast<float>(contact->penetrationMeters),
+                    timestamp,
+                    "obstacle",
+                    static_cast<int>(index + 1)};
+            }
+        }
+        for (std::size_t index = 0; index < bodies.size(); ++index)
+        {
+            if (index == bodyIndex || !bodies[index])
+                continue;
+
+            const RigidBodyState other = ToProjectState(bodies[index]->kinematics.getState());
+            const double combinedRadius = bodyRadius
+                + CollisionRadius(bodies[index]->collisionBoxes);
+            const glm::dvec3 centerOffset = center - other.positionMeters;
+            if (glm::dot(centerOffset, centerOffset) >= combinedRadius * combinedRadius)
+                continue;
+
+            for (const RigidBodyBox& ownBox : body.collisionBoxes)
+            {
+                const OrientedBox worldOwnBox = ToWorldBox(
+                    center, state.orientation, ownBox);
+                for (const RigidBodyBox& otherBox : bodies[index]->collisionBoxes)
+                {
+                    const auto contact = FindBoxContact(worldOwnBox,
+                        ToWorldBox(other.positionMeters, other.orientation, otherBox));
+                    if (!contact || contact->penetrationMeters <= greatestPenetration)
+                        continue;
+
+                    greatestPenetration = contact->penetrationMeters;
+                    deepestContact = msr::airlib::CollisionInfo{
+                        true,
+                        ToAirSimPosition(contact->normal),
+                        ToAirSimPosition(contact->impactPointMeters),
+                        ToAirSimPosition(center),
+                        static_cast<float>(contact->penetrationMeters),
+                        timestamp,
+                        "drone",
+                        static_cast<int>(index + 1)};
+                }
+            }
+        }
+        return deepestContact.value_or(msr::airlib::CollisionInfo{});
     }
 };
 
@@ -223,245 +552,178 @@ PhysicsWorld::PhysicsWorld()
 
 PhysicsWorld::~PhysicsWorld() = default;
 
-RigidBodyHandle PhysicsWorld::CreateBox(const RigidBodyDefinition& definition)
+void PhysicsWorld::AddStaticObstacleBox(
+    const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    const RigidBodyBox box{definition.halfExtentsMeters, {}, {1.0, 0.0, 0.0, 0.0}};
-    return CreateCompoundBoxes(definition, std::span{&box, 1U});
+    if (!IsFinite(centerMeters)
+        || !IsFinite(glm::dvec3{halfExtentsMeters})
+        || glm::any(glm::lessThanEqual(halfExtentsMeters, glm::vec3{0.0F})))
+    {
+        throw std::invalid_argument("고정 상자의 위치와 크기를 확인해 주세요.");
+    }
+    impl_->obstacles.push_back({centerMeters, glm::dvec3{halfExtentsMeters}});
 }
 
-RigidBodyHandle PhysicsWorld::CreateCompoundBoxes(
+RigidBodyHandle PhysicsWorld::CreateQuadrotor(
     const RigidBodyDefinition& definition,
-    std::span<const RigidBodyBox> boxes)
+    const QuadrotorParameters& quadrotor)
 {
-    if (boxes.empty()
-        || !std::isfinite(definition.massKilograms)
-        || definition.massKilograms < 0.0
-        || !IsFinite(definition.positionMeters)
-        || !std::isfinite(glm::length(definition.orientation))
-        || !(glm::length(definition.orientation) > 0.0)
-        || (definition.principalInertiaKilogramMetersSquared.has_value()
-            && (!IsFinite(*definition.principalInertiaKilogramMetersSquared)
-                || !(definition.principalInertiaKilogramMetersSquared->x > 0.0)
-                || !(definition.principalInertiaKilogramMetersSquared->y > 0.0)
-                || !(definition.principalInertiaKilogramMetersSquared->z > 0.0)))
-        || (!definition.isStatic && !(definition.massKilograms > 0.0)))
+    if (!IsFinite(definition.positionMeters)
+        || !IsValidOrientation(definition.orientation)
+        || !(quadrotor.massKilograms > 0.0)
+        || !std::isfinite(quadrotor.massKilograms)
+        || !IsFinite(quadrotor.principalInertiaKilogramMetersSquared)
+        || glm::any(glm::lessThanEqual(
+            quadrotor.principalInertiaKilogramMetersSquared, glm::dvec3{0.0}))
+        || !IsFinite(quadrotor.bodySizeMeters)
+        || glm::any(glm::lessThanEqual(quadrotor.bodySizeMeters, glm::dvec3{0.0}))
+        || !(quadrotor.thrustCoefficientNewtonsPerSpeedSquared > 0.0)
+        || !std::isfinite(quadrotor.thrustCoefficientNewtonsPerSpeedSquared)
+        || !(quadrotor.momentToThrustRatio > 0.0)
+        || !std::isfinite(quadrotor.momentToThrustRatio)
+        || !(quadrotor.motorTimeConstantUpSeconds > 0.0)
+        || !std::isfinite(quadrotor.motorTimeConstantUpSeconds)
+        || !(quadrotor.maximumMotorSpeedRadiansPerSecond > 0.0)
+        || !std::isfinite(quadrotor.maximumMotorSpeedRadiansPerSecond)
+        || !std::all_of(quadrotor.rotors.begin(), quadrotor.rotors.end(),
+            [](const RotorDefinition& rotor) { return IsFinite(rotor.positionMeters); }))
     {
-        throw std::invalid_argument("강체 위치와 질량을 확인해 주세요.");
+        throw std::invalid_argument("드론의 물리 제원과 시작 자세를 확인해 주세요.");
     }
 
-    JPH::StaticCompoundShapeSettings shapeSettings;
-    for (const RigidBodyBox& box : boxes)
+    for (const RigidBodyBox& box : quadrotor.collisionBoxes)
     {
-        if (!(box.halfExtentsMeters.x > 0.0F)
-            || !(box.halfExtentsMeters.y > 0.0F)
-            || !(box.halfExtentsMeters.z > 0.0F)
-            || !std::isfinite(box.halfExtentsMeters.x)
-            || !std::isfinite(box.halfExtentsMeters.y)
-            || !std::isfinite(box.halfExtentsMeters.z)
+        if (!IsFinite(glm::dvec3{box.halfExtentsMeters})
+            || glm::any(glm::lessThanEqual(box.halfExtentsMeters, glm::vec3{0.0F}))
             || !IsFinite(box.positionMeters)
-            || !std::isfinite(glm::length(box.orientation))
-            || !(glm::length(box.orientation) > 0.0))
+            || !IsValidOrientation(box.orientation))
         {
-            throw std::invalid_argument("강체 충돌 상자의 크기와 자세를 확인해 주세요.");
-        }
-        shapeSettings.AddShape(
-            ToJolt(box.positionMeters),
-            ToJolt(box.orientation),
-            new JPH::BoxShape(ToJolt(box.halfExtentsMeters), 0.0F));
-    }
-
-    const JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
-    if (shapeResult.HasError())
-        throw std::runtime_error(std::string("Jolt 복합 충돌 모양을 만들지 못했습니다: ")
-            + shapeResult.GetError().c_str());
-
-    const JPH::EMotionType motion = definition.isStatic
-        ? JPH::EMotionType::Static
-        : JPH::EMotionType::Dynamic;
-    JPH::BodyCreationSettings settings{
-        shapeResult.Get(),
-        JPH::RVec3{ToJolt(definition.positionMeters)},
-        ToJolt(definition.orientation),
-        motion,
-        definition.isStatic ? staticLayer : movingLayer};
-    settings.mFriction = 0.8F;
-    settings.mLinearDamping = 0.0F;
-    settings.mAngularDamping = 0.0F;
-    settings.mAllowSleeping = false;
-    if (!definition.isStatic)
-    {
-        settings.mMassPropertiesOverride.mMass = ToJoltFloat(definition.massKilograms);
-        if (definition.principalInertiaKilogramMetersSquared.has_value())
-        {
-            settings.mOverrideMassProperties = JPH::EOverrideMassProperties::MassAndInertiaProvided;
-            settings.mMassPropertiesOverride.mInertia =
-                JPH::Mat44::sScale(ToJolt(*definition.principalInertiaKilogramMetersSquared));
-        }
-        else
-        {
-            settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+            throw std::invalid_argument("드론 충돌 모양의 크기와 위치를 확인해 주세요.");
         }
     }
 
-    JPH::BodyInterface& bodyInterface = impl_->physics.GetBodyInterface();
-    const JPH::BodyID id = bodyInterface.CreateAndAddBody(settings, JPH::EActivation::Activate);
-    if (id.IsInvalid())
-        throw std::runtime_error("Jolt 움직이는 강체를 만들지 못했습니다.");
-
-    const auto handle = RigidBodyHandle{static_cast<std::uint32_t>(impl_->bodies.size())};
-    impl_->bodies.emplace_back(id);
+    static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
+    auto body = std::make_unique<Impl::Body>(definition, quadrotor);
+    const RigidBodyHandle handle{static_cast<std::uint32_t>(impl_->bodies.size())};
+    impl_->physicsEngine.insert(body->model.get());
+    impl_->bodies.push_back(std::move(body));
     return handle;
 }
 
-void PhysicsWorld::SetTerrain(const terrain::TerrainGrid& terrain)
+void PhysicsWorld::SetMotorTargets(
+    RigidBodyHandle handle,
+    const std::array<double, 4>& speeds)
 {
-    if (terrain.sampleCount < 3U
-        || terrain.heightOffsetsMeters.size()
-            != static_cast<std::size_t>(terrain.sampleCount) * terrain.sampleCount
-        || !std::isfinite(terrain.spacingXMeters) || !(terrain.spacingXMeters > 0.0F)
-        || !std::isfinite(terrain.spacingYMeters) || !(terrain.spacingYMeters > 0.0F)
-        || !std::all_of(terrain.heightOffsetsMeters.begin(), terrain.heightOffsetsMeters.end(),
-            [](float height) { return std::isfinite(height); }))
-    {
-        throw std::invalid_argument("지형 격자 크기, 간격 또는 높이 값을 확인해 주세요.");
-    }
-
-    const float halfWidth = static_cast<float>(terrain.sampleCount - 1U)
-        * terrain.spacingXMeters * 0.5F;
-    const float halfDepth = static_cast<float>(terrain.sampleCount - 1U)
-        * terrain.spacingYMeters * 0.5F;
-    JPH::HeightFieldShapeSettings shapeSettings{
-        terrain.heightOffsetsMeters.data(),
-        JPH::Vec3{-halfWidth, 0.0F, -halfDepth},
-        JPH::Vec3{terrain.spacingXMeters, 1.0F, terrain.spacingYMeters},
-        terrain.sampleCount};
-    shapeSettings.mBitsPerSample = 16;
-    const JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
-    if (shapeResult.HasError())
-        throw std::runtime_error(std::string("Jolt 지형 충돌 모양을 만들지 못했습니다: ")
-            + shapeResult.GetError().c_str());
-
-    const JPH::Quat simulationUpRotation = JPH::Quat::sRotation(
-        JPH::Vec3::sAxisX(), JPH::DegreesToRadians(90.0F));
-    JPH::BodyCreationSettings settings{
-        shapeResult.Get(), JPH::RVec3::sZero(), simulationUpRotation,
-        JPH::EMotionType::Static, staticLayer};
-    settings.mFriction = 0.8F;
-
-    JPH::BodyInterface& bodyInterface = impl_->physics.GetBodyInterface();
-    const JPH::BodyID newTerrainBody = bodyInterface.CreateAndAddBody(
-        settings, JPH::EActivation::DontActivate);
-    if (newTerrainBody.IsInvalid())
-        throw std::runtime_error("Jolt 지형 충돌체를 만들지 못했습니다.");
-
-    if (impl_->hasTerrain)
-    {
-        bodyInterface.RemoveBody(impl_->terrainBody);
-        bodyInterface.DestroyBody(impl_->terrainBody);
-    }
-    else
-    {
-        bodyInterface.RemoveBody(impl_->groundBody);
-        bodyInterface.DestroyBody(impl_->groundBody);
-    }
-    impl_->terrainBody = newTerrainBody;
-    impl_->hasTerrain = true;
+    Impl::Body& body = impl_->GetBody(handle);
+    body.actuation.SetMotorTargets(speeds, body.maximumMotorSpeed);
 }
 
-void PhysicsWorld::SetState(RigidBodyHandle body, const RigidBodyState& state)
+void PhysicsWorld::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
-    if (!IsFinite(state.positionMeters)
-        || !IsFinite(state.linearVelocityMetersPerSecond)
+    if (!IsFinite(velocity))
+        throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
+    impl_->physicsEngine.setWind(ToAirSimPosition(velocity));
+}
+
+void PhysicsWorld::SetTerrain(terrain::TerrainGrid source)
+{
+    if (source.sampleCount < 3U
+        || source.heightOffsetsMeters.size()
+            != static_cast<std::size_t>(source.sampleCount) * source.sampleCount
+        || !std::isfinite(source.spacingXMeters) || !(source.spacingXMeters > 0.0F)
+        || !std::isfinite(source.spacingYMeters) || !(source.spacingYMeters > 0.0F)
+        || !std::all_of(source.heightOffsetsMeters.begin(), source.heightOffsetsMeters.end(),
+            [](float value) { return std::isfinite(value); }))
+    {
+        throw std::invalid_argument("지형 격자 크기, 간격과 높이 값을 확인해 주세요.");
+    }
+    impl_->terrain = std::move(source);
+}
+
+void PhysicsWorld::SetState(RigidBodyHandle handle, const RigidBodyState& state)
+{
+    if (!IsFinite(state.positionMeters) || !IsFinite(state.linearVelocityMetersPerSecond)
         || !IsFinite(state.angularVelocityRadiansPerSecond)
-        || !std::isfinite(glm::length(state.orientation))
-        || !(glm::length(state.orientation) > 0.0))
+        || !IsValidOrientation(state.orientation))
     {
         throw std::invalid_argument("강체의 초기 상태를 확인해 주세요.");
     }
-
-    impl_->physics.GetBodyInterface().SetPositionRotationAndVelocity(
-        impl_->GetBody(body),
-        JPH::RVec3{ToJolt(state.positionMeters)},
-        ToJolt(state.orientation),
-        ToJolt(state.linearVelocityMetersPerSecond),
-        ToJolt(state.angularVelocityRadiansPerSecond));
+    Impl::Body& body = impl_->GetBody(handle);
+    static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
+    if (body.updatedSinceReset)
+    {
+        body.actuation.reset();
+        body.model->reset();
+        body.updatedSinceReset = false;
+    }
+    const msr::airlib::Kinematics::State airSimState = ToAirSimState(state);
+    body.kinematics.setState(airSimState);
+    body.model->setPose(airSimState.pose);
+    body.model->setTwist(airSimState.twist);
+    body.model->setCollisionInfo({});
 }
 
-void PhysicsWorld::ApplyForce(RigidBodyHandle body, const glm::dvec3& forceNewtons)
+void PhysicsWorld::Step(double seconds, double* durationMicroseconds)
 {
-    if (!IsFinite(forceNewtons))
-        throw std::invalid_argument("힘은 유한한 숫자여야 합니다.");
-    impl_->physics.GetBodyInterface().AddForce(impl_->GetBody(body), ToJolt(forceNewtons));
-}
+    if (!std::isfinite(seconds) || !(seconds > 0.0))
+        throw std::invalid_argument("물리 시간 간격을 확인해 주세요.");
+    static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
+    static_cast<void>(impl_->clock->stepBy(seconds));
 
-void PhysicsWorld::ApplyForceAtPoint(
-    RigidBodyHandle body,
-    const glm::dvec3& forceNewtons,
-    const glm::dvec3& worldPositionMeters)
-{
-    if (!IsFinite(forceNewtons) || !IsFinite(worldPositionMeters))
-        throw std::invalid_argument("힘과 작용점은 유한한 숫자여야 합니다.");
-    impl_->physics.GetBodyInterface().AddForce(
-        impl_->GetBody(body), ToJolt(forceNewtons), JPH::RVec3{ToJolt(worldPositionMeters)});
-}
-
-void PhysicsWorld::ApplyTorque(RigidBodyHandle body, const glm::dvec3& torqueNewtonMeters)
-{
-    if (!IsFinite(torqueNewtonMeters))
-        throw std::invalid_argument("토크는 유한한 숫자여야 합니다.");
-    impl_->physics.GetBodyInterface().AddTorque(impl_->GetBody(body), ToJolt(torqueNewtonMeters));
-}
-
-void PhysicsWorld::Step(double seconds, int collisionSteps, double* durationMicroseconds)
-{
-    if (!std::isfinite(seconds) || !(seconds > 0.0) || collisionSteps <= 0)
-        throw std::invalid_argument("물리 시간 간격과 충돌 계산 횟수를 확인해 주세요.");
-
-    const float stepSeconds = ToJoltFloat(seconds);
-    if (!(stepSeconds > 0.0F))
-        throw std::invalid_argument("물리 시간 간격이 Jolt에서 0초로 줄어듭니다.");
+    auto advance = [&]
+    {
+        ++impl_->stepCount;
+        for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
+        {
+            auto& body = impl_->bodies[index];
+            if (!body)
+                continue;
+            body->environment.setPosition(body->kinematics.getPose().position);
+            body->environment.update();
+            body->model->setCollisionInfo(
+                impl_->BuildAirSimContactInfo(*body, index));
+            body->ApplyMotorTargets();
+            body->model->update();
+            body->updatedSinceReset = true;
+        }
+        impl_->physicsEngine.update();
+    };
 
     if (durationMicroseconds == nullptr)
     {
-        impl_->physics.Update(stepSeconds, collisionSteps,
-            &impl_->tempAllocator, &impl_->jobSystem);
+        advance();
         return;
     }
-
     const auto start = std::chrono::steady_clock::now();
-    impl_->physics.Update(stepSeconds, collisionSteps,
-        &impl_->tempAllocator, &impl_->jobSystem);
+    advance();
     *durationMicroseconds = std::chrono::duration<double, std::micro>(
         std::chrono::steady_clock::now() - start).count();
 }
 
-bool PhysicsWorld::DestroyBody(RigidBodyHandle body)
+bool PhysicsWorld::DestroyBody(RigidBodyHandle handle)
 {
-    if (body.value >= impl_->bodies.size() || !impl_->bodies[body.value].has_value())
+    if (handle.value >= impl_->bodies.size() || !impl_->bodies[handle.value])
         return false;
-
-    const JPH::BodyID id = *impl_->bodies[body.value];
-    JPH::BodyInterface& bodyInterface = impl_->physics.GetBodyInterface();
-    bodyInterface.RemoveBody(id);
-    bodyInterface.DestroyBody(id);
-    impl_->bodies[body.value].reset();
+    impl_->physicsEngine.erase_remove(impl_->bodies[handle.value]->model.get());
+    impl_->bodies[handle.value].reset();
     return true;
 }
 
-RigidBodyState PhysicsWorld::State(RigidBodyHandle body) const
+RigidBodyState PhysicsWorld::State(RigidBodyHandle handle) const
 {
-    const JPH::BodyID id = impl_->GetBody(body);
-    const JPH::BodyInterface& bodyInterface = impl_->physics.GetBodyInterface();
-    JPH::RVec3 position;
-    JPH::Quat orientation;
-    JPH::Vec3 linearVelocity;
-    JPH::Vec3 angularVelocity;
-    bodyInterface.GetPositionAndRotation(id, position, orientation);
-    bodyInterface.GetLinearAndAngularVelocity(id, linearVelocity, angularVelocity);
-    return {
-        ToGlm(position),
-        ToGlm(orientation),
-        ToGlm(linearVelocity),
-        ToGlm(angularVelocity)};
+    return ToProjectState(impl_->GetBody(handle).kinematics.getState());
+}
+
+std::array<double, 4> PhysicsWorld::MotorSpeedsRadiansPerSecond(
+    RigidBodyHandle handle) const
+{
+    const Impl::Body& body = impl_->GetBody(handle);
+    std::array<double, 4> speeds{};
+    for (std::size_t index = 0; index < speeds.size(); ++index)
+    {
+        speeds[index] = body.model->getRotorOutput(
+            static_cast<msr::airlib::uint>(index)).speed;
+    }
+    return speeds;
 }
 }

@@ -6,7 +6,7 @@
 
 namespace aerosimlab::sensor
 {
-TEST(RgbFrame, ValidatesFrameAndFlipsOpenGlRowOrder)
+void Verify_RgbFrame_ValidatesFrameAndFlipsOpenGlRowOrder()
 {
     RgbFrame frame{2, 1, 4, {1, 2, 3, 4, 5, 6}};
     EXPECT_TRUE(frame.IsValid());
@@ -27,4 +27,10 @@ TEST(RgbFrame, ValidatesFrameAndFlipsOpenGlRowOrder)
     frame.FlipVertical();
     EXPECT_EQ(frame.pixels, (std::vector<std::uint8_t>{1, 2, 3}));
 }
+
+TEST(RgbFrameTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_RgbFrame_ValidatesFrameAndFlipsOpenGlRowOrder());
+}
+
 }

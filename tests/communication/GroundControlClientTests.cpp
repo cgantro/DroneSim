@@ -10,7 +10,7 @@
 
 namespace aerosimlab::ground_control
 {
-TEST(GroundControlClient, SendsCommandAndReadsMatchingUdpReply)
+void Verify_GroundControlClient_SendsCommandAndReadsMatchingUdpReply()
 {
     communication::UdpSocket simulatorSocket(0);
     communication::UdpSocket groundControlSocket(0);
@@ -56,4 +56,10 @@ TEST(GroundControlClient, SendsCommandAndReadsMatchingUdpReply)
     EXPECT_EQ(result.reply.sequence, command.sequence);
     EXPECT_EQ(result.reply.appliedTick, 12);
 }
+
+TEST(GroundControlClientTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_GroundControlClient_SendsCommandAndReadsMatchingUdpReply());
+}
+
 }

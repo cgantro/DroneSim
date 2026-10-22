@@ -10,13 +10,13 @@
 
 namespace aerosimlab::terrain
 {
-TEST(TerrainGrid, LoadsThePublicTestAreaWithItsLocalHeightOrigin)
+void Verify_TerrainGrid_LoadsThePublicTestAreaWithItsLocalHeightOrigin()
 {
     const TerrainGrid terrain = TerrainGrid::Load(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
         / "assets/maps/bukhansan-demo/terrain.grid");
 
-    ASSERT_EQ(terrain.sampleCount, 65U);
+    ASSERT_EQ(terrain.sampleCount, 385U);
     EXPECT_NEAR(terrain.centerLatitudeDegrees, 37.661111, 1.0e-5);
     EXPECT_NEAR(terrain.centerLongitudeDegrees, 126.983889, 1.0e-5);
     EXPECT_NEAR(terrain.ToLocalMeters(
@@ -28,7 +28,11 @@ TEST(TerrainGrid, LoadsThePublicTestAreaWithItsLocalHeightOrigin)
         terrain.centerLatitudeDegrees,
         terrain.centerLongitudeDegrees + 1.0 / 3600.0).x, terrain.spacingXMeters, 0.01);
     EXPECT_NEAR(terrain.referenceElevationMeters, 504.0F, 1.0e-5F);
-    EXPECT_NEAR(terrain.HeightAt(32, 32), 0.0F, 1.0e-5F);
+    EXPECT_NEAR(terrain.HeightAt(192, 192), 0.0F, 1.0e-5F);
+    EXPECT_NEAR((terrain.sampleCount - 1U) * terrain.spacingXMeters,
+        9399.4F, 1.0F);
+    EXPECT_NEAR((terrain.sampleCount - 1U) * terrain.spacingYMeters,
+        11874.1F, 1.0F);
     EXPECT_GT(terrain.spacingXMeters, 24.0F);
     EXPECT_LT(terrain.spacingXMeters, 25.0F);
     EXPECT_GT(terrain.spacingYMeters, 30.0F);
@@ -39,7 +43,7 @@ TEST(TerrainGrid, LoadsThePublicTestAreaWithItsLocalHeightOrigin)
         terrain.heightOffsetsMeters.end()), 300.0F);
 }
 
-TEST(TerrainGrid, RejectsARequestedSampleOutsideTheGrid)
+void Verify_TerrainGrid_RejectsARequestedSampleOutsideTheGrid()
 {
     TerrainGrid terrain;
     terrain.sampleCount = 3;
@@ -48,7 +52,7 @@ TEST(TerrainGrid, RejectsARequestedSampleOutsideTheGrid)
     EXPECT_THROW(static_cast<void>(terrain.HeightAt(3, 0)), std::out_of_range);
 }
 
-TEST(TerrainGrid, InterpolatesHeightAtALocalPosition)
+void Verify_TerrainGrid_InterpolatesHeightAtALocalPosition()
 {
     TerrainGrid terrain;
     terrain.sampleCount = 3;
@@ -62,7 +66,7 @@ TEST(TerrainGrid, InterpolatesHeightAtALocalPosition)
         std::out_of_range);
 }
 
-TEST(BuildingFootprint, LoadsThePublicMapWithoutInventingMissingHeights)
+void Verify_BuildingFootprint_LoadsThePublicMapWithoutInventingMissingHeights()
 {
     const std::filesystem::path root{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
@@ -82,7 +86,7 @@ TEST(BuildingFootprint, LoadsThePublicMapWithoutInventingMissingHeights)
     }
 }
 
-TEST(StaticFacility, LoadsTheSurveyedParkFeaturesAndCollisionBounds)
+void Verify_StaticFacility_LoadsTheSurveyedParkFeaturesAndCollisionBounds()
 {
     const std::vector<StaticFacility> facilities = LoadStaticFacilities(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
@@ -103,4 +107,14 @@ TEST(StaticFacility, LoadsTheSurveyedParkFeaturesAndCollisionBounds)
         EXPECT_LT(std::abs(facility.centerMeters.y), 1'000.0);
     }
 }
+
+TEST(TerrainGridTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_TerrainGrid_LoadsThePublicTestAreaWithItsLocalHeightOrigin());
+    EXPECT_NO_FATAL_FAILURE(Verify_TerrainGrid_RejectsARequestedSampleOutsideTheGrid());
+    EXPECT_NO_FATAL_FAILURE(Verify_TerrainGrid_InterpolatesHeightAtALocalPosition());
+    EXPECT_NO_FATAL_FAILURE(Verify_BuildingFootprint_LoadsThePublicMapWithoutInventingMissingHeights());
+    EXPECT_NO_FATAL_FAILURE(Verify_StaticFacility_LoadsTheSurveyedParkFeaturesAndCollisionBounds());
+}
+
 }

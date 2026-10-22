@@ -20,6 +20,16 @@ if(GIT_FOUND)
   if(NOT AEROSIMLAB_SOURCE_REVISION)
     set(AEROSIMLAB_SOURCE_REVISION "unknown")
   endif()
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" status --porcelain
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE AEROSIMLAB_WORKTREE_STATUS
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(AEROSIMLAB_WORKTREE_STATUS)
+    string(APPEND AEROSIMLAB_SOURCE_REVISION "-dirty")
+  endif()
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -42,7 +52,7 @@ aerosimlab_add_common_dependencies()
 aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
 if(NOT EMSCRIPTEN)
-  aerosimlab_add_physics_dependencies()
+  aerosimlab_add_airsim_dependency()
 endif()
 
 add_library(aerosimlab_terrain STATIC
@@ -71,7 +81,7 @@ target_link_libraries(aerosimlab_simulation_core
   PRIVATE nlohmann_json::nlohmann_json flecs::flecs_static
 )
 if(NOT EMSCRIPTEN)
-  target_link_libraries(aerosimlab_simulation_core PRIVATE Jolt)
+  target_link_libraries(aerosimlab_simulation_core PRIVATE aerosimlab_airsim)
 endif()
 
 add_library(aerosimlab_communication STATIC
@@ -184,6 +194,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
 
   add_library(aerosimlab_simulator_app STATIC
     apps/simulator/AeroSimLabApp.cpp
+    apps/simulator/AeroSimLabAppInput.cpp
     apps/simulator/SimulationBenchmark.cpp
   )
   target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator)
@@ -327,7 +338,7 @@ if(BUILD_TESTING)
   endif()
 
   add_test(NAME HeadlessScenarioSmoke
-    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/flight/normal-flight.json")
+    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/flight/rigid-body-flight.json")
   set_tests_properties(HeadlessScenarioSmoke PROPERTIES LABELS "INTEGRATION;simulation")
 
   add_test(NAME HeadlessFaultScenarioSmoke

@@ -3,6 +3,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cstddef>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -274,6 +275,7 @@ std::string EncodeReply(const CommandReply& reply)
                 state.angularVelocityRadiansPerSecond.x,
                 state.angularVelocityRadiansPerSecond.y,
                 state.angularVelocityRadiansPerSecond.z}},
+            {"motor_speeds_radians_per_second", state.motorSpeedsRadiansPerSecond},
             {"yaw_radians", state.yawRadians},
             {"camera_status", aerosimlab::communication::ToString(camera.status)},
             {"camera_frame_count", camera.frameCount},
@@ -308,6 +310,17 @@ CommandReply DecodeReply(std::string_view datagram)
     if (telemetry.contains("angular_velocity_radians_per_second"))
         state.angularVelocityRadiansPerSecond =
             ReadVector(Required(telemetry, "angular_velocity_radians_per_second"));
+    if (telemetry.contains("motor_speeds_radians_per_second"))
+    {
+        const Json& speeds = Required(telemetry, "motor_speeds_radians_per_second");
+        if (!speeds.is_array() || speeds.size() != state.motorSpeedsRadiansPerSecond.size())
+            throw std::invalid_argument("로터 속도는 네 개 숫자로 된 배열이어야 합니다.");
+        for (std::size_t index = 0; index < speeds.size(); ++index)
+        {
+            state.motorSpeedsRadiansPerSecond[index] =
+                ReadFinite(speeds[index], "motor_speeds_radians_per_second");
+        }
+    }
     state.yawRadians = ReadFinite(Required(telemetry, "yaw_radians"), "yaw_radians");
     auto& camera = reply.telemetry.camera;
     camera.status = ReadCameraStatus(Required(telemetry, "camera_status"));

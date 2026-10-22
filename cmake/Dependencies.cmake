@@ -23,27 +23,32 @@ function(aerosimlab_add_ecs_dependencies)
   FetchContent_MakeAvailable(flecs)
 endfunction()
 
-function(aerosimlab_add_physics_dependencies)
-  set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "Use project warning settings for Jolt" FORCE)
-  set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "Keep the project's compiler flags" FORCE)
-  set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "Disable Jolt-only link-time optimization" FORCE)
-  set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "Keep physics updates from changing FPU traps" FORCE)
-  set(GENERATE_DEBUG_SYMBOLS OFF CACHE BOOL "Use project debug-symbol settings" FORCE)
-  set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "Match the project's dynamic MSVC runtime" FORCE)
-  set(JPH_USE_DX12 OFF CACHE BOOL "Do not build Jolt compute backends" FORCE)
-  set(JPH_USE_VK OFF CACHE BOOL "Do not build Jolt compute backends" FORCE)
-  set(JPH_USE_MTL OFF CACHE BOOL "Do not build Jolt compute backends" FORCE)
-  set(JPH_USE_CPU_COMPUTE OFF CACHE BOOL "Do not build Jolt compute backends" FORCE)
-  set(ENABLE_INSTALL OFF CACHE BOOL "Do not install a project-private dependency" FORCE)
+function(aerosimlab_add_airsim_dependency)
+  set(EIGEN_BUILD_DOC OFF CACHE BOOL "Disable Eigen documentation" FORCE)
+  set(_aerosimlab_build_testing ${BUILD_TESTING})
+  set(BUILD_TESTING OFF)
+  FetchContent_Declare(
+    Eigen3
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG 3.4.0
+    GIT_SHALLOW TRUE
+  )
+  FetchContent_MakeAvailable(Eigen3)
+  set(BUILD_TESTING ${_aerosimlab_build_testing})
 
   FetchContent_Declare(
-    JoltPhysics
-    GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
-    GIT_TAG v5.6.0
-    GIT_SHALLOW TRUE
-    SOURCE_SUBDIR Build
+    AirSim
+    GIT_REPOSITORY https://github.com/microsoft/AirSim.git
+    GIT_TAG 1ca93f6f77e4e8a39b2b241c1fe2764da4d7dd41
+    GIT_SHALLOW FALSE
   )
-  FetchContent_MakeAvailable(JoltPhysics)
+  FetchContent_MakeAvailable(AirSim)
+
+  add_library(aerosimlab_airsim INTERFACE)
+  target_include_directories(aerosimlab_airsim SYSTEM INTERFACE
+    "${airsim_SOURCE_DIR}/AirLib/include"
+  )
+  target_link_libraries(aerosimlab_airsim INTERFACE Eigen3::Eigen)
 endfunction()
 
 function(aerosimlab_add_scenario_dependencies)

@@ -13,6 +13,7 @@
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 
 namespace aerosimlab::simulation
 {
@@ -34,7 +35,6 @@ struct SimulationCore::EcsStorage
     struct DroneActuation
     {
         QuadrotorParameters parameters;
-        QuadrotorState motors;
     };
 #endif
 
@@ -44,7 +44,6 @@ struct SimulationCore::EcsStorage
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
     flecs::entity camera;
-    glm::dvec3 windVelocityMetersPerSecond{0.0};
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
 #if !defined(__EMSCRIPTEN__)
@@ -121,13 +120,9 @@ struct SimulationCore::EcsStorage
             RigidBodyDefinition definition;
             definition.positionMeters = positionMeters;
             definition.orientation = initialState.orientation;
-            definition.massKilograms = parameters.massKilograms;
-            definition.principalInertiaKilogramMetersSquared =
-                parameters.principalInertiaKilogramMetersSquared;
-            const RigidBodyHandle body = physics->CreateCompoundBoxes(
-                definition, parameters.collisionBoxes);
+            const RigidBodyHandle body = physics->CreateQuadrotor(definition, parameters);
             drone.set<PhysicsBody>({body});
-            drone.set<DroneActuation>({parameters, {}});
+            drone.set<DroneActuation>({parameters});
             CopyPhysicsState(drone.get_mut<DroneState>(), body);
         }
 #endif
@@ -194,7 +189,6 @@ struct SimulationCore::EcsStorage
             initialPose.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
         const RigidBodyHandle body = drone.get<PhysicsBody>().handle;
         physics->SetState(body, initialState);
-        drone.get_mut<DroneActuation>().motors = {};
         CopyPhysicsState(drone.get_mut<DroneState>(), body);
     }
 
@@ -210,18 +204,7 @@ struct SimulationCore::EcsStorage
 
         const auto targetSpeeds = QuadrotorFlightController::MotorTargets(
             state, control, actuation.parameters, step);
-        QuadrotorModel::AdvanceMotors(
-            actuation.motors, targetSpeeds, actuation.parameters, step);
-        const glm::dquat worldToBody = glm::inverse(state.orientation);
-        const glm::dvec3 airRelativeVelocityBody = worldToBody
-            * (state.velocityMetersPerSecond - windVelocityMetersPerSecond);
-        const glm::dvec3 angularVelocityBody =
-            worldToBody * state.angularVelocityRadiansPerSecond;
-        const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(
-            actuation.motors, actuation.parameters,
-            airRelativeVelocityBody, angularVelocityBody);
-        physics->ApplyForce(body, state.orientation * wrench.forceNewtons);
-        physics->ApplyTorque(body, state.orientation * wrench.torqueNewtonMeters);
+        physics->SetMotorTargets(body, targetSpeeds);
     }
 
     void SynchronizeRigidBody(
@@ -239,7 +222,7 @@ struct SimulationCore::EcsStorage
             state.mode = FlightMode::Hovering;
         }
         else if (state.mode == FlightMode::FollowingWaypoint
-            && glm::length(control.waypointMeters - state.positionMeters) < 0.05
+            && glm::length(control.waypointMeters - state.positionMeters) < 0.15
             && glm::length(state.velocityMetersPerSecond) < 0.15)
         {
             state.mode = FlightMode::Hovering;
@@ -263,6 +246,7 @@ struct SimulationCore::EcsStorage
         target.velocityMetersPerSecond = source.linearVelocityMetersPerSecond;
         target.orientation = source.orientation;
         target.angularVelocityRadiansPerSecond = source.angularVelocityRadiansPerSecond;
+        target.motorSpeedsRadiansPerSecond = physics->MotorSpeedsRadiansPerSecond(body);
         const glm::dquat& q = source.orientation;
         target.yawRadians = std::atan2(
             2.0 * (q.w * q.z + q.x * q.y),
@@ -272,7 +256,7 @@ struct SimulationCore::EcsStorage
     void AdvancePhysicsWorld()
     {
         if (measurePhysicsStepDuration)
-            physics->Step(DroneModel::fixedStepSeconds, 1,
+            physics->Step(DroneModel::fixedStepSeconds,
                 &lastPhysicsStepDurationMicroseconds);
         else
             physics->Step(DroneModel::fixedStepSeconds);
@@ -480,7 +464,10 @@ void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
     if (!std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))
         throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
-    ecs_->windVelocityMetersPerSecond = velocity;
+#if !defined(__EMSCRIPTEN__)
+    if (ecs_->dynamics == SimulationDynamics::RigidBody)
+        ecs_->physics->SetWindVelocityMetersPerSecond(velocity);
+#endif
 }
 
 void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept
@@ -501,19 +488,15 @@ void SimulationCore::AddStaticObstacleBox(
     if (!ecs_->physics)
         throw std::logic_error("고정 장애물은 강체 모의에서만 추가할 수 있습니다.");
 
-    RigidBodyDefinition definition;
-    definition.positionMeters = centerMeters;
-    definition.halfExtentsMeters = halfExtentsMeters;
-    definition.isStatic = true;
-    static_cast<void>(ecs_->physics->CreateBox(definition));
+    ecs_->physics->AddStaticObstacleBox(centerMeters, halfExtentsMeters);
 }
 
-void SimulationCore::SetTerrain(const terrain::TerrainGrid& terrain)
+void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
 {
     if (!ecs_->physics)
         throw std::logic_error("지형 충돌은 강체 모의에서만 설정할 수 있습니다.");
 
-    ecs_->physics->SetTerrain(terrain);
+    ecs_->physics->SetTerrain(std::move(terrain));
 }
 #endif
 

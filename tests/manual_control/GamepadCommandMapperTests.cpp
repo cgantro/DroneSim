@@ -6,7 +6,7 @@
 
 namespace aerosimlab::manual_control
 {
-TEST(GamepadCommandMapper, AppliesDeadZoneAndRotatesMovement)
+void Verify_GamepadCommandMapper_AppliesDeadZoneAndRotatesMovement()
 {
     EXPECT_DOUBLE_EQ(ApplyDeadZone(0.08), 0.0);
     EXPECT_DOUBLE_EQ(ApplyDeadZone(-0.08), 0.0);
@@ -18,7 +18,7 @@ TEST(GamepadCommandMapper, AppliesDeadZoneAndRotatesMovement)
     EXPECT_NEAR(command.velocityMetersPerSecond.y, simulation::DroneModel::maximumSpeedMetersPerSecond, 1.0e-12);
 }
 
-TEST(GamepadCommandMapper, LimitsSpeedAndMapsHeightAndYaw)
+void Verify_GamepadCommandMapper_LimitsSpeedAndMapsHeightAndYaw()
 {
     const auto command = MapAxes(
         GamepadAxes{.forward = 1.0, .right = 1.0, .vertical = 0.5, .yaw = -1.0}, 0.0);
@@ -31,7 +31,7 @@ TEST(GamepadCommandMapper, LimitsSpeedAndMapsHeightAndYaw)
         -simulation::DroneModel::maximumYawRateRadiansPerSecond);
 }
 
-TEST(GamepadCommandMapper, RespectsControlSourceAndResolvesDisconnectAction)
+void Verify_GamepadCommandMapper_RespectsControlSourceAndResolvesDisconnectAction()
 {
     using Action = GamepadDisconnectAction;
     using Mode = simulation::FlightMode;
@@ -45,4 +45,12 @@ TEST(GamepadCommandMapper, RespectsControlSourceAndResolvesDisconnectAction)
     EXPECT_EQ(ResolveGamepadDisconnectAction(true, false, Mode::Grounded), Action::ClearPendingAction);
     EXPECT_EQ(ResolveGamepadDisconnectAction(true, true, Mode::Flying), Action::ClearPendingAction);
 }
+
+TEST(GamepadCommandMapperTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_GamepadCommandMapper_AppliesDeadZoneAndRotatesMovement());
+    EXPECT_NO_FATAL_FAILURE(Verify_GamepadCommandMapper_LimitsSpeedAndMapsHeightAndYaw());
+    EXPECT_NO_FATAL_FAILURE(Verify_GamepadCommandMapper_RespectsControlSourceAndResolvesDisconnectAction());
+}
+
 }

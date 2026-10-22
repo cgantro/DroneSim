@@ -9,7 +9,6 @@
 #include "communication/UdpSocket.h"
 #endif
 #include "simulation_core/SimulationCore.h"
-#include "terrain/TerrainGrid.h"
 
 #include <glm/glm.hpp>
 
@@ -128,6 +127,8 @@ private:
     bool gamepadConnected_ = false;
     bool previousTakeoffButton_ = false;
     bool previousLandButton_ = false;
+    int gamepadJoystickId_ = -1;
+    int unsupportedJoystickId_ = -1;
     std::optional<aerosimlab::simulation::DroneCommand> pendingControllerAction_;
     std::optional<aerosimlab::manual_control::PilotCommand> pendingPilotCommand_;
     aerosimlab::sensor::RgbFrame eoFrame_;
@@ -139,6 +140,7 @@ private:
     std::size_t renderedFrames_ = 0;
     std::clock_t benchmarkCpuStart_ = 0;
     std::vector<double> tickDurationsMicroseconds_;
+    std::vector<double> renderFrameDurationsMicroseconds_;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds_;
     std::vector<double> visionDurationsMicroseconds_;
@@ -175,7 +177,6 @@ private:
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Mesh> facilityMesh_;
     std::vector<glm::mat4> buildingTransforms_;
-    aerosimlab::terrain::TerrainGrid terrain_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};

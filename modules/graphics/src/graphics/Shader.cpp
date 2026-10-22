@@ -1,34 +1,34 @@
 #include "graphics/Shader.h"
 
 #include "graphics/GlApi.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <vector>
-#include <fstream>
-#include <sstream>
-#include <iostream>
-#include <stdexcept>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace aerosimlab::graphics
 {
-
-
-
-// 파일의 단계 이름을 OpenGL이 쓰는 정점·픽셀 계산 종류로 바꾼다.
-static GLenum ShaderTypeFromString(const std::string& type)
+namespace
+{
+/** @brief 파일에 적힌 단계 이름을 OpenGL 셰이더 종류로 바꾼다. */
+GLenum ShaderTypeFromString(const std::string& type)
 {
     if (type == "vertex")
         return GL_VERTEX_SHADER;
     if (type == "fragment" || type == "pixel")
         return GL_FRAGMENT_SHADER;
-    throw std::runtime_error("Unknown Shader Type: " + type);
+
+    throw std::runtime_error("알 수 없는 셰이더 단계입니다: " + type);
 }
 
-namespace
-{
+/** @brief 링크가 끝날 때까지 임시 셰이더와 프로그램의 소유권을 맡는다. */
 class PendingShaderProgram final
 {
 public:
@@ -37,7 +37,7 @@ public:
         shaderIDs_.reserve(shaderCount);
         program_ = glCreateProgram();
         if (program_ == 0)
-            throw std::runtime_error("Failed to create Shader Program");
+            throw std::runtime_error("화면 계산 프로그램을 만들지 못했습니다.");
     }
 
     ~PendingShaderProgram()
@@ -94,6 +94,7 @@ std::string ShaderInfoLog(GLuint shader)
     glGetShaderInfoLog(shader, length, &written, log.data());
     if (written <= 0)
         return {};
+
     log.resize(static_cast<std::size_t>(written));
     return log;
 }
@@ -110,92 +111,85 @@ std::string ProgramInfoLog(GLuint program)
     glGetProgramInfoLog(program, length, &written, log.data());
     if (written <= 0)
         return {};
+
     log.resize(static_cast<std::size_t>(written));
     return log;
 }
 }
 
-Shader::Shader(const std::string& filepath){
-    const std::string src = ReadFile(filepath);
-
-    // 파일 내용을 #type 표식이 나눈 구간별로 읽어 각 Shader 단계의 소스 문자열을 만든다.
-    const auto shaderSources = PreProcess(src);
-
-    Compile(shaderSources);
-
-    m_Name = std::filesystem::path(filepath)
-        .stem()
-        .string();
+Shader::Shader(const std::string& filepath)
+{
+    const std::string source = ReadFile(filepath);
+    Compile(PreProcess(source));
+    m_Name = std::filesystem::path(filepath).stem().string();
 }
 
 Shader::Shader(
     const std::string& name,
-    const std::string& vertexSrc,
-    const std::string& fragmentSrc): m_Name(name){
-    std::unordered_map<unsigned int, std::string> srcs;
-
-    srcs[GL_VERTEX_SHADER] = vertexSrc;
-    srcs[GL_FRAGMENT_SHADER] = fragmentSrc;
-
-    Compile(srcs);
+    const std::string& vertexSource,
+    const std::string& fragmentSource)
+    : m_Name(name)
+{
+    std::unordered_map<unsigned int, std::string> sources{
+        {GL_VERTEX_SHADER, vertexSource},
+        {GL_FRAGMENT_SHADER, fragmentSource}};
+    Compile(sources);
 }
 
-Shader::~Shader(){
-    if(m_RendererID != 0){
+Shader::~Shader()
+{
+    if (m_RendererID != 0)
         glDeleteProgram(m_RendererID);
-
-        m_RendererID = 0;
-    }
 }
 
-std::string Shader::ReadFile(const std::string& filepath){
-    // Shader 전처리는 호출자가 수행하므로 이 단계에서는 #type 표식까지 원문 그대로 유지한다.
+std::string Shader::ReadFile(const std::string& filepath)
+{
     std::ifstream file(filepath, std::ios::in | std::ios::binary);
+    if (!file.is_open())
+        throw std::runtime_error("화면 계산 코드 파일을 열지 못했습니다: " + filepath);
 
-    if(!file.is_open()) throw std::runtime_error(
-        "Could not open Shader File: " + filepath
-    );
-
-    std::stringstream stream;
-    stream << file.rdbuf();
-
-    return stream.str();
+    std::stringstream source;
+    source << file.rdbuf();
+    return source.str();
 }
 
-std::unordered_map<unsigned int, std::string> Shader::PreProcess(const std::string& source){
+std::unordered_map<unsigned int, std::string> Shader::PreProcess(const std::string& source)
+{
     std::unordered_map<unsigned int, std::string> shaderSources;
-
-    std::istringstream stream(source);
+    std::istringstream input(source);
     std::string line;
-
     GLenum currentType = 0;
     std::stringstream currentSource;
 
-    // 각 표식은 다음 줄부터 특정 Shader 단계의 소스를 모으는 경계다. 첫 표식 앞에 있는 설명문은 단계 소스에 넣지 않는다.
-    while(std::getline(stream,line)){
-        // Windows 줄바꿈은 '\r\n'으로 끝날 수 있다. 줄 끝에 남은 '\r'을 제거해 표식 문자열을 정확히 비교한다.
-        if(!line.empty() && line.back() == '\r') line.pop_back();
+    // #type 표식 뒤에 나오는 줄을 해당 셰이더 단계의 코드로 모은다.
+    while (std::getline(input, line))
+    {
+        // Windows 줄바꿈 끝의 '\r'을 지워 표식 이름을 정확히 읽는다.
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
 
-        // 새 #type 경계를 만나면 앞 단계의 소스를 저장하고, 이후 줄은 새로 지정된 단계에 모은다.
-        if(line.rfind("#type ",0) == 0){
-            if(currentType != 0){
+        if (line.rfind("#type ", 0) == 0)
+        {
+            if (currentType != 0)
+            {
                 shaderSources[currentType] = currentSource.str();
-
                 currentSource.str("");
                 currentSource.clear();
             }
 
-            const std::string type = line.substr(6);
-            currentType = ShaderTypeFromString(type);
+            currentType = ShaderTypeFromString(line.substr(6));
             continue;
         }
-        if(currentType == 0) continue;
-        currentSource << line << '\n';
+
+        if (currentType != 0)
+            currentSource << line << '\n';
     }
-    // 파일 끝(EOF)에 도달하면 마지막으로 읽은 #type 구간의 소스도 저장한다.
-    if(currentType != 0) shaderSources[currentType] = currentSource.str();
-    
-    if(shaderSources.empty()) throw std::runtime_error("No Shader Source found.");
+
+    // 파일 끝에 도달하면 마지막 단계의 코드도 저장한다.
+    if (currentType != 0)
+        shaderSources[currentType] = currentSource.str();
+    if (shaderSources.empty())
+        throw std::runtime_error("화면 계산 코드가 없습니다.");
 
     return shaderSources;
 }
@@ -225,56 +219,96 @@ void Shader::Compile(const std::unordered_map<unsigned int, std::string>& shader
 
         const GLuint shader = pending.CreateShader(type);
         if (shader == 0)
-            throw std::runtime_error("Failed to Create Shader object");
+            throw std::runtime_error("화면 계산 단계를 만들지 못했습니다.");
 
-        const GLchar* sourceCstr = source.c_str();
-        glShaderSource(shader, 1, &sourceCstr, nullptr);
+        const GLchar* sourcePointer = source.c_str();
+        glShaderSource(shader, 1, &sourcePointer, nullptr);
         glCompileShader(shader);
 
-        GLint isCompiled = GL_FALSE;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
-        if (isCompiled == GL_FALSE)
-            throw std::runtime_error("Shader Compile Failed\n" + ShaderInfoLog(shader));
+        GLint compiled = GL_FALSE;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+        if (compiled == GL_FALSE)
+            throw std::runtime_error("화면 계산 코드 컴파일에 실패했습니다.\n"
+                + ShaderInfoLog(shader));
 
         pending.Attach(shader);
     }
 
-    // 각 단계가 따로 컴파일되어도 서로 연결되지 않을 수 있다. 따라서 모든 단계를 Program으로 묶는 링크 작업을 별도로 확인한다.
+    // 단계별 코드를 하나의 GPU 프로그램으로 연결한다.
     glLinkProgram(pending.Program());
-    GLint isLinked = GL_FALSE;
-    glGetProgramiv(pending.Program(), GL_LINK_STATUS, &isLinked);
-    if (isLinked == GL_FALSE)
-        throw std::runtime_error("Shader Link Failed:\n" + ProgramInfoLog(pending.Program()));
+    GLint linked = GL_FALSE;
+    glGetProgramiv(pending.Program(), GL_LINK_STATUS, &linked);
+    if (linked == GL_FALSE)
+        throw std::runtime_error("화면 계산 단계를 연결하지 못했습니다.\n"
+            + ProgramInfoLog(pending.Program()));
 
-    // 링크가 성공하면 실행에 필요한 코드는 Program에 보존된다. 따라서 컴파일에 쓴 임시 Shader 단계 객체는 Program에서 분리해 해제한다.
-    m_RendererID = static_cast<uint32_t>(pending.Release());
+    // 연결에 성공하면 실행 프로그램만 이 객체가 소유하고, 임시 단계 코드는 해제한다.
+    m_RendererID = static_cast<std::uint32_t>(pending.Release());
 }
 
-void Shader::Bind() const {glUseProgram(m_RendererID);} 
-void Shader::UnBind() const {glUseProgram(0);}
+void Shader::Bind() const
+{
+    glUseProgram(m_RendererID);
+}
 
-int Shader::GetUniformLocation(const std::string& name)const{
-    auto it = m_UniformLocationCache.find(name);
-    if(it != m_UniformLocationCache.end()) return it->second;
+void Shader::UnBind() const
+{
+    glUseProgram(0);
+}
 
-    // uniform의 위치는 링크된 Program 안에서 고정된다. 찾은 위치와 존재하지 않음을 뜻하는 -1을 모두 이름별로 저장해 반복 조회를 피한다.
-    int location = glGetUniformLocation(m_RendererID,name.c_str());
-    if(location == -1) std::cout << "Warning: Uniform " << name << "'doesn't exist\n";
+int Shader::GetUniformLocation(const std::string& name) const
+{
+    const auto found = m_UniformLocationCache.find(name);
+    if (found != m_UniformLocationCache.end())
+        return found->second;
+
+    // 입력 위치는 프로그램 연결 뒤 바뀌지 않아, 이름별로 한 번만 조회한다.
+    const int location = glGetUniformLocation(m_RendererID, name.c_str());
+    if (location == -1)
+        std::cout << "경고: 입력값을 셰이더에서 찾지 못했습니다: " << name << '\n';
 
     m_UniformLocationCache[name] = location;
-
     return location;
 }
 
+// 각 입력 함수는 현재 선택한 GPU 프로그램에 값을 전달한다. 행렬은 전치하지 않고 보낸다.
+void Shader::SetInt(const std::string& name, int value)
+{
+    glUniform1i(GetUniformLocation(name), value);
+}
 
-// 각 Set 함수는 값을 대응하는 OpenGL uniform 자료형으로 전달한다. 값을 쓰기 전에 Program을 Bind해야 하며 행렬은 전치 없이 보낸다.
-void Shader::SetInt(const std::string& name, int value){glUniform1i(GetUniformLocation(name),value);}
-void Shader::SetIntArray(const std::string& name, int* values, uint32_t cnt){glUniform1iv(GetUniformLocation(name),static_cast<GLsizei>(cnt),values);}
-void Shader::SetFloat(const std::string& name, float value){glUniform1f(GetUniformLocation(name),value);}
-void Shader::SetFloat2(const std::string& name, const glm::vec2& value){glUniform2fv(GetUniformLocation(name),1,glm::value_ptr(value));}
-void Shader::SetFloat3(const std::string& name, const glm::vec3& value){glUniform3fv(GetUniformLocation(name),1,glm::value_ptr(value));}
-void Shader::SetFloat4(const std::string& name, const glm::vec4& value){glUniform4fv(GetUniformLocation(name),1,glm::value_ptr(value));}
-void Shader::SetMat3(const std::string& name, const glm::mat3& value){glUniformMatrix3fv(GetUniformLocation(name),1,GL_FALSE,glm::value_ptr(value));}
-void Shader::SetMat4(const std::string& name, const glm::mat4& value){glUniformMatrix4fv(GetUniformLocation(name),1,GL_FALSE,glm::value_ptr(value));}
+void Shader::SetIntArray(const std::string& name, int* values, uint32_t count)
+{
+    glUniform1iv(GetUniformLocation(name), static_cast<GLsizei>(count), values);
+}
 
-} // namespace aerosimlab::graphics
+void Shader::SetFloat(const std::string& name, float value)
+{
+    glUniform1f(GetUniformLocation(name), value);
+}
+
+void Shader::SetFloat2(const std::string& name, const glm::vec2& value)
+{
+    glUniform2fv(GetUniformLocation(name), 1, glm::value_ptr(value));
+}
+
+void Shader::SetFloat3(const std::string& name, const glm::vec3& value)
+{
+    glUniform3fv(GetUniformLocation(name), 1, glm::value_ptr(value));
+}
+
+void Shader::SetFloat4(const std::string& name, const glm::vec4& value)
+{
+    glUniform4fv(GetUniformLocation(name), 1, glm::value_ptr(value));
+}
+
+void Shader::SetMat3(const std::string& name, const glm::mat3& matrix)
+{
+    glUniformMatrix3fv(GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(matrix));
+}
+
+void Shader::SetMat4(const std::string& name, const glm::mat4& matrix)
+{
+    glUniformMatrix4fv(GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(matrix));
+}
+}

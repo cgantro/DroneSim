@@ -8,7 +8,7 @@
 
 namespace aerosimlab::vision
 {
-TEST(RgbFrameQuality, MeasuresGrayscaleAndSharpnessWithoutChangingInput)
+void Verify_RgbFrameQuality_MeasuresGrayscaleAndSharpnessWithoutChangingInput()
 {
     cv::Mat image(2, 2, CV_8UC3);
     image.at<cv::Vec3b>(0, 0) = {0, 0, 0};
@@ -33,4 +33,10 @@ TEST(RgbFrameQuality, MeasuresGrayscaleAndSharpnessWithoutChangingInput)
     EXPECT_DOUBLE_EQ(flatQuality.meanContrast, 0.0);
     EXPECT_DOUBLE_EQ(flatQuality.sharpness, 0.0);
 }
+
+TEST(RgbFrameQualityTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_RgbFrameQuality_MeasuresGrayscaleAndSharpnessWithoutChangingInput());
+}
+
 }

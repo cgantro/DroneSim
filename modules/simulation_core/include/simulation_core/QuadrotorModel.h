@@ -25,71 +25,35 @@ struct RotorDefinition
 /** @brief 기체 기준 좌표에 놓인 PX4 모델의 상자 충돌 형상이다. */
 using QuadrotorCollisionBox = RigidBodyBox;
 
-/** @brief 한 단계에서 모터에 적용할 목표 속도와 현재 속도다. */
-struct QuadrotorState
-{
-    std::array<double, 4> motorSpeedRadiansPerSecond{};
-};
-
 /**
  * @brief 기체 질량·관성과 로터·모터의 계산값을 보관한다.
  * @details X500 기본값은 Gazebo의 중심 기체와 네 로터 링크를 한 강체로 합친 값이다. 로터 회전 자체의 관성 효과는 따로 계산하지 않는다.
  */
 struct QuadrotorParameters
 {
+    static constexpr std::size_t rotorCount = 4;
+
     double massKilograms = 2.0643076923076924;
     glm::dvec3 principalInertiaKilogramMetersSquared{
         0.023846692647701416, 0.02394961745804886, 0.043999953714003955};
-    std::array<RotorDefinition, 4> rotors{};
+    /** @brief AirSim의 동체 공기 저항에 쓰는 중심 기체 크기다. */
+    glm::dvec3 bodySizeMeters{0.18, 0.11, 0.04};
+    std::array<RotorDefinition, rotorCount> rotors{};
     std::array<QuadrotorCollisionBox, 9> collisionBoxes{};
     double thrustCoefficientNewtonsPerSpeedSquared = 8.54858e-6;
     double momentToThrustRatio = 0.016;
     double motorTimeConstantUpSeconds = 0.0125;
-    double motorTimeConstantDownSeconds = 0.025;
     double maximumMotorSpeedRadiansPerSecond = 1000.0;
-    /** @brief X500 Gazebo 설정의 로터 항력 계수다. 단위는 N·s²/m다. */
-    double rotorDragCoefficientNewtonSecondsSquaredPerMeter = 8.06428e-5;
-    /** @brief X500 Gazebo 설정의 로터 구름 모멘트 계수다. 단위는 N·m·s²/m다. */
-    double rollingMomentCoefficientNewtonMetersSecondsSquaredPerMeter = 1.0e-6;
 
     /** @brief PX4가 공개한 X500 Gazebo 모델의 중심 기체와 모터 설정값을 반환한다. */
     [[nodiscard]] static QuadrotorParameters X500Gazebo();
 
     /**
-     * @brief 공개된 X500 모터 표에 맞춘 추력·토크 계수와 속도 범위를 반환한다.
-     * @details 질량·관성·로터 배치·모터 응답·항력은 PX4 Gazebo 설정을 사용한다.
+     * @brief 제조사 시험표를 참고해 추력·토크 계수와 최대 속도를 추정한다.
+     * @details 질량·관성·로터 배치·모터 응답은 PX4 설정을 사용한다.
+     * 시험표는 X500 V2와 같은 KV·프로펠러 규격을 쓰지만, 동일 부품으로 확인된 자료는 아니다.
      */
     [[nodiscard]] static QuadrotorParameters X500MotorTableEstimate();
 };
 
-/** @brief 기체 중심 좌표계에서 합한 힘과 토크다. */
-struct QuadrotorWrench
-{
-    glm::dvec3 forceNewtons{0.0};
-    glm::dvec3 torqueNewtonMeters{0.0};
-};
-
-/**
- * @brief 모터의 응답과 로터가 만드는 힘·토크를 계산한다.
- * @details 계산 결과는 기체 중심 좌표계 기준이다. 위치·자세 적분과 충돌은 물리 월드가 맡는다.
- */
-class QuadrotorModel
-{
-public:
-    static constexpr std::size_t rotorCount = 4;
-
-    /** @brief 목표 회전 속도를 모터의 상승·하강 시간에 따라 현재 속도에 반영한다. */
-    static void AdvanceMotors(
-        QuadrotorState& state,
-        const std::array<double, rotorCount>& targetSpeedRadiansPerSecond,
-        const QuadrotorParameters& parameters,
-        double stepSeconds);
-
-    /** @brief 현재 로터 속도로 기체에 작용하는 힘과 토크를 계산한다. */
-    [[nodiscard]] static QuadrotorWrench CalculateWrench(
-        const QuadrotorState& state,
-        const QuadrotorParameters& parameters,
-        const glm::dvec3& airRelativeVelocityBodyMetersPerSecond = glm::dvec3{0.0},
-        const glm::dvec3& angularVelocityBodyRadiansPerSecond = glm::dvec3{0.0});
-};
 }

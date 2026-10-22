@@ -20,6 +20,12 @@ constexpr double angularRateGain = 7.0;
 constexpr double maximumAccelerationMetersPerSecondSquared = 4.0;
 constexpr double maximumTorqueNewtonMeters = 0.5;
 
+struct DesiredWrench
+{
+    glm::dvec3 forceNewtons{0.0};
+    glm::dvec3 torqueNewtonMeters{0.0};
+};
+
 glm::dvec3 LimitMagnitude(const glm::dvec3& value, double maximumMagnitude)
 {
     const double magnitude = glm::length(value);
@@ -33,11 +39,11 @@ double DirectionSign(RotorRotation direction)
     return direction == RotorRotation::CounterClockwise ? 1.0 : -1.0;
 }
 
-std::array<double, QuadrotorModel::rotorCount> SolveRotorThrusts(
-    const QuadrotorWrench& desiredWrench,
+std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
+    const DesiredWrench& desiredWrench,
     const QuadrotorParameters& parameters)
 {
-    constexpr std::size_t rotorCount = QuadrotorModel::rotorCount;
+    constexpr std::size_t rotorCount = QuadrotorParameters::rotorCount;
     std::array<std::array<double, rotorCount + 1>, rotorCount> equation{};
 
     for (std::size_t rotor = 0; rotor < rotorCount; ++rotor)
@@ -128,7 +134,7 @@ glm::dvec3 AttitudeTorque(
 }
 }
 
-std::array<double, QuadrotorModel::rotorCount> QuadrotorFlightController::MotorTargets(
+std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::MotorTargets(
     const DroneState& state,
     const DroneControlState& control,
     const QuadrotorParameters& parameters,
@@ -180,10 +186,10 @@ std::array<double, QuadrotorModel::rotorCount> QuadrotorFlightController::MotorT
         desiredWorldThrust, control.desiredYawRadians);
     const glm::dvec3 torqueBody = AttitudeTorque(state, parameters, desiredOrientation);
     const glm::dvec3 forceBody{0.0, 0.0, glm::length(desiredWorldThrust)};
-    const QuadrotorWrench desiredWrench{forceBody, torqueBody};
+    const DesiredWrench desiredWrench{forceBody, torqueBody};
     const auto rotorThrusts = SolveRotorThrusts(desiredWrench, parameters);
 
-    std::array<double, QuadrotorModel::rotorCount> motorTargets{};
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
     for (std::size_t rotor = 0; rotor < motorTargets.size(); ++rotor)
     {
         motorTargets[rotor] = std::min(

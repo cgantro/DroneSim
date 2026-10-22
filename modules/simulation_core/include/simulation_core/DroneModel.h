@@ -3,6 +3,8 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
+#include <array>
+
 namespace aerosimlab::simulation
 {
 /**
@@ -30,6 +32,8 @@ struct DroneState
     glm::dvec3 velocityMetersPerSecond{0.0};
     glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
     glm::dvec3 angularVelocityRadiansPerSecond{0.0};
+    /** @brief AirSim이 계산한 네 로터의 회전 속도다. 단위는 라디안/초다. */
+    std::array<double, 4> motorSpeedsRadiansPerSecond{};
     double yawRadians = 0.0;
     FlightMode mode = FlightMode::Grounded;
 };

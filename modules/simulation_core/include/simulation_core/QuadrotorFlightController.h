@@ -18,7 +18,7 @@ public:
     static constexpr double groundedModelOriginHeightMeters = 0.24;
 
     /** @brief 현재 상태와 명령으로 다음 고정 Tick의 모터 목표를 계산한다. */
-    [[nodiscard]] static std::array<double, QuadrotorModel::rotorCount> MotorTargets(
+    [[nodiscard]] static std::array<double, QuadrotorParameters::rotorCount> MotorTargets(
         const DroneState& state,
         const DroneControlState& control,
         const QuadrotorParameters& parameters,

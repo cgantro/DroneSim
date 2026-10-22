@@ -527,7 +527,7 @@ SimulationDynamics ReadDynamics(const Json& document)
 {
     const auto found = document.find("dynamics");
     if (found == document.end())
-        return SimulationDynamics::Kinematic;
+        return defaultSimulationDynamics;
     if (!found->is_string())
         throw std::invalid_argument("dynamics는 kinematic 또는 rigid_body 문자열이어야 합니다.");
 

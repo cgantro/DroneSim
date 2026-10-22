@@ -12,12 +12,16 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <future>
+#include <string>
 #include <thread>
+#include <utility>
 
 using namespace aerosimlab;
 
-TEST(SimulatorBenchmark, SummarizesLatencyPercentiles)
+void Verify_SimulatorBenchmark_SummarizesLatencyPercentiles()
 {
     const nlohmann::json summary = simulator::SummarizeDurations({5.0, 1.0, 4.0, 2.0, 3.0});
 
@@ -27,7 +31,61 @@ TEST(SimulatorBenchmark, SummarizesLatencyPercentiles)
     EXPECT_DOUBLE_EQ(summary.at("p99"), 5.0);
 }
 
-TEST(SimulatorSession, RecordingReplayOverUdp)
+void Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues()
+{
+    simulator::ViewerBenchmarkMeasurements measurements;
+    measurements.sourceRevision = "test-revision";
+    measurements.framebufferWidth = 640;
+    measurements.framebufferHeight = 480;
+    measurements.graphicsRenderer = "test-renderer";
+    measurements.graphicsVersion = "test-version";
+    measurements.elapsedSeconds = 2.0;
+    measurements.simulationTicks = 120;
+    measurements.renderedFrames = 100;
+    measurements.processCpuSeconds = 0.5;
+    measurements.tickDurationsMicroseconds = {10000.0, 16000.0, 30000.0};
+    measurements.renderFrameDurationsMicroseconds = {700.0, 800.0, 900.0};
+#ifndef __EMSCRIPTEN__
+    measurements.physicsStepDurationsMicroseconds = {5000.0, 7000.0};
+    measurements.visionDurationsMicroseconds = {4000.0};
+    measurements.meanBrightness = 0.4;
+    measurements.meanContrast = 0.2;
+    measurements.meanSharpness = 0.1;
+    measurements.visionSampleCount = 1;
+#endif
+
+    const nlohmann::json report = simulator::BuildViewerBenchmarkReport(
+        std::move(measurements));
+
+    EXPECT_EQ(report.at("source_revision"), "test-revision");
+    EXPECT_EQ(report.at("framebuffer").at("width"), 640);
+    EXPECT_EQ(report.at("framebuffer").at("height"), 480);
+    EXPECT_EQ(report.at("opengl").at("renderer"), "test-renderer");
+    EXPECT_DOUBLE_EQ(report.at("render_fps"), 50.0);
+    EXPECT_DOUBLE_EQ(report.at("render_frame_duration_us").at("p50"), 800.0);
+    EXPECT_DOUBLE_EQ(report.at("render_frame_duration_us").at("p95"), 900.0);
+    EXPECT_DOUBLE_EQ(report.at("process_cpu_percent_approx"), 25.0);
+    EXPECT_EQ(report.at("tick_duration_us").at("deadline_misses_over_16_67ms"), 1U);
+    EXPECT_DOUBLE_EQ(report.at("tick_duration_us").at("p50"), 16000.0);
+#ifndef __EMSCRIPTEN__
+    EXPECT_DOUBLE_EQ(report.at("vision_analysis").at("mean_brightness"), 0.4);
+    EXPECT_DOUBLE_EQ(report.at("physics_step_duration_us").at("p95"), 7000.0);
+#endif
+
+    const std::filesystem::path outputPath = std::filesystem::temp_directory_path()
+        / ("aerosimlab-benchmark-"
+            + std::to_string(std::chrono::steady_clock::now()
+                .time_since_epoch().count())
+            + ".json");
+    simulator::SaveViewerBenchmarkReport(report, outputPath);
+    std::ifstream savedFile(outputPath, std::ios::binary);
+    const nlohmann::json savedReport = nlohmann::json::parse(savedFile);
+    EXPECT_EQ(savedReport.at("source_revision"), "test-revision");
+    savedFile.close();
+    std::filesystem::remove(outputPath);
+}
+
+void Verify_SimulatorSession_RecordingReplayOverUdp()
 {
     std::uint16_t simulatorPort = 0;
     {
@@ -196,4 +254,11 @@ TEST(SimulatorSession, RecordingReplayOverUdp)
 
     if (simulatorThread.joinable())
         simulatorThread.join();
+}
+
+TEST(SimulatorSessionTests, CoreScenarios)
+{
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulatorBenchmark_SummarizesLatencyPercentiles());
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues());
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_RecordingReplayOverUdp());
 }
