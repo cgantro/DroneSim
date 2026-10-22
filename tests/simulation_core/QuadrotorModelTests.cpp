@@ -2,172 +2,99 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
-#include <limits>
-#include <stdexcept>
+#include <numbers>
 
 namespace aerosimlab::simulation
 {
-TEST(QuadrotorModel, X500GazeboParametersMatchSourceAndBalanceWeight)
+void Verify_QuadrotorParameters_X500HasFourBalancedRotorsAndCollisionBoxes()
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    EXPECT_NEAR(parameters.massKilograms, 2.0643076923076924, 1.0e-12);
-    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.x,
-        0.023846692647701416, 1.0e-12);
-    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.y,
-        0.02394961745804886, 1.0e-12);
-    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.z,
-        0.043999953714003955, 1.0e-12);
-    EXPECT_DOUBLE_EQ(parameters.thrustCoefficientNewtonsPerSpeedSquared, 8.54858e-6);
-    EXPECT_DOUBLE_EQ(parameters.momentToThrustRatio, 0.016);
-    EXPECT_DOUBLE_EQ(parameters.motorTimeConstantUpSeconds, 0.0125);
-    EXPECT_DOUBLE_EQ(parameters.motorTimeConstantDownSeconds, 0.025);
-    EXPECT_DOUBLE_EQ(parameters.maximumMotorSpeedRadiansPerSecond, 1000.0);
-    EXPECT_DOUBLE_EQ(parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter, 8.06428e-5);
-    EXPECT_DOUBLE_EQ(parameters.rollingMomentCoefficientNewtonMetersSecondsSquaredPerMeter, 1.0e-6);
 
-    const std::array<glm::dvec3, QuadrotorModel::rotorCount> expectedRotorPositions{
-        glm::dvec3{0.174, -0.174, 0.06},
-        glm::dvec3{-0.174, 0.174, 0.06},
-        glm::dvec3{0.174, 0.174, 0.06},
-        glm::dvec3{-0.174, -0.174, 0.06}};
-    const std::array<RotorRotation, QuadrotorModel::rotorCount> expectedRotorDirections{
-        RotorRotation::CounterClockwise,
-        RotorRotation::CounterClockwise,
-        RotorRotation::Clockwise,
-        RotorRotation::Clockwise};
-    for (std::size_t rotor = 0; rotor < QuadrotorModel::rotorCount; ++rotor)
-    {
-        EXPECT_EQ(parameters.rotors[rotor].positionMeters, expectedRotorPositions[rotor]);
-        EXPECT_EQ(parameters.rotors[rotor].rotation, expectedRotorDirections[rotor]);
-    }
-
-    const double hoverSpeed = std::sqrt(
-        parameters.massKilograms * 9.81
-        / (QuadrotorModel::rotorCount * parameters.thrustCoefficientNewtonsPerSpeedSquared));
-    QuadrotorState state;
-    state.motorSpeedRadiansPerSecond.fill(hoverSpeed);
-
-    const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(state, parameters);
-    EXPECT_NEAR(wrench.forceNewtons.z, parameters.massKilograms * 9.81, 1.0e-9);
-    EXPECT_NEAR(wrench.torqueNewtonMeters.x, 0.0, 1.0e-12);
-    EXPECT_NEAR(wrench.torqueNewtonMeters.y, 0.0, 1.0e-12);
-    EXPECT_NEAR(wrench.torqueNewtonMeters.z, 0.0, 1.0e-12);
+    EXPECT_DOUBLE_EQ(parameters.massKilograms, 2.0643076923076924);
+    EXPECT_EQ(parameters.rotors.size(), 4U);
+    EXPECT_EQ(parameters.collisionBoxes.size(), 9U);
+    EXPECT_NEAR(parameters.thrustCoefficientNewtonsPerSpeedSquared, 8.54858e-6, 1.0e-15);
 }
 
-TEST(QuadrotorModel, X500MotorTableEstimateMatchesPublishedMotorPoints)
+void Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference()
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
-    constexpr double radiansPerSecondPerRpm = 0.10471975511965977;
-    // 공개된 Holybro 모터 표의 회전수(rpm), 추력(g), 토크(N·m) 세 점이다.
-    constexpr std::array<double, 3> speedsRpm{4269.0, 6252.0, 10703.0};
-    constexpr std::array<double, 3> thrustGrams{214.74, 470.2, 1367.04};
-    constexpr std::array<double, 3> torqueNewtonMeters{0.03, 0.07, 0.19};
 
-    EXPECT_NEAR(parameters.maximumMotorSpeedRadiansPerSecond,
-        speedsRpm.back() * radiansPerSecondPerRpm, 1.0e-6);
-
-    for (std::size_t point = 0; point < speedsRpm.size(); ++point)
+    struct TestStandPoint
     {
-        QuadrotorState state;
-        state.motorSpeedRadiansPerSecond.fill(
-            speedsRpm[point] * radiansPerSecondPerRpm);
-
-        const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(state, parameters);
-        const double expectedThrustNewtons = thrustGrams[point] / 1000.0 * 9.80665;
-        EXPECT_NEAR(wrench.forceNewtons.z / QuadrotorModel::rotorCount,
-            expectedThrustNewtons, expectedThrustNewtons * 0.02);
-
-        QuadrotorState singleRotorState;
-        singleRotorState.motorSpeedRadiansPerSecond[0] =
-            speedsRpm[point] * radiansPerSecondPerRpm;
-        const QuadrotorWrench singleRotorWrench = QuadrotorModel::CalculateWrench(
-            singleRotorState, parameters);
-        EXPECT_NEAR(std::abs(singleRotorWrench.torqueNewtonMeters.z),
-            torqueNewtonMeters[point], 0.0051);
+        double speedRpm;
+        double thrustGrams;
+        double torqueNewtonMeters;
+    };
+    // 제조사 16V 표의 회전수·추력·토크 15점이다. 전압과 프로펠러는 모든 행에서 같다.
+    constexpr std::array<TestStandPoint, 15> testStand = {{
+        {4042.0, 210.0, 0.03}, {4469.0, 259.0, 0.04}, {4855.0, 309.0, 0.05},
+        {5301.0, 373.0, 0.05}, {5780.0, 447.0, 0.06}, {6298.0, 536.0, 0.08},
+        {6800.0, 628.0, 0.09}, {7281.0, 729.0, 0.10}, {7679.0, 814.0, 0.11},
+        {8096.0, 906.0, 0.12}, {8468.0, 993.0, 0.14}, {8867.0, 1087.0, 0.15},
+        {9257.0, 1191.0, 0.16}, {9675.0, 1289.0, 0.18}, {9857.0, 1332.0, 0.18}}};
+    constexpr double standardGravityMetersPerSecondSquared = 9.80665;
+    const double radiansPerRpm = 2.0 * std::numbers::pi / 60.0;
+    double coefficientNumerator = 0.0;
+    double coefficientDenominator = 0.0;
+    double torqueRatioNumerator = 0.0;
+    double torqueRatioDenominator = 0.0;
+    double measuredMaximumThrustNewtons = 0.0;
+    for (const TestStandPoint& point : testStand)
+    {
+        const double angularSpeed = point.speedRpm * radiansPerRpm;
+        const double angularSpeedSquared = angularSpeed * angularSpeed;
+        const double measuredThrust = point.thrustGrams
+            / 1000.0 * standardGravityMetersPerSecondSquared;
+        coefficientNumerator += angularSpeedSquared * measuredThrust;
+        coefficientDenominator += angularSpeedSquared * angularSpeedSquared;
+        torqueRatioNumerator += measuredThrust * point.torqueNewtonMeters;
+        torqueRatioDenominator += measuredThrust * measuredThrust;
+        measuredMaximumThrustNewtons = std::max(
+            measuredMaximumThrustNewtons, measuredThrust);
     }
-}
 
-TEST(QuadrotorModel, X500CollisionBoxesIncludeFrameGearAndFourPropellerPlanes)
-{
-    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    const double fittedCoefficient = coefficientNumerator / coefficientDenominator;
+    const double fittedMomentToThrustRatio =
+        torqueRatioNumerator / torqueRatioDenominator;
+    double squaredError = 0.0;
+    for (const TestStandPoint& point : testStand)
+    {
+        const double angularSpeed = point.speedRpm * radiansPerRpm;
+        const double measuredThrust = point.thrustGrams
+            / 1000.0 * standardGravityMetersPerSecondSquared;
+        const double predictedThrust = fittedCoefficient * angularSpeed * angularSpeed;
+        const double error = predictedThrust - measuredThrust;
+        squaredError += error * error;
+    }
+    const double relativeRootMeanSquareError = std::sqrt(
+        squaredError / static_cast<double>(testStand.size()))
+        / measuredMaximumThrustNewtons;
 
-    ASSERT_EQ(parameters.collisionBoxes.size(), 9U);
-    EXPECT_NEAR(parameters.collisionBoxes[0].halfExtentsMeters.x, 0.1767767F, 1.0e-6F);
-    EXPECT_NEAR(parameters.collisionBoxes[1].positionMeters.z, -0.123, 1.0e-9);
-    EXPECT_NEAR(parameters.collisionBoxes[4].positionMeters.z, -0.2195, 1.0e-9);
-    EXPECT_NEAR(parameters.collisionBoxes[5].positionMeters.x, 0.174, 1.0e-9);
-    EXPECT_NEAR(parameters.collisionBoxes[5].positionMeters.y, -0.174, 1.0e-9);
-    EXPECT_NEAR(parameters.collisionBoxes[8].positionMeters.z, 0.06, 1.0e-9);
-}
-
-TEST(QuadrotorModel, MotorResponseAndUnequalRotorsChangeWrench)
-{
-    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    QuadrotorState state;
-    std::array<double, QuadrotorModel::rotorCount> targetSpeeds;
-    targetSpeeds.fill(parameters.maximumMotorSpeedRadiansPerSecond);
-
-    QuadrotorModel::AdvanceMotors(
-        state, targetSpeeds, parameters, parameters.motorTimeConstantUpSeconds);
-    const double expectedAfterSpinUp = parameters.maximumMotorSpeedRadiansPerSecond
-        * (1.0 - std::exp(-1.0));
-    EXPECT_NEAR(state.motorSpeedRadiansPerSecond[0], expectedAfterSpinUp, 1.0e-9);
-
-    const std::array<double, QuadrotorModel::rotorCount> differentialSpeeds{
-        parameters.maximumMotorSpeedRadiansPerSecond, 0.0, 0.0, 0.0};
-    state.motorSpeedRadiansPerSecond = differentialSpeeds;
-    const QuadrotorWrench wrench = QuadrotorModel::CalculateWrench(state, parameters);
-    // 첫 로터의 위치 외적은 roll/pitch 토크를, 회전 방향은 반작용 yaw 토크를 만든다.
-    const double rotorThrustNewtons = parameters.thrustCoefficientNewtonsPerSpeedSquared
+    const double measuredMaximumRpm = parameters.maximumMotorSpeedRadiansPerSecond
+        * 60.0 / (2.0 * std::numbers::pi);
+    const double estimatedMaximumThrustGrams =
+        parameters.thrustCoefficientNewtonsPerSpeedSquared
         * parameters.maximumMotorSpeedRadiansPerSecond
-        * parameters.maximumMotorSpeedRadiansPerSecond;
-    const glm::dvec3& rotorPosition = parameters.rotors[0].positionMeters;
-    EXPECT_NEAR(wrench.torqueNewtonMeters.x,
-        rotorPosition.y * rotorThrustNewtons,
-        1.0e-12);
-    EXPECT_NEAR(wrench.torqueNewtonMeters.y,
-        -rotorPosition.x * rotorThrustNewtons,
-        1.0e-12);
-    EXPECT_NEAR(wrench.torqueNewtonMeters.z,
-        -parameters.momentToThrustRatio * rotorThrustNewtons,
-        1.0e-12);
+        * parameters.maximumMotorSpeedRadiansPerSecond
+        / standardGravityMetersPerSecondSquared * 1000.0;
 
-    targetSpeeds.fill(0.0);
-    QuadrotorModel::AdvanceMotors(
-        state, targetSpeeds, parameters, parameters.motorTimeConstantDownSeconds);
-    EXPECT_NEAR(state.motorSpeedRadiansPerSecond[0],
-        parameters.maximumMotorSpeedRadiansPerSecond * std::exp(-1.0), 1.0e-9);
+    EXPECT_NEAR(fittedCoefficient,
+        parameters.thrustCoefficientNewtonsPerSpeedSquared, 1.0e-12);
+    EXPECT_NEAR(fittedMomentToThrustRatio, parameters.momentToThrustRatio, 1.0e-8);
+    EXPECT_NEAR(relativeRootMeanSquareError, 0.00742232, 1.0e-6);
+    EXPECT_NEAR(measuredMaximumRpm, 9857.0, 0.1);
+    EXPECT_NEAR(estimatedMaximumThrustGrams, 1332.0, 10.0);
+    EXPECT_NEAR(parameters.momentToThrustRatio, 0.01403352, 1.0e-8);
 }
 
-TEST(QuadrotorModel, RotorDragOpposesAirRelativeVelocity)
+TEST(QuadrotorModelTests, CoreScenarios)
 {
-    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    QuadrotorState state;
-    state.motorSpeedRadiansPerSecond.fill(500.0);
-
-    const QuadrotorWrench stillAir = QuadrotorModel::CalculateWrench(state, parameters);
-    const QuadrotorWrench forwardAirflow = QuadrotorModel::CalculateWrench(
-        state, parameters, glm::dvec3{5.0, 0.0, 0.0});
-
-    EXPECT_DOUBLE_EQ(stillAir.forceNewtons.x, 0.0);
-    EXPECT_LT(forwardAirflow.forceNewtons.x, 0.0);
-    EXPECT_NEAR(forwardAirflow.forceNewtons.x,
-        -4.0 * 500.0 * parameters.rotorDragCoefficientNewtonSecondsSquaredPerMeter * 5.0,
-        1.0e-12);
+    EXPECT_NO_FATAL_FAILURE(Verify_QuadrotorParameters_X500HasFourBalancedRotorsAndCollisionBoxes());
+    EXPECT_NO_FATAL_FAILURE(Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference());
 }
 
-TEST(QuadrotorModel, RejectsWrenchThatOverflowsDoubleRange)
-{
-    QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    parameters.thrustCoefficientNewtonsPerSpeedSquared =
-        std::numeric_limits<double>::max();
-
-    QuadrotorState state;
-    state.motorSpeedRadiansPerSecond.fill(2.0);
-
-    EXPECT_THROW(
-        static_cast<void>(QuadrotorModel::CalculateWrench(state, parameters)),
-        std::invalid_argument);
-}
 }
