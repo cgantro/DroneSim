@@ -3,6 +3,7 @@
 #include "graphics/Material.h"
 #include "graphics/Mesh.h"
 #include "graphics/Shader.h"
+#include "graphics/Texture2D.h"
 #ifndef __EMSCRIPTEN__
 #include "graphics/MultisampleFramebuffer.h"
 #endif
@@ -24,9 +25,9 @@ namespace
 struct RendererDefaults final
 {
     inline static constexpr int multisampleCount = 4;
-    inline static constexpr float clearRed = 0.14F;
-    inline static constexpr float clearGreen = 0.15F;
-    inline static constexpr float clearBlue = 0.16F;
+    inline static constexpr float clearRed = 0.50F;
+    inline static constexpr float clearGreen = 0.68F;
+    inline static constexpr float clearBlue = 0.79F;
     inline static constexpr float clearAlpha = 1.0F;
 };
 
@@ -37,6 +38,10 @@ struct RendererUniformNames final
     inline static constexpr char view[] = "u_View";
     inline static constexpr char projection[] = "u_Projection";
     inline static constexpr char baseColorFactor[] = "u_BaseColorFactor";
+    inline static constexpr char baseTexture[] = "u_BaseTexture";
+    inline static constexpr char useBaseTexture[] = "u_UseBaseTexture";
+    inline static constexpr char triplanarTexture[] = "u_TriplanarTexture";
+    inline static constexpr char terrainSurface[] = "u_TerrainSurface";
     inline static constexpr char metallicFactor[] = "u_MetallicFactor";
     inline static constexpr char roughnessFactor[] = "u_RoughnessFactor";
     inline static constexpr char cameraPosition[] = "u_CameraPosition";
@@ -199,7 +204,10 @@ void Renderer::Draw(
     Shader& shader,
     const glm::mat4& view,
     const glm::mat4& projection,
-    const glm::vec3& cameraPosition)
+    const glm::vec3& cameraPosition,
+    const Texture2D* baseTexture,
+    bool triplanarTexture,
+    bool terrainSurface)
 {
     if (m_SceneViewport.z > 0 && m_SceneViewport.w > 0)
     {
@@ -214,11 +222,18 @@ void Renderer::Draw(
     shader.SetMat4(RendererUniformNames::projection, projection);
 
     shader.SetFloat4(RendererUniformNames::baseColorFactor, material.BaseColorFactor());
+    shader.SetInt(RendererUniformNames::baseTexture, 0);
+    shader.SetInt(RendererUniformNames::useBaseTexture, baseTexture != nullptr ? 1 : 0);
+    shader.SetInt(RendererUniformNames::triplanarTexture, triplanarTexture ? 1 : 0);
+    shader.SetInt(RendererUniformNames::terrainSurface, terrainSurface ? 1 : 0);
     shader.SetFloat(RendererUniformNames::metallicFactor, material.MetallicFactor());
     shader.SetFloat(RendererUniformNames::roughnessFactor, material.RoughnessFactor());
 
     shader.SetFloat3(RendererUniformNames::cameraPosition, cameraPosition);
     shader.SetFloat3(RendererUniformNames::lightDirection, m_LightDirection);
+
+    if (baseTexture != nullptr)
+        baseTexture->Bind();
 
     mesh.Bind();
 
@@ -229,6 +244,8 @@ void Renderer::Draw(
         nullptr);
 
     mesh.UnBind();
+    if (baseTexture != nullptr)
+        baseTexture->Unbind();
     shader.UnBind();
 
 #ifndef NDEBUG

@@ -3,7 +3,7 @@
 namespace aerosimlab::graphics
 {
 
-// Material은 전달된 Factor 값을 그대로 저장한다. 값의 유효 범위 제한은 Metallic/Roughness를 해석하는 Shader가 적용한다.
+// 재질은 색과 금속성·거칠기 값을 보관한다. 실제로 쓸 수 있는 범위는 셰이더가 정한다.
 Material::Material(
     const glm::vec4& baseColorFactor,
     float metallicFactor,

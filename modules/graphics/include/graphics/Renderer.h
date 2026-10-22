@@ -12,6 +12,7 @@ class MultisampleFramebuffer;
 class Material;
 class Mesh;
 class Shader;
+class Texture2D;
 
 class Renderer
 {
@@ -33,7 +34,10 @@ public:
         Shader& shader,
         const glm::mat4& view,
         const glm::mat4& projection,
-        const glm::vec3& cameraPosition);
+        const glm::vec3& cameraPosition,
+        const Texture2D* baseTexture = nullptr,
+        bool triplanarTexture = false,
+        bool terrainSurface = false);
 
 private:
 #ifndef __EMSCRIPTEN__

@@ -10,12 +10,14 @@
 #include "graphics/GlApi.h"
 #include "graphics/Mesh.h"
 #include "graphics/Renderer.h"
+#include "graphics/Texture2D.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
 #include "SimulationBenchmark.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "terrain/BuildingFootprint.h"
 #include "terrain/StaticFacility.h"
+#include "terrain/TerrainGrid.h"
 #include <glm/gtc/quaternion.hpp>
 #ifndef __EMSCRIPTEN__
 #include "vision/RgbFrameQuality.h"
@@ -143,7 +145,10 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
                     (static_cast<float>(column) - center) * terrain.spacingXMeters,
                     heightAt(row, column),
                     (static_cast<float>(row) - center) * terrain.spacingYMeters},
-                normal};
+                normal,
+                glm::vec2{
+                    static_cast<float>(column) / static_cast<float>(sampleCount - 1U),
+                    static_cast<float>(row) / static_cast<float>(sampleCount - 1U)}};
         }
     }
 
@@ -271,24 +276,28 @@ void AeroSimLabApp::InitializeGraphics()
     renderer_ = std::make_unique<aerosimlab::graphics::Renderer>();
     renderer_->Init(framebufferWidth, framebufferHeight);
     observerCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
-        glm::vec3{7.0F, 5.0F, 7.0F}, glm::vec3{0.0F}, 1.0F);
+        glm::vec3{7.0F, 5.0F, 7.0F}, glm::vec3{0.0F}, 1.0F,
+        45.0F, 0.5F, 12000.0F);
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
 
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb("models/drones/x500/visual.glb");
-    terrain_ = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
-    terrainMesh_ = CreateTerrainMesh(terrain_);
+    auto terrain = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
+    terrainMesh_ = CreateTerrainMesh(terrain);
+    terrainTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
+        "maps/bukhansan-demo/terrain-albedo.ppm");
+    droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
+        "models/drones/x500/carbon-weave.ppm");
     facilityMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
         "maps/bukhansan-demo/facilities.glb");
     const auto buildings = aerosimlab::terrain::LoadBuildingFootprints(
-        "maps/bukhansan-demo/buildings.geojson", terrain_);
+        "maps/bukhansan-demo/buildings.geojson", terrain);
     const auto facilities = aerosimlab::terrain::LoadStaticFacilities(
         "maps/bukhansan-demo/facilities.json");
 #ifndef __EMSCRIPTEN__
-    simulation_.SetTerrain(terrain_);
     simulation_.SetInitialPose({demoDroneStartMeters,
-        terrain_.HeightAtLocalMeters(demoDroneStartMeters)
+        terrain.HeightAtLocalMeters(demoDroneStartMeters)
             + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
     for (const auto& facility : facilities)
         simulation_.AddStaticObstacleBox(
@@ -309,7 +318,7 @@ void AeroSimLabApp::InitializeGraphics()
         const glm::dvec2 center = (minimum + maximum) * 0.5;
         const float heightMeters = building.heightMeters.value_or(
             missingBuildingHeightProxyMeters);
-        const double groundHeightMeters = terrain_.HeightAtLocalMeters(center);
+        const double groundHeightMeters = terrain.HeightAtLocalMeters(center);
         const glm::dvec3 centerMeters{
             center.x, center.y, groundHeightMeters + heightMeters * 0.5};
         const glm::vec3 sizeMeters{
@@ -322,6 +331,7 @@ void AeroSimLabApp::InitializeGraphics()
         buildingTransforms_.push_back(CubeTransform(
             ToRenderPosition(centerMeters), sizeMeters));
     }
+    simulation_.SetTerrain(std::move(terrain));
     shader_ = std::make_unique<aerosimlab::graphics::Shader>("shaders/Scene.glsl");
 }
 
@@ -954,7 +964,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     const glm::vec3& cameraPosition)
 {
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
-        view, projection, cameraPosition);
+        view, projection, cameraPosition, terrainTexture_.get(), false, true);
     for (const glm::mat4& transform : buildingTransforms_)
         DrawCube(transform, cameraPosition, buildingMaterial_, view, projection);
 
@@ -967,7 +977,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
         glm::mat4_cast(ToRenderOrientation(simulation_.State().orientation));
     renderer_->Draw(heading, *droneMesh_, droneMaterial_, *shader_,
-        view, projection, cameraPosition);
+        view, projection, cameraPosition, droneSurfaceTexture_.get(), true);
 }
 
 void AeroSimLabApp::DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,

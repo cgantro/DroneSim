@@ -6,13 +6,17 @@
 
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
+layout(location = 2) in vec2 a_TextureCoordinate;
 
 uniform mat4 u_Model;
 uniform mat4 u_View;
 uniform mat4 u_Projection;
 
 out vec3 v_Normal;
+out vec3 v_ModelNormal;
+out vec3 v_ModelPosition;
 out vec3 v_WorldPosition;
+out vec2 v_TextureCoordinate;
 
 void main()
 {
@@ -20,6 +24,9 @@ void main()
     vec4 worldPosition = u_Model * vec4(a_Position, 1.0);
 
     v_WorldPosition = worldPosition.xyz;
+    v_ModelPosition = a_Position;
+    v_ModelNormal = a_Normal;
+    v_TextureCoordinate = a_TextureCoordinate;
 
     // 크기 배율이 축마다 다르면 방향만 모델 행렬로 바꾼 법선은 표면에 수직이 아니게 된다.
     // 역전치 행렬을 적용해 변환 뒤에도 표면에 수직인 방향을 유지한다.
@@ -33,10 +40,11 @@ void main()
 
 #type fragment
 #version 330 core
-
-
 in vec3 v_Normal;
+in vec3 v_ModelNormal;
+in vec3 v_ModelPosition;
 in vec3 v_WorldPosition;
+in vec2 v_TextureCoordinate;
 
 uniform vec3 u_CameraPosition;
 uniform vec3 u_LightDirection;
@@ -44,9 +52,29 @@ uniform vec3 u_LightDirection;
 uniform vec4 u_BaseColorFactor;
 uniform float u_MetallicFactor;
 uniform float u_RoughnessFactor;
-
-
+uniform sampler2D u_BaseTexture;
+uniform int u_UseBaseTexture;
+uniform int u_TriplanarTexture;
+uniform int u_TerrainSurface;
 out vec4 FragColor;
+
+float HashTerrainCell(vec2 cell)
+{
+    vec3 value = fract(vec3(cell.x, cell.y, cell.x) * 0.1031);
+    value += dot(value, value.yzx + 33.33);
+    return fract((value.x + value.y) * value.z);
+}
+
+float TerrainNoise(vec2 position)
+{
+    vec2 cell = floor(position);
+    vec2 fraction = fract(position);
+    fraction = fraction * fraction * (3.0 - 2.0 * fraction);
+
+    float lower = mix(HashTerrainCell(cell), HashTerrainCell(cell + vec2(1.0, 0.0)), fraction.x);
+    float upper = mix(HashTerrainCell(cell + vec2(0.0, 1.0)), HashTerrainCell(cell + vec2(1.0)), fraction.x);
+    return mix(lower, upper, fraction.y);
+}
 
 vec3 ToneMapACES(vec3 color)
 {
@@ -65,6 +93,41 @@ vec3 ToneMapACES(vec3 color)
     );
 }
 
+float DistributionGGX(vec3 normal, vec3 halfway, float roughness)
+{
+    const float pi = 3.14159265;
+    float alpha = roughness * roughness;
+    float alphaSquared = alpha * alpha;
+    float normalHalfway = max(dot(normal, halfway), 0.0);
+    float denominator = normalHalfway * normalHalfway * (alphaSquared - 1.0) + 1.0;
+    return alphaSquared / max(pi * denominator * denominator, 0.0001);
+}
+
+float GeometrySchlickGGX(float normalView, float roughness)
+{
+    float radius = roughness + 1.0;
+    float k = radius * radius / 8.0;
+    return normalView / max(normalView * (1.0 - k) + k, 0.0001);
+}
+
+vec3 FresnelSchlick(float viewHalfway, vec3 reflectionAtNormal)
+{
+    return reflectionAtNormal + (1.0 - reflectionAtNormal)
+        * pow(1.0 - clamp(viewHalfway, 0.0, 1.0), 5.0);
+}
+
+vec3 SampleTriplanarTexture(vec3 position, vec3 normal)
+{
+    // UV가 없는 X500 메시에도 좌표축 투영을 겹쳐 적용해 표면 결을 입힌다.
+    vec3 weights = pow(abs(normal), vec3(4.0));
+    weights /= max(weights.x + weights.y + weights.z, 0.0001);
+    vec2 scale = vec2(12.0);
+    vec3 alongX = texture(u_BaseTexture, fract(position.zy * scale)).rgb;
+    vec3 alongY = texture(u_BaseTexture, fract(position.xz * scale)).rgb;
+    vec3 alongZ = texture(u_BaseTexture, fract(position.xy * scale)).rgb;
+    return alongX * weights.x + alongY * weights.y + alongZ * weights.z;
+}
+
 void main()
 {
     vec3 N = normalize(v_Normal);
@@ -72,14 +135,39 @@ void main()
     vec3 L = normalize(u_LightDirection);
 
     float NdotL = max(dot(N, L), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
 
     float upFactor = N.y * 0.5 + 0.5;
 
-    vec3 groundAmbient = vec3(0.10, 0.105, 0.11);
-    vec3 skyAmbient = vec3(0.24, 0.25, 0.27);
-    vec3 ambientLight = mix(groundAmbient, skyAmbient, upFactor);
-
     vec3 baseColor = u_BaseColorFactor.rgb;
+    if (u_UseBaseTexture != 0)
+    {
+        vec3 surfaceColor = u_TriplanarTexture != 0
+            ? SampleTriplanarTexture(v_ModelPosition, normalize(v_ModelNormal))
+            : texture(u_BaseTexture, v_TextureCoordinate).rgb;
+        baseColor *= surfaceColor;
+    }
+
+    if (u_TerrainSurface != 0)
+    {
+        // 넓은 지역용 음영도는 약 20m 간격이다. 화면에 보이는 간격에 맞춘 작은 무늬를 더해 가까운 지면이 한 색으로 뭉개지지 않게 한다.
+        vec2 groundPosition = v_ModelPosition.xz;
+        float pixelFootprint = max(
+            length(dFdx(groundPosition)), length(dFdy(groundPosition)));
+        float broadFade = 1.0 - smoothstep(0.55, 0.95, pixelFootprint * 0.06);
+        float detailFade = 1.0 - smoothstep(0.55, 0.95, pixelFootprint * 0.22);
+        float grainFade = 1.0 - smoothstep(0.55, 0.95, pixelFootprint * 0.9);
+        float broad = TerrainNoise(groundPosition * 0.06) * broadFade;
+        float detail = TerrainNoise(groundPosition * 0.22) * detailFade;
+        float grain = TerrainNoise(groundPosition * 0.9) * grainFade;
+        float vegetation = broad * 0.5 + detail * 0.34 + grain * 0.16;
+        vec3 detailedGround = baseColor * (0.82 + vegetation * 0.36);
+
+        float slope = 1.0 - clamp(N.y, 0.0, 1.0);
+        float exposedRock = smoothstep(0.34, 0.68, slope) * 0.48;
+        vec3 rockColor = mix(vec3(0.27, 0.29, 0.27), vec3(0.43, 0.40, 0.34), vegetation);
+        baseColor = mix(detailedGround, rockColor, exposedRock);
+    }
 
     float baseAlpha = u_BaseColorFactor.a;
 
@@ -87,38 +175,38 @@ void main()
     float metallic = clamp(u_MetallicFactor, 0.0, 1.0);
     float roughness = clamp(u_RoughnessFactor, 0.05, 1.0);
 
-    // 금속 계수가 커져도 표면 색이 모두 사라지지 않도록 기본색 조명을 최대 35% 남기는 단순 근사다.
-    vec3 diffuseColor = baseColor * mix(1.0, 0.35, metallic);
-
-    // 표면에서 빛과 카메라를 향하는 두 방향의 중간을 이용해 반짝임을 계산한다. 거칠수록 넓고 약해진다.
     vec3 H = normalize(L + V);
-    float NdotH = max(dot(N, H), 0.0);
-
-    float shininess = mix(48.0, 5.0, roughness);
-    float specularStrength = pow(NdotH, shininess);
-
-    if (NdotL <= 0.0)
-        specularStrength = 0.0;
-
-    // 표면을 정면에서 볼 때의 반사색을 비금속의 회색 값 0.04와 금속의 기본색 사이에서 정한다.
     vec3 F0 = mix(vec3(0.04), baseColor, metallic);
-    vec3 specular = F0 * specularStrength * 0.35;
-
-    vec3 directLight = (diffuseColor * NdotL + specular) * 1.35;
+    vec3 fresnel = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    float distribution = DistributionGGX(N, H, roughness);
+    float geometry = GeometrySchlickGGX(NdotV, roughness)
+        * GeometrySchlickGGX(NdotL, roughness);
+    vec3 specular = distribution * geometry * fresnel
+        / max(4.0 * NdotV * NdotL, 0.001);
+    vec3 diffuse = (1.0 - fresnel) * (1.0 - metallic) * baseColor / 3.14159265;
+    vec3 directLight = (diffuse + specular) * NdotL * 2.2;
 
     vec3 fillDirection = normalize(vec3(0.65, 0.35, -0.65));
     float fillAmount = max(dot(N, fillDirection), 0.0);
-    vec3 fillLight = diffuseColor * fillAmount * 0.42;
+    vec3 groundAmbient = vec3(0.10, 0.105, 0.11);
+    vec3 skyAmbient = vec3(0.24, 0.25, 0.27);
+    vec3 ambientLight = mix(groundAmbient, skyAmbient, upFactor);
+    vec3 fillLight = baseColor * fillAmount * (1.0 - metallic) * 0.20;
 
     vec3 color =
-        baseColor * ambientLight +
+        baseColor * ambientLight * (1.0 - metallic) +
         directLight +
         fillLight;
+
+    // 먼 산은 대기 색과 섞어 지형의 크기와 깊이가 눈에 들어오게 한다.
+    float viewDistance = length(u_CameraPosition - v_WorldPosition);
+    float fogAmount = smoothstep(800.0, 4200.0, viewDistance);
+    color = mix(color, vec3(0.43, 0.60, 0.72), fogAmount);
 
     // ACES 곡선은 조명 결과를 화면 밝기 범위로 압축한다. 이어 1/2.2 거듭제곱 감마 보정으로 모니터 표시용 RGB 값에 맞춘다.
     color = ToneMapACES(color);
 
     color = pow(color, vec3(1.0 / 2.2));
 
-    FragColor =vec4(color,baseAlpha);
+    FragColor = vec4(color, baseAlpha);
 }

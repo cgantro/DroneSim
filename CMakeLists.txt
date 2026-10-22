@@ -157,6 +157,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     modules/graphics/src/graphics/Mesh.cpp
     modules/graphics/src/graphics/Renderer.cpp
     modules/graphics/src/graphics/Shader.cpp
+    modules/graphics/src/graphics/Texture2D.cpp
     modules/graphics/src/graphics/VertexArray.cpp
     modules/graphics/src/graphics/VertexBuffer.cpp
     modules/graphics/src/graphics/Window.cpp

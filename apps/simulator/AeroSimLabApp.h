@@ -27,6 +27,7 @@ class Camera;
 class Mesh;
 class Renderer;
 class Shader;
+class Texture2D;
 class Window;
 }
 
@@ -170,14 +171,16 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
+    std::unique_ptr<aerosimlab::graphics::Texture2D> terrainTexture_;
+    std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Mesh> facilityMesh_;
     std::vector<glm::mat4> buildingTransforms_;
     aerosimlab::terrain::TerrainGrid terrain_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
-        glm::vec4{0.12F, 0.48F, 0.32F, 1.0F}, 0.0F, 0.75F};
+        glm::vec4{1.0F}, 0.16F, 0.40F};
     aerosimlab::graphics::Material groundMaterial_{
-        glm::vec4{0.35F, 0.39F, 0.34F, 1.0F}, 0.0F, 1.0F};
+        glm::vec4{1.0F}, 0.0F, 0.92F};
     aerosimlab::graphics::Material buildingMaterial_{
         glm::vec4{0.63F, 0.59F, 0.48F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material facilityMaterial_{

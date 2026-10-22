@@ -153,6 +153,8 @@ Mesh::Mesh(const Vertex* vertices, std::uint32_t vertexCount,
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, position)));
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, normal)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, textureCoordinate)));
 
     // Vertex Buffer Object(VBO)의 현재 선택을 해제해도 VAO에 기록된 정점 속성 설명은 남는다.
     // index buffer 연결은 VAO 내부 상태이므로 여기서 해제하지 않는다.
@@ -256,7 +258,24 @@ std::unique_ptr<Mesh> Mesh::LoadGlb(const std::string& path)
         const std::uint8_t* normal = normals.bytes + index * normals.stride;
         vertices[index] = {
             {ReadFloat(position), ReadFloat(position + 4U), ReadFloat(position + 8U)},
-            {ReadFloat(normal), ReadFloat(normal + 4U), ReadFloat(normal + 8U)}};
+            {ReadFloat(normal), ReadFloat(normal + 4U), ReadFloat(normal + 8U)},
+            {0.0F, 0.0F}};
+    }
+
+    if (attributes.contains("TEXCOORD_0"))
+    {
+        const GlbAccessor textureCoordinates = ReadAccessor(
+            document, attributes.at("TEXCOORD_0").get<std::size_t>(), binary, "VEC2", 8U);
+        if (textureCoordinates.componentType != 5126U
+            || textureCoordinates.count != positions.count)
+            throw std::runtime_error("GLB 이미지 좌표 자료 형식이 올바르지 않습니다.");
+        for (std::size_t index = 0; index < vertices.size(); ++index)
+        {
+            const std::uint8_t* coordinate = textureCoordinates.bytes
+                + index * textureCoordinates.stride;
+            vertices[index].textureCoordinate = {
+                ReadFloat(coordinate), ReadFloat(coordinate + 4U)};
+        }
     }
 
     const std::size_t indexAccessor = primitive.at("indices").get<std::size_t>();

@@ -9,7 +9,7 @@ namespace aerosimlab::graphics
  * @details
  * 재질은 Mesh 표면의 색과 빛 반응을 정한다. Renderer가 이 값을 GPU Shader에 전달한다.
  * 기본색은 RGBA 값으로 저장한다. Renderer는 이 색과 금속성·거칠기 값을 간단한 조명 계산에 전달한다.
- * Scene.glsl은 금속성·거칠기 숫자로 간단한 반사 근사를 계산하며 glTF의 전체 물리 기반 빛 반사식은 구현하지 않는다.
+ * GPU는 금속성과 거칠기를 사용해 표면의 직접광과 반사를 계산한다. 주변 빛과 환경 반사광은 간단히 근사한다.
  */
 class Material final
 {

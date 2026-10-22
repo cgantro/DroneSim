@@ -14,6 +14,7 @@ struct Vertex
 {
     glm::vec3 position{0.0F};
     glm::vec3 normal{0.0F, 1.0F, 0.0F};
+    glm::vec2 textureCoordinate{0.0F};
 };
 
 class VertexArray;
@@ -28,7 +29,7 @@ class IndexBuffer;
  * IndexBuffer는 삼각형마다 연결할 정점 번호를 보관한다. 세 번호가 삼각형 하나를 만들고 여러 삼각형이 같은 정점을 함께 쓸 수 있어 저장량이 줄어든다.
  * 인접 면의 표면 방향이 다르면 같은 위치라도 정점을 따로 저장한다. Shader는 정점을 장면 좌표로 바꾸고 표면 방향으로 빛을 계산한다.
  * 생성 중 CPU 배열을 GPU로 복사하므로 그 뒤 원본을 해제해도 된다. GPU 자원을 만들거나 마지막으로 해제할 때 GPU 명령 실행 환경(context)이 현재 스레드에서 활성화되어 있어야 한다.
- * 화면은 정점 색이 아니라 Material의 기본색을 사용한다. 표면 이미지와 요철 방향은 지원하지 않는다.
+ * 화면은 Material 기본색을 바탕으로 색을 계산한다. UV 좌표가 있는 Mesh는 이미지 질감도 사용할 수 있다.
  */
 class Mesh final
 {
@@ -78,7 +79,7 @@ public:
     static std::unique_ptr<Mesh> CreateCube(float sideLengthMeters = 1.0F);
 
     /**
-     * @brief 위치·법선·삼각형 번호가 하나의 메시로 저장된 GLB 모델을 GPU에 올린다.
+     * @brief 위치·법선·UV 좌표·삼각형 번호가 하나의 메시로 저장된 GLB 모델을 GPU에 올린다.
      * @param path 읽을 GLB 파일 경로다. 위치와 방향은 모델 기준이며 변환이 미리 적용되어 있어야 한다.
      * @throws std::runtime_error 파일이 손상됐거나 지원하지 않는 GLB 구조인 경우.
      */
