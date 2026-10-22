@@ -802,11 +802,6 @@ void PhysicsWorld::Step(
         impl_->physicsEngine.update();
     };
 
-    if (durationMicroseconds == nullptr)
-    {
-        advance();
-        return;
-    }
     ScopedDuration measurePhysicsStep(durationMicroseconds);
     advance();
 }
