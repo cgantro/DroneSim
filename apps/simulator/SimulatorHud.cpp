@@ -96,25 +96,20 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     ImGui::NewFrame();
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspace");
+    const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspaceV2");
     if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
     {
         ImGui::DockBuilderAddNode(dockspaceId,
             ImGuiDockNodeFlags_DockSpace | ImGuiDockNodeFlags_PassthruCentralNode);
         ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
-        ImGuiID sceneNode = dockspaceId;
-        ImGuiID cameraNode = 0;
-        ImGui::DockBuilderSplitNode(dockspaceId, ImGuiDir_Right, 1.0F / 3.0F,
-            &cameraNode, &sceneNode);
-        ImGui::DockBuilderDockWindow("장면", sceneNode);
-        ImGui::DockBuilderDockWindow("카메라", cameraNode);
+        ImGui::DockBuilderDockWindow("장면##SceneViewV2", dockspaceId);
         ImGui::DockBuilderFinish(dockspaceId);
     }
     ImGui::DockSpaceOverViewport(dockspaceId, viewport);
 
     const auto drawScenePanel = [&renderScene]
     {
-        if (ImGui::Begin("장면"))
+        if (ImGui::Begin("장면##SceneViewV2"))
         {
             const ImVec2 available = ImGui::GetContentRegionAvail();
             const ImVec2 imageSize{std::max(1.0F, available.x),
@@ -129,7 +124,15 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
 
     drawScenePanel();
 
-    if (ImGui::Begin("카메라"))
+    const float cameraPanelWidth = std::min(448.0F, viewport->WorkSize.x * 0.45F);
+    const float cameraPanelHeight = cameraPanelWidth * 0.82F;
+    ImGui::SetNextWindowSize(
+        ImVec2{cameraPanelWidth, cameraPanelHeight}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2{
+        viewport->WorkPos.x + viewport->WorkSize.x - cameraPanelWidth - 12.0F,
+        viewport->WorkPos.y + viewport->WorkSize.y - cameraPanelHeight - 12.0F},
+        ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("카메라##CameraViewV2"))
     {
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const ImVec2 imageOrigin = ImGui::GetCursorPos();
