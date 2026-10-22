@@ -280,7 +280,7 @@ std::string EncodeReply(const CommandReply& reply)
         {"camera_frame_count", camera.frameCount},
         {"camera_last_frame_tick", camera.lastFrameTick}
     };
-    if (reply.status != "fleet_status")
+    if (reply.status != "fleet_status" && reply.telemetry.drones.size() <= 1U)
     {
         telemetry["velocity_meters_per_second"] = {
             state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y,

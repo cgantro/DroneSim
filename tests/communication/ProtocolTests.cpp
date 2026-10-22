@@ -61,8 +61,7 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     reply.telemetry.camera.status = simulation::CameraStatus::Fault;
     reply.telemetry.camera.frameCount = 8;
     reply.telemetry.drones = {
-        {1, "드론 1", simulation::FlightMode::Hovering, {1.0, 2.0, 3.0}},
-        {2, "드론 2", simulation::FlightMode::Grounded, {6.0, 2.0, 0.24}}};
+        {1, "드론 1", simulation::FlightMode::Hovering, {1.0, 2.0, 3.0}}};
     const std::string encodedReply = EncodeReply(reply);
     EXPECT_LE(encodedReply.size(), maximumDatagramBytes);
     const auto decoded = DecodeReply(encodedReply);
@@ -77,14 +76,20 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     EXPECT_EQ(decoded.telemetry.drone.motorSpeedsRadiansPerSecond,
         reply.telemetry.drone.motorSpeedsRadiansPerSecond);
     EXPECT_EQ(decoded.telemetry.camera.status, simulation::CameraStatus::Fault);
-    ASSERT_EQ(decoded.telemetry.drones.size(), 2U);
+    ASSERT_EQ(decoded.telemetry.drones.size(), 1U);
     EXPECT_EQ(decoded.telemetry.drones[0].id, 1U);
     EXPECT_EQ(decoded.telemetry.drones[0].name, "드론 1");
-    EXPECT_EQ(decoded.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
-    EXPECT_EQ(decoded.telemetry.drones[1].positionMeters, glm::dvec3(6.0, 2.0, 0.24));
 
-    CommandReply fullFleet = reply;
-    fullFleet.status = "fleet_status";
+    CommandReply fleetReply = reply;
+    fleetReply.status = "fleet_status";
+    fleetReply.telemetry.drones.push_back(
+        {2, "드론 2", simulation::FlightMode::Grounded, {6.0, 2.0, 0.24}});
+    const auto decodedFleet = DecodeReply(EncodeReply(fleetReply));
+    ASSERT_EQ(decodedFleet.telemetry.drones.size(), 2U);
+    EXPECT_EQ(decodedFleet.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
+    EXPECT_EQ(decodedFleet.telemetry.drones[1].positionMeters, glm::dvec3(6.0, 2.0, 0.24));
+
+    CommandReply fullFleet = fleetReply;
     for (std::uint64_t id = 3; id <= maximumFleetDroneCount; ++id)
     {
         fullFleet.telemetry.drones.push_back({id, "드론 " + std::to_string(id),
