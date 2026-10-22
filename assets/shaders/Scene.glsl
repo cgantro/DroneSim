@@ -161,7 +161,9 @@ void main()
         float detail = TerrainNoise(groundPosition * 0.22) * detailFade;
         float grain = TerrainNoise(groundPosition * 0.9) * grainFade;
         float vegetation = broad * 0.5 + detail * 0.34 + grain * 0.16;
-        baseColor *= 0.94 + vegetation * 0.12;
+        baseColor *= 0.78 + vegetation * 0.30;
+        float rockAmount = smoothstep(0.38, 0.78, 1.0 - N.y);
+        baseColor = mix(baseColor, vec3(0.34, 0.33, 0.30), rockAmount * 0.42);
     }
 
     float baseAlpha = u_BaseColorFactor.a;

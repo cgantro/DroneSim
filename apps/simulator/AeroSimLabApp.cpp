@@ -47,6 +47,8 @@ namespace
 {
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
+// 산의 높낮이가 화면에서 보이도록 지형과 그 위의 물체를 세로로 두 배 그린다.
+constexpr float terrainReliefScale = 2.0F;
 // 창이 멈춘 뒤 밀린 시간을 전부 따라잡느라 다음 화면까지 늦어지지 않게 한다.
 constexpr std::size_t smokeTestFrameLimit = 8;
 constexpr std::size_t demoLengthTicks = 900;
@@ -59,8 +61,10 @@ constexpr float missingBuildingHeightProxyMeters = 3.0F;
 glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
 {
     // 모의는 Z축을 위로 쓰고 화면은 Y축을 위로 쓴다. Y축 방향은 화면의 -Z로 옮겨 오른손 좌표계를 유지한다.
-    return {static_cast<float>(positionMeters.x), static_cast<float>(positionMeters.z),
-        static_cast<float>(-positionMeters.y)};
+    return glm::vec3{
+        static_cast<float>(positionMeters.x), static_cast<float>(positionMeters.z),
+        static_cast<float>(-positionMeters.y)}
+        * glm::vec3{1.0F, terrainReliefScale, 1.0F};
 }
 
 glm::quat ToRenderOrientation(const glm::dquat& orientation)
@@ -116,11 +120,13 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
             const float slopeSouth = northSouthDistance > 0.0F
                 ? (heightAt(afterRow, column) - heightAt(beforeRow, column)) / northSouthDistance
                 : 0.0F;
-            const glm::vec3 normal = glm::normalize(glm::vec3{-slopeEast, 1.0F, -slopeSouth});
+            const glm::vec3 normal = glm::normalize(glm::vec3{
+                -slopeEast * terrainReliefScale, 1.0F,
+                -slopeSouth * terrainReliefScale});
             vertices[row * sampleCount + column] = {
                 glm::vec3{
                     (static_cast<float>(column) - center) * terrain.spacingXMeters,
-                    heightAt(row, column),
+                    heightAt(row, column) * terrainReliefScale,
                     (static_cast<float>(row) - center) * terrain.spacingYMeters},
                 normal,
                 glm::vec2{
@@ -307,7 +313,7 @@ void AeroSimLabApp::InitializeGraphics()
         const glm::dvec3 centerMeters{
             center.x, center.y, groundHeightMeters + heightMeters * 0.5};
         const glm::vec3 sizeMeters{
-            static_cast<float>(footprintSize.x), heightMeters,
+            static_cast<float>(footprintSize.x), heightMeters * terrainReliefScale,
             static_cast<float>(footprintSize.y)};
 
 #ifndef __EMSCRIPTEN__
@@ -460,7 +466,7 @@ void AeroSimLabApp::RenderFrame()
         return;
 
     renderer_->Resize(width, height);
-    const int observerWidth = width / 2;
+    const int observerWidth = width * 2 / 3;
     const int eoWidth = width - observerWidth;
     UpdateCameraTransforms(observerWidth, eoWidth, height);
 
@@ -496,7 +502,7 @@ void AeroSimLabApp::UpdateCameraTransforms(int observerWidth, int eoWidth, int h
     const glm::mat4 cameraOrientation = glm::mat4_cast(
         ToRenderOrientation(cameraState.orientation));
 
-    observerCamera_->SetPosition(dronePosition + glm::vec3{7.0F, 5.0F, 7.0F});
+    observerCamera_->SetPosition(dronePosition + glm::vec3{80.0F, 45.0F, 80.0F});
     observerCamera_->SetTarget(dronePosition + glm::vec3{0.0F, 0.2F, 0.0F});
     observerCamera_->SetAspectRatio(static_cast<float>(observerWidth) / static_cast<float>(height));
 
@@ -548,7 +554,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         DrawCube(transform, cameraPosition, buildingMaterial_, view, projection);
 
     const glm::mat4 simulationToRender = glm::rotate(
-        glm::mat4{1.0F}, -1.57079632679F, glm::vec3{1.0F, 0.0F, 0.0F});
+        glm::mat4{1.0F}, -1.57079632679F, glm::vec3{1.0F, 0.0F, 0.0F})
+        * glm::scale(glm::mat4{1.0F}, glm::vec3{1.0F, 1.0F, terrainReliefScale});
     renderer_->Draw(simulationToRender, *facilityMesh_, facilityMaterial_, *shader_,
         view, projection, cameraPosition);
 
