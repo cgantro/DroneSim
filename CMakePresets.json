@@ -53,7 +53,10 @@
       "name": "emscripten-single-thread",
       "displayName": "Emscripten Single Thread Release",
       "inherits": "ninja-release",
-      "binaryDir": "${sourceDir}/build-emscripten-single-thread"
+      "binaryDir": "${sourceDir}/build-emscripten-single-thread",
+      "cacheVariables": {
+        "BUILD_TESTING": "OFF"
+      }
     }
   ],
   "buildPresets": [
