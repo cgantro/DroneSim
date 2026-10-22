@@ -347,9 +347,7 @@ bool AeroSimLabApp::ApplySessionCommand(
         pendingControllerAction_.reset();
         pendingPilotCommand_.reset();
         window_->SetTitle("AeroSimLab | 입력 기록 재생 중");
-        ApplyRecordedCommands();
-        simulation_.AdvanceOneTick();
-        commandRecording_.AdvanceReplayTick();
+        AdvanceReplayTick();
         reply.accepted = true;
         reply.status = "recording_replay_started";
         return true;
