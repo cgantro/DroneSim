@@ -309,6 +309,16 @@ void AeroSimLabApp::InitializeGraphics()
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
 
+    LoadScene();
+    shader_ = std::make_unique<aerosimlab::graphics::Shader>(
+        AssetPath("shaders/Scene.glsl").string());
+#ifndef __EMSCRIPTEN__
+    hud_ = std::make_unique<SimulatorHud>(window_->GetNativeHandle());
+#endif
+}
+
+void AeroSimLabApp::LoadScene()
+{
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
         AssetPath("models/drones/x500/visual.glb").string());
@@ -370,11 +380,6 @@ void AeroSimLabApp::InitializeGraphics()
 #ifndef __EMSCRIPTEN__
     // 웹 빌드는 운동학 모드라 충돌 물리 월드에만 필요한 지형 설정을 건너뛴다.
     simulation_.SetTerrain(terrainGrid_);
-#endif
-    shader_ = std::make_unique<aerosimlab::graphics::Shader>(
-        AssetPath("shaders/Scene.glsl").string());
-#ifndef __EMSCRIPTEN__
-    hud_ = std::make_unique<SimulatorHud>(window_->GetNativeHandle());
 #endif
 }
 

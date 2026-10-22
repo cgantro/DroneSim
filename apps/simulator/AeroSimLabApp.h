@@ -73,6 +73,8 @@ public:
 
 private:
     void InitializeGraphics();
+    /** @brief 지도·기체 화면 자산을 불러오고 강체 월드의 충돌 모양을 준비한다. */
+    void LoadScene();
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
