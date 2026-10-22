@@ -298,17 +298,10 @@ void PopulateFinalSnapshot(
     result.finalCamera = simulation.Camera();
 }
 
-void CheckExpectedResults(
+void CheckExpectedDroneResults(
     const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
-    if (result.mission)
-    {
-        result.mission->passed = std::all_of(
-            result.mission->tasks.begin(), result.mission->tasks.end(),
-            [](const ScenarioResult::MissionTask& task) { return task.completed; });
-    }
-
     for (const ExpectedDrone& expectedDrone : definition.expectedDrones)
     {
         const auto found = std::find_if(result.drones.begin(), result.drones.end(),
@@ -352,6 +345,12 @@ void CheckExpectedResults(
     {
         result.issues.push_back("expected.drones 개수가 시나리오 드론 수와 다릅니다.");
     }
+}
+
+void CheckExpectedSeparation(
+    const ScenarioDefinition& definition,
+    ScenarioResult& result)
+{
     if (definition.minimumDroneSeparationMeters
         && result.minimumDroneSeparationMeters
         && *result.minimumDroneSeparationMeters
@@ -359,6 +358,12 @@ void CheckExpectedResults(
     {
         result.issues.push_back("드론 사이 최소 거리가 설정한 안전 간격보다 짧았습니다.");
     }
+}
+
+void CheckExpectedCamera(
+    const ScenarioDefinition& definition,
+    ScenarioResult& result)
+{
     if (definition.expectedCameraStatus
         && result.finalCamera.status != *definition.expectedCameraStatus)
     {
@@ -369,6 +374,22 @@ void CheckExpectedResults(
     {
         result.issues.push_back("카메라 프레임 수가 예상값과 다릅니다.");
     }
+}
+
+void CheckExpectedResults(
+    const ScenarioDefinition& definition,
+    ScenarioResult& result)
+{
+    if (result.mission)
+    {
+        result.mission->passed = std::all_of(
+            result.mission->tasks.begin(), result.mission->tasks.end(),
+            [](const ScenarioResult::MissionTask& task) { return task.completed; });
+    }
+
+    CheckExpectedDroneResults(definition, result);
+    CheckExpectedSeparation(definition, result);
+    CheckExpectedCamera(definition, result);
     result.passed = result.issues.empty();
 }
 }
