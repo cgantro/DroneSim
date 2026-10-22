@@ -33,6 +33,17 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     EXPECT_EQ(DecodeCommand(EncodeCommand(recording)).sessionCommand,
         SessionCommand::ReplayRecording);
 
+    CommandPacket addDrone;
+    addDrone.commandId = 10;
+    addDrone.sequence = 14;
+    addDrone.fleetCommand = FleetCommand::AddDrone;
+    EXPECT_EQ(DecodeCommand(EncodeCommand(addDrone)).fleetCommand, FleetCommand::AddDrone);
+    CommandPacket fleetStatus;
+    fleetStatus.commandId = 11;
+    fleetStatus.sequence = 15;
+    fleetStatus.fleetCommand = FleetCommand::GetStatus;
+    EXPECT_EQ(DecodeCommand(EncodeCommand(fleetStatus)).fleetCommand, FleetCommand::GetStatus);
+
     CommandReply reply;
     reply.commandId = 3;
     reply.sequence = 5;
@@ -49,6 +60,9 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     reply.telemetry.drone.motorSpeedsRadiansPerSecond = {120.0, 121.0, 119.0, 122.0};
     reply.telemetry.camera.status = simulation::CameraStatus::Fault;
     reply.telemetry.camera.frameCount = 8;
+    reply.telemetry.drones = {
+        {1, "드론 1", simulation::FlightMode::Hovering, {1.0, 2.0, 3.0}},
+        {2, "드론 2", simulation::FlightMode::Grounded, {6.0, 2.0, 0.24}}};
     const std::string encodedReply = EncodeReply(reply);
     EXPECT_LE(encodedReply.size(), maximumDatagramBytes);
     const auto decoded = DecodeReply(encodedReply);
@@ -63,6 +77,22 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     EXPECT_EQ(decoded.telemetry.drone.motorSpeedsRadiansPerSecond,
         reply.telemetry.drone.motorSpeedsRadiansPerSecond);
     EXPECT_EQ(decoded.telemetry.camera.status, simulation::CameraStatus::Fault);
+    ASSERT_EQ(decoded.telemetry.drones.size(), 2U);
+    EXPECT_EQ(decoded.telemetry.drones[0].id, 1U);
+    EXPECT_EQ(decoded.telemetry.drones[0].name, "드론 1");
+    EXPECT_EQ(decoded.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
+    EXPECT_EQ(decoded.telemetry.drones[1].positionMeters, glm::dvec3(6.0, 2.0, 0.24));
+
+    CommandReply fullFleet = reply;
+    fullFleet.status = "fleet_status";
+    for (std::uint64_t id = 3; id <= maximumFleetDroneCount; ++id)
+    {
+        fullFleet.telemetry.drones.push_back({id, "드론 " + std::to_string(id),
+            simulation::FlightMode::Grounded, {static_cast<double>(id) * 5.0, 0.0, 0.24}});
+    }
+    const std::string fullFleetDatagram = EncodeReply(fullFleet);
+    EXPECT_LE(fullFleetDatagram.size(), maximumDatagramBytes);
+    EXPECT_EQ(DecodeReply(fullFleetDatagram).telemetry.drones.size(), maximumFleetDroneCount);
 }
 
 void Verify_Protocol_RejectsInvalidPacketsAndSequenceNumbers()
@@ -82,6 +112,10 @@ void Verify_Protocol_RejectsInvalidPacketsAndSequenceNumbers()
     EXPECT_THROW(static_cast<void>(DecodeCommand(wrongLength)), std::invalid_argument);
     EXPECT_THROW(static_cast<void>(DecodeCommand("{}")), std::invalid_argument);
     EXPECT_THROW(static_cast<void>(DecodeCommand(std::string(maximumDatagramBytes + 1, 'x'))), std::invalid_argument);
+
+    CommandReply oversizedFleet;
+    oversizedFleet.telemetry.drones.resize(maximumFleetDroneCount + 1U);
+    EXPECT_THROW(static_cast<void>(EncodeReply(oversizedFleet)), std::invalid_argument);
 
     SequenceGuard guard;
     CommandPacket first{10, 4};

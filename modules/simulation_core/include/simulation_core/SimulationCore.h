@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace aerosimlab::simulation
 {
@@ -77,6 +78,10 @@ public:
     [[nodiscard]] DroneId AddDrone(
         const glm::dvec3& positionMeters, double yawRadians = 0.0);
 
+    /** @brief 지형 높이가 있는 환경에서 지면 높이까지 정해 드론을 추가한다. */
+    [[nodiscard]] DroneId AddDrone(const glm::dvec3& positionMeters,
+        double yawRadians, double groundElevationMeters);
+
     /** @brief 첫 Tick 전에 주 드론의 시작 위치와 방향을 지정한다. */
     void SetInitialPose(const glm::dvec3& positionMeters, double yawRadians = 0.0);
 
@@ -88,6 +93,9 @@ public:
 
     /** @brief 현재 시뮬레이션에 있는 드론 수를 반환한다. */
     [[nodiscard]] std::size_t DroneCount() const noexcept;
+
+    /** @brief 현재 드론 식별값을 오름차순으로 돌려준다. */
+    [[nodiscard]] std::vector<DroneId> DroneIds() const;
 
     /** @brief 실행 중이면 고정 간격 한 단계만 진행하고, 일시정지 중이면 아무것도 바꾸지 않는다. */
     void AdvanceOneTick() noexcept;

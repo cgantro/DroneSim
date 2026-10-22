@@ -8,11 +8,13 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace aerosimlab::communication
 {
 inline constexpr std::uint16_t defaultPort = 27015;
 inline constexpr std::size_t maximumDatagramBytes = 1200;
+inline constexpr std::size_t maximumFleetDroneCount = 8;
 
 /** @brief 지상통제가 카메라에 보낼 동작이다. */
 enum class CameraCommand
@@ -31,6 +33,13 @@ enum class SessionCommand
     ReplayRecording
 };
 
+/** @brief 시뮬레이터의 여러 드론을 추가하거나 상태를 조회한다. */
+enum class FleetCommand
+{
+    AddDrone,
+    GetStatus
+};
+
 /** @brief UDP로 받은 한 번의 비행·카메라·기록 제어 명령을 보관한다. */
 struct CommandPacket
 {
@@ -39,6 +48,16 @@ struct CommandPacket
     std::optional<simulation::DroneCommand> droneCommand;
     std::optional<CameraCommand> cameraCommand;
     std::optional<SessionCommand> sessionCommand;
+    std::optional<FleetCommand> fleetCommand;
+};
+
+/** @brief 편대 목록에 표시할 드론의 간단한 상태다. */
+struct DroneTelemetry
+{
+    std::uint64_t id = 0;
+    std::string name;
+    simulation::FlightMode mode = simulation::FlightMode::Grounded;
+    glm::dvec3 positionMeters{0.0};
 };
 
 /** @brief 명령 응답에 실어 지상통제 프로그램으로 돌려보낼 모의 상태다. */
@@ -48,6 +67,7 @@ struct Telemetry
     double simulationTimeSeconds = 0.0;
     simulation::DroneState drone;
     simulation::CameraState camera;
+    std::vector<DroneTelemetry> drones;
 };
 
 /** @brief 지상통제 명령의 접수·적용 결과와 적용 시점이다. */

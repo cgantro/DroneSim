@@ -169,7 +169,8 @@ std::string EncodeCommand(const CommandPacket& packet)
 {
     const unsigned int targetCount = static_cast<unsigned int>(packet.droneCommand.has_value())
         + static_cast<unsigned int>(packet.cameraCommand.has_value())
-        + static_cast<unsigned int>(packet.sessionCommand.has_value());
+        + static_cast<unsigned int>(packet.sessionCommand.has_value())
+        + static_cast<unsigned int>(packet.fleetCommand.has_value());
     if (targetCount != 1)
         throw std::invalid_argument("한 메시지에는 비행·카메라·기록 명령 중 하나만 넣을 수 있습니다.");
 
@@ -208,7 +209,7 @@ std::string EncodeCommand(const CommandPacket& packet)
         case CameraCommand::Recover: payload["action"] = "recover"; break;
         }
     }
-    else
+    else if (packet.sessionCommand)
     {
         payload["target"] = "session";
         switch (*packet.sessionCommand)
@@ -217,6 +218,12 @@ std::string EncodeCommand(const CommandPacket& packet)
         case SessionCommand::StopRecording: payload["action"] = "record_stop"; break;
         case SessionCommand::ReplayRecording: payload["action"] = "record_replay"; break;
         }
+    }
+    else
+    {
+        payload["target"] = "fleet";
+        payload["action"] = *packet.fleetCommand == FleetCommand::AddDrone
+            ? "add_drone" : "status";
     }
     return Wrap("command", std::move(payload)).dump();
 }
@@ -246,6 +253,13 @@ CommandPacket DecodeCommand(std::string_view datagram)
         packet.sessionCommand = ReadSessionCommand(action);
         return packet;
     }
+    if (target == "fleet")
+    {
+        if (action == "add_drone") packet.fleetCommand = FleetCommand::AddDrone;
+        else if (action == "status") packet.fleetCommand = FleetCommand::GetStatus;
+        else throw std::invalid_argument("알 수 없는 편대 동작입니다.");
+        return packet;
+    }
     if (target != "drone")
         throw std::invalid_argument("알 수 없는 명령 대상입니다.");
 
@@ -257,32 +271,52 @@ std::string EncodeReply(const CommandReply& reply)
 {
     const auto& state = reply.telemetry.drone;
     const auto& camera = reply.telemetry.camera;
+    Json telemetry{
+        {"tick", reply.telemetry.tick},
+        {"simulation_time_seconds", reply.telemetry.simulationTimeSeconds},
+        {"flight_mode", simulation::ToString(state.mode)},
+        {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
+        {"camera_status", aerosimlab::communication::ToString(camera.status)},
+        {"camera_frame_count", camera.frameCount},
+        {"camera_last_frame_tick", camera.lastFrameTick}
+    };
+    if (reply.status != "fleet_status")
+    {
+        telemetry["velocity_meters_per_second"] = {
+            state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y,
+            state.velocityMetersPerSecond.z};
+        telemetry["orientation_quaternion"] = {
+            {"w", state.orientation.w}, {"x", state.orientation.x},
+            {"y", state.orientation.y}, {"z", state.orientation.z}};
+        telemetry["angular_velocity_radians_per_second"] = {
+            state.angularVelocityRadiansPerSecond.x,
+            state.angularVelocityRadiansPerSecond.y,
+            state.angularVelocityRadiansPerSecond.z};
+        telemetry["motor_speeds_radians_per_second"] = state.motorSpeedsRadiansPerSecond;
+        telemetry["yaw_radians"] = state.yawRadians;
+    }
     Json payload{
         {"command_id", reply.commandId}, {"sequence", reply.sequence},
         {"accepted", reply.accepted}, {"status", reply.status},
         {"received_at_ms", reply.receivedAtMilliseconds}, {"applied_tick", reply.appliedTick},
-        {"telemetry", {
-            {"tick", reply.telemetry.tick},
-            {"simulation_time_seconds", reply.telemetry.simulationTimeSeconds},
-            {"flight_mode", simulation::ToString(state.mode)},
-            {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
-            {"velocity_meters_per_second", {
-                state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y, state.velocityMetersPerSecond.z}},
-            {"orientation_quaternion", {
-                {"w", state.orientation.w}, {"x", state.orientation.x},
-                {"y", state.orientation.y}, {"z", state.orientation.z}}},
-            {"angular_velocity_radians_per_second", {
-                state.angularVelocityRadiansPerSecond.x,
-                state.angularVelocityRadiansPerSecond.y,
-                state.angularVelocityRadiansPerSecond.z}},
-            {"motor_speeds_radians_per_second", state.motorSpeedsRadiansPerSecond},
-            {"yaw_radians", state.yawRadians},
-            {"camera_status", aerosimlab::communication::ToString(camera.status)},
-            {"camera_frame_count", camera.frameCount},
-            {"camera_last_frame_tick", camera.lastFrameTick}
-        }}
+        {"telemetry", std::move(telemetry)}
     };
-    return Wrap("reply", std::move(payload)).dump();
+    if (reply.telemetry.drones.size() > maximumFleetDroneCount)
+        throw std::invalid_argument("편대 상태 응답에 포함된 드론 수가 허용 범위를 넘었습니다.");
+    payload["telemetry"]["drones"] = Json::array();
+    for (const DroneTelemetry& drone : reply.telemetry.drones)
+    {
+        payload["telemetry"]["drones"].push_back({
+            {"id", drone.id}, {"name", drone.name},
+            {"flight_mode", simulation::ToString(drone.mode)},
+            {"position_meters", {drone.positionMeters.x,
+                drone.positionMeters.y, drone.positionMeters.z}}
+        });
+    }
+    const std::string datagram = Wrap("reply", std::move(payload)).dump();
+    if (datagram.size() > maximumDatagramBytes)
+        throw std::invalid_argument("편대 상태 응답이 UDP 메시지 크기 제한을 넘었습니다.");
+    return datagram;
 }
 
 CommandReply DecodeReply(std::string_view datagram)
@@ -304,7 +338,8 @@ CommandReply DecodeReply(std::string_view datagram)
     auto& state = reply.telemetry.drone;
     state.mode = ReadFlightMode(Required(telemetry, "flight_mode"));
     state.positionMeters = ReadVector(Required(telemetry, "position_meters"));
-    state.velocityMetersPerSecond = ReadVector(Required(telemetry, "velocity_meters_per_second"));
+    if (telemetry.contains("velocity_meters_per_second"))
+        state.velocityMetersPerSecond = ReadVector(Required(telemetry, "velocity_meters_per_second"));
     if (telemetry.contains("orientation_quaternion"))
         state.orientation = ReadQuaternion(Required(telemetry, "orientation_quaternion"));
     if (telemetry.contains("angular_velocity_radians_per_second"))
@@ -321,11 +356,29 @@ CommandReply DecodeReply(std::string_view datagram)
                 ReadFinite(speeds[index], "motor_speeds_radians_per_second");
         }
     }
-    state.yawRadians = ReadFinite(Required(telemetry, "yaw_radians"), "yaw_radians");
+    if (telemetry.contains("yaw_radians"))
+        state.yawRadians = ReadFinite(Required(telemetry, "yaw_radians"), "yaw_radians");
     auto& camera = reply.telemetry.camera;
     camera.status = ReadCameraStatus(Required(telemetry, "camera_status"));
     camera.frameCount = ReadUnsigned(Required(telemetry, "camera_frame_count"), "camera_frame_count");
     camera.lastFrameTick = ReadUnsigned(Required(telemetry, "camera_last_frame_tick"), "camera_last_frame_tick");
+    if (telemetry.contains("drones"))
+    {
+        const Json& drones = telemetry["drones"];
+        if (!drones.is_array() || drones.size() > maximumFleetDroneCount)
+            throw std::invalid_argument("편대 드론 목록의 형식이나 크기가 잘못되었습니다.");
+        reply.telemetry.drones.reserve(drones.size());
+        for (const Json& item : drones)
+        {
+            if (!item.is_object() || !Required(item, "name").is_string())
+                throw std::invalid_argument("편대 드론 이름이 올바르지 않습니다.");
+            reply.telemetry.drones.push_back({
+                ReadUnsigned(Required(item, "id"), "drone.id"),
+                Required(item, "name").get<std::string>(),
+                ReadFlightMode(Required(item, "flight_mode")),
+                ReadVector(Required(item, "position_meters"))});
+        }
+    }
     return reply;
 }
 

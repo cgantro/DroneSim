@@ -91,6 +91,8 @@ void Verify_SimulationCore_InitialYawSetsOrientationAndSurvivesReset()
     SimulationCore kinematic{SimulationDynamics::Kinematic};
     const DroneId kinematicDrone = kinematic.AddDrone(
         glm::dvec3{2.0, 3.0, 1.0}, initialYawRadians);
+    EXPECT_EQ(kinematic.DroneCount(), 2U);
+    EXPECT_EQ(kinematic.DroneIds(), (std::vector<DroneId>{1U, kinematicDrone}));
     EXPECT_NEAR(kinematic.State(kinematicDrone).yawRadians, initialYawRadians, 1.0e-12);
     EXPECT_EQ(kinematic.State(kinematicDrone).orientation, expectedOrientation);
     kinematic.Reset();
@@ -104,6 +106,9 @@ void Verify_SimulationCore_InitialYawSetsOrientationAndSurvivesReset()
     EXPECT_NEAR(rigidBody.State(rigidBodyDrone).yawRadians, initialYawRadians, 1.0e-6);
     rigidBody.Reset();
     EXPECT_NEAR(rigidBody.State(rigidBodyDrone).yawRadians, initialYawRadians, 1.0e-6);
+    EXPECT_DOUBLE_EQ(
+        rigidBody.State(rigidBodyDrone).positionMeters.z,
+        1.5);
 #endif
 }
 

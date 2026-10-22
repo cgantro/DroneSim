@@ -328,12 +328,25 @@ CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command
 
 DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters, double yawRadians)
 {
+    return AddDrone(positionMeters, yawRadians, 0.0);
+}
+
+DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters,
+    double yawRadians, double groundElevationMeters)
+{
     if (!std::isfinite(positionMeters.x)
         || !std::isfinite(positionMeters.y)
         || !std::isfinite(positionMeters.z)
         || !std::isfinite(yawRadians))
         throw std::invalid_argument("드론 시작 위치와 방향은 유한한 값이어야 합니다.");
-    return ecs_->CreateDrone(positionMeters, yawRadians);
+    if (!std::isfinite(groundElevationMeters))
+        throw std::invalid_argument("드론 지면 높이는 유한한 값이어야 합니다.");
+    const DroneId id = ecs_->CreateDrone(positionMeters, yawRadians);
+    auto& drone = ecs_->FindDrone(id);
+    drone.set<EcsStorage::InitialPose>(
+        {positionMeters, yawRadians, groundElevationMeters});
+    drone.get_mut<DroneControlState>().groundElevationMeters = groundElevationMeters;
+    return id;
 }
 
 void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yawRadians)
@@ -378,6 +391,19 @@ DroneId SimulationCore::PrimaryDroneId() const noexcept
 std::size_t SimulationCore::DroneCount() const noexcept
 {
     return ecs_->drones.size();
+}
+
+std::vector<DroneId> SimulationCore::DroneIds() const
+{
+    std::vector<DroneId> ids;
+    ids.reserve(ecs_->drones.size());
+    for (const auto& [id, drone] : ecs_->drones)
+    {
+        (void)drone;
+        ids.push_back(id);
+    }
+    std::sort(ids.begin(), ids.end());
+    return ids;
 }
 
 void SimulationCore::AdvanceOneTick() noexcept
