@@ -37,6 +37,7 @@ struct ViewerBenchmarkMeasurements
     std::size_t renderedFrames = 0;
     double processCpuSeconds = 0.0;
     std::vector<double> tickDurationsMicroseconds;
+    std::vector<double> applicationFrameDurationsMicroseconds;
     std::vector<double> renderFrameDurationsMicroseconds;
     std::vector<double> renderFrameDurationsWithEoReadbackMicroseconds;
     std::vector<double> renderFrameDurationsWithoutEoReadbackMicroseconds;

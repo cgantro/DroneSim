@@ -224,6 +224,9 @@ int AeroSimLabApp::Run()
 
     while (!window_->ShouldClose())
     {
+        const auto applicationFrameStart = benchmarkMode_
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         window_->PollEvents();
         PollGroundControl();
         PollGamepad();
@@ -263,6 +266,12 @@ int AeroSimLabApp::Run()
             frameDurations.push_back(renderDurationMicroseconds);
         }
         ++renderedFrames_;
+        if (benchmarkMode_)
+        {
+            benchmarkMeasurements_.applicationFrameDurationsMicroseconds.push_back(
+                std::chrono::duration<double, std::micro>(
+                    std::chrono::steady_clock::now() - applicationFrameStart).count());
+        }
 
         if (smokeTest_ && SmokeTestIsComplete())
             break;

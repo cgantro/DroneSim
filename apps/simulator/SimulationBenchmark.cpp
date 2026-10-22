@@ -114,6 +114,8 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             ? static_cast<double>(measurements.renderedFrames) / measurements.elapsedSeconds : 0.0},
         {"tick_duration_us", SummarizeDurations(
             std::move(measurements.tickDurationsMicroseconds))},
+        {"application_frame_duration_us", SummarizeDurations(
+            std::move(measurements.applicationFrameDurationsMicroseconds))},
         {"render_frame_duration_us", SummarizeDurations(
             std::move(measurements.renderFrameDurationsMicroseconds))},
         {"render_frame_with_eo_readback_duration_us", SummarizeDurations(

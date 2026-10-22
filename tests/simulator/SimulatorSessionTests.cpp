@@ -44,6 +44,7 @@ void Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues()
     measurements.renderedFrames = 100;
     measurements.processCpuSeconds = 0.5;
     measurements.tickDurationsMicroseconds = {10000.0, 16000.0, 30000.0};
+    measurements.applicationFrameDurationsMicroseconds = {1500.0, 1800.0, 2400.0};
     measurements.renderFrameDurationsMicroseconds = {700.0, 800.0, 900.0};
     measurements.renderFrameDurationsWithEoReadbackMicroseconds = {800.0, 1200.0};
     measurements.renderFrameDurationsWithoutEoReadbackMicroseconds = {600.0};
@@ -66,6 +67,8 @@ void Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues()
     EXPECT_EQ(report.at("framebuffer").at("height"), 480);
     EXPECT_EQ(report.at("opengl").at("renderer"), "test-renderer");
     EXPECT_DOUBLE_EQ(report.at("render_fps"), 50.0);
+    EXPECT_DOUBLE_EQ(report.at("application_frame_duration_us").at("p50"), 1800.0);
+    EXPECT_DOUBLE_EQ(report.at("application_frame_duration_us").at("p95"), 2400.0);
     EXPECT_DOUBLE_EQ(report.at("render_frame_duration_us").at("p50"), 800.0);
     EXPECT_DOUBLE_EQ(report.at("render_frame_duration_us").at("p95"), 900.0);
     EXPECT_DOUBLE_EQ(report.at("render_frame_with_eo_readback_duration_us").at("p95"), 1200.0);
