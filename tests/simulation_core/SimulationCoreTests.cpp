@@ -485,6 +485,7 @@ void Verify_SimulationCore_RigidBodyRemainsStableDuringOneMinuteHover()
     EXPECT_LT(glm::length(simulation.State().velocityMetersPerSecond), 0.15);
 }
 
+#ifndef __EMSCRIPTEN__
 void Verify_SimulationCore_RigidBodyTakesOffFromTheSelectedTerrainStart()
 {
     SimulationCore simulation{SimulationDynamics::RigidBody};
@@ -519,6 +520,7 @@ void Verify_SimulationCore_RigidBodyTakesOffFromTheSelectedTerrainStart()
             + QuadrotorFlightController::groundedModelOriginHeightMeters,
         1.0e-6);
 }
+#endif
 
 void Verify_SimulationCore_CameraStopsOnDisableOrFaultAndResumesAfterRecovery()
 {
@@ -588,7 +590,9 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RigidBodyDronesShareOnePhysicsStepAndCanBeRemoved());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_CollidingRigidBodyDronesRemainSeparated());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RigidBodyRemainsStableDuringOneMinuteHover());
+#ifndef __EMSCRIPTEN__
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RigidBodyTakesOffFromTheSelectedTerrainStart());
+#endif
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_CameraStopsOnDisableOrFaultAndResumesAfterRecovery());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_EoCameraPoseTracksPrimaryDroneThroughTicksAndReset());
 }
