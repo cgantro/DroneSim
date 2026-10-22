@@ -1,5 +1,7 @@
 #include "AeroSimLabApp.h"
 #include "graphics/Window.h"
+#include "simulation_core/QuadrotorFlightController.h"
+#include "simulation_core/ScenarioRunner.h"
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -43,6 +45,7 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     try
     {
         const auto packet = aerosimlab::communication::DecodeCommand(datagram);
+        lastGroundControlMessage_ = std::chrono::steady_clock::now();
         if (activePeer_ && (activePeer_->addressNetworkOrder != peer.addressNetworkOrder
             || activePeer_->portNetworkOrder != peer.portNetworkOrder) && !pendingCommand_)
         {
@@ -84,8 +87,22 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         }
 
         sequenceGuard_.Commit(packet);
+        if (packet.fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
+        {
+            aerosimlab::communication::CommandReply reply;
+            reply.commandId = packet.commandId;
+            reply.sequence = packet.sequence;
+            reply.accepted = true;
+            reply.status = "fleet_status";
+            reply.appliedTick = simulation_.TickCount();
+            reply.telemetry = CurrentTelemetry();
+            lastReply_ = reply;
+            udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+            return;
+        }
+
         externalControl_ = true;
-        if (!packet.sessionCommand)
+        if (!packet.sessionCommand && !packet.fleetCommand)
         {
             groundControlActive_ = true;
             window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
@@ -430,6 +447,33 @@ void AeroSimLabApp::ApplyGroundCommand()
         ApplyDroneCommand(*pending.packet.droneCommand, reply);
     else if (pending.packet.cameraCommand)
         ApplyCameraCommand(*pending.packet.cameraCommand, reply);
+    else if (pending.packet.fleetCommand
+        == aerosimlab::communication::FleetCommand::AddDrone)
+    {
+        if (simulation_.DroneCount() >= aerosimlab::communication::maximumFleetDroneCount)
+        {
+            reply.accepted = false;
+            reply.status = "fleet_limit_reached";
+        }
+        else
+        {
+            const std::size_t slot = simulation_.DroneCount() - 1U;
+            const double eastMeters = static_cast<double>(slot % 3U + 1U) * 5.0;
+            const double northMeters = static_cast<double>(slot / 3U) * 5.0;
+            const glm::dvec3 primaryPosition = simulation_.State().positionMeters;
+            const glm::dvec2 spawnPosition{
+                primaryPosition.x + eastMeters,
+                primaryPosition.y + northMeters};
+            const double groundHeightMeters = terrainGrid_.HeightAtLocalMeters(spawnPosition);
+            const glm::dvec3 positionMeters{spawnPosition.x, spawnPosition.y,
+                groundHeightMeters
+                    + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters};
+            const auto id = simulation_.AddDrone(positionMeters, 0.0, groundHeightMeters);
+            fleetDroneIds_.push_back(id);
+            reply.accepted = true;
+            reply.status = "drone_added";
+        }
+    }
 
     if (!replayTickAdvanced)
         simulation_.AdvanceOneTick();
@@ -480,6 +524,13 @@ aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
     telemetry.simulationTimeSeconds = simulation_.SimulationTimeSeconds();
     telemetry.drone = simulation_.State();
     telemetry.camera = simulation_.Camera();
+    telemetry.drones.reserve(fleetDroneIds_.size());
+    for (const auto id : fleetDroneIds_)
+    {
+        const auto& drone = simulation_.State(id);
+        telemetry.drones.push_back({
+            id, "드론 " + std::to_string(id), drone.mode, drone.positionMeters});
+    }
     return telemetry;
 }
 

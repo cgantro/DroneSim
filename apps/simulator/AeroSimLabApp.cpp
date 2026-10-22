@@ -13,6 +13,9 @@
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
 #include "SimulationBenchmark.h"
+#ifndef __EMSCRIPTEN__
+#include "SimulatorHud.h"
+#endif
 #include "simulation_core/QuadrotorFlightController.h"
 #include "terrain/BuildingFootprint.h"
 #include "terrain/StaticFacility.h"
@@ -264,8 +267,8 @@ void AeroSimLabApp::InitializeGraphics()
 
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb("models/drones/x500/visual.glb");
-    auto terrain = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
-    terrainMesh_ = CreateTerrainMesh(terrain);
+    terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
+    terrainMesh_ = CreateTerrainMesh(terrainGrid_);
     terrainTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
         "maps/bukhansan-demo/terrain-satellite.ppm");
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
@@ -273,17 +276,18 @@ void AeroSimLabApp::InitializeGraphics()
     facilityMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
         "maps/bukhansan-demo/facilities.glb");
     const auto buildings = aerosimlab::terrain::LoadBuildingFootprints(
-        "maps/bukhansan-demo/buildings.geojson", terrain);
+        "maps/bukhansan-demo/buildings.geojson", terrainGrid_);
     const auto facilities = aerosimlab::terrain::LoadStaticFacilities(
         "maps/bukhansan-demo/facilities.json");
 #ifndef __EMSCRIPTEN__
     simulation_.SetInitialPose({demoDroneStartMeters,
-        terrain.HeightAtLocalMeters(demoDroneStartMeters)
+        terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters)
             + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
     for (const auto& facility : facilities)
         simulation_.AddStaticObstacleBox(
             facility.centerMeters, facility.halfExtentsMeters);
 #endif
+    fleetDroneIds_ = simulation_.DroneIds();
     buildingTransforms_.reserve(buildings.size());
     for (const auto& building : buildings)
     {
@@ -299,7 +303,7 @@ void AeroSimLabApp::InitializeGraphics()
         const glm::dvec2 center = (minimum + maximum) * 0.5;
         const float heightMeters = building.heightMeters.value_or(
             missingBuildingHeightProxyMeters);
-        const double groundHeightMeters = terrain.HeightAtLocalMeters(center);
+        const double groundHeightMeters = terrainGrid_.HeightAtLocalMeters(center);
         const glm::dvec3 centerMeters{
             center.x, center.y, groundHeightMeters + heightMeters * 0.5};
         const glm::vec3 sizeMeters{
@@ -312,8 +316,11 @@ void AeroSimLabApp::InitializeGraphics()
         buildingTransforms_.push_back(CubeTransform(
             ToRenderPosition(centerMeters), sizeMeters));
     }
-    simulation_.SetTerrain(std::move(terrain));
+    simulation_.SetTerrain(terrainGrid_);
     shader_ = std::make_unique<aerosimlab::graphics::Shader>("shaders/Scene.glsl");
+#ifndef __EMSCRIPTEN__
+    hud_ = std::make_unique<SimulatorHud>(window_->GetNativeHandle());
+#endif
 }
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
@@ -469,6 +476,15 @@ void AeroSimLabApp::RenderFrame()
     renderer_->EndFrame();
 
     CaptureEoFrame(observerWidth, eoWidth, height);
+#ifndef __EMSCRIPTEN__
+    if (hud_)
+    {
+        const bool groundControlConnected = lastGroundControlMessage_
+            && std::chrono::steady_clock::now() - *lastGroundControlMessage_
+                < std::chrono::seconds(2);
+        hud_->Render(simulation_, gamepadConnected_, groundControlConnected);
+    }
+#endif
 }
 
 void AeroSimLabApp::UpdateCameraTransforms(int observerWidth, int eoWidth, int height)
@@ -536,11 +552,15 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     renderer_->Draw(simulationToRender, *facilityMesh_, facilityMaterial_, *shader_,
         view, projection, cameraPosition);
 
-    const glm::vec3 position = ToRenderPosition(simulation_.State().positionMeters);
-    const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
-        glm::mat4_cast(ToRenderOrientation(simulation_.State().orientation));
-    renderer_->Draw(heading, *droneMesh_, droneMaterial_, *shader_,
-        view, projection, cameraPosition, droneSurfaceTexture_.get(), true);
+    for (const aerosimlab::simulation::DroneId id : fleetDroneIds_)
+    {
+        const auto& drone = simulation_.State(id);
+        const glm::vec3 position = ToRenderPosition(drone.positionMeters);
+        const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
+            glm::mat4_cast(ToRenderOrientation(drone.orientation));
+        renderer_->Draw(heading, *droneMesh_, droneMaterial_, *shader_,
+            view, projection, cameraPosition, droneSurfaceTexture_.get(), true);
+    }
 }
 
 void AeroSimLabApp::DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,

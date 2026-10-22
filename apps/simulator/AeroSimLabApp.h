@@ -39,6 +39,8 @@ class RgbFrameAnalyzer;
 
 namespace aerosimlab::simulator
 {
+class SimulatorHud;
+
 /**
  * @brief 드론 모의를 진행하고 관찰 화면과 탑재 카메라 화면을 나란히 그린다.
  * @details 드론 위치는 미터, 모의 간격은 1/60초다. 왼쪽 화면은 드론 주변을 보는 관찰자 시점이고 오른쪽은 기체 앞쪽에 고정한 RGB 카메라 시점이다.
@@ -124,6 +126,7 @@ private:
     bool demoMode_ = false;
     bool externalControl_ = false;
     bool groundControlActive_ = false;
+    std::optional<std::chrono::steady_clock::time_point> lastGroundControlMessage_;
     bool gamepadConnected_ = false;
     bool previousTakeoffButton_ = false;
     bool previousLandButton_ = false;
@@ -167,6 +170,9 @@ private:
     std::unique_ptr<aerosimlab::communication::UdpSocket> udpSocket_;
 #endif
     std::unique_ptr<aerosimlab::graphics::Window> window_;
+#ifndef __EMSCRIPTEN__
+    std::unique_ptr<SimulatorHud> hud_;
+#endif
     std::unique_ptr<aerosimlab::graphics::Renderer> renderer_;
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
@@ -177,6 +183,8 @@ private:
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Mesh> facilityMesh_;
     std::vector<glm::mat4> buildingTransforms_;
+    std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
+    aerosimlab::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};

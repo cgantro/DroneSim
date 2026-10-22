@@ -23,6 +23,8 @@ namespace
 constexpr wchar_t windowClassName[] = L"AeroSimLabGroundControlWindow";
 constexpr UINT requestTimerId = 1;
 constexpr UINT requestPollMilliseconds = 40;
+constexpr auto telemetryRefreshInterval = std::chrono::milliseconds(250);
+constexpr auto telemetryTimeout = std::chrono::milliseconds(350);
 constexpr WORD standardWindowResourceId = 32512;
 
 enum ControlId : int
@@ -44,7 +46,9 @@ enum ControlId : int
     telemetryTextId,
     recordingStartButtonId,
     recordingStopButtonId,
-    recordingReplayButtonId
+    recordingReplayButtonId,
+    addDroneButtonId,
+    droneListId
 };
 
 struct AppState
@@ -54,11 +58,15 @@ struct AppState
     HWND waypointInputs[3]{};
     HWND statusText = nullptr;
     HWND telemetryText = nullptr;
+    HWND droneList = nullptr;
     bool requestPending = false;
+    bool statusRequest = false;
     std::uint32_t nextCommandId = 1;
     std::uint32_t nextSequence = 1;
     std::optional<aerosimlab::communication::UdpSocket> socket;
+    std::optional<aerosimlab::communication::CommandPacket> queuedCommand;
     std::future<aerosimlab::ground_control::CommandResult> request;
+    std::chrono::steady_clock::time_point nextStatusPoll{};
 };
 
 HWND AddControl(HWND parent, const wchar_t* className, const wchar_t* text,
@@ -147,13 +155,14 @@ void SetControlsEnabled(AppState& state, bool enabled)
 {
     const int buttonIds[]{takeoffButtonId, stopButtonId, landButtonId, waypointButtonId,
         cameraOnButtonId, cameraOffButtonId, cameraFaultButtonId, cameraRecoverButtonId,
-        recordingStartButtonId, recordingStopButtonId, recordingReplayButtonId};
+        recordingStartButtonId, recordingStopButtonId, recordingReplayButtonId,
+        addDroneButtonId};
     for (const int id : buttonIds)
         EnableWindow(GetDlgItem(GetParent(state.statusText), id), enabled);
 }
 
 void StartRequest(HWND window, AppState& state,
-    aerosimlab::communication::CommandPacket packet)
+    aerosimlab::communication::CommandPacket packet, bool isStatusRequest = false)
 {
     if (state.requestPending)
         return;
@@ -168,20 +177,27 @@ void StartRequest(HWND window, AppState& state,
         packet.sequence = state.nextSequence++;
         auto* socket = &*state.socket;
         state.requestPending = true;
-        SetControlsEnabled(state, false);
-        SetStatus(state, L"시뮬레이터 응답을 기다리는 중입니다...");
+        state.statusRequest = isStatusRequest;
+        if (!isStatusRequest)
+        {
+            SetControlsEnabled(state, false);
+            SetStatus(state, L"시뮬레이터 응답을 기다리는 중입니다...");
+        }
         // 요청이 끝날 때까지 버튼을 잠가 여러 작업이 같은 소켓을 동시에 쓰지 않게 한다.
         state.request = std::async(std::launch::async,
-            [host, port, packet = std::move(packet), socket]
+            [host, port, packet = std::move(packet), socket, isStatusRequest]
             {
                 return aerosimlab::ground_control::SendCommand(
-                    host, port, packet, *socket, std::chrono::seconds(4));
+                    host, port, packet, *socket,
+                    isStatusRequest ? telemetryTimeout : std::chrono::seconds(4));
             });
         SetTimer(window, requestTimerId, requestPollMilliseconds, nullptr);
     }
     catch (const std::exception& error)
     {
         SetStatus(state, FromUtf8(error.what()));
+        if (isStatusRequest)
+            state.nextStatusPoll = std::chrono::steady_clock::now() + telemetryRefreshInterval;
         state.requestPending = false;
         SetControlsEnabled(state, true);
     }
@@ -189,14 +205,16 @@ void StartRequest(HWND window, AppState& state,
 
 std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply& reply)
 {
-    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 7> messages{{
+    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 9> messages{{
         {"recording_started", L"입력 기록을 시작했습니다. 게임패드와 비행 명령을 기록합니다."},
         {"recording_stopped", L"기록을 마쳤습니다. 시뮬레이터를 닫기 전까지 재생할 수 있습니다."},
         {"recording_replay_started", L"입력 기록을 재생합니다."},
         {"recording_requires_grounded", L"기록은 드론이 지상에 있을 때 시작할 수 있습니다."},
         {"recording_not_active", L"진행 중인 입력 기록이 없습니다."},
         {"recording_empty", L"재생할 입력 기록이 없습니다."},
-        {"recording_unavailable", L"기록 또는 재생이 이미 진행 중입니다."}
+        {"recording_unavailable", L"기록 또는 재생이 이미 진행 중입니다."},
+        {"drone_added", L"새 드론을 지면에 추가했습니다."},
+        {"fleet_limit_reached", L"드론은 최대 8대까지 추가할 수 있습니다."}
     }};
 
     for (const auto& [status, message] : messages)
@@ -216,7 +234,8 @@ void ShowResult(AppState& state)
     {
         const auto result = state.request.get();
         const auto& reply = result.reply;
-        SetStatus(state, CommandStatusMessage(reply));
+        SetStatus(state, state.statusRequest
+            ? L"시뮬레이터 연결됨" : CommandStatusMessage(reply));
 
         const auto& drone = reply.telemetry.drone;
         std::wostringstream telemetry;
@@ -229,13 +248,30 @@ void ShowResult(AppState& state)
                       reply.telemetry.camera.status))
                   << L"   생성 프레임: " << reply.telemetry.camera.frameCount;
         SetWindowTextW(state.telemetryText, telemetry.str().c_str());
+        SendMessageW(state.droneList, LB_RESETCONTENT, 0, 0);
+        for (const auto& drone : reply.telemetry.drones)
+        {
+            std::wostringstream row;
+            row << FromUtf8(drone.name) << L"  |  "
+                << WidenAscii(aerosimlab::simulation::ToString(drone.mode))
+                << L"  |  (" << drone.positionMeters.x << L", "
+                << drone.positionMeters.y << L", " << drone.positionMeters.z << L") m";
+            const std::wstring text = row.str();
+            SendMessageW(state.droneList, LB_ADDSTRING, 0,
+                reinterpret_cast<LPARAM>(text.c_str()));
+        }
     }
     catch (const std::exception& error)
     {
-        SetStatus(state, L"통신 실패: " + FromUtf8(error.what()));
+        SetStatus(state, state.statusRequest
+            ? L"연결 끊김: 시뮬레이터 응답이 없습니다."
+            : L"통신 실패: " + FromUtf8(error.what()));
     }
     state.requestPending = false;
-    SetControlsEnabled(state, true);
+    if (!state.statusRequest)
+        SetControlsEnabled(state, true);
+    state.statusRequest = false;
+    state.nextStatusPoll = std::chrono::steady_clock::now() + telemetryRefreshInterval;
 }
 
 void CreateControls(HWND window, AppState& state)
@@ -285,6 +321,13 @@ void CreateControls(HWND window, AppState& state)
     AddControl(window, L"BUTTON", L"마지막 기록 재생", BS_PUSHBUTTON,
         350, 307, 180, 32, recordingReplayButtonId);
 
+    AddLabel(window, L"편대 상태", 565, 62, 150);
+    AddControl(window, L"BUTTON", L"드론 추가", BS_PUSHBUTTON,
+        565, 88, 290, 34, addDroneButtonId);
+    state.droneList = AddControl(window, L"LISTBOX", L"",
+        WS_BORDER | WS_VSCROLL | LBS_NOINTEGRALHEIGHT,
+        565, 132, 290, 360, droneListId);
+
     AddLabel(window, L"명령 결과", 20, 352, 100);
     state.statusText = AddControl(window, L"STATIC", L"시뮬레이터에 연결해 명령을 보냅니다.",
         SS_LEFT, 20, 378, 510, 34, statusTextId);
@@ -309,6 +352,8 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
     {
     case WM_CREATE:
         CreateControls(window, *state);
+        state->nextStatusPoll = std::chrono::steady_clock::now();
+        SetTimer(window, requestTimerId, requestPollMilliseconds, nullptr);
         return 0;
     case WM_COMMAND:
     {
@@ -354,7 +399,15 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
         case recordingReplayButtonId:
             packet.sessionCommand = aerosimlab::communication::SessionCommand::ReplayRecording;
             break;
+        case addDroneButtonId:
+            packet.fleetCommand = aerosimlab::communication::FleetCommand::AddDrone;
+            break;
         default: return 0;
+        }
+        if (state->requestPending && state->statusRequest)
+        {
+            state->queuedCommand = std::move(packet);
+            return 0;
         }
         StartRequest(window, *state, std::move(packet));
         return 0;
@@ -363,14 +416,27 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
         if (wParam == requestTimerId && state->requestPending
             && state->request.wait_for(std::chrono::milliseconds::zero()) == std::future_status::ready)
         {
-            KillTimer(window, requestTimerId);
             ShowResult(*state);
+            if (state->queuedCommand)
+            {
+                auto packet = std::move(*state->queuedCommand);
+                state->queuedCommand.reset();
+                StartRequest(window, *state, std::move(packet));
+            }
+        }
+        else if (wParam == requestTimerId && !state->requestPending
+            && std::chrono::steady_clock::now() >= state->nextStatusPoll)
+        {
+            aerosimlab::communication::CommandPacket packet;
+            packet.fleetCommand = aerosimlab::communication::FleetCommand::GetStatus;
+            StartRequest(window, *state, std::move(packet), true);
         }
         return 0;
     case WM_CLOSE:
+        KillTimer(window, requestTimerId);
+        state->queuedCommand.reset();
         if (state->requestPending)
         {
-            KillTimer(window, requestTimerId);
             ShowResult(*state);
         }
         DestroyWindow(window);
@@ -405,7 +471,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
     AppState state;
     HWND window = CreateWindowExW(0, windowClassName, L"AeroSimLab 지상통제",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 570, 530, nullptr, nullptr, instance, &state);
+        CW_USEDEFAULT, CW_USEDEFAULT, 900, 550, nullptr, nullptr, instance, &state);
     if (!window)
         return 1;
 

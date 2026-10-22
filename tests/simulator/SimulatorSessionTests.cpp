@@ -149,6 +149,26 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
     std::exception_ptr commandFailure;
     try
     {
+        const auto beforeStatus = send([](communication::CommandPacket& packet)
+        {
+            packet.fleetCommand = communication::FleetCommand::GetStatus;
+        });
+        ASSERT_TRUE(beforeStatus.accepted);
+        ASSERT_EQ(beforeStatus.telemetry.drones.size(), 1U);
+        EXPECT_EQ(beforeStatus.appliedTick, beforeStatus.telemetry.tick);
+
+        const auto added = send([](communication::CommandPacket& packet)
+        {
+            packet.fleetCommand = communication::FleetCommand::AddDrone;
+        });
+        ASSERT_TRUE(added.accepted);
+        EXPECT_EQ(added.status, "drone_added");
+        ASSERT_EQ(added.telemetry.drones.size(), 2U);
+        EXPECT_EQ(added.telemetry.drones[1].name, "드론 2");
+        EXPECT_EQ(added.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
+        EXPECT_GT(added.telemetry.drones[1].positionMeters.x,
+            added.telemetry.drones[0].positionMeters.x);
+
         const auto start = send([](communication::CommandPacket& packet)
         {
             packet.sessionCommand = communication::SessionCommand::StartRecording;

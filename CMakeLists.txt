@@ -42,6 +42,9 @@ endif()
 
 include(CTest)
 include(cmake/Dependencies.cmake)
+if(POLICY CMP0169)
+  cmake_policy(SET CMP0169 OLD)
+endif()
 
 if(NOT EMSCRIPTEN)
   find_package(OpenCV REQUIRED COMPONENTS core imgproc)
@@ -158,6 +161,31 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   if(NOT EMSCRIPTEN)
     add_library(aerosimlab_glad STATIC third_party/glad/src/glad.c)
     target_include_directories(aerosimlab_glad PUBLIC third_party/glad/include)
+
+    FetchContent_Declare(
+      aerosimlab_imgui_source
+      GIT_REPOSITORY https://github.com/ocornut/imgui.git
+      GIT_TAG c1aaac65e896a45f81f47a4d68f9959e0f86c859
+      GIT_SHALLOW TRUE
+    )
+    FetchContent_GetProperties(aerosimlab_imgui_source)
+    if(NOT aerosimlab_imgui_source_POPULATED)
+      FetchContent_Populate(aerosimlab_imgui_source)
+    endif()
+    add_library(aerosimlab_imgui STATIC
+      "${aerosimlab_imgui_source_SOURCE_DIR}/imgui.cpp"
+      "${aerosimlab_imgui_source_SOURCE_DIR}/imgui_draw.cpp"
+      "${aerosimlab_imgui_source_SOURCE_DIR}/imgui_tables.cpp"
+      "${aerosimlab_imgui_source_SOURCE_DIR}/imgui_widgets.cpp"
+      "${aerosimlab_imgui_source_SOURCE_DIR}/backends/imgui_impl_glfw.cpp"
+      "${aerosimlab_imgui_source_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp"
+    )
+    target_include_directories(aerosimlab_imgui PUBLIC
+      "${aerosimlab_imgui_source_SOURCE_DIR}"
+      "${aerosimlab_imgui_source_SOURCE_DIR}/backends"
+    )
+    target_compile_definitions(aerosimlab_imgui PRIVATE GLFW_INCLUDE_NONE)
+    target_link_libraries(aerosimlab_imgui PUBLIC glfw OpenGL::GL)
   endif()
 
   set(AEROSIMLAB_GRAPHICS_SOURCES
@@ -197,6 +225,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     apps/simulator/AeroSimLabAppInput.cpp
     apps/simulator/SimulationBenchmark.cpp
   )
+  if(NOT EMSCRIPTEN)
+    target_sources(aerosimlab_simulator_app PRIVATE apps/simulator/SimulatorHud.cpp)
+  endif()
   target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator)
   target_link_libraries(aerosimlab_simulator_app PUBLIC
     aerosimlab_graphics
@@ -207,7 +238,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     nlohmann_json::nlohmann_json
   )
   if(NOT EMSCRIPTEN)
-    target_link_libraries(aerosimlab_simulator_app PRIVATE aerosimlab_vision)
+    target_link_libraries(aerosimlab_simulator_app PRIVATE aerosimlab_vision aerosimlab_imgui)
   endif()
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"
