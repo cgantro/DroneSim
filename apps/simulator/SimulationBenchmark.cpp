@@ -65,6 +65,17 @@ std::filesystem::path DefaultBenchmarkOutputPath()
     return std::filesystem::current_path() / "benchmark-latest.json";
 #endif
 }
+
+std::optional<std::size_t> ReadProcessWorkingSetBytes()
+{
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS memory{};
+    memory.cb = sizeof(memory);
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
+        return memory.WorkingSetSize;
+#endif
+    return std::nullopt;
+}
 }
 
 nlohmann::json SummarizeDurations(std::vector<double> durations)
@@ -129,12 +140,8 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             std::move(measurements.visionDurationsMicroseconds))}};
 #endif
 
-#ifdef _WIN32
-    PROCESS_MEMORY_COUNTERS memory{};
-    memory.cb = sizeof(memory);
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
-        report["working_set_bytes"] = memory.WorkingSetSize;
-#endif
+    if (const auto workingSetBytes = ReadProcessWorkingSetBytes())
+        report["working_set_bytes"] = *workingSetBytes;
     return report;
 }
 
@@ -178,16 +185,6 @@ nlohmann::json MeasureDroneScaling(
     const char* layoutName = usesCompactLayout ? "compact" : "separated";
     constexpr double separatedSpacingMeters = 2.5;
     constexpr double compactSpacingMeters = 0.55;
-    const auto readWorkingSetBytes = []() -> std::optional<std::size_t>
-    {
-#ifdef _WIN32
-        PROCESS_MEMORY_COUNTERS memory{};
-        memory.cb = sizeof(memory);
-        if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
-            return memory.WorkingSetSize;
-#endif
-        return std::nullopt;
-    };
     nlohmann::json runs = nlohmann::json::array();
     bool stoppedAtTimeLimit = false;
 
@@ -266,7 +263,7 @@ nlohmann::json MeasureDroneScaling(
             contactGenerationFractions.reserve(measuredTicks);
             workingSetSamples.reserve(
                 measuredTicks / workingSetSampleIntervalTicks + 1U);
-            const auto workingSetBefore = readWorkingSetBytes();
+            const auto workingSetBefore = ReadProcessWorkingSetBytes();
             const std::clock_t cpuStart = std::clock();
             const auto measurementStart = std::chrono::steady_clock::now();
             bool timeLimitReached = false;
@@ -305,7 +302,7 @@ nlohmann::json MeasureDroneScaling(
 
                 if ((tick + 1U) % workingSetSampleIntervalTicks == 0U)
                 {
-                    if (const auto workingSet = readWorkingSetBytes())
+                    if (const auto workingSet = ReadProcessWorkingSetBytes())
                         workingSetSamples.push_back(*workingSet);
                 }
 
@@ -322,7 +319,7 @@ nlohmann::json MeasureDroneScaling(
                 std::chrono::steady_clock::now() - measurementStart).count();
             const double cpuSeconds = static_cast<double>(std::clock() - cpuStart)
                 / CLOCKS_PER_SEC;
-            const auto workingSetAfter = readWorkingSetBytes();
+            const auto workingSetAfter = ReadProcessWorkingSetBytes();
             if (workingSetAfter)
                 workingSetSamples.push_back(*workingSetAfter);
             const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
