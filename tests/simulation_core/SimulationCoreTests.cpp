@@ -246,11 +246,15 @@ void Verify_SimulationCore_DefaultsToAirSimAndUsesRotorForcesForTakeoffAndLandin
 {
     SimulationCore simulation;
     simulation.SetPhysicsStepTimingEnabled(true);
+    simulation.SetEcsSystemTimingEnabled(true);
     simulation.AdvanceOneTick();
+    EXPECT_GT(simulation.LastEcsSystemDurationMicroseconds(), 0.0);
     EXPECT_GT(simulation.LastPhysicsStepDurationMicroseconds(), 0.0);
     EXPECT_GT(simulation.LastContactGenerationDurationMicroseconds(), 0.0);
     simulation.SetPhysicsStepTimingEnabled(false);
+    simulation.SetEcsSystemTimingEnabled(false);
     simulation.AdvanceOneTick();
+    EXPECT_DOUBLE_EQ(simulation.LastEcsSystemDurationMicroseconds(), 0.0);
     EXPECT_DOUBLE_EQ(simulation.LastContactGenerationDurationMicroseconds(), 0.0);
 
     ASSERT_EQ(

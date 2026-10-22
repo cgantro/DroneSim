@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -166,6 +167,7 @@ nlohmann::json MeasureDroneScaling(
     constexpr std::size_t repetitions = 3U;
     constexpr std::size_t warmupTicks = 120U;
     constexpr std::size_t measuredTicks = 30000U;
+    constexpr std::size_t workingSetSampleIntervalTicks = 5000U;
     constexpr auto runTimeLimit = std::chrono::seconds{30};
     const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
     const bool usesCompactLayout = layout == DroneScalingLayout::Compact;
@@ -195,6 +197,7 @@ nlohmann::json MeasureDroneScaling(
         {
             aerosimlab::simulation::SimulationCore simulation{
                 dynamics};
+            simulation.SetEcsSystemTimingEnabled(true);
             simulation.SetPhysicsStepTimingEnabled(usesRigidBodyPhysics);
 
             std::vector<aerosimlab::simulation::DroneId> droneIds;
@@ -235,13 +238,18 @@ nlohmann::json MeasureDroneScaling(
                 simulation.AdvanceOneTick();
 
             std::vector<double> tickDurations;
+            std::vector<double> ecsSystemDurations;
             std::vector<double> physicsDurations;
             std::vector<double> contactGenerationDurations;
             std::vector<double> contactGenerationFractions;
+            std::vector<std::size_t> workingSetSamples;
             tickDurations.reserve(measuredTicks);
+            ecsSystemDurations.reserve(measuredTicks);
             physicsDurations.reserve(measuredTicks);
             contactGenerationDurations.reserve(measuredTicks);
             contactGenerationFractions.reserve(measuredTicks);
+            workingSetSamples.reserve(
+                measuredTicks / workingSetSampleIntervalTicks + 1U);
             const auto workingSetBefore = readWorkingSetBytes();
             const std::clock_t cpuStart = std::clock();
             const auto measurementStart = std::chrono::steady_clock::now();
@@ -254,6 +262,8 @@ nlohmann::json MeasureDroneScaling(
                     simulation.AdvanceOneTick();
                 }
                 tickDurations.push_back(tickDurationMicroseconds);
+                ecsSystemDurations.push_back(
+                    simulation.LastEcsSystemDurationMicroseconds());
                 if (usesRigidBodyPhysics)
                 {
                     const double physicsDuration =
@@ -267,6 +277,12 @@ nlohmann::json MeasureDroneScaling(
                         contactGenerationFractions.push_back(
                             contactGenerationDuration / physicsDuration);
                     }
+                }
+
+                if ((tick + 1U) % workingSetSampleIntervalTicks == 0U)
+                {
+                    if (const auto workingSet = readWorkingSetBytes())
+                        workingSetSamples.push_back(*workingSet);
                 }
 
                 if ((tick + 1U) % 1000U == 0U
@@ -283,6 +299,8 @@ nlohmann::json MeasureDroneScaling(
             const double cpuSeconds = static_cast<double>(std::clock() - cpuStart)
                 / CLOCKS_PER_SEC;
             const auto workingSetAfter = readWorkingSetBytes();
+            if (workingSetAfter)
+                workingSetSamples.push_back(*workingSetAfter);
             const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
                 tickDurations.begin(), tickDurations.end(), [](double duration)
                 {
@@ -297,6 +315,8 @@ nlohmann::json MeasureDroneScaling(
                 {"target_ticks", measuredTicks},
                 {"measured_ticks", completedTicks},
                 {"tick_duration_us", SummarizeDurations(std::move(tickDurations))},
+                {"ecs_system_duration_us", SummarizeDurations(
+                    std::move(ecsSystemDurations))},
                 {"measurement_wall_seconds", wallSeconds},
                 {"simulation_ticks_per_second", wallSeconds > 0.0
                     ? static_cast<double>(completedTicks) / wallSeconds : 0.0},
@@ -327,6 +347,18 @@ nlohmann::json MeasureDroneScaling(
                 run["process_working_set_change_bytes"] =
                     static_cast<std::int64_t>(*workingSetAfter)
                     - static_cast<std::int64_t>(*workingSetBefore);
+            }
+            if (!workingSetSamples.empty())
+            {
+                const double totalWorkingSetBytes = std::accumulate(
+                    workingSetSamples.begin(), workingSetSamples.end(), 0.0);
+                run["sampled_average_working_set_bytes"] =
+                    totalWorkingSetBytes / static_cast<double>(workingSetSamples.size());
+                run["sampled_max_working_set_bytes"] = *std::max_element(
+                    workingSetSamples.begin(), workingSetSamples.end());
+                run["working_set_sample_interval_ticks"] =
+                    workingSetSampleIntervalTicks;
+                run["working_set_sample_count"] = workingSetSamples.size();
             }
             runs.push_back(std::move(run));
             if (timeLimitReached)

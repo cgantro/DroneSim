@@ -4,6 +4,7 @@
 #endif
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
+#include "simulation_core/ScopedDuration.h"
 
 #include <flecs.h>
 #include <glm/gtc/quaternion.hpp>
@@ -55,6 +56,8 @@ struct SimulationCore::EcsStorage
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
     flecs::entity camera;
+    bool measureEcsSystemDuration = false;
+    double lastEcsSystemDurationMicroseconds = 0.0;
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
     double lastContactGenerationDurationMicroseconds = 0.0;
@@ -465,7 +468,12 @@ void SimulationCore::AdvanceOneTick() noexcept
     }
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
     ecs_->lastContactGenerationDurationMicroseconds = 0.0;
-    ecs_->world.progress(DroneModel::fixedStepSeconds);
+    ecs_->lastEcsSystemDurationMicroseconds = 0.0;
+    {
+        ScopedDuration measureEcsSystems(ecs_->measureEcsSystemDuration
+            ? &ecs_->lastEcsSystemDurationMicroseconds : nullptr);
+        ecs_->world.progress(DroneModel::fixedStepSeconds);
+    }
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->AdvancePhysicsWorld();
@@ -547,6 +555,17 @@ void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept
     ecs_->measurePhysicsStepDuration = enabled;
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
     ecs_->lastContactGenerationDurationMicroseconds = 0.0;
+}
+
+void SimulationCore::SetEcsSystemTimingEnabled(bool enabled) noexcept
+{
+    ecs_->measureEcsSystemDuration = enabled;
+    ecs_->lastEcsSystemDurationMicroseconds = 0.0;
+}
+
+double SimulationCore::LastEcsSystemDurationMicroseconds() const noexcept
+{
+    return ecs_->lastEcsSystemDurationMicroseconds;
 }
 
 double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept

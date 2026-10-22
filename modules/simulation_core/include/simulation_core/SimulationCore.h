@@ -130,6 +130,12 @@ public:
     /** @brief 벤치마크에서 물리 단계 시간 측정을 켜거나 끈다. */
     void SetPhysicsStepTimingEnabled(bool enabled) noexcept;
 
+    /** @brief 벤치마크에서 Flecs 시스템 갱신 시간 측정을 켜거나 끈다. */
+    void SetEcsSystemTimingEnabled(bool enabled) noexcept;
+
+    /** @brief 마지막 Tick에서 Flecs 시스템 갱신에 든 시간을 마이크로초로 반환한다. */
+    [[nodiscard]] double LastEcsSystemDurationMicroseconds() const noexcept;
+
     /** @brief 마지막 Tick의 AirSim 물리 계산 시간을 마이크로초로 반환한다. */
     [[nodiscard]] double LastPhysicsStepDurationMicroseconds() const noexcept;
 
