@@ -57,6 +57,8 @@ constexpr int windowHeight = 720;
 constexpr float terrainReliefScale = 2.0F;
 // 창이 멈춘 뒤 밀린 시간을 전부 따라잡느라 다음 화면까지 늦어지지 않게 한다.
 constexpr std::size_t smokeTestFrameLimit = 8;
+// 소프트웨어 렌더러에서도 네트워크 스모크의 모의가 화면 속도에 묶이지 않게 한다.
+constexpr std::size_t networkSmokeSimulationBatchesPerFrame = 5;
 constexpr std::size_t demoLengthTicks = 900;
 // 지도 원점은 경사가 급해 이륙이 막히므로 주변에서 고른 완만한 지점을 쓴다.
 constexpr glm::dvec2 demoDroneStartMeters{171.3545, -92.7667};
@@ -236,7 +238,12 @@ int AeroSimLabApp::Run()
         }
         previousFrame = now;
 
-        AdvanceSimulation(frameSeconds);
+        const std::size_t simulationBatches = smokeTest_ && networkEnabled_
+            && !benchmarkMode_
+            ? networkSmokeSimulationBatchesPerFrame
+            : 1U;
+        for (std::size_t batch = 0; batch < simulationBatches; ++batch)
+            AdvanceSimulation(frameSeconds);
         eoReadbackHappenedThisFrame_ = false;
         double renderDurationMicroseconds = 0.0;
         {
