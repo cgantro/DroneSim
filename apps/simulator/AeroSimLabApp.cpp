@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -313,7 +314,12 @@ int AeroSimLabApp::ValidateSmokeTestOutput() const
     const auto& camera = simulation_.Camera();
     if (camera.status == aerosimlab::simulation::CameraStatus::Active
         && eoFrame_.simulationTick != camera.lastFrameTick)
+    {
+        std::cerr << "EO 영상 Tick이 카메라의 마지막 Tick과 다릅니다. 영상="
+                  << eoFrame_.simulationTick << ", 카메라="
+                  << camera.lastFrameTick << '\n';
         return 6;
+    }
 
     return 0;
 }
