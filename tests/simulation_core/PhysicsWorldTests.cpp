@@ -109,6 +109,29 @@ void Verify_AirSimPhysics_TerrainContactStopsTheDrone()
     EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.2);
 }
 
+void Verify_AirSimPhysics_SlopedTerrainContactUsesTheDroneFootprint()
+{
+    terrain::TerrainGrid slope;
+    slope.sampleCount = 3;
+    slope.spacingXMeters = 2.0F;
+    slope.spacingYMeters = 2.0F;
+    slope.heightOffsetsMeters = {-1.0F, 0.0F, 1.0F,
+        -1.0F, 0.0F, 1.0F,
+        -1.0F, 0.0F, 1.0F};
+
+    PhysicsWorld world;
+    world.SetTerrain(std::move(slope));
+    RigidBodyDefinition definition;
+    definition.positionMeters.z = 0.3;
+    const RigidBodyHandle drone = world.CreateQuadrotor(
+        definition, QuadrotorParameters::X500Gazebo());
+
+    for (int tick = 0; tick < 60; ++tick)
+        world.Step(1.0 / 60.0);
+
+    EXPECT_GT(world.State(drone).positionMeters.z, 0.25);
+}
+
 void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
 {
     const std::filesystem::path mapPath = std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
@@ -132,13 +155,12 @@ void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
         maximum = glm::max(maximum, point);
     }
     const glm::dvec2 center = (minimum + maximum) * 0.5;
-    const double ground = terrain.HeightAtLocalMeters(center);
+    constexpr double testGroundHeightMeters = 10.0;
     constexpr double buildingHeightMeters = 3.0;
 
     PhysicsWorld world;
-    world.SetTerrain(std::move(terrain));
     world.AddStaticObstacleBox(
-        {center.x, center.y, ground + buildingHeightMeters * 0.5},
+        {center.x, center.y, testGroundHeightMeters + buildingHeightMeters * 0.5},
         {static_cast<float>((maximum.x - minimum.x) * 0.5),
             static_cast<float>(buildingHeightMeters * 0.5),
             static_cast<float>((maximum.y - minimum.y) * 0.5)});
@@ -146,7 +168,8 @@ void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
     RigidBodyDefinition droneDefinition;
     droneDefinition.positionMeters = {
-        minimum.x - 0.8, center.y, ground + buildingHeightMeters * 0.5};
+        minimum.x - 0.8, center.y,
+        testGroundHeightMeters + buildingHeightMeters * 0.5};
     const RigidBodyHandle drone = world.CreateQuadrotor(droneDefinition, parameters);
     const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
         / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
@@ -251,6 +274,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorTargetsLiftTheDrone());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_SlopedTerrainContactUsesTheDroneFootprint());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RejectsInvalidVehicleConfiguration());

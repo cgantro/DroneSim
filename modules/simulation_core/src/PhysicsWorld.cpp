@@ -333,22 +333,6 @@ std::optional<BoxContact> FindBoxContact(
     return BoxContact{collisionNormal, impactPoint, smallestPenetration};
 }
 
-double BottomExtent(std::span<const RigidBodyBox> boxes, const glm::dquat& orientation)
-{
-    double extent = 0.0;
-    for (const RigidBodyBox& box : boxes)
-    {
-        const glm::dvec3 localOffset = orientation * box.positionMeters;
-        const glm::dmat3 boxRotation = glm::mat3_cast(
-            orientation * box.orientation);
-        const glm::dvec3 halfExtents{box.halfExtentsMeters};
-        const glm::dvec3 worldHalf = glm::abs(boxRotation[0]) * halfExtents.x
-            + glm::abs(boxRotation[1]) * halfExtents.y
-            + glm::abs(boxRotation[2]) * halfExtents.z;
-        extent = std::max(extent, -localOffset.z + worldHalf.z);
-    }
-    return extent;
-}
 }
 
 struct PhysicsWorld::Impl
@@ -439,32 +423,85 @@ struct PhysicsWorld::Impl
         }
     }
 
+    /** @brief 높이 격자의 주변 변화량으로 그 지점의 바깥쪽 방향을 구한다. */
+    glm::dvec3 GroundNormal(const glm::dvec2& position) const
+    {
+        if (!terrain)
+            return {0.0, 0.0, 1.0};
+
+        const double halfWidth = static_cast<double>(terrain->sampleCount - 1U)
+            * terrain->spacingXMeters * 0.5;
+        const double halfDepth = static_cast<double>(terrain->sampleCount - 1U)
+            * terrain->spacingYMeters * 0.5;
+        const double west = std::max(position.x - terrain->spacingXMeters, -halfWidth);
+        const double east = std::min(position.x + terrain->spacingXMeters, halfWidth);
+        const double south = std::max(position.y - terrain->spacingYMeters, -halfDepth);
+        const double north = std::min(position.y + terrain->spacingYMeters, halfDepth);
+        const double slopeEast = east > west
+            ? (GroundHeight({east, position.y}) - GroundHeight({west, position.y}))
+                / (east - west)
+            : 0.0;
+        const double slopeNorth = north > south
+            ? (GroundHeight({position.x, north}) - GroundHeight({position.x, south}))
+                / (north - south)
+            : 0.0;
+        return glm::normalize(glm::dvec3{-slopeEast, -slopeNorth, 1.0});
+    }
+
+    /**
+     * @brief 기체 충돌 상자의 꼭짓점에서 지면과 겹치는 정도를 찾는다.
+     * @details 가장 깊은 한 곳을 AirSim에 넘겨 위치, 방향, 겹친 깊이로 쓰게 한다.
+     */
+    std::optional<msr::airlib::CollisionInfo> FindTerrainContact(
+        const Body& body, const RigidBodyState& state, std::uint64_t timestamp) const
+    {
+        std::optional<msr::airlib::CollisionInfo> contactInfo;
+        double greatestPenetration = 0.0;
+        for (const RigidBodyBox& box : body.collisionBoxes)
+        {
+            const OrientedBox worldBox = ToWorldBox(
+                state.positionMeters, state.orientation, box);
+            for (unsigned int cornerIndex = 0; cornerIndex < 8U; ++cornerIndex)
+            {
+                glm::dvec3 corner = worldBox.centerMeters;
+                for (std::size_t axisIndex = 0; axisIndex < worldBox.axes.size(); ++axisIndex)
+                {
+                    const double direction = (cornerIndex & (1U << axisIndex)) != 0U
+                        ? 1.0 : -1.0;
+                    corner += worldBox.axes[axisIndex]
+                        * (direction * worldBox.halfExtentsMeters[axisIndex]);
+                }
+
+                const double ground = GroundHeight({corner.x, corner.y});
+                const double penetration = ground - corner.z;
+                if (penetration <= greatestPenetration)
+                    continue;
+
+                greatestPenetration = penetration;
+                contactInfo = msr::airlib::CollisionInfo{
+                    true,
+                    ToAirSimPosition(GroundNormal({corner.x, corner.y})),
+                    ToAirSimPosition({corner.x, corner.y, ground}),
+                    ToAirSimPosition(state.positionMeters),
+                    static_cast<float>(penetration),
+                    timestamp,
+                    "ground",
+                    0};
+            }
+        }
+        return contactInfo;
+    }
+
     // 단독 실행에서는 Unreal이 접촉 정보를 만들지 않으므로, 장면과의 접촉만 찾아 AirSim에 넘긴다.
     msr::airlib::CollisionInfo BuildAirSimContactInfo(
         const Body& body, std::size_t bodyIndex) const
     {
         const RigidBodyState state = ToProjectState(body.kinematics.getState());
         const glm::dvec3 center = state.positionMeters;
-        const double bottom = center.z - BottomExtent(body.collisionBoxes, state.orientation);
-        const double ground = GroundHeight({center.x, center.y});
         const std::uint64_t timestamp = stepCount + 1;
 
-        if (bottom < ground)
-        {
-            const double extent = BottomExtent(body.collisionBoxes, state.orientation);
-            const double centerHeight = ground + extent;
-            return {
-                true,
-                AirSimVector{0.0F, 0.0F, -1.0F},
-                AirSimVector{static_cast<float>(center.x), static_cast<float>(center.y),
-                    static_cast<float>(-ground)},
-                AirSimVector{static_cast<float>(center.x), static_cast<float>(center.y),
-                    static_cast<float>(-centerHeight)},
-                static_cast<float>(ground - bottom),
-                timestamp,
-                "ground",
-                0};
-        }
+        if (auto groundContact = FindTerrainContact(body, state, timestamp))
+            return *groundContact;
 
         // 경계 반경은 멀리 떨어진 후보만 빠르게 거른다. 실제 겹침은 아래 상자 검사로 결정한다.
         const double bodyRadius = CollisionRadius(body.collisionBoxes);
