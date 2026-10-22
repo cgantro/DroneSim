@@ -583,7 +583,14 @@ void AeroSimLabApp::CaptureEoFrame()
         eoFrame_.width = cameraTarget_->GetWidth();
         eoFrame_.height = cameraTarget_->GetHeight();
         eoFrame_.simulationTick = camera.lastFrameTick;
+        const auto readbackStart = std::chrono::steady_clock::now();
         cameraTarget_->ReadRgbPixels(eoFrame_.pixels);
+        if (benchmarkMode_)
+        {
+            eoReadbackCallDurationsMicroseconds_.push_back(
+                std::chrono::duration<double, std::micro>(
+                    std::chrono::steady_clock::now() - readbackStart).count());
+        }
         eoFrame_.FlipVertical();
 #ifndef __EMSCRIPTEN__
         const auto analysisStart = std::chrono::steady_clock::now();
@@ -670,6 +677,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     measurements.renderFrameDurationsMicroseconds = renderFrameDurationsMicroseconds_;
 #ifndef __EMSCRIPTEN__
     measurements.physicsStepDurationsMicroseconds = physicsStepDurationsMicroseconds_;
+    measurements.eoReadbackCallDurationsMicroseconds = eoReadbackCallDurationsMicroseconds_;
     measurements.visionDurationsMicroseconds = visionDurationsMicroseconds_;
     measurements.visionSampleCount = visionSampleCount_;
     if (visionSampleCount_ > 0)

@@ -40,6 +40,8 @@ struct ViewerBenchmarkMeasurements
     std::vector<double> renderFrameDurationsMicroseconds;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds;
+    // CPU가 픽셀 읽기 호출에서 기다린 시간이며, 버퍼 준비와 GPU 동기화 대기도 포함한다.
+    std::vector<double> eoReadbackCallDurationsMicroseconds;
     std::vector<double> visionDurationsMicroseconds;
     double meanBrightness = 0.0;
     double meanContrast = 0.0;

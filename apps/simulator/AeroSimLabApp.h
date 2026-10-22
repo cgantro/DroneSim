@@ -153,6 +153,7 @@ private:
     std::vector<double> renderFrameDurationsMicroseconds_;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds_;
+    std::vector<double> eoReadbackCallDurationsMicroseconds_;
     std::vector<double> visionDurationsMicroseconds_;
     double totalMeanBrightness_ = 0.0;
     double totalMeanContrast_ = 0.0;

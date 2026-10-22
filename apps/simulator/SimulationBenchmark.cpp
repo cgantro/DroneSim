@@ -103,6 +103,8 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
 #ifndef __EMSCRIPTEN__
     report["physics_step_duration_us"] = SummarizeDurations(
         std::move(measurements.physicsStepDurationsMicroseconds));
+    report["eo_pixel_readback_call_duration_us"] = SummarizeDurations(
+        std::move(measurements.eoReadbackCallDurationsMicroseconds));
     report["vision_analysis"] = {
         {"samples", measurements.visionSampleCount},
         {"mean_brightness", measurements.meanBrightness},
