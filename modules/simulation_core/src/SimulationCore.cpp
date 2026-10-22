@@ -17,6 +17,17 @@
 
 namespace aerosimlab::simulation
 {
+namespace
+{
+bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
+{
+    return std::isfinite(positionMeters.x)
+        && std::isfinite(positionMeters.y)
+        && std::isfinite(positionMeters.z)
+        && std::isfinite(yawRadians);
+}
+}
+
 struct SimulationCore::EcsStorage
 {
     struct InitialPose
@@ -347,10 +358,7 @@ DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters, double yawRad
 DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters,
     double yawRadians, double groundElevationMeters)
 {
-    if (!std::isfinite(positionMeters.x)
-        || !std::isfinite(positionMeters.y)
-        || !std::isfinite(positionMeters.z)
-        || !std::isfinite(yawRadians))
+    if (!HasFinitePose(positionMeters, yawRadians))
         throw std::invalid_argument("드론 시작 위치와 방향은 유한한 값이어야 합니다.");
     if (!std::isfinite(groundElevationMeters))
         throw std::invalid_argument("드론 지면 높이는 유한한 값이어야 합니다.");
@@ -361,8 +369,7 @@ void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yaw
 {
     if (ecs_->tickCount != 0)
         throw std::logic_error("드론 시작 자세는 첫 Tick 전에만 바꿀 수 있습니다.");
-    if (!std::isfinite(positionMeters.x) || !std::isfinite(positionMeters.y)
-        || !std::isfinite(positionMeters.z) || !std::isfinite(yawRadians))
+    if (!HasFinitePose(positionMeters, yawRadians))
         throw std::invalid_argument("드론 시작 위치와 방향은 유한한 값이어야 합니다.");
 
     flecs::entity& drone = ecs_->FindDrone(ecs_->primaryDroneId);
