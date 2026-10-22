@@ -8,6 +8,11 @@
 #include <string>
 #include <vector>
 
+namespace aerosimlab::simulation
+{
+enum class SimulationDynamics;
+}
+
 namespace aerosimlab::simulator
 {
 /** @brief 실행 시간 표본에서 p50·p95·p99와 표본 수를 계산한다. */
@@ -45,7 +50,7 @@ void SaveViewerBenchmarkReport(
     const nlohmann::json& report, const std::filesystem::path& outputPath = {});
 
 #ifndef __EMSCRIPTEN__
-/** @brief 화면 없이 여러 드론의 강체 모의 확장성을 측정한다. */
-nlohmann::json MeasureDroneScaling();
+/** @brief 선택한 비행 계산 방식에서 여러 드론을 화면 없이 측정한다. */
+nlohmann::json MeasureDroneScaling(simulation::SimulationDynamics dynamics);
 #endif
 }

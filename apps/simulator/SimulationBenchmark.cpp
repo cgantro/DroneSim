@@ -139,14 +139,18 @@ void SaveViewerBenchmarkReport(
 }
 
 #ifndef __EMSCRIPTEN__
-nlohmann::json MeasureDroneScaling()
+nlohmann::json MeasureDroneScaling(
+    aerosimlab::simulation::SimulationDynamics dynamics)
 {
+    using aerosimlab::simulation::SimulationDynamics;
     constexpr std::array<std::size_t, 8> droneCounts{
         1U, 8U, 32U, 64U, 128U, 256U, 512U, 1024U};
     constexpr std::size_t repetitions = 3U;
     constexpr std::size_t warmupTicks = 120U;
     constexpr std::size_t measuredTicks = 30000U;
     constexpr auto runTimeLimit = std::chrono::seconds{30};
+    const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
+    const char* dynamicsName = usesRigidBodyPhysics ? "rigid_body" : "kinematic";
     const auto readWorkingSetBytes = []() -> std::optional<std::size_t>
     {
 #ifdef _WIN32
@@ -165,8 +169,8 @@ nlohmann::json MeasureDroneScaling()
         for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
         {
             aerosimlab::simulation::SimulationCore simulation{
-                aerosimlab::simulation::SimulationDynamics::RigidBody};
-            simulation.SetPhysicsStepTimingEnabled(true);
+                dynamics};
+            simulation.SetPhysicsStepTimingEnabled(usesRigidBodyPhysics);
 
             std::vector<aerosimlab::simulation::DroneId> droneIds;
             droneIds.reserve(droneCount);
@@ -205,8 +209,9 @@ nlohmann::json MeasureDroneScaling()
                 simulation.AdvanceOneTick();
                 tickDurations.push_back(std::chrono::duration<double, std::micro>(
                     std::chrono::steady_clock::now() - tickStart).count());
-                physicsDurations.push_back(
-                    simulation.LastPhysicsStepDurationMicroseconds());
+                if (usesRigidBodyPhysics)
+                    physicsDurations.push_back(
+                        simulation.LastPhysicsStepDurationMicroseconds());
 
                 if ((tick + 1U) % 1000U == 0U
                     && std::chrono::steady_clock::now() - measurementStart >= runTimeLimit)
@@ -228,13 +233,13 @@ nlohmann::json MeasureDroneScaling()
                     return duration > 1'000'000.0 / 60.0;
                 }));
             nlohmann::json run{
+                {"dynamics", dynamicsName},
                 {"drone_count", droneCount},
                 {"repetition", repetition + 1U},
                 {"warmup_ticks", warmupTicks},
                 {"target_ticks", measuredTicks},
                 {"measured_ticks", completedTicks},
                 {"tick_duration_us", SummarizeDurations(std::move(tickDurations))},
-                {"physics_step_duration_us", SummarizeDurations(std::move(physicsDurations))},
                 {"measurement_wall_seconds", wallSeconds},
                 {"simulation_ticks_per_second", wallSeconds > 0.0
                     ? static_cast<double>(completedTicks) / wallSeconds : 0.0},
@@ -249,6 +254,11 @@ nlohmann::json MeasureDroneScaling()
                 {"time_limit_reached", timeLimitReached},
                 {"process_cpu_percent_approx", wallSeconds > 0.0
                     ? 100.0 * cpuSeconds / wallSeconds : 0.0}};
+            if (usesRigidBodyPhysics)
+            {
+                run["physics_step_duration_us"] = SummarizeDurations(
+                    std::move(physicsDurations));
+            }
             if (workingSetBefore && workingSetAfter)
             {
                 run["process_working_set_before_bytes"] = *workingSetBefore;
@@ -281,7 +291,10 @@ nlohmann::json MeasureDroneScaling()
     }
 
     return {
-        {"method", "헤드리스 AirSim 강체 모의. 드론을 2.5m 간격으로 배치해 이륙·호버링시키고, 한 물리 세계에서 함께 갱신"},
+        {"dynamics", dynamicsName},
+        {"method", usesRigidBodyPhysics
+            ? "헤드리스 AirSim 강체 모의. 드론을 2.5m 간격으로 배치해 이륙·호버링시키고, 한 물리 세계에서 함께 갱신"
+            : "헤드리스 운동학 모의. 드론을 2.5m 간격으로 배치해 이륙·호버링시키고, 매 Tick 상태를 갱신"},
         {"target_counts", droneCounts},
         {"measured_counts", std::move(measuredCounts)},
         {"target_repetitions_per_count", repetitions},

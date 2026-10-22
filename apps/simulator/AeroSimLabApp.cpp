@@ -679,7 +679,11 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
 #endif
     nlohmann::json report = BuildViewerBenchmarkReport(std::move(measurements));
 #ifndef __EMSCRIPTEN__
-    report["entity_scaling"] = MeasureDroneScaling();
+    report["entity_scaling"] = {
+        {"kinematic", MeasureDroneScaling(
+            aerosimlab::simulation::SimulationDynamics::Kinematic)},
+        {"rigid_body", MeasureDroneScaling(
+            aerosimlab::simulation::SimulationDynamics::RigidBody)}};
 #endif
     SaveViewerBenchmarkReport(report);
 }
