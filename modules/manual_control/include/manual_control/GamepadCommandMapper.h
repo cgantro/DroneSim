@@ -36,7 +36,11 @@ enum class GamepadDisconnectAction
     Land
 };
 
-/** @brief 게임패드의 현재 축과 드론 방향을 월드 좌표의 조종 값으로 바꾼다. */
+/**
+ * @brief 스틱 입력을 월드 좌표 속도와 회전 속도로 바꾼다.
+ * @details PX4 Position Slow의 속도·회전 한도와 부드러운 스틱 감도를 참고한다.
+ * 결과는 속도 목표이므로 PX4의 가속 기반 입력이나 내부 위치 제어를 그대로 재현하지 않는다.
+ */
 [[nodiscard]] PilotCommand MapAxes(
     const GamepadAxes& axes, double droneYawRadians) noexcept;
 

@@ -15,7 +15,7 @@ void Verify_GamepadCommandMapper_AppliesDeadZoneAndRotatesMovement()
     const auto command = MapAxes(GamepadAxes{.forward = 1.0}, 0.5 * std::acos(-1.0));
 
     EXPECT_NEAR(command.velocityMetersPerSecond.x, 0.0, 1.0e-12);
-    EXPECT_NEAR(command.velocityMetersPerSecond.y, simulation::DroneModel::maximumSpeedMetersPerSecond, 1.0e-12);
+    EXPECT_NEAR(command.velocityMetersPerSecond.y, 3.0, 1.0e-12);
 }
 
 void Verify_GamepadCommandMapper_LimitsSpeedAndMapsHeightAndYaw()
@@ -24,11 +24,10 @@ void Verify_GamepadCommandMapper_LimitsSpeedAndMapsHeightAndYaw()
         GamepadAxes{.forward = 1.0, .right = 1.0, .vertical = 0.5, .yaw = -1.0}, 0.0);
 
     EXPECT_NEAR(std::hypot(command.velocityMetersPerSecond.x, command.velocityMetersPerSecond.y),
-        simulation::DroneModel::maximumSpeedMetersPerSecond, 1.0e-12);
-    EXPECT_NEAR(command.velocityMetersPerSecond.z,
-        ApplyDeadZone(0.5) * simulation::DroneModel::maximumSpeedMetersPerSecond, 1.0e-12);
-    EXPECT_DOUBLE_EQ(command.yawRateRadiansPerSecond,
-        -simulation::DroneModel::maximumYawRateRadiansPerSecond);
+        3.0, 1.0e-12);
+    EXPECT_NEAR(command.velocityMetersPerSecond.z, 0.4 * ApplyDeadZone(0.5)
+        + 0.6 * std::pow(ApplyDeadZone(0.5), 3.0), 1.0e-12);
+    EXPECT_NEAR(command.yawRateRadiansPerSecond, -0.7853981633974483, 1.0e-12);
 }
 
 void Verify_GamepadCommandMapper_RespectsControlSourceAndResolvesDisconnectAction()
