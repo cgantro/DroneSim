@@ -434,6 +434,17 @@ void Verify_SimulationCore_RigidBodyDronesShareOnePhysicsStepAndCanBeRemoved()
     EXPECT_EQ(simulation.DroneCount(), 1U);
     simulation.AdvanceOneTick();
     EXPECT_TRUE(std::isfinite(simulation.State(first).positionMeters.z));
+
+    const DroneId replacement = simulation.AddDrone({
+        4.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters});
+    ASSERT_TRUE(simulation.RemoveDrone(first));
+    EXPECT_EQ(simulation.DroneCount(), 1U);
+    EXPECT_EQ(simulation.PrimaryDroneId(), replacement);
+    ExpectCameraPoseMatchesPrimaryDrone(simulation);
+    EXPECT_EQ(simulation.Apply(first, Command(DroneCommand::Kind::Stop)),
+        CommandResult::DroneNotFound);
+    simulation.AdvanceOneTick();
+    EXPECT_TRUE(std::isfinite(simulation.State().positionMeters.z));
 }
 
 void Verify_SimulationCore_CollidingRigidBodyDronesRemainSeparated()
