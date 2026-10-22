@@ -331,6 +331,9 @@ struct SimulationCore::EcsStorage
 
 std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
 {
+    if (std::isnan(elapsedSeconds) || elapsedSeconds <= 0.0)
+        return 0;
+
     accumulatedSeconds_ += std::min(elapsedSeconds, maximumFrameSeconds);
 
     std::size_t tickCount = 0;

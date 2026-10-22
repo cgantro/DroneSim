@@ -45,7 +45,7 @@ public:
     static constexpr double fixedStepSeconds = DroneModel::fixedStepSeconds;
     static constexpr double maximumFrameSeconds = 0.1;
 
-    /** @brief 지난 프레임 시간에 따라 지금 실행할 Tick 수를 반환한다. */
+    /** @brief 지난 프레임 시간에 따라 지금 실행할 Tick 수를 반환한다. 0 이하이거나 NaN인 입력은 무시한다. */
     [[nodiscard]] std::size_t Consume(double elapsedSeconds) noexcept;
 
 private:

@@ -154,6 +154,12 @@ void Verify_FixedTickAccumulator_CarriesFractionalTimeAndLimitsCatchUp()
     EXPECT_EQ(accumulator.Consume(FixedTickAccumulator::maximumFrameSeconds), 6);
     EXPECT_EQ(accumulator.Consume(1.0), 6);
     EXPECT_EQ(accumulator.Consume(0.0), 0);
+
+    FixedTickAccumulator invalidInputAccumulator;
+    EXPECT_EQ(invalidInputAccumulator.Consume(halfTick), 0);
+    EXPECT_EQ(invalidInputAccumulator.Consume(-halfTick), 0);
+    EXPECT_EQ(invalidInputAccumulator.Consume(std::numeric_limits<double>::quiet_NaN()), 0);
+    EXPECT_EQ(invalidInputAccumulator.Consume(halfTick), 1);
 }
 
 void Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers()
