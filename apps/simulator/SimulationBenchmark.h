@@ -15,6 +15,12 @@ enum class SimulationDynamics;
 
 namespace aerosimlab::simulator
 {
+enum class DroneScalingLayout
+{
+    Separated,
+    Compact
+};
+
 /** @brief 실행 시간 표본에서 p50·p95·p99와 표본 수를 계산한다. */
 nlohmann::json SummarizeDurations(std::vector<double> durations);
 
@@ -50,7 +56,8 @@ void SaveViewerBenchmarkReport(
     const nlohmann::json& report, const std::filesystem::path& outputPath = {});
 
 #ifndef __EMSCRIPTEN__
-/** @brief 선택한 비행 계산 방식에서 여러 드론을 화면 없이 측정한다. */
-nlohmann::json MeasureDroneScaling(simulation::SimulationDynamics dynamics);
+/** @brief 선택한 비행 계산 방식과 드론 배치에서 화면 없이 측정한다. */
+nlohmann::json MeasureDroneScaling(
+    simulation::SimulationDynamics dynamics, DroneScalingLayout layout);
 #endif
 }

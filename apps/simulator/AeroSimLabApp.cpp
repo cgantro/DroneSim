@@ -681,9 +681,14 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
 #ifndef __EMSCRIPTEN__
     report["entity_scaling"] = {
         {"kinematic", MeasureDroneScaling(
-            aerosimlab::simulation::SimulationDynamics::Kinematic)},
+            aerosimlab::simulation::SimulationDynamics::Kinematic,
+            DroneScalingLayout::Separated)},
         {"rigid_body", MeasureDroneScaling(
-            aerosimlab::simulation::SimulationDynamics::RigidBody)}};
+            aerosimlab::simulation::SimulationDynamics::RigidBody,
+            DroneScalingLayout::Separated)},
+        {"rigid_body_compact", MeasureDroneScaling(
+            aerosimlab::simulation::SimulationDynamics::RigidBody,
+            DroneScalingLayout::Compact)}};
 #endif
     SaveViewerBenchmarkReport(report);
 }

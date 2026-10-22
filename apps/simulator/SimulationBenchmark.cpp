@@ -141,17 +141,23 @@ void SaveViewerBenchmarkReport(
 
 #ifndef __EMSCRIPTEN__
 nlohmann::json MeasureDroneScaling(
-    aerosimlab::simulation::SimulationDynamics dynamics)
+    aerosimlab::simulation::SimulationDynamics dynamics,
+    DroneScalingLayout layout)
 {
     using aerosimlab::simulation::SimulationDynamics;
-    constexpr std::array<std::size_t, 8> droneCounts{
-        1U, 8U, 32U, 64U, 128U, 256U, 512U, 1024U};
     constexpr std::size_t repetitions = 3U;
     constexpr std::size_t warmupTicks = 120U;
     constexpr std::size_t measuredTicks = 30000U;
     constexpr auto runTimeLimit = std::chrono::seconds{30};
     const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
+    const bool usesCompactLayout = layout == DroneScalingLayout::Compact;
+    const std::vector<std::size_t> droneCounts = usesCompactLayout
+        ? std::vector<std::size_t>{1U, 8U, 32U, 64U, 128U, 256U}
+        : std::vector<std::size_t>{1U, 8U, 32U, 64U, 128U, 256U, 512U, 1024U};
     const char* dynamicsName = usesRigidBodyPhysics ? "rigid_body" : "kinematic";
+    const char* layoutName = usesCompactLayout ? "compact" : "separated";
+    constexpr double separatedSpacingMeters = 2.5;
+    constexpr double compactSpacingMeters = 0.55;
     const auto readWorkingSetBytes = []() -> std::optional<std::size_t>
     {
 #ifdef _WIN32
@@ -177,11 +183,25 @@ nlohmann::json MeasureDroneScaling(
             droneIds.reserve(droneCount);
             droneIds.push_back(simulation.PrimaryDroneId());
             const double groundOriginMeters = simulation.State().positionMeters.z;
+            const std::size_t compactGridWidth = static_cast<std::size_t>(
+                std::ceil(std::sqrt(static_cast<double>(droneCount))));
             for (std::size_t index = 1; index < droneCount; ++index)
             {
-                const auto xMeters = static_cast<double>(index) * 2.5;
-                droneIds.push_back(simulation.AddDrone(
-                    glm::dvec3{xMeters, 0.0, groundOriginMeters}));
+                glm::dvec3 positionMeters{};
+                positionMeters.z = groundOriginMeters;
+                if (usesCompactLayout)
+                {
+                    positionMeters.x = static_cast<double>(index % compactGridWidth)
+                        * compactSpacingMeters;
+                    positionMeters.y = static_cast<double>(index / compactGridWidth)
+                        * compactSpacingMeters;
+                }
+                else
+                {
+                    positionMeters.x = static_cast<double>(index)
+                        * separatedSpacingMeters;
+                }
+                droneIds.push_back(simulation.AddDrone(positionMeters));
             }
 
             const aerosimlab::simulation::DroneCommand takeoff{
@@ -235,6 +255,7 @@ nlohmann::json MeasureDroneScaling(
                 }));
             nlohmann::json run{
                 {"dynamics", dynamicsName},
+                {"layout", layoutName},
                 {"drone_count", droneCount},
                 {"repetition", repetition + 1U},
                 {"warmup_ticks", warmupTicks},
@@ -293,9 +314,12 @@ nlohmann::json MeasureDroneScaling(
 
     return {
         {"dynamics", dynamicsName},
+        {"layout", layoutName},
+        {"spacing_meters", usesCompactLayout
+            ? compactSpacingMeters : separatedSpacingMeters},
         {"method", usesRigidBodyPhysics
-            ? "헤드리스 AirSim 강체 모의. 드론을 2.5m 간격으로 배치해 이륙·호버링시키고, 한 물리 세계에서 함께 갱신"
-            : "헤드리스 운동학 모의. 드론을 2.5m 간격으로 배치해 이륙·호버링시키고, 매 Tick 상태를 갱신"},
+            ? "헤드리스 AirSim 강체 모의. 여러 드론을 이륙·호버링시키고 한 물리 세계에서 함께 갱신"
+            : "헤드리스 운동학 모의. 여러 드론을 이륙·호버링시키고 매 Tick 상태를 갱신"},
         {"target_counts", droneCounts},
         {"measured_counts", std::move(measuredCounts)},
         {"target_repetitions_per_count", repetitions},
