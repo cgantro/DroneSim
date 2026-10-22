@@ -285,6 +285,11 @@ bool AeroSimLabApp::ApplySessionCommand(
     using FlightMode = aerosimlab::simulation::FlightMode;
     const auto resetSimulationState = [this]
     {
+#ifndef __EMSCRIPTEN__
+        // Tick이 0으로 돌아가기 전에 이전 GPU 읽기를 끝내고 프레임 번호 기준을 초기화한다.
+        DrainEoReadbacks();
+        lastQueuedEoFrameTick_ = 0;
+#endif
         simulation_.Reset();
         eoFrame_ = {};
         groundControlCommandExpiresAtTick_.reset();
