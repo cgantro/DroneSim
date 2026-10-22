@@ -71,6 +71,7 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/CommandRecording.cpp
   modules/simulation_core/src/EoCameraModel.cpp
   modules/simulation_core/src/ScenarioRunner.cpp
+  modules/simulation_core/src/ScenarioDefinition.cpp
   modules/simulation_core/src/SimulationCore.cpp
   modules/simulation_core/src/QuadrotorModel.cpp
   modules/simulation_core/src/QuadrotorFlightController.cpp
