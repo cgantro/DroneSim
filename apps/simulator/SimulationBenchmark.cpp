@@ -8,6 +8,7 @@
 
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/QuadrotorFlightController.h"
+#include "simulation_core/ScopedDuration.h"
 #include "simulation_core/ScenarioRunner.h"
 
 #include <nlohmann/json.hpp>
@@ -238,10 +239,12 @@ nlohmann::json MeasureDroneScaling(
             bool timeLimitReached = false;
             for (std::size_t tick = 0; tick < measuredTicks; ++tick)
             {
-                const auto tickStart = std::chrono::steady_clock::now();
-                simulation.AdvanceOneTick();
-                tickDurations.push_back(std::chrono::duration<double, std::micro>(
-                    std::chrono::steady_clock::now() - tickStart).count());
+                double tickDurationMicroseconds = 0.0;
+                {
+                    simulation::ScopedDuration measureTick(&tickDurationMicroseconds);
+                    simulation.AdvanceOneTick();
+                }
+                tickDurations.push_back(tickDurationMicroseconds);
                 if (usesRigidBodyPhysics)
                 {
                     const double physicsDuration =
@@ -452,10 +455,14 @@ nlohmann::json MeasureCooperativeMissionScaling()
             for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
             {
                 const std::clock_t cpuStart = std::clock();
-                const auto start = std::chrono::steady_clock::now();
-                const aerosimlab::simulation::ScenarioResult result = RunScenario(scenarioText);
-                const double wallSeconds = std::chrono::duration<double>(
-                    std::chrono::steady_clock::now() - start).count();
+                double scenarioDurationMicroseconds = 0.0;
+                const aerosimlab::simulation::ScenarioResult result = [&]
+                {
+                    simulation::ScopedDuration measureScenario(
+                        &scenarioDurationMicroseconds);
+                    return RunScenario(scenarioText);
+                }();
+                const double wallSeconds = scenarioDurationMicroseconds / 1'000'000.0;
                 const double cpuSeconds = static_cast<double>(std::clock() - cpuStart)
                     / CLOCKS_PER_SEC;
                 if (!result.passed || !result.mission || !result.mission->passed)

@@ -2,6 +2,7 @@
 
 #include "simulation_core/DroneModel.h"
 #include "simulation_core/QuadrotorModel.h"
+#include "simulation_core/ScopedDuration.h"
 
 #include <mutex>
 #include <common/ClockFactory.hpp>
@@ -762,31 +763,24 @@ void PhysicsWorld::Step(
     auto advance = [&]
     {
         ++impl_->stepCount;
-        const auto bodyOrderingStart = contactGenerationMicroseconds != nullptr
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        const double largestCollisionRadius = impl_->PrepareCollisionData();
-        if (contactGenerationMicroseconds != nullptr)
+        double largestCollisionRadius = 0.0;
         {
-            *contactGenerationMicroseconds += std::chrono::duration<double, std::micro>(
-                std::chrono::steady_clock::now() - bodyOrderingStart).count();
+            ScopedDuration measureBodyOrdering(contactGenerationMicroseconds,
+                ScopedDuration::Mode::Accumulate);
+            largestCollisionRadius = impl_->PrepareCollisionData();
         }
         for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
         {
             auto& body = impl_->bodies[index];
             if (!body)
                 continue;
-            const auto contactStart = contactGenerationMicroseconds != nullptr
-                ? std::chrono::steady_clock::now()
-                : std::chrono::steady_clock::time_point{};
-            body->environment.setPosition(body->kinematics.getPose().position);
-            body->environment.update();
-            body->model->setCollisionInfo(
-                impl_->BuildAirSimContactInfo(*body, index, largestCollisionRadius));
-            if (contactGenerationMicroseconds != nullptr)
             {
-                *contactGenerationMicroseconds += std::chrono::duration<double, std::micro>(
-                    std::chrono::steady_clock::now() - contactStart).count();
+                ScopedDuration measureContactGeneration(contactGenerationMicroseconds,
+                    ScopedDuration::Mode::Accumulate);
+                body->environment.setPosition(body->kinematics.getPose().position);
+                body->environment.update();
+                body->model->setCollisionInfo(
+                    impl_->BuildAirSimContactInfo(*body, index, largestCollisionRadius));
             }
             body->ApplyMotorTargets();
             body->model->update();
@@ -800,10 +794,8 @@ void PhysicsWorld::Step(
         advance();
         return;
     }
-    const auto start = std::chrono::steady_clock::now();
+    ScopedDuration measurePhysicsStep(durationMicroseconds);
     advance();
-    *durationMicroseconds = std::chrono::duration<double, std::micro>(
-        std::chrono::steady_clock::now() - start).count();
 }
 
 bool PhysicsWorld::DestroyBody(RigidBodyHandle handle)

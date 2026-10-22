@@ -20,6 +20,7 @@
 #include "SimulatorHud.h"
 #endif
 #include "simulation_core/QuadrotorFlightController.h"
+#include "simulation_core/ScopedDuration.h"
 #include "terrain/BuildingFootprint.h"
 #include "terrain/StaticFacility.h"
 #include "terrain/TerrainGrid.h"
@@ -236,14 +237,15 @@ int AeroSimLabApp::Run()
 
         AdvanceSimulation(frameSeconds);
         eoReadbackHappenedThisFrame_ = false;
-        const auto renderStart = std::chrono::steady_clock::now();
-        RenderFrame();
-        window_->SwapBuffers();
+        double renderDurationMicroseconds = 0.0;
+        {
+            aerosimlab::simulation::ScopedDuration measureRender(
+                benchmarkMode_ ? &renderDurationMicroseconds : nullptr);
+            RenderFrame();
+            window_->SwapBuffers();
+        }
         if (benchmarkMode_)
         {
-            const double renderDurationMicroseconds =
-                std::chrono::duration<double, std::micro>(
-                    std::chrono::steady_clock::now() - renderStart).count();
             renderFrameDurationsMicroseconds_.push_back(renderDurationMicroseconds);
             auto& frameDurations = eoReadbackHappenedThisFrame_
                 ? renderFrameDurationsWithEoReadbackMicroseconds_
@@ -394,13 +396,16 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
     const std::size_t tickCount = fixedTickAccumulator_.Consume(elapsedSeconds);
     for (std::size_t tick = 0; tick < tickCount; ++tick)
     {
-        const auto tickStart = std::chrono::steady_clock::now();
+        double tickDurationMicroseconds = 0.0;
         const std::uint64_t previousSimulationTick = simulation_.TickCount();
-        AdvanceSimulationTick();
+        {
+            aerosimlab::simulation::ScopedDuration measureTick(
+                benchmarkMode_ ? &tickDurationMicroseconds : nullptr);
+            AdvanceSimulationTick();
+        }
         if (benchmarkMode_)
         {
-            tickDurationsMicroseconds_.push_back(std::chrono::duration<double, std::micro>(
-                std::chrono::steady_clock::now() - tickStart).count());
+            tickDurationsMicroseconds_.push_back(tickDurationMicroseconds);
 #ifndef __EMSCRIPTEN__
             if (simulation_.TickCount() != previousSimulationTick)
                 physicsStepDurationsMicroseconds_.push_back(
@@ -634,30 +639,34 @@ void AeroSimLabApp::CaptureEoFrame()
         eoFrame_.width = cameraTarget_->GetWidth();
         eoFrame_.height = cameraTarget_->GetHeight();
         eoFrame_.simulationTick = camera.lastFrameTick;
-        const auto readbackStart = std::chrono::steady_clock::now();
-        cameraTarget_->ReadRgbPixels(eoFrame_.pixels);
+        double readbackDurationMicroseconds = 0.0;
+        {
+            aerosimlab::simulation::ScopedDuration measureReadback(
+                benchmarkMode_ ? &readbackDurationMicroseconds : nullptr);
+            cameraTarget_->ReadRgbPixels(eoFrame_.pixels);
+        }
         if (benchmarkMode_)
         {
             eoReadbackHappenedThisFrame_ = true;
-            eoReadbackCallDurationsMicroseconds_.push_back(
-                std::chrono::duration<double, std::micro>(
-                    std::chrono::steady_clock::now() - readbackStart).count());
+            eoReadbackCallDurationsMicroseconds_.push_back(readbackDurationMicroseconds);
         }
         eoFrame_.FlipVertical();
 #ifndef __EMSCRIPTEN__
-        const auto analysisStart = std::chrono::steady_clock::now();
+        double analysisDurationMicroseconds = 0.0;
         // OpenCV는 eoFrame_의 픽셀을 빌려 쓴다. 다음 프레임이 버퍼를 덮기 전에 분석을 끝낸다.
-        const auto quality = visionAnalyzer_->Analyze(
-            aerosimlab::vision::MakeRgbFrameView(eoFrame_));
+        aerosimlab::vision::RgbFrameQuality quality;
+        {
+            aerosimlab::simulation::ScopedDuration measureAnalysis(
+                benchmarkMode_ ? &analysisDurationMicroseconds : nullptr);
+            quality = visionAnalyzer_->Analyze(
+                aerosimlab::vision::MakeRgbFrameView(eoFrame_));
+        }
         totalMeanBrightness_ += quality.meanBrightness;
         totalMeanContrast_ += quality.meanContrast;
         totalSharpness_ += quality.sharpness;
         ++visionSampleCount_;
         if (benchmarkMode_)
-        {
-            visionDurationsMicroseconds_.push_back(std::chrono::duration<double, std::micro>(
-                std::chrono::steady_clock::now() - analysisStart).count());
-        }
+            visionDurationsMicroseconds_.push_back(analysisDurationMicroseconds);
 #endif
     }
 }
