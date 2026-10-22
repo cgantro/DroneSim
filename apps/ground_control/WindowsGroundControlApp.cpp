@@ -237,25 +237,25 @@ void ShowResult(AppState& state)
         SetStatus(state, state.statusRequest
             ? L"시뮬레이터 연결됨" : CommandStatusMessage(reply));
 
-        const auto& drone = reply.telemetry.drone;
+        const auto& primaryDrone = reply.telemetry.drone;
         std::wostringstream telemetry;
         telemetry << L"적용 Tick: " << reply.appliedTick
                   << L"   응답 시간: " << result.responseTimeMilliseconds << L"ms\r\n"
-                  << L"비행 상태: " << WidenAscii(aerosimlab::simulation::ToString(drone.mode))
-                  << L"   위치: (" << drone.positionMeters.x << L", "
-                  << drone.positionMeters.y << L", " << drone.positionMeters.z << L")m\r\n"
+                  << L"비행 상태: " << WidenAscii(aerosimlab::simulation::ToString(primaryDrone.mode))
+                  << L"   위치: (" << primaryDrone.positionMeters.x << L", "
+                  << primaryDrone.positionMeters.y << L", " << primaryDrone.positionMeters.z << L")m\r\n"
                   << L"카메라: " << WidenAscii(aerosimlab::communication::ToString(
                       reply.telemetry.camera.status))
                   << L"   생성 프레임: " << reply.telemetry.camera.frameCount;
         SetWindowTextW(state.telemetryText, telemetry.str().c_str());
         SendMessageW(state.droneList, LB_RESETCONTENT, 0, 0);
-        for (const auto& drone : reply.telemetry.drones)
+        for (const auto& droneTelemetry : reply.telemetry.drones)
         {
             std::wostringstream row;
-            row << FromUtf8(drone.name) << L"  |  "
-                << WidenAscii(aerosimlab::simulation::ToString(drone.mode))
-                << L"  |  (" << drone.positionMeters.x << L", "
-                << drone.positionMeters.y << L", " << drone.positionMeters.z << L") m";
+            row << FromUtf8(droneTelemetry.name) << L"  |  "
+                << WidenAscii(aerosimlab::simulation::ToString(droneTelemetry.mode))
+                << L"  |  (" << droneTelemetry.positionMeters.x << L", "
+                << droneTelemetry.positionMeters.y << L", " << droneTelemetry.positionMeters.z << L") m";
             const std::wstring text = row.str();
             SendMessageW(state.droneList, LB_ADDSTRING, 0,
                 reinterpret_cast<LPARAM>(text.c_str()));
@@ -450,7 +450,11 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
 }
 }
 
-int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
+int WINAPI wWinMain(
+    _In_ HINSTANCE instance,
+    _In_opt_ HINSTANCE,
+    _In_ PWSTR,
+    _In_ int showCommand)
 {
     const HBRUSH background = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     const WNDCLASSW windowClass{
