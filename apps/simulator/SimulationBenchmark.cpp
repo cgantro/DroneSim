@@ -63,6 +63,7 @@ nlohmann::json SummarizeDurations(std::vector<double> durations)
         {"p50", Percentile(durations, 0.50)},
         {"p95", Percentile(durations, 0.95)},
         {"p99", Percentile(durations, 0.99)},
+        {"maximum", durations.empty() ? 0.0 : durations.back()},
         {"samples", durations.size()}};
 }
 
