@@ -59,5 +59,8 @@ void SaveViewerBenchmarkReport(
 /** @brief 선택한 비행 계산 방식과 드론 배치에서 화면 없이 측정한다. */
 nlohmann::json MeasureDroneScaling(
     simulation::SimulationDynamics dynamics, DroneScalingLayout layout);
+
+/** @brief 실제 시나리오 실행 경로에서 여러 드론의 공동 임무를 측정한다. */
+nlohmann::json MeasureCooperativeMissionScaling();
 #endif
 }

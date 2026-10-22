@@ -689,6 +689,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         {"rigid_body_compact", MeasureDroneScaling(
             aerosimlab::simulation::SimulationDynamics::RigidBody,
             DroneScalingLayout::Compact)}};
+    report["cooperative_mission_scaling"] = MeasureCooperativeMissionScaling();
 #endif
     SaveViewerBenchmarkReport(report);
 }

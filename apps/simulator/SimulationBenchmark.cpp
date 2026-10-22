@@ -7,6 +7,8 @@
 #endif
 
 #include "simulation_core/SimulationCore.h"
+#include "simulation_core/QuadrotorFlightController.h"
+#include "simulation_core/ScenarioRunner.h"
 
 #include <nlohmann/json.hpp>
 
@@ -349,6 +351,170 @@ nlohmann::json MeasureDroneScaling(
             ? "한 번의 측정이 제한 시간에 도달해 더 큰 규모의 실행을 멈췄습니다."
             : "모든 지정 규모를 측정했습니다."},
         {"runs", std::move(runs)}};
+}
+
+nlohmann::json MeasureCooperativeMissionScaling()
+{
+    using aerosimlab::simulation::RunScenario;
+    using aerosimlab::simulation::SimulationDynamics;
+
+    const auto buildScenario = [](SimulationDynamics dynamics, std::size_t droneCount)
+    {
+        const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
+        const std::uint64_t missionStartTick = usesRigidBodyPhysics ? 270U : 90U;
+        const std::uint64_t missionDeadlineTick = missionStartTick + 180U;
+        const std::uint64_t scenarioTicks = missionDeadlineTick + 30U;
+        const double initialAltitudeMeters = usesRigidBodyPhysics
+            ? aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters
+            : 0.0;
+        const double targetAltitudeMeters = initialAltitudeMeters
+            + aerosimlab::simulation::DroneModel::takeoffHeightMeters;
+        const double taskToleranceMeters = usesRigidBodyPhysics ? 0.15 : 0.05;
+        const double expectedToleranceMeters = usesRigidBodyPhysics ? 0.25 : 0.05;
+        constexpr double spacingMeters = 5.0;
+        constexpr double waypointOffsetMeters = 0.5;
+
+        nlohmann::json drones = nlohmann::json::array();
+        nlohmann::json commands = nlohmann::json::array();
+        nlohmann::json tasks = nlohmann::json::array();
+        nlohmann::json expectedDrones = nlohmann::json::array();
+        for (std::size_t index = 0; index < droneCount; ++index)
+        {
+            const std::string droneName = "drone-" + std::to_string(index);
+            const double startX = static_cast<double>(index) * spacingMeters;
+            const double targetX = startX + waypointOffsetMeters;
+            drones.push_back({
+                {"name", droneName},
+                {"initial_position_meters", {startX, 0.0, initialAltitudeMeters}}});
+            commands.push_back({
+                {"tick", 0},
+                {"drone", droneName},
+                {"type", "takeoff"}});
+            tasks.push_back({
+                {"name", "task-" + std::to_string(index)},
+                {"role", "survey"},
+                {"drone", droneName},
+                {"target_position_meters", {targetX, 0.0, targetAltitudeMeters}},
+                {"start_tick", missionStartTick},
+                {"deadline_tick", missionDeadlineTick},
+                {"tolerance_meters", taskToleranceMeters}});
+            expectedDrones.push_back({
+                {"name", droneName},
+                {"mode", "hovering"},
+                {"position_meters", {targetX, 0.0, targetAltitudeMeters}}});
+        }
+
+        return nlohmann::json{
+            {"version", 1},
+            {"dynamics", usesRigidBodyPhysics ? "rigid_body" : "kinematic"},
+            {"ticks", scenarioTicks},
+            {"drones", std::move(drones)},
+            {"commands", std::move(commands)},
+            {"mission", {
+                {"name", "parallel-survey"},
+                {"tasks", std::move(tasks)}}},
+            {"expected", {
+                {"tolerance_meters", expectedToleranceMeters},
+                {"drones", std::move(expectedDrones)}}}};
+    };
+
+    const auto measureDynamics = [&buildScenario](SimulationDynamics dynamics)
+    {
+        const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
+        const char* dynamicsName = usesRigidBodyPhysics ? "rigid_body" : "kinematic";
+        const std::vector<std::size_t> droneCounts = usesRigidBodyPhysics
+            ? std::vector<std::size_t>{2U, 8U, 32U, 64U, 128U}
+            : std::vector<std::size_t>{2U, 8U, 32U, 64U, 128U, 256U, 512U, 1024U};
+        constexpr std::size_t repetitions = 3U;
+        constexpr std::size_t warmupRuns = 1U;
+        nlohmann::json runs = nlohmann::json::array();
+        nlohmann::json summaries = nlohmann::json::array();
+        std::vector<std::size_t> measuredCounts;
+
+        for (const std::size_t droneCount : droneCounts)
+        {
+            const std::string scenarioText = buildScenario(dynamics, droneCount).dump();
+            for (std::size_t warmup = 0; warmup < warmupRuns; ++warmup)
+            {
+                const aerosimlab::simulation::ScenarioResult result = RunScenario(scenarioText);
+                if (!result.passed || !result.mission || !result.mission->passed)
+                    throw std::runtime_error("공동 임무 성능 측정의 준비 실행이 통과하지 못했습니다.");
+            }
+
+            std::vector<double> scenarioDurationsMicroseconds;
+            scenarioDurationsMicroseconds.reserve(repetitions);
+            for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
+            {
+                const std::clock_t cpuStart = std::clock();
+                const auto start = std::chrono::steady_clock::now();
+                const aerosimlab::simulation::ScenarioResult result = RunScenario(scenarioText);
+                const double wallSeconds = std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - start).count();
+                const double cpuSeconds = static_cast<double>(std::clock() - cpuStart)
+                    / CLOCKS_PER_SEC;
+                if (!result.passed || !result.mission || !result.mission->passed)
+                {
+                    const std::string reason = result.issues.empty()
+                        ? "임무 완료 판정이 실패했습니다."
+                        : result.issues.front();
+                    throw std::runtime_error(
+                        "공동 임무 성능 측정 결과가 통과하지 못했습니다: " + reason);
+                }
+
+                std::size_t completedTasks = 0;
+                for (const auto& task : result.mission->tasks)
+                {
+                    if (task.completed)
+                        ++completedTasks;
+                }
+                const double durationMicroseconds = wallSeconds * 1'000'000.0;
+                scenarioDurationsMicroseconds.push_back(durationMicroseconds);
+                runs.push_back({
+                    {"dynamics", dynamicsName},
+                    {"drone_count", droneCount},
+                    {"repetition", repetition + 1U},
+                    {"warmup_runs", warmupRuns},
+                    {"scenario_ticks", result.tickCount},
+                    {"scenario_duration_us", durationMicroseconds},
+                    {"scenario_ticks_per_second", wallSeconds > 0.0
+                        ? static_cast<double>(result.tickCount) / wallSeconds : 0.0},
+                    {"drone_ticks_per_second", wallSeconds > 0.0
+                        ? static_cast<double>(droneCount)
+                            * static_cast<double>(result.tickCount) / wallSeconds : 0.0},
+                    {"process_cpu_percent_approx", wallSeconds > 0.0
+                        ? 100.0 * cpuSeconds / wallSeconds : 0.0},
+                    {"scenario_passed", result.passed},
+                    {"mission_passed", result.mission->passed},
+                    {"mission_task_count", result.mission->tasks.size()},
+                    {"completed_task_count", completedTasks}});
+            }
+            measuredCounts.push_back(droneCount);
+            summaries.push_back({
+                {"drone_count", droneCount},
+                {"scenario_duration_us",
+                    SummarizeDurations(std::move(scenarioDurationsMicroseconds))}});
+        }
+
+        const std::uint64_t missionStartTick = usesRigidBodyPhysics ? 270U : 90U;
+        const std::uint64_t scenarioTicks = missionStartTick + 210U;
+        return nlohmann::json{
+            {"dynamics", dynamicsName},
+            {"layout", "separated"},
+            {"spacing_meters", 5.0},
+            {"mission_start_tick", missionStartTick},
+            {"target_scenario_ticks", scenarioTicks},
+            {"warmup_runs_per_count", warmupRuns},
+            {"target_repetitions_per_count", repetitions},
+            {"target_counts", droneCounts},
+            {"measured_counts", std::move(measuredCounts)},
+            {"method", "실제 JSON 시나리오 실행기로 모든 드론에 조사 목표를 배정하고, 비행·목표 도달·임무 완료 판정을 함께 측정"},
+            {"summaries", std::move(summaries)},
+            {"runs", std::move(runs)}};
+    };
+
+    return {
+        {"kinematic", measureDynamics(SimulationDynamics::Kinematic)},
+        {"rigid_body", measureDynamics(SimulationDynamics::RigidBody)}};
 }
 #endif
 }
