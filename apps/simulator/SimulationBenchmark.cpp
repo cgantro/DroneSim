@@ -219,9 +219,11 @@ nlohmann::json MeasureDroneScaling(
             std::vector<double> tickDurations;
             std::vector<double> physicsDurations;
             std::vector<double> contactGenerationDurations;
+            std::vector<double> contactGenerationFractions;
             tickDurations.reserve(measuredTicks);
             physicsDurations.reserve(measuredTicks);
             contactGenerationDurations.reserve(measuredTicks);
+            contactGenerationFractions.reserve(measuredTicks);
             const auto workingSetBefore = readWorkingSetBytes();
             const std::clock_t cpuStart = std::clock();
             const auto measurementStart = std::chrono::steady_clock::now();
@@ -234,10 +236,17 @@ nlohmann::json MeasureDroneScaling(
                     std::chrono::steady_clock::now() - tickStart).count());
                 if (usesRigidBodyPhysics)
                 {
-                    physicsDurations.push_back(
-                        simulation.LastPhysicsStepDurationMicroseconds());
-                    contactGenerationDurations.push_back(
-                        simulation.LastContactGenerationDurationMicroseconds());
+                    const double physicsDuration =
+                        simulation.LastPhysicsStepDurationMicroseconds();
+                    const double contactGenerationDuration =
+                        simulation.LastContactGenerationDurationMicroseconds();
+                    physicsDurations.push_back(physicsDuration);
+                    contactGenerationDurations.push_back(contactGenerationDuration);
+                    if (physicsDuration > 0.0)
+                    {
+                        contactGenerationFractions.push_back(
+                            contactGenerationDuration / physicsDuration);
+                    }
                 }
 
                 if ((tick + 1U) % 1000U == 0U
@@ -288,6 +297,8 @@ nlohmann::json MeasureDroneScaling(
                     std::move(physicsDurations));
                 run["contact_generation_duration_us"] = SummarizeDurations(
                     std::move(contactGenerationDurations));
+                run["contact_generation_fraction"] = SummarizeDurations(
+                    std::move(contactGenerationFractions));
             }
             if (workingSetBefore && workingSetAfter)
             {
