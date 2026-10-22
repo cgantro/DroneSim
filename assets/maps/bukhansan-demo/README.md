@@ -38,7 +38,9 @@ SRTM은 땅 표면뿐 아니라 나무와 건물의 영향을 받을 수 있는 
 
 OpenStreetMap 자료는 [Open Database License(ODbL)](https://www.openstreetmap.org/copyright)를 따릅니다. 출처는 `© OpenStreetMap contributors`입니다. 원본 조회 주소도 GeoJSON에 기록했습니다.
 
-지형의 큰 색과 음영은 높이 자료로 만들었습니다. 가까이서 보이는 작은 색 변화와 급한 사면의 바위빛은 화면 셰이더가 덧붙입니다. 실제 숲·암석 재질을 측정한 자료가 아니며, 위성 사진도 아닙니다. 고도와 경사를 보기 쉽게 나타내는 표현입니다.
+산의 높낮이와 충돌 위치는 SRTM 높이 자료를 따릅니다. 화면에는 별도로 촬영한 위성 영상을 입혔습니다. 사진은 숲·도로·건물 같은 지표 색을 보여 주지만 높이 정보는 담고 있지 않습니다. SRTM 높이 격자도 약 30m 간격이라 작은 지형까지 표현하지는 못합니다.
+
+화면에는 2025년 7월 10일 촬영한 Copernicus Sentinel-2 영상을 사용합니다. 10m 크기의 픽셀을 시험 구역에 맞춰 잘랐습니다. 영상과 높이 자료의 촬영 시점·해상도가 달라 실제 지형과 완전히 일치하지 않을 수 있습니다. 원본은 [AWS 공개 자료](https://registry.opendata.aws/sentinel-2-l2a-cogs/)에서 로그인 없이 받을 수 있습니다. 수정한 자료의 출처는 **Contains modified Copernicus Sentinel data 2025**입니다. 자세한 이용 조건은 [Copernicus 안내](https://cds.climate.copernicus.eu/licences/ec-sentinel)를 확인해 주세요.
 
 ## 다음에 받을 자료
 

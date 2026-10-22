@@ -286,7 +286,7 @@ void AeroSimLabApp::InitializeGraphics()
     auto terrain = aerosimlab::terrain::TerrainGrid::Load("maps/bukhansan-demo/terrain.grid");
     terrainMesh_ = CreateTerrainMesh(terrain);
     terrainTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
-        "maps/bukhansan-demo/terrain-albedo.ppm");
+        "maps/bukhansan-demo/terrain-satellite.ppm");
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
         "models/drones/x500/carbon-weave.ppm");
     facilityMesh_ = aerosimlab::graphics::Mesh::LoadGlb(

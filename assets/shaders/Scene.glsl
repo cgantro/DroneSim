@@ -150,7 +150,7 @@ void main()
 
     if (u_TerrainSurface != 0)
     {
-        // 넓은 지역용 음영도는 약 20m 간격이다. 화면에 보이는 간격에 맞춘 작은 무늬를 더해 가까운 지면이 한 색으로 뭉개지지 않게 한다.
+        // 위성 사진의 실제 색을 유지하면서 가까운 지면에만 약한 자연스러운 명암 변화를 더한다.
         vec2 groundPosition = v_ModelPosition.xz;
         float pixelFootprint = max(
             length(dFdx(groundPosition)), length(dFdy(groundPosition)));
@@ -161,12 +161,7 @@ void main()
         float detail = TerrainNoise(groundPosition * 0.22) * detailFade;
         float grain = TerrainNoise(groundPosition * 0.9) * grainFade;
         float vegetation = broad * 0.5 + detail * 0.34 + grain * 0.16;
-        vec3 detailedGround = baseColor * (0.82 + vegetation * 0.36);
-
-        float slope = 1.0 - clamp(N.y, 0.0, 1.0);
-        float exposedRock = smoothstep(0.34, 0.68, slope) * 0.48;
-        vec3 rockColor = mix(vec3(0.27, 0.29, 0.27), vec3(0.43, 0.40, 0.34), vegetation);
-        baseColor = mix(detailedGround, rockColor, exposedRock);
+        baseColor *= 0.94 + vegetation * 0.12;
     }
 
     float baseAlpha = u_BaseColorFactor.a;
