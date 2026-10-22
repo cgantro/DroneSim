@@ -131,26 +131,45 @@ struct SimulationCore::EcsStorage
         DroneState initialState;
         DroneControlState initialControl;
         ApplyInitialPose(initialState, initialControl, initialPose);
-        flecs::entity drone = world.entity()
-            .set<DroneState>(initialState)
-            .set<DroneControlState>(initialControl)
-            .set<InitialPose>(initialPose);
-
+        flecs::entity drone = world.entity();
 #if !defined(__EMSCRIPTEN__)
-        if (dynamics == SimulationDynamics::RigidBody)
-        {
-            const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
-            RigidBodyDefinition definition;
-            definition.positionMeters = positionMeters;
-            definition.orientation = initialState.orientation;
-            const RigidBodyHandle body = physics->CreateQuadrotor(definition, parameters);
-            drone.set<PhysicsBody>({body});
-            drone.set<DroneActuation>({parameters});
-            CopyPhysicsState(drone.get_mut<DroneState>(), body);
-        }
+        RigidBodyHandle createdBody{};
+        bool hasCreatedBody = false;
 #endif
 
-        drones.emplace(id, drone);
+        try
+        {
+            drone.set<DroneState>(initialState)
+                .set<DroneControlState>(initialControl)
+                .set<InitialPose>(initialPose);
+#if !defined(__EMSCRIPTEN__)
+            if (dynamics == SimulationDynamics::RigidBody)
+            {
+                const QuadrotorParameters parameters =
+                    QuadrotorParameters::X500MotorTableEstimate();
+                RigidBodyDefinition definition;
+                definition.positionMeters = positionMeters;
+                definition.orientation = initialState.orientation;
+                createdBody = physics->CreateQuadrotor(definition, parameters);
+                hasCreatedBody = true;
+                drone.set<PhysicsBody>({createdBody});
+                drone.set<DroneActuation>({parameters});
+                CopyPhysicsState(drone.get_mut<DroneState>(), createdBody);
+            }
+#endif
+
+            drones.emplace(id, drone);
+        }
+        catch (...)
+        {
+#if !defined(__EMSCRIPTEN__)
+            if (hasCreatedBody)
+                static_cast<void>(physics->DestroyBody(createdBody));
+#endif
+            // ECS에만 남은 엔티티가 다음 시스템 실행에 섞이지 않도록 함께 지운다.
+            drone.destruct();
+            throw;
+        }
         return id;
     }
 
