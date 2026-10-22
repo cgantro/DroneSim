@@ -1,0 +1,50 @@
+{
+  "experiment": "physics_world_tick_after_repeated_body_churn",
+  "date": "2026-10-23",
+  "build": {
+    "configuration": "Release",
+    "architecture": "x64",
+    "generator": "Ninja",
+    "compiler": "MSVC 14.50.35717"
+  },
+  "environment": {
+    "operating_system": "Windows 11 Pro 10.0.26200",
+    "cpu": "13th Gen Intel Core i5-13600KF",
+    "memory_gib": 31.8
+  },
+  "workload": {
+    "active_bodies_during_measurement": 1,
+    "temporary_body_create_destroy_cycles": 1000,
+    "warmup_ticks": 120,
+    "measured_ticks_per_repetition": 30000,
+    "repetitions": 3,
+    "metric": "total wall-clock microseconds divided by measured ticks"
+  },
+  "comparison": {
+    "other_source_revision": "4191276d",
+    "before": {
+      "physics_world_source_revision": "41c38d9e",
+      "microseconds_per_tick_by_repetition": [
+        2.25359,
+        2.25528,
+        2.2557
+      ],
+      "median_microseconds_per_tick": 2.25528
+    },
+    "after": {
+      "physics_world_source_revision": "4191276d",
+      "microseconds_per_tick_by_repetition": [
+        1.06967,
+        1.07172,
+        1.09918
+      ],
+      "median_microseconds_per_tick": 1.07172
+    },
+    "median_reduction_percent": 52.48
+  },
+  "limitations": [
+    "The comparison isolates the PhysicsWorld implementation; all other source was kept at revision 4191276d.",
+    "Each repetition reports an average Tick cost over the full measured interval, not per-Tick p95 or p99.",
+    "The result applies only to one active body after 1000 create/destroy cycles and does not predict other workloads."
+  ]
+}
