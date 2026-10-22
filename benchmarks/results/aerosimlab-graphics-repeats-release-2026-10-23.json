@@ -169,5 +169,189 @@
       "process_cpu_percent_approx": 99.99900240899235,
       "working_set_bytes": 198062080
     }
-  ]
+  ],
+  "asynchronous_readback_runs": [
+    {
+      "run": 1,
+      "source_revision": "1d76004d",
+      "elapsed_seconds": 5.002156,
+      "rendered_frames": 1807,
+      "render_fps": 361.24423148738265,
+      "render_frame_duration_us": {
+        "maximum": 89185.3,
+        "p50": 2387.4,
+        "p95": 5804.2,
+        "p99": 5924.3,
+        "samples": 1807
+      },
+      "render_frame_with_eo_readback_duration_us": {
+        "maximum": 89185.3,
+        "p50": 4061.3,
+        "p95": 5895.8,
+        "p99": 6209.4,
+        "samples": 588
+      },
+      "render_frame_without_eo_readback_duration_us": {
+        "maximum": 3436.6,
+        "p50": 2380.3,
+        "p95": 2471.6,
+        "p99": 2551.4,
+        "samples": 1219
+      },
+      "eo_pixel_readback_enqueue_duration_us": {
+        "maximum": 6107.5,
+        "p50": 2197.2,
+        "p95": 2355.3,
+        "p99": 2426.3,
+        "samples": 295
+      },
+      "eo_pixel_readback_poll_duration_us": {
+        "maximum": 85442.9,
+        "p50": 0.1,
+        "p95": 2348.5,
+        "p99": 2430.3,
+        "samples": 1807
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "maximum": 4351.9,
+          "p50": 3065.1,
+          "p95": 3176.6,
+          "p99": 3223.7,
+          "samples": 295
+        },
+        "mean_brightness": 125.00815428032259,
+        "mean_contrast": 39.11953248434101,
+        "mean_sharpness": 29.710391689831955,
+        "samples": 295
+      }
+    },
+    {
+      "run": 2,
+      "source_revision": "1d76004d",
+      "elapsed_seconds": 5.0002511,
+      "rendered_frames": 1804,
+      "render_fps": 360.78188153390937,
+      "render_frame_duration_us": {
+        "maximum": 94188.6,
+        "p50": 2387.3,
+        "p95": 5802.6,
+        "p99": 6001.4,
+        "samples": 1804
+      },
+      "render_frame_with_eo_readback_duration_us": {
+        "maximum": 94188.6,
+        "p50": 4067.2,
+        "p95": 5915.7,
+        "p99": 6130.1,
+        "samples": 587
+      },
+      "render_frame_without_eo_readback_duration_us": {
+        "maximum": 5307.9,
+        "p50": 2380.4,
+        "p95": 2475.5,
+        "p99": 2550.2,
+        "samples": 1217
+      },
+      "eo_pixel_readback_enqueue_duration_us": {
+        "maximum": 7166.5,
+        "p50": 2206.4,
+        "p95": 2351.3,
+        "p99": 2452.1,
+        "samples": 294
+      },
+      "eo_pixel_readback_poll_duration_us": {
+        "maximum": 90408.7,
+        "p50": 0.1,
+        "p95": 2344.8,
+        "p99": 2429.1,
+        "samples": 1804
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "maximum": 4258.2,
+          "p50": 3081.3,
+          "p95": 3207.5,
+          "p99": 3320.0,
+          "samples": 294
+        },
+        "mean_brightness": 125.00815555356206,
+        "mean_contrast": 39.11953378134101,
+        "mean_sharpness": 29.71035813380602,
+        "samples": 294
+      }
+    },
+    {
+      "run": 3,
+      "source_revision": "1d76004d",
+      "elapsed_seconds": 5.0015948,
+      "rendered_frames": 1813,
+      "render_fps": 362.48438198152314,
+      "render_frame_duration_us": {
+        "maximum": 84303.0,
+        "p50": 2386.8,
+        "p95": 5778.0,
+        "p99": 5891.6,
+        "samples": 1813
+      },
+      "render_frame_with_eo_readback_duration_us": {
+        "maximum": 6451.9,
+        "p50": 3991.6,
+        "p95": 5852.7,
+        "p99": 5939.1,
+        "samples": 588
+      },
+      "render_frame_without_eo_readback_duration_us": {
+        "maximum": 84303.0,
+        "p50": 2375.4,
+        "p95": 2472.8,
+        "p99": 2568.5,
+        "samples": 1225
+      },
+      "eo_pixel_readback_enqueue_duration_us": {
+        "maximum": 3149.8,
+        "p50": 2222.1,
+        "p95": 2361.6,
+        "p99": 2428.3,
+        "samples": 294
+      },
+      "eo_pixel_readback_poll_duration_us": {
+        "maximum": 2510.1,
+        "p50": 0.1,
+        "p95": 2355.8,
+        "p99": 2423.3,
+        "samples": 1813
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "maximum": 4499.6,
+          "p50": 3046.2,
+          "p95": 3166.3,
+          "p99": 3271.0,
+          "samples": 294
+        },
+        "mean_brightness": 125.00794652822017,
+        "mean_contrast": 39.119313596096134,
+        "mean_sharpness": 29.709952182202276,
+        "samples": 294
+      }
+    }
+  ],
+  "asynchronous_readback_summary": {
+    "source_revision": "1d76004d",
+    "method": "세 슬롯 PBO와 fence를 사용한 비동기 픽셀 읽기",
+    "repeat_count": 3,
+    "render_fps_median": 361.24,
+    "frame_p50_us_median": 2387.4,
+    "frame_p95_us_median": 5802.6,
+    "frame_p99_us_median": 5924.3,
+    "frame_max_us_range": [
+      84303.0,
+      94188.6
+    ],
+    "enqueue_p95_us_median": 2355.3,
+    "poll_p95_us_median": 2348.5,
+    "vision_p95_us_median": 3176.6,
+    "comparison_note": "기존 7855c460-dirty 측정과 같은 PC·장면·해상도지만 코드 리비전이 달라 PBO 효과만 분리한 엄밀한 A/B 비교는 아님."
+  }
 }
