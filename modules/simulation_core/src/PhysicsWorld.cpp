@@ -690,6 +690,10 @@ RigidBodyHandle PhysicsWorld::CreateQuadrotor(
     static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
     auto body = std::make_unique<Impl::Body>(definition, quadrotor);
     const RigidBodyHandle handle{static_cast<std::uint32_t>(impl_->bodies.size())};
+
+    // AirSim에 주소를 넘긴 뒤 vector가 재할당에 실패하면 해제된 주소가 남을 수 있다.
+    // 먼저 저장 공간을 확보해 등록 이후의 소유권 이전이 예외 없이 끝나게 한다.
+    impl_->bodies.reserve(impl_->bodies.size() + 1U);
     impl_->physicsEngine.insert(body->model.get());
     impl_->bodies.push_back(std::move(body));
     return handle;
