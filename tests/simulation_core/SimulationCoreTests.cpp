@@ -248,14 +248,31 @@ void Verify_SimulationCore_DefaultsToAirSimAndUsesRotorForcesForTakeoffAndLandin
     simulation.SetPhysicsStepTimingEnabled(true);
     simulation.SetEcsSystemTimingEnabled(true);
     simulation.AdvanceOneTick();
-    EXPECT_GT(simulation.LastEcsSystemDurationMicroseconds(), 0.0);
+    EXPECT_GT(simulation.LastFlecsProgressDurationMicroseconds(), 0.0);
+    const EcsSystemDurations rigidBodySystemDurations = simulation.LastEcsSystemDurations();
+    EXPECT_DOUBLE_EQ(rigidBodySystemDurations.advanceKinematicDroneMicroseconds, 0.0);
+    EXPECT_GT(rigidBodySystemDurations.applyRigidBodyForcesMicroseconds, 0.0);
+    EXPECT_GT(rigidBodySystemDurations.advanceCameraMicroseconds, 0.0);
     EXPECT_GT(simulation.LastPhysicsStepDurationMicroseconds(), 0.0);
     EXPECT_GT(simulation.LastContactGenerationDurationMicroseconds(), 0.0);
     simulation.SetPhysicsStepTimingEnabled(false);
     simulation.SetEcsSystemTimingEnabled(false);
     simulation.AdvanceOneTick();
-    EXPECT_DOUBLE_EQ(simulation.LastEcsSystemDurationMicroseconds(), 0.0);
+    EXPECT_DOUBLE_EQ(simulation.LastFlecsProgressDurationMicroseconds(), 0.0);
+    const EcsSystemDurations disabledSystemDurations = simulation.LastEcsSystemDurations();
+    EXPECT_DOUBLE_EQ(disabledSystemDurations.advanceKinematicDroneMicroseconds, 0.0);
+    EXPECT_DOUBLE_EQ(disabledSystemDurations.applyRigidBodyForcesMicroseconds, 0.0);
+    EXPECT_DOUBLE_EQ(disabledSystemDurations.advanceCameraMicroseconds, 0.0);
     EXPECT_DOUBLE_EQ(simulation.LastContactGenerationDurationMicroseconds(), 0.0);
+
+    SimulationCore kinematicSimulation{SimulationDynamics::Kinematic};
+    kinematicSimulation.SetEcsSystemTimingEnabled(true);
+    kinematicSimulation.AdvanceOneTick();
+    const EcsSystemDurations kinematicSystemDurations =
+        kinematicSimulation.LastEcsSystemDurations();
+    EXPECT_GT(kinematicSystemDurations.advanceKinematicDroneMicroseconds, 0.0);
+    EXPECT_DOUBLE_EQ(kinematicSystemDurations.applyRigidBodyForcesMicroseconds, 0.0);
+    EXPECT_GT(kinematicSystemDurations.advanceCameraMicroseconds, 0.0);
 
     ASSERT_EQ(
         simulation.Apply(Command(DroneCommand::Kind::TakeOff)),

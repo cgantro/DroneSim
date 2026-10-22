@@ -57,7 +57,8 @@ struct SimulationCore::EcsStorage
     DroneId nextDroneId = 1;
     flecs::entity camera;
     bool measureEcsSystemDuration = false;
-    double lastEcsSystemDurationMicroseconds = 0.0;
+    EcsSystemDurations lastEcsSystemDurations;
+    double lastFlecsProgressDurationMicroseconds = 0.0;
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
     double lastContactGenerationDurationMicroseconds = 0.0;
@@ -86,9 +87,19 @@ struct SimulationCore::EcsStorage
             primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
             world.system<DroneState, DroneControlState>("AdvanceKinematicDrone")
                 .kind(flecs::OnUpdate)
-                .each([](DroneState& state, DroneControlState& control)
+                .run([this](flecs::iter& iterator)
                 {
-                    DroneModel::AdvanceOneTick(state, control);
+                    ScopedDuration measureSystem(
+                        measureEcsSystemDuration
+                            ? &lastEcsSystemDurations.advanceKinematicDroneMicroseconds
+                            : nullptr);
+                    while (iterator.next())
+                    {
+                        auto states = iterator.field<DroneState>(0);
+                        auto controls = iterator.field<DroneControlState>(1);
+                        for (const std::size_t row : iterator)
+                            DroneModel::AdvanceOneTick(states[row], controls[row]);
+                    }
                 });
         }
 #if !defined(__EMSCRIPTEN__)
@@ -100,13 +111,24 @@ struct SimulationCore::EcsStorage
             world.system<DroneState, DroneControlState, PhysicsBody, DroneActuation>(
                 "ApplyRigidBodyForces")
                 .kind(flecs::OnUpdate)
-                .each([this](
-                    DroneState& state,
-                    DroneControlState& control,
-                    const PhysicsBody& body,
-                    DroneActuation& actuation)
+                .run([this](flecs::iter& iterator)
                 {
-                    ApplyRigidBodyForces(state, control, body.handle, actuation);
+                    ScopedDuration measureSystem(
+                        measureEcsSystemDuration
+                            ? &lastEcsSystemDurations.applyRigidBodyForcesMicroseconds
+                            : nullptr);
+                    while (iterator.next())
+                    {
+                        auto states = iterator.field<DroneState>(0);
+                        auto controls = iterator.field<DroneControlState>(1);
+                        auto bodies = iterator.field<const PhysicsBody>(2);
+                        auto actuations = iterator.field<DroneActuation>(3);
+                        for (const std::size_t row : iterator)
+                        {
+                            ApplyRigidBodyForces(
+                                states[row], controls[row], bodies[row].handle, actuations[row]);
+                        }
+                    }
                 });
         }
 #else
@@ -119,9 +141,17 @@ struct SimulationCore::EcsStorage
         camera = world.entity("EoCamera").set<CameraState>({});
         world.system<CameraState>("AdvanceCamera")
             .kind(flecs::OnUpdate)
-            .each([this](CameraState& state)
+            .run([this](flecs::iter& iterator)
             {
-                EoCameraModel::AdvanceOneTick(state, tickCount + 1);
+                ScopedDuration measureSystem(
+                    measureEcsSystemDuration
+                        ? &lastEcsSystemDurations.advanceCameraMicroseconds : nullptr);
+                while (iterator.next())
+                {
+                    auto cameraStates = iterator.field<CameraState>(0);
+                    for (const std::size_t row : iterator)
+                        EoCameraModel::AdvanceOneTick(cameraStates[row], tickCount + 1);
+                }
             });
         SynchronizeCameraPose();
     }
@@ -468,10 +498,11 @@ void SimulationCore::AdvanceOneTick() noexcept
     }
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
     ecs_->lastContactGenerationDurationMicroseconds = 0.0;
-    ecs_->lastEcsSystemDurationMicroseconds = 0.0;
+    ecs_->lastEcsSystemDurations = {};
+    ecs_->lastFlecsProgressDurationMicroseconds = 0.0;
     {
         ScopedDuration measureEcsSystems(ecs_->measureEcsSystemDuration
-            ? &ecs_->lastEcsSystemDurationMicroseconds : nullptr);
+            ? &ecs_->lastFlecsProgressDurationMicroseconds : nullptr);
         ecs_->world.progress(DroneModel::fixedStepSeconds);
     }
 #if !defined(__EMSCRIPTEN__)
@@ -560,12 +591,18 @@ void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept
 void SimulationCore::SetEcsSystemTimingEnabled(bool enabled) noexcept
 {
     ecs_->measureEcsSystemDuration = enabled;
-    ecs_->lastEcsSystemDurationMicroseconds = 0.0;
+    ecs_->lastEcsSystemDurations = {};
+    ecs_->lastFlecsProgressDurationMicroseconds = 0.0;
 }
 
-double SimulationCore::LastEcsSystemDurationMicroseconds() const noexcept
+EcsSystemDurations SimulationCore::LastEcsSystemDurations() const noexcept
 {
-    return ecs_->lastEcsSystemDurationMicroseconds;
+    return ecs_->lastEcsSystemDurations;
+}
+
+double SimulationCore::LastFlecsProgressDurationMicroseconds() const noexcept
+{
+    return ecs_->lastFlecsProgressDurationMicroseconds;
 }
 
 double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept

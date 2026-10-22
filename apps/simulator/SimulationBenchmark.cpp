@@ -238,13 +238,19 @@ nlohmann::json MeasureDroneScaling(
                 simulation.AdvanceOneTick();
 
             std::vector<double> tickDurations;
-            std::vector<double> ecsSystemDurations;
+            std::vector<double> flecsProgressDurations;
+            std::vector<double> kinematicDroneSystemDurations;
+            std::vector<double> rigidBodyForceSystemDurations;
+            std::vector<double> cameraSystemDurations;
             std::vector<double> physicsDurations;
             std::vector<double> contactGenerationDurations;
             std::vector<double> contactGenerationFractions;
             std::vector<std::size_t> workingSetSamples;
             tickDurations.reserve(measuredTicks);
-            ecsSystemDurations.reserve(measuredTicks);
+            flecsProgressDurations.reserve(measuredTicks);
+            kinematicDroneSystemDurations.reserve(measuredTicks);
+            rigidBodyForceSystemDurations.reserve(measuredTicks);
+            cameraSystemDurations.reserve(measuredTicks);
             physicsDurations.reserve(measuredTicks);
             contactGenerationDurations.reserve(measuredTicks);
             contactGenerationFractions.reserve(measuredTicks);
@@ -262,8 +268,16 @@ nlohmann::json MeasureDroneScaling(
                     simulation.AdvanceOneTick();
                 }
                 tickDurations.push_back(tickDurationMicroseconds);
-                ecsSystemDurations.push_back(
-                    simulation.LastEcsSystemDurationMicroseconds());
+                flecsProgressDurations.push_back(
+                    simulation.LastFlecsProgressDurationMicroseconds());
+                const simulation::EcsSystemDurations systemDurations =
+                    simulation.LastEcsSystemDurations();
+                kinematicDroneSystemDurations.push_back(
+                    systemDurations.advanceKinematicDroneMicroseconds);
+                rigidBodyForceSystemDurations.push_back(
+                    systemDurations.applyRigidBodyForcesMicroseconds);
+                cameraSystemDurations.push_back(
+                    systemDurations.advanceCameraMicroseconds);
                 if (usesRigidBodyPhysics)
                 {
                     const double physicsDuration =
@@ -315,8 +329,10 @@ nlohmann::json MeasureDroneScaling(
                 {"target_ticks", measuredTicks},
                 {"measured_ticks", completedTicks},
                 {"tick_duration_us", SummarizeDurations(std::move(tickDurations))},
-                {"ecs_system_duration_us", SummarizeDurations(
-                    std::move(ecsSystemDurations))},
+                {"flecs_progress_duration_us", SummarizeDurations(
+                    std::move(flecsProgressDurations))},
+                {"advance_camera_system_duration_us", SummarizeDurations(
+                    std::move(cameraSystemDurations))},
                 {"measurement_wall_seconds", wallSeconds},
                 {"simulation_ticks_per_second", wallSeconds > 0.0
                     ? static_cast<double>(completedTicks) / wallSeconds : 0.0},
@@ -333,12 +349,19 @@ nlohmann::json MeasureDroneScaling(
                     ? 100.0 * cpuSeconds / wallSeconds : 0.0}};
             if (usesRigidBodyPhysics)
             {
+                run["apply_rigid_body_forces_system_duration_us"] = SummarizeDurations(
+                    std::move(rigidBodyForceSystemDurations));
                 run["physics_step_duration_us"] = SummarizeDurations(
                     std::move(physicsDurations));
                 run["contact_generation_duration_us"] = SummarizeDurations(
                     std::move(contactGenerationDurations));
                 run["contact_generation_fraction"] = SummarizeDurations(
                     std::move(contactGenerationFractions));
+            }
+            else
+            {
+                run["advance_kinematic_drone_system_duration_us"] = SummarizeDurations(
+                    std::move(kinematicDroneSystemDurations));
             }
             if (workingSetBefore && workingSetAfter)
             {
