@@ -228,11 +228,13 @@ int AeroSimLabApp::Run()
         const auto now = std::chrono::steady_clock::now();
         const double elapsedSeconds = std::chrono::duration<double>(now - previousFrame).count();
         // 화면 스모크는 프레임마다 한 Tick, 네트워크 스모크는 프레임마다 최대 따라잡기만큼 진행한다.
-        const double frameSeconds = smokeTest_ && !benchmarkMode_
-            ? (networkEnabled_
+        double frameSeconds = elapsedSeconds;
+        if (smokeTest_ && !benchmarkMode_)
+        {
+            frameSeconds = networkEnabled_
                 ? aerosimlab::simulation::FixedTickAccumulator::maximumFrameSeconds
-                : aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds)
-            : elapsedSeconds;
+                : aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds;
+        }
         previousFrame = now;
 
         AdvanceSimulation(frameSeconds);
@@ -254,33 +256,42 @@ int AeroSimLabApp::Run()
         }
         ++renderedFrames_;
 
-        if (smokeTest_ && !networkEnabled_ && renderedFrames_ >= smokeTestFrameLimit)
-            break;
-        if (smokeTest_ && networkEnabled_ && smokeReplayStarted_
-            && !commandRecording_.IsRecording() && !commandRecording_.IsReplaying()
-            && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
-            break;
-        if (smokeTest_ && networkEnabled_ &&
-            std::chrono::steady_clock::now() - startTime_ > std::chrono::seconds(15))
-            return 4;
+        if (smokeTest_)
+        {
+            if (!networkEnabled_ && renderedFrames_ >= smokeTestFrameLimit)
+                break;
+            if (networkEnabled_ && smokeReplayStarted_
+                && !commandRecording_.IsRecording() && !commandRecording_.IsReplaying()
+                && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
+            {
+                break;
+            }
+            if (networkEnabled_
+                && std::chrono::steady_clock::now() - startTime_ > std::chrono::seconds(15))
+            {
+                return 4;
+            }
+        }
         if (benchmarkMode_ &&
             std::chrono::steady_clock::now() - startTime_ >= std::chrono::duration<double>(benchmarkDurationSeconds))
             break;
     }
-    const bool cameraFrameHasPixels = eoFrame_.IsValid()
-        && std::any_of(eoFrame_.pixels.begin(), eoFrame_.pixels.end(), [](std::uint8_t value)
+    if (smokeTest_)
+    {
+        const bool cameraFrameHasPixels = eoFrame_.IsValid()
+            && std::any_of(eoFrame_.pixels.begin(), eoFrame_.pixels.end(), [](std::uint8_t value)
+            {
+                return value != 0;
+            });
+        if (!cameraFrameHasPixels)
+            return 5;
+
+        const auto& camera = simulation_.Camera();
+        if (camera.status == aerosimlab::simulation::CameraStatus::Active
+            && eoFrame_.simulationTick != camera.lastFrameTick)
         {
-            return value != 0;
-        });
-    if (smokeTest_ && !cameraFrameHasPixels)
-    {
-        return 5;
-    }
-    const auto& camera = simulation_.Camera();
-    if (smokeTest_ && camera.status == aerosimlab::simulation::CameraStatus::Active
-        && eoFrame_.simulationTick != camera.lastFrameTick)
-    {
-        return 6;
+            return 6;
+        }
     }
     if (benchmarkMode_)
     {
