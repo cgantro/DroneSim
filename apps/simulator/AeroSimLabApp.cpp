@@ -235,14 +235,20 @@ int AeroSimLabApp::Run()
         previousFrame = now;
 
         AdvanceSimulation(frameSeconds);
+        eoReadbackHappenedThisFrame_ = false;
         const auto renderStart = std::chrono::steady_clock::now();
         RenderFrame();
         window_->SwapBuffers();
         if (benchmarkMode_)
         {
-            renderFrameDurationsMicroseconds_.push_back(
+            const double renderDurationMicroseconds =
                 std::chrono::duration<double, std::micro>(
-                    std::chrono::steady_clock::now() - renderStart).count());
+                    std::chrono::steady_clock::now() - renderStart).count();
+            renderFrameDurationsMicroseconds_.push_back(renderDurationMicroseconds);
+            auto& frameDurations = eoReadbackHappenedThisFrame_
+                ? renderFrameDurationsWithEoReadbackMicroseconds_
+                : renderFrameDurationsWithoutEoReadbackMicroseconds_;
+            frameDurations.push_back(renderDurationMicroseconds);
         }
         ++renderedFrames_;
 
@@ -632,6 +638,7 @@ void AeroSimLabApp::CaptureEoFrame()
         cameraTarget_->ReadRgbPixels(eoFrame_.pixels);
         if (benchmarkMode_)
         {
+            eoReadbackHappenedThisFrame_ = true;
             eoReadbackCallDurationsMicroseconds_.push_back(
                 std::chrono::duration<double, std::micro>(
                     std::chrono::steady_clock::now() - readbackStart).count());
@@ -720,6 +727,10 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC;
     measurements.tickDurationsMicroseconds = tickDurationsMicroseconds_;
     measurements.renderFrameDurationsMicroseconds = renderFrameDurationsMicroseconds_;
+    measurements.renderFrameDurationsWithEoReadbackMicroseconds =
+        renderFrameDurationsWithEoReadbackMicroseconds_;
+    measurements.renderFrameDurationsWithoutEoReadbackMicroseconds =
+        renderFrameDurationsWithoutEoReadbackMicroseconds_;
 #ifndef __EMSCRIPTEN__
     measurements.physicsStepDurationsMicroseconds = physicsStepDurationsMicroseconds_;
     measurements.eoReadbackCallDurationsMicroseconds = eoReadbackCallDurationsMicroseconds_;

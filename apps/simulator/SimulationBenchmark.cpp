@@ -96,6 +96,10 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             std::move(measurements.tickDurationsMicroseconds))},
         {"render_frame_duration_us", SummarizeDurations(
             std::move(measurements.renderFrameDurationsMicroseconds))},
+        {"render_frame_with_eo_readback_duration_us", SummarizeDurations(
+            std::move(measurements.renderFrameDurationsWithEoReadbackMicroseconds))},
+        {"render_frame_without_eo_readback_duration_us", SummarizeDurations(
+            std::move(measurements.renderFrameDurationsWithoutEoReadbackMicroseconds))},
         {"process_cpu_percent_approx", measurements.elapsedSeconds > 0.0
             ? 100.0 * measurements.processCpuSeconds / measurements.elapsedSeconds : 0.0}};
     report["tick_duration_us"]["deadline_misses_over_16_67ms"] = deadlineMisses;

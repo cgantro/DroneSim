@@ -38,6 +38,8 @@ struct ViewerBenchmarkMeasurements
     double processCpuSeconds = 0.0;
     std::vector<double> tickDurationsMicroseconds;
     std::vector<double> renderFrameDurationsMicroseconds;
+    std::vector<double> renderFrameDurationsWithEoReadbackMicroseconds;
+    std::vector<double> renderFrameDurationsWithoutEoReadbackMicroseconds;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds;
     // CPU가 픽셀 읽기 호출에서 기다린 시간이며, 버퍼 준비와 GPU 동기화 대기도 포함한다.

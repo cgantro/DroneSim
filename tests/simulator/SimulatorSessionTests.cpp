@@ -45,6 +45,8 @@ void Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues()
     measurements.processCpuSeconds = 0.5;
     measurements.tickDurationsMicroseconds = {10000.0, 16000.0, 30000.0};
     measurements.renderFrameDurationsMicroseconds = {700.0, 800.0, 900.0};
+    measurements.renderFrameDurationsWithEoReadbackMicroseconds = {800.0, 1200.0};
+    measurements.renderFrameDurationsWithoutEoReadbackMicroseconds = {600.0};
 #ifndef __EMSCRIPTEN__
     measurements.physicsStepDurationsMicroseconds = {5000.0, 7000.0};
     measurements.eoReadbackCallDurationsMicroseconds = {1200.0, 1500.0};
@@ -65,6 +67,8 @@ void Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues()
     EXPECT_DOUBLE_EQ(report.at("render_fps"), 50.0);
     EXPECT_DOUBLE_EQ(report.at("render_frame_duration_us").at("p50"), 800.0);
     EXPECT_DOUBLE_EQ(report.at("render_frame_duration_us").at("p95"), 900.0);
+    EXPECT_DOUBLE_EQ(report.at("render_frame_with_eo_readback_duration_us").at("p95"), 1200.0);
+    EXPECT_DOUBLE_EQ(report.at("render_frame_without_eo_readback_duration_us").at("p95"), 600.0);
     EXPECT_DOUBLE_EQ(report.at("process_cpu_percent_approx"), 25.0);
     EXPECT_EQ(report.at("tick_duration_us").at("deadline_misses_over_16_67ms"), 1U);
     EXPECT_DOUBLE_EQ(report.at("tick_duration_us").at("p50"), 16000.0);

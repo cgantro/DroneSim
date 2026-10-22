@@ -144,6 +144,7 @@ private:
     bool gamepadConnected_ = false;
     bool previousTakeoffButton_ = false;
     bool previousLandButton_ = false;
+    bool eoReadbackHappenedThisFrame_ = false;
     int gamepadJoystickId_ = -1;
     int unsupportedJoystickId_ = -1;
     std::optional<aerosimlab::simulation::DroneCommand> pendingControllerAction_;
@@ -158,6 +159,8 @@ private:
     std::clock_t benchmarkCpuStart_ = 0;
     std::vector<double> tickDurationsMicroseconds_;
     std::vector<double> renderFrameDurationsMicroseconds_;
+    std::vector<double> renderFrameDurationsWithEoReadbackMicroseconds_;
+    std::vector<double> renderFrameDurationsWithoutEoReadbackMicroseconds_;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds_;
     std::vector<double> eoReadbackCallDurationsMicroseconds_;
