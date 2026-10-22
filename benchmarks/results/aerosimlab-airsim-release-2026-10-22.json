@@ -1,6 +1,6 @@
 {
   "configuration": "hidden OpenGL window; one drone; 9.4km x 11.9km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes",
-  "elapsed_seconds": 5.0013048,
+  "elapsed_seconds": 5.0006576,
   "entity_scaling": {
     "counts": [
       1,
@@ -14,22 +14,22 @@
       {
         "drone_count": 1,
         "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.0464421,
+        "measurement_wall_seconds": 0.061899,
         "physics_step_duration_us": {
-          "p50": 0.5,
-          "p95": 0.6,
-          "p99": 0.7,
+          "p50": 1.1,
+          "p95": 1.1,
+          "p99": 1.3,
           "samples": 30000
         },
-        "process_cpu_percent_approx": 101.20128073450599,
-        "process_working_set_after_bytes": 130527232,
-        "process_working_set_before_bytes": 130064384,
-        "process_working_set_change_bytes": 462848,
+        "process_cpu_percent_approx": 100.16316903342542,
+        "process_working_set_after_bytes": 131059712,
+        "process_working_set_before_bytes": 130592768,
+        "process_working_set_change_bytes": 466944,
         "repetition": 1,
         "tick_duration_us": {
-          "p50": 1.5,
-          "p95": 1.6,
-          "p99": 1.8,
+          "p50": 2.0,
+          "p95": 2.1,
+          "p99": 2.4,
           "samples": 30000
         },
         "warmup_ticks": 120
@@ -37,22 +37,22 @@
       {
         "drone_count": 1,
         "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.0470396,
+        "measurement_wall_seconds": 0.0619946,
         "physics_step_duration_us": {
-          "p50": 0.5,
-          "p95": 0.6,
-          "p99": 0.6,
+          "p50": 1.1,
+          "p95": 1.1,
+          "p99": 1.4,
           "samples": 30000
         },
-        "process_cpu_percent_approx": 99.91581561067696,
-        "process_working_set_after_bytes": 130781184,
-        "process_working_set_before_bytes": 130318336,
-        "process_working_set_change_bytes": 462848,
+        "process_cpu_percent_approx": 100.00871043607025,
+        "process_working_set_after_bytes": 131276800,
+        "process_working_set_before_bytes": 130801664,
+        "process_working_set_change_bytes": 475136,
         "repetition": 2,
         "tick_duration_us": {
-          "p50": 1.5,
-          "p95": 1.6,
-          "p99": 1.7,
+          "p50": 2.0,
+          "p95": 2.1,
+          "p99": 2.7,
           "samples": 30000
         },
         "warmup_ticks": 120
@@ -60,22 +60,22 @@
       {
         "drone_count": 1,
         "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.0463901,
+        "measurement_wall_seconds": 0.0623735,
         "physics_step_duration_us": {
-          "p50": 0.5,
-          "p95": 0.6,
-          "p99": 0.7,
+          "p50": 1.1,
+          "p95": 1.1,
+          "p99": 1.3,
           "samples": 30000
         },
-        "process_cpu_percent_approx": 99.15908782261732,
-        "process_working_set_after_bytes": 130719744,
-        "process_working_set_before_bytes": 130314240,
-        "process_working_set_change_bytes": 405504,
+        "process_cpu_percent_approx": 101.004432972336,
+        "process_working_set_after_bytes": 131284992,
+        "process_working_set_before_bytes": 130813952,
+        "process_working_set_change_bytes": 471040,
         "repetition": 3,
         "tick_duration_us": {
-          "p50": 1.5,
-          "p95": 1.6,
-          "p99": 1.7,
+          "p50": 2.0,
+          "p95": 2.2,
+          "p99": 2.5,
           "samples": 30000
         },
         "warmup_ticks": 120
@@ -83,183 +83,137 @@
       {
         "drone_count": 2,
         "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.0774777,
+        "measurement_wall_seconds": 0.1169701,
         "physics_step_duration_us": {
-          "p50": 1.1,
-          "p95": 1.7,
-          "p99": 1.8,
+          "p50": 2.2,
+          "p95": 3.1,
+          "p99": 3.3,
           "samples": 30000
         },
-        "process_cpu_percent_approx": 99.38343549176086,
-        "process_working_set_after_bytes": 130629632,
-        "process_working_set_before_bytes": 130158592,
-        "process_working_set_change_bytes": 471040,
+        "process_cpu_percent_approx": 100.02556208808919,
+        "process_working_set_after_bytes": 131125248,
+        "process_working_set_before_bytes": 130650112,
+        "process_working_set_change_bytes": 475136,
         "repetition": 1,
         "tick_duration_us": {
-          "p50": 2.4,
-          "p95": 3.6,
-          "p99": 3.9,
-          "samples": 30000
-        },
-        "warmup_ticks": 120
-      },
-      {
-        "drone_count": 2,
-        "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.0759508,
-        "physics_step_duration_us": {
-          "p50": 1.1,
-          "p95": 1.6,
-          "p99": 1.8,
-          "samples": 30000
-        },
-        "process_cpu_percent_approx": 100.06477877784039,
-        "process_working_set_after_bytes": 130637824,
-        "process_working_set_before_bytes": 130166784,
-        "process_working_set_change_bytes": 471040,
-        "repetition": 2,
-        "tick_duration_us": {
-          "p50": 2.4,
-          "p95": 3.5,
-          "p99": 3.7,
-          "samples": 30000
-        },
-        "warmup_ticks": 120
-      },
-      {
-        "drone_count": 2,
-        "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.084566,
-        "physics_step_duration_us": {
-          "p50": 1.1,
-          "p95": 1.8,
-          "p99": 1.9,
-          "samples": 30000
-        },
-        "process_cpu_percent_approx": 100.51320861812076,
-        "process_working_set_after_bytes": 130781184,
-        "process_working_set_before_bytes": 130306048,
-        "process_working_set_change_bytes": 475136,
-        "repetition": 3,
-        "tick_duration_us": {
-          "p50": 2.4,
-          "p95": 3.7,
-          "p99": 4.0,
-          "samples": 30000
-        },
-        "warmup_ticks": 120
-      },
-      {
-        "drone_count": 4,
-        "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.1373128,
-        "physics_step_duration_us": {
-          "p50": 2.6,
-          "p95": 3.0,
-          "p99": 3.9,
-          "samples": 30000
-        },
-        "process_cpu_percent_approx": 100.50046317604767,
-        "process_working_set_after_bytes": 130756608,
-        "process_working_set_before_bytes": 130449408,
-        "process_working_set_change_bytes": 307200,
-        "repetition": 1,
-        "tick_duration_us": {
-          "p50": 4.3,
-          "p95": 5.6,
-          "p99": 6.6,
-          "samples": 30000
-        },
-        "warmup_ticks": 120
-      },
-      {
-        "drone_count": 4,
-        "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.1352011,
-        "physics_step_duration_us": {
-          "p50": 2.6,
-          "p95": 2.7,
-          "p99": 3.0,
-          "samples": 30000
-        },
-        "process_cpu_percent_approx": 100.59089755926544,
-        "process_working_set_after_bytes": 130793472,
-        "process_working_set_before_bytes": 130318336,
-        "process_working_set_change_bytes": 475136,
-        "repetition": 2,
-        "tick_duration_us": {
-          "p50": 4.3,
-          "p95": 4.6,
-          "p99": 5.1,
-          "samples": 30000
-        },
-        "warmup_ticks": 120
-      },
-      {
-        "drone_count": 4,
-        "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.1367126,
-        "physics_step_duration_us": {
-          "p50": 2.6,
-          "p95": 2.9,
-          "p99": 3.9,
-          "samples": 30000
-        },
-        "process_cpu_percent_approx": 100.21022202781603,
-        "process_working_set_after_bytes": 130740224,
-        "process_working_set_before_bytes": 130326528,
-        "process_working_set_change_bytes": 413696,
-        "repetition": 3,
-        "tick_duration_us": {
-          "p50": 4.4,
+          "p50": 3.4,
           "p95": 5.0,
-          "p99": 6.7,
+          "p99": 5.3,
           "samples": 30000
         },
         "warmup_ticks": 120
       },
       {
-        "drone_count": 8,
+        "drone_count": 2,
         "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.2996151,
+        "measurement_wall_seconds": 0.1066154,
         "physics_step_duration_us": {
-          "p50": 6.6,
-          "p95": 7.7,
-          "p99": 11.9,
+          "p50": 2.2,
+          "p95": 3.0,
+          "p99": 3.2,
           "samples": 30000
         },
-        "process_cpu_percent_approx": 99.7947032709633,
-        "process_working_set_after_bytes": 129843200,
-        "process_working_set_before_bytes": 130314240,
-        "process_working_set_change_bytes": -471040,
-        "repetition": 1,
-        "tick_duration_us": {
-          "p50": 9.5,
-          "p95": 11.0,
-          "p99": 16.8,
-          "samples": 30000
-        },
-        "warmup_ticks": 120
-      },
-      {
-        "drone_count": 8,
-        "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.3044132,
-        "physics_step_duration_us": {
-          "p50": 6.6,
-          "p95": 8.9,
-          "p99": 11.6,
-          "samples": 30000
-        },
-        "process_cpu_percent_approx": 99.86426344192695,
-        "process_working_set_after_bytes": 129802240,
-        "process_working_set_before_bytes": 129388544,
-        "process_working_set_change_bytes": 413696,
+        "process_cpu_percent_approx": 100.36073587868168,
+        "process_working_set_after_bytes": 131284992,
+        "process_working_set_before_bytes": 130809856,
+        "process_working_set_change_bytes": 475136,
         "repetition": 2,
         "tick_duration_us": {
-          "p50": 9.5,
-          "p95": 12.6,
-          "p99": 17.0,
+          "p50": 3.4,
+          "p95": 4.9,
+          "p99": 5.2,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 2,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.1071408,
+        "physics_step_duration_us": {
+          "p50": 2.2,
+          "p95": 2.3,
+          "p99": 2.8,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.86858414348222,
+        "process_working_set_after_bytes": 131170304,
+        "process_working_set_before_bytes": 130695168,
+        "process_working_set_change_bytes": 475136,
+        "repetition": 3,
+        "tick_duration_us": {
+          "p50": 3.4,
+          "p95": 3.7,
+          "p99": 4.8,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 4,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.1977721,
+        "physics_step_duration_us": {
+          "p50": 4.6,
+          "p95": 4.9,
+          "p99": 6.3,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.1152336451906,
+        "process_working_set_after_bytes": 131293184,
+        "process_working_set_before_bytes": 130818048,
+        "process_working_set_change_bytes": 475136,
+        "repetition": 1,
+        "tick_duration_us": {
+          "p50": 6.4,
+          "p95": 6.9,
+          "p99": 9.0,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 4,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.2067779,
+        "physics_step_duration_us": {
+          "p50": 4.6,
+          "p95": 6.8,
+          "p99": 8.6,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 100.10740993113868,
+        "process_working_set_after_bytes": 131280896,
+        "process_working_set_before_bytes": 130805760,
+        "process_working_set_change_bytes": 475136,
+        "repetition": 2,
+        "tick_duration_us": {
+          "p50": 6.4,
+          "p95": 9.9,
+          "p99": 11.8,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 4,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.2050711,
+        "physics_step_duration_us": {
+          "p50": 4.6,
+          "p95": 6.6,
+          "p99": 7.5,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.96532909805428,
+        "process_working_set_after_bytes": 129732608,
+        "process_working_set_before_bytes": 130203648,
+        "process_working_set_change_bytes": -471040,
+        "repetition": 3,
+        "tick_duration_us": {
+          "p50": 6.4,
+          "p95": 9.1,
+          "p99": 10.5,
           "samples": 30000
         },
         "warmup_ticks": 120
@@ -267,22 +221,68 @@
       {
         "drone_count": 8,
         "measured_ticks": 30000,
-        "measurement_wall_seconds": 0.2965863,
+        "measurement_wall_seconds": 0.4226863,
         "physics_step_duration_us": {
-          "p50": 6.6,
-          "p95": 7.6,
-          "p99": 9.7,
+          "p50": 10.6,
+          "p95": 15.0,
+          "p99": 17.3,
           "samples": 30000
         },
-        "process_cpu_percent_approx": 99.80231723447777,
-        "process_working_set_after_bytes": 129810432,
-        "process_working_set_before_bytes": 129339392,
-        "process_working_set_change_bytes": 471040,
+        "process_cpu_percent_approx": 99.83763372505803,
+        "process_working_set_after_bytes": 129830912,
+        "process_working_set_before_bytes": 129355776,
+        "process_working_set_change_bytes": 475136,
+        "repetition": 1,
+        "tick_duration_us": {
+          "p50": 13.4,
+          "p95": 18.9,
+          "p99": 21.6,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 8,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.4155146,
+        "physics_step_duration_us": {
+          "p50": 10.5,
+          "p95": 11.7,
+          "p99": 15.6,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.87615356957373,
+        "process_working_set_after_bytes": 129945600,
+        "process_working_set_before_bytes": 129470464,
+        "process_working_set_change_bytes": 475136,
+        "repetition": 2,
+        "tick_duration_us": {
+          "p50": 13.4,
+          "p95": 15.4,
+          "p99": 19.8,
+          "samples": 30000
+        },
+        "warmup_ticks": 120
+      },
+      {
+        "drone_count": 8,
+        "measured_ticks": 30000,
+        "measurement_wall_seconds": 0.4250386,
+        "physics_step_duration_us": {
+          "p50": 10.6,
+          "p95": 15.0,
+          "p99": 16.9,
+          "samples": 30000
+        },
+        "process_cpu_percent_approx": 99.99091847187526,
+        "process_working_set_after_bytes": 129851392,
+        "process_working_set_before_bytes": 129376256,
+        "process_working_set_change_bytes": 475136,
         "repetition": 3,
         "tick_duration_us": {
-          "p50": 9.5,
-          "p95": 10.8,
-          "p99": 14.5,
+          "p50": 13.4,
+          "p95": 18.9,
+          "p99": 21.8,
           "samples": 30000
         },
         "warmup_ticks": 120
@@ -298,40 +298,40 @@
     "version": "3.3.0 NVIDIA 581.42"
   },
   "physics_step_duration_us": {
-    "p50": 8.2,
-    "p95": 10.5,
-    "p99": 30.9,
+    "p50": 12.1,
+    "p95": 13.8,
+    "p99": 25.5,
     "samples": 299
   },
-  "process_cpu_percent_approx": 100.01390037255878,
-  "render_fps": 396.6964780870784,
+  "process_cpu_percent_approx": 100.00684709946948,
+  "render_fps": 396.54784602729046,
   "render_frame_duration_us": {
-    "p50": 2381.1,
-    "p95": 2648.4,
-    "p99": 4543.8,
-    "samples": 1984
+    "p50": 2379.2,
+    "p95": 4535.6,
+    "p99": 4717.6,
+    "samples": 1983
   },
-  "rendered_frames": 1984,
+  "rendered_frames": 1983,
   "simulation_ticks": 299,
-  "source_revision": "42e1d229",
+  "source_revision": "a76a206b",
   "tick_duration_us": {
     "deadline_misses_over_16_67ms": 0,
-    "p50": 19.1,
-    "p95": 25.0,
-    "p99": 50.2,
+    "p50": 22.9,
+    "p95": 26.4,
+    "p99": 49.6,
     "samples": 299
   },
   "vision_analysis": {
     "duration_us": {
-      "p50": 1198.8,
-      "p95": 1377.8,
-      "p99": 2207.2,
-      "samples": 294
+      "p50": 1206.6,
+      "p95": 1329.3,
+      "p99": 2137.4,
+      "samples": 295
     },
-    "mean_brightness": 119.55958962968829,
-    "mean_contrast": 40.182758100920445,
-    "mean_sharpness": 24.974044983836663,
-    "samples": 294
+    "mean_brightness": 119.53965664724568,
+    "mean_contrast": 40.19077235337452,
+    "mean_sharpness": 24.943832606980145,
+    "samples": 295
   },
-  "working_set_bytes": 129212416
+  "working_set_bytes": 129323008
 }
