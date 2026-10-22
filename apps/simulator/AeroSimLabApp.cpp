@@ -584,11 +584,7 @@ std::uint32_t AeroSimLabApp::RenderScenePanel(int width, int height)
 {
     sceneTarget_->Resize(width, height);
     UpdateObserverCamera(width, height);
-    renderer_->BeginView(*sceneTarget_);
-    DrawWorld(observerCamera_->GetViewMatrix(), observerCamera_->GetProjectionMatrix(),
-        observerCamera_->GetPosition());
-    renderer_->EndView(*sceneTarget_);
-    return sceneTarget_->GetTextureId();
+    return RenderWorldToTarget(*sceneTarget_, *observerCamera_);
 }
 
 std::uint32_t AeroSimLabApp::RenderCameraPanel()
@@ -598,12 +594,19 @@ std::uint32_t AeroSimLabApp::RenderCameraPanel()
     const int imageHeight = camera.imageHeightPixels;
     cameraTarget_->Resize(imageWidth, imageHeight);
     UpdateEoCamera(imageWidth, imageHeight);
-    renderer_->BeginView(*cameraTarget_);
-    DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
-        eoCamera_->GetPosition());
-    renderer_->EndView(*cameraTarget_);
+    const std::uint32_t texture = RenderWorldToTarget(*cameraTarget_, *eoCamera_);
     CaptureEoFrame();
-    return cameraTarget_->GetTextureId();
+    return texture;
+}
+
+std::uint32_t AeroSimLabApp::RenderWorldToTarget(
+    aerosimlab::graphics::MultisampleFramebuffer& target,
+    const aerosimlab::graphics::Camera& camera)
+{
+    renderer_->BeginView(target);
+    DrawWorld(camera.GetViewMatrix(), camera.GetProjectionMatrix(), camera.GetPosition());
+    renderer_->EndView(target);
+    return target.GetTextureId();
 }
 
 void AeroSimLabApp::CaptureEoFrame()
