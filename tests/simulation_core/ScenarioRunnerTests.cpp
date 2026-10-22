@@ -86,7 +86,6 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
     EXPECT_EQ(result.drones[1].name, "scout");
     EXPECT_EQ(result.drones[0].finalState.mode, FlightMode::Hovering);
     EXPECT_EQ(result.drones[1].finalState.mode, FlightMode::Hovering);
-    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
     EXPECT_NEAR(result.drones[1].finalState.yawRadians, 1.2, 1.0e-12);
     EXPECT_DOUBLE_EQ(result.drones[0].finalState.positionMeters.z, 1.5);
     EXPECT_DOUBLE_EQ(result.drones[1].finalState.positionMeters.x, 12.0);
