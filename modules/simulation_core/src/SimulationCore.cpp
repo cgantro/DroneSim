@@ -51,6 +51,18 @@ struct SimulationCore::EcsStorage
 #endif
     std::uint64_t tickCount = 0;
 
+    static void ApplyInitialPose(
+        DroneState& state, DroneControlState& control, const InitialPose& pose) noexcept
+    {
+        state.positionMeters = pose.positionMeters;
+        state.yawRadians = pose.yawRadians;
+        state.orientation = glm::angleAxis(
+            pose.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
+        control = {};
+        control.desiredYawRadians = pose.yawRadians;
+        control.groundElevationMeters = pose.groundElevationMeters;
+    }
+
     explicit EcsStorage(SimulationDynamics selectedDynamics)
         : dynamics(selectedDynamics)
     {
@@ -103,17 +115,14 @@ struct SimulationCore::EcsStorage
         const glm::dvec3& positionMeters, double yawRadians, double groundElevationMeters = 0.0)
     {
         const DroneId id = nextDroneId++;
+        const InitialPose initialPose{positionMeters, yawRadians, groundElevationMeters};
         DroneState initialState;
-        initialState.positionMeters = positionMeters;
-        initialState.yawRadians = yawRadians;
-        initialState.orientation = glm::angleAxis(yawRadians, glm::dvec3{0.0, 0.0, 1.0});
         DroneControlState initialControl;
-        initialControl.desiredYawRadians = yawRadians;
-        initialControl.groundElevationMeters = groundElevationMeters;
+        ApplyInitialPose(initialState, initialControl, initialPose);
         flecs::entity drone = world.entity()
             .set<DroneState>(initialState)
             .set<DroneControlState>(initialControl)
-            .set<InitialPose>({positionMeters, yawRadians, groundElevationMeters});
+            .set<InitialPose>(initialPose);
 
 #if !defined(__EMSCRIPTEN__)
         if (dynamics == SimulationDynamics::RigidBody)
@@ -358,16 +367,11 @@ void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yaw
     const double groundElevationMeters = ecs_->dynamics == SimulationDynamics::RigidBody
         ? positionMeters.z - QuadrotorFlightController::groundedModelOriginHeightMeters
         : positionMeters.z;
-    drone.set<EcsStorage::InitialPose>(
-        {positionMeters, yawRadians, groundElevationMeters});
-    DroneState& state = drone.get_mut<DroneState>();
-    state.positionMeters = positionMeters;
-    state.yawRadians = yawRadians;
-    state.orientation = glm::angleAxis(yawRadians, glm::dvec3{0.0, 0.0, 1.0});
-    DroneControlState& control = drone.get_mut<DroneControlState>();
-    control = {};
-    control.desiredYawRadians = yawRadians;
-    control.groundElevationMeters = groundElevationMeters;
+    const EcsStorage::InitialPose initialPose{
+        positionMeters, yawRadians, groundElevationMeters};
+    drone.set<EcsStorage::InitialPose>(initialPose);
+    EcsStorage::ApplyInitialPose(
+        drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>(), initialPose);
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->ResetPhysicsBody(drone);
@@ -436,14 +440,8 @@ void SimulationCore::Reset() noexcept
         (void)id;
         DroneModel::Reset(drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>());
         const EcsStorage::InitialPose& initialPose = drone.get<EcsStorage::InitialPose>();
-        DroneState& state = drone.get_mut<DroneState>();
-        DroneControlState& control = drone.get_mut<DroneControlState>();
-        state.positionMeters = initialPose.positionMeters;
-        state.yawRadians = initialPose.yawRadians;
-        state.orientation = glm::angleAxis(
-            initialPose.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
-        control.desiredYawRadians = initialPose.yawRadians;
-        control.groundElevationMeters = initialPose.groundElevationMeters;
+        EcsStorage::ApplyInitialPose(
+            drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>(), initialPose);
 #if !defined(__EMSCRIPTEN__)
         if (ecs_->dynamics == SimulationDynamics::RigidBody)
             ecs_->ResetPhysicsBody(drone);
