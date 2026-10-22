@@ -57,9 +57,44 @@ void Verify_GroundControlClient_SendsCommandAndReadsMatchingUdpReply()
     EXPECT_EQ(result.reply.appliedTick, 12);
 }
 
+void Verify_GroundControlClient_StopsWaitingWhenCancelled()
+{
+    communication::UdpSocket simulatorSocket(0);
+    communication::UdpSocket groundControlSocket(0);
+    communication::CommandPacket command;
+    command.commandId = 8;
+    command.sequence = 4;
+    command.droneCommand = simulation::DroneCommand{
+        simulation::DroneCommand::Kind::TakeOff};
+
+    std::stop_source stopSource;
+    auto request = std::async(std::launch::async, [&]
+    {
+        return SendCommand("127.0.0.1", simulatorSocket.LocalPort(), command,
+            groundControlSocket, std::chrono::seconds(4), stopSource.get_token());
+    });
+
+    communication::UdpPeer peer;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    bool commandReceived = false;
+    while (!commandReceived && std::chrono::steady_clock::now() < deadline)
+    {
+        commandReceived = simulatorSocket.Receive(peer).has_value();
+        if (!commandReceived)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    stopSource.request_stop();
+    ASSERT_TRUE(commandReceived);
+    EXPECT_EQ(request.wait_for(std::chrono::milliseconds(100)),
+        std::future_status::ready);
+    EXPECT_THROW(static_cast<void>(request.get()), CommandCancelled);
+}
+
 TEST(GroundControlClientTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_GroundControlClient_SendsCommandAndReadsMatchingUdpReply());
+    EXPECT_NO_FATAL_FAILURE(Verify_GroundControlClient_StopsWaitingWhenCancelled());
 }
 
 }

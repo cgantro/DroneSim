@@ -65,6 +65,7 @@ struct AppState
     std::uint32_t nextSequence = 1;
     std::optional<aerosimlab::communication::UdpSocket> socket;
     std::optional<aerosimlab::communication::CommandPacket> queuedCommand;
+    std::stop_source requestStopSource;
     std::future<aerosimlab::ground_control::CommandResult> request;
     std::chrono::steady_clock::time_point nextStatusPoll{};
 };
@@ -184,12 +185,15 @@ void StartRequest(HWND window, AppState& state,
             SetStatus(state, L"시뮬레이터 응답을 기다리는 중입니다...");
         }
         // 요청이 끝날 때까지 버튼을 잠가 여러 작업이 같은 소켓을 동시에 쓰지 않게 한다.
+        state.requestStopSource = std::stop_source{};
+        const std::stop_token stopToken = state.requestStopSource.get_token();
         state.request = std::async(std::launch::async,
-            [host, port, packet = std::move(packet), socket, isStatusRequest]
+            [host, port, packet = std::move(packet), socket, isStatusRequest, stopToken]
             {
                 return aerosimlab::ground_control::SendCommand(
                     host, port, packet, *socket,
-                    isStatusRequest ? telemetryTimeout : std::chrono::seconds(4));
+                    isStatusRequest ? telemetryTimeout : std::chrono::seconds(4),
+                    stopToken);
             });
         SetTimer(window, requestTimerId, requestPollMilliseconds, nullptr);
     }
@@ -437,7 +441,8 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
         state->queuedCommand.reset();
         if (state->requestPending)
         {
-            ShowResult(*state);
+            // 작업이 빌려 쓴 UDP 소켓은 취소된 요청이 끝난 뒤 정리한다.
+            state->requestStopSource.request_stop();
         }
         DestroyWindow(window);
         return 0;
