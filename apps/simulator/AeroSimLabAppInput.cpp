@@ -392,6 +392,7 @@ void AeroSimLabApp::ApplyDroneCommand(
     case Result::InvalidFlightMode: reply.status = "invalid_flight_mode"; break;
     case Result::UnsupportedDynamics: reply.status = "unsupported_dynamics"; break;
     case Result::SimulationPaused: reply.status = "simulation_paused"; break;
+    case Result::DroneNotFound: reply.status = "drone_not_found"; break;
     }
 }
 

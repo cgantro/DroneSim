@@ -336,7 +336,10 @@ void AeroSimLabApp::InitializeGraphics()
         buildingTransforms_.push_back(CubeTransform(
             ToRenderPosition(centerMeters), sizeMeters));
     }
+#ifndef __EMSCRIPTEN__
+    // 웹 빌드는 운동학 모드라 충돌 물리 월드에만 필요한 지형 설정을 건너뛴다.
     simulation_.SetTerrain(terrainGrid_);
+#endif
     shader_ = std::make_unique<aerosimlab::graphics::Shader>("shaders/Scene.glsl");
 #ifndef __EMSCRIPTEN__
     hud_ = std::make_unique<SimulatorHud>(window_->GetNativeHandle());
