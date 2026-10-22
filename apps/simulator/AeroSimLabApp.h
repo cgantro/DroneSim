@@ -117,7 +117,6 @@ private:
     void ApplyGroundCommand();
     void ExpireGroundControlCommand();
     void ApplyRecordedCommands();
-    void RecordCommand(const aerosimlab::simulation::DroneCommand& command);
     void WriteBenchmarkReport(double elapsedSeconds) const;
     [[nodiscard]] aerosimlab::communication::Telemetry CurrentTelemetry() const;
     void RenderFrame();

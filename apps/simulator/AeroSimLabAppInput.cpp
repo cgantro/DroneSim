@@ -372,7 +372,7 @@ void AeroSimLabApp::ApplyDroneCommand(
     reply.accepted = result == aerosimlab::simulation::CommandResult::Accepted;
     if (reply.accepted)
     {
-        RecordCommand(command);
+        commandRecording_.Record(command);
         const bool velocityCommand = command.kind
             == aerosimlab::simulation::DroneCommand::Kind::SetVelocity;
         const bool yawRateCommand = command.kind
@@ -458,7 +458,7 @@ void AeroSimLabApp::ExpireGroundControlCommand()
     const aerosimlab::simulation::DroneCommand stop{
         aerosimlab::simulation::DroneCommand::Kind::Stop};
     if (simulation_.Apply(stop) == aerosimlab::simulation::CommandResult::Accepted)
-        RecordCommand(stop);
+        commandRecording_.Record(stop);
     groundControlCommandExpiresAtTick_.reset();
 }
 
@@ -523,11 +523,6 @@ void AeroSimLabApp::ApplyRecordedCommands()
     {
         (void)simulation_.Apply(entry.command);
     }
-}
-
-void AeroSimLabApp::RecordCommand(const aerosimlab::simulation::DroneCommand& command)
-{
-    commandRecording_.Record(command);
 }
 
 aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const

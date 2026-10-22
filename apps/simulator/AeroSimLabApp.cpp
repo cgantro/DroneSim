@@ -499,7 +499,7 @@ void AeroSimLabApp::AdvanceManualControlTick()
         if (simulation_.Apply(command)
             == aerosimlab::simulation::CommandResult::Accepted)
         {
-            RecordCommand(command);
+            commandRecording_.Record(command);
         }
     };
 
