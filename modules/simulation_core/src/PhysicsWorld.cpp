@@ -314,6 +314,22 @@ std::optional<BoxContact> FindBoxContact(
     const OrientedBox& droneBox,
     const OrientedBox& otherBox)
 {
+    const glm::dvec3 centerOffset = otherBox.centerMeters - droneBox.centerMeters;
+    // 먼저 회전 상자의 바깥 AABB를 검사해, 겹칠 수 없는 쌍은 15축 검사에서 제외한다.
+    for (std::size_t worldAxis = 0; worldAxis < 3; ++worldAxis)
+    {
+        const double droneRadius =
+            std::abs(droneBox.axes[0][worldAxis]) * droneBox.halfExtentsMeters.x
+            + std::abs(droneBox.axes[1][worldAxis]) * droneBox.halfExtentsMeters.y
+            + std::abs(droneBox.axes[2][worldAxis]) * droneBox.halfExtentsMeters.z;
+        const double otherRadius =
+            std::abs(otherBox.axes[0][worldAxis]) * otherBox.halfExtentsMeters.x
+            + std::abs(otherBox.axes[1][worldAxis]) * otherBox.halfExtentsMeters.y
+            + std::abs(otherBox.axes[2][worldAxis]) * otherBox.halfExtentsMeters.z;
+        if (std::abs(centerOffset[worldAxis]) > droneRadius + otherRadius)
+            return std::nullopt;
+    }
+
     std::array<glm::dvec3, 15> candidateAxes{};
     std::size_t axisCount = 0;
     for (const glm::dvec3& axis : droneBox.axes)
@@ -326,7 +342,6 @@ std::optional<BoxContact> FindBoxContact(
             candidateAxes[axisCount++] = glm::cross(droneAxis, otherAxis);
     }
 
-    const glm::dvec3 centerOffset = otherBox.centerMeters - droneBox.centerMeters;
     double smallestPenetration = std::numeric_limits<double>::infinity();
     glm::dvec3 collisionNormal{0.0};
     for (std::size_t axisIndex = 0; axisIndex < axisCount; ++axisIndex)
