@@ -28,6 +28,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -376,6 +377,7 @@ struct PhysicsWorld::Impl
 {
     struct Body
     {
+        RigidBodyHandle handle;
         QuadrotorParametersAdapter parameters;
         ActuationApi actuation;
         msr::airlib::Kinematics kinematics;
@@ -388,8 +390,12 @@ struct PhysicsWorld::Impl
         double maximumMotorSpeed = 0.0;
         bool updatedSinceReset = false;
 
-        Body(const RigidBodyDefinition& definition, const QuadrotorParameters& quadrotor)
-            : parameters(quadrotor),
+        Body(
+            RigidBodyHandle bodyHandle,
+            const RigidBodyDefinition& definition,
+            const QuadrotorParameters& quadrotor)
+            : handle(bodyHandle),
+              parameters(quadrotor),
               kinematics(ToAirSimState({definition.positionMeters,
                   definition.orientation, {}, {}})),
               collisionBoxes(quadrotor.collisionBoxes.begin(), quadrotor.collisionBoxes.end()),
@@ -425,11 +431,14 @@ struct PhysicsWorld::Impl
 
     std::shared_ptr<msr::airlib::SteppableClock> clock = CreateSimulationClock();
     msr::airlib::FastPhysicsEngine physicsEngine{true};
+    // 핸들 값은 고정하고, 벡터에는 현재 살아 있는 강체만 보관한다.
     std::vector<std::unique_ptr<Body>> bodies;
+    std::unordered_map<std::uint32_t, std::size_t> bodyIndices;
     std::vector<std::pair<double, std::size_t>> bodyPositionsByX;
     std::vector<Obstacle> obstacles;
     std::optional<terrain::TerrainGrid> terrain;
     std::uint64_t stepCount = 0;
+    std::uint64_t nextBodyHandleValue = 0;
 
     Impl()
     {
@@ -446,18 +455,22 @@ struct PhysicsWorld::Impl
         physicsEngine.clear();
     }
 
+    std::size_t GetBodyIndex(RigidBodyHandle handle) const
+    {
+        const auto found = bodyIndices.find(handle.value);
+        if (found == bodyIndices.end())
+            throw std::out_of_range("존재하지 않는 강체 번호입니다.");
+        return found->second;
+    }
+
     Body& GetBody(RigidBodyHandle handle)
     {
-        if (handle.value >= bodies.size() || !bodies[handle.value])
-            throw std::out_of_range("존재하지 않는 강체 번호입니다.");
-        return *bodies[handle.value];
+        return *bodies[GetBodyIndex(handle)];
     }
 
     const Body& GetBody(RigidBodyHandle handle) const
     {
-        if (handle.value >= bodies.size() || !bodies[handle.value])
-            throw std::out_of_range("존재하지 않는 강체 번호입니다.");
-        return *bodies[handle.value];
+        return *bodies[GetBodyIndex(handle)];
     }
 
     /**
@@ -471,9 +484,6 @@ struct PhysicsWorld::Impl
         double largestCollisionRadius = 0.0;
         for (std::size_t index = 0; index < bodies.size(); ++index)
         {
-            if (!bodies[index])
-                continue;
-
             Body& body = *bodies[index];
             body.collisionState = ToProjectState(body.kinematics.getState());
             for (std::size_t boxIndex = 0;
@@ -667,7 +677,7 @@ struct PhysicsWorld::Impl
                         static_cast<float>(contact->penetrationMeters),
                         timestamp,
                         "drone",
-                        static_cast<int>(index + 1)};
+                        static_cast<int>(otherBody.handle.value + 1U)};
                 }
             }
         }
@@ -709,15 +719,34 @@ RigidBodyHandle PhysicsWorld::CreateQuadrotor(
         throw std::invalid_argument("드론 충돌 모양의 크기와 위치를 확인해 주세요.");
     }
 
-    static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
-    auto body = std::make_unique<Impl::Body>(definition, quadrotor);
-    const RigidBodyHandle handle{static_cast<std::uint32_t>(impl_->bodies.size())};
+    if (impl_->nextBodyHandleValue > std::numeric_limits<std::uint32_t>::max())
+        throw std::overflow_error("강체 식별값을 더 만들 수 없습니다.");
 
-    // AirSim에 주소를 넘긴 뒤 vector가 재할당에 실패하면 해제된 주소가 남을 수 있다.
-    // 먼저 저장 공간을 확보해 등록 이후의 소유권 이전이 예외 없이 끝나게 한다.
+    static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
+    const RigidBodyHandle handle{
+        static_cast<std::uint32_t>(impl_->nextBodyHandleValue)};
+    auto body = std::make_unique<Impl::Body>(handle, definition, quadrotor);
+
+    // 엔진에 주소를 빌려주기 전에 저장 공간을 확보해 등록 뒤 이동이 실패하지 않게 한다.
     impl_->bodies.reserve(impl_->bodies.size() + 1U);
-    impl_->physicsEngine.insert(body->model.get());
+    impl_->bodyIndices.reserve(impl_->bodyIndices.size() + 1U);
+    const std::size_t bodyIndex = impl_->bodies.size();
+    const auto indexEntry =
+        impl_->bodyIndices.emplace(handle.value, bodyIndex).first;
+
+    try
+    {
+        impl_->physicsEngine.insert(body->model.get());
+    }
+    catch (...)
+    {
+        impl_->physicsEngine.erase_remove(body->model.get());
+        impl_->bodyIndices.erase(indexEntry);
+        throw;
+    }
+
     impl_->bodies.push_back(std::move(body));
+    ++impl_->nextBodyHandleValue;
     return handle;
 }
 
@@ -798,8 +827,6 @@ void PhysicsWorld::Step(
         for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
         {
             auto& body = impl_->bodies[index];
-            if (!body)
-                continue;
             {
                 ScopedDuration measureContactGeneration(contactGenerationMicroseconds,
                     ScopedDuration::Mode::Accumulate);
@@ -821,10 +848,17 @@ void PhysicsWorld::Step(
 
 bool PhysicsWorld::DestroyBody(RigidBodyHandle handle)
 {
-    if (handle.value >= impl_->bodies.size() || !impl_->bodies[handle.value])
+    const auto found = impl_->bodyIndices.find(handle.value);
+    if (found == impl_->bodyIndices.end())
         return false;
-    impl_->physicsEngine.erase_remove(impl_->bodies[handle.value]->model.get());
-    impl_->bodies[handle.value].reset();
+
+    const std::size_t bodyIndex = found->second;
+    impl_->physicsEngine.erase_remove(impl_->bodies[bodyIndex]->model.get());
+    impl_->bodyIndices.erase(found);
+    impl_->bodies.erase(impl_->bodies.begin()
+        + static_cast<std::vector<std::unique_ptr<Impl::Body>>::difference_type>(bodyIndex));
+    for (std::size_t index = bodyIndex; index < impl_->bodies.size(); ++index)
+        impl_->bodyIndices.at(impl_->bodies[index]->handle.value) = index;
     return true;
 }
 

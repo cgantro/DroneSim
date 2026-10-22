@@ -234,6 +234,29 @@ void Verify_AirSimCollision_SeparatesOverlappingDrones()
     EXPECT_GT(rightAfter.positionMeters.x, rightDefinition.positionMeters.x);
 }
 
+void Verify_AirSimPhysics_RemovingBodyKeepsOtherHandlesValid()
+{
+    PhysicsWorld world;
+    const RigidBodyHandle first = MakeX500(world, 5.0);
+    const RigidBodyHandle removed = MakeX500(world, 10.0);
+    const RigidBodyHandle last = MakeX500(world, 15.0);
+
+    ASSERT_TRUE(world.DestroyBody(removed));
+    EXPECT_FALSE(world.DestroyBody(removed));
+    EXPECT_THROW(static_cast<void>(world.State(removed)), std::out_of_range);
+    EXPECT_TRUE(std::isfinite(world.State(last).positionMeters.z));
+
+    world.Step(1.0 / 60.0);
+    EXPECT_TRUE(std::isfinite(world.State(first).positionMeters.z));
+    EXPECT_TRUE(std::isfinite(world.State(last).positionMeters.z));
+
+    const RigidBodyHandle replacement = MakeX500(world, 20.0);
+    EXPECT_NE(replacement.value, removed.value);
+    EXPECT_THROW(static_cast<void>(world.State(removed)), std::out_of_range);
+    world.Step(1.0 / 60.0);
+    EXPECT_TRUE(std::isfinite(world.State(replacement).positionMeters.z));
+}
+
 void Verify_AirSimPhysics_RejectsInvalidVehicleConfiguration()
 {
     PhysicsWorld world;
@@ -310,6 +333,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_SeparatesOverlappingDrones());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RemovingBodyKeepsOtherHandlesValid());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RejectsInvalidVehicleConfiguration());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_DifferentialRotorInputAndInertiaChangeVehicleResponse());
 }
