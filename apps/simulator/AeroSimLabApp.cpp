@@ -15,7 +15,6 @@
 #include "graphics/Texture2D.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
-#include "SimulationBenchmark.h"
 #ifndef __EMSCRIPTEN__
 #include "SimulatorHud.h"
 #endif
@@ -248,10 +247,11 @@ int AeroSimLabApp::Run()
         }
         if (benchmarkMode_)
         {
-            renderFrameDurationsMicroseconds_.push_back(renderDurationMicroseconds);
+            benchmarkMeasurements_.renderFrameDurationsMicroseconds.push_back(
+                renderDurationMicroseconds);
             auto& frameDurations = eoReadbackHappenedThisFrame_
-                ? renderFrameDurationsWithEoReadbackMicroseconds_
-                : renderFrameDurationsWithoutEoReadbackMicroseconds_;
+                ? benchmarkMeasurements_.renderFrameDurationsWithEoReadbackMicroseconds
+                : benchmarkMeasurements_.renderFrameDurationsWithoutEoReadbackMicroseconds;
             frameDurations.push_back(renderDurationMicroseconds);
         }
         ++renderedFrames_;
@@ -418,10 +418,11 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
         }
         if (benchmarkMode_)
         {
-            tickDurationsMicroseconds_.push_back(tickDurationMicroseconds);
+            benchmarkMeasurements_.tickDurationsMicroseconds.push_back(
+                tickDurationMicroseconds);
 #ifndef __EMSCRIPTEN__
             if (simulation_.TickCount() != previousSimulationTick)
-                physicsStepDurationsMicroseconds_.push_back(
+                benchmarkMeasurements_.physicsStepDurationsMicroseconds.push_back(
                     simulation_.LastPhysicsStepDurationMicroseconds());
 #endif
         }
@@ -659,7 +660,8 @@ void AeroSimLabApp::CaptureEoFrame()
         readCompleted = cameraTarget_->TryReadRgbPixels(eoFrame_.pixels, simulationTick);
     }
     if (benchmarkMode_)
-        eoReadbackPollDurationsMicroseconds_.push_back(pollDurationMicroseconds);
+        benchmarkMeasurements_.eoReadbackPollDurationsMicroseconds.push_back(
+            pollDurationMicroseconds);
     if (readCompleted)
     {
         eoReadbackHappenedThisFrame_ = true;
@@ -683,7 +685,8 @@ void AeroSimLabApp::CaptureEoFrame()
         if (benchmarkMode_)
         {
             eoReadbackHappenedThisFrame_ = true;
-            eoReadbackEnqueueDurationsMicroseconds_.push_back(enqueueDurationMicroseconds);
+            benchmarkMeasurements_.eoReadbackEnqueueDurationsMicroseconds.push_back(
+                enqueueDurationMicroseconds);
         }
     }
 }
@@ -707,9 +710,10 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
     totalMeanBrightness_ += quality.meanBrightness;
     totalMeanContrast_ += quality.meanContrast;
     totalSharpness_ += quality.sharpness;
-    ++visionSampleCount_;
+    ++benchmarkMeasurements_.visionSampleCount;
     if (benchmarkMode_)
-        visionDurationsMicroseconds_.push_back(analysisDurationMicroseconds);
+        benchmarkMeasurements_.visionDurationsMicroseconds.push_back(
+            analysisDurationMicroseconds);
 #endif
 }
 
@@ -784,7 +788,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         return reinterpret_cast<const char*>(glGetString(name));
     };
 
-    ViewerBenchmarkMeasurements measurements;
+    ViewerBenchmarkMeasurements measurements = benchmarkMeasurements_;
     measurements.sourceRevision = AEROSIMLAB_SOURCE_REVISION;
     measurements.framebufferWidth = framebufferWidth;
     measurements.framebufferHeight = framebufferHeight;
@@ -795,23 +799,11 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     measurements.renderedFrames = renderedFrames_;
     measurements.processCpuSeconds = static_cast<double>(
         std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC;
-    measurements.tickDurationsMicroseconds = tickDurationsMicroseconds_;
-    measurements.renderFrameDurationsMicroseconds = renderFrameDurationsMicroseconds_;
-    measurements.renderFrameDurationsWithEoReadbackMicroseconds =
-        renderFrameDurationsWithEoReadbackMicroseconds_;
-    measurements.renderFrameDurationsWithoutEoReadbackMicroseconds =
-        renderFrameDurationsWithoutEoReadbackMicroseconds_;
 #ifndef __EMSCRIPTEN__
-    measurements.physicsStepDurationsMicroseconds = physicsStepDurationsMicroseconds_;
-    measurements.eoReadbackEnqueueDurationsMicroseconds =
-        eoReadbackEnqueueDurationsMicroseconds_;
-    measurements.eoReadbackPollDurationsMicroseconds =
-        eoReadbackPollDurationsMicroseconds_;
-    measurements.visionDurationsMicroseconds = visionDurationsMicroseconds_;
-    measurements.visionSampleCount = visionSampleCount_;
-    if (visionSampleCount_ > 0)
+    if (benchmarkMeasurements_.visionSampleCount > 0)
     {
-        const double sampleCount = static_cast<double>(visionSampleCount_);
+        const double sampleCount = static_cast<double>(
+            benchmarkMeasurements_.visionSampleCount);
         measurements.meanBrightness = totalMeanBrightness_ / sampleCount;
         measurements.meanContrast = totalMeanContrast_ / sampleCount;
         measurements.meanSharpness = totalSharpness_ / sampleCount;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SimulationBenchmark.h"
 #include "communication/Protocol.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
@@ -162,19 +163,11 @@ private:
     std::size_t renderedFrames_ = 0;
     std::uint64_t lastQueuedEoFrameTick_ = 0;
     std::clock_t benchmarkCpuStart_ = 0;
-    std::vector<double> tickDurationsMicroseconds_;
-    std::vector<double> renderFrameDurationsMicroseconds_;
-    std::vector<double> renderFrameDurationsWithEoReadbackMicroseconds_;
-    std::vector<double> renderFrameDurationsWithoutEoReadbackMicroseconds_;
+    ViewerBenchmarkMeasurements benchmarkMeasurements_;
 #ifndef __EMSCRIPTEN__
-    std::vector<double> physicsStepDurationsMicroseconds_;
-    std::vector<double> eoReadbackEnqueueDurationsMicroseconds_;
-    std::vector<double> eoReadbackPollDurationsMicroseconds_;
-    std::vector<double> visionDurationsMicroseconds_;
     double totalMeanBrightness_ = 0.0;
     double totalMeanContrast_ = 0.0;
     double totalSharpness_ = 0.0;
-    std::size_t visionSampleCount_ = 0;
     std::unique_ptr<aerosimlab::vision::RgbFrameAnalyzer> visionAnalyzer_;
 #endif
     std::chrono::steady_clock::time_point startTime_;
