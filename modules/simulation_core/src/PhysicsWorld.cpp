@@ -401,6 +401,15 @@ struct PhysicsWorld::Impl
         physicsEngine.reset();
     }
 
+    /**
+     * @brief AirSim 엔진에 등록한 강체를 먼저 분리한다.
+     * @details 엔진은 강체를 소유하지 않으므로, 빌린 주소를 지운 뒤 우리가 가진 강체를 파괴한다.
+     */
+    ~Impl()
+    {
+        physicsEngine.clear();
+    }
+
     Body& GetBody(RigidBodyHandle handle)
     {
         if (handle.value >= bodies.size() || !bodies[handle.value])
