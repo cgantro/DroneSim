@@ -256,22 +256,11 @@ int AeroSimLabApp::Run()
         }
         ++renderedFrames_;
 
-        if (smokeTest_)
-        {
-            if (!networkEnabled_ && renderedFrames_ >= smokeTestFrameLimit)
-                break;
-            if (networkEnabled_ && smokeReplayStarted_
-                && !commandRecording_.IsRecording() && !commandRecording_.IsReplaying()
-                && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
-            {
-                break;
-            }
-            if (networkEnabled_
-                && std::chrono::steady_clock::now() - startTime_ > std::chrono::seconds(15))
-            {
-                return 4;
-            }
-        }
+        if (smokeTest_ && SmokeTestIsComplete())
+            break;
+        if (smokeTest_ && networkEnabled_
+            && std::chrono::steady_clock::now() - startTime_ > std::chrono::seconds(15))
+            return 4;
         if (benchmarkMode_ &&
             std::chrono::steady_clock::now() - startTime_ >= std::chrono::duration<double>(benchmarkDurationSeconds))
             break;
@@ -280,20 +269,9 @@ int AeroSimLabApp::Run()
         DrainEoReadbacks();
     if (smokeTest_)
     {
-        const bool cameraFrameHasPixels = eoFrame_.IsValid()
-            && std::any_of(eoFrame_.pixels.begin(), eoFrame_.pixels.end(), [](std::uint8_t value)
-            {
-                return value != 0;
-            });
-        if (!cameraFrameHasPixels)
-            return 5;
-
-        const auto& camera = simulation_.Camera();
-        if (camera.status == aerosimlab::simulation::CameraStatus::Active
-            && eoFrame_.simulationTick != camera.lastFrameTick)
-        {
-            return 6;
-        }
+        const int smokeTestResult = ValidateSmokeTestOutput();
+        if (smokeTestResult != 0)
+            return smokeTestResult;
     }
     if (benchmarkMode_)
     {
@@ -301,6 +279,35 @@ int AeroSimLabApp::Run()
             std::chrono::steady_clock::now() - startTime_).count();
         WriteBenchmarkReport(elapsedSeconds);
     }
+    return 0;
+}
+
+bool AeroSimLabApp::SmokeTestIsComplete() const
+{
+    if (!networkEnabled_)
+        return renderedFrames_ >= smokeTestFrameLimit;
+
+    return smokeReplayStarted_
+        && !commandRecording_.IsRecording()
+        && !commandRecording_.IsReplaying()
+        && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded;
+}
+
+int AeroSimLabApp::ValidateSmokeTestOutput() const
+{
+    const bool cameraFrameHasPixels = eoFrame_.IsValid()
+        && std::any_of(eoFrame_.pixels.begin(), eoFrame_.pixels.end(), [](std::uint8_t value)
+        {
+            return value != 0;
+        });
+    if (!cameraFrameHasPixels)
+        return 5;
+
+    const auto& camera = simulation_.Camera();
+    if (camera.status == aerosimlab::simulation::CameraStatus::Active
+        && eoFrame_.simulationTick != camera.lastFrameTick)
+        return 6;
+
     return 0;
 }
 

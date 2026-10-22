@@ -80,6 +80,10 @@ private:
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
     void AdvanceSimulationTick();
+    /** @brief 현재 실행 경로에서 스모크 검사를 끝낼 조건이 충족됐는지 확인한다. */
+    [[nodiscard]] bool SmokeTestIsComplete() const;
+    /** @brief 스모크 검사에서 마지막으로 읽은 EO 영상과 카메라 Tick을 확인한다. */
+    [[nodiscard]] int ValidateSmokeTestOutput() const;
     void AdvanceReplayTick();
     void AdvanceManualControlTick();
     void ApplyDemoCommands();
