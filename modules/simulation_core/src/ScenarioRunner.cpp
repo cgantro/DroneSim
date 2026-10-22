@@ -621,19 +621,20 @@ ScenarioResult RunScenario(std::string_view jsonText)
         throw std::invalid_argument("여러 드론을 지정한 시나리오는 expected.drones가 필요합니다.");
 
     std::vector<ExpectedDrone> expectedDrones;
-    std::optional<FlightMode> expectedMode;
-    std::optional<glm::dvec3> expectedPosition;
-    std::optional<glm::dquat> expectedOrientation;
     if (hasExpectedDrones)
+    {
         expectedDrones = ReadExpectedDrones(expected["drones"]);
+    }
     else
     {
-        expectedMode = ReadFlightMode(Required(expected, "mode"));
-        expectedPosition = ReadVector(
-            Required(expected, "position_meters"), "position_meters");
+        std::optional<glm::dquat> orientation;
         if (expected.contains("orientation_quaternion_wxyz"))
-            expectedOrientation = ReadOrientationQuaternion(
-                expected["orientation_quaternion_wxyz"]);
+            orientation = ReadOrientationQuaternion(expected["orientation_quaternion_wxyz"]);
+        expectedDrones.push_back({
+            primaryDroneName,
+            ReadFlightMode(Required(expected, "mode")),
+            ReadVector(Required(expected, "position_meters"), "position_meters"),
+            orientation});
     }
     const double toleranceMeters = expected.contains("tolerance_meters")
         ? ReadFiniteNumber(expected["tolerance_meters"], "tolerance_meters")
@@ -892,23 +893,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
             result.mission->tasks.begin(), result.mission->tasks.end(),
             [](const ScenarioResult::MissionTask& task) { return task.completed; });
     }
-    if (expectedMode && result.finalState.mode != *expectedMode)
-    {
-        result.issues.push_back(
-            "예상 비행 상태는 " + std::string(ToString(*expectedMode))
-            + "이지만 실제 상태는 " + std::string(ToString(result.finalState.mode)) + "입니다.");
-    }
-    if (expectedPosition
-        && glm::length(result.finalState.positionMeters - *expectedPosition) > toleranceMeters)
-    {
-        result.issues.push_back("최종 위치가 허용 오차를 벗어났습니다.");
-    }
-    if (expectedOrientation
-        && OrientationErrorRadians(result.finalState.orientation, *expectedOrientation)
-            > orientationToleranceRadians)
-    {
-        result.issues.push_back("최종 자세가 허용 각도 오차를 벗어났습니다.");
-    }
     for (const ExpectedDrone& expectedDrone : expectedDrones)
     {
         const auto found = std::find_if(result.drones.begin(), result.drones.end(),
@@ -922,16 +906,29 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 + expectedDrone.name);
             continue;
         }
+        const std::string dronePrefix = hasExpectedDrones
+            ? expectedDrone.name + " 드론의 "
+            : "";
         if (found->finalState.mode != expectedDrone.mode)
-            result.issues.push_back(expectedDrone.name + " 드론의 최종 비행 상태가 예상과 다릅니다.");
+        {
+            if (hasExpectedDrones)
+                result.issues.push_back(dronePrefix + "최종 비행 상태가 예상과 다릅니다.");
+            else
+                result.issues.push_back(
+                    "예상 비행 상태는 " + std::string(ToString(expectedDrone.mode))
+                    + "이지만 실제 상태는 "
+                    + std::string(ToString(found->finalState.mode)) + "입니다.");
+        }
         if (glm::length(found->finalState.positionMeters - expectedDrone.positionMeters)
             > toleranceMeters)
-            result.issues.push_back(expectedDrone.name + " 드론의 최종 위치가 허용 오차를 벗어났습니다.");
+        {
+            result.issues.push_back(dronePrefix + "최종 위치가 허용 오차를 벗어났습니다.");
+        }
         if (expectedDrone.orientation
             && OrientationErrorRadians(found->finalState.orientation, *expectedDrone.orientation)
                 > orientationToleranceRadians)
         {
-            result.issues.push_back(expectedDrone.name + " 드론의 최종 자세가 허용 각도 오차를 벗어났습니다.");
+            result.issues.push_back(dronePrefix + "최종 자세가 허용 각도 오차를 벗어났습니다.");
         }
     }
     if (hasExpectedDrones && expectedDrones.size() != result.drones.size())
