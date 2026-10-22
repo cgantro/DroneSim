@@ -29,6 +29,10 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             libgl1-mesa-dev \
             libopencv-dev \
+            libwayland-bin \
+            libwayland-dev \
+            wayland-protocols \
+            libxkbcommon-dev \
             libx11-dev \
             libxrandr-dev \
             libxinerama-dev \
