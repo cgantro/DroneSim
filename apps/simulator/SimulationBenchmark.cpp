@@ -203,6 +203,8 @@ nlohmann::json MeasureDroneScaling(
             std::vector<aerosimlab::simulation::DroneId> droneIds;
             droneIds.reserve(droneCount);
             droneIds.push_back(simulation.PrimaryDroneId());
+            std::vector<double> droneCreationDurations;
+            droneCreationDurations.reserve(droneCount - 1U);
             const double groundOriginMeters = simulation.State().positionMeters.z;
             const std::size_t compactGridWidth = static_cast<std::size_t>(
                 std::ceil(std::sqrt(static_cast<double>(droneCount))));
@@ -222,7 +224,15 @@ nlohmann::json MeasureDroneScaling(
                     positionMeters.x = static_cast<double>(index)
                         * separatedSpacingMeters;
                 }
-                droneIds.push_back(simulation.AddDrone(positionMeters));
+                double creationDurationMicroseconds = 0.0;
+                aerosimlab::simulation::DroneId droneId = 0;
+                {
+                    simulation::ScopedDuration measureCreation(
+                        &creationDurationMicroseconds);
+                    droneId = simulation.AddDrone(positionMeters);
+                }
+                droneCreationDurations.push_back(creationDurationMicroseconds);
+                droneIds.push_back(droneId);
             }
 
             const aerosimlab::simulation::DroneCommand takeoff{
@@ -320,6 +330,22 @@ nlohmann::json MeasureDroneScaling(
                 {
                     return duration > 1'000'000.0 / 60.0;
                 }));
+            std::vector<double> droneRemovalDurations;
+            droneRemovalDurations.reserve(droneIds.size() - 1U);
+            for (std::size_t index = droneIds.size(); index > 1U; --index)
+            {
+                double removalDurationMicroseconds = 0.0;
+                bool removed = false;
+                {
+                    simulation::ScopedDuration measureRemoval(
+                        &removalDurationMicroseconds);
+                    removed = simulation.RemoveDrone(droneIds[index - 1U]);
+                }
+                if (!removed)
+                    throw std::runtime_error("멀티드론 성능 측정용 드론을 삭제하지 못했습니다.");
+                droneRemovalDurations.push_back(removalDurationMicroseconds);
+            }
+
             nlohmann::json run{
                 {"dynamics", dynamicsName},
                 {"layout", layoutName},
@@ -347,6 +373,13 @@ nlohmann::json MeasureDroneScaling(
                 {"time_limit_reached", timeLimitReached},
                 {"process_cpu_percent_approx", wallSeconds > 0.0
                     ? 100.0 * cpuSeconds / wallSeconds : 0.0}};
+            run["entity_lifecycle"] = {
+                {"additional_drone_add_duration_us", SummarizeDurations(
+                    std::move(droneCreationDurations))},
+                {"additional_drone_remove_duration_us", SummarizeDurations(
+                    std::move(droneRemovalDurations))},
+                {"measured_add_count", droneCount - 1U},
+                {"measured_remove_count", droneCount - 1U}};
             if (usesRigidBodyPhysics)
             {
                 run["apply_rigid_body_forces_system_duration_us"] = SummarizeDurations(
