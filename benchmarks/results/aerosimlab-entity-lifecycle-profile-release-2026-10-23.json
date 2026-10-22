@@ -1,0 +1,5764 @@
+{
+  "configuration": "hidden OpenGL window; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring",
+  "cooperative_mission_scaling": {
+    "kinematic": {
+      "dynamics": "kinematic",
+      "layout": "separated",
+      "measured_counts": [
+        2,
+        8,
+        32,
+        64,
+        128,
+        256,
+        512,
+        1024
+      ],
+      "method": "실제 JSON 시나리오 실행기로 모든 드론에 조사 목표를 배정하고, 비행·목표 도달·임무 완료 판정을 함께 측정",
+      "mission_start_tick": 90,
+      "runs": [
+        {
+          "completed_task_count": 2,
+          "drone_count": 2,
+          "drone_ticks_per_second": 394036.90812372754,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 2,
+          "process_cpu_percent_approx": 65.67281802062126,
+          "repetition": 1,
+          "scenario_duration_us": 1522.7,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 197018.45406186377,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 2,
+          "drone_count": 2,
+          "drone_ticks_per_second": 403388.4630899556,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 2,
+          "process_cpu_percent_approx": 134.4628210299852,
+          "repetition": 2,
+          "scenario_duration_us": 1487.4,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 201694.2315449778,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 2,
+          "drone_count": 2,
+          "drone_ticks_per_second": 380493.3730737523,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 2,
+          "process_cpu_percent_approx": 126.83112435791745,
+          "repetition": 3,
+          "scenario_duration_us": 1576.9,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 190246.68653687614,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 8,
+          "drone_count": 8,
+          "drone_ticks_per_second": 1538067.1622660854,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 8,
+          "process_cpu_percent_approx": 128.17226352217378,
+          "repetition": 1,
+          "scenario_duration_us": 1560.4,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 192258.39528326067,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 8,
+          "drone_count": 8,
+          "drone_ticks_per_second": 1479654.7472256473,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 8,
+          "process_cpu_percent_approx": 61.652281134401974,
+          "repetition": 2,
+          "scenario_duration_us": 1622.0,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 184956.84340320592,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 8,
+          "drone_count": 8,
+          "drone_ticks_per_second": 1562703.4770152364,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 8,
+          "process_cpu_percent_approx": 130.2252897512697,
+          "repetition": 3,
+          "scenario_duration_us": 1535.8,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 195337.93462690455,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 32,
+          "drone_count": 32,
+          "drone_ticks_per_second": 5571353.955080959,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 32,
+          "process_cpu_percent_approx": 116.06987406418665,
+          "repetition": 1,
+          "scenario_duration_us": 1723.1,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 174104.81109627997,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 32,
+          "drone_count": 32,
+          "drone_ticks_per_second": 5515022.692020452,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 32,
+          "process_cpu_percent_approx": 57.448153041879706,
+          "repetition": 2,
+          "scenario_duration_us": 1740.7,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 172344.4591256391,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 32,
+          "drone_count": 32,
+          "drone_ticks_per_second": 5580097.651708905,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 32,
+          "process_cpu_percent_approx": 116.25203441060218,
+          "repetition": 3,
+          "scenario_duration_us": 1720.4,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 174378.05161590327,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 64,
+          "drone_count": 64,
+          "drone_ticks_per_second": 9278499.97583724,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 64,
+          "process_cpu_percent_approx": 96.65104141497125,
+          "repetition": 1,
+          "scenario_duration_us": 2069.3,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 144976.56212245687,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 64,
+          "drone_count": 64,
+          "drone_ticks_per_second": 8842628.839865517,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 64,
+          "process_cpu_percent_approx": 92.11071708193248,
+          "repetition": 2,
+          "scenario_duration_us": 2171.3,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 138166.0756228987,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 64,
+          "drone_count": 64,
+          "drone_ticks_per_second": 8843036.109064113,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 64,
+          "process_cpu_percent_approx": 92.11495946941784,
+          "repetition": 3,
+          "scenario_duration_us": 2171.2,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 138172.43920412677,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 128,
+          "drone_count": 128,
+          "drone_ticks_per_second": 13599660.008499788,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 128,
+          "process_cpu_percent_approx": 106.2473438164046,
+          "repetition": 1,
+          "scenario_duration_us": 2823.6,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 106247.3438164046,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 128,
+          "drone_count": 128,
+          "drone_ticks_per_second": 13435499.10779889,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 128,
+          "process_cpu_percent_approx": 104.96483677967882,
+          "repetition": 2,
+          "scenario_duration_us": 2858.1,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 104964.83677967882,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 128,
+          "drone_count": 128,
+          "drone_ticks_per_second": 13704496.788008567,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 128,
+          "process_cpu_percent_approx": 107.06638115631692,
+          "repetition": 3,
+          "scenario_duration_us": 2802.0,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 107066.38115631693,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 256,
+          "drone_count": 256,
+          "drone_ticks_per_second": 18845700.82449941,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 256,
+          "process_cpu_percent_approx": 98.15469179426776,
+          "repetition": 1,
+          "scenario_duration_us": 4075.2000000000003,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 73616.01884570082,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 256,
+          "drone_count": 256,
+          "drone_ticks_per_second": 18760076.212809615,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 256,
+          "process_cpu_percent_approx": 97.70873027505009,
+          "repetition": 2,
+          "scenario_duration_us": 4093.7999999999997,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 73281.54770628756,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 256,
+          "drone_count": 256,
+          "drone_ticks_per_second": 17555890.824303936,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 256,
+          "process_cpu_percent_approx": 91.436931376583,
+          "repetition": 3,
+          "scenario_duration_us": 4374.6,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 68577.69853243725,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 512,
+          "drone_count": 512,
+          "drone_ticks_per_second": 21659122.636321336,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 512,
+          "process_cpu_percent_approx": 98.70693909781859,
+          "repetition": 1,
+          "scenario_duration_us": 7091.7,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 42302.97389906511,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 512,
+          "drone_count": 512,
+          "drone_ticks_per_second": 22009514.529718574,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 512,
+          "process_cpu_percent_approx": 100.3037771536654,
+          "repetition": 2,
+          "scenario_duration_us": 6978.8,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 42987.33306585659,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 512,
+          "drone_count": 512,
+          "drone_ticks_per_second": 22304184.938866783,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 512,
+          "process_cpu_percent_approx": 101.64667615368978,
+          "repetition": 3,
+          "scenario_duration_us": 6886.6,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 43562.861208724185,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 1024,
+          "drone_count": 1024,
+          "drone_ticks_per_second": 22942323.059573863,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 1024,
+          "process_cpu_percent_approx": 97.08665357241544,
+          "repetition": 1,
+          "scenario_duration_us": 13390.1,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 22404.6123628651,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 1024,
+          "drone_count": 1024,
+          "drone_ticks_per_second": 23991940.207586516,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 1024,
+          "process_cpu_percent_approx": 101.5283928055419,
+          "repetition": 2,
+          "scenario_duration_us": 12804.3,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 23429.629108971207,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 1024,
+          "drone_count": 1024,
+          "drone_ticks_per_second": 25009565.833285846,
+          "dynamics": "kinematic",
+          "mission_passed": true,
+          "mission_task_count": 1024,
+          "process_cpu_percent_approx": 97.69361653627283,
+          "repetition": 3,
+          "scenario_duration_us": 12283.3,
+          "scenario_passed": true,
+          "scenario_ticks": 300,
+          "scenario_ticks_per_second": 24423.40413406821,
+          "warmup_runs": 1
+        }
+      ],
+      "spacing_meters": 5.0,
+      "summaries": [
+        {
+          "drone_count": 2,
+          "scenario_duration_us": {
+            "maximum": 1576.9,
+            "p50": 1522.7,
+            "p95": 1576.9,
+            "p99": 1576.9,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 8,
+          "scenario_duration_us": {
+            "maximum": 1622.0,
+            "p50": 1560.4,
+            "p95": 1622.0,
+            "p99": 1622.0,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 32,
+          "scenario_duration_us": {
+            "maximum": 1740.7,
+            "p50": 1723.1,
+            "p95": 1740.7,
+            "p99": 1740.7,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 64,
+          "scenario_duration_us": {
+            "maximum": 2171.3,
+            "p50": 2171.2,
+            "p95": 2171.3,
+            "p99": 2171.3,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 128,
+          "scenario_duration_us": {
+            "maximum": 2858.1,
+            "p50": 2823.6,
+            "p95": 2858.1,
+            "p99": 2858.1,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 256,
+          "scenario_duration_us": {
+            "maximum": 4374.6,
+            "p50": 4093.7999999999997,
+            "p95": 4374.6,
+            "p99": 4374.6,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 512,
+          "scenario_duration_us": {
+            "maximum": 7091.7,
+            "p50": 6978.8,
+            "p95": 7091.7,
+            "p99": 7091.7,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 1024,
+          "scenario_duration_us": {
+            "maximum": 13390.1,
+            "p50": 12804.3,
+            "p95": 13390.1,
+            "p99": 13390.1,
+            "samples": 3
+          }
+        }
+      ],
+      "target_counts": [
+        2,
+        8,
+        32,
+        64,
+        128,
+        256,
+        512,
+        1024
+      ],
+      "target_repetitions_per_count": 3,
+      "target_scenario_ticks": 300,
+      "warmup_runs_per_count": 1
+    },
+    "rigid_body": {
+      "dynamics": "rigid_body",
+      "layout": "separated",
+      "measured_counts": [
+        2,
+        8,
+        32,
+        64,
+        128
+      ],
+      "method": "실제 JSON 시나리오 실행기로 모든 드론에 조사 목표를 배정하고, 비행·목표 도달·임무 완료 판정을 함께 측정",
+      "mission_start_tick": 270,
+      "runs": [
+        {
+          "completed_task_count": 2,
+          "drone_count": 2,
+          "drone_ticks_per_second": 312805.47409579664,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 2,
+          "process_cpu_percent_approx": 97.75171065493646,
+          "repetition": 1,
+          "scenario_duration_us": 3069.0,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 156402.73704789832,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 2,
+          "drone_count": 2,
+          "drone_ticks_per_second": 314516.9216656292,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 2,
+          "process_cpu_percent_approx": 98.28653802050913,
+          "repetition": 2,
+          "scenario_duration_us": 3052.3,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 157258.4608328146,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 2,
+          "drone_count": 2,
+          "drone_ticks_per_second": 320181.43614715006,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 2,
+          "process_cpu_percent_approx": 100.05669879598437,
+          "repetition": 3,
+          "scenario_duration_us": 2998.3,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 160090.71807357503,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 8,
+          "drone_count": 8,
+          "drone_ticks_per_second": 534655.1196012364,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 8,
+          "process_cpu_percent_approx": 97.4631728439754,
+          "repetition": 1,
+          "scenario_duration_us": 7182.2,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 66831.88995015455,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 8,
+          "drone_count": 8,
+          "drone_ticks_per_second": 493059.92475700105,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 8,
+          "process_cpu_percent_approx": 102.72081765770857,
+          "repetition": 2,
+          "scenario_duration_us": 7788.1,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 61632.49059462513,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 8,
+          "drone_count": 8,
+          "drone_ticks_per_second": 541043.1989179136,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 8,
+          "process_cpu_percent_approx": 98.62766646941135,
+          "repetition": 3,
+          "scenario_duration_us": 7097.4,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 67630.3998647392,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 32,
+          "drone_count": 32,
+          "drone_ticks_per_second": 653058.4478807489,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 32,
+          "process_cpu_percent_approx": 97.78869987797671,
+          "repetition": 1,
+          "scenario_duration_us": 23520.1,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 20408.076496273403,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 32,
+          "drone_count": 32,
+          "drone_ticks_per_second": 653216.7522879597,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 32,
+          "process_cpu_percent_approx": 102.0651175449937,
+          "repetition": 2,
+          "scenario_duration_us": 23514.4,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 20413.02350899874,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 32,
+          "drone_count": 32,
+          "drone_ticks_per_second": 650202.7650549877,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 32,
+          "process_cpu_percent_approx": 97.36109112151509,
+          "repetition": 3,
+          "scenario_duration_us": 23623.4,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 20318.836407968367,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 64,
+          "drone_count": 64,
+          "drone_ticks_per_second": 689810.0327839404,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 64,
+          "process_cpu_percent_approx": 101.04639152108501,
+          "repetition": 1,
+          "scenario_duration_us": 44534.0,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 10778.28176224907,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 64,
+          "drone_count": 64,
+          "drone_ticks_per_second": 685140.7861722888,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 64,
+          "process_cpu_percent_approx": 100.36241984945636,
+          "repetition": 2,
+          "scenario_duration_us": 44837.5,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 10705.324783942013,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 64,
+          "drone_count": 64,
+          "drone_ticks_per_second": 680618.760440807,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 64,
+          "process_cpu_percent_approx": 99.70001373644634,
+          "repetition": 3,
+          "scenario_duration_us": 45135.4,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 10634.668131887609,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 128,
+          "drone_count": 128,
+          "drone_ticks_per_second": 698227.8377438514,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 128,
+          "process_cpu_percent_approx": 100.00659134352036,
+          "repetition": 1,
+          "scenario_duration_us": 87994.2,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 5454.904982373839,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 128,
+          "drone_count": 128,
+          "drone_ticks_per_second": 709643.3649384895,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 128,
+          "process_cpu_percent_approx": 100.48660929304782,
+          "repetition": 2,
+          "scenario_duration_us": 86578.7,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 5544.088788581949,
+          "warmup_runs": 1
+        },
+        {
+          "completed_task_count": 128,
+          "drone_count": 128,
+          "drone_ticks_per_second": 698495.3473434099,
+          "dynamics": "rigid_body",
+          "mission_passed": true,
+          "mission_task_count": 128,
+          "process_cpu_percent_approx": 100.04490652054047,
+          "repetition": 3,
+          "scenario_duration_us": 87960.5,
+          "scenario_passed": true,
+          "scenario_ticks": 480,
+          "scenario_ticks_per_second": 5456.99490112039,
+          "warmup_runs": 1
+        }
+      ],
+      "spacing_meters": 5.0,
+      "summaries": [
+        {
+          "drone_count": 2,
+          "scenario_duration_us": {
+            "maximum": 3069.0,
+            "p50": 3052.3,
+            "p95": 3069.0,
+            "p99": 3069.0,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 8,
+          "scenario_duration_us": {
+            "maximum": 7788.1,
+            "p50": 7182.2,
+            "p95": 7788.1,
+            "p99": 7788.1,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 32,
+          "scenario_duration_us": {
+            "maximum": 23623.4,
+            "p50": 23520.1,
+            "p95": 23623.4,
+            "p99": 23623.4,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 64,
+          "scenario_duration_us": {
+            "maximum": 45135.4,
+            "p50": 44837.5,
+            "p95": 45135.4,
+            "p99": 45135.4,
+            "samples": 3
+          }
+        },
+        {
+          "drone_count": 128,
+          "scenario_duration_us": {
+            "maximum": 87994.2,
+            "p50": 87960.5,
+            "p95": 87994.2,
+            "p99": 87994.2,
+            "samples": 3
+          }
+        }
+      ],
+      "target_counts": [
+        2,
+        8,
+        32,
+        64,
+        128
+      ],
+      "target_repetitions_per_count": 3,
+      "target_scenario_ticks": 480,
+      "warmup_runs_per_count": 1
+    }
+  },
+  "elapsed_seconds": 5.000605,
+  "entity_scaling": {
+    "kinematic": {
+      "dynamics": "kinematic",
+      "layout": "separated",
+      "measured_counts": [
+        1,
+        8,
+        32,
+        64,
+        128,
+        256,
+        512,
+        1024
+      ],
+      "method": "헤드리스 운동학 모의. 여러 드론을 이륙·호버링시키고 매 Tick 상태를 갱신",
+      "run_time_limit_seconds": 30,
+      "runs": [
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.7,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 0.2,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 1357281.8169479256,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 37.8,
+            "p50": 0.6,
+            "p95": 0.7,
+            "p99": 0.7,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.022103,
+          "process_cpu_percent_approx": 99.53399990951453,
+          "process_working_set_after_bytes": 201129984,
+          "process_working_set_before_bytes": 199970816,
+          "process_working_set_change_bytes": 1159168,
+          "real_time_factor": 22621.36361579876,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 200778898.2857143,
+          "sampled_max_working_set_bytes": 201129984,
+          "simulation_ticks_per_second": 1357281.8169479256,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 37.9,
+            "p50": 0.7,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 4.7,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 4.7,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 1344495.6348708388,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 44.4,
+            "p50": 0.6,
+            "p95": 0.7,
+            "p99": 0.7,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0223132,
+          "process_cpu_percent_approx": 98.59634655719483,
+          "process_working_set_after_bytes": 201195520,
+          "process_working_set_before_bytes": 200015872,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 22408.26058118065,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 200846189.7142857,
+          "sampled_max_working_set_bytes": 201195520,
+          "simulation_ticks_per_second": 1344495.6348708388,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 44.6,
+            "p50": 0.7,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 0.3,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 25.6,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 1335737.6611233554,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 66.5,
+            "p50": 0.6,
+            "p95": 0.7,
+            "p99": 0.7,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0224595,
+          "process_cpu_percent_approx": 102.40655401945723,
+          "process_working_set_after_bytes": 201383936,
+          "process_working_set_before_bytes": 200212480,
+          "process_working_set_change_bytes": 1171456,
+          "real_time_factor": 22262.294352055924,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 201028169.14285713,
+          "sampled_max_working_set_bytes": 201383936,
+          "simulation_ticks_per_second": 1335737.6611233554,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 66.7,
+            "p50": 0.7,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 40.6,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 18.5,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 10223119.584941344,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 1.0,
+              "p50": 0.4,
+              "p95": 1.0,
+              "p99": 1.0,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.2,
+              "p50": 0.1,
+              "p95": 1.2,
+              "p99": 1.2,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 41.4,
+            "p50": 0.7,
+            "p95": 0.7,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0234762,
+          "process_cpu_percent_approx": 97.97156268902121,
+          "process_working_set_after_bytes": 201252864,
+          "process_working_set_before_bytes": 200204288,
+          "process_working_set_change_bytes": 1048576,
+          "real_time_factor": 21298.165801961135,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 200918162.2857143,
+          "sampled_max_working_set_bytes": 201252864,
+          "simulation_ticks_per_second": 1277889.948117668,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 54.2,
+            "p50": 0.7,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.2,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 14.3,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 10135691.570905497,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 1.1,
+              "p50": 0.5,
+              "p95": 1.1,
+              "p99": 1.1,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.1,
+              "p50": 0.1,
+              "p95": 1.1,
+              "p99": 1.1,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 74.1,
+            "p50": 0.7,
+            "p95": 0.7,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0236787,
+          "process_cpu_percent_approx": 101.35691570905497,
+          "process_working_set_after_bytes": 201396224,
+          "process_working_set_before_bytes": 200216576,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 21116.02410605312,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 201052160.0,
+          "sampled_max_working_set_bytes": 201396224,
+          "simulation_ticks_per_second": 1266961.4463631872,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 74.2,
+            "p50": 0.7,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 3.3,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 4.2,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 10020834.986075215,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 1.2,
+              "p50": 0.4,
+              "p95": 1.2,
+              "p99": 1.2,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.1,
+              "p50": 0.1,
+              "p95": 1.1,
+              "p99": 1.1,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 223.1,
+            "p50": 0.7,
+            "p95": 0.7,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0239501,
+          "process_cpu_percent_approx": 100.20834986075215,
+          "process_working_set_after_bytes": 201285632,
+          "process_working_set_before_bytes": 200105984,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 20876.739554323365,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 200941568.0,
+          "sampled_max_working_set_bytes": 201285632,
+          "simulation_ticks_per_second": 1252604.3732594019,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 224.1,
+            "p50": 0.7,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 1.2,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 98.3,
+            "p50": 0.2,
+            "p95": 0.3,
+            "p99": 0.3,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 35265853.10302772,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 5.9,
+              "p50": 0.3,
+              "p95": 2.1,
+              "p99": 5.9,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.0,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 1.0,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 101.5,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 0.9,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0272218,
+          "process_cpu_percent_approx": 99.18521185226547,
+          "process_working_set_after_bytes": 201310208,
+          "process_working_set_before_bytes": 200130560,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 18367.631824493605,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 200966144.0,
+          "sampled_max_working_set_bytes": 201310208,
+          "simulation_ticks_per_second": 1102057.9094696161,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 102.4,
+            "p50": 0.9,
+            "p95": 0.9,
+            "p99": 0.9,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 0.3,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 32.4,
+            "p50": 0.2,
+            "p95": 0.3,
+            "p99": 0.3,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 34929159.29879712,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 2.4,
+              "p50": 0.3,
+              "p95": 1.9,
+              "p99": 2.4,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.8,
+              "p50": 0.1,
+              "p95": 0.6,
+              "p99": 1.8,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 42.1,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 0.9,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0274842,
+          "process_cpu_percent_approx": 98.23826052786693,
+          "process_working_set_after_bytes": 201351168,
+          "process_working_set_before_bytes": 200171520,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 18192.270468123505,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 201007104.0,
+          "sampled_max_working_set_bytes": 201351168,
+          "simulation_ticks_per_second": 1091536.22808741,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 42.2,
+            "p50": 0.9,
+            "p95": 0.9,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 0.4,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 41.2,
+            "p50": 0.2,
+            "p95": 0.3,
+            "p99": 0.3,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 35470033.364000134,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 2.2,
+              "p50": 0.4,
+              "p95": 1.7,
+              "p99": 2.2,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.6,
+              "p50": 0.1,
+              "p95": 0.7,
+              "p99": 1.6,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 51.6,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 0.9,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0270651,
+          "process_cpu_percent_approx": 99.75946883625038,
+          "process_working_set_after_bytes": 201342976,
+          "process_working_set_before_bytes": 200359936,
+          "process_working_set_change_bytes": 983040,
+          "real_time_factor": 18473.975710416737,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 201036361.14285713,
+          "sampled_max_working_set_bytes": 201342976,
+          "simulation_ticks_per_second": 1108438.5426250042,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 51.7,
+            "p50": 0.9,
+            "p95": 0.9,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 4.2,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 49.7,
+            "p50": 0.4,
+            "p95": 0.4,
+            "p99": 0.5,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 59970951.570333116,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 5.9,
+              "p50": 0.3,
+              "p95": 1.4,
+              "p99": 5.9,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.5,
+              "p50": 0.1,
+              "p95": 0.3,
+              "p99": 1.5,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 61.8,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.1,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0320155,
+          "process_cpu_percent_approx": 99.9515859505552,
+          "process_working_set_after_bytes": 201408512,
+          "process_working_set_before_bytes": 200228864,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 15617.43530477425,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 201066203.42857143,
+          "sampled_max_working_set_bytes": 201408512,
+          "simulation_ticks_per_second": 937046.1182864549,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 63.9,
+            "p50": 1.0,
+            "p95": 1.1,
+            "p99": 1.1,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 0.4,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 276.8,
+            "p50": 0.4,
+            "p95": 0.4,
+            "p99": 0.5,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 56890068.83105723,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 4.6,
+              "p50": 0.3,
+              "p95": 1.3,
+              "p99": 4.6,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.5,
+              "p50": 0.1,
+              "p95": 0.3,
+              "p99": 1.5,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 280.1,
+            "p50": 1.0,
+            "p95": 1.1,
+            "p99": 1.1,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0337493,
+          "process_cpu_percent_approx": 97.77980580337963,
+          "process_working_set_after_bytes": 201404416,
+          "process_working_set_before_bytes": 200224768,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 14815.122091421154,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 201062107.42857143,
+          "sampled_max_working_set_bytes": 201404416,
+          "simulation_ticks_per_second": 888907.3254852692,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 281.0,
+            "p50": 1.0,
+            "p95": 1.1,
+            "p99": 1.2,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 24.3,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 93.6,
+            "p50": 0.4,
+            "p95": 0.4,
+            "p99": 0.5,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 59937814.51743816,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 4.0,
+              "p50": 0.3,
+              "p95": 1.4,
+              "p99": 4.0,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.8,
+              "p50": 0.1,
+              "p95": 0.3,
+              "p99": 1.8,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 94.6,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.1,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0320332,
+          "process_cpu_percent_approx": 99.89635752906361,
+          "process_working_set_after_bytes": 201322496,
+          "process_working_set_before_bytes": 200208384,
+          "process_working_set_change_bytes": 1114112,
+          "real_time_factor": 15608.805863916188,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 200977846.85714287,
+          "sampled_max_working_set_bytes": 201322496,
+          "simulation_ticks_per_second": 936528.3518349712,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 94.7,
+            "p50": 1.0,
+            "p95": 1.1,
+            "p99": 1.1,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 0.3,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 47.6,
+            "p50": 0.6,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 128,
+          "drone_ticks_per_second": 91058051.87937655,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 7.1,
+              "p50": 0.3,
+              "p95": 1.0,
+              "p99": 6.1,
+              "samples": 127
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.7,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.3,
+              "samples": 127
+            },
+            "measured_add_count": 127,
+            "measured_remove_count": 127
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 64.0,
+            "p50": 1.2,
+            "p95": 1.4,
+            "p99": 1.4,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0421709,
+          "process_cpu_percent_approx": 99.59474424306809,
+          "process_working_set_after_bytes": 201449472,
+          "process_working_set_before_bytes": 200269824,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 11856.517171793821,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 201105993.14285713,
+          "sampled_max_working_set_bytes": 201449472,
+          "simulation_ticks_per_second": 711391.0303076293,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 64.5,
+            "p50": 1.3,
+            "p95": 1.5,
+            "p99": 1.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 7.3,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 174.8,
+            "p50": 0.6,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 128,
+          "drone_ticks_per_second": 92081914.53647307,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 5.5,
+              "p50": 0.3,
+              "p95": 1.1,
+              "p99": 2.5,
+              "samples": 127
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.6,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.3,
+              "samples": 127
+            },
+            "measured_add_count": 127,
+            "measured_remove_count": 127
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 178.9,
+            "p50": 1.2,
+            "p95": 1.4,
+            "p99": 1.4,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.041702,
+          "process_cpu_percent_approx": 100.71459402426741,
+          "process_working_set_after_bytes": 201486336,
+          "process_working_set_before_bytes": 200314880,
+          "process_working_set_change_bytes": 1171456,
+          "real_time_factor": 11989.832621936597,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 201130569.14285713,
+          "sampled_max_working_set_bytes": 201486336,
+          "simulation_ticks_per_second": 719389.9573161958,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 180.0,
+            "p50": 1.3,
+            "p95": 1.5,
+            "p99": 1.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 1.4,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 30.9,
+            "p50": 0.6,
+            "p95": 0.8,
+            "p99": 0.8,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 128,
+          "drone_ticks_per_second": 92965827.79532991,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 6.5,
+              "p50": 0.3,
+              "p95": 1.1,
+              "p99": 2.6,
+              "samples": 127
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.3,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.4,
+              "samples": 127
+            },
+            "measured_add_count": 127,
+            "measured_remove_count": 127
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 46.6,
+            "p50": 1.2,
+            "p95": 1.4,
+            "p99": 1.4,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0413055,
+          "process_cpu_percent_approx": 101.6813741511421,
+          "process_working_set_after_bytes": 201494528,
+          "process_working_set_before_bytes": 200314880,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 12104.925494183582,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 201144612.57142857,
+          "sampled_max_working_set_bytes": 201494528,
+          "simulation_ticks_per_second": 726295.529651015,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 47.5,
+            "p50": 1.3,
+            "p95": 1.5,
+            "p99": 1.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 30.0,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 96.5,
+            "p50": 1.5,
+            "p95": 1.7,
+            "p99": 1.7,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 256,
+          "drone_ticks_per_second": 108820866.4011324,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 7.8,
+              "p50": 0.3,
+              "p95": 1.1,
+              "p99": 5.8,
+              "samples": 255
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.9,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.6,
+              "samples": 255
+            },
+            "measured_add_count": 255,
+            "measured_remove_count": 255
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 100.1,
+            "p50": 2.2,
+            "p95": 2.4,
+            "p99": 2.4,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0705747,
+          "process_cpu_percent_approx": 100.60262388646355,
+          "process_working_set_after_bytes": 201523200,
+          "process_working_set_before_bytes": 200343552,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 7084.691822990391,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 201173284.57142857,
+          "sampled_max_working_set_bytes": 201523200,
+          "simulation_ticks_per_second": 425081.50937942346,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 100.8,
+            "p50": 2.3,
+            "p95": 2.4,
+            "p99": 2.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.8,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 56.4,
+            "p50": 1.5,
+            "p95": 1.6,
+            "p99": 1.6,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 256,
+          "drone_ticks_per_second": 113340200.64757395,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 6.3,
+              "p50": 0.3,
+              "p95": 0.5,
+              "p99": 2.5,
+              "samples": 255
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.9,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.4,
+              "samples": 255
+            },
+            "measured_add_count": 255,
+            "measured_remove_count": 255
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 58.2,
+            "p50": 2.1,
+            "p95": 2.2,
+            "p99": 2.2,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0677606,
+          "process_cpu_percent_approx": 100.35330265670612,
+          "process_working_set_after_bytes": 201555968,
+          "process_working_set_before_bytes": 200376320,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 7378.919312993095,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 201206052.57142857,
+          "sampled_max_working_set_bytes": 201555968,
+          "simulation_ticks_per_second": 442735.15877958573,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 58.2,
+            "p50": 2.2,
+            "p95": 2.3,
+            "p99": 2.3,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.9,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 85.5,
+            "p50": 1.5,
+            "p95": 1.6,
+            "p99": 1.6,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 256,
+          "drone_ticks_per_second": 113348899.12833516,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 75.0,
+              "p50": 0.3,
+              "p95": 1.0,
+              "p99": 8.3,
+              "samples": 255
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.7,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.4,
+              "samples": 255
+            },
+            "measured_add_count": 255,
+            "measured_remove_count": 255
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 93.6,
+            "p50": 2.1,
+            "p95": 2.2,
+            "p99": 2.2,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0677554,
+          "process_cpu_percent_approx": 100.36100443654678,
+          "process_working_set_after_bytes": 201601024,
+          "process_working_set_before_bytes": 200421376,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 7379.485620334321,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 201251108.57142857,
+          "sampled_max_working_set_bytes": 201601024,
+          "simulation_ticks_per_second": 442769.13722005923,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 94.6,
+            "p50": 2.2,
+            "p95": 2.3,
+            "p99": 2.3,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 0.4,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 54.8,
+            "p50": 2.9,
+            "p95": 3.0,
+            "p99": 3.3,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 512,
+          "drone_ticks_per_second": 138173234.69299635,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 11.1,
+              "p50": 0.3,
+              "p95": 0.5,
+              "p99": 2.1,
+              "samples": 511
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.8,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.3,
+              "samples": 511
+            },
+            "measured_add_count": 511,
+            "measured_remove_count": 511
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 59.5,
+            "p50": 3.6,
+            "p95": 3.7,
+            "p99": 3.9,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.1111648,
+          "process_cpu_percent_approx": 100.75131696364318,
+          "process_working_set_after_bytes": 201707520,
+          "process_working_set_before_bytes": 200527872,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 4497.826650162641,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 201357604.57142857,
+          "sampled_max_working_set_bytes": 201707520,
+          "simulation_ticks_per_second": 269869.5990097585,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 60.4,
+            "p50": 3.6,
+            "p95": 3.8,
+            "p99": 4.0,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.5,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 68.5,
+            "p50": 2.8,
+            "p95": 2.9,
+            "p99": 3.0,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 512,
+          "drone_ticks_per_second": 138736719.0753053,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 13.3,
+              "p50": 0.3,
+              "p95": 1.0,
+              "p99": 6.3,
+              "samples": 511
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.8,
+              "p50": 0.1,
+              "p95": 0.1,
+              "p99": 0.3,
+              "samples": 511
+            },
+            "measured_add_count": 511,
+            "measured_remove_count": 511
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 109.7,
+            "p50": 3.5,
+            "p95": 3.6,
+            "p99": 3.7,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.1107133,
+          "process_cpu_percent_approx": 99.35572329611709,
+          "process_working_set_after_bytes": 201424896,
+          "process_working_set_before_bytes": 200249344,
+          "process_working_set_change_bytes": 1175552,
+          "real_time_factor": 4516.1692407325945,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 201089609.14285713,
+          "sampled_max_working_set_bytes": 201424896,
+          "simulation_ticks_per_second": 270970.1544439557,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 111.1,
+            "p50": 3.6,
+            "p95": 3.7,
+            "p99": 3.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.6,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 77.0,
+            "p50": 2.9,
+            "p95": 3.0,
+            "p99": 3.0,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 512,
+          "drone_ticks_per_second": 136901568.12902972,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 18.2,
+              "p50": 0.3,
+              "p95": 0.8,
+              "p99": 2.7,
+              "samples": 511
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.6,
+              "p50": 0.1,
+              "p95": 0.1,
+              "p99": 0.3,
+              "samples": 511
+            },
+            "measured_add_count": 511,
+            "measured_remove_count": 511
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 82.6,
+            "p50": 3.6,
+            "p95": 3.7,
+            "p99": 3.7,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.1121974,
+          "process_cpu_percent_approx": 100.71534634492421,
+          "process_working_set_after_bytes": 201392128,
+          "process_working_set_before_bytes": 200212480,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 4456.431254200186,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 201052745.14285713,
+          "sampled_max_working_set_bytes": 201392128,
+          "simulation_ticks_per_second": 267385.8752520112,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 86.1,
+            "p50": 3.6,
+            "p95": 3.8,
+            "p99": 3.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 40.7,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 301.4,
+            "p50": 5.6,
+            "p95": 6.6,
+            "p99": 8.0,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1024,
+          "drone_ticks_per_second": 151300385.44167203,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 12.3,
+              "p50": 0.3,
+              "p95": 0.5,
+              "p99": 1.2,
+              "samples": 1023
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.9,
+              "p50": 0.1,
+              "p95": 0.1,
+              "p99": 0.2,
+              "samples": 1023
+            },
+            "measured_add_count": 1023,
+            "measured_remove_count": 1023
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 303.5,
+            "p50": 6.3,
+            "p95": 7.2,
+            "p99": 9.4,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.2030398,
+          "process_cpu_percent_approx": 99.98039793183406,
+          "process_working_set_after_bytes": 194883584,
+          "process_working_set_before_bytes": 200622080,
+          "process_working_set_change_bytes": -5738496,
+          "real_time_factor": 2462.5713776313805,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 198488649.14285713,
+          "sampled_max_working_set_bytes": 201613312,
+          "simulation_ticks_per_second": 147754.28265788284,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 304.1,
+            "p50": 6.4,
+            "p95": 7.3,
+            "p99": 9.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 8.0,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 251.1,
+            "p50": 5.7,
+            "p95": 6.6,
+            "p99": 7.4,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1024,
+          "drone_ticks_per_second": 149456759.7073917,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 23.6,
+              "p50": 0.3,
+              "p95": 0.5,
+              "p99": 1.5,
+              "samples": 1023
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.7,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.2,
+              "samples": 1023
+            },
+            "measured_add_count": 1023,
+            "measured_remove_count": 1023
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 269.2,
+            "p50": 6.5,
+            "p95": 7.2,
+            "p99": 8.8,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.2055444,
+          "process_cpu_percent_approx": 99.73514238286229,
+          "process_working_set_after_bytes": 194949120,
+          "process_working_set_before_bytes": 193769472,
+          "process_working_set_change_bytes": 1179648,
+          "real_time_factor": 2432.564448362495,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 194610322.2857143,
+          "sampled_max_working_set_bytes": 194949120,
+          "simulation_ticks_per_second": 145953.86690174972,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 269.7,
+            "p50": 6.5,
+            "p95": 7.3,
+            "p99": 9.1,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.7,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "advance_kinematic_drone_system_duration_us": {
+            "maximum": 184.8,
+            "p50": 5.8,
+            "p95": 6.6,
+            "p99": 7.7,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1024,
+          "drone_ticks_per_second": 150684333.48915166,
+          "dynamics": "kinematic",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 17.7,
+              "p50": 0.3,
+              "p95": 0.5,
+              "p99": 2.5,
+              "samples": 1023
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 1.9,
+              "p50": 0.1,
+              "p95": 0.2,
+              "p99": 0.2,
+              "samples": 1023
+            },
+            "measured_add_count": 1023,
+            "measured_remove_count": 1023
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 228.9,
+            "p50": 6.4,
+            "p95": 7.3,
+            "p99": 8.8,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.2038699,
+          "process_cpu_percent_approx": 100.06381520763978,
+          "process_working_set_after_bytes": 194945024,
+          "process_working_set_before_bytes": 193773568,
+          "process_working_set_change_bytes": 1171456,
+          "real_time_factor": 2452.5444903833277,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 194601545.14285713,
+          "sampled_max_working_set_bytes": 194945024,
+          "simulation_ticks_per_second": 147152.66942299966,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 229.3,
+            "p50": 6.5,
+            "p95": 7.4,
+            "p99": 8.9,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        }
+      ],
+      "spacing_meters": 2.5,
+      "stop_reason": "모든 지정 규모를 측정했습니다.",
+      "stopped_at_time_limit": false,
+      "target_counts": [
+        1,
+        8,
+        32,
+        64,
+        128,
+        256,
+        512,
+        1024
+      ],
+      "target_repetitions_per_count": 3,
+      "target_ticks_per_run": 30000
+    },
+    "rigid_body": {
+      "dynamics": "rigid_body",
+      "layout": "separated",
+      "measured_counts": [
+        1,
+        8,
+        32,
+        64,
+        128,
+        256,
+        512,
+        1024
+      ],
+      "method": "헤드리스 AirSim 강체 모의. 여러 드론을 이륙·호버링시키고 한 물리 세계에서 함께 갱신",
+      "run_time_limit_seconds": 30,
+      "runs": [
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 30.2,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 81.0,
+            "p50": 0.2,
+            "p95": 0.2,
+            "p99": 0.3,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 40.4,
+            "p50": 0.8999999999999999,
+            "p95": 1.0,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9849624060150376,
+            "p50": 0.75,
+            "p95": 0.8333333333333334,
+            "p99": 0.8333333333333334,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 437699.3355724086,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 84.1,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0685402,
+          "physics_step_duration_us": {
+            "maximum": 98.6,
+            "p50": 1.2,
+            "p95": 1.2,
+            "p99": 1.4,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.670847181654,
+          "process_working_set_after_bytes": 195391488,
+          "process_working_set_before_bytes": 193519616,
+          "process_working_set_change_bytes": 1871872,
+          "real_time_factor": 7294.988926206811,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 194832676.57142857,
+          "sampled_max_working_set_bytes": 195391488,
+          "simulation_ticks_per_second": 437699.3355724086,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 101.6,
+            "p50": 2.2,
+            "p95": 2.3,
+            "p99": 2.6,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.7,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 6.0,
+            "p50": 0.2,
+            "p95": 0.2,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 56.800000000000004,
+            "p50": 0.8999999999999999,
+            "p95": 0.8999999999999999,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9895470383275262,
+            "p50": 0.75,
+            "p95": 0.818181818181818,
+            "p99": 0.8333333333333334,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 447516.72966707736,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 59.6,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 0.9,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0670366,
+          "physics_step_duration_us": {
+            "maximum": 57.4,
+            "p50": 1.1,
+            "p95": 1.2,
+            "p99": 1.2,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.94540295898062,
+          "process_working_set_after_bytes": 195334144,
+          "process_working_set_before_bytes": 193474560,
+          "process_working_set_change_bytes": 1859584,
+          "real_time_factor": 7458.612161117956,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 194762459.42857143,
+          "sampled_max_working_set_bytes": 195334144,
+          "simulation_ticks_per_second": 447516.72966707736,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 61.4,
+            "p50": 2.2,
+            "p95": 2.2,
+            "p99": 2.3,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 8.8,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 50.0,
+            "p50": 0.2,
+            "p95": 0.2,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 67.3,
+            "p50": 0.8999999999999999,
+            "p95": 1.0,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9839743589743589,
+            "p50": 0.75,
+            "p95": 0.8333333333333334,
+            "p99": 0.8333333333333334,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 442144.63730138494,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 94.2,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0678511,
+          "physics_step_duration_us": {
+            "maximum": 69.9,
+            "p50": 1.2,
+            "p95": 1.2,
+            "p99": 1.3,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.21945112164727,
+          "process_working_set_after_bytes": 195473408,
+          "process_working_set_before_bytes": 193597440,
+          "process_working_set_change_bytes": 1875968,
+          "real_time_factor": 7369.077288356416,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 194930395.42857143,
+          "sampled_max_working_set_bytes": 195473408,
+          "simulation_ticks_per_second": 442144.63730138494,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 125.4,
+            "p50": 2.2,
+            "p95": 2.3,
+            "p99": 2.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 27.6,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 315.7,
+            "p50": 1.2,
+            "p95": 1.2,
+            "p99": 1.4,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 263.3,
+            "p50": 6.999999999999999,
+            "p95": 7.199999999999999,
+            "p99": 9.599999999999998,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9820962327489742,
+            "p50": 0.8045977011494252,
+            "p95": 0.8160919540229885,
+            "p99": 0.8275862068965518,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 674111.6682831303,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 11.5,
+              "p50": 6.8,
+              "p95": 11.5,
+              "p99": 11.5,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 20.1,
+              "p50": 1.1,
+              "p95": 20.1,
+              "p99": 20.1,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 317.5,
+            "p50": 1.9,
+            "p95": 1.9,
+            "p99": 2.2,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.3560241,
+          "physics_step_duration_us": {
+            "maximum": 268.1,
+            "p50": 8.7,
+            "p95": 8.9,
+            "p99": 13.0,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99323079533099,
+          "process_working_set_after_bytes": 195723264,
+          "process_working_set_before_bytes": 193851392,
+          "process_working_set_change_bytes": 1871872,
+          "real_time_factor": 1404.399308923188,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 195178496.0,
+          "sampled_max_working_set_bytes": 195723264,
+          "simulation_ticks_per_second": 84263.95853539128,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 331.0,
+            "p50": 11.4,
+            "p95": 11.7,
+            "p99": 17.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 1.4,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 142.9,
+            "p50": 1.2,
+            "p95": 1.2,
+            "p99": 1.4,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 301.99999999999994,
+            "p50": 6.999999999999999,
+            "p95": 7.2,
+            "p99": 9.2,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9859390693003014,
+            "p50": 0.8023255813953488,
+            "p95": 0.8160919540229885,
+            "p99": 0.8255813953488373,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 676684.2247426204,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 13.2,
+              "p50": 9.7,
+              "p95": 13.2,
+              "p99": 13.2,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 5.9,
+              "p50": 1.3,
+              "p95": 5.9,
+              "p99": 5.9,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 145.3,
+            "p50": 1.9,
+            "p95": 2.0,
+            "p99": 2.2,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.3546706,
+          "physics_step_duration_us": {
+            "maximum": 307.4,
+            "p50": 8.8,
+            "p95": 9.0,
+            "p99": 12.1,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.09287490984592,
+          "process_working_set_after_bytes": 195727360,
+          "process_working_set_before_bytes": 193851392,
+          "process_working_set_change_bytes": 1875968,
+          "real_time_factor": 1409.7588015471256,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 195184347.42857143,
+          "sampled_max_working_set_bytes": 195727360,
+          "simulation_ticks_per_second": 84585.52809282755,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 312.1,
+            "p50": 11.5,
+            "p95": 11.8,
+            "p99": 16.4,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 5.4,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 66.2,
+            "p50": 1.2,
+            "p95": 1.2,
+            "p99": 1.4,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 229.39999999999995,
+            "p50": 7.0,
+            "p95": 7.2,
+            "p99": 9.299999999999999,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9761702127659573,
+            "p50": 0.8023255813953488,
+            "p95": 0.818181818181818,
+            "p99": 0.8275862068965519,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 675022.8874947791,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 9.8,
+              "p50": 5.5,
+              "p95": 9.8,
+              "p99": 9.8,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 4.3,
+              "p50": 0.9,
+              "p95": 4.3,
+              "p99": 4.3,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 72.5,
+            "p50": 1.9,
+            "p95": 2.0,
+            "p99": 2.2,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.3555435,
+          "physics_step_duration_us": {
+            "maximum": 247.9,
+            "p50": 8.8,
+            "p95": 9.0,
+            "p99": 12.4,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.12839497839224,
+          "process_working_set_after_bytes": 195567616,
+          "process_working_set_before_bytes": 193683456,
+          "process_working_set_change_bytes": 1884160,
+          "real_time_factor": 1406.2976822807898,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 195018752.0,
+          "sampled_max_working_set_bytes": 195567616,
+          "simulation_ticks_per_second": 84377.86093684738,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 251.3,
+            "p50": 11.5,
+            "p95": 11.8,
+            "p99": 17.2,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 5.4,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 167.1,
+            "p50": 4.5,
+            "p95": 4.6,
+            "p99": 5.6,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 729.6000000000012,
+            "p50": 28.1,
+            "p95": 31.3,
+            "p99": 49.699999999999996,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9866831411312478,
+            "p50": 0.8063583815028902,
+            "p95": 0.813753581661891,
+            "p99": 0.8618042226487531,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 718208.9843006249,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 14.0,
+              "p50": 4.0,
+              "p95": 13.2,
+              "p99": 14.0,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 4.5,
+              "p50": 0.5,
+              "p95": 2.5,
+              "p99": 4.5,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 170.0,
+            "p50": 5.2,
+            "p95": 5.5,
+            "p99": 8.6,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 1.3366583,
+          "physics_step_duration_us": {
+            "maximum": 740.1,
+            "p50": 34.8,
+            "p95": 39.3,
+            "p99": 61.8,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.9507503151703,
+          "process_working_set_after_bytes": 195846144,
+          "process_working_set_before_bytes": 193961984,
+          "process_working_set_change_bytes": 1884160,
+          "real_time_factor": 374.0671793232421,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 195289673.14285713,
+          "sampled_max_working_set_bytes": 195846144,
+          "simulation_ticks_per_second": 22444.03075939453,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 749.5,
+            "p50": 43.1,
+            "p95": 48.9,
+            "p99": 76.7,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 14.8,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 225.5,
+            "p50": 4.5,
+            "p95": 4.6,
+            "p99": 5.4,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 357.90000000000015,
+            "p50": 28.1,
+            "p95": 30.6,
+            "p99": 43.40000000000003,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9699938763012858,
+            "p50": 0.8069164265129682,
+            "p95": 0.8137535816618912,
+            "p99": 0.836104513064133,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 721823.9408248733,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 17.8,
+              "p50": 3.7,
+              "p95": 15.3,
+              "p99": 17.8,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.8,
+              "p50": 0.4,
+              "p95": 1.9,
+              "p99": 3.8,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 229.2,
+            "p50": 5.2,
+            "p95": 5.5,
+            "p99": 8.2,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 1.3299642,
+          "physics_step_duration_us": {
+            "maximum": 413.8,
+            "p50": 34.8,
+            "p95": 38.6,
+            "p99": 58.8,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.00269180177932,
+          "process_working_set_after_bytes": 195887104,
+          "process_working_set_before_bytes": 194011136,
+          "process_working_set_change_bytes": 1875968,
+          "real_time_factor": 375.9499691796215,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 195344091.42857143,
+          "sampled_max_working_set_bytes": 195887104,
+          "simulation_ticks_per_second": 22556.99815077729,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 423.3,
+            "p50": 43.0,
+            "p95": 47.9,
+            "p99": 72.4,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 11.5,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 337.2,
+            "p50": 4.5,
+            "p95": 4.6,
+            "p99": 5.5,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 776.8999999999999,
+            "p50": 28.1,
+            "p95": 30.600000000000005,
+            "p99": 42.20000000000003,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9842898771062966,
+            "p50": 0.8068181818181817,
+            "p95": 0.8134715025906735,
+            "p99": 0.836492890995261,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 721702.1163989741,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 48.0,
+              "p50": 3.4,
+              "p95": 22.4,
+              "p99": 48.0,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.9,
+              "p50": 0.5,
+              "p95": 2.2,
+              "p99": 3.9,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 340.5,
+            "p50": 5.2,
+            "p95": 5.4,
+            "p99": 8.1,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 1.3301887,
+          "physics_step_duration_us": {
+            "maximum": 789.3,
+            "p50": 34.9,
+            "p95": 38.8,
+            "p99": 56.7,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.98581404277454,
+          "process_working_set_after_bytes": 195764224,
+          "process_working_set_before_bytes": 193880064,
+          "process_working_set_change_bytes": 1884160,
+          "real_time_factor": 375.886518957799,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 195204242.2857143,
+          "sampled_max_working_set_bytes": 195764224,
+          "simulation_ticks_per_second": 22553.19113746794,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 798.7,
+            "p50": 43.0,
+            "p95": 48.3,
+            "p99": 70.1,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 91.9,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 215.5,
+            "p50": 8.9,
+            "p95": 9.1,
+            "p99": 12.4,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 564.600000000001,
+            "p50": 56.400000000000084,
+            "p95": 62.500000000000085,
+            "p99": 88.00000000000004,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9649196956889265,
+            "p50": 0.8082975679542215,
+            "p95": 0.814814814814816,
+            "p99": 0.8541458541458549,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 729969.74427487,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 20.6,
+              "p50": 3.2,
+              "p95": 9.4,
+              "p99": 20.6,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.2,
+              "p50": 0.4,
+              "p95": 0.8,
+              "p99": 3.2,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 217.3,
+            "p50": 9.6,
+            "p95": 10.2,
+            "p99": 15.0,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 2.630246,
+          "physics_step_duration_us": {
+            "maximum": 588.7,
+            "p50": 69.8,
+            "p95": 78.7,
+            "p99": 110.1,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.02866652016577,
+          "process_working_set_after_bytes": 196132864,
+          "process_working_set_before_bytes": 194256896,
+          "process_working_set_change_bytes": 1875968,
+          "real_time_factor": 190.09628757158075,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 195571126.85714287,
+          "sampled_max_working_set_bytes": 196132864,
+          "simulation_ticks_per_second": 11405.777254294844,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 606.6,
+            "p50": 85.2,
+            "p95": 97.4,
+            "p99": 132.9,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 30.5,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 416.7,
+            "p50": 8.9,
+            "p95": 9.2,
+            "p99": 12.9,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 339.0,
+            "p50": 56.30000000000008,
+            "p95": 63.20000000000008,
+            "p99": 92.20000000000009,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9521829521829521,
+            "p50": 0.8078034682080937,
+            "p95": 0.8146666666666678,
+            "p99": 0.856995884773663,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 727724.6608262972,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 24.1,
+              "p50": 3.1,
+              "p95": 12.7,
+              "p99": 24.1,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.1,
+              "p50": 0.4,
+              "p95": 0.8,
+              "p99": 3.1,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 419.1,
+            "p50": 9.7,
+            "p95": 10.3,
+            "p99": 14.9,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 2.6383605,
+          "physics_step_duration_us": {
+            "maximum": 1456.9,
+            "p50": 69.6,
+            "p95": 79.9,
+            "p99": 116.6,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.02423853753116,
+          "process_working_set_after_bytes": 195887104,
+          "process_working_set_before_bytes": 194011136,
+          "process_working_set_change_bytes": 1875968,
+          "real_time_factor": 189.5116304235149,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 195325366.85714287,
+          "sampled_max_working_set_bytes": 195887104,
+          "simulation_ticks_per_second": 11370.697825410894,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 1474.1,
+            "p50": 85.2,
+            "p95": 98.4,
+            "p99": 146.6,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 10.6,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 164.5,
+            "p50": 8.9,
+            "p95": 9.2,
+            "p99": 13.3,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 735.5000000000009,
+            "p50": 56.400000000000084,
+            "p95": 64.00000000000009,
+            "p99": 96.50000000000006,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9732698160645771,
+            "p50": 0.8082386363636376,
+            "p95": 0.8153638814016185,
+            "p99": 0.8609137055837566,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 725094.4775445038,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 21.6,
+              "p50": 3.1,
+              "p95": 14.3,
+              "p99": 21.6,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.4,
+              "p50": 0.5,
+              "p95": 1.1,
+              "p99": 3.4,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 257.2,
+            "p50": 9.7,
+            "p95": 10.4,
+            "p99": 15.3,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 2.6479308,
+          "physics_step_duration_us": {
+            "maximum": 755.7,
+            "p50": 69.8,
+            "p95": 80.5,
+            "p99": 129.5,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.00261336134615,
+          "process_working_set_after_bytes": 196161536,
+          "process_working_set_before_bytes": 194285568,
+          "process_working_set_change_bytes": 1875968,
+          "real_time_factor": 188.82668686054785,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 195599798.85714287,
+          "sampled_max_working_set_bytes": 196161536,
+          "simulation_ticks_per_second": 11329.601211632871,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 771.9,
+            "p50": 85.3,
+            "p95": 99.3,
+            "p99": 157.9,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 72.0,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 298.1,
+            "p50": 17.6,
+            "p95": 19.5,
+            "p99": 26.4,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 746.9,
+            "p50": 112.39999999999999,
+            "p95": 130.3,
+            "p99": 183.8999999999996,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9498918987663741,
+            "p50": 0.8086194302410511,
+            "p95": 0.8167741935483873,
+            "p99": 0.8500527983104521,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 128,
+          "drone_ticks_per_second": 733878.663788894,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 31.7,
+              "p50": 3.2,
+              "p95": 13.8,
+              "p99": 26.6,
+              "samples": 127
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.8,
+              "p50": 0.4,
+              "p95": 0.9,
+              "p99": 1.6,
+              "samples": 127
+            },
+            "measured_add_count": 127,
+            "measured_remove_count": 127
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 302.2,
+            "p50": 18.4,
+            "p95": 21.2,
+            "p99": 29.5,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 5.2324726,
+          "physics_step_duration_us": {
+            "maximum": 1757.7,
+            "p50": 139.0,
+            "p95": 163.3,
+            "p99": 223.8,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.9909679412368,
+          "process_working_set_after_bytes": 196800512,
+          "process_working_set_before_bytes": 194932736,
+          "process_working_set_change_bytes": 1867776,
+          "real_time_factor": 95.55711768084556,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 196237019.42857143,
+          "sampled_max_working_set_bytes": 196800512,
+          "simulation_ticks_per_second": 5733.427060850734,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 1793.4,
+            "p50": 169.1,
+            "p95": 200.4,
+            "p99": 264.4,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 30.9,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 266.4,
+            "p50": 17.7,
+            "p95": 19.5,
+            "p99": 26.1,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 497.5999999999996,
+            "p50": 112.70000000000002,
+            "p95": 129.60000000000005,
+            "p99": 185.3999999999999,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9342846413818994,
+            "p50": 0.8088023088023086,
+            "p95": 0.8166441136671179,
+            "p99": 0.8494887525562383,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 128,
+          "drone_ticks_per_second": 733496.5847138318,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 75.8,
+              "p50": 3.2,
+              "p95": 20.2,
+              "p99": 41.8,
+              "samples": 127
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 4.7,
+              "p50": 0.3,
+              "p95": 0.7,
+              "p99": 1.3,
+              "samples": 127
+            },
+            "measured_add_count": 127,
+            "measured_remove_count": 127
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 268.5,
+            "p50": 18.5,
+            "p95": 21.2,
+            "p99": 29.2,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 5.2351982,
+          "physics_step_duration_us": {
+            "maximum": 559.0,
+            "p50": 139.4,
+            "p95": 162.1,
+            "p99": 223.9,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.01531556150061,
+          "process_working_set_after_bytes": 196685824,
+          "process_working_set_before_bytes": 194670592,
+          "process_working_set_change_bytes": 2015232,
+          "real_time_factor": 95.50736780128018,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 196039826.2857143,
+          "sampled_max_working_set_bytes": 196685824,
+          "simulation_ticks_per_second": 5730.442068076811,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 604.5,
+            "p50": 169.4,
+            "p95": 198.0,
+            "p99": 264.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 21.2,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 288.8,
+            "p50": 17.6,
+            "p95": 19.4,
+            "p99": 25.8,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 3045.3999999999924,
+            "p50": 112.89999999999998,
+            "p95": 130.39999999999984,
+            "p99": 186.79999999999933,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9864282706572061,
+            "p50": 0.8090452261306533,
+            "p95": 0.8174878556557948,
+            "p99": 0.853896103896102,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 128,
+          "drone_ticks_per_second": 731703.9848084534,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 25.1,
+              "p50": 3.1,
+              "p95": 15.1,
+              "p99": 22.2,
+              "samples": 127
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.6,
+              "p50": 0.4,
+              "p95": 0.9,
+              "p99": 1.4,
+              "samples": 127
+            },
+            "measured_add_count": 127,
+            "measured_remove_count": 127
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 294.5,
+            "p50": 18.4,
+            "p95": 21.2,
+            "p99": 28.9,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 5.2480239,
+          "physics_step_duration_us": {
+            "maximum": 3087.3,
+            "p50": 139.6,
+            "p95": 163.4,
+            "p99": 225.2,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99954459048864,
+          "process_working_set_after_bytes": 196890624,
+          "process_working_set_before_bytes": 195014656,
+          "process_working_set_change_bytes": 1875968,
+          "real_time_factor": 95.27395635526736,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 196341760.0,
+          "sampled_max_working_set_bytes": 196890624,
+          "simulation_ticks_per_second": 5716.437381316042,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 3120.2,
+            "p50": 169.5,
+            "p95": 199.5,
+            "p99": 266.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 57.1,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 426.9,
+            "p50": 35.2,
+            "p95": 41.0,
+            "p99": 60.0,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 4056.400000000004,
+            "p50": 226.69999999999862,
+            "p95": 264.69999999999874,
+            "p99": 331.2999999999985,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9842764243424256,
+            "p50": 0.8036831132731015,
+            "p95": 0.8147174770039373,
+            "p99": 0.8431426985008286,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 256,
+          "drone_ticks_per_second": 725952.415066923,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 43.7,
+              "p50": 3.2,
+              "p95": 16.8,
+              "p99": 36.8,
+              "samples": 255
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 93.4,
+              "p50": 0.4,
+              "p95": 0.9,
+              "p99": 3.2,
+              "samples": 255
+            },
+            "measured_add_count": 255,
+            "measured_remove_count": 255
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 439.4,
+            "p50": 36.3,
+            "p95": 42.7,
+            "p99": 62.4,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 10.5792058,
+          "physics_step_duration_us": {
+            "maximum": 4121.2,
+            "p50": 282.4,
+            "p95": 338.8,
+            "p99": 415.2,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99805467438776,
+          "process_working_set_after_bytes": 198123520,
+          "process_working_set_before_bytes": 196243456,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 47.262527022586134,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 197559442.2857143,
+          "sampled_max_working_set_bytes": 198123520,
+          "simulation_ticks_per_second": 2835.751621355168,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 4182.2,
+            "p50": 342.3,
+            "p95": 409.1,
+            "p99": 493.3,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 80.2,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 410.9,
+            "p50": 35.3,
+            "p95": 40.9,
+            "p99": 55.0,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 1125.4000000000028,
+            "p50": 227.19999999999857,
+            "p95": 256.69999999999857,
+            "p99": 312.6999999999983,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9462709156646791,
+            "p50": 0.8006419400855871,
+            "p95": 0.8093464273619995,
+            "p99": 0.8314573459715602,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 256,
+          "drone_ticks_per_second": 727511.7796519143,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 102.5,
+              "p50": 3.1,
+              "p95": 15.0,
+              "p99": 23.7,
+              "samples": 255
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 88.1,
+              "p50": 0.4,
+              "p95": 0.8,
+              "p99": 3.3,
+              "samples": 255
+            },
+            "measured_add_count": 255,
+            "measured_remove_count": 255
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 413.8,
+            "p50": 36.4,
+            "p95": 42.3,
+            "p99": 59.7,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 10.5565301,
+          "physics_step_duration_us": {
+            "maximum": 1189.3,
+            "p50": 283.9,
+            "p95": 325.0,
+            "p99": 392.0,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.00445127324556,
+          "process_working_set_after_bytes": 197853184,
+          "process_working_set_before_bytes": 195981312,
+          "process_working_set_change_bytes": 1871872,
+          "real_time_factor": 47.364048154421496,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 197296128.0,
+          "sampled_max_working_set_bytes": 197853184,
+          "simulation_ticks_per_second": 2841.84288926529,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 1263.4,
+            "p50": 344.0,
+            "p95": 396.4,
+            "p99": 468.2,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 12.3,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 545.6,
+            "p50": 35.3,
+            "p95": 40.8,
+            "p99": 53.0,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 800.2000000000025,
+            "p50": 227.2999999999986,
+            "p95": 254.99999999999815,
+            "p99": 311.09999999999945,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9167144002749485,
+            "p50": 0.7992869875222766,
+            "p95": 0.8073237508555733,
+            "p99": 0.8287488908606869,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 256,
+          "drone_ticks_per_second": 726549.713984434,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 35.0,
+              "p50": 3.0,
+              "p95": 13.7,
+              "p99": 21.3,
+              "samples": 255
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 141.1,
+              "p50": 0.4,
+              "p95": 1.1,
+              "p99": 3.7,
+              "samples": 255
+            },
+            "measured_add_count": 255,
+            "measured_remove_count": 255
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 548.7,
+            "p50": 36.3,
+            "p95": 42.2,
+            "p99": 57.2,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 10.5705086,
+          "physics_step_duration_us": {
+            "maximum": 1528.2,
+            "p50": 284.5,
+            "p95": 323.3,
+            "p99": 392.9,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.9951885002014,
+          "process_working_set_after_bytes": 198000640,
+          "process_working_set_before_bytes": 196149248,
+          "process_working_set_change_bytes": 1851392,
+          "real_time_factor": 47.30141367086159,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 197447094.85714287,
+          "sampled_max_working_set_bytes": 198000640,
+          "simulation_ticks_per_second": 2838.0848202516954,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 1598.0,
+            "p50": 344.8,
+            "p95": 393.4,
+            "p99": 467.7,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 6.6,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 367.1,
+            "p50": 70.5,
+            "p95": 81.7,
+            "p99": 105.5,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 3873.599999999937,
+            "p50": 457.9999999999983,
+            "p95": 515.199999999998,
+            "p99": 597.1000000000004,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9643017176997603,
+            "p50": 0.7987299347327562,
+            "p95": 0.8083179607580063,
+            "p99": 0.8221332965365049,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 512,
+          "drone_ticks_per_second": 720845.1470083662,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 57.3,
+              "p50": 3.2,
+              "p95": 15.0,
+              "p99": 28.8,
+              "samples": 511
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 74.7,
+              "p50": 0.4,
+              "p95": 0.7,
+              "p99": 1.5,
+              "samples": 511
+            },
+            "measured_add_count": 511,
+            "measured_remove_count": 511
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 370.8,
+            "p50": 71.9,
+            "p95": 83.8,
+            "p99": 108.7,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 21.3083213,
+          "physics_step_duration_us": {
+            "maximum": 4017.0,
+            "p50": 574.1,
+            "p95": 649.3,
+            "p99": 745.2,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99849213837415,
+          "process_working_set_after_bytes": 200388608,
+          "process_working_set_before_bytes": 198533120,
+          "process_working_set_change_bytes": 1855488,
+          "real_time_factor": 23.465011295845255,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 199835648.0,
+          "sampled_max_working_set_bytes": 200388608,
+          "simulation_ticks_per_second": 1407.9006777507152,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 4145.9,
+            "p50": 695.8,
+            "p95": 786.4,
+            "p99": 890.0,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 44.3,
+            "p50": 0.1,
+            "p95": 0.2,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 389.0,
+            "p50": 70.5,
+            "p95": 81.9,
+            "p99": 106.8,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 5791.599999999998,
+            "p50": 459.89999999999804,
+            "p95": 524.5,
+            "p99": 613.9000000000034,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9741804174866693,
+            "p50": 0.7988165680473339,
+            "p95": 0.8102274613979705,
+            "p99": 0.8246940739722306,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 512,
+          "drone_ticks_per_second": 715491.1491788425,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 63.1,
+              "p50": 3.2,
+              "p95": 14.4,
+              "p99": 26.5,
+              "samples": 511
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 101.4,
+              "p50": 0.5,
+              "p95": 0.9,
+              "p99": 1.9,
+              "samples": 511
+            },
+            "measured_add_count": 511,
+            "measured_remove_count": 511
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 393.0,
+            "p50": 71.9,
+            "p95": 84.5,
+            "p99": 110.5,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 21.4677708,
+          "physics_step_duration_us": {
+            "maximum": 5945.1,
+            "p50": 576.6,
+            "p95": 667.6,
+            "p99": 768.3,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.00106764694917,
+          "process_working_set_after_bytes": 200417280,
+          "process_working_set_before_bytes": 198565888,
+          "process_working_set_change_bytes": 1851392,
+          "real_time_factor": 23.290727512332115,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 199853202.2857143,
+          "sampled_max_working_set_bytes": 200417280,
+          "simulation_ticks_per_second": 1397.4436507399269,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 6066.1,
+            "p50": 699.0,
+            "p95": 808.1,
+            "p99": 908.8,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 69.5,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 701.6,
+            "p50": 70.5,
+            "p95": 81.6,
+            "p99": 109.6,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 1480.4999999999943,
+            "p50": 458.2999999999987,
+            "p95": 522.9999999999992,
+            "p99": 615.5999999999991,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9249078528143901,
+            "p50": 0.7989808469513242,
+            "p95": 0.8079163810829292,
+            "p99": 0.8268439813545433,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 512,
+          "drone_ticks_per_second": 719230.3695622906,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 92.9,
+              "p50": 3.4,
+              "p95": 14.8,
+              "p99": 23.9,
+              "samples": 511
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 210.9,
+              "p50": 0.4,
+              "p95": 0.7,
+              "p99": 1.6,
+              "samples": 511
+            },
+            "measured_add_count": 511,
+            "measured_remove_count": 511
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 704.6,
+            "p50": 71.9,
+            "p95": 83.4,
+            "p99": 113.1,
+            "samples": 30000
+          },
+          "layout": "separated",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 21.3561616,
+          "physics_step_duration_us": {
+            "maximum": 1846.6,
+            "p50": 574.3,
+            "p95": 663.6,
+            "p99": 782.0,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99924330971537,
+          "process_working_set_after_bytes": 200687616,
+          "process_working_set_before_bytes": 198828032,
+          "process_working_set_change_bytes": 1859584,
+          "real_time_factor": 23.412446925855814,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 200142848.0,
+          "sampled_max_working_set_bytes": 200687616,
+          "simulation_ticks_per_second": 1404.7468155513488,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 1985.0,
+            "p50": 696.0,
+            "p95": 801.9,
+            "p99": 924.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 34.8,
+            "p50": 0.1,
+            "p95": 0.2,
+            "p99": 0.3,
+            "samples": 21000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 1737.0,
+            "p50": 141.1,
+            "p95": 157.3,
+            "p99": 210.5,
+            "samples": 21000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 2076.599999999998,
+            "p50": 929.3000000000228,
+            "p95": 1034.7000000000266,
+            "p99": 1152.300000000025,
+            "samples": 21000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.8823454429572968,
+            "p50": 0.7935815147625348,
+            "p95": 0.8034705737906397,
+            "p99": 0.8122586872587062,
+            "samples": 21000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1024,
+          "drone_ticks_per_second": 703751.9900490568,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 103.4,
+              "p50": 3.6,
+              "p95": 13.9,
+              "p99": 35.7,
+              "samples": 1023
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 116.0,
+              "p50": 0.4,
+              "p95": 0.7,
+              "p99": 2.2,
+              "samples": 1023
+            },
+            "measured_add_count": 1023,
+            "measured_remove_count": 1023
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 1741.9,
+            "p50": 143.1,
+            "p95": 160.7,
+            "p99": 216.3,
+            "samples": 21000
+          },
+          "layout": "separated",
+          "measured_ticks": 21000,
+          "measurement_wall_seconds": 30.5562191,
+          "physics_step_duration_us": {
+            "maximum": 2961.5,
+            "p50": 1174.2,
+            "p95": 1325.2,
+            "p99": 1463.6,
+            "samples": 21000
+          },
+          "process_cpu_percent_approx": 99.99928296102576,
+          "process_working_set_after_bytes": 204709888,
+          "process_working_set_before_bytes": 203231232,
+          "process_working_set_change_bytes": 1478656,
+          "real_time_factor": 11.454296713038035,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 204229017.6,
+          "sampled_max_working_set_bytes": 204709888,
+          "simulation_ticks_per_second": 687.257802782282,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 3278.3,
+            "p50": 1429.4,
+            "p95": 1600.6,
+            "p99": 1747.3,
+            "samples": 21000
+          },
+          "time_limit_reached": true,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 5,
+          "working_set_sample_interval_ticks": 5000
+        }
+      ],
+      "spacing_meters": 2.5,
+      "stop_reason": "한 번의 측정이 제한 시간에 도달해 더 큰 규모의 실행을 멈췄습니다.",
+      "stopped_at_time_limit": true,
+      "target_counts": [
+        1,
+        8,
+        32,
+        64,
+        128,
+        256,
+        512,
+        1024
+      ],
+      "target_repetitions_per_count": 3,
+      "target_ticks_per_run": 30000
+    },
+    "rigid_body_compact": {
+      "dynamics": "rigid_body",
+      "layout": "compact",
+      "measured_counts": [
+        1,
+        8,
+        32,
+        64,
+        128
+      ],
+      "method": "헤드리스 AirSim 강체 모의. 여러 드론을 이륙·호버링시키고 한 물리 세계에서 함께 갱신",
+      "run_time_limit_seconds": 30,
+      "runs": [
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 2.8,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 23.8,
+            "p50": 0.2,
+            "p95": 0.2,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 74.0,
+            "p50": 0.8999999999999999,
+            "p95": 0.8999999999999999,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9919571045576409,
+            "p50": 0.75,
+            "p95": 0.818181818181818,
+            "p99": 0.8333333333333334,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 447650.95163131465,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 53.3,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0670165,
+          "physics_step_duration_us": {
+            "maximum": 74.6,
+            "p50": 1.1,
+            "p95": 1.2,
+            "p99": 1.3,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.97537919766027,
+          "process_working_set_after_bytes": 196071424,
+          "process_working_set_before_bytes": 194326528,
+          "process_working_set_change_bytes": 1744896,
+          "real_time_factor": 7460.849193855244,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 195527241.14285713,
+          "sampled_max_working_set_bytes": 196071424,
+          "simulation_ticks_per_second": 447650.95163131465,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 80.0,
+            "p50": 2.2,
+            "p95": 2.2,
+            "p99": 2.5,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 1.0,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 58.3,
+            "p50": 0.2,
+            "p95": 0.2,
+            "p99": 0.3,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 42.5,
+            "p50": 0.8999999999999999,
+            "p95": 1.0,
+            "p99": 1.1,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9860788863109048,
+            "p50": 0.75,
+            "p95": 0.8333333333333334,
+            "p99": 0.8333333333333334,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 443557.3297848747,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 61.2,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 1.0,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.067635,
+          "physics_step_duration_us": {
+            "maximum": 43.1,
+            "p50": 1.2,
+            "p95": 1.2,
+            "p99": 1.4,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.53966141790494,
+          "process_working_set_after_bytes": 196005888,
+          "process_working_set_before_bytes": 194125824,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 7392.622163081245,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 195437714.2857143,
+          "sampled_max_working_set_bytes": 196005888,
+          "simulation_ticks_per_second": 443557.3297848747,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 66.7,
+            "p50": 2.2,
+            "p95": 2.3,
+            "p99": 2.6,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 32.3,
+            "p50": 0.0,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 45.1,
+            "p50": 0.2,
+            "p95": 0.2,
+            "p99": 0.3,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 96.80000000000001,
+            "p50": 0.8999999999999999,
+            "p95": 1.0,
+            "p99": 1.1,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.986111111111111,
+            "p50": 0.75,
+            "p95": 0.8333333333333334,
+            "p99": 0.8333333333333334,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 1,
+          "drone_ticks_per_second": 412207.3842830821,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "samples": 0
+            },
+            "measured_add_count": 0,
+            "measured_remove_count": 0
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 2717.0,
+            "p50": 0.8,
+            "p95": 0.9,
+            "p99": 1.1,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 0.0727789,
+          "physics_step_duration_us": {
+            "maximum": 129.8,
+            "p50": 1.2,
+            "p95": 1.2,
+            "p99": 1.5,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.30379684221664,
+          "process_working_set_after_bytes": 196059136,
+          "process_working_set_before_bytes": 194179072,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 6870.123071384702,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 195499154.2857143,
+          "sampled_max_working_set_bytes": 196059136,
+          "simulation_ticks_per_second": 412207.3842830821,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 2738.2,
+            "p50": 2.2,
+            "p95": 2.3,
+            "p99": 3.2,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 5.8,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 53.2,
+            "p50": 1.4,
+            "p95": 1.5,
+            "p99": 1.9,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 1202.4,
+            "p50": 71.30000000000001,
+            "p95": 79.89999999999999,
+            "p99": 105.4,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.996023856858847,
+            "p50": 0.9751479289940828,
+            "p95": 0.9768392370572206,
+            "p99": 0.9780521262002743,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 102123.05317292071,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 15.8,
+              "p50": 5.1,
+              "p95": 15.8,
+              "p99": 15.8,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 5.0,
+              "p50": 0.5,
+              "p95": 5.0,
+              "p99": 5.0,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 58.5,
+            "p50": 2.1,
+            "p95": 2.4,
+            "p99": 4.6,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 2.350106,
+          "physics_step_duration_us": {
+            "maximum": 1207.2,
+            "p50": 73.2,
+            "p95": 82.3,
+            "p99": 109.7,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99548956515154,
+          "process_working_set_after_bytes": 196034560,
+          "process_working_set_before_bytes": 194154496,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 212.75636077691817,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 195474578.2857143,
+          "sampled_max_working_set_bytes": 196034560,
+          "simulation_ticks_per_second": 12765.38164661509,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 1211.2,
+            "p50": 76.2,
+            "p95": 86.3,
+            "p99": 115.2,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 4.0,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 438.6,
+            "p50": 1.4,
+            "p95": 1.5,
+            "p99": 2.0,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 1192.7,
+            "p50": 71.8,
+            "p95": 80.3,
+            "p99": 106.10000000000001,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.996241229535583,
+            "p50": 0.9745454545454546,
+            "p95": 0.9769647696476964,
+            "p99": 0.9781718963165076,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 101438.29356445033,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 17.2,
+              "p50": 5.5,
+              "p95": 17.2,
+              "p99": 17.2,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 4.1,
+              "p50": 0.6,
+              "p95": 4.1,
+              "p99": 4.1,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 441.3,
+            "p50": 2.1,
+            "p95": 2.5,
+            "p99": 4.7,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 2.3659704,
+          "physics_step_duration_us": {
+            "maximum": 1197.2,
+            "p50": 73.6,
+            "p95": 82.9,
+            "p99": 110.6,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.0012510722873,
+          "process_working_set_after_bytes": 196038656,
+          "process_working_set_before_bytes": 194158592,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 211.32977825927154,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 195478674.2857143,
+          "sampled_max_working_set_bytes": 196038656,
+          "simulation_ticks_per_second": 12679.786695556291,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 1202.3,
+            "p50": 76.7,
+            "p95": 87.4,
+            "p99": 116.3,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 6.2,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.1,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 89.8,
+            "p50": 1.4,
+            "p95": 1.5,
+            "p99": 1.7,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 877.7,
+            "p50": 71.4,
+            "p95": 78.2,
+            "p99": 104.5,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9944482211647405,
+            "p50": 0.9742198100407055,
+            "p95": 0.9768076398362892,
+            "p99": 0.977620730270907,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 8,
+          "drone_ticks_per_second": 102446.149395,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 10.8,
+              "p50": 4.4,
+              "p95": 10.8,
+              "p99": 10.8,
+              "samples": 7
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 4.2,
+              "p50": 0.6,
+              "p95": 4.2,
+              "p99": 4.2,
+              "samples": 7
+            },
+            "measured_add_count": 7,
+            "measured_remove_count": 7
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 98.6,
+            "p50": 2.1,
+            "p95": 2.4,
+            "p99": 3.6,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 2.3426942,
+          "physics_step_duration_us": {
+            "maximum": 882.6,
+            "p50": 73.3,
+            "p95": 80.6,
+            "p99": 108.8,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.01305334686876,
+          "process_working_set_after_bytes": 196046848,
+          "process_working_set_before_bytes": 194166784,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 213.42947790624999,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 195492717.7142857,
+          "sampled_max_working_set_bytes": 196046848,
+          "simulation_ticks_per_second": 12805.768674375,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 892.2,
+            "p50": 76.3,
+            "p95": 84.1,
+            "p99": 113.6,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 8.6,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 296.9,
+            "p50": 5.3,
+            "p95": 5.7,
+            "p99": 6.7,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 6313.5,
+            "p50": 385.1,
+            "p95": 430.40000000000003,
+            "p99": 511.0,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9966218882697438,
+            "p50": 0.9816560509554139,
+            "p95": 0.9825819672131144,
+            "p99": 0.9832298136645966,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 77846.42093173489,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 22.4,
+              "p50": 3.5,
+              "p95": 15.4,
+              "p99": 22.4,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.9,
+              "p50": 0.5,
+              "p95": 1.1,
+              "p99": 3.9,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 300.3,
+            "p50": 6.1,
+            "p95": 7.5,
+            "p99": 10.9,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 12.3319735,
+          "physics_step_duration_us": {
+            "maximum": 6334.9,
+            "p50": 392.5,
+            "p95": 441.9,
+            "p99": 525.3,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.00021488855778,
+          "process_working_set_after_bytes": 196349952,
+          "process_working_set_before_bytes": 194469888,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 40.545010901945254,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 195789970.2857143,
+          "sampled_max_working_set_bytes": 196349952,
+          "simulation_ticks_per_second": 2432.700654116715,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 6357.6,
+            "p50": 402.1,
+            "p95": 454.2,
+            "p99": 538.4,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 21.9,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 327.0,
+            "p50": 5.3,
+            "p95": 5.6,
+            "p99": 6.6,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 2660.9999999999995,
+            "p50": 385.29999999999995,
+            "p95": 434.40000000000003,
+            "p99": 505.90000000000003,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9952872531418311,
+            "p50": 0.981734047735022,
+            "p95": 0.9826042466103866,
+            "p99": 0.9832860296436455,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 77839.74722579953,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 13.7,
+              "p50": 3.5,
+              "p95": 11.2,
+              "p99": 13.7,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 4.3,
+              "p50": 0.5,
+              "p95": 1.0,
+              "p99": 4.3,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 330.8,
+            "p50": 6.1,
+            "p95": 7.5,
+            "p99": 10.7,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 12.3330308,
+          "physics_step_duration_us": {
+            "maximum": 3895.8,
+            "p50": 392.6,
+            "p95": 445.6,
+            "p99": 518.6,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99975026414431,
+          "process_working_set_after_bytes": 196460544,
+          "process_working_set_before_bytes": 194580480,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 40.54153501343725,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 195906413.7142857,
+          "sampled_max_working_set_bytes": 196460544,
+          "simulation_ticks_per_second": 2432.492100806235,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 3910.0,
+            "p50": 402.2,
+            "p95": 458.2,
+            "p99": 530.9,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 15.4,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 179.9,
+            "p50": 5.3,
+            "p95": 5.6,
+            "p99": 6.6,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 4198.2,
+            "p50": 385.4000000000001,
+            "p95": 430.90000000000003,
+            "p99": 512.7,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9974577680629143,
+            "p50": 0.9817490494296577,
+            "p95": 0.9826381059751974,
+            "p99": 0.9834983498349836,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 32,
+          "drone_ticks_per_second": 77781.20555229469,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 16.6,
+              "p50": 3.6,
+              "p95": 13.6,
+              "p99": 16.6,
+              "samples": 31
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.6,
+              "p50": 0.5,
+              "p95": 0.7,
+              "p99": 3.6,
+              "samples": 31
+            },
+            "measured_add_count": 31,
+            "measured_remove_count": 31
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 183.6,
+            "p50": 6.1,
+            "p95": 7.4,
+            "p99": 10.9,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 12.3423132,
+          "physics_step_duration_us": {
+            "maximum": 4208.9,
+            "p50": 392.8,
+            "p95": 442.1,
+            "p99": 525.3,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99746238816887,
+          "process_working_set_after_bytes": 196214784,
+          "process_working_set_before_bytes": 194334720,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 40.511044558486816,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 195670601.14285713,
+          "sampled_max_working_set_bytes": 196214784,
+          "simulation_ticks_per_second": 2430.662673509209,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 4219.8,
+            "p50": 402.4,
+            "p95": 453.9,
+            "p99": 536.9,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 5.9,
+            "p50": 0.1,
+            "p95": 0.2,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 1206.3,
+            "p50": 10.5,
+            "p95": 11.8,
+            "p99": 13.9,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 2623.2000000000003,
+            "p50": 846.9999999999999,
+            "p95": 927.8999999999996,
+            "p99": 1020.7999999999998,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9909712515583092,
+            "p50": 0.9833119383825418,
+            "p95": 0.984064208444806,
+            "p99": 0.9843933725280595,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 71503.8276110645,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 15.4,
+              "p50": 3.3,
+              "p95": 10.6,
+              "p99": 15.4,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.6,
+              "p50": 0.4,
+              "p95": 0.8,
+              "p99": 3.6,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 1209.7,
+            "p50": 11.5,
+            "p95": 15.1,
+            "p99": 18.2,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 26.8517094,
+          "physics_step_duration_us": {
+            "maximum": 2647.1,
+            "p50": 861.9,
+            "p95": 947.4,
+            "p99": 1045.4,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 99.99735808253607,
+          "process_working_set_after_bytes": 196485120,
+          "process_working_set_before_bytes": 194605056,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 18.62078844038138,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 195949129.14285713,
+          "sampled_max_working_set_bytes": 196485120,
+          "simulation_ticks_per_second": 1117.2473064228827,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 2683.5,
+            "p50": 880.3,
+            "p95": 968.4,
+            "p99": 1066.3,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 4.5,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 284.4,
+            "p50": 10.5,
+            "p95": 11.9,
+            "p99": 15.1,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 7180.499999999997,
+            "p50": 847.3,
+            "p95": 927.8000000000001,
+            "p99": 1017.3999999999999,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9935382997564752,
+            "p50": 0.9832246039142587,
+            "p95": 0.9840119622728318,
+            "p99": 0.9842510763652839,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 71442.43838459926,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 20.0,
+              "p50": 3.2,
+              "p95": 13.6,
+              "p99": 20.0,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 2.9,
+              "p50": 0.5,
+              "p95": 0.9,
+              "p99": 2.9,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 288.4,
+            "p50": 11.5,
+            "p95": 15.3,
+            "p99": 18.7,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 26.8747826,
+          "physics_step_duration_us": {
+            "maximum": 7227.2,
+            "p50": 862.5,
+            "p95": 948.5,
+            "p99": 1040.1,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.0008089367763,
+          "process_working_set_after_bytes": 196685824,
+          "process_working_set_before_bytes": 194805760,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 18.604801662656055,
+          "repetition": 2,
+          "sampled_average_working_set_bytes": 196139885.7142857,
+          "sampled_max_working_set_bytes": 196685824,
+          "simulation_ticks_per_second": 1116.2880997593634,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 7249.8,
+            "p50": 881.1,
+            "p95": 969.9,
+            "p99": 1062.7,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 15.3,
+            "p50": 0.1,
+            "p95": 0.1,
+            "p99": 0.2,
+            "samples": 30000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 273.4,
+            "p50": 10.5,
+            "p95": 11.9,
+            "p99": 14.3,
+            "samples": 30000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 3336.200000000001,
+            "p50": 844.9999999999998,
+            "p95": 916.6999999999998,
+            "p99": 1002.1999999999998,
+            "samples": 30000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9924145521611094,
+            "p50": 0.9832029452369995,
+            "p95": 0.9839953271028037,
+            "p99": 0.9842455362352661,
+            "samples": 30000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 64,
+          "drone_ticks_per_second": 71748.58131193851,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 18.7,
+              "p50": 3.2,
+              "p95": 14.1,
+              "p99": 18.7,
+              "samples": 63
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 3.8,
+              "p50": 0.4,
+              "p95": 0.8,
+              "p99": 3.8,
+              "samples": 63
+            },
+            "measured_add_count": 63,
+            "measured_remove_count": 63
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 276.3,
+            "p50": 11.5,
+            "p95": 15.4,
+            "p99": 18.3,
+            "samples": 30000
+          },
+          "layout": "compact",
+          "measured_ticks": 30000,
+          "measurement_wall_seconds": 26.760111,
+          "physics_step_duration_us": {
+            "maximum": 3361.7,
+            "p50": 860.1,
+            "p95": 936.3,
+            "p99": 1025.7,
+            "samples": 30000
+          },
+          "process_cpu_percent_approx": 100.00332210879095,
+          "process_working_set_after_bytes": 196558848,
+          "process_working_set_before_bytes": 194678784,
+          "process_working_set_change_bytes": 1880064,
+          "real_time_factor": 18.68452638331732,
+          "repetition": 3,
+          "sampled_average_working_set_bytes": 196021101.7142857,
+          "sampled_max_working_set_bytes": 196558848,
+          "simulation_ticks_per_second": 1121.0715829990393,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 3384.3,
+            "p50": 878.7,
+            "p95": 957.3,
+            "p99": 1047.6,
+            "samples": 30000
+          },
+          "time_limit_reached": false,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 7,
+          "working_set_sample_interval_ticks": 5000
+        },
+        {
+          "advance_camera_system_duration_us": {
+            "maximum": 5.9,
+            "p50": 0.1,
+            "p95": 0.2,
+            "p99": 0.2,
+            "samples": 17000
+          },
+          "apply_rigid_body_forces_system_duration_us": {
+            "maximum": 259.1,
+            "p50": 21.2,
+            "p95": 25.7,
+            "p99": 29.9,
+            "samples": 17000
+          },
+          "contact_generation_duration_us": {
+            "maximum": 4309.800000000002,
+            "p50": 1764.300000000001,
+            "p95": 1886.8000000000002,
+            "p99": 2002.4000000000008,
+            "samples": 17000
+          },
+          "contact_generation_fraction": {
+            "maximum": 0.9853886322554732,
+            "p50": 0.9837073981712385,
+            "p95": 0.9844887445402628,
+            "p99": 0.9847368982815667,
+            "samples": 17000
+          },
+          "deadline_misses_over_16_67ms": 0,
+          "drone_count": 128,
+          "drone_ticks_per_second": 68994.2520178409,
+          "dynamics": "rigid_body",
+          "entity_lifecycle": {
+            "additional_drone_add_duration_us": {
+              "maximum": 27.7,
+              "p50": 3.2,
+              "p95": 14.2,
+              "p99": 21.9,
+              "samples": 127
+            },
+            "additional_drone_remove_duration_us": {
+              "maximum": 4.0,
+              "p50": 0.4,
+              "p95": 0.7,
+              "p99": 1.6,
+              "samples": 127
+            },
+            "measured_add_count": 127,
+            "measured_remove_count": 127
+          },
+          "flecs_progress_duration_us": {
+            "maximum": 262.6,
+            "p50": 22.7,
+            "p95": 30.0,
+            "p99": 34.2,
+            "samples": 17000
+          },
+          "layout": "compact",
+          "measured_ticks": 17000,
+          "measurement_wall_seconds": 31.5388592,
+          "physics_step_duration_us": {
+            "maximum": 4401.3,
+            "p50": 1795.1,
+            "p95": 1925.4,
+            "p99": 2040.9,
+            "samples": 17000
+          },
+          "process_cpu_percent_approx": 100.00044643339541,
+          "process_working_set_after_bytes": 196939776,
+          "process_working_set_before_bytes": 195354624,
+          "process_working_set_change_bytes": 1585152,
+          "real_time_factor": 8.983626564823032,
+          "repetition": 1,
+          "sampled_average_working_set_bytes": 196509696.0,
+          "sampled_max_working_set_bytes": 196939776,
+          "simulation_ticks_per_second": 539.017593889382,
+          "target_ticks": 30000,
+          "tick_duration_us": {
+            "maximum": 4454.2,
+            "p50": 1833.5,
+            "p95": 1965.6,
+            "p99": 2081.2,
+            "samples": 17000
+          },
+          "time_limit_reached": true,
+          "warmup_ticks": 120,
+          "working_set_sample_count": 4,
+          "working_set_sample_interval_ticks": 5000
+        }
+      ],
+      "spacing_meters": 0.55,
+      "stop_reason": "한 번의 측정이 제한 시간에 도달해 더 큰 규모의 실행을 멈췄습니다.",
+      "stopped_at_time_limit": true,
+      "target_counts": [
+        1,
+        8,
+        32,
+        64,
+        128,
+        256
+      ],
+      "target_repetitions_per_count": 3,
+      "target_ticks_per_run": 30000
+    }
+  },
+  "eo_pixel_readback_enqueue_duration_us": {
+    "maximum": 93599.2,
+    "p50": 2211.7,
+    "p95": 2363.8,
+    "p99": 2555.6,
+    "samples": 291
+  },
+  "eo_pixel_readback_poll_duration_us": {
+    "maximum": 2623.1,
+    "p50": 0.1,
+    "p95": 2349.7,
+    "p99": 2430.5,
+    "samples": 1798
+  },
+  "framebuffer": {
+    "height": 720,
+    "width": 1280
+  },
+  "opengl": {
+    "renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+    "version": "3.3.0 NVIDIA 581.42"
+  },
+  "physics_step_duration_us": {
+    "maximum": 53.3,
+    "p50": 11.8,
+    "p95": 13.1,
+    "p99": 22.0,
+    "samples": 299
+  },
+  "process_cpu_percent_approx": 100.00789904421565,
+  "render_fps": 359.5564936642666,
+  "render_frame_duration_us": {
+    "maximum": 93875.3,
+    "p50": 2387.4,
+    "p95": 5675.7,
+    "p99": 5833.3,
+    "samples": 1798
+  },
+  "render_frame_with_eo_readback_duration_us": {
+    "maximum": 93875.3,
+    "p50": 3930.5,
+    "p95": 5779.2,
+    "p99": 5987.0,
+    "samples": 580
+  },
+  "render_frame_without_eo_readback_duration_us": {
+    "maximum": 4554.5,
+    "p50": 2384.5,
+    "p95": 2465.1,
+    "p99": 2580.9,
+    "samples": 1218
+  },
+  "rendered_frames": 1798,
+  "simulation_ticks": 299,
+  "source_revision": "4ec16596",
+  "tick_duration_us": {
+    "deadline_misses_over_16_67ms": 0,
+    "maximum": 62.7,
+    "p50": 21.3,
+    "p95": 24.4,
+    "p99": 54.4,
+    "samples": 299
+  },
+  "vision_analysis": {
+    "duration_us": {
+      "maximum": 4380.1,
+      "p50": 3082.6,
+      "p95": 3195.1,
+      "p99": 3347.3,
+      "samples": 291
+    },
+    "mean_brightness": 125.00777994791613,
+    "mean_contrast": 39.119151166340615,
+    "mean_sharpness": 29.720257161455525,
+    "samples": 291
+  },
+  "working_set_bytes": 198520832,
+  "measured_source_revision": "ccf304cc",
+  "source_revision_note": "The executable contained an older CMake revision stamp. The source files compiled and measured match measured_source_revision."
+}
