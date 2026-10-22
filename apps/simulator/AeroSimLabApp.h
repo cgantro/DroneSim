@@ -118,7 +118,7 @@ private:
     void UpdateEoCamera(int width, int height);
 #ifndef __EMSCRIPTEN__
     [[nodiscard]] std::uint32_t RenderScenePanel(int width, int height);
-    [[nodiscard]] std::uint32_t RenderCameraPanel(int width, int height);
+    [[nodiscard]] std::uint32_t RenderCameraPanel();
     /** @brief 새 EO 화면을 픽셀로 읽고 영상 품질을 계산한다. */
     void CaptureEoFrame();
 #endif

@@ -496,9 +496,11 @@ void AeroSimLabApp::RenderFrame()
                 < std::chrono::seconds(2);
         const bool cameraActive = simulation_.Camera().status
             == aerosimlab::simulation::CameraStatus::Active;
+        const auto& camera = simulation_.Camera();
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
+            camera.imageWidthPixels, camera.imageHeightPixels,
             [this](int width, int height) { return RenderScenePanel(width, height); },
-            [this](int width, int height) { return RenderCameraPanel(width, height); });
+            [this] { return RenderCameraPanel(); });
     }
 #endif
 }
@@ -541,10 +543,13 @@ std::uint32_t AeroSimLabApp::RenderScenePanel(int width, int height)
     return sceneTarget_->GetTextureId();
 }
 
-std::uint32_t AeroSimLabApp::RenderCameraPanel(int width, int height)
+std::uint32_t AeroSimLabApp::RenderCameraPanel()
 {
-    cameraTarget_->Resize(width, height);
-    UpdateEoCamera(width, height);
+    const auto& camera = simulation_.Camera();
+    const int imageWidth = camera.imageWidthPixels;
+    const int imageHeight = camera.imageHeightPixels;
+    cameraTarget_->Resize(imageWidth, imageHeight);
+    UpdateEoCamera(imageWidth, imageHeight);
     renderer_->BeginView(*cameraTarget_);
     DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
         eoCamera_->GetPosition());

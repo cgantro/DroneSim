@@ -30,6 +30,10 @@ enum class CameraStatus
 struct CameraState
 {
     CameraStatus status = CameraStatus::Active;
+    /** @brief 탑재 카메라가 한 프레임에 만드는 가로 픽셀 수다. X500 단안 카메라는 1280이다. */
+    int imageWidthPixels = 1280;
+    /** @brief 탑재 카메라가 한 프레임에 만드는 세로 픽셀 수다. X500 단안 카메라는 960이다. */
+    int imageHeightPixels = 960;
     std::uint64_t frameCount = 0;
     std::uint64_t lastFrameTick = 0;
     glm::dvec3 positionMeters{0.0};

@@ -24,8 +24,9 @@ public:
 
     void Render(const simulation::SimulationCore& simulation,
         bool gamepadConnected, bool groundControlConnected, bool cameraActive,
+        int cameraImageWidth, int cameraImageHeight,
         const std::function<std::uint32_t(int, int)>& renderScene,
-        const std::function<std::uint32_t(int, int)>& renderCamera);
+        const std::function<std::uint32_t()>& renderCamera);
 
 private:
     bool initialized_ = false;

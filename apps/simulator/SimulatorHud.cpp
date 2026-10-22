@@ -87,8 +87,9 @@ SimulatorHud::~SimulatorHud()
 
 void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     bool gamepadConnected, bool groundControlConnected, bool cameraActive,
+    int cameraImageWidth, int cameraImageHeight,
     const std::function<std::uint32_t(int, int)>& renderScene,
-    const std::function<std::uint32_t(int, int)>& renderCamera)
+    const std::function<std::uint32_t()>& renderCamera)
 {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -111,33 +112,69 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     }
     ImGui::DockSpaceOverViewport(dockspaceId, viewport);
 
-    const auto drawPanel = [](const char* title,
-        const std::function<std::uint32_t(int, int)>& drawView,
-        bool enabled, const char* disabledMessage)
+    const auto drawScenePanel = [&renderScene]
     {
-        if (ImGui::Begin(title))
+        if (ImGui::Begin("장면"))
         {
             const ImVec2 available = ImGui::GetContentRegionAvail();
             const ImVec2 imageSize{std::max(1.0F, available.x),
                 std::max(1.0F, available.y)};
-            const int width = static_cast<int>(imageSize.x);
-            const int height = static_cast<int>(imageSize.y);
-            if (enabled)
-            {
-                const std::uint32_t texture = drawView(width, height);
-                ImGui::Image(static_cast<ImTextureID>(texture), imageSize,
-                    ImVec2{0.0F, 1.0F}, ImVec2{1.0F, 0.0F});
-            }
-            else
-            {
-                ImGui::TextUnformatted(disabledMessage);
-            }
+            const std::uint32_t texture = renderScene(
+                static_cast<int>(imageSize.x), static_cast<int>(imageSize.y));
+            ImGui::Image(static_cast<ImTextureID>(texture), imageSize,
+                ImVec2{0.0F, 1.0F}, ImVec2{1.0F, 0.0F});
         }
         ImGui::End();
     };
 
-    drawPanel("장면", renderScene, true, "장면을 표시할 수 없습니다.");
-    drawPanel("카메라", renderCamera, cameraActive, "카메라가 꺼져 있습니다.");
+    drawScenePanel();
+
+    if (ImGui::Begin("카메라"))
+    {
+        const ImVec2 available = ImGui::GetContentRegionAvail();
+        const ImVec2 imageOrigin = ImGui::GetCursorPos();
+        const ImVec2 contentOrigin = ImGui::GetCursorScreenPos();
+        ImVec2 imageMaximum{contentOrigin.x + available.x,
+            contentOrigin.y + available.y};
+
+        if (cameraActive && cameraImageWidth > 0 && cameraImageHeight > 0)
+        {
+            const float scale = std::min(
+                available.x / static_cast<float>(cameraImageWidth),
+                available.y / static_cast<float>(cameraImageHeight));
+            const ImVec2 imageSize{
+                static_cast<float>(cameraImageWidth) * scale,
+                static_cast<float>(cameraImageHeight) * scale};
+            ImGui::SetCursorPos(ImVec2{
+                imageOrigin.x + (available.x - imageSize.x) * 0.5F,
+                imageOrigin.y + (available.y - imageSize.y) * 0.5F});
+            const std::uint32_t texture = renderCamera();
+            ImGui::Image(static_cast<ImTextureID>(texture), imageSize,
+                ImVec2{0.0F, 1.0F}, ImVec2{1.0F, 0.0F});
+            imageMaximum = ImGui::GetItemRectMax();
+        }
+        else
+        {
+            ImGui::TextUnformatted("카메라가 꺼져 있습니다.");
+        }
+
+        const std::string resolution = std::to_string(cameraImageWidth)
+            + " × " + std::to_string(cameraImageHeight);
+        const ImVec2 textSize = ImGui::CalcTextSize(resolution.c_str());
+        const ImVec2 padding{8.0F, 4.0F};
+        const ImVec2 badgeMinimum{
+            imageMaximum.x - textSize.x - padding.x * 2.0F - 8.0F,
+            imageMaximum.y - textSize.y - padding.y * 2.0F - 8.0F};
+        const ImVec2 badgeMaximum{
+            imageMaximum.x - 8.0F,
+            imageMaximum.y - 8.0F};
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddRectFilled(badgeMinimum, badgeMaximum,
+            IM_COL32(0, 0, 0, 190), 4.0F);
+        drawList->AddText(ImVec2{badgeMinimum.x + padding.x,
+            badgeMinimum.y + padding.y}, IM_COL32(255, 255, 255, 255), resolution.c_str());
+    }
+    ImGui::End();
 
     ImGui::SetNextWindowPos(ImVec2{14.0F, 14.0F}, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.86F);
