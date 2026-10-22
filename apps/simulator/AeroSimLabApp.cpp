@@ -509,8 +509,8 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
 {
     const auto& state = simulation_.State();
     const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
-    observerCamera_->SetPosition(dronePosition + glm::vec3{80.0F, 45.0F, 80.0F});
-    observerCamera_->SetTarget(dronePosition + glm::vec3{0.0F, 0.2F, 0.0F});
+    observerCamera_->SetPosition(dronePosition + glm::vec3{8.0F, 6.0F, 8.0F});
+    observerCamera_->SetTarget(dronePosition + glm::vec3{0.0F, 0.4F, 0.0F});
     observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
 }
 
