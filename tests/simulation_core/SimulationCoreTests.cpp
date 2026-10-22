@@ -252,7 +252,8 @@ void Verify_SimulationCore_DefaultsToAirSimAndUsesRotorForcesForTakeoffAndLandin
     const EcsSystemDurations rigidBodySystemDurations = simulation.LastEcsSystemDurations();
     EXPECT_DOUBLE_EQ(rigidBodySystemDurations.advanceKinematicDroneMicroseconds, 0.0);
     EXPECT_GT(rigidBodySystemDurations.applyRigidBodyForcesMicroseconds, 0.0);
-    EXPECT_GT(rigidBodySystemDurations.advanceCameraMicroseconds, 0.0);
+    // 카메라 갱신은 짧아 한 번의 시간 표본이 0일 수 있으므로 프레임 증가로 실행을 확인한다.
+    EXPECT_EQ(simulation.Camera().frameCount, 1U);
     EXPECT_GT(simulation.LastPhysicsStepDurationMicroseconds(), 0.0);
     EXPECT_GT(simulation.LastContactGenerationDurationMicroseconds(), 0.0);
     simulation.SetPhysicsStepTimingEnabled(false);
@@ -272,7 +273,7 @@ void Verify_SimulationCore_DefaultsToAirSimAndUsesRotorForcesForTakeoffAndLandin
         kinematicSimulation.LastEcsSystemDurations();
     EXPECT_GT(kinematicSystemDurations.advanceKinematicDroneMicroseconds, 0.0);
     EXPECT_DOUBLE_EQ(kinematicSystemDurations.applyRigidBodyForcesMicroseconds, 0.0);
-    EXPECT_GT(kinematicSystemDurations.advanceCameraMicroseconds, 0.0);
+    EXPECT_EQ(kinematicSimulation.Camera().frameCount, 1U);
 
     ASSERT_EQ(
         simulation.Apply(Command(DroneCommand::Kind::TakeOff)),
