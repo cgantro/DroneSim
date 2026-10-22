@@ -472,11 +472,19 @@ void AeroSimLabApp::AdvanceReplayTick()
 
 void AeroSimLabApp::AdvanceManualControlTick()
 {
+    const auto applyAndRecord = [this](
+        const aerosimlab::simulation::DroneCommand& command)
+    {
+        if (simulation_.Apply(command)
+            == aerosimlab::simulation::CommandResult::Accepted)
+        {
+            RecordCommand(command);
+        }
+    };
+
     if (!groundControlActive_ && pendingControllerAction_)
     {
-        const auto result = simulation_.Apply(*pendingControllerAction_);
-        if (result == aerosimlab::simulation::CommandResult::Accepted)
-            RecordCommand(*pendingControllerAction_);
+        applyAndRecord(*pendingControllerAction_);
         pendingControllerAction_.reset();
     }
     if (!groundControlActive_ && pendingPilotCommand_)
@@ -492,12 +500,8 @@ void AeroSimLabApp::AdvanceManualControlTick()
                 aerosimlab::simulation::DroneCommand::Kind::SetYawRate,
                 glm::dvec3{0.0},
                 pendingPilotCommand_->yawRateRadiansPerSecond};
-            if (simulation_.Apply(velocityCommand)
-                == aerosimlab::simulation::CommandResult::Accepted)
-                RecordCommand(velocityCommand);
-            if (simulation_.Apply(yawCommand)
-                == aerosimlab::simulation::CommandResult::Accepted)
-                RecordCommand(yawCommand);
+            applyAndRecord(velocityCommand);
+            applyAndRecord(yawCommand);
         }
     }
 
