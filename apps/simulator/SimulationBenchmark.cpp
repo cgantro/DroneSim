@@ -76,7 +76,7 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
         }));
 
     nlohmann::json report{
-        {"configuration", "hidden OpenGL window; one drone; 9.4km x 11.9km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes"},
+        {"configuration", "hidden OpenGL window; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes"},
         {"source_revision", measurements.sourceRevision},
         {"framebuffer", {
             {"width", measurements.framebufferWidth},

@@ -258,7 +258,7 @@ void AeroSimLabApp::InitializeGraphics()
     renderer_->Init(framebufferWidth, framebufferHeight);
     observerCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{7.0F, 5.0F, 7.0F}, glm::vec3{0.0F}, 1.0F,
-        45.0F, 0.5F, 12000.0F);
+        45.0F, 0.5F, 25000.0F);
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
 

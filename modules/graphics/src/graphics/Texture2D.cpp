@@ -2,6 +2,8 @@
 
 #include "graphics/GlApi.h"
 
+#include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <limits>
 #include <stdexcept>
@@ -9,6 +11,46 @@
 
 namespace aerosimlab::graphics
 {
+
+namespace
+{
+
+/**
+ * @brief 비스듬히 보이는 텍스처의 흐려짐을 줄입니다.
+ * @details 지원하지 않는 그래픽 장치에서는 기본 필터 설정을 그대로 씁니다.
+ */
+void SetAnisotropicFilteringIfAvailable()
+{
+#ifndef __EMSCRIPTEN__
+    constexpr GLenum textureMaxAnisotropy = 0x84FE;
+    constexpr GLenum maxTextureMaxAnisotropy = 0x84FF;
+    constexpr char extensionName[] = "GL_EXT_texture_filter_anisotropic";
+
+    GLint extensionCount = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &extensionCount);
+    bool isSupported = false;
+    for (GLint index = 0; index < extensionCount; ++index)
+    {
+        const auto* extension = reinterpret_cast<const char*>(
+            glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(index)));
+        if (extension != nullptr && std::strcmp(extension, extensionName) == 0)
+        {
+            isSupported = true;
+            break;
+        }
+    }
+
+    if (!isSupported)
+        return;
+
+    GLfloat maximumAnisotropy = 1.0F;
+    glGetFloatv(maxTextureMaxAnisotropy, &maximumAnisotropy);
+    glTexParameterf(GL_TEXTURE_2D, textureMaxAnisotropy,
+        std::min(maximumAnisotropy, 8.0F));
+#endif
+}
+
+} // namespace
 
 std::unique_ptr<Texture2D> Texture2D::LoadPpm(const std::filesystem::path& path)
 {
@@ -65,6 +107,7 @@ Texture2D::Texture2D(std::uint32_t width, std::uint32_t height,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    SetAnisotropicFilteringIfAvailable();
 
     GLint previousUnpackAlignment = 4;
     glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
