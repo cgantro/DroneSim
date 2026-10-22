@@ -157,18 +157,6 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
         ASSERT_EQ(beforeStatus.telemetry.drones.size(), 1U);
         EXPECT_EQ(beforeStatus.appliedTick, beforeStatus.telemetry.tick);
 
-        const auto added = send([](communication::CommandPacket& packet)
-        {
-            packet.fleetCommand = communication::FleetCommand::AddDrone;
-        });
-        ASSERT_TRUE(added.accepted);
-        EXPECT_EQ(added.status, "drone_added");
-        ASSERT_EQ(added.telemetry.drones.size(), 2U);
-        EXPECT_EQ(added.telemetry.drones[1].name, "드론 2");
-        EXPECT_EQ(added.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
-        EXPECT_GT(added.telemetry.drones[1].positionMeters.x,
-            added.telemetry.drones[0].positionMeters.x);
-
         const auto start = send([](communication::CommandPacket& packet)
         {
             packet.sessionCommand = communication::SessionCommand::StartRecording;
@@ -217,7 +205,23 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
             return reply.telemetry.tick >= stopped.telemetry.tick + 60;
         }, std::chrono::seconds(5));
         EXPECT_EQ(settled.telemetry.drone.mode, simulation::FlightMode::Hovering);
-        EXPECT_NEAR(settled.telemetry.drone.positionMeters.x, positionAfterStopMeters, 0.1);
+        EXPECT_NEAR(settled.telemetry.drone.positionMeters.x, positionAfterStopMeters, 0.1)
+            << "stopped vx=" << stopped.telemetry.drone.velocityMetersPerSecond.x
+            << ", settled vx=" << settled.telemetry.drone.velocityMetersPerSecond.x
+            << ", stop tick=" << stopped.telemetry.tick
+            << ", settled tick=" << settled.telemetry.tick;
+
+        const auto added = send([](communication::CommandPacket& packet)
+        {
+            packet.fleetCommand = communication::FleetCommand::AddDrone;
+        });
+        ASSERT_TRUE(added.accepted);
+        EXPECT_EQ(added.status, "drone_added");
+        ASSERT_EQ(added.telemetry.drones.size(), 2U);
+        EXPECT_EQ(added.telemetry.drones[1].name, "드론 2");
+        EXPECT_EQ(added.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
+        EXPECT_GT(added.telemetry.drones[1].positionMeters.x,
+            added.telemetry.drones[0].positionMeters.x);
 
         const auto land = send([](communication::CommandPacket& packet)
         {
