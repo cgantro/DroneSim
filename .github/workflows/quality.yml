@@ -29,10 +29,6 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             libgl1-mesa-dev \
             libopencv-dev \
-            libwayland-bin \
-            libwayland-dev \
-            wayland-protocols \
-            libxkbcommon-dev \
             libx11-dev \
             libxrandr-dev \
             libxinerama-dev \
@@ -44,7 +40,7 @@ jobs:
             xauth
 
       - name: Configure GCC sanitizer build
-        run: cmake --preset linux-gcc-asan-ubsan
+        run: cmake --preset linux-gcc-asan-ubsan -DGLFW_BUILD_WAYLAND=OFF
 
       - name: Build native targets
         run: cmake --build --preset linux-gcc-asan-ubsan
@@ -79,10 +75,6 @@ jobs:
             gcovr \
             libgl1-mesa-dev \
             libopencv-dev \
-            libwayland-bin \
-            libwayland-dev \
-            wayland-protocols \
-            libxkbcommon-dev \
             libx11-dev \
             libxrandr-dev \
             libxinerama-dev \
@@ -94,7 +86,7 @@ jobs:
             xauth
 
       - name: Configure GCC coverage build
-        run: cmake --preset linux-gcc-coverage
+        run: cmake --preset linux-gcc-coverage -DGLFW_BUILD_WAYLAND=OFF
 
       - name: Build native targets
         run: cmake --build --preset linux-gcc-coverage

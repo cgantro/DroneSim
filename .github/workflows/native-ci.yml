@@ -29,10 +29,6 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             libgl1-mesa-dev \
             libopencv-dev \
-            libwayland-bin \
-            libwayland-dev \
-            wayland-protocols \
-            libxkbcommon-dev \
             libx11-dev \
             libxrandr-dev \
             libxinerama-dev \
@@ -44,7 +40,7 @@ jobs:
             xauth
 
       - name: Configure native Debug build
-        run: cmake --preset linux-gcc-debug
+        run: cmake --preset linux-gcc-debug -DGLFW_BUILD_WAYLAND=OFF
 
       - name: Build native targets
         run: cmake --build --preset linux-gcc-debug --parallel 4
