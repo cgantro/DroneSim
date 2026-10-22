@@ -162,6 +162,22 @@ FlightMode ReadFlightMode(const Json& value)
     throw std::invalid_argument(std::string("알 수 없는 비행 상태입니다: ") + name);
 }
 
+std::string ReadUniqueDroneName(
+    const Json& item,
+    std::unordered_set<std::string>& names,
+    std::string_view droneKind)
+{
+    const Json& nameValue = Required(item, "name");
+    if (!nameValue.is_string())
+        throw std::invalid_argument(std::string(droneKind) + " name은 문자열이어야 합니다.");
+
+    std::string name = nameValue.get<std::string>();
+    if (name.empty() || !names.insert(name).second)
+        throw std::invalid_argument(
+            std::string(droneKind) + " name은 비어 있거나 중복될 수 없습니다.");
+    return name;
+}
+
 std::vector<ExpectedDrone> ReadExpectedDrones(const Json& value)
 {
     if (!value.is_array() || value.empty())
@@ -174,12 +190,7 @@ std::vector<ExpectedDrone> ReadExpectedDrones(const Json& value)
     {
         if (!item.is_object())
             throw std::invalid_argument("예상 드론 상태는 JSON 객체여야 합니다.");
-        const Json& nameValue = Required(item, "name");
-        if (!nameValue.is_string())
-            throw std::invalid_argument("예상 드론 name은 문자열이어야 합니다.");
-        std::string name = nameValue.get<std::string>();
-        if (name.empty() || !names.insert(name).second)
-            throw std::invalid_argument("예상 드론 name은 비어 있거나 중복될 수 없습니다.");
+        std::string name = ReadUniqueDroneName(item, names, "예상 드론");
         const auto orientation = item.find("orientation_quaternion_wxyz");
         drones.push_back({
             std::move(name),
@@ -207,12 +218,7 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
     {
         if (!item.is_object())
             throw std::invalid_argument("각 드론은 JSON 객체여야 합니다.");
-        const Json& nameValue = Required(item, "name");
-        if (!nameValue.is_string())
-            throw std::invalid_argument("드론 name은 문자열이어야 합니다.");
-        std::string name = nameValue.get<std::string>();
-        if (name.empty() || !names.insert(name).second)
-            throw std::invalid_argument("드론 name은 비어 있거나 중복될 수 없습니다.");
+        std::string name = ReadUniqueDroneName(item, names, "드론");
         const auto yaw = item.find("initial_yaw_radians");
         const double initialYawRadians = yaw == item.end()
             ? 0.0
