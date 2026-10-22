@@ -7,7 +7,7 @@ namespace aerosimlab::graphics
 
 VertexArray::VertexArray()
 {
-    // Vertex Array Object(VAO) ID만 만든다. 정점 속성 형식과 index buffer 연결은 Mesh가 이 VAO를 선택한 뒤 기록한다.
+    // VAO(정점 읽기 설정을 저장하는 GPU 객체)를 만든다. 정점 형식과 연결 번호는 Mesh가 선택한 뒤 등록한다.
     glGenVertexArrays(1, &m_RendererID);
 }
 
@@ -27,7 +27,7 @@ void VertexArray::Bind() const
 
 void VertexArray::UnBind() const
 {
-    // 현재 VAO 선택만 해제한다. 그 안에 저장된 정점 속성 설명과 index buffer 연결은 그대로 남는다.
+    // 현재 VAO 선택만 해제한다. 저장된 정점 읽기 방법과 삼각형 연결 번호는 유지된다.
     glBindVertexArray(0);
 }
 

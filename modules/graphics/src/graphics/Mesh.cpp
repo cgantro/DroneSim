@@ -137,7 +137,7 @@ Mesh::Mesh(const Vertex* vertices, std::uint32_t vertexCount,
         static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max()) / sizeof(std::uint32_t))
         throw std::runtime_error("Mesh index data exceeds the GPU buffer limit");
 
-    // Vertex Array Object(VAO)를 먼저 선택한다. 이후 지정하는 정점 속성 형식과 index buffer 연결이 이 Mesh의 상태로 저장된다.
+    // 정점 읽기 설정을 저장할 VAO를 먼저 선택한다. 이후 지정하는 정점 형식과 연결 번호가 여기에 저장된다.
     vertexArray_ = std::make_unique<VertexArray>();
     vertexArray_->Bind();
 
@@ -145,10 +145,10 @@ Mesh::Mesh(const Vertex* vertices, std::uint32_t vertexCount,
     vertexBuffer_ = std::make_unique<VertexBuffer>(vertices, byteCount);
     vertexBuffer_->Bind();
 
-    // index buffer 연결은 현재 VAO의 일부로 저장된다. VAO를 선택한 상태에서 buffer를 만들고 올려 이후 그리기에 쓰도록 한다.
+    // 삼각형 연결 번호는 VAO에 저장된다. VAO를 선택한 상태에서 번호 버퍼를 만들고 데이터를 올린다.
     indexBuffer_ = std::make_unique<IndexBuffer>(indices, indexCount);
 
-    // Shader 입력 위치 0과 1에 정점 위치와 표면 법선을 연결한다. stride는 다음 정점까지의 byte 간격이다.
+    // 셰이더 입력 0과 1에 정점 위치와 표면 방향을 연결한다. stride는 다음 정점까지의 byte 간격이다.
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, position)));
     glEnableVertexAttribArray(1);
@@ -156,15 +156,15 @@ Mesh::Mesh(const Vertex* vertices, std::uint32_t vertexCount,
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, textureCoordinate)));
 
-    // Vertex Buffer Object(VBO)의 현재 선택을 해제해도 VAO에 기록된 정점 속성 설명은 남는다.
-    // index buffer 연결은 VAO 내부 상태이므로 여기서 해제하지 않는다.
+    // 정점 버퍼의 현재 선택만 해제한다. VAO에 저장된 정점 읽기 방법은 그대로 남는다.
+    // 삼각형 연결 번호도 VAO에 저장되므로 여기서 별도로 해제하지 않는다.
     vertexBuffer_->UnBind();
     vertexArray_->UnBind();
 }
 
 Mesh::~Mesh() = default;
 
-// 그리기 명령은 index buffer의 uint32 원소를 읽어 VAO가 참조하는 정점 buffer의 원소를 선택한다.
+// 그리기 명령은 삼각형 연결 번호를 따라 VAO가 참조하는 정점들을 읽는다.
 void Mesh::Bind() const { vertexArray_->Bind(); }
 void Mesh::UnBind() const { vertexArray_->UnBind(); }
 std::uint32_t Mesh::GetIndexCount() const { return indexBuffer_->GetCount(); }

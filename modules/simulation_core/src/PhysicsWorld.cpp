@@ -376,8 +376,7 @@ struct PhysicsWorld::Impl
 
         void ApplyMotorTargets()
         {
-            // AirSim normally copies controller output after integrating the body.
-            // This simulator already has the command at the start of the fixed step.
+            // 고정 Tick이 시작될 때 계산된 모터 목표를 각 로터에 전달한다.
             for (msr::airlib::uint index = 0; index < parameters.getParams().rotor_count; ++index)
             {
                 auto& rotor = static_cast<msr::airlib::RotorActuator&>(

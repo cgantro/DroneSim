@@ -29,10 +29,10 @@ IndexBuffer::IndexBuffer(const std::uint32_t* indices, std::uint32_t count)
 
     glGenBuffers(1, &m_RendererID);
 
-    // 번호 배열 연결은 현재 선택된 VAO에 저장된다. Mesh가 사용할 VAO를 먼저 선택해야 한다.
+    // 삼각형을 만들 정점 번호는 현재 VAO에 저장된다. Mesh가 사용할 VAO를 먼저 선택해야 한다.
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
 
-    // GPU 저장 공간 크기는 byte 단위지만, 그리기 함수에 넘길 값은 번호 개수다.
+    // GPU 저장 공간은 byte 단위로 만들지만, 그리기 함수에는 정점 번호의 개수를 전달한다.
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
         byteCount,
@@ -40,7 +40,7 @@ IndexBuffer::IndexBuffer(const std::uint32_t* indices, std::uint32_t count)
         GL_STATIC_DRAW
     );
 
-    // 여기서 연결을 0으로 바꾸면 현재 VAO에 저장된 번호 배열도 지워지므로 그대로 둔다.
+    // 연결을 0으로 바꾸면 현재 VAO의 정점 번호 설정도 지워지므로 그대로 둔다.
 }
 
 IndexBuffer::~IndexBuffer()
@@ -60,7 +60,7 @@ void IndexBuffer::Bind() const
 
 void IndexBuffer::UnBind() const
 {
-    // GL_ELEMENT_ARRAY_BUFFER 연결은 VAO에 저장된다. 따라서 0을 연결하면 현재 VAO가 기억하던 EBO도 지워진다.
+    // 연결 정보는 VAO에 저장된다. 여기에 0을 연결하면 VAO의 정점 번호 설정도 지워진다.
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
