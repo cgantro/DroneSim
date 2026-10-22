@@ -34,6 +34,33 @@ bool CanReceiveWaypoint(FlightMode mode) noexcept
         || mode == FlightMode::FollowingWaypoint;
 }
 
+/**
+ * @brief 시나리오에서 사용할 이름과 실제 드론 번호를 연결한다.
+ * @details 드론 목록이 있으면 SimulationCore가 미리 만든 기본 드론을 지우고 목록을 구성한다.
+ */
+DroneIds CreateScenarioDrones(
+    const ScenarioDefinition& definition,
+    SimulationCore& simulation)
+{
+    DroneIds droneIds;
+    if (definition.drones.empty())
+    {
+        droneIds.emplace(definition.primaryDroneName, simulation.PrimaryDroneId());
+        return droneIds;
+    }
+
+    const DroneId unusedDefaultDrone = simulation.PrimaryDroneId();
+    for (const ScenarioDrone& drone : definition.drones)
+    {
+        droneIds.emplace(drone.name, simulation.AddDrone(
+            drone.initialPositionMeters, drone.initialYawRadians));
+    }
+
+    if (!simulation.RemoveDrone(unusedDefaultDrone))
+        throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
+    return droneIds;
+}
+
 /** @brief 카메라 동작을 적용하고 실행 기록에 쓸 이름을 돌려준다. */
 std::string_view ApplyCameraEvent(
     SimulationCore& simulation, detail::CameraEventAction action)
@@ -402,18 +429,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
     if (definition.windVelocity)
         simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
 
-    DroneIds droneIds;
-    if (definition.drones.empty())
-        droneIds.emplace(definition.primaryDroneName, simulation.PrimaryDroneId());
-    else
-    {
-        const DroneId unusedDefaultDrone = simulation.PrimaryDroneId();
-        for (const ScenarioDrone& drone : definition.drones)
-            droneIds.emplace(drone.name, simulation.AddDrone(
-                drone.initialPositionMeters, drone.initialYawRadians));
-        if (!simulation.RemoveDrone(unusedDefaultDrone))
-            throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
-    }
+    DroneIds droneIds = CreateScenarioDrones(definition, simulation);
 
     ScenarioResult result;
     result.mission = std::move(definition.mission);
