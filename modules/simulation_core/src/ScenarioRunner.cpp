@@ -103,12 +103,11 @@ void ApplyScheduledCommands(
 {
     while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
     {
-        const ScheduledCommand& scheduled = commands[nextCommand];
+        const ScheduledCommand& scheduled = commands[nextCommand++];
         if (scheduled.dropped)
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + scheduled.droneName + " 드론 명령을 통신 장애로 버렸습니다.");
-            ++nextCommand;
             continue;
         }
 
@@ -117,7 +116,6 @@ void ApplyScheduledCommands(
         {
             result.issues.push_back("tick " + std::to_string(tick) + "에서 "
                 + scheduled.droneName + " 드론의 역순 명령을 거부했습니다.");
-            ++nextCommand;
             continue;
         }
         lastSequence = scheduled.sequence;
@@ -139,7 +137,6 @@ void ApplyScheduledCommands(
         if (scheduled.duplicated)
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + scheduled.droneName + " 드론의 중복 재전송 명령을 한 번만 처리했습니다.");
-        ++nextCommand;
     }
 }
 

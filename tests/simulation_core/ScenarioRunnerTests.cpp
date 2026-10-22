@@ -110,6 +110,25 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
     EXPECT_FALSE(wrongOrientationResult.passed);
     ASSERT_EQ(wrongOrientationResult.issues.size(), 1);
     EXPECT_NE(wrongOrientationResult.issues.front().find("최종 자세"), std::string::npos);
+
+    constexpr std::string_view communicationFaultScenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":100,
+     "commands":[
+       {"tick":0,"type":"takeoff","delay_ticks":10},
+       {"tick":1,"type":"takeoff","drop":true},
+       {"tick":2,"type":"takeoff","duplicate":true}],
+     "expected":{"mode":"hovering","position_meters":[0,0,1.5],
+       "tolerance_meters":0.000001}}
+    )json";
+
+    const ScenarioResult communicationFaults = RunScenario(communicationFaultScenario);
+    EXPECT_FALSE(communicationFaults.passed);
+    ASSERT_EQ(communicationFaults.issues.size(), 1);
+    EXPECT_NE(communicationFaults.issues.front().find("역순 명령"), std::string::npos);
+    ASSERT_EQ(communicationFaults.eventLog.size(), 3);
+    EXPECT_NE(communicationFaults.eventLog[0].find("통신 장애"), std::string::npos);
+    EXPECT_NE(communicationFaults.eventLog[2].find("중복 재전송"), std::string::npos);
+    EXPECT_EQ(communicationFaults.finalState.mode, FlightMode::Hovering);
 }
 
 void Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward()
