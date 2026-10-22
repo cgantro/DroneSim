@@ -481,29 +481,34 @@ void AeroSimLabApp::ApplyDemoCommands()
     using Kind = aerosimlab::simulation::DroneCommand::Kind;
     const std::size_t tick = static_cast<std::size_t>(simulation_.TickCount()) % demoLengthTicks;
     aerosimlab::simulation::DroneCommand command;
-    bool hasCommand = true;
-
-    if (tick == 0)
+    switch (tick)
+    {
+    case 0:
         command.kind = Kind::TakeOff;
-    else if (tick == 120)
+        break;
+    case 120:
     {
         command.kind = Kind::SetWaypoint;
         command.vector = {8.0, 0.0, 2.0};
+        break;
     }
-    else if (tick == 300)
+    case 300:
     {
         command.kind = Kind::SetYawRate;
         command.yawRateRadiansPerSecond = 0.35;
+        break;
     }
-    else if (tick == 360)
+    case 360:
         command.kind = Kind::Stop;
-    else if (tick == 600)
+        break;
+    case 600:
         command.kind = Kind::Land;
-    else
-        hasCommand = false;
+        break;
+    default:
+        return;
+    }
 
-    if (hasCommand)
-        (void)simulation_.Apply(command);
+    (void)simulation_.Apply(command);
 }
 
 void AeroSimLabApp::RenderFrame()
