@@ -371,14 +371,13 @@ void AeroSimLabApp::ApplyDroneCommand(
     if (reply.accepted)
     {
         commandRecording_.Record(command);
-        const bool velocityCommand = command.kind
-            == aerosimlab::simulation::DroneCommand::Kind::SetVelocity;
-        const bool yawRateCommand = command.kind
-            == aerosimlab::simulation::DroneCommand::Kind::SetYawRate;
-        const bool hasNonzeroInput = velocityCommand
-            ? glm::length(command.vector) > 0.0
-            : command.yawRateRadiansPerSecond != 0.0;
-        if ((velocityCommand || yawRateCommand) && hasNonzeroInput)
+        const bool hasActiveVelocityCommand = command.kind
+                == aerosimlab::simulation::DroneCommand::Kind::SetVelocity
+            && glm::length(command.vector) > 0.0;
+        const bool hasActiveYawRateCommand = command.kind
+                == aerosimlab::simulation::DroneCommand::Kind::SetYawRate
+            && command.yawRateRadiansPerSecond != 0.0;
+        if (hasActiveVelocityCommand || hasActiveYawRateCommand)
         {
             groundControlCommandExpiresAtTick_ = simulation_.TickCount()
                 + groundControlCommandTimeoutTicks_;
