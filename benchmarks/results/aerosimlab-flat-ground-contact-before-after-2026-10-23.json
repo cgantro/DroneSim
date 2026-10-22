@@ -1,0 +1,374 @@
+{
+  "title": "평평한 바닥 접촉 검사 최적화 전후 측정",
+  "date": "2026-10-23",
+  "baseline_revision": "2568eb50",
+  "after_revision": "43ee0b0f",
+  "environment": {
+    "os": "Microsoft Windows 11 Pro",
+    "os_version": "10.0.26200",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+    "physical_cores": 14.0,
+    "logical_processors": 20.0,
+    "ram_gib": 31.8,
+    "gpu": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+    "graphics_api": "OpenGL 3.3",
+    "driver": "3.3.0 NVIDIA 581.42"
+  },
+  "method": {
+    "build": "Windows Release",
+    "warmup_ticks": 120,
+    "target_ticks_per_run": 30000,
+    "repetitions_per_count": 3,
+    "run_limit_seconds": 30,
+    "separated_spacing_meters": 2.5,
+    "compact_spacing_meters": 0.55,
+    "terrain": "height grid disabled; PhysicsWorld uses the flat z=0 ground fallback",
+    "change": "flat ground contact checks only the lowest collision-box corner; terrain-grid contact still checks all eight corners",
+    "limitations": [
+      "1024-drone results contain one repetition because runs reached the 30-second limit.",
+      "This benchmark measures the headless flat-ground path, not the terrain-grid collision path or GUI frame time.",
+      "The compact 0.55 m layout has frequent overlapping contacts; its timings are not representative of separated flight.",
+      "The results compare this single PC and benchmark workload only."
+    ]
+  },
+  "results": [
+    {
+      "layout": "separated",
+      "drone_count": 1,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 2.2,
+        "tick_p95_us": 2.3,
+        "tick_p99_us": 3.4,
+        "contact_p50_us": 0.9,
+        "contact_fraction_p50": 0.75,
+        "real_time_factor": 7290.36
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 1.8,
+        "tick_p95_us": 1.9,
+        "tick_p99_us": 2.2,
+        "contact_p50_us": 0.5,
+        "contact_fraction_p50": 0.625,
+        "real_time_factor": 8709.04
+      },
+      "tick_p95_change_percent": -17.4,
+      "contact_p50_change_percent": -44.4
+    },
+    {
+      "layout": "separated",
+      "drone_count": 8,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 11.5,
+        "tick_p95_us": 11.9,
+        "tick_p99_us": 19.4,
+        "contact_p50_us": 6.9,
+        "contact_fraction_p50": 0.8023,
+        "real_time_factor": 1419.0
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 8.6,
+        "tick_p95_us": 8.8,
+        "tick_p99_us": 12.1,
+        "contact_p50_us": 4.1,
+        "contact_fraction_p50": 0.7018,
+        "real_time_factor": 1891.06
+      },
+      "tick_p95_change_percent": -26.1,
+      "contact_p50_change_percent": -40.6
+    },
+    {
+      "layout": "separated",
+      "drone_count": 32,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 43.2,
+        "tick_p95_us": 48.2,
+        "tick_p99_us": 68.8,
+        "contact_p50_us": 27.8,
+        "contact_fraction_p50": 0.804,
+        "real_time_factor": 378.2
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 31.6,
+        "tick_p95_us": 34.4,
+        "tick_p99_us": 50.9,
+        "contact_p50_us": 16.3,
+        "contact_fraction_p50": 0.7074,
+        "real_time_factor": 514.3
+      },
+      "tick_p95_change_percent": -28.6,
+      "contact_p50_change_percent": -41.4
+    },
+    {
+      "layout": "separated",
+      "drone_count": 64,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 85.5,
+        "tick_p95_us": 98.7,
+        "tick_p99_us": 133.6,
+        "contact_p50_us": 55.8,
+        "contact_fraction_p50": 0.8063,
+        "real_time_factor": 190.25
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 62.3,
+        "tick_p95_us": 67.9,
+        "tick_p99_us": 101.2,
+        "contact_p50_us": 32.7,
+        "contact_fraction_p50": 0.7102,
+        "real_time_factor": 261.3
+      },
+      "tick_p95_change_percent": -31.2,
+      "contact_p50_change_percent": -41.4
+    },
+    {
+      "layout": "separated",
+      "drone_count": 128,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 170.3,
+        "tick_p95_us": 195.2,
+        "tick_p99_us": 252.6,
+        "contact_p50_us": 111.7,
+        "contact_fraction_p50": 0.8068,
+        "real_time_factor": 96.18
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 123.8,
+        "tick_p95_us": 137.4,
+        "tick_p99_us": 199.1,
+        "contact_p50_us": 65.6,
+        "contact_fraction_p50": 0.7118,
+        "real_time_factor": 131.44
+      },
+      "tick_p95_change_percent": -29.6,
+      "contact_p50_change_percent": -41.3
+    },
+    {
+      "layout": "separated",
+      "drone_count": 256,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 340.4,
+        "tick_p95_us": 397.5,
+        "tick_p99_us": 470.1,
+        "contact_p50_us": 222.7,
+        "contact_fraction_p50": 0.8042,
+        "real_time_factor": 48.09
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 248.6,
+        "tick_p95_us": 296.9,
+        "tick_p99_us": 360.7,
+        "contact_p50_us": 132.2,
+        "contact_fraction_p50": 0.7119,
+        "real_time_factor": 65.24
+      },
+      "tick_p95_change_percent": -25.3,
+      "contact_p50_change_percent": -40.6
+    },
+    {
+      "layout": "separated",
+      "drone_count": 512,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 699.8,
+        "tick_p95_us": 799.2,
+        "tick_p99_us": 883.3,
+        "contact_p50_us": 451.1,
+        "contact_fraction_p50": 0.7956,
+        "real_time_factor": 23.46
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 516.9,
+        "tick_p95_us": 602.3,
+        "tick_p99_us": 680.6,
+        "contact_p50_us": 270.2,
+        "contact_fraction_p50": 0.7018,
+        "real_time_factor": 31.54
+      },
+      "tick_p95_change_percent": -24.6,
+      "contact_p50_change_percent": -40.1
+    },
+    {
+      "layout": "separated",
+      "drone_count": 1024,
+      "before": {
+        "repetitions": 1,
+        "ticks_median": 21000.0,
+        "tick_p50_us": 1441.3,
+        "tick_p95_us": 1586.2,
+        "tick_p99_us": 1717.3,
+        "contact_p50_us": 914.0,
+        "contact_fraction_p50": 0.7903,
+        "real_time_factor": 11.38
+      },
+      "after": {
+        "repetitions": 1,
+        "ticks_median": 28000.0,
+        "tick_p50_us": 1071.8,
+        "tick_p95_us": 1204.3,
+        "tick_p99_us": 1320.6,
+        "contact_p50_us": 551.7,
+        "contact_fraction_p50": 0.6981,
+        "real_time_factor": 15.26
+      },
+      "tick_p95_change_percent": -24.1,
+      "contact_p50_change_percent": -39.6
+    },
+    {
+      "layout": "compact",
+      "drone_count": 1,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 2.2,
+        "tick_p95_us": 2.3,
+        "tick_p99_us": 2.6,
+        "contact_p50_us": 0.9,
+        "contact_fraction_p50": 0.75,
+        "real_time_factor": 7336.44
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 1.9,
+        "tick_p95_us": 1.9,
+        "tick_p99_us": 2.2,
+        "contact_p50_us": 0.5,
+        "contact_fraction_p50": 0.625,
+        "real_time_factor": 8707.36
+      },
+      "tick_p95_change_percent": -17.4,
+      "contact_p50_change_percent": -44.4
+    },
+    {
+      "layout": "compact",
+      "drone_count": 8,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 75.9,
+        "tick_p95_us": 87.2,
+        "tick_p99_us": 120.3,
+        "contact_p50_us": 70.9,
+        "contact_fraction_p50": 0.975,
+        "real_time_factor": 214.21
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 73.1,
+        "tick_p95_us": 81.3,
+        "tick_p99_us": 104.9,
+        "contact_p50_us": 68.2,
+        "contact_fraction_p50": 0.9741,
+        "real_time_factor": 223.72
+      },
+      "tick_p95_change_percent": -6.8,
+      "contact_p50_change_percent": -3.8
+    },
+    {
+      "layout": "compact",
+      "drone_count": 32,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 402.3,
+        "tick_p95_us": 448.2,
+        "tick_p99_us": 506.8,
+        "contact_p50_us": 385.0,
+        "contact_fraction_p50": 0.9815,
+        "real_time_factor": 40.71
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 390.9,
+        "tick_p95_us": 440.1,
+        "tick_p99_us": 505.4,
+        "contact_p50_us": 373.6,
+        "contact_fraction_p50": 0.981,
+        "real_time_factor": 42.03
+      },
+      "tick_p95_change_percent": -1.8,
+      "contact_p50_change_percent": -3.0
+    },
+    {
+      "layout": "compact",
+      "drone_count": 64,
+      "before": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 882.0,
+        "tick_p95_us": 971.0,
+        "tick_p99_us": 1060.2,
+        "contact_p50_us": 847.1,
+        "contact_fraction_p50": 0.9831,
+        "real_time_factor": 18.71
+      },
+      "after": {
+        "repetitions": 3,
+        "ticks_median": 30000.0,
+        "tick_p50_us": 860.1,
+        "tick_p95_us": 951.3,
+        "tick_p99_us": 1042.3,
+        "contact_p50_us": 825.6,
+        "contact_fraction_p50": 0.9827,
+        "real_time_factor": 19.08
+      },
+      "tick_p95_change_percent": -2.0,
+      "contact_p50_change_percent": -2.5
+    },
+    {
+      "layout": "compact",
+      "drone_count": 128,
+      "before": {
+        "repetitions": 1,
+        "ticks_median": 17000.0,
+        "tick_p50_us": 1841.5,
+        "tick_p95_us": 1966.1,
+        "tick_p99_us": 2072.6,
+        "contact_p50_us": 1769.7,
+        "contact_fraction_p50": 0.9834,
+        "real_time_factor": 8.96
+      },
+      "after": {
+        "repetitions": 1,
+        "ticks_median": 17000.0,
+        "tick_p50_us": 1797.1,
+        "tick_p95_us": 1926.8,
+        "tick_p99_us": 2043.2,
+        "contact_p50_us": 1725.7,
+        "contact_fraction_p50": 0.9831,
+        "real_time_factor": 9.16
+      },
+      "tick_p95_change_percent": -2.0,
+      "contact_p50_change_percent": -2.5
+    }
+  ]
+}
