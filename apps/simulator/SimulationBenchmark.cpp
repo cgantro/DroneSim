@@ -141,10 +141,12 @@ void SaveViewerBenchmarkReport(
 #ifndef __EMSCRIPTEN__
 nlohmann::json MeasureDroneScaling()
 {
-    constexpr std::array<std::size_t, 4> droneCounts{1U, 2U, 4U, 8U};
+    constexpr std::array<std::size_t, 8> droneCounts{
+        1U, 8U, 32U, 64U, 128U, 256U, 512U, 1024U};
     constexpr std::size_t repetitions = 3U;
     constexpr std::size_t warmupTicks = 120U;
     constexpr std::size_t measuredTicks = 30000U;
+    constexpr auto runTimeLimit = std::chrono::seconds{30};
     const auto readWorkingSetBytes = []() -> std::optional<std::size_t>
     {
 #ifdef _WIN32
@@ -156,6 +158,7 @@ nlohmann::json MeasureDroneScaling()
         return std::nullopt;
     };
     nlohmann::json runs = nlohmann::json::array();
+    bool stoppedAtTimeLimit = false;
 
     for (const std::size_t droneCount : droneCounts)
     {
@@ -195,6 +198,7 @@ nlohmann::json MeasureDroneScaling()
             const auto workingSetBefore = readWorkingSetBytes();
             const std::clock_t cpuStart = std::clock();
             const auto measurementStart = std::chrono::steady_clock::now();
+            bool timeLimitReached = false;
             for (std::size_t tick = 0; tick < measuredTicks; ++tick)
             {
                 const auto tickStart = std::chrono::steady_clock::now();
@@ -203,21 +207,46 @@ nlohmann::json MeasureDroneScaling()
                     std::chrono::steady_clock::now() - tickStart).count());
                 physicsDurations.push_back(
                     simulation.LastPhysicsStepDurationMicroseconds());
+
+                if ((tick + 1U) % 1000U == 0U
+                    && std::chrono::steady_clock::now() - measurementStart >= runTimeLimit)
+                {
+                    timeLimitReached = true;
+                    break;
+                }
             }
 
+            const std::size_t completedTicks = tickDurations.size();
             const double wallSeconds = std::chrono::duration<double>(
                 std::chrono::steady_clock::now() - measurementStart).count();
             const double cpuSeconds = static_cast<double>(std::clock() - cpuStart)
                 / CLOCKS_PER_SEC;
             const auto workingSetAfter = readWorkingSetBytes();
+            const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
+                tickDurations.begin(), tickDurations.end(), [](double duration)
+                {
+                    return duration > 1'000'000.0 / 60.0;
+                }));
             nlohmann::json run{
                 {"drone_count", droneCount},
                 {"repetition", repetition + 1U},
                 {"warmup_ticks", warmupTicks},
-                {"measured_ticks", measuredTicks},
+                {"target_ticks", measuredTicks},
+                {"measured_ticks", completedTicks},
                 {"tick_duration_us", SummarizeDurations(std::move(tickDurations))},
                 {"physics_step_duration_us", SummarizeDurations(std::move(physicsDurations))},
                 {"measurement_wall_seconds", wallSeconds},
+                {"simulation_ticks_per_second", wallSeconds > 0.0
+                    ? static_cast<double>(completedTicks) / wallSeconds : 0.0},
+                {"drone_ticks_per_second", wallSeconds > 0.0
+                    ? static_cast<double>(droneCount) * static_cast<double>(completedTicks)
+                        / wallSeconds : 0.0},
+                {"real_time_factor", wallSeconds > 0.0
+                    ? static_cast<double>(completedTicks)
+                        * aerosimlab::simulation::DroneModel::fixedStepSeconds / wallSeconds
+                    : 0.0},
+                {"deadline_misses_over_16_67ms", deadlineMisses},
+                {"time_limit_reached", timeLimitReached},
                 {"process_cpu_percent_approx", wallSeconds > 0.0
                     ? 100.0 * cpuSeconds / wallSeconds : 0.0}};
             if (workingSetBefore && workingSetAfter)
@@ -229,13 +258,39 @@ nlohmann::json MeasureDroneScaling()
                     - static_cast<std::int64_t>(*workingSetBefore);
             }
             runs.push_back(std::move(run));
+            if (timeLimitReached)
+            {
+                stoppedAtTimeLimit = true;
+                break;
+            }
+        }
+        if (stoppedAtTimeLimit)
+            break;
+    }
+
+    nlohmann::json measuredCounts = nlohmann::json::array();
+    std::optional<std::size_t> previousCount;
+    for (const nlohmann::json& run : runs)
+    {
+        const std::size_t measuredCount = run.at("drone_count").get<std::size_t>();
+        if (!previousCount || *previousCount != measuredCount)
+        {
+            measuredCounts.push_back(measuredCount);
+            previousCount = measuredCount;
         }
     }
 
     return {
-        {"method", "헤드리스 AirSim 강체 모의; 한 물리 세계에서 모든 드론을 함께 갱신. 각 실행은 워밍업 뒤 30,000 Tick을 측정하고 프로세스 CPU 시간과 작업 집합을 기록"},
-        {"counts", droneCounts},
-        {"repetitions_per_count", repetitions},
+        {"method", "헤드리스 AirSim 강체 모의. 드론을 2.5m 간격으로 배치해 이륙·호버링시키고, 한 물리 세계에서 함께 갱신"},
+        {"target_counts", droneCounts},
+        {"measured_counts", std::move(measuredCounts)},
+        {"target_repetitions_per_count", repetitions},
+        {"target_ticks_per_run", measuredTicks},
+        {"run_time_limit_seconds", runTimeLimit.count()},
+        {"stopped_at_time_limit", stoppedAtTimeLimit},
+        {"stop_reason", stoppedAtTimeLimit
+            ? "한 번의 측정이 제한 시간에 도달해 더 큰 규모의 실행을 멈췄습니다."
+            : "모든 지정 규모를 측정했습니다."},
         {"runs", std::move(runs)}};
 }
 #endif

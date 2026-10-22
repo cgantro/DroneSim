@@ -45,7 +45,7 @@ void SaveViewerBenchmarkReport(
     const nlohmann::json& report, const std::filesystem::path& outputPath = {});
 
 #ifndef __EMSCRIPTEN__
-/** @brief 화면 없이 1·2·4·8대 강체 모의를 재고 실행별 결과를 돌려준다. */
+/** @brief 화면 없이 여러 드론의 강체 모의 확장성을 측정한다. */
 nlohmann::json MeasureDroneScaling();
 #endif
 }
