@@ -256,58 +256,59 @@ void Shader::UnBind() const
     glUseProgram(0);
 }
 
-int Shader::GetUniformLocation(const std::string& name) const
+int Shader::GetUniformLocation(std::string_view name) const
 {
     const auto found = m_UniformLocationCache.find(name);
     if (found != m_UniformLocationCache.end())
         return found->second;
 
     // 입력 위치는 프로그램 연결 뒤 바뀌지 않아, 이름별로 한 번만 조회한다.
-    const int location = glGetUniformLocation(m_RendererID, name.c_str());
+    const std::string ownedName(name);
+    const int location = glGetUniformLocation(m_RendererID, ownedName.c_str());
     if (location == -1)
         std::cout << "경고: 입력값을 셰이더에서 찾지 못했습니다: " << name << '\n';
 
-    m_UniformLocationCache[name] = location;
+    m_UniformLocationCache.emplace(ownedName, location);
     return location;
 }
 
 // 각 입력 함수는 현재 선택한 GPU 프로그램에 값을 전달한다. 행렬은 전치하지 않고 보낸다.
-void Shader::SetInt(const std::string& name, int value)
+void Shader::SetInt(std::string_view name, int value)
 {
     glUniform1i(GetUniformLocation(name), value);
 }
 
-void Shader::SetIntArray(const std::string& name, int* values, uint32_t count)
+void Shader::SetIntArray(std::string_view name, int* values, uint32_t count)
 {
     glUniform1iv(GetUniformLocation(name), static_cast<GLsizei>(count), values);
 }
 
-void Shader::SetFloat(const std::string& name, float value)
+void Shader::SetFloat(std::string_view name, float value)
 {
     glUniform1f(GetUniformLocation(name), value);
 }
 
-void Shader::SetFloat2(const std::string& name, const glm::vec2& value)
+void Shader::SetFloat2(std::string_view name, const glm::vec2& value)
 {
     glUniform2fv(GetUniformLocation(name), 1, glm::value_ptr(value));
 }
 
-void Shader::SetFloat3(const std::string& name, const glm::vec3& value)
+void Shader::SetFloat3(std::string_view name, const glm::vec3& value)
 {
     glUniform3fv(GetUniformLocation(name), 1, glm::value_ptr(value));
 }
 
-void Shader::SetFloat4(const std::string& name, const glm::vec4& value)
+void Shader::SetFloat4(std::string_view name, const glm::vec4& value)
 {
     glUniform4fv(GetUniformLocation(name), 1, glm::value_ptr(value));
 }
 
-void Shader::SetMat3(const std::string& name, const glm::mat3& matrix)
+void Shader::SetMat3(std::string_view name, const glm::mat3& matrix)
 {
     glUniformMatrix3fv(GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(matrix));
 }
 
-void Shader::SetMat4(const std::string& name, const glm::mat4& matrix)
+void Shader::SetMat4(std::string_view name, const glm::mat4& matrix)
 {
     glUniformMatrix4fv(GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(matrix));
 }

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 #include <glm/glm.hpp>
@@ -58,21 +60,21 @@ public:
     void UnBind() const;
 
     /** @brief 정수 입력값을 프로그램에 전달한다. 이미지 입력 이름에는 연결할 이미지 슬롯 번호를 쓴다. */
-    void SetInt(const std::string& name, int value);
+    void SetInt(std::string_view name, int value);
     /** @brief 정수 입력값 여러 개를 연속해서 전달한다. count는 정수의 개수다. */
-    void SetIntArray(const std::string& name, int* value, uint32_t count);
+    void SetIntArray(std::string_view name, int* value, uint32_t count);
     /** @brief 실수 입력값 하나를 전달한다. */
-    void SetFloat(const std::string& name, float value);
+    void SetFloat(std::string_view name, float value);
     /** @brief 실수 두 개로 된 좌표나 값 묶음을 전달한다. */
-    void SetFloat2(const std::string& name, const glm::vec2& value);
+    void SetFloat2(std::string_view name, const glm::vec2& value);
     /** @brief 실수 세 개로 된 위치, 방향, 색상 등을 전달한다. */
-    void SetFloat3(const std::string& name, const glm::vec3& value);
+    void SetFloat3(std::string_view name, const glm::vec3& value);
     /** @brief 실수 네 개로 된 색상이나 값 묶음을 전달한다. */
-    void SetFloat4(const std::string& name, const glm::vec4& value);
+    void SetFloat4(std::string_view name, const glm::vec4& value);
     /** @brief 행과 열을 바꾸지 않고 3×3 실수 행렬을 전달한다. */
-    void SetMat3(const std::string& name, const glm::mat3& matrix);
+    void SetMat3(std::string_view name, const glm::mat3& matrix);
     /** @brief 행과 열을 바꾸지 않고 4×4 실수 행렬을 전달한다. */
-    void SetMat4(const std::string& name, const glm::mat4& matrix);
+    void SetMat4(std::string_view name, const glm::mat4& matrix);
 
     /** @brief 만들 때 지정한 이 그리기 프로그램의 이름을 반환한다. */
     const std::string& GetName() const { return m_Name; }
@@ -86,7 +88,17 @@ private:
     // 코드 검사나 연결이 실패하면 임시 코드와 실행 프로그램을 정리한 뒤 오류를 알린다.
     void Compile(const std::unordered_map<unsigned int, std::string>& shaderSources);
 
-    int GetUniformLocation(const std::string& name) const;
+    int GetUniformLocation(std::string_view name) const;
+
+    struct TransparentStringHash final
+    {
+        using is_transparent = void;
+
+        [[nodiscard]] std::size_t operator()(std::string_view value) const noexcept
+        {
+            return std::hash<std::string_view>{}(value);
+        }
+    };
 
 private:
     // 코드 두 부분의 연결이 끝난 실행 프로그램 번호. 이 객체가 GPU 소유권을 가진다.
@@ -94,7 +106,8 @@ private:
 
     std::string m_Name;
 
-    mutable std::unordered_map<std::string, int> m_UniformLocationCache;
+    mutable std::unordered_map<std::string, int, TransparentStringHash, std::equal_to<>>
+        m_UniformLocationCache;
 };
 
 } // namespace aerosimlab::graphics
