@@ -413,6 +413,35 @@ void AeroSimLabApp::ApplyCameraCommand(
     reply.status = "applied";
 }
 
+void AeroSimLabApp::ApplyAddDroneCommand(
+    aerosimlab::communication::CommandReply& reply)
+{
+    if (simulation_.DroneCount() >= aerosimlab::communication::maximumFleetDroneCount)
+    {
+        reply.accepted = false;
+        reply.status = "fleet_limit_reached";
+        return;
+    }
+
+    const std::size_t slot = simulation_.DroneCount() - 1U;
+    const double eastMeters = static_cast<double>(slot % 3U + 1U) * 5.0;
+    const double northMeters = static_cast<double>(slot / 3U) * 5.0;
+    const glm::dvec3 primaryPosition = simulation_.State().positionMeters;
+    const glm::dvec2 spawnPosition{
+        primaryPosition.x + eastMeters,
+        primaryPosition.y + northMeters};
+    const double groundHeightMeters = terrainGrid_.HeightAtLocalMeters(spawnPosition);
+    const glm::dvec3 positionMeters{
+        spawnPosition.x,
+        spawnPosition.y,
+        groundHeightMeters
+            + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters};
+    const auto id = simulation_.AddDrone(positionMeters, 0.0, groundHeightMeters);
+    fleetDroneIds_.push_back(id);
+    reply.accepted = true;
+    reply.status = "drone_added";
+}
+
 void AeroSimLabApp::ExpireGroundControlCommand()
 {
     if (!groundControlCommandExpiresAtTick_
@@ -450,31 +479,7 @@ void AeroSimLabApp::ApplyGroundCommand()
         ApplyCameraCommand(*pending.packet.cameraCommand, reply);
     else if (pending.packet.fleetCommand
         == aerosimlab::communication::FleetCommand::AddDrone)
-    {
-        if (simulation_.DroneCount() >= aerosimlab::communication::maximumFleetDroneCount)
-        {
-            reply.accepted = false;
-            reply.status = "fleet_limit_reached";
-        }
-        else
-        {
-            const std::size_t slot = simulation_.DroneCount() - 1U;
-            const double eastMeters = static_cast<double>(slot % 3U + 1U) * 5.0;
-            const double northMeters = static_cast<double>(slot / 3U) * 5.0;
-            const glm::dvec3 primaryPosition = simulation_.State().positionMeters;
-            const glm::dvec2 spawnPosition{
-                primaryPosition.x + eastMeters,
-                primaryPosition.y + northMeters};
-            const double groundHeightMeters = terrainGrid_.HeightAtLocalMeters(spawnPosition);
-            const glm::dvec3 positionMeters{spawnPosition.x, spawnPosition.y,
-                groundHeightMeters
-                    + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters};
-            const auto id = simulation_.AddDrone(positionMeters, 0.0, groundHeightMeters);
-            fleetDroneIds_.push_back(id);
-            reply.accepted = true;
-            reply.status = "drone_added";
-        }
-    }
+        ApplyAddDroneCommand(reply);
 
     if (!replayTickAdvanced)
         simulation_.AdvanceOneTick();

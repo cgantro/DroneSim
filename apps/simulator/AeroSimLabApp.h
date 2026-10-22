@@ -107,6 +107,8 @@ private:
         aerosimlab::communication::CommandReply& reply);
     void ApplyCameraCommand(aerosimlab::communication::CameraCommand command,
         aerosimlab::communication::CommandReply& reply);
+    /** @brief 새 드론의 지면 위치를 정하고 편대에 추가한 결과를 응답에 담는다. */
+    void ApplyAddDroneCommand(aerosimlab::communication::CommandReply& reply);
     void ApplyGroundCommand();
     void ExpireGroundControlCommand();
     void ApplyRecordedCommands();
