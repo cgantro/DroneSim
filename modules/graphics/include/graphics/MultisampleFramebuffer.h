@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace aerosimlab::graphics
@@ -65,8 +66,15 @@ public:
     /** @brief 최근에 합성한 화면을 ImGui에서 사용할 OpenGL 텍스처 번호로 돌려준다. */
     [[nodiscard]] std::uint32_t GetTextureId() const { return m_ResolvedColorTexture; }
 
-    /** @brief 합성된 화면의 RGB 픽셀을 아래 행부터 읽는다. */
-    void ReadRgbPixels(std::vector<std::uint8_t>& pixels) const;
+    /** @brief 화면 픽셀 읽기를 GPU에 맡기고, 읽을 때 함께 저장할 시뮬레이션 Tick을 기록한다. */
+    [[nodiscard]] bool QueueRgbReadback(std::uint64_t simulationTick);
+
+    /** @brief GPU가 이미 다 읽은 가장 오래된 화면을 CPU로 복사한다. 아직 준비되지 않았으면 false를 돌려준다. */
+    [[nodiscard]] bool TryReadRgbPixels(
+        std::vector<std::uint8_t>& pixels, std::uint64_t& simulationTick);
+
+    /** @brief 종료·시험 직전에 남은 GPU 읽기를 마치고 결과를 꺼낼 수 있게 한다. */
+    void FinishRgbReadbacks();
 
     /** @brief 생성 또는 마지막 크기 변경에 지정한 너비 [pixel]를 반환한다. */
     int GetWidth() const { return m_Width; }
@@ -76,6 +84,8 @@ public:
     int GetSamples() const { return m_Samples; }
 
 private:
+    struct PixelReadback;
+
     // 색과 카메라 깊이 저장소를 같은 크기·표본 수로 만들고 GPU가 함께 쓸 수 있는지 확인한다.
     void Create();
 
@@ -98,6 +108,9 @@ private:
 
     // 색과 카메라 깊이 저장소가 픽셀마다 공통으로 검사하는 위치 수.
     int m_Samples = 4;
+
+    // OpenGL 동기화 핸들을 공개 헤더에 노출하지 않도록 세부 상태를 숨긴다.
+    std::unique_ptr<PixelReadback> m_PixelReadback;
 };
 
 } // namespace aerosimlab::graphics

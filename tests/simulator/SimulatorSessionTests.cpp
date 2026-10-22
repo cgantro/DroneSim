@@ -49,7 +49,8 @@ void Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues()
     measurements.renderFrameDurationsWithoutEoReadbackMicroseconds = {600.0};
 #ifndef __EMSCRIPTEN__
     measurements.physicsStepDurationsMicroseconds = {5000.0, 7000.0};
-    measurements.eoReadbackCallDurationsMicroseconds = {1200.0, 1500.0};
+    measurements.eoReadbackEnqueueDurationsMicroseconds = {1200.0, 1500.0};
+    measurements.eoReadbackPollDurationsMicroseconds = {10.0, 20.0};
     measurements.visionDurationsMicroseconds = {4000.0};
     measurements.meanBrightness = 0.4;
     measurements.meanContrast = 0.2;
@@ -75,7 +76,8 @@ void Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues()
 #ifndef __EMSCRIPTEN__
     EXPECT_DOUBLE_EQ(report.at("vision_analysis").at("mean_brightness"), 0.4);
     EXPECT_DOUBLE_EQ(report.at("physics_step_duration_us").at("p95"), 7000.0);
-    EXPECT_DOUBLE_EQ(report.at("eo_pixel_readback_call_duration_us").at("p95"), 1500.0);
+    EXPECT_DOUBLE_EQ(report.at("eo_pixel_readback_enqueue_duration_us").at("p95"), 1500.0);
+    EXPECT_DOUBLE_EQ(report.at("eo_pixel_readback_poll_duration_us").at("p95"), 20.0);
 #endif
 
     const std::filesystem::path outputPath = std::filesystem::temp_directory_path()

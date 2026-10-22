@@ -277,6 +277,8 @@ int AeroSimLabApp::Run()
             break;
     }
     if (smokeTest_)
+        DrainEoReadbacks();
+    if (smokeTest_)
     {
         const bool cameraFrameHasPixels = eoFrame_.IsValid()
             && std::any_of(eoFrame_.pixels.begin(), eoFrame_.pixels.end(), [](std::uint8_t value)
@@ -644,41 +646,85 @@ std::uint32_t AeroSimLabApp::RenderWorldToTarget(
 void AeroSimLabApp::CaptureEoFrame()
 {
     const auto& camera = simulation_.Camera();
-    if (camera.status == aerosimlab::simulation::CameraStatus::Active
-        && camera.lastFrameTick > eoFrame_.simulationTick)
+    std::uint64_t simulationTick = 0;
+    double pollDurationMicroseconds = 0.0;
+    bool readCompleted = false;
     {
-        eoFrame_.width = cameraTarget_->GetWidth();
-        eoFrame_.height = cameraTarget_->GetHeight();
-        eoFrame_.simulationTick = camera.lastFrameTick;
-        double readbackDurationMicroseconds = 0.0;
-        {
-            aerosimlab::simulation::ScopedDuration measureReadback(
-                benchmarkMode_ ? &readbackDurationMicroseconds : nullptr);
-            cameraTarget_->ReadRgbPixels(eoFrame_.pixels);
-        }
+        aerosimlab::simulation::ScopedDuration measurePoll(
+            benchmarkMode_ ? &pollDurationMicroseconds : nullptr);
+        readCompleted = cameraTarget_->TryReadRgbPixels(eoFrame_.pixels, simulationTick);
+    }
+    if (benchmarkMode_)
+        eoReadbackPollDurationsMicroseconds_.push_back(pollDurationMicroseconds);
+    if (readCompleted)
+    {
+        eoReadbackHappenedThisFrame_ = true;
+        ProcessEoPixels(simulationTick);
+    }
+
+    if (camera.status != aerosimlab::simulation::CameraStatus::Active
+        || camera.lastFrameTick <= lastQueuedEoFrameTick_)
+        return;
+
+    double enqueueDurationMicroseconds = 0.0;
+    bool queued = false;
+    {
+        aerosimlab::simulation::ScopedDuration measureEnqueue(
+            benchmarkMode_ ? &enqueueDurationMicroseconds : nullptr);
+        queued = cameraTarget_->QueueRgbReadback(camera.lastFrameTick);
+    }
+    if (queued)
+    {
+        lastQueuedEoFrameTick_ = camera.lastFrameTick;
         if (benchmarkMode_)
         {
             eoReadbackHappenedThisFrame_ = true;
-            eoReadbackCallDurationsMicroseconds_.push_back(readbackDurationMicroseconds);
+            eoReadbackEnqueueDurationsMicroseconds_.push_back(enqueueDurationMicroseconds);
         }
-        eoFrame_.FlipVertical();
+    }
+}
+
+void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
+{
+    eoFrame_.width = cameraTarget_->GetWidth();
+    eoFrame_.height = cameraTarget_->GetHeight();
+    eoFrame_.simulationTick = simulationTick;
+    eoFrame_.FlipVertical();
 #ifndef __EMSCRIPTEN__
-        double analysisDurationMicroseconds = 0.0;
-        // OpenCV는 eoFrame_의 픽셀을 빌려 쓴다. 다음 프레임이 버퍼를 덮기 전에 분석을 끝낸다.
-        aerosimlab::vision::RgbFrameQuality quality;
-        {
-            aerosimlab::simulation::ScopedDuration measureAnalysis(
-                benchmarkMode_ ? &analysisDurationMicroseconds : nullptr);
-            quality = visionAnalyzer_->Analyze(
-                aerosimlab::vision::MakeRgbFrameView(eoFrame_));
-        }
-        totalMeanBrightness_ += quality.meanBrightness;
-        totalMeanContrast_ += quality.meanContrast;
-        totalSharpness_ += quality.sharpness;
-        ++visionSampleCount_;
-        if (benchmarkMode_)
-            visionDurationsMicroseconds_.push_back(analysisDurationMicroseconds);
+    double analysisDurationMicroseconds = 0.0;
+    // OpenCV는 현재 프레임 메모리를 빌려 쓴다. 분석이 끝날 때까지 픽셀을 바꾸지 않는다.
+    aerosimlab::vision::RgbFrameQuality quality;
+    {
+        aerosimlab::simulation::ScopedDuration measureAnalysis(
+            benchmarkMode_ ? &analysisDurationMicroseconds : nullptr);
+        quality = visionAnalyzer_->Analyze(
+            aerosimlab::vision::MakeRgbFrameView(eoFrame_));
+    }
+    totalMeanBrightness_ += quality.meanBrightness;
+    totalMeanContrast_ += quality.meanContrast;
+    totalSharpness_ += quality.sharpness;
+    ++visionSampleCount_;
+    if (benchmarkMode_)
+        visionDurationsMicroseconds_.push_back(analysisDurationMicroseconds);
 #endif
+}
+
+void AeroSimLabApp::DrainEoReadbacks()
+{
+    const auto& camera = simulation_.Camera();
+    while (true)
+    {
+        cameraTarget_->FinishRgbReadbacks();
+        std::uint64_t simulationTick = 0;
+        while (cameraTarget_->TryReadRgbPixels(eoFrame_.pixels, simulationTick))
+            ProcessEoPixels(simulationTick);
+
+        if (camera.status != aerosimlab::simulation::CameraStatus::Active
+            || camera.lastFrameTick <= lastQueuedEoFrameTick_)
+            return;
+        if (!cameraTarget_->QueueRgbReadback(camera.lastFrameTick))
+            return;
+        lastQueuedEoFrameTick_ = camera.lastFrameTick;
     }
 }
 #endif
@@ -753,7 +799,10 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         renderFrameDurationsWithoutEoReadbackMicroseconds_;
 #ifndef __EMSCRIPTEN__
     measurements.physicsStepDurationsMicroseconds = physicsStepDurationsMicroseconds_;
-    measurements.eoReadbackCallDurationsMicroseconds = eoReadbackCallDurationsMicroseconds_;
+    measurements.eoReadbackEnqueueDurationsMicroseconds =
+        eoReadbackEnqueueDurationsMicroseconds_;
+    measurements.eoReadbackPollDurationsMicroseconds =
+        eoReadbackPollDurationsMicroseconds_;
     measurements.visionDurationsMicroseconds = visionDurationsMicroseconds_;
     measurements.visionSampleCount = visionSampleCount_;
     if (visionSampleCount_ > 0)

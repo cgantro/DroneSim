@@ -42,8 +42,10 @@ struct ViewerBenchmarkMeasurements
     std::vector<double> renderFrameDurationsWithoutEoReadbackMicroseconds;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds;
-    // CPU가 픽셀 읽기 호출에서 기다린 시간이며, 버퍼 준비와 GPU 동기화 대기도 포함한다.
-    std::vector<double> eoReadbackCallDurationsMicroseconds;
+    // GPU에 픽셀 복사를 맡기는 CPU 호출 시간이다. 실제 GPU 복사 시간은 포함하지 않는다.
+    std::vector<double> eoReadbackEnqueueDurationsMicroseconds;
+    // 완료 여부를 확인하고 준비된 픽셀을 CPU 메모리로 복사하는 시간이다.
+    std::vector<double> eoReadbackPollDurationsMicroseconds;
     std::vector<double> visionDurationsMicroseconds;
     double meanBrightness = 0.0;
     double meanContrast = 0.0;

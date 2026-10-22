@@ -17,6 +17,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -43,6 +44,12 @@ double Percentile(const std::vector<double>& sortedDurations, double fraction)
 
 std::filesystem::path DefaultBenchmarkOutputPath()
 {
+    if (const char* outputPath = std::getenv("AEROSIMLAB_BENCHMARK_OUTPUT");
+        outputPath != nullptr && outputPath[0] != '\0')
+    {
+        return std::filesystem::u8path(outputPath);
+    }
+
 #ifdef _WIN32
     std::wstring executablePath(32768U, L'\0');
     const DWORD pathLength = GetModuleFileNameW(
@@ -80,7 +87,7 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
         }));
 
     nlohmann::json report{
-        {"configuration", "hidden OpenGL window; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes"},
+        {"configuration", "hidden OpenGL window; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring"},
         {"source_revision", measurements.sourceRevision},
         {"framebuffer", {
             {"width", measurements.framebufferWidth},
@@ -108,8 +115,10 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
 #ifndef __EMSCRIPTEN__
     report["physics_step_duration_us"] = SummarizeDurations(
         std::move(measurements.physicsStepDurationsMicroseconds));
-    report["eo_pixel_readback_call_duration_us"] = SummarizeDurations(
-        std::move(measurements.eoReadbackCallDurationsMicroseconds));
+    report["eo_pixel_readback_enqueue_duration_us"] = SummarizeDurations(
+        std::move(measurements.eoReadbackEnqueueDurationsMicroseconds));
+    report["eo_pixel_readback_poll_duration_us"] = SummarizeDurations(
+        std::move(measurements.eoReadbackPollDurationsMicroseconds));
     report["vision_analysis"] = {
         {"samples", measurements.visionSampleCount},
         {"mean_brightness", measurements.meanBrightness},

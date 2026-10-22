@@ -3,15 +3,53 @@
 #include "graphics/GlApi.h"
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 #include <stdexcept>
 
 namespace aerosimlab::graphics
 {
 
+struct MultisampleFramebuffer::PixelReadback
+{
+    struct Slot
+    {
+        GLuint buffer = 0;
+        GLsync completion = nullptr;
+        std::uint64_t simulationTick = 0;
+        std::uint64_t order = 0;
+        std::size_t byteCount = 0;
+        bool pending = false;
+    };
+
+    std::array<Slot, 3> slots{};
+    std::uint64_t nextOrder = 0;
+
+    void Destroy() noexcept
+    {
+        for (Slot& slot : slots)
+        {
+            if (slot.completion != nullptr)
+            {
+                glDeleteSync(slot.completion);
+                slot.completion = nullptr;
+            }
+            if (slot.buffer != 0)
+            {
+                glDeleteBuffers(1, &slot.buffer);
+                slot.buffer = 0;
+            }
+            slot.pending = false;
+            slot.byteCount = 0;
+        }
+    }
+};
+
 MultisampleFramebuffer::MultisampleFramebuffer(int width, int height, int samples)
     : m_Width(width),
       m_Height(height),
-      m_Samples(samples)
+      m_Samples(samples),
+      m_PixelReadback(std::make_unique<PixelReadback>())
 {
     if (width <= 0 || height <= 0)
         throw std::invalid_argument("MSAA framebuffer dimensions must be positive");
@@ -101,6 +139,7 @@ void MultisampleFramebuffer::Create()
 
 void MultisampleFramebuffer::Destroy()
 {
+    m_PixelReadback->Destroy();
     if (m_ResolvedColorTexture != 0)
         glDeleteTextures(1, &m_ResolvedColorTexture);
     if (m_ResolvedFramebuffer != 0)
@@ -164,17 +203,121 @@ void MultisampleFramebuffer::ResolveToTexture() const
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void MultisampleFramebuffer::ReadRgbPixels(std::vector<std::uint8_t>& pixels) const
+bool MultisampleFramebuffer::QueueRgbReadback(std::uint64_t simulationTick)
 {
-    pixels.resize(static_cast<std::size_t>(m_Width) * static_cast<std::size_t>(m_Height) * 3U);
+    PixelReadback::Slot* available = nullptr;
+    for (PixelReadback::Slot& slot : m_PixelReadback->slots)
+    {
+        if (!slot.pending)
+        {
+            available = &slot;
+            break;
+        }
+    }
+    if (available == nullptr)
+        return false;
+
+    if (available->buffer == 0)
+        glGenBuffers(1, &available->buffer);
+
+    const std::size_t byteCount =
+        static_cast<std::size_t>(m_Width) * static_cast<std::size_t>(m_Height) * 3U;
+    GLint previousPackBuffer = 0;
     GLint previousPackAlignment = 4;
+    GLint previousReadFramebuffer = 0;
+    GLint previousReadBuffer = GL_BACK;
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &previousPackBuffer);
     glGetIntegerv(GL_PACK_ALIGNMENT, &previousPackAlignment);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFramebuffer);
+    glGetIntegerv(GL_READ_BUFFER, &previousReadBuffer);
+
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, available->buffer);
+    if (available->byteCount != byteCount)
+    {
+        glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
+            nullptr, GL_STREAM_READ);
+        available->byteCount = byteCount;
+    }
+
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ResolvedFramebuffer);
     glReadBuffer(GL_COLOR_ATTACHMENT0);
-    glReadPixels(0, 0, m_Width, m_Height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glReadPixels(0, 0, m_Width, m_Height, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+
+    available->completion = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    const bool queued = available->completion != nullptr;
+    if (queued)
+    {
+        available->simulationTick = simulationTick;
+        available->order = m_PixelReadback->nextOrder++;
+        available->pending = true;
+    }
+    else
+    {
+        // Fence를 만들지 못하면 다음 전송이 같은 버퍼를 덮기 전에 현재 복사를 마친다.
+        glFinish();
+    }
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previousReadFramebuffer));
+    glReadBuffer(static_cast<GLenum>(previousReadBuffer));
     glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
+    return queued;
+}
+
+bool MultisampleFramebuffer::TryReadRgbPixels(
+    std::vector<std::uint8_t>& pixels, std::uint64_t& simulationTick)
+{
+    PixelReadback::Slot* oldest = nullptr;
+    for (PixelReadback::Slot& slot : m_PixelReadback->slots)
+    {
+        if (slot.pending && (oldest == nullptr || slot.order < oldest->order))
+            oldest = &slot;
+    }
+    if (oldest == nullptr)
+        return false;
+
+    const GLenum result = glClientWaitSync(
+        oldest->completion, GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+    if (result == GL_TIMEOUT_EXPIRED)
+        return false;
+    if (result == GL_WAIT_FAILED)
+    {
+        glFinish();
+        glDeleteSync(oldest->completion);
+        oldest->completion = nullptr;
+        oldest->pending = false;
+        return false;
+    }
+
+    pixels.resize(oldest->byteCount);
+    GLint previousPackBuffer = 0;
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &previousPackBuffer);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, oldest->buffer);
+    const void* source = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0,
+        static_cast<GLsizeiptr>(oldest->byteCount), GL_MAP_READ_BIT);
+    if (source != nullptr)
+        std::memcpy(pixels.data(), source, oldest->byteCount);
+    const GLboolean valid = source != nullptr
+        ? glUnmapBuffer(GL_PIXEL_PACK_BUFFER) : GL_FALSE;
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
+
+    simulationTick = oldest->simulationTick;
+    glDeleteSync(oldest->completion);
+    oldest->completion = nullptr;
+    oldest->pending = false;
+    return valid == GL_TRUE;
+}
+
+void MultisampleFramebuffer::FinishRgbReadbacks()
+{
+    const bool hasPending = std::any_of(m_PixelReadback->slots.begin(),
+        m_PixelReadback->slots.end(), [](const PixelReadback::Slot& slot)
+        {
+            return slot.pending;
+        });
+    if (hasPending)
+        glFinish();
 }
 
 void MultisampleFramebuffer::Resize(int width, int height)

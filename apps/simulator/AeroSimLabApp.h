@@ -126,8 +126,12 @@ private:
     [[nodiscard]] std::uint32_t RenderWorldToTarget(
         aerosimlab::graphics::MultisampleFramebuffer& target,
         const aerosimlab::graphics::Camera& camera);
-    /** @brief 새 EO 화면을 픽셀로 읽고 영상 품질을 계산한다. */
+    /** @brief 완료된 EO 픽셀 읽기를 처리하고 새 화면 읽기를 GPU에 맡긴다. */
     void CaptureEoFrame();
+    /** @brief 저장된 EO 화면의 Tick과 품질을 갱신한다. */
+    void ProcessEoPixels(std::uint64_t simulationTick);
+    /** @brief 스모크 검사 전에 마지막 EO 화면까지 읽어 온다. */
+    void DrainEoReadbacks();
 #endif
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition);
@@ -156,6 +160,7 @@ private:
     std::uint64_t groundControlCommandTimeoutTicks_ = 60;
     std::optional<std::uint64_t> groundControlCommandExpiresAtTick_;
     std::size_t renderedFrames_ = 0;
+    std::uint64_t lastQueuedEoFrameTick_ = 0;
     std::clock_t benchmarkCpuStart_ = 0;
     std::vector<double> tickDurationsMicroseconds_;
     std::vector<double> renderFrameDurationsMicroseconds_;
@@ -163,7 +168,8 @@ private:
     std::vector<double> renderFrameDurationsWithoutEoReadbackMicroseconds_;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds_;
-    std::vector<double> eoReadbackCallDurationsMicroseconds_;
+    std::vector<double> eoReadbackEnqueueDurationsMicroseconds_;
+    std::vector<double> eoReadbackPollDurationsMicroseconds_;
     std::vector<double> visionDurationsMicroseconds_;
     double totalMeanBrightness_ = 0.0;
     double totalMeanContrast_ = 0.0;
