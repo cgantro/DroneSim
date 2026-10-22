@@ -366,6 +366,34 @@ std::optional<ScenarioResult::Mission> ReadMission(
     return mission;
 }
 
+bool ReadOptionalBoolean(const Json& object, const char* name)
+{
+    const auto value = object.find(name);
+    if (value == object.end())
+        return false;
+    if (!value->is_boolean())
+        throw std::invalid_argument("drop과 duplicate는 true 또는 false여야 합니다.");
+    return value->get<bool>();
+}
+
+std::string ReadCommandDroneName(
+    const Json& command,
+    const std::string& defaultDroneName,
+    const std::unordered_set<std::string>& droneNames)
+{
+    std::string droneName = defaultDroneName;
+    const auto drone = command.find("drone");
+    if (drone != command.end())
+    {
+        if (!drone->is_string())
+            throw std::invalid_argument("명령 drone은 드론 name 문자열이어야 합니다.");
+        droneName = drone->get<std::string>();
+    }
+    if (!droneNames.contains(droneName))
+        throw std::invalid_argument("명령이 가리키는 드론을 찾을 수 없습니다: " + droneName);
+    return droneName;
+}
+
 std::vector<ScheduledCommand> ReadCommands(
     const Json& commands,
     std::uint64_t tickCount,
@@ -397,20 +425,10 @@ std::vector<ScheduledCommand> ReadCommands(
             : 0;
         if (delay >= tickCount - tick)
             throw std::invalid_argument("통신 지연 뒤 명령이 시나리오 실행 범위를 벗어납니다.");
-        if ((item.contains("drop") && !item["drop"].is_boolean())
-            || (item.contains("duplicate") && !item["duplicate"].is_boolean()))
-            throw std::invalid_argument("drop과 duplicate는 true 또는 false여야 합니다.");
-        std::string droneName = defaultDroneName;
-        if (item.contains("drone"))
-        {
-            if (!item["drone"].is_string())
-                throw std::invalid_argument("명령 drone은 드론 name 문자열이어야 합니다.");
-            droneName = item["drone"].get<std::string>();
-        }
-        if (!droneNames.contains(droneName))
-            throw std::invalid_argument("명령이 가리키는 드론을 찾을 수 없습니다: " + droneName);
-        const bool dropped = item.contains("drop") && item["drop"].get<bool>();
-        const bool duplicated = item.contains("duplicate") && item["duplicate"].get<bool>();
+        const bool dropped = ReadOptionalBoolean(item, "drop");
+        const bool duplicated = ReadOptionalBoolean(item, "duplicate");
+        std::string droneName = ReadCommandDroneName(
+            item, defaultDroneName, droneNames);
         result.push_back({tick + delay, tick, delay,
             static_cast<std::uint64_t>(result.size()) + 1, std::move(droneName),
             ReadCommand(item), dropped, duplicated});
