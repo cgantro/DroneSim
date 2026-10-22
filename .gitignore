@@ -48,6 +48,7 @@ _deps/
 # Personal notes and source material are local-only.
 /docs/diary/
 /docs/history/
+/docs/private/
 /docs/DOCUMENTATION_AUDIT_2026-10-09.md
 _workspace
 # Operating system files
