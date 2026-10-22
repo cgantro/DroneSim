@@ -255,6 +255,12 @@ void Verify_AirSimPhysics_RejectsInvalidVehicleConfiguration()
     EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
         invalidPose, QuadrotorParameters::X500Gazebo())),
         std::invalid_argument);
+
+    parameters = QuadrotorParameters::X500Gazebo();
+    parameters.collisionBoxes.front().halfExtentsMeters.x = 0.0F;
+    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
+        RigidBodyDefinition{}, parameters)),
+        std::invalid_argument);
 }
 
 void Verify_AirSimPhysics_DifferentialRotorInputAndInertiaChangeVehicleResponse()

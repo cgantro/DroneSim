@@ -46,12 +46,48 @@ bool IsFinite(const glm::dvec3& value)
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
 
+bool IsPositiveFinite(double value)
+{
+    return std::isfinite(value) && value > 0.0;
+}
+
 bool IsValidOrientation(const glm::dquat& value)
 {
     const double lengthSquared = glm::dot(value, value);
     return std::isfinite(value.w) && std::isfinite(value.x)
         && std::isfinite(value.y) && std::isfinite(value.z)
         && std::isfinite(lengthSquared) && lengthSquared > 0.0;
+}
+
+bool HasValidVehicleConfiguration(
+    const RigidBodyDefinition& definition,
+    const QuadrotorParameters& parameters)
+{
+    return IsFinite(definition.positionMeters)
+        && IsValidOrientation(definition.orientation)
+        && IsPositiveFinite(parameters.massKilograms)
+        && IsFinite(parameters.principalInertiaKilogramMetersSquared)
+        && glm::all(glm::greaterThan(
+            parameters.principalInertiaKilogramMetersSquared, glm::dvec3{0.0}))
+        && IsFinite(parameters.bodySizeMeters)
+        && glm::all(glm::greaterThan(parameters.bodySizeMeters, glm::dvec3{0.0}))
+        && IsPositiveFinite(parameters.thrustCoefficientNewtonsPerSpeedSquared)
+        && IsPositiveFinite(parameters.momentToThrustRatio)
+        && IsPositiveFinite(parameters.motorTimeConstantUpSeconds)
+        && IsPositiveFinite(parameters.maximumMotorSpeedRadiansPerSecond)
+        && std::all_of(parameters.rotors.begin(), parameters.rotors.end(),
+            [](const RotorDefinition& rotor)
+            {
+                return IsFinite(rotor.positionMeters);
+            });
+}
+
+bool HasValidCollisionBox(const RigidBodyBox& box)
+{
+    return IsFinite(glm::dvec3{box.halfExtentsMeters})
+        && glm::all(glm::greaterThan(box.halfExtentsMeters, glm::vec3{0.0F}))
+        && IsFinite(box.positionMeters)
+        && IsValidOrientation(box.orientation);
 }
 
 AirSimVector ToAirSimPosition(const glm::dvec3& value)
@@ -662,38 +698,15 @@ RigidBodyHandle PhysicsWorld::CreateQuadrotor(
     const RigidBodyDefinition& definition,
     const QuadrotorParameters& quadrotor)
 {
-    if (!IsFinite(definition.positionMeters)
-        || !IsValidOrientation(definition.orientation)
-        || !(quadrotor.massKilograms > 0.0)
-        || !std::isfinite(quadrotor.massKilograms)
-        || !IsFinite(quadrotor.principalInertiaKilogramMetersSquared)
-        || glm::any(glm::lessThanEqual(
-            quadrotor.principalInertiaKilogramMetersSquared, glm::dvec3{0.0}))
-        || !IsFinite(quadrotor.bodySizeMeters)
-        || glm::any(glm::lessThanEqual(quadrotor.bodySizeMeters, glm::dvec3{0.0}))
-        || !(quadrotor.thrustCoefficientNewtonsPerSpeedSquared > 0.0)
-        || !std::isfinite(quadrotor.thrustCoefficientNewtonsPerSpeedSquared)
-        || !(quadrotor.momentToThrustRatio > 0.0)
-        || !std::isfinite(quadrotor.momentToThrustRatio)
-        || !(quadrotor.motorTimeConstantUpSeconds > 0.0)
-        || !std::isfinite(quadrotor.motorTimeConstantUpSeconds)
-        || !(quadrotor.maximumMotorSpeedRadiansPerSecond > 0.0)
-        || !std::isfinite(quadrotor.maximumMotorSpeedRadiansPerSecond)
-        || !std::all_of(quadrotor.rotors.begin(), quadrotor.rotors.end(),
-            [](const RotorDefinition& rotor) { return IsFinite(rotor.positionMeters); }))
+    if (!HasValidVehicleConfiguration(definition, quadrotor))
     {
         throw std::invalid_argument("드론의 물리 제원과 시작 자세를 확인해 주세요.");
     }
 
-    for (const RigidBodyBox& box : quadrotor.collisionBoxes)
+    if (!std::all_of(quadrotor.collisionBoxes.begin(), quadrotor.collisionBoxes.end(),
+        HasValidCollisionBox))
     {
-        if (!IsFinite(glm::dvec3{box.halfExtentsMeters})
-            || glm::any(glm::lessThanEqual(box.halfExtentsMeters, glm::vec3{0.0F}))
-            || !IsFinite(box.positionMeters)
-            || !IsValidOrientation(box.orientation))
-        {
-            throw std::invalid_argument("드론 충돌 모양의 크기와 위치를 확인해 주세요.");
-        }
+        throw std::invalid_argument("드론 충돌 모양의 크기와 위치를 확인해 주세요.");
     }
 
     static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
