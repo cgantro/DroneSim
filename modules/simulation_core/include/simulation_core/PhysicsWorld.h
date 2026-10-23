@@ -72,7 +72,7 @@ public:
         const RigidBodyDefinition& definition,
         const QuadrotorParameters& quadrotor);
 
-    /** @brief AirSim이 다음 단계에서 적용할 로터 출력을 받는다. */
+    /** @brief 로터 목표 속도를 받는다. 비유한 값은 거부하고 범위를 벗어나면 제한한다. */
     void SetMotorTargets(
         RigidBodyHandle body,
         const std::array<double, 4>& speedRadiansPerSecond);

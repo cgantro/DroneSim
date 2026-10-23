@@ -765,6 +765,11 @@ void PhysicsWorld::SetMotorTargets(
     const std::array<double, 4>& speeds)
 {
     Impl::Body& body = impl_->GetBody(handle);
+    if (!std::all_of(speeds.begin(), speeds.end(),
+        [](double speed) { return std::isfinite(speed); }))
+    {
+        throw std::invalid_argument("로터 목표 속도는 유한한 값이어야 합니다.");
+    }
     body.actuation.SetMotorTargets(speeds, body.maximumMotorSpeed);
 }
 

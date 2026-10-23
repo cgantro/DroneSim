@@ -243,6 +243,17 @@ void Verify_AirSimBoundary_RejectsValuesItCannotRepresent()
     motorTargets.fill(800.0);
     world.SetMotorTargets(drone, motorTargets);
     world.Step(1.0 / 60.0);
+
+    auto invalidMotorTargets = motorTargets;
+    invalidMotorTargets.back() = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(world.SetMotorTargets(drone, invalidMotorTargets), std::invalid_argument);
+    world.Step(1.0 / 60.0);
+    const double expectedMotorSpeed = motorTargets[0] * std::sqrt(
+        1.0 - std::exp(-1.0 / 60.0
+            / QuadrotorParameters::X500Gazebo().motorTimeConstantUpSeconds));
+    for (const double motorSpeed : world.MotorSpeedsRadiansPerSecond(drone))
+        EXPECT_NEAR(motorSpeed, expectedMotorSpeed, 1.0);
+
     const RigidBodyState stateBeforeRejectedUpdate = world.State(drone);
     const auto motorSpeedsBeforeRejectedUpdate = world.MotorSpeedsRadiansPerSecond(drone);
     const double tooLargeForFloat =
