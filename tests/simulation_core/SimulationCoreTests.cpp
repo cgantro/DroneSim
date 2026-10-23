@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <limits>
+#include <stdexcept>
 
 namespace aerosimlab::simulation
 {
@@ -73,16 +74,40 @@ void Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInva
     EXPECT_EQ(simulation.State().mode, FlightMode::Hovering);
 }
 
+void Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether()
+{
+    const auto verifyLifecycle = [](SimulationDynamics dynamics)
+    {
+        SimulationCore simulation{dynamics};
+        const DroneId first = simulation.PrimaryDroneId();
+        const DroneId second = simulation.AddDrone({4.0, 0.0, 5.0}, 0.2);
+        const DroneId third = simulation.AddDrone({8.0, 0.0, 5.0}, -0.2);
+
+        ASSERT_EQ(simulation.DroneCount(), 3U);
+        EXPECT_TRUE(simulation.RemoveDrone(first));
+        EXPECT_EQ(simulation.PrimaryDroneId(), second);
+        EXPECT_EQ(simulation.DroneCount(), 2U);
+        EXPECT_FALSE(simulation.RemoveDrone(first));
+        EXPECT_THROW(static_cast<void>(simulation.State(first)), std::out_of_range);
+
+        EXPECT_TRUE(simulation.RemoveDrone(third));
+        EXPECT_FALSE(simulation.RemoveDrone(second));
+        EXPECT_EQ(simulation.DroneCount(), 1U);
+        simulation.AdvanceOneTick();
+        EXPECT_NO_THROW(static_cast<void>(simulation.State(second)));
+    };
+
+    verifyLifecycle(SimulationDynamics::Kinematic);
+#ifndef __EMSCRIPTEN__
+    verifyLifecycle(SimulationDynamics::RigidBody);
+#endif
+}
+
 TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
-#ifndef __EMSCRIPTEN__
-#endif
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers());
-#ifndef __EMSCRIPTEN__
-#endif
-#ifndef __EMSCRIPTEN__
-#endif
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether());
 }
 
 }
