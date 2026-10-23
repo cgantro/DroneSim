@@ -214,8 +214,10 @@ int AeroSimLabApp::Run()
             std::chrono::steady_clock::now() - startTime_ >= std::chrono::duration<double>(benchmarkDurationSeconds))
             break;
     }
+#ifndef __EMSCRIPTEN__
     if (smokeTest_)
         DrainEoReadbacks();
+#endif
     if (smokeTest_)
     {
         const int smokeTestResult = ValidateSmokeTestOutput();
