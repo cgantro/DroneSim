@@ -115,6 +115,36 @@ nlohmann::json BuildCooperativeMissionScenario(
             {"drones", std::move(expectedDrones)}}}};
 }
 
+Json BuildCoordinatorReallocationScenario(std::size_t droneCount)
+{
+    Json scenario = BuildCooperativeMissionScenario(
+        SimulationDynamics::Kinematic, droneCount);
+    constexpr std::uint64_t missionStartTick = 90U;
+    constexpr std::uint64_t outageStartTick = missionStartTick - 5U;
+    constexpr std::uint64_t missionDeadlineTick = missionStartTick + 600U;
+    const std::uint64_t scenarioTicks = missionDeadlineTick + 30U;
+    const std::size_t outageCount = droneCount / 4U > 0U
+        ? droneCount / 4U : 1U;
+
+    scenario["ticks"] = scenarioTicks;
+    scenario.erase("expected");
+    for (Json& task : scenario["mission"]["tasks"])
+        task["deadline_tick"] = missionDeadlineTick;
+
+    Json outages = Json::array();
+    for (std::size_t index = 0; index < outageCount; ++index)
+    {
+        outages.push_back({
+            {"drone", "drone-" + std::to_string(index)},
+            {"start_tick", outageStartTick},
+            {"end_tick", scenarioTicks},
+            {"heartbeat_timeout_ticks", 3U},
+            {"on_timeout", "hold_position"}});
+    }
+    scenario["communication_outages"] = std::move(outages);
+    return scenario;
+}
+
 void RequireCooperativeMissionSuccess(const ScenarioResult& result, bool isWarmup)
 {
     if (result.passed && result.mission && result.mission->passed)
@@ -150,6 +180,7 @@ nlohmann::json MeasureCooperativeMissionRun(
 
     std::size_t completedTasks = 0;
     std::size_t reassignedTasks = 0;
+    std::size_t totalTaskReassignments = 0;
     std::size_t unknownDrones = 0;
     for (const auto& task : result.mission->tasks)
     {
@@ -157,6 +188,7 @@ nlohmann::json MeasureCooperativeMissionRun(
             ++completedTasks;
         if (task.reassignmentCount > 0U)
             ++reassignedTasks;
+        totalTaskReassignments += task.reassignmentCount;
     }
     for (const auto& drone : result.drones)
     {
@@ -193,6 +225,7 @@ nlohmann::json MeasureCooperativeMissionRun(
         {"mission_task_count", result.mission->tasks.size()},
         {"completed_task_count", completedTasks},
         {"reassigned_task_count", reassignedTasks},
+        {"total_task_reassignment_events", totalTaskReassignments},
         {"unknown_drone_count", unknownDrones},
         {"mission_completion_percent", result.mission->completionPercent},
         {"mission_coverage_percent", result.mission->coveragePercent}};
@@ -295,6 +328,91 @@ void MeasureCooperativeMissionCount(
             SummarizeDurations(std::move(missionCompletionTimesSeconds))}});
 }
 
+Json MeasureCoordinatorReallocationCount(
+    std::size_t droneCount,
+    std::size_t repetitions,
+    std::size_t warmupRuns)
+{
+    const Json scenario = BuildCoordinatorReallocationScenario(droneCount);
+    const std::size_t outageCount = droneCount / 4U > 0U
+        ? droneCount / 4U : 1U;
+    const std::string scenarioText = scenario.dump();
+    for (std::size_t warmup = 0; warmup < warmupRuns; ++warmup)
+    {
+        const ScenarioResult result = aerosimlab::simulation::RunScenario(scenarioText);
+        RequireCooperativeMissionSuccess(result, true);
+    }
+
+    Json runs = Json::array();
+    std::vector<double> durationsMicroseconds;
+    std::vector<double> missionCompletionTimesSeconds;
+    std::vector<double> taskReassignmentEvents;
+    durationsMicroseconds.reserve(repetitions);
+    missionCompletionTimesSeconds.reserve(repetitions);
+    taskReassignmentEvents.reserve(repetitions);
+    for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
+    {
+        double durationMicroseconds = 0.0;
+        std::optional<double> missionCompletionTimeSeconds;
+        Json run = MeasureCooperativeMissionRun(
+            scenarioText, "kinematic", droneCount, repetition, warmupRuns,
+            durationMicroseconds, missionCompletionTimeSeconds);
+        run["outage_drone_count"] = outageCount;
+        durationsMicroseconds.push_back(durationMicroseconds);
+        taskReassignmentEvents.push_back(
+            run["total_task_reassignment_events"].get<double>());
+        if (missionCompletionTimeSeconds)
+            missionCompletionTimesSeconds.push_back(*missionCompletionTimeSeconds);
+        runs.push_back(std::move(run));
+    }
+
+    return {
+        {"drone_count", droneCount},
+        {"outage_drone_count", outageCount},
+        {"outage_fraction_percent", 100.0 * static_cast<double>(outageCount)
+            / static_cast<double>(droneCount)},
+        {"layout", "separated"},
+        {"mission_start_tick", 90U},
+        {"outage_start_tick", 85U},
+        {"target_scenario_ticks", scenario["ticks"]},
+        {"warmup_runs", warmupRuns},
+        {"target_repetitions", repetitions},
+        {"scenario_duration_us", SummarizeDurations(std::move(durationsMicroseconds))},
+        {"mission_completion_time_seconds",
+            SummarizeDurations(std::move(missionCompletionTimesSeconds))},
+        {"total_task_reassignment_events",
+            SummarizeDurations(std::move(taskReassignmentEvents))},
+        {"method", "운동학 모델에서 전체 드론의 과제를 미리 배정한 뒤 일부 드론의 통신을 끊고, 미완료 과제를 다시 나누는 실행 비용을 측정"},
+        {"runs", std::move(runs)}};
+}
+
+Json MeasureCoordinatorReallocationScaling()
+{
+    constexpr std::size_t repetitions = 3U;
+    constexpr std::size_t warmupRuns = 1U;
+    const std::vector<std::size_t> droneCounts{4U, 16U, 64U, 256U};
+    Json summaries = Json::array();
+    Json runs = Json::array();
+    for (const std::size_t droneCount : droneCounts)
+    {
+        Json count = MeasureCoordinatorReallocationCount(
+            droneCount, repetitions, warmupRuns);
+        Json countRuns = std::move(count["runs"]);
+        count.erase("runs");
+        summaries.push_back(std::move(count));
+        for (Json& run : countRuns)
+            runs.push_back(std::move(run));
+    }
+
+    return {
+        {"dynamics", "kinematic"},
+        {"target_counts", droneCounts},
+        {"target_repetitions_per_count", repetitions},
+        {"warmup_runs_per_count", warmupRuns},
+        {"summaries", std::move(summaries)},
+        {"runs", std::move(runs)}};
+}
+
 nlohmann::json MeasureCooperativeMissionDynamics(SimulationDynamics dynamics)
 {
     const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
@@ -331,6 +449,8 @@ nlohmann::json MeasureCooperativeMissionDynamics(SimulationDynamics dynamics)
 nlohmann::json MeasureCooperativeMissionScaling()
 {
     return {
+        {"coordinator_reallocation_scaling",
+            MeasureCoordinatorReallocationScaling()},
         {"kinematic", MeasureCooperativeMissionDynamics(
             aerosimlab::simulation::SimulationDynamics::Kinematic)},
         {"rigid_body", MeasureCooperativeMissionDynamics(
