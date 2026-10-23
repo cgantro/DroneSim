@@ -663,7 +663,12 @@ std::uint32_t AeroSimLabApp::RenderWorldToTarget(
 
 void AeroSimLabApp::CaptureEoFrame()
 {
-    const auto& camera = simulation_.Camera();
+    ProcessCompletedEoReadback();
+    QueueEoReadback();
+}
+
+void AeroSimLabApp::ProcessCompletedEoReadback()
+{
     std::uint64_t simulationTick = 0;
     double pollDurationMicroseconds = 0.0;
     bool readCompleted = false;
@@ -711,7 +716,11 @@ void AeroSimLabApp::CaptureEoFrame()
         eoReadbackHappenedThisFrame_ = true;
         ProcessEoPixels(simulationTick);
     }
+}
 
+void AeroSimLabApp::QueueEoReadback()
+{
+    const auto& camera = simulation_.Camera();
     if (camera.status != aerosimlab::simulation::CameraStatus::Active
         || camera.lastFrameTick <= lastQueuedEoFrameTick_)
         return;

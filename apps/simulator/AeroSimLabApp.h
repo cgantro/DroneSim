@@ -132,8 +132,12 @@ private:
     [[nodiscard]] std::uint32_t RenderWorldToTarget(
         aerosimlab::graphics::MultisampleFramebuffer& target,
         const aerosimlab::graphics::Camera& camera);
-    /** @brief 완료된 EO 픽셀 읽기를 처리하고 새 화면 읽기를 GPU에 맡긴다. */
+    /** @brief 끝난 픽셀 읽기를 처리한 뒤 새 카메라 화면을 GPU에 맡긴다. */
     void CaptureEoFrame();
+    /** @brief GPU에서 끝난 EO 픽셀 읽기와 측정값을 처리한다. */
+    void ProcessCompletedEoReadback();
+    /** @brief 아직 읽지 않은 카메라 Tick이 있으면 GPU에 읽기를 예약한다. */
+    void QueueEoReadback();
     /** @brief 저장된 EO 화면의 Tick과 품질을 갱신한다. */
     void ProcessEoPixels(std::uint64_t simulationTick);
     /** @brief 스모크 검사 전에 마지막 EO 화면까지 읽어 온다. */
