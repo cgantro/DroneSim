@@ -120,9 +120,9 @@ void Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones()
      "commands":[],
      "expected":{"tolerance_meters":0.0,"minimum_drone_separation_meters":1.9,
        "drones":[
+         {"name":"third","mode":"grounded","position_meters":[0,2,0]},
          {"name":"first","mode":"grounded","position_meters":[0,0,0]},
-         {"name":"second","mode":"grounded","position_meters":[3,0,0]},
-         {"name":"third","mode":"grounded","position_meters":[0,2,0]}]}}
+         {"name":"second","mode":"grounded","position_meters":[3,0,0]}]}}
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
