@@ -82,62 +82,79 @@ struct SimulationCore::EcsStorage
     explicit EcsStorage(SimulationDynamics selectedDynamics)
         : dynamics(selectedDynamics)
     {
+        RegisterDroneSystem();
+        RegisterCameraSystem();
+        SynchronizeCameraPose();
+    }
+
+    void RegisterDroneSystem()
+    {
         if (dynamics == SimulationDynamics::Kinematic)
         {
-            primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
-            world.system<DroneState, DroneControlState>("AdvanceKinematicDrone")
-                .kind(flecs::OnUpdate)
-                .run([this](flecs::iter& iterator)
-                {
-                    ScopedDuration measureSystem(
-                        measureEcsSystemDuration
-                            ? &lastEcsSystemDurations.advanceKinematicDroneMicroseconds
-                            : nullptr);
-                    while (iterator.next())
-                    {
-                        auto states = iterator.field<DroneState>(0);
-                        auto controls = iterator.field<DroneControlState>(1);
-                        for (const std::size_t row : iterator)
-                            DroneModel::AdvanceOneTick(states[row], controls[row]);
-                    }
-                });
+            RegisterKinematicSystem();
+            return;
         }
 #if !defined(__EMSCRIPTEN__)
-        else
-        {
-            physics = std::make_unique<PhysicsWorld>();
-            primaryDroneId = CreateDrone(glm::dvec3{
-                0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters}, 0.0);
-            world.system<DroneState, DroneControlState, PhysicsBody, DroneActuation>(
-                "ApplyRigidBodyForces")
-                .kind(flecs::OnUpdate)
-                .run([this](flecs::iter& iterator)
-                {
-                    ScopedDuration measureSystem(
-                        measureEcsSystemDuration
-                            ? &lastEcsSystemDurations.applyRigidBodyForcesMicroseconds
-                            : nullptr);
-                    while (iterator.next())
-                    {
-                        auto states = iterator.field<DroneState>(0);
-                        auto controls = iterator.field<DroneControlState>(1);
-                        auto bodies = iterator.field<const PhysicsBody>(2);
-                        auto actuations = iterator.field<DroneActuation>(3);
-                        for (const std::size_t row : iterator)
-                        {
-                            ApplyRigidBodyForces(
-                                states[row], controls[row], bodies[row].handle, actuations[row]);
-                        }
-                    }
-                });
-        }
+        RegisterRigidBodySystem();
 #else
-        else
-        {
-            primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
-        }
+        primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
+#endif
+    }
+
+    void RegisterKinematicSystem()
+    {
+        primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
+        world.system<DroneState, DroneControlState>("AdvanceKinematicDrone")
+            .kind(flecs::OnUpdate)
+            .run([this](flecs::iter& iterator)
+            {
+                ScopedDuration measureSystem(
+                    measureEcsSystemDuration
+                        ? &lastEcsSystemDurations.advanceKinematicDroneMicroseconds
+                        : nullptr);
+                while (iterator.next())
+                {
+                    auto states = iterator.field<DroneState>(0);
+                    auto controls = iterator.field<DroneControlState>(1);
+                    for (const std::size_t row : iterator)
+                        DroneModel::AdvanceOneTick(states[row], controls[row]);
+                }
+            });
+    }
+
+#if !defined(__EMSCRIPTEN__)
+    void RegisterRigidBodySystem()
+    {
+        physics = std::make_unique<PhysicsWorld>();
+        primaryDroneId = CreateDrone(glm::dvec3{
+            0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters}, 0.0);
+        world.system<DroneState, DroneControlState, PhysicsBody, DroneActuation>(
+            "ApplyRigidBodyForces")
+            .kind(flecs::OnUpdate)
+            .run([this](flecs::iter& iterator)
+            {
+                ScopedDuration measureSystem(
+                    measureEcsSystemDuration
+                        ? &lastEcsSystemDurations.applyRigidBodyForcesMicroseconds
+                        : nullptr);
+                while (iterator.next())
+                {
+                    auto states = iterator.field<DroneState>(0);
+                    auto controls = iterator.field<DroneControlState>(1);
+                    auto bodies = iterator.field<const PhysicsBody>(2);
+                    auto actuations = iterator.field<DroneActuation>(3);
+                    for (const std::size_t row : iterator)
+                    {
+                        ApplyRigidBodyForces(
+                            states[row], controls[row], bodies[row].handle, actuations[row]);
+                    }
+                }
+            });
+    }
 #endif
 
+    void RegisterCameraSystem()
+    {
         camera = world.entity("EoCamera").set<CameraState>({});
         world.system<CameraState>("AdvanceCamera")
             .kind(flecs::OnUpdate)
@@ -153,7 +170,6 @@ struct SimulationCore::EcsStorage
                         EoCameraModel::AdvanceOneTick(cameraStates[row], tickCount + 1);
                 }
             });
-        SynchronizeCameraPose();
     }
 
     DroneId CreateDrone(
