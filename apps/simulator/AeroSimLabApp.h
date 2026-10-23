@@ -76,9 +76,16 @@ public:
     int Run();
 
 private:
-    /** @brief 현재 화면 프레임에서만 쓰는 렌더링·카메라·HUD 측정값이다. */
+    /** @brief 입력부터 화면 출력까지 현재 프레임에서만 쓰는 측정값이다. */
     struct CurrentFrameMeasurements
     {
+        double eventPollingMicroseconds = 0.0;
+        double groundControlPollingMicroseconds = 0.0;
+        double gamepadPollingMicroseconds = 0.0;
+        double simulationUpdateMicroseconds = 0.0;
+        double renderFrameMicroseconds = 0.0;
+        double renderMicroseconds = 0.0;
+        double bufferSwapMicroseconds = 0.0;
         double scenePanelRenderMicroseconds = 0.0;
         double cameraSceneRenderMicroseconds = 0.0;
         double eoReadbackHandlingMicroseconds = 0.0;
@@ -97,6 +104,8 @@ private:
 
     /** @brief 입력을 읽고 시뮬레이션과 화면을 한 프레임 진행한다. */
     void RunFrame(std::chrono::steady_clock::time_point& previousFrame);
+    /** @brief 이번 프레임 측정값을 요약 목록과 긴 프레임 기록에 추가한다. */
+    void RecordBenchmarkFrame(double applicationMicroseconds);
     void InitializeGraphics();
     /** @brief 지도·기체 화면 자산을 불러오고 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();

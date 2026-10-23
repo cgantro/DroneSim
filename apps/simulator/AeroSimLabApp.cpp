@@ -260,22 +260,20 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     const auto applicationFrameStart = benchmarkMode_
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    double eventPollingMicroseconds = 0.0;
+    frameMeasurements_ = {};
     {
         aerosimlab::simulation::ScopedDuration measureEvents(
-            benchmarkMode_ ? &eventPollingMicroseconds : nullptr);
+            benchmarkMode_ ? &frameMeasurements_.eventPollingMicroseconds : nullptr);
         window_->PollEvents();
     }
-    double groundControlPollingMicroseconds = 0.0;
     {
         aerosimlab::simulation::ScopedDuration measureGroundControl(
-            benchmarkMode_ ? &groundControlPollingMicroseconds : nullptr);
+            benchmarkMode_ ? &frameMeasurements_.groundControlPollingMicroseconds : nullptr);
         PollGroundControl();
     }
-    double gamepadPollingMicroseconds = 0.0;
     {
         aerosimlab::simulation::ScopedDuration measureGamepad(
-            benchmarkMode_ ? &gamepadPollingMicroseconds : nullptr);
+            benchmarkMode_ ? &frameMeasurements_.gamepadPollingMicroseconds : nullptr);
         PollGamepad();
     }
     const auto now = std::chrono::steady_clock::now();
@@ -294,92 +292,91 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         && !benchmarkMode_
         ? networkSmokeSimulationBatchesPerFrame
         : 1U;
-    double simulationUpdateMicroseconds = 0.0;
     {
         aerosimlab::simulation::ScopedDuration measureSimulation(
-            benchmarkMode_ ? &simulationUpdateMicroseconds : nullptr);
+            benchmarkMode_ ? &frameMeasurements_.simulationUpdateMicroseconds : nullptr);
         for (std::size_t batch = 0; batch < simulationBatches; ++batch)
             AdvanceSimulation(frameSeconds);
     }
     eoReadbackHappenedThisFrame_ = false;
-    double renderFrameDurationMicroseconds = 0.0;
-    double renderDurationMicroseconds = 0.0;
-    double bufferSwapDurationMicroseconds = 0.0;
-    frameMeasurements_ = {};
     {
         aerosimlab::simulation::ScopedDuration measureRenderFrame(
-            benchmarkMode_ ? &renderFrameDurationMicroseconds : nullptr);
+            benchmarkMode_ ? &frameMeasurements_.renderFrameMicroseconds : nullptr);
         {
             aerosimlab::simulation::ScopedDuration measureRender(
-                benchmarkMode_ ? &renderDurationMicroseconds : nullptr);
+                benchmarkMode_ ? &frameMeasurements_.renderMicroseconds : nullptr);
             RenderFrame();
         }
         {
             aerosimlab::simulation::ScopedDuration measureBufferSwap(
-                benchmarkMode_ ? &bufferSwapDurationMicroseconds : nullptr);
+                benchmarkMode_ ? &frameMeasurements_.bufferSwapMicroseconds : nullptr);
             window_->SwapBuffers();
         }
-    }
-    if (benchmarkMode_)
-    {
-        benchmarkMeasurements_.renderFrameDurationsMicroseconds.push_back(
-            renderFrameDurationMicroseconds);
-        auto& frameDurations = eoReadbackHappenedThisFrame_
-            ? benchmarkMeasurements_.renderFrameDurationsWithEoReadbackMicroseconds
-            : benchmarkMeasurements_.renderFrameDurationsWithoutEoReadbackMicroseconds;
-        frameDurations.push_back(renderFrameDurationMicroseconds);
     }
     ++renderedFrames_;
     if (benchmarkMode_)
     {
         const double applicationMicroseconds = std::chrono::duration<double, std::micro>(
             std::chrono::steady_clock::now() - applicationFrameStart).count();
-        for (std::size_t index = 0;
-             index < frameMeasurements_.completedHudGpuTimingCount; ++index)
-        {
-            const HudGpuTiming& timing = completedHudGpuTimings_[index];
-            const auto frame = std::find_if(benchmarkMeasurements_.slowFrames.begin(),
-                benchmarkMeasurements_.slowFrames.end(), [&timing](const auto& candidate)
-                {
-                    return candidate.frameIndex == timing.frameIndex;
-                });
-            if (frame != benchmarkMeasurements_.slowFrames.end())
-            {
-                frame->hudGpuExecutionMicroseconds = timing.executionMicroseconds;
-                frame->hudGpuTimingAvailable = true;
-            }
-        }
-        benchmarkMeasurements_.applicationFrameDurationsMicroseconds.push_back(
-            applicationMicroseconds);
-        if (applicationMicroseconds > 1'000'000.0 / 60.0)
-        {
-            benchmarkMeasurements_.slowFrames.push_back({
-                static_cast<std::uint64_t>(renderedFrames_),
-                applicationMicroseconds,
-                eventPollingMicroseconds,
-                groundControlPollingMicroseconds,
-                gamepadPollingMicroseconds,
-                simulationUpdateMicroseconds,
-                renderDurationMicroseconds,
-                frameMeasurements_.scenePanelRenderMicroseconds,
-                frameMeasurements_.cameraSceneRenderMicroseconds,
-                bufferSwapDurationMicroseconds,
-                frameMeasurements_.eoReadbackHandlingMicroseconds,
-                frameMeasurements_.eoFenceWaitMicroseconds,
-                frameMeasurements_.eoBufferMapMicroseconds,
-                frameMeasurements_.eoPixelCopyMicroseconds,
-                frameMeasurements_.hudInterfaceBuildMicroseconds,
-                frameMeasurements_.hudFinalizeMicroseconds,
-                frameMeasurements_.hudBackendDrawMicroseconds,
-                frameMeasurements_.hudDrawListCount,
-                frameMeasurements_.hudDrawCommandCount,
-                frameMeasurements_.hudVertexCount,
-                frameMeasurements_.hudIndexCount,
-                0.0,
-                false,
-                eoReadbackHappenedThisFrame_});
-        }
+        RecordBenchmarkFrame(applicationMicroseconds);
     }
+}
+
+void AeroSimLabApp::RecordBenchmarkFrame(double applicationMicroseconds)
+{
+    benchmarkMeasurements_.renderFrameDurationsMicroseconds.push_back(
+        frameMeasurements_.renderFrameMicroseconds);
+    auto& frameDurations = eoReadbackHappenedThisFrame_
+        ? benchmarkMeasurements_.renderFrameDurationsWithEoReadbackMicroseconds
+        : benchmarkMeasurements_.renderFrameDurationsWithoutEoReadbackMicroseconds;
+    frameDurations.push_back(frameMeasurements_.renderFrameMicroseconds);
+    benchmarkMeasurements_.applicationFrameDurationsMicroseconds.push_back(
+        applicationMicroseconds);
+
+    for (std::size_t index = 0;
+         index < frameMeasurements_.completedHudGpuTimingCount; ++index)
+    {
+        const HudGpuTiming& timing = completedHudGpuTimings_[index];
+        const auto frame = std::find_if(benchmarkMeasurements_.slowFrames.begin(),
+            benchmarkMeasurements_.slowFrames.end(), [&timing](const auto& candidate)
+            {
+                return candidate.frameIndex == timing.frameIndex;
+            });
+        if (frame == benchmarkMeasurements_.slowFrames.end())
+            continue;
+
+        frame->hudGpuExecutionMicroseconds = timing.executionMicroseconds;
+        frame->hudGpuTimingAvailable = true;
+    }
+
+    if (applicationMicroseconds <= 1'000'000.0 / 60.0)
+        return;
+
+    benchmarkMeasurements_.slowFrames.push_back({
+        static_cast<std::uint64_t>(renderedFrames_),
+        applicationMicroseconds,
+        frameMeasurements_.eventPollingMicroseconds,
+        frameMeasurements_.groundControlPollingMicroseconds,
+        frameMeasurements_.gamepadPollingMicroseconds,
+        frameMeasurements_.simulationUpdateMicroseconds,
+        frameMeasurements_.renderMicroseconds,
+        frameMeasurements_.scenePanelRenderMicroseconds,
+        frameMeasurements_.cameraSceneRenderMicroseconds,
+        frameMeasurements_.bufferSwapMicroseconds,
+        frameMeasurements_.eoReadbackHandlingMicroseconds,
+        frameMeasurements_.eoFenceWaitMicroseconds,
+        frameMeasurements_.eoBufferMapMicroseconds,
+        frameMeasurements_.eoPixelCopyMicroseconds,
+        frameMeasurements_.hudInterfaceBuildMicroseconds,
+        frameMeasurements_.hudFinalizeMicroseconds,
+        frameMeasurements_.hudBackendDrawMicroseconds,
+        frameMeasurements_.hudDrawListCount,
+        frameMeasurements_.hudDrawCommandCount,
+        frameMeasurements_.hudVertexCount,
+        frameMeasurements_.hudIndexCount,
+        0.0,
+        false,
+        eoReadbackHappenedThisFrame_});
 }
 
 bool AeroSimLabApp::SmokeTestIsComplete() const
