@@ -1,26 +1,19 @@
 #include "AeroSimLabApp.h"
 #include "FleetDroneSpawn.h"
-#include "SimulationBenchmark.h"
 
 #include "GroundControlClient.h"
 #include "communication/Protocol.h"
 #include "communication/UdpSocket.h"
-#include "simulation_core/QuadrotorFlightController.h"
 
-#include <glm/geometric.hpp>
+#include <glm/glm.hpp>
 #include <gtest/gtest.h>
-#include <nlohmann/json.hpp>
 
 #include <chrono>
 #include <cstdint>
 #include <exception>
-#include <filesystem>
-#include <fstream>
 #include <future>
 #include <optional>
-#include <string>
 #include <thread>
-#include <utility>
 
 using namespace aerosimlab;
 

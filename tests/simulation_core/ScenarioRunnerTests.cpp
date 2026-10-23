@@ -1,9 +1,6 @@
 #include "simulation_core/ScenarioRunner.h"
-#include "simulation_core/QuadrotorFlightController.h"
-
 #include <gtest/gtest.h>
 
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -11,25 +8,6 @@ namespace aerosimlab::simulation
 {
 namespace
 {
-constexpr std::string_view completeFlightScenario = R"json(
-{
-  "version": 1,
-  "dynamics": "kinematic",
-  "ticks": 300,
-  "commands": [
-    {"tick": 0, "type": "takeoff"},
-    {"tick": 90, "type": "set_waypoint", "position_meters": [3.0, 0.0, 1.5]},
-    {"tick": 150, "type": "stop"},
-    {"tick": 200, "type": "land"}
-  ],
-  "expected": {
-    "mode": "grounded",
-    "position_meters": [3.0, 0.0, 0.0],
-    "orientation_quaternion_wxyz": [1.0, 0.0, 0.0, 0.0],
-    "orientation_tolerance_radians": 0.000001,
-    "tolerance_meters": 0.000001
-  }
-})json";
 }
 
 void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder()

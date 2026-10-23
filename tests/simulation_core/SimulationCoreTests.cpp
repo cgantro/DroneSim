@@ -1,18 +1,9 @@
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/QuadrotorFlightController.h"
 
-#include <glm/geometric.hpp>
-#include <glm/gtc/quaternion.hpp>
-
 #include <gtest/gtest.h>
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <filesystem>
 #include <limits>
-#include <numbers>
-#include <stdexcept>
 
 namespace aerosimlab::simulation
 {
@@ -36,26 +27,6 @@ void ReachHovering(SimulationCore& simulation)
     ASSERT_EQ(simulation.State().mode, FlightMode::Hovering);
 }
 
-void ReachHovering(SimulationCore& simulation, DroneId droneId)
-{
-    ASSERT_EQ(simulation.Apply(droneId, Command(DroneCommand::Kind::TakeOff)),
-        CommandResult::Accepted);
-    for (int tick = 0; tick < 120; ++tick)
-        simulation.AdvanceOneTick();
-    ASSERT_EQ(simulation.State(droneId).mode, FlightMode::Hovering);
-}
-
-void ExpectCameraPoseMatchesPrimaryDrone(const SimulationCore& simulation)
-{
-    const DroneState& drone = simulation.State();
-    const CameraState& camera = simulation.Camera();
-    const glm::dvec3 mountPositionBodyMeters{0.35, 0.0, 0.12};
-    const glm::dvec3 expectedPosition = drone.positionMeters
-        + drone.orientation * mountPositionBodyMeters;
-
-    EXPECT_NEAR(glm::length(camera.positionMeters - expectedPosition), 0.0, 1.0e-10);
-    EXPECT_EQ(camera.orientation, drone.orientation);
-}
 }
 
 void Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks()
