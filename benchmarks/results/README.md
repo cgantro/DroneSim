@@ -1,6 +1,6 @@
 # 성능 측정 결과 찾아보기
 
-먼저 [기술 검토](../../docs/public/기술검토.md)에서 주요 결과와 해석을 읽어 주세요. 이곳의 JSON은 각 실행에서 나온 원자료입니다.
+먼저 [성능 검증과 측정 결과](../../docs/public/성능검증.md)에서 각 시험이 확인하려는 내용과 해석 범위를 읽어 주세요. 이곳의 JSON은 실행별 원자료입니다.
 
 ## 대표 결과
 
@@ -14,7 +14,7 @@
 | 여러 드론이 가까이 있을 때의 충돌 후보 검사 | [충돌 쌍 측정](aerosimlab-drone-collision-pair-sweep-release-2026-10-23-8623be5c.json) |
 | EO 영상 픽셀을 GPU에서 읽어 오는 방식의 변경 | [비동기 픽셀 읽기 측정](aerosimlab-visible-pbo-persistent-map-2026-10-23.json) |
 | 화면 그리기 구간의 CPU·GPU 측정 | [화면 처리 진단](aerosimlab-visible-imgui-gpu-timing-2026-10-23.json) |
-| 강체 드론 충돌 후보 정렬 변경 전후 | [변경 전 원자료](archive/aerosimlab-full-benchmark-release-2026-10-23-94c39b94-before-sort-reuse.json), [변경 후 원자료](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json), [조건과 해석](../../docs/public/기술검토.md) |
+| 강체 드론 충돌 후보 정렬 변경 전후 | [변경 전 원자료](archive/aerosimlab-full-benchmark-release-2026-10-23-94c39b94-before-sort-reuse.json), [변경 후 원자료](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json), [조건과 해석](../../docs/public/성능검증.md) |
 
 ## 과거 원자료
 
