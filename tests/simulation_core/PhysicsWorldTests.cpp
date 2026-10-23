@@ -119,30 +119,19 @@ void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
         });
     ASSERT_NE(building, buildings.end());
 
-    const auto& outline = building->outlineMeters;
-    glm::dvec2 minimum = outline.front();
-    glm::dvec2 maximum = outline.front();
-    for (const glm::dvec2& point : outline)
-    {
-        minimum = glm::min(minimum, point);
-        maximum = glm::max(maximum, point);
-    }
-    const glm::dvec2 center = (minimum + maximum) * 0.5;
-    constexpr double testGroundHeightMeters = 10.0;
-    constexpr double buildingHeightMeters = 3.0;
+    constexpr float assumedBuildingHeightMeters = 3.0F;
+    const auto bounds = terrain::MakeBuildingBoundsMeters(
+        *building, terrain, assumedBuildingHeightMeters);
 
     PhysicsWorld world;
-    world.AddStaticObstacleBox(
-        {center.x, center.y, testGroundHeightMeters + buildingHeightMeters * 0.5},
-        {static_cast<float>((maximum.x - minimum.x) * 0.5),
-            static_cast<float>(buildingHeightMeters * 0.5),
-            static_cast<float>((maximum.y - minimum.y) * 0.5)});
+    world.AddStaticObstacleBox(bounds.centerMeters,
+        glm::vec3{bounds.halfExtentsMeters});
 
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
     RigidBodyDefinition droneDefinition;
     droneDefinition.positionMeters = {
-        minimum.x - 0.8, center.y,
-        testGroundHeightMeters + buildingHeightMeters * 0.5};
+        bounds.centerMeters.x - bounds.halfExtentsMeters.x - 0.8,
+        bounds.centerMeters.y, bounds.centerMeters.z};
     const RigidBodyHandle drone = world.CreateQuadrotor(droneDefinition, parameters);
     const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
         / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
@@ -158,7 +147,8 @@ void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
         world.Step(1.0 / 60.0);
 
     state = world.State(drone);
-    EXPECT_LT(state.positionMeters.x, minimum.x);
+    EXPECT_LT(state.positionMeters.x,
+        bounds.centerMeters.x - bounds.halfExtentsMeters.x);
     EXPECT_LT(state.linearVelocityMetersPerSecond.x, 0.5);
 }
 

@@ -386,30 +386,20 @@ void AeroSimLabApp::LoadScene()
     buildingTransforms_.reserve(buildings.size());
     for (const auto& building : buildings)
     {
-        glm::dvec2 minimum = building.outlineMeters.front();
-        glm::dvec2 maximum = minimum;
-        for (const glm::dvec2& point : building.outlineMeters)
-        {
-            minimum = glm::min(minimum, point);
-            maximum = glm::max(maximum, point);
-        }
-
-        const glm::dvec2 footprintSize = maximum - minimum;
-        const glm::dvec2 center = (minimum + maximum) * 0.5;
-        const float heightMeters = building.heightMeters.value_or(
-            missingBuildingHeightProxyMeters);
-        const double groundHeightMeters = terrainGrid_.HeightAtLocalMeters(center);
-        const glm::dvec3 centerMeters{
-            center.x, center.y, groundHeightMeters + heightMeters * 0.5};
-        const glm::vec3 sizeMeters{
-            static_cast<float>(footprintSize.x), heightMeters * terrainReliefScale,
-            static_cast<float>(footprintSize.y)};
+        const auto bounds = aerosimlab::terrain::MakeBuildingBoundsMeters(
+            building, terrainGrid_, missingBuildingHeightProxyMeters);
+        const glm::vec3 displaySizeMeters{
+            static_cast<float>(bounds.halfExtentsMeters.x * 2.0),
+            static_cast<float>(bounds.halfExtentsMeters.z * 2.0) * terrainReliefScale,
+            static_cast<float>(bounds.halfExtentsMeters.y * 2.0)};
 
 #ifndef __EMSCRIPTEN__
-        simulation_.AddStaticObstacleBox(centerMeters, sizeMeters * 0.5F);
+        // 화면에서 키운 높이는 보기 편의를 위한 값이므로 실제 크기의 충돌 상자를 사용한다.
+        simulation_.AddStaticObstacleBox(
+            bounds.centerMeters, glm::vec3{bounds.halfExtentsMeters});
 #endif
         buildingTransforms_.push_back(CubeTransform(
-            ToRenderPosition(centerMeters), sizeMeters));
+            ToRenderPosition(bounds.centerMeters), displaySizeMeters));
     }
 #ifndef __EMSCRIPTEN__
     // 웹 빌드는 운동학 모드라 충돌 물리 월드에만 필요한 지형 설정을 건너뛴다.

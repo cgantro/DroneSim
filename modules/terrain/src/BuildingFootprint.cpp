@@ -1,5 +1,6 @@
 #include "terrain/BuildingFootprint.h"
 
+#include <glm/common.hpp>
 #include <nlohmann/json.hpp>
 
 #include <cmath>
@@ -84,5 +85,28 @@ std::vector<BuildingFootprint> LoadBuildingFootprints(
     }
 
     return buildings;
+}
+
+BuildingBoundsMeters MakeBuildingBoundsMeters(
+    const BuildingFootprint& building, const TerrainGrid& terrain,
+    float assumedHeightMeters)
+{
+    glm::dvec2 minimum = building.outlineMeters.front();
+    glm::dvec2 maximum = minimum;
+    for (const glm::dvec2& point : building.outlineMeters)
+    {
+        minimum = glm::min(minimum, point);
+        maximum = glm::max(maximum, point);
+    }
+
+    const glm::dvec2 footprintCenter = (minimum + maximum) * 0.5;
+    const float heightMeters = building.heightMeters.value_or(assumedHeightMeters);
+    const double groundElevationMeters = terrain.HeightAtLocalMeters(footprintCenter);
+    return {
+        {footprintCenter.x, footprintCenter.y,
+            groundElevationMeters + static_cast<double>(heightMeters) * 0.5},
+        {(maximum.x - minimum.x) * 0.5,
+            (maximum.y - minimum.y) * 0.5,
+            static_cast<double>(heightMeters) * 0.5}};
 }
 }

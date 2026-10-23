@@ -43,9 +43,33 @@ void Verify_TerrainGrid_LoadsThePublicTestAreaWithItsLocalHeightOrigin()
         terrain.heightOffsetsMeters.end()), 300.0F);
 }
 
+void Verify_BuildingBoundsUseEastNorthUpCoordinatesAndAssumedHeight()
+{
+    TerrainGrid terrain;
+    terrain.sampleCount = 2;
+    terrain.spacingXMeters = 10.0F;
+    terrain.spacingYMeters = 20.0F;
+    terrain.heightOffsetsMeters = {17.0F, 17.0F, 17.0F, 17.0F};
+
+    BuildingFootprint building;
+    building.outlineMeters = {
+        {-4.0, -2.0}, {6.0, -2.0}, {6.0, 10.0}, {-4.0, 10.0}, {-4.0, -2.0}};
+
+    const BuildingBoundsMeters bounds = MakeBuildingBoundsMeters(
+        building, terrain, 8.0F);
+
+    EXPECT_DOUBLE_EQ(bounds.centerMeters.x, 1.0);
+    EXPECT_DOUBLE_EQ(bounds.centerMeters.y, 4.0);
+    EXPECT_DOUBLE_EQ(bounds.centerMeters.z, 21.0);
+    EXPECT_DOUBLE_EQ(bounds.halfExtentsMeters.x, 5.0);
+    EXPECT_DOUBLE_EQ(bounds.halfExtentsMeters.y, 6.0);
+    EXPECT_DOUBLE_EQ(bounds.halfExtentsMeters.z, 4.0);
+}
+
 TEST(TerrainGridTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_TerrainGrid_LoadsThePublicTestAreaWithItsLocalHeightOrigin());
+    EXPECT_NO_FATAL_FAILURE(Verify_BuildingBoundsUseEastNorthUpCoordinatesAndAssumedHeight());
 }
 
 }
