@@ -1,9 +1,11 @@
 #include "AeroSimLabApp.h"
+#include "FleetDroneSpawn.h"
 #include "SimulationBenchmark.h"
 
 #include "GroundControlClient.h"
 #include "communication/Protocol.h"
 #include "communication/UdpSocket.h"
+#include "simulation_core/QuadrotorFlightController.h"
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -15,11 +17,44 @@
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
 
 using namespace aerosimlab;
+
+void Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain()
+{
+    terrain::TerrainGrid terrainGrid;
+    terrainGrid.sampleCount = 3;
+    terrainGrid.spacingXMeters = 2.0F;
+    terrainGrid.spacingYMeters = 2.0F;
+    terrainGrid.heightOffsetsMeters.resize(9U);
+
+    std::optional<simulator::detail::FleetDroneSpawnPose> spawn;
+    EXPECT_NO_THROW(spawn = simulator::detail::FindFleetDroneSpawnPose(
+        terrainGrid, glm::dvec3{0.0}, 0U));
+    EXPECT_FALSE(spawn.has_value());
+}
+
+void Verify_FleetDroneSpawnUsesTheTerrainHeight()
+{
+    terrain::TerrainGrid terrainGrid;
+    terrainGrid.sampleCount = 3;
+    terrainGrid.spacingXMeters = 12.0F;
+    terrainGrid.spacingYMeters = 12.0F;
+    terrainGrid.heightOffsetsMeters.assign(9U, 7.0F);
+
+    const auto spawn = simulator::detail::FindFleetDroneSpawnPose(
+        terrainGrid, glm::dvec3{0.0}, 0U);
+    ASSERT_TRUE(spawn.has_value());
+    EXPECT_DOUBLE_EQ(spawn->groundElevationMeters, 7.0);
+    EXPECT_DOUBLE_EQ(spawn->positionMeters.x, 5.0);
+    EXPECT_DOUBLE_EQ(spawn->positionMeters.y, 0.0);
+    EXPECT_DOUBLE_EQ(spawn->positionMeters.z,
+        7.0 + simulation::QuadrotorFlightController::groundedModelOriginHeightMeters);
+}
 
 void Verify_SimulatorBenchmark_SummarizesLatencyPercentiles()
 {
@@ -293,6 +328,8 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
 TEST(SimulatorSessionTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
+    EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnUsesTheTerrainHeight());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulatorBenchmark_SummarizesLatencyPercentiles());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulatorBenchmark_BuildsViewerReportFromMeasuredValues());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_RecordingReplayOverUdp());

@@ -210,7 +210,7 @@ void StartRequest(HWND window, AppState& state,
 
 std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply& reply)
 {
-    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 9> messages{{
+    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 10> messages{{
         {"recording_started", L"입력 기록을 시작했습니다. 게임패드와 비행 명령을 기록합니다."},
         {"recording_stopped", L"기록을 마쳤습니다. 시뮬레이터를 닫기 전까지 재생할 수 있습니다."},
         {"recording_replay_started", L"입력 기록을 재생합니다."},
@@ -219,7 +219,8 @@ std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply&
         {"recording_empty", L"재생할 입력 기록이 없습니다."},
         {"recording_unavailable", L"기록 또는 재생이 이미 진행 중입니다."},
         {"drone_added", L"새 드론을 지면에 추가했습니다."},
-        {"fleet_limit_reached", L"드론은 최대 8대까지 추가할 수 있습니다."}
+        {"fleet_limit_reached", L"드론은 최대 8대까지 추가할 수 있습니다."},
+        {"spawn_outside_terrain", L"지도 범위 밖에는 새 드론을 추가할 수 없습니다."}
     }};
 
     for (const auto& [status, message] : messages)
