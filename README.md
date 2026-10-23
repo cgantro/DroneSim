@@ -51,9 +51,9 @@ Windows Release 빌드에서 자동 시험 20개가 통과했습니다. 2026년 
 | EO 픽셀 읽기 추적 | 상태 조회 제거 전 요청 p50 2.283ms, 제거 후 두 실행은 0.064ms와 2.282ms. 앱 프레임 최댓값은 세 실행 모두 90ms 이상 | 결과 확인과 요청 제출 중 긴 시간이 기록된 위치가 실행마다 달라졌고, 전체 프레임 멈춤은 남음. 숨김 창 측정이라 GPU 원인이나 실제 표시 지연은 확정하지 못함 |
 | 운동학 확장 | 화면 없는 분리 배치 1,024대, Tick p95 중앙값 8.9µs, 30,000 Tick씩 3회 완료 | 처리량 시험 결과이며 GUI 실시간 조종 성능이나 물리 정확도를 뜻하지 않음 |
 | AirSim 강체 확장 | 분리 배치 512대에서 Tick p95 중앙값 949.3µs, 30,000 Tick씩 3회 완료 | 같은 PC의 화면 없는 시험. 1,024대 강체는 1회 실행 중 30초 제한에 걸려 완료 결과가 아님 |
-| 밀집 충돌 처리 | 0.55m 간격 256대에서 변경 전 Tick p95 중앙값 1,185.5µs·접촉 생성 p95 939.8µs, 변경 후 각각 955.5µs·722.8µs. 각 조건에서 30,000 Tick씩 3회 완료 | 밀집 배치에서는 줄었지만 분리 배치의 접촉 생성 p95는 206.1µs에서 242.5µs로 늘어남. 모든 배치의 개선을 뜻하지 않음 |
+| 밀집 충돌 처리 | 0.55m 간격 256대에서 접촉 생성 p95 중앙값 607.6µs → 496.3µs, 전체 Tick p95 801.6µs → 648.2µs. 변경 전후 각각 30,000 Tick씩 3회 완료 | 같은 PC와 입력 조건에서 측정했지만 코드 리비전은 다름. 이 장면의 결과이며 다른 배치의 성능을 보장하지 않음 |
 | 협동 임무 | 운동학 1,024대와 AirSim 강체 128대까지 모든 기록된 반복에서 목표 완료 | 로컬 시나리오 결과이며 실제 통신 장애·충돌 회피·실비행 정확도 검증은 아님 |
 
-상세 조건과 실행 환경은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. [이전 기준선](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-bbb86f73-dirty.json), [충돌 검사 변경 후 결과](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-26cc0b07-dirty.json), [EO 화면 재사용 변경 후 결과](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-245adc16-dirty.json), [EO 픽셀 읽기 상태 조회 진단과 반복 측정](docs/public/문제해결/화면-프레임-지연.md)을 보관합니다. 주요 문제 추적은 [문제 해결 기록](docs/public/문제해결.md)에 있습니다.
+상세 조건과 실행 환경은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. 충돌 경계값 재사용의 [변경 전 측정](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-0de5d066-dirty-state-query-removed-repeat-2.json)과 [변경 후 측정](benchmarks/results/aerosimlab-contact-aabb-cache-release-2026-10-23.json)을 보관합니다. 화면 지연 분석은 [EO 픽셀 읽기 기록](docs/public/문제해결/화면-프레임-지연.md), 주요 문제의 목록은 [문제 해결 기록](docs/public/문제해결.md)에서 확인할 수 있습니다.
 
 다중 드론과 공동 임무의 실행 범위, 실패한 규모 시험은 [개발 원리와 확인 결과](docs/public/기술검토.md)에 정리했습니다.
