@@ -3,6 +3,7 @@
   "dynamics": "rigid_body",
   "wind_velocity_meters_per_second": [2.0, 0.0, 0.0],
   "ticks": 600,
+  "record_trajectory": {"sample_every_ticks": 600},
   "commands": [
     {"tick": 0, "type": "takeoff"},
     {"tick": 240, "type": "land"}

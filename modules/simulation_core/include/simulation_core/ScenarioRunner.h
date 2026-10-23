@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace aerosimlab::simulation
@@ -56,6 +57,14 @@ struct ScenarioResult
         bool customized = false;
     };
     std::optional<ControllerSettings> controllerSettings;
+    /** @brief 요청한 시나리오에서 일정 간격으로 저장한 드론 궤적이다. */
+    struct TrajectorySample
+    {
+        std::uint64_t tick = 0;
+        double timeSeconds = 0.0;
+        std::vector<std::pair<std::string, DroneState>> drones;
+    };
+    std::vector<TrajectorySample> trajectory;
     /** @brief 시나리오에서 이름으로 지정한 드론의 마지막 상태다. */
     struct Drone
     {

@@ -29,6 +29,7 @@ void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
     std::string customModelScenario =
         ReadScenarioFixture("scenarios/flight/physical-model-override.json");
     const ScenarioResult result = RunScenario(customModelScenario);
+    EXPECT_TRUE(result.trajectory.empty());
     ASSERT_TRUE(result.passed)
         << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_TRUE(result.physicalModel.has_value());
@@ -65,6 +66,41 @@ void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(kinematicOverride)),
         std::invalid_argument);
+}
+
+void Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories()
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":5,
+     "drones":[
+       {"name":"east","initial_position_meters":[1,0,0]},
+       {"name":"north","initial_position_meters":[0,2,0]}],
+     "commands":[],"record_trajectory":{"sample_every_ticks":2},
+     "expected":{"drones":[
+       {"name":"east","mode":"grounded","position_meters":[1,0,0]},
+       {"name":"north","mode":"grounded","position_meters":[0,2,0]}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    ASSERT_TRUE(result.passed);
+    ASSERT_EQ(result.trajectory.size(), 4);
+    EXPECT_EQ(result.trajectory[0].tick, 0U);
+    EXPECT_DOUBLE_EQ(result.trajectory[0].timeSeconds, 0.0);
+    EXPECT_EQ(result.trajectory[1].tick, 2U);
+    EXPECT_NEAR(result.trajectory[1].timeSeconds, 2.0 / 60.0, 1.0e-12);
+    EXPECT_EQ(result.trajectory[2].tick, 4U);
+    EXPECT_EQ(result.trajectory[3].tick, 5U);
+    ASSERT_EQ(result.trajectory[3].drones.size(), 2);
+    EXPECT_EQ(result.trajectory[3].drones[0].first, "east");
+    EXPECT_EQ(result.trajectory[3].drones[1].first, "north");
+    EXPECT_EQ(result.trajectory[3].drones[0].second.positionMeters,
+        (glm::dvec3{1.0, 0.0, 0.0}));
+
+    constexpr std::string_view oversizedTrace = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":100000,
+     "commands":[],"record_trajectory":{"sample_every_ticks":1}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(oversizedTrace)), std::invalid_argument);
 }
 
 void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
@@ -505,6 +541,8 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
 
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange());

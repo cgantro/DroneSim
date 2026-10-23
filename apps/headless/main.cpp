@@ -27,6 +27,10 @@ nlohmann::json ToJson(const aerosimlab::simulation::DroneState& state)
             state.velocityMetersPerSecond.x,
             state.velocityMetersPerSecond.y,
             state.velocityMetersPerSecond.z}},
+        {"angular_velocity_radians_per_second", {
+            state.angularVelocityRadiansPerSecond.x,
+            state.angularVelocityRadiansPerSecond.y,
+            state.angularVelocityRadiansPerSecond.z}},
         {"orientation_quaternion_wxyz", {
             state.orientation.w,
             state.orientation.x,
@@ -151,6 +155,20 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
             {"customized", controller.customized}};
     }
 
+    nlohmann::json trajectory = nlohmann::json::array();
+    for (const auto& sample : result.trajectory)
+    {
+        nlohmann::json dronesAtTick = nlohmann::json::array();
+        for (const auto& [name, state] : sample.drones)
+        {
+            dronesAtTick.push_back({{"name", name}, {"state", ToJson(state)}});
+        }
+        trajectory.push_back({
+            {"tick", sample.tick},
+            {"time_seconds", sample.timeSeconds},
+            {"drones", std::move(dronesAtTick)}});
+    }
+
     return {
         {"passed", result.passed},
         {"tick_count", result.tickCount},
@@ -164,6 +182,7 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
         {"drones", std::move(drones)},
         {"physical_model", std::move(physicalModel)},
         {"controller_gains", std::move(controllerSettings)},
+        {"trajectory", std::move(trajectory)},
         {"mission", std::move(mission)},
         {"minimum_drone_separation_meters", result.minimumDroneSeparationMeters},
         {"minimum_predicted_drone_separation_meters",

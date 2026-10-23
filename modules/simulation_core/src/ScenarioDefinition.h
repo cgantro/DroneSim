@@ -113,6 +113,8 @@ struct ScenarioDefinition
     QuadrotorControllerParameters controllerParameters;
     bool controllerParametersCustomized = false;
     std::optional<glm::dvec3> windVelocity;
+    /** @brief 궤적 저장을 요청한 경우의 샘플 간격이다. */
+    std::optional<std::uint64_t> trajectorySampleEveryTicks;
     std::vector<ScheduledCameraEvent> cameraEvents;
     std::vector<ExpectedDrone> expectedDrones;
     bool hasExpectedDrones = false;

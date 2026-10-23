@@ -34,6 +34,28 @@ using detail::DroneCommunicationOutage;
 using DroneIds = std::unordered_map<std::string, DroneId>;
 using DroneCommunicationStatus = ScenarioResult::Drone::CommunicationStatus;
 
+void RecordTrajectorySample(const ScenarioDefinition& definition,
+    const SimulationCore& simulation, const DroneIds& droneIds,
+    std::uint64_t tick, ScenarioResult& result)
+{
+    ScenarioResult::TrajectorySample sample;
+    sample.tick = tick;
+    sample.timeSeconds = static_cast<double>(tick) * DroneModel::fixedStepSeconds;
+    sample.drones.reserve(droneIds.size());
+
+    const auto addDrone = [&](const std::string& name)
+    {
+        sample.drones.emplace_back(name, simulation.State(droneIds.at(name)));
+    };
+    if (definition.drones.empty())
+        addDrone(definition.primaryDroneName);
+    else
+        for (const ScenarioDrone& drone : definition.drones)
+            addDrone(drone.name);
+
+    result.trajectory.push_back(std::move(sample));
+}
+
 struct DroneObservation
 {
     DroneCommunicationStatus status = DroneCommunicationStatus::Connected;
@@ -1088,6 +1110,14 @@ ScenarioResult RunScenario(std::string_view jsonText)
 
     ScenarioResult result;
     result.mission = std::move(definition.mission);
+    if (definition.trajectorySampleEveryTicks)
+    {
+        const std::uint64_t periodicSamples =
+            tickCount / *definition.trajectorySampleEveryTicks + 1;
+        const std::uint64_t sampleCount = periodicSamples
+            + (tickCount % *definition.trajectorySampleEveryTicks != 0 ? 1 : 0);
+        result.trajectory.reserve(static_cast<std::size_t>(sampleCount));
+    }
     std::size_t nextCommand = 0;
     std::size_t nextCameraEvent = 0;
     std::unordered_map<std::string, std::uint64_t> lastDeliveredSequence;
@@ -1099,6 +1129,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
 
     RecordMinimumDroneSeparation(
         definition, simulation, droneIds, dronePositionsMeters, result);
+    if (definition.trajectorySampleEveryTicks)
+        RecordTrajectorySample(definition, simulation, droneIds, 0, result);
     for (std::uint64_t tick = 0; tick < tickCount; ++tick)
     {
         UpdateDroneObservations(tick, definition, simulation, droneIds, energies,
@@ -1124,6 +1156,14 @@ ScenarioResult RunScenario(std::string_view jsonText)
             definition, simulation, droneIds, dronePositionsMeters, result);
         UpdateMissionResults(tick, result.mission, simulation, droneIds,
             observations, result);
+        const std::uint64_t completedTick = tick + 1;
+        if (definition.trajectorySampleEveryTicks
+            && (completedTick % *definition.trajectorySampleEveryTicks == 0
+                || completedTick == tickCount))
+        {
+            RecordTrajectorySample(
+                definition, simulation, droneIds, completedTick, result);
+        }
     }
 
     for (const auto& [droneName, droneId] : droneIds)

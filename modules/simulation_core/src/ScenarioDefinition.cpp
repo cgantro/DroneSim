@@ -21,6 +21,7 @@ namespace
 using Json = nlohmann::json;
 
 constexpr std::uint64_t maximumScenarioTicks = 5'184'000;
+constexpr std::uint64_t maximumTrajectoryDroneSamples = 100'000;
 
 const Json& Required(const Json& object, const char* key)
 {
@@ -760,6 +761,35 @@ void ReadEnvironmentSettings(const Json& document, ScenarioDefinition& definitio
         throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
 }
 
+void ReadTrajectorySettings(const Json& document, ScenarioDefinition& definition)
+{
+    const auto setting = document.find("record_trajectory");
+    if (setting == document.end())
+        return;
+    if (!setting->is_object())
+        throw std::invalid_argument("record_trajectory는 설정 객체여야 합니다.");
+
+    const std::uint64_t sampleEveryTicks = setting->contains("sample_every_ticks")
+        ? ReadUnsigned((*setting)["sample_every_ticks"], "sample_every_ticks") : 1;
+    if (sampleEveryTicks == 0)
+        throw std::invalid_argument("sample_every_ticks는 1 이상이어야 합니다.");
+
+    const std::uint64_t sampledTicks = definition.tickCount / sampleEveryTicks;
+    const std::uint64_t periodicSamples = sampledTicks + 1;
+    const bool finalTickNeedsExtraSample = definition.tickCount % sampleEveryTicks != 0;
+    const std::uint64_t sampleCount = periodicSamples
+        + (finalTickNeedsExtraSample ? 1 : 0);
+    const std::uint64_t droneCount = definition.drones.empty()
+        ? 1 : static_cast<std::uint64_t>(definition.drones.size());
+    if (sampleCount > maximumTrajectoryDroneSamples / droneCount)
+    {
+        throw std::invalid_argument(
+            "궤적 기록이 너무 큽니다. sample_every_ticks를 늘려 주세요.");
+    }
+
+    definition.trajectorySampleEveryTicks = sampleEveryTicks;
+}
+
 void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& definition)
 {
     const auto settings = document.find("quadrotor_model");
@@ -1067,6 +1097,8 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
         for (const ScenarioDrone& drone : definition.drones)
             droneOrder.push_back(drone.name);
     }
+
+    ReadTrajectorySettings(document, definition);
     definition.mission = ReadMission(
         document, definition.tickCount, droneNames, droneOrder);
     ValidateFormationMissionAssignment(definition);

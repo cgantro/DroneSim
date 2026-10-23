@@ -433,7 +433,9 @@ if(BUILD_TESTING)
 
   add_test(NAME HeadlessScenarioSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/flight/rigid-body-flight.json")
-  set_tests_properties(HeadlessScenarioSmoke PROPERTIES LABELS "INTEGRATION;simulation")
+  set_tests_properties(HeadlessScenarioSmoke PROPERTIES
+    LABELS "INTEGRATION;simulation"
+    PASS_REGULAR_EXPRESSION "\\\"tick\\\": 600;\\\"angular_velocity_radians_per_second\\\"")
 
   add_test(NAME HeadlessFaultScenarioSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/fault-injection/fault-injection.json")
