@@ -240,6 +240,19 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     ASSERT_EQ(zeroStartResult.trajectory.size(), reference.size());
     const std::array<double, 4> zeroStartRmse = calculateRmse(zeroStartResult);
 
+    // 초기 상태와 명령은 그대로 두고 추력 계수만 10% 높여 민감도를 비교한다.
+    Json increasedThrustScenario = fixture;
+    increasedThrustScenario["quadrotor_model"]
+        ["thrust_coefficient_newtons_per_speed_squared"] = 1.1
+            * fixture.at("quadrotor_model")
+                .at("thrust_coefficient_newtons_per_speed_squared").get<double>();
+    const ScenarioResult increasedThrustResult =
+        RunScenario(increasedThrustScenario.dump());
+    ASSERT_TRUE(increasedThrustResult.passed);
+    ASSERT_EQ(increasedThrustResult.trajectory.size(), reference.size());
+    const std::array<double, 4> increasedThrustRmse =
+        calculateRmse(increasedThrustResult);
+
     EXPECT_NEAR(estimatedStartRmse[0], 0.4779, 0.02);
     EXPECT_NEAR(estimatedStartRmse[1], 0.3707, 0.02);
     EXPECT_NEAR(estimatedStartRmse[2], 52.29, 0.5);
@@ -248,6 +261,10 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     EXPECT_NEAR(zeroStartRmse[1], 0.2666, 0.02);
     EXPECT_NEAR(zeroStartRmse[2], 27.70, 0.5);
     EXPECT_NEAR(zeroStartRmse[3], 0.5568, 0.02);
+    EXPECT_NEAR(increasedThrustRmse[0], 0.9727, 0.02);
+    EXPECT_NEAR(increasedThrustRmse[1], 0.9695, 0.02);
+    EXPECT_NEAR(increasedThrustRmse[2], 99.85, 0.5);
+    EXPECT_NEAR(increasedThrustRmse[3], 1.4210, 0.02);
 }
 
 void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
