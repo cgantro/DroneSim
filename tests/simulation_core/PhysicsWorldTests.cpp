@@ -66,6 +66,32 @@ void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
     EXPECT_LT(laterSpeed, motorTargets[0]);
 }
 
+void Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes()
+{
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    RigidBodyDefinition definition;
+    definition.positionMeters = {0.0, 0.0, 10.0};
+    definition.orientation = glm::normalize(
+        glm::angleAxis(glm::half_pi<double>(), glm::dvec3{0.0, 0.0, 1.0})
+        * glm::angleAxis(0.2, glm::dvec3{0.0, 1.0, 0.0}));
+
+    PhysicsWorld world;
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
+        / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(hoverSpeed);
+    world.SetMotorTargets(drone, motorTargets);
+
+    for (int tick = 0; tick < 30; ++tick)
+        world.Step(1.0 / 60.0);
+
+    const RigidBodyState state = world.State(drone);
+    // 기체를 동쪽으로 기울인 뒤 북쪽을 향하게 했으므로 추력은 북쪽으로 이동시킨다.
+    EXPECT_GT(state.positionMeters.y, definition.positionMeters.y + 0.05);
+    EXPECT_LT(std::abs(state.positionMeters.x - definition.positionMeters.x), 0.01);
+}
+
 void Verify_AirSimPhysics_TerrainContactStopsTheDrone()
 {
     PhysicsWorld world;
@@ -182,6 +208,8 @@ void Verify_AirSimCollision_SeparatesOverlappingDrones()
 TEST(PhysicsWorldTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());

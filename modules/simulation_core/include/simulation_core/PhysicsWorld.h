@@ -52,7 +52,7 @@ struct PhysicsStepMeasurements
 
 /**
  * @brief AirSim 하나로 드론 비행과 충돌 반응을 계산한다.
- * @details AirSim이 힘, 이동, 회전 적분과 충돌 후 반응을 맡는다. Unreal 없이 실행하므로 이 클래스가 지형·장애물 접촉 정보만 만들어 AirSim에 전달한다. 물리 좌표의 위쪽은 Z축이다.
+ * @details AirSim이 힘, 이동, 회전 적분과 충돌 후 반응을 맡는다. Unreal 없이 실행하므로 이 클래스가 지형·장애물 접촉 정보만 만들어 AirSim에 전달한다. 장면 좌표는 동·북·위(ENU), 기체 좌표는 앞·왼쪽·위(FLU) 기준이다.
  */
 class PhysicsWorld
 {

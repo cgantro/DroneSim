@@ -39,10 +39,12 @@ namespace
 using AirSimBody = msr::airlib::MultiRotorPhysicsBody;
 using AirSimVector = msr::airlib::Vector3r;
 
-// 프로젝트의 X·Y 값은 각각 동쪽·북쪽이지만, 이 어댑터는 X·Y 순서를 유지하고 Z만 뒤집는다.
-// AirSim은 내부 물리 계산에만 쓰므로 원시 좌표를 지리 기준 NED 값으로 내보내면 안 된다.
-const glm::dmat3 axisReflection{
-    {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, -1.0}};
+// 장면 좌표는 동·북·위(ENU), AirSim 월드는 북·동·아래(NED)다.
+const glm::dmat3 projectToAirSimWorld{
+    {0.0, 1.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 0.0, -1.0}};
+// 기체 좌표는 앞·왼쪽·위(FLU), AirSim 기체 좌표는 앞·오른쪽·아래(FRD)다.
+const glm::dmat3 projectToAirSimBody{
+    {1.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {0.0, 0.0, -1.0}};
 
 bool IsFinite(const glm::dvec3& value)
 {
@@ -93,33 +95,35 @@ bool HasValidCollisionBox(const RigidBodyBox& box)
         && IsValidOrientation(box.orientation);
 }
 
-AirSimVector ToAirSimPosition(const glm::dvec3& value)
+AirSimVector ToAirSimWorldVector(const glm::dvec3& value)
 {
-    return {static_cast<float>(value.x), static_cast<float>(value.y),
-        static_cast<float>(-value.z)};
+    const glm::dvec3 converted = projectToAirSimWorld * value;
+    return {static_cast<float>(converted.x), static_cast<float>(converted.y),
+        static_cast<float>(converted.z)};
 }
 
-AirSimVector ToAirSimAngularVector(const glm::dvec3& value)
+AirSimVector ToAirSimBodyVector(const glm::dvec3& value)
 {
-    return {static_cast<float>(-value.x), static_cast<float>(-value.y),
-        static_cast<float>(value.z)};
+    const glm::dvec3 converted = projectToAirSimBody * value;
+    return {static_cast<float>(converted.x), static_cast<float>(converted.y),
+        static_cast<float>(converted.z)};
 }
 
-glm::dvec3 ToProjectPosition(const AirSimVector& value)
+glm::dvec3 ToProjectWorldVector(const AirSimVector& value)
 {
-    return {value.x(), value.y(), -value.z()};
+    return projectToAirSimWorld * glm::dvec3{value.x(), value.y(), value.z()};
 }
 
-glm::dvec3 ToProjectAngularVector(const AirSimVector& value)
+glm::dvec3 ToProjectBodyVector(const AirSimVector& value)
 {
-    return {-value.x(), -value.y(), value.z()};
+    return projectToAirSimBody * glm::dvec3{value.x(), value.y(), value.z()};
 }
 
 msr::airlib::Quaternionr ToAirSimOrientation(const glm::dquat& value)
 {
     const glm::dmat3 rotation = glm::mat3_cast(glm::normalize(value));
     const glm::dquat converted = glm::quat_cast(
-        axisReflection * rotation * axisReflection);
+        projectToAirSimWorld * rotation * projectToAirSimBody);
     return {static_cast<float>(converted.w), static_cast<float>(converted.x),
         static_cast<float>(converted.y), static_cast<float>(converted.z)};
 }
@@ -129,26 +133,26 @@ glm::dquat ToProjectOrientation(const msr::airlib::Quaternionr& value)
     const glm::dmat3 rotation = glm::mat3_cast(glm::dquat{
         value.w(), value.x(), value.y(), value.z()});
     return glm::normalize(glm::quat_cast(
-        axisReflection * rotation * axisReflection));
+        projectToAirSimWorld * rotation * projectToAirSimBody));
 }
 
 msr::airlib::Kinematics::State ToAirSimState(const RigidBodyState& value)
 {
     auto result = msr::airlib::Kinematics::State::zero();
-    result.pose.position = ToAirSimPosition(value.positionMeters);
+    result.pose.position = ToAirSimWorldVector(value.positionMeters);
     result.pose.orientation = ToAirSimOrientation(value.orientation);
-    result.twist.linear = ToAirSimPosition(value.linearVelocityMetersPerSecond);
-    result.twist.angular = ToAirSimAngularVector(value.angularVelocityRadiansPerSecond);
+    result.twist.linear = ToAirSimWorldVector(value.linearVelocityMetersPerSecond);
+    result.twist.angular = ToAirSimBodyVector(value.angularVelocityRadiansPerSecond);
     return result;
 }
 
 RigidBodyState ToProjectState(const msr::airlib::Kinematics::State& value)
 {
     return {
-        ToProjectPosition(value.pose.position),
+        ToProjectWorldVector(value.pose.position),
         ToProjectOrientation(value.pose.orientation),
-        ToProjectPosition(value.twist.linear),
-        ToProjectAngularVector(value.twist.angular)};
+        ToProjectWorldVector(value.twist.linear),
+        ToProjectBodyVector(value.twist.angular)};
 }
 
 std::shared_ptr<msr::airlib::SteppableClock> CreateSimulationClock()
@@ -246,10 +250,11 @@ protected:
         for (const RotorDefinition& rotor : source_.rotors)
         {
             const auto direction = rotor.rotation == RotorRotation::CounterClockwise
-                ? msr::airlib::RotorTurningDirection::RotorTurningDirectionCW
-                : msr::airlib::RotorTurningDirection::RotorTurningDirectionCCW;
+                ? msr::airlib::RotorTurningDirection::RotorTurningDirectionCCW
+                : msr::airlib::RotorTurningDirection::RotorTurningDirectionCW;
+            // 두 좌표계 사이의 변환은 오른손 회전이므로 로터 회전 방향은 유지한다.
             target.rotor_poses.emplace_back(
-                ToAirSimPosition(rotor.positionMeters),
+                ToAirSimBodyVector(rotor.positionMeters),
                 AirSimVector{0.0F, 0.0F, -1.0F}, direction);
         }
     }
@@ -445,7 +450,7 @@ struct PhysicsWorld::Impl
         {
             parameters.Configure();
             msr::airlib::Environment::State environmentState;
-            environmentState.position = ToAirSimPosition(definition.positionMeters);
+            environmentState.position = ToAirSimWorldVector(definition.positionMeters);
             environmentState.geo_point.set(0.0, 0.0, 0.0F);
             environment.initialize(environmentState);
             kinematics.reset();
@@ -453,7 +458,7 @@ struct PhysicsWorld::Impl
             model = std::make_unique<AirSimBody>(
                 &parameters, &actuation, &kinematics, &environment);
             model->reset();
-            model->setPose({ToAirSimPosition(definition.positionMeters),
+            model->setPose({ToAirSimWorldVector(definition.positionMeters),
                 ToAirSimOrientation(definition.orientation)});
         }
 
@@ -680,9 +685,9 @@ struct PhysicsWorld::Impl
                 greatestPenetration = penetration;
                 contactInfo = msr::airlib::CollisionInfo{
                     true,
-                    ToAirSimPosition(GroundNormal({corner.x, corner.y})),
-                    ToAirSimPosition({corner.x, corner.y, ground}),
-                    ToAirSimPosition(state.positionMeters),
+                    ToAirSimWorldVector(GroundNormal({corner.x, corner.y})),
+                    ToAirSimWorldVector({corner.x, corner.y, ground}),
+                    ToAirSimWorldVector(state.positionMeters),
                     static_cast<float>(penetration),
                     timestamp,
                     "ground",
@@ -754,9 +759,9 @@ struct PhysicsWorld::Impl
         const BoxContact& contact = deepestContact->contact;
         return {
             true,
-            ToAirSimPosition(contact.normal),
-            ToAirSimPosition(contact.impactPointMeters),
-            ToAirSimPosition(body.collisionState.positionMeters),
+            ToAirSimWorldVector(contact.normal),
+            ToAirSimWorldVector(contact.impactPointMeters),
+            ToAirSimWorldVector(body.collisionState.positionMeters),
             static_cast<float>(contact.penetrationMeters),
             timestamp,
             deepestContact->objectName,
@@ -841,7 +846,7 @@ void PhysicsWorld::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
     if (!IsFinite(velocity))
         throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
-    impl_->physicsEngine.setWind(ToAirSimPosition(velocity));
+    impl_->physicsEngine.setWind(ToAirSimWorldVector(velocity));
 }
 
 void PhysicsWorld::SetTerrain(terrain::TerrainGrid source)
