@@ -24,6 +24,20 @@ std::string ReadScenarioFixture(std::string_view relativePath)
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
 
+bool ReplaceAll(
+    std::string& text, std::string_view oldValue, std::string_view newValue)
+{
+    std::size_t position = 0;
+    bool replaced = false;
+    while ((position = text.find(oldValue, position)) != std::string::npos)
+    {
+        text.replace(position, oldValue.size(), newValue);
+        position += newValue.size();
+        replaced = true;
+    }
+    return replaced;
+}
+
 void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
 {
     std::string customModelScenario =
@@ -278,29 +292,15 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     ASSERT_NE(dynamicsPosition, std::string::npos);
     physicalScenario.replace(dynamicsPosition, kinematicMode.size(),
         "\"dynamics\": \"rigid_body\"");
-    const auto replaceSetting = [&physicalScenario](
-        std::string_view oldValue, std::string_view newValue)
-    {
-        std::size_t position = 0;
-        bool replaced = false;
-        while ((position = physicalScenario.find(oldValue, position))
-            != std::string::npos)
-        {
-            physicalScenario.replace(position, oldValue.size(), newValue);
-            position += newValue.size();
-            replaced = true;
-        }
-        return replaced;
-    };
-    ASSERT_TRUE(replaceSetting(
+    ASSERT_TRUE(ReplaceAll(physicalScenario,
         "\"ticks\": 320", "\"ticks\": 1200"));
-    ASSERT_TRUE(replaceSetting(
+    ASSERT_TRUE(ReplaceAll(physicalScenario,
         "\"end_tick\": 320", "\"end_tick\": 1200"));
-    ASSERT_TRUE(replaceSetting(
+    ASSERT_TRUE(ReplaceAll(physicalScenario,
         "\"deadline_tick\": 310", "\"deadline_tick\": 1190"));
-    ASSERT_TRUE(replaceSetting(
+    ASSERT_TRUE(ReplaceAll(physicalScenario,
         "\"tolerance_meters\": 0.1", "\"tolerance_meters\": 0.5"));
-    ASSERT_TRUE(replaceSetting(
+    ASSERT_TRUE(ReplaceAll(physicalScenario,
         "\"tolerance_meters\": 0.01", "\"tolerance_meters\": 1000"));
     const ScenarioResult physicalResult = RunScenario(physicalScenario);
     EXPECT_EQ(physicalResult.outcome, ScenarioResult::Outcome::Passed)
@@ -658,6 +658,51 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     EXPECT_GE(*avoidanceResult.minimumDroneSeparationMeters, 2.5);
     ASSERT_TRUE(avoidanceResult.minimumPredictedDroneSeparationMeters.has_value());
     EXPECT_LT(*avoidanceResult.minimumPredictedDroneSeparationMeters, 3.0);
+
+#if !defined(__EMSCRIPTEN__)
+    std::string physicalAvoidanceScenario{collisionAvoidanceScenario};
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario, "\"dynamics\":\"kinematic\"",
+        "\"dynamics\":\"rigid_body\""));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"ticks\":600", "\"ticks\":1200"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"deadline_tick\":580", "\"deadline_tick\":1190"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"safety_distance_meters\":3",
+        "\"safety_distance_meters\":8"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"prediction_horizon_seconds\":2",
+        "\"prediction_horizon_seconds\":6"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"tolerance_meters\":0.2",
+        "\"tolerance_meters\":0.5"));
+    // 임무 목표 반경에 들어와도 강체 비행 상태는 Hovering으로 바뀌지 않을 수 있다.
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"name\":\"east\",\"mode\":\"hovering\"",
+        "\"name\":\"east\",\"mode\":\"following_waypoint\""));
+
+    const ScenarioResult physicalAvoidanceResult = RunScenario(physicalAvoidanceScenario);
+    ASSERT_TRUE(physicalAvoidanceResult.passed)
+        << (physicalAvoidanceResult.issues.empty()
+            ? "" : physicalAvoidanceResult.issues.front())
+        << " minimum="
+        << physicalAvoidanceResult.minimumDroneSeparationMeters.value_or(-1.0)
+        << " predicted="
+        << physicalAvoidanceResult.minimumPredictedDroneSeparationMeters.value_or(-1.0)
+        << " avoidance_events=" << physicalAvoidanceResult.collisionAvoidanceEvents
+        << " west_mode=" << (physicalAvoidanceResult.drones.size() > 0U
+            ? static_cast<int>(physicalAvoidanceResult.drones[0].finalState.mode) : -1)
+        << " east_mode=" << (physicalAvoidanceResult.drones.size() > 1U
+            ? static_cast<int>(physicalAvoidanceResult.drones[1].finalState.mode) : -1)
+        << " mission=" << (physicalAvoidanceResult.mission.has_value()
+            ? static_cast<int>(physicalAvoidanceResult.mission->outcome) : -1);
+    ASSERT_TRUE(physicalAvoidanceResult.mission.has_value());
+    EXPECT_TRUE(physicalAvoidanceResult.mission->passed);
+    EXPECT_EQ(physicalAvoidanceResult.mission->completedTaskCount, 2U);
+    EXPECT_GT(physicalAvoidanceResult.collisionAvoidanceEvents, 0U);
+    ASSERT_TRUE(physicalAvoidanceResult.minimumDroneSeparationMeters.has_value());
+    EXPECT_GE(*physicalAvoidanceResult.minimumDroneSeparationMeters, 3.0);
+#endif
 
     const std::string lowBatteryScenario = ReadScenarioFixture(
         "scenarios/multi-drone/low-battery-reallocation.json");
