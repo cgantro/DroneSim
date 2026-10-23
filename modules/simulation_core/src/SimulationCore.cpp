@@ -506,7 +506,7 @@ std::vector<DroneId> SimulationCore::DroneIds() const
     return ids;
 }
 
-void SimulationCore::AdvanceOneTick() noexcept
+void SimulationCore::AdvanceOneTick()
 {
     if (paused_)
     {
@@ -539,7 +539,7 @@ void SimulationCore::Resume() noexcept
     paused_ = false;
 }
 
-void SimulationCore::Reset() noexcept
+void SimulationCore::Reset()
 {
     for (auto& [id, drone] : ecs_->drones)
     {

@@ -106,7 +106,7 @@ public:
     [[nodiscard]] std::vector<DroneId> DroneIds() const;
 
     /** @brief 실행 중이면 고정 간격 한 단계만 진행하고, 일시정지 중이면 아무것도 바꾸지 않는다. */
-    void AdvanceOneTick() noexcept;
+    void AdvanceOneTick();
 
     /** @brief 모의 시간 진행을 멈춘다. */
     void Pause() noexcept;
@@ -115,7 +115,7 @@ public:
     void Resume() noexcept;
 
     /** @brief 시간, 드론 위치와 상태를 처음 값으로 되돌리고 실행을 계속한다. */
-    void Reset() noexcept;
+    void Reset();
 
     /** @brief 현재 드론 상태를 반환한다. */
     [[nodiscard]] const DroneState& State() const noexcept;
