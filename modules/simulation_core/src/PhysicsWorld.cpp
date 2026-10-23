@@ -293,6 +293,7 @@ struct OrientedBox
     glm::dvec3 centerMeters;
     glm::dvec3 halfExtentsMeters;
     std::array<glm::dvec3, 3> axes;
+    double boundingRadiusMeters = 0.0;
 };
 
 struct BoxContact
@@ -349,12 +350,14 @@ OrientedBox ToWorldBox(
     const RigidBodyBox& box)
 {
     const glm::dquat orientation = glm::normalize(bodyOrientation * box.orientation);
+    const glm::dvec3 halfExtents{box.halfExtentsMeters};
     return {
         bodyPosition + bodyOrientation * box.positionMeters,
-        glm::dvec3{box.halfExtentsMeters},
+        halfExtents,
         {orientation * glm::dvec3{1.0, 0.0, 0.0},
             orientation * glm::dvec3{0.0, 1.0, 0.0},
-            orientation * glm::dvec3{0.0, 0.0, 1.0}}};
+            orientation * glm::dvec3{0.0, 0.0, 1.0}},
+        glm::length(halfExtents)};
 }
 
 /**
@@ -366,6 +369,15 @@ std::optional<BoxContact> FindBoxContact(
     const OrientedBox& otherBox)
 {
     const glm::dvec3 centerOffset = otherBox.centerMeters - droneBox.centerMeters;
+    // 회전 상자마다 외접구로 먼저 거르면 서로 떨어진 상자의 세부 검사를 줄일 수 있다.
+    const double combinedBoundingRadius =
+        droneBox.boundingRadiusMeters + otherBox.boundingRadiusMeters;
+    if (glm::dot(centerOffset, centerOffset)
+        > combinedBoundingRadius * combinedBoundingRadius)
+    {
+        return std::nullopt;
+    }
+
     // 먼저 회전 상자의 바깥 AABB를 검사해, 겹칠 수 없는 쌍은 15축 검사에서 제외한다.
     for (glm::length_t worldAxis = 0; worldAxis < 3; ++worldAxis)
     {
@@ -735,7 +747,8 @@ struct PhysicsWorld::Impl
                 obstacle.centerMeters,
                 obstacle.halfExtentsMeters,
                 {glm::dvec3{1.0, 0.0, 0.0}, glm::dvec3{0.0, 1.0, 0.0},
-                    glm::dvec3{0.0, 0.0, 1.0}}};
+                    glm::dvec3{0.0, 0.0, 1.0}},
+                glm::length(obstacle.halfExtentsMeters)};
             for (const OrientedBox& worldBox : body.worldCollisionBoxes)
             {
                 const auto contact = FindBoxContact(worldBox, obstacleBox);
