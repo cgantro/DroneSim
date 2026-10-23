@@ -146,6 +146,8 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             {"hud_draw_command_count", frame.hudDrawCommandCount},
             {"hud_vertex_count", frame.hudVertexCount},
             {"hud_index_count", frame.hudIndexCount},
+            {"hud_gpu_execution_us", frame.hudGpuExecutionMicroseconds},
+            {"hud_gpu_timing_available", frame.hudGpuTimingAvailable},
             {"eo_readback_happened", frame.eoReadbackHappened}});
     }
 

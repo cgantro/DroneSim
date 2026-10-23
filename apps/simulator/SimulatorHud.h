@@ -4,6 +4,8 @@
 #include "simulation_core/SimulationCore.h"
 
 #include <cstddef>
+#include <array>
+#include <cstdint>
 #include <vector>
 #include <cstdint>
 #include <functional>
@@ -16,6 +18,12 @@ namespace aerosimlab::simulator
 /** @brief ImGui 프레임을 만들고 그리는 CPU 구간이다. */
 struct HudRenderTimings
 {
+    struct GpuFrameResult
+    {
+        std::uint64_t frameIndex = 0;
+        double executionMicroseconds = 0.0;
+    };
+
     double interfaceBuildMicroseconds = 0.0;
     double frameFinalizeMicroseconds = 0.0;
     double backendDrawMicroseconds = 0.0;
@@ -23,6 +31,10 @@ struct HudRenderTimings
     std::size_t drawCommandCount = 0;
     std::size_t vertexCount = 0;
     std::size_t indexCount = 0;
+    bool collectGpuTimings = false;
+    std::uint64_t frameIndex = 0;
+    std::array<GpuFrameResult, 4> completedGpuFrames{};
+    std::size_t completedGpuFrameCount = 0;
 };
 
 /** @brief 비행 상태와 편대 요약을 3D 화면 위에 표시한다. */
@@ -44,7 +56,15 @@ public:
         HudRenderTimings* timings = nullptr);
 
 private:
+    struct PendingGpuQuery
+    {
+        std::uint32_t query = 0;
+        std::uint64_t frameIndex = 0;
+        bool pending = false;
+    };
+
     bool initialized_ = false;
     std::string layoutFile_;
+    std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };
 }

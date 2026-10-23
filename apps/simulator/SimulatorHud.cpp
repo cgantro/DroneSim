@@ -1,4 +1,5 @@
 #include "SimulatorHud.h"
+#include "graphics/GlApi.h"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -79,6 +80,13 @@ SimulatorHud::~SimulatorHud()
     if (!initialized_)
         return;
 
+#ifndef __EMSCRIPTEN__
+    for (const PendingGpuQuery& query : backendGpuQueries_)
+    {
+        if (query.query != 0)
+            glDeleteQueries(1, &query.query);
+    }
+#endif
     if (!layoutFile_.empty())
         ImGui::SaveIniSettingsToDisk(layoutFile_.c_str());
     ImGui_ImplOpenGL3_Shutdown();
@@ -94,6 +102,33 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::function<std::uint32_t()>& renderCamera,
     HudRenderTimings* timings)
 {
+#ifndef __EMSCRIPTEN__
+    if (timings != nullptr && timings->collectGpuTimings && GLAD_GL_VERSION_3_3)
+    {
+        for (PendingGpuQuery& query : backendGpuQueries_)
+        {
+            if (!query.pending)
+                continue;
+
+            GLint available = GL_FALSE;
+            glGetQueryObjectiv(query.query, GL_QUERY_RESULT_AVAILABLE, &available);
+            if (available != GL_TRUE)
+                continue;
+
+            GLuint64 durationNanoseconds = 0;
+            glGetQueryObjectui64v(query.query, GL_QUERY_RESULT, &durationNanoseconds);
+            const std::size_t resultIndex = timings->completedGpuFrameCount++;
+            if (resultIndex < timings->completedGpuFrames.size())
+            {
+                timings->completedGpuFrames[resultIndex] = {
+                    query.frameIndex,
+                    static_cast<double>(durationNanoseconds) / 1000.0};
+            }
+            query.pending = false;
+        }
+    }
+#endif
+
     const auto interfaceBuildStart = timings != nullptr
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -254,7 +289,31 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         for (const ImDrawList* list : drawData->CmdLists)
             timings->drawCommandCount += static_cast<std::size_t>(list->CmdBuffer.Size);
     }
+#ifndef __EMSCRIPTEN__
+    PendingGpuQuery* gpuQuery = nullptr;
+    if (timings != nullptr && timings->collectGpuTimings && GLAD_GL_VERSION_3_3)
+    {
+        for (PendingGpuQuery& query : backendGpuQueries_)
+        {
+            if (query.pending)
+                continue;
+            if (query.query == 0)
+                glGenQueries(1, &query.query);
+            gpuQuery = &query;
+            glBeginQuery(GL_TIME_ELAPSED, gpuQuery->query);
+            break;
+        }
+    }
+#endif
     ImGui_ImplOpenGL3_RenderDrawData(drawData);
+#ifndef __EMSCRIPTEN__
+    if (gpuQuery != nullptr)
+    {
+        glEndQuery(GL_TIME_ELAPSED);
+        gpuQuery->frameIndex = timings->frameIndex;
+        gpuQuery->pending = true;
+    }
+#endif
     if (timings != nullptr)
     {
         timings->backendDrawMicroseconds = std::chrono::duration<double, std::micro>(

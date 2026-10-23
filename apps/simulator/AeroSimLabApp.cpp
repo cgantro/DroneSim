@@ -299,6 +299,7 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     frameHudDrawCommandCount_ = 0;
     frameHudVertexCount_ = 0;
     frameHudIndexCount_ = 0;
+    completedHudGpuTimingCount_ = 0;
     {
         aerosimlab::simulation::ScopedDuration measureRenderFrame(
             benchmarkMode_ ? &renderFrameDurationMicroseconds : nullptr);
@@ -327,6 +328,20 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     {
         const double applicationMicroseconds = std::chrono::duration<double, std::micro>(
             std::chrono::steady_clock::now() - applicationFrameStart).count();
+        for (std::size_t index = 0; index < completedHudGpuTimingCount_; ++index)
+        {
+            const CompletedHudGpuTiming& timing = completedHudGpuTimings_[index];
+            const auto frame = std::find_if(benchmarkMeasurements_.slowFrames.begin(),
+                benchmarkMeasurements_.slowFrames.end(), [&timing](const auto& candidate)
+                {
+                    return candidate.frameIndex == timing.frameIndex;
+                });
+            if (frame != benchmarkMeasurements_.slowFrames.end())
+            {
+                frame->hudGpuExecutionMicroseconds = timing.executionMicroseconds;
+                frame->hudGpuTimingAvailable = true;
+            }
+        }
         benchmarkMeasurements_.applicationFrameDurationsMicroseconds.push_back(
             applicationMicroseconds);
         if (applicationMicroseconds > 1'000'000.0 / 60.0)
@@ -353,6 +368,8 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
                 frameHudDrawCommandCount_,
                 frameHudVertexCount_,
                 frameHudIndexCount_,
+                0.0,
+                false,
                 eoReadbackHappenedThisFrame_});
         }
     }
@@ -657,6 +674,8 @@ void AeroSimLabApp::RenderFrame()
                 == aerosimlab::simulation::FlightMode::Grounded
             && missionDistanceMeters <= 1.5;
         HudRenderTimings hudTimings;
+        hudTimings.collectGpuTimings = visibleBenchmarkMode_;
+        hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
             camera.imageWidthPixels, camera.imageHeightPixels,
             missionDistanceMeters, missionComplete,
@@ -670,6 +689,14 @@ void AeroSimLabApp::RenderFrame()
         frameHudDrawCommandCount_ = hudTimings.drawCommandCount;
         frameHudVertexCount_ = hudTimings.vertexCount;
         frameHudIndexCount_ = hudTimings.indexCount;
+        completedHudGpuTimingCount_ = std::min(
+            hudTimings.completedGpuFrameCount, completedHudGpuTimings_.size());
+        for (std::size_t index = 0; index < completedHudGpuTimingCount_; ++index)
+        {
+            completedHudGpuTimings_[index] = {
+                hudTimings.completedGpuFrames[index].frameIndex,
+                hudTimings.completedGpuFrames[index].executionMicroseconds};
+        }
     }
 #endif
 }
