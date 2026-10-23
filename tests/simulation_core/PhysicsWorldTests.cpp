@@ -265,6 +265,40 @@ void Verify_AirSimPhysics_RotorTorqueResponseScalesWithPitchInertia()
     EXPECT_NEAR(higherInertiaPitchRate / baselinePitchRate, 0.5, 0.2);
 }
 
+void Verify_AirSimPhysics_YawResponseScalesWithMomentToThrustRatio()
+{
+    const auto yawRateAfterAsymmetricInput = [](const QuadrotorParameters& parameters)
+    {
+        PhysicsWorld world;
+        RigidBodyDefinition definition;
+        definition.positionMeters.z = 10.0;
+        const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+
+        std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+        motorTargets.fill(760.0);
+        world.SetMotorTargets(drone, motorTargets);
+        for (int tick = 0; tick < 120; ++tick)
+            world.Step(1.0 / 60.0);
+
+        // 같은 회전 방향의 두 로터만 빠르게 돌려 수직축 토크를 만든다.
+        motorTargets[0] = 900.0;
+        motorTargets[1] = 900.0;
+        world.SetMotorTargets(drone, motorTargets);
+        for (int tick = 0; tick < 30; ++tick)
+            world.Step(1.0 / 60.0);
+        return std::abs(world.State(drone).angularVelocityRadiansPerSecond.z);
+    };
+
+    const QuadrotorParameters baseline = QuadrotorParameters::X500Gazebo();
+    QuadrotorParameters higherMomentRatio = baseline;
+    higherMomentRatio.momentToThrustRatio *= 2.0;
+
+    const double baselineYawRate = yawRateAfterAsymmetricInput(baseline);
+    const double higherMomentRatioYawRate = yawRateAfterAsymmetricInput(higherMomentRatio);
+    EXPECT_GT(baselineYawRate, 0.1);
+    EXPECT_NEAR(higherMomentRatioYawRate / baselineYawRate, 2.0, 0.2);
+}
+
 void Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes()
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
@@ -597,6 +631,8 @@ TEST(PhysicsWorldTests, CoreScenarios)
         Verify_AirSimFlightController_HoverTargetsFollowMassAndThrustCoefficient());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_RotorTorqueResponseScalesWithPitchInertia());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysics_YawResponseScalesWithMomentToThrustRatio());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
