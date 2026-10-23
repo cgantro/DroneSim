@@ -117,6 +117,37 @@ void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
     EXPECT_NEAR(state.linearVelocityMetersPerSecond.z, 0.0, 0.05);
 }
 
+void Verify_AirSimFlightController_GainsChangeYawMotorTargets()
+{
+    DroneState state;
+    state.positionMeters.z = 10.0;
+    state.angularVelocityRadiansPerSecond.z = 0.2;
+    state.mode = FlightMode::Hovering;
+    DroneControlState control;
+    control.desiredYawRadians = 0.5;
+    const QuadrotorParameters model = QuadrotorParameters::X500Gazebo();
+
+    QuadrotorControllerParameters lowAttitudeGain;
+    lowAttitudeGain.attitudeGain = 2.0;
+    QuadrotorControllerParameters highAttitudeGain;
+    highAttitudeGain.attitudeGain = 20.0;
+    const auto lowAttitudeTargets = QuadrotorFlightController::MotorTargets(
+        state, control, model, lowAttitudeGain);
+    const auto highAttitudeTargets = QuadrotorFlightController::MotorTargets(
+        state, control, model, highAttitudeGain);
+    EXPECT_NE(lowAttitudeTargets, highAttitudeTargets);
+
+    QuadrotorControllerParameters weakRateDamping;
+    weakRateDamping.angularRateGain = 2.0;
+    QuadrotorControllerParameters strongRateDamping;
+    strongRateDamping.angularRateGain = 14.0;
+    const auto weakDampingTargets = QuadrotorFlightController::MotorTargets(
+        state, control, model, weakRateDamping);
+    const auto strongDampingTargets = QuadrotorFlightController::MotorTargets(
+        state, control, model, strongRateDamping);
+    EXPECT_NE(weakDampingTargets, strongDampingTargets);
+}
+
 void Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude()
 {
     PhysicsWorld world;
@@ -465,6 +496,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_HoldsAStationaryWaypoint());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
