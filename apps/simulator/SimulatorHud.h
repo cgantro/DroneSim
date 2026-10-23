@@ -56,6 +56,8 @@ private:
         bool pending = false;
     };
 
+    void CollectCompletedGpuTimings(HudRenderTimings* timings);
+
     bool initialized_ = false;
     std::string layoutFile_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
