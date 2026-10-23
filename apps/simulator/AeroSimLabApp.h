@@ -76,6 +76,25 @@ public:
     int Run();
 
 private:
+    /** @brief 현재 화면 프레임에서만 쓰는 렌더링·카메라·HUD 측정값이다. */
+    struct CurrentFrameMeasurements
+    {
+        double scenePanelRenderMicroseconds = 0.0;
+        double cameraSceneRenderMicroseconds = 0.0;
+        double eoReadbackHandlingMicroseconds = 0.0;
+        double eoFenceWaitMicroseconds = 0.0;
+        double eoBufferMapMicroseconds = 0.0;
+        double eoPixelCopyMicroseconds = 0.0;
+        double hudInterfaceBuildMicroseconds = 0.0;
+        double hudFinalizeMicroseconds = 0.0;
+        double hudBackendDrawMicroseconds = 0.0;
+        std::size_t hudDrawListCount = 0;
+        std::size_t hudDrawCommandCount = 0;
+        std::size_t hudVertexCount = 0;
+        std::size_t hudIndexCount = 0;
+        std::size_t completedHudGpuTimingCount = 0;
+    };
+
     /** @brief 입력을 읽고 시뮬레이션과 화면을 한 프레임 진행한다. */
     void RunFrame(std::chrono::steady_clock::time_point& previousFrame);
     void InitializeGraphics();
@@ -181,21 +200,8 @@ private:
     std::optional<std::uint64_t> lastRenderedEoFrameTick_;
 #endif
     std::clock_t benchmarkCpuStart_ = 0;
-    double frameScenePanelRenderDurationMicroseconds_ = 0.0;
-    double frameCameraSceneRenderDurationMicroseconds_ = 0.0;
-    double frameEoReadbackHandlingDurationMicroseconds_ = 0.0;
-    double frameEoFenceWaitDurationMicroseconds_ = 0.0;
-    double frameEoBufferMapDurationMicroseconds_ = 0.0;
-    double frameEoPixelCopyDurationMicroseconds_ = 0.0;
-    double frameHudInterfaceBuildDurationMicroseconds_ = 0.0;
-    double frameHudFinalizeDurationMicroseconds_ = 0.0;
-    double frameHudBackendDrawDurationMicroseconds_ = 0.0;
-    std::size_t frameHudDrawListCount_ = 0;
-    std::size_t frameHudDrawCommandCount_ = 0;
-    std::size_t frameHudVertexCount_ = 0;
-    std::size_t frameHudIndexCount_ = 0;
+    CurrentFrameMeasurements frameMeasurements_;
     std::array<HudGpuTiming, 4> completedHudGpuTimings_{};
-    std::size_t completedHudGpuTimingCount_ = 0;
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
 #ifndef __EMSCRIPTEN__
     double totalMeanBrightness_ = 0.0;

@@ -286,20 +286,7 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     double renderFrameDurationMicroseconds = 0.0;
     double renderDurationMicroseconds = 0.0;
     double bufferSwapDurationMicroseconds = 0.0;
-    frameScenePanelRenderDurationMicroseconds_ = 0.0;
-    frameCameraSceneRenderDurationMicroseconds_ = 0.0;
-    frameEoReadbackHandlingDurationMicroseconds_ = 0.0;
-    frameEoFenceWaitDurationMicroseconds_ = 0.0;
-    frameEoBufferMapDurationMicroseconds_ = 0.0;
-    frameEoPixelCopyDurationMicroseconds_ = 0.0;
-    frameHudInterfaceBuildDurationMicroseconds_ = 0.0;
-    frameHudFinalizeDurationMicroseconds_ = 0.0;
-    frameHudBackendDrawDurationMicroseconds_ = 0.0;
-    frameHudDrawListCount_ = 0;
-    frameHudDrawCommandCount_ = 0;
-    frameHudVertexCount_ = 0;
-    frameHudIndexCount_ = 0;
-    completedHudGpuTimingCount_ = 0;
+    frameMeasurements_ = {};
     {
         aerosimlab::simulation::ScopedDuration measureRenderFrame(
             benchmarkMode_ ? &renderFrameDurationMicroseconds : nullptr);
@@ -328,7 +315,8 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     {
         const double applicationMicroseconds = std::chrono::duration<double, std::micro>(
             std::chrono::steady_clock::now() - applicationFrameStart).count();
-        for (std::size_t index = 0; index < completedHudGpuTimingCount_; ++index)
+        for (std::size_t index = 0;
+             index < frameMeasurements_.completedHudGpuTimingCount; ++index)
         {
             const HudGpuTiming& timing = completedHudGpuTimings_[index];
             const auto frame = std::find_if(benchmarkMeasurements_.slowFrames.begin(),
@@ -354,20 +342,20 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
                 gamepadPollingMicroseconds,
                 simulationUpdateMicroseconds,
                 renderDurationMicroseconds,
-                frameScenePanelRenderDurationMicroseconds_,
-                frameCameraSceneRenderDurationMicroseconds_,
+                frameMeasurements_.scenePanelRenderMicroseconds,
+                frameMeasurements_.cameraSceneRenderMicroseconds,
                 bufferSwapDurationMicroseconds,
-                frameEoReadbackHandlingDurationMicroseconds_,
-                frameEoFenceWaitDurationMicroseconds_,
-                frameEoBufferMapDurationMicroseconds_,
-                frameEoPixelCopyDurationMicroseconds_,
-                frameHudInterfaceBuildDurationMicroseconds_,
-                frameHudFinalizeDurationMicroseconds_,
-                frameHudBackendDrawDurationMicroseconds_,
-                frameHudDrawListCount_,
-                frameHudDrawCommandCount_,
-                frameHudVertexCount_,
-                frameHudIndexCount_,
+                frameMeasurements_.eoReadbackHandlingMicroseconds,
+                frameMeasurements_.eoFenceWaitMicroseconds,
+                frameMeasurements_.eoBufferMapMicroseconds,
+                frameMeasurements_.eoPixelCopyMicroseconds,
+                frameMeasurements_.hudInterfaceBuildMicroseconds,
+                frameMeasurements_.hudFinalizeMicroseconds,
+                frameMeasurements_.hudBackendDrawMicroseconds,
+                frameMeasurements_.hudDrawListCount,
+                frameMeasurements_.hudDrawCommandCount,
+                frameMeasurements_.hudVertexCount,
+                frameMeasurements_.hudIndexCount,
                 0.0,
                 false,
                 eoReadbackHappenedThisFrame_});
@@ -682,16 +670,17 @@ void AeroSimLabApp::RenderFrame()
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this] { return RenderCameraPanel(); },
             benchmarkMode_ ? &hudTimings : nullptr);
-        frameHudInterfaceBuildDurationMicroseconds_ = hudTimings.interfaceBuildMicroseconds;
-        frameHudFinalizeDurationMicroseconds_ = hudTimings.frameFinalizeMicroseconds;
-        frameHudBackendDrawDurationMicroseconds_ = hudTimings.backendDrawMicroseconds;
-        frameHudDrawListCount_ = hudTimings.drawListCount;
-        frameHudDrawCommandCount_ = hudTimings.drawCommandCount;
-        frameHudVertexCount_ = hudTimings.vertexCount;
-        frameHudIndexCount_ = hudTimings.indexCount;
-        completedHudGpuTimingCount_ = std::min(
+        frameMeasurements_.hudInterfaceBuildMicroseconds = hudTimings.interfaceBuildMicroseconds;
+        frameMeasurements_.hudFinalizeMicroseconds = hudTimings.frameFinalizeMicroseconds;
+        frameMeasurements_.hudBackendDrawMicroseconds = hudTimings.backendDrawMicroseconds;
+        frameMeasurements_.hudDrawListCount = hudTimings.drawListCount;
+        frameMeasurements_.hudDrawCommandCount = hudTimings.drawCommandCount;
+        frameMeasurements_.hudVertexCount = hudTimings.vertexCount;
+        frameMeasurements_.hudIndexCount = hudTimings.indexCount;
+        frameMeasurements_.completedHudGpuTimingCount = std::min(
             hudTimings.completedGpuFrameCount, completedHudGpuTimings_.size());
-        for (std::size_t index = 0; index < completedHudGpuTimingCount_; ++index)
+        for (std::size_t index = 0;
+             index < frameMeasurements_.completedHudGpuTimingCount; ++index)
         {
             completedHudGpuTimings_[index] = hudTimings.completedGpuFrames[index];
         }
@@ -729,7 +718,7 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
 std::uint32_t AeroSimLabApp::RenderScenePanel(int width, int height)
 {
     aerosimlab::simulation::ScopedDuration measureScenePanel(
-        benchmarkMode_ ? &frameScenePanelRenderDurationMicroseconds_ : nullptr);
+        benchmarkMode_ ? &frameMeasurements_.scenePanelRenderMicroseconds : nullptr);
     sceneTarget_->Resize(width, height);
     UpdateObserverCamera(width, height);
     return RenderWorldToTarget(*sceneTarget_, *observerCamera_);
@@ -747,13 +736,13 @@ std::uint32_t AeroSimLabApp::RenderCameraPanel()
         || *lastRenderedEoFrameTick_ != camera.lastFrameTick)
     {
         aerosimlab::simulation::ScopedDuration measureCameraScene(
-            benchmarkMode_ ? &frameCameraSceneRenderDurationMicroseconds_ : nullptr);
+            benchmarkMode_ ? &frameMeasurements_.cameraSceneRenderMicroseconds : nullptr);
         UpdateEoCamera(imageWidth, imageHeight);
         static_cast<void>(RenderWorldToTarget(*cameraTarget_, *eoCamera_));
         lastRenderedEoFrameTick_ = camera.lastFrameTick;
     }
     aerosimlab::simulation::ScopedDuration measureEoReadbackHandling(
-        benchmarkMode_ ? &frameEoReadbackHandlingDurationMicroseconds_ : nullptr);
+        benchmarkMode_ ? &frameMeasurements_.eoReadbackHandlingMicroseconds : nullptr);
     CaptureEoFrame();
     return cameraTarget_->GetTextureId();
 }
@@ -788,9 +777,9 @@ void AeroSimLabApp::ProcessCompletedEoReadback()
     }
     if (benchmarkMode_)
     {
-        frameEoFenceWaitDurationMicroseconds_ = pollTimings.fenceWaitCallMicroseconds;
-        frameEoBufferMapDurationMicroseconds_ = pollTimings.bufferMapCallMicroseconds;
-        frameEoPixelCopyDurationMicroseconds_ = pollTimings.pixelCopyMicroseconds;
+        frameMeasurements_.eoFenceWaitMicroseconds = pollTimings.fenceWaitCallMicroseconds;
+        frameMeasurements_.eoBufferMapMicroseconds = pollTimings.bufferMapCallMicroseconds;
+        frameMeasurements_.eoPixelCopyMicroseconds = pollTimings.pixelCopyMicroseconds;
         benchmarkMeasurements_.eoReadbackPollDurationsMicroseconds.push_back(
             pollDurationMicroseconds);
         benchmarkMeasurements_.eoFenceWaitCallDurationsMicroseconds.push_back(
