@@ -55,6 +55,4 @@ Windows Release 빌드에서 자동 시험 20개가 통과했습니다. 2026년 
 | 밀집 충돌 처리 | 256대 비교에서 밀집 배치는 접촉 생성 p95 3.6%, Tick p95 3.2% 감소했고, 분리 배치는 Tick p95가 5.1% 증가했습니다. 각 조건은 30,000 Tick씩 3회 측정했습니다. 분리 1,024대는 양쪽 실행 모두 30초 제한에 걸려 27,000 Tick에서 멈췄습니다. [자세한 결과와 측정 한계](docs/public/문제해결/다중드론-충돌-성능.md) | 장면별 효과가 달라 전반적인 성능 개선으로 볼 수 없습니다. 1,024대는 완료된 반복 측정이 아닙니다. |
 | 협동 임무 | 운동학 1,024대와 AirSim 강체 128대까지 모든 기록된 반복에서 목표 완료 | 로컬 시나리오 결과이며 실제 통신 장애·충돌 회피·실비행 정확도 검증은 아님 |
 
-상세 조건과 실행 환경은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. [확장 시험과 메모리 표본 원본](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-e2510815.json), [이전 반복 시험 원본](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-cd8344bc.json), 보이는 창의 [화면 측정 원본](benchmarks/results/aerosimlab-visible-gui-release-2026-10-23.json), [PBO 매핑 변경 전후 기록](benchmarks/results/aerosimlab-visible-pbo-persistent-map-2026-10-23.json), [ImGui CPU·GPU 시간 기록](benchmarks/results/aerosimlab-visible-imgui-gpu-timing-2026-10-23.json)을 보관합니다. 화면 지연 분석은 [EO 픽셀 읽기 기록](docs/public/문제해결/화면-프레임-지연.md), 주요 문제의 목록은 [문제 해결 기록](docs/public/문제해결.md)에서 확인할 수 있습니다.
-
-다중 드론과 공동 임무의 실행 범위, 실패한 규모 시험은 [개발 원리와 확인 결과](docs/public/기술검토.md)에 정리했습니다.
+측정 조건과 해석은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. 실행별 원본 기록은 [측정 결과 모음](benchmarks/results/)에 보관합니다. 화면 지연 원인은 [문제 해결 기록](docs/public/문제해결/화면-프레임-지연.md), 다른 주요 문제는 [문제 해결 목록](docs/public/문제해결.md)에서 확인할 수 있습니다.
