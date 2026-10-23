@@ -194,12 +194,7 @@ private:
     std::size_t frameHudDrawCommandCount_ = 0;
     std::size_t frameHudVertexCount_ = 0;
     std::size_t frameHudIndexCount_ = 0;
-    struct CompletedHudGpuTiming
-    {
-        std::uint64_t frameIndex = 0;
-        double executionMicroseconds = 0.0;
-    };
-    std::array<CompletedHudGpuTiming, 4> completedHudGpuTimings_{};
+    std::array<HudGpuTiming, 4> completedHudGpuTimings_{};
     std::size_t completedHudGpuTimingCount_ = 0;
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
 #ifndef __EMSCRIPTEN__

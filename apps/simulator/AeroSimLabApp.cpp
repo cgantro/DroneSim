@@ -330,7 +330,7 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
             std::chrono::steady_clock::now() - applicationFrameStart).count();
         for (std::size_t index = 0; index < completedHudGpuTimingCount_; ++index)
         {
-            const CompletedHudGpuTiming& timing = completedHudGpuTimings_[index];
+            const HudGpuTiming& timing = completedHudGpuTimings_[index];
             const auto frame = std::find_if(benchmarkMeasurements_.slowFrames.begin(),
                 benchmarkMeasurements_.slowFrames.end(), [&timing](const auto& candidate)
                 {
@@ -693,9 +693,7 @@ void AeroSimLabApp::RenderFrame()
             hudTimings.completedGpuFrameCount, completedHudGpuTimings_.size());
         for (std::size_t index = 0; index < completedHudGpuTimingCount_; ++index)
         {
-            completedHudGpuTimings_[index] = {
-                hudTimings.completedGpuFrames[index].frameIndex,
-                hudTimings.completedGpuFrames[index].executionMicroseconds};
+            completedHudGpuTimings_[index] = hudTimings.completedGpuFrames[index];
         }
     }
 #endif

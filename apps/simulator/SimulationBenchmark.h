@@ -21,6 +21,13 @@ enum class DroneScalingLayout
     Compact
 };
 
+/** @brief GPU에서 끝난 HUD 그리기 시간과 해당 화면 프레임 번호다. */
+struct HudGpuTiming
+{
+    std::uint64_t frameIndex = 0;
+    double executionMicroseconds = 0.0;
+};
+
 /** @brief 실행 시간 표본에서 p50·p95·p99와 표본 수를 계산한다. */
 nlohmann::json SummarizeDurations(std::vector<double> durations);
 

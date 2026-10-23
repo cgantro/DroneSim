@@ -120,7 +120,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
             const std::size_t resultIndex = timings->completedGpuFrameCount++;
             if (resultIndex < timings->completedGpuFrames.size())
             {
-                timings->completedGpuFrames[resultIndex] = {
+                timings->completedGpuFrames[resultIndex] = HudGpuTiming{
                     query.frameIndex,
                     static_cast<double>(durationNanoseconds) / 1000.0};
             }

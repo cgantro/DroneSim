@@ -1,13 +1,12 @@
 #pragma once
 
 #include "communication/Protocol.h"
+#include "SimulationBenchmark.h"
 #include "simulation_core/SimulationCore.h"
 
-#include <cstddef>
 #include <array>
-#include <cstdint>
+#include <cstddef>
 #include <vector>
-#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -18,12 +17,6 @@ namespace aerosimlab::simulator
 /** @brief ImGui 프레임을 만들고 그리는 CPU 구간이다. */
 struct HudRenderTimings
 {
-    struct GpuFrameResult
-    {
-        std::uint64_t frameIndex = 0;
-        double executionMicroseconds = 0.0;
-    };
-
     double interfaceBuildMicroseconds = 0.0;
     double frameFinalizeMicroseconds = 0.0;
     double backendDrawMicroseconds = 0.0;
@@ -33,7 +26,7 @@ struct HudRenderTimings
     std::size_t indexCount = 0;
     bool collectGpuTimings = false;
     std::uint64_t frameIndex = 0;
-    std::array<GpuFrameResult, 4> completedGpuFrames{};
+    std::array<HudGpuTiming, 4> completedGpuFrames{};
     std::size_t completedGpuFrameCount = 0;
 };
 
