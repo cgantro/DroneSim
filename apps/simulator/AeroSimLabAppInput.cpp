@@ -37,83 +37,86 @@ void AeroSimLabApp::PollGroundControl()
 void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     const aerosimlab::communication::UdpPeer& peer)
 {
+    aerosimlab::communication::CommandPacket packet;
     try
     {
-        const auto packet = aerosimlab::communication::DecodeCommand(datagram);
-        lastGroundControlMessage_ = std::chrono::steady_clock::now();
-        if (activePeer_ && (activePeer_->addressNetworkOrder != peer.addressNetworkOrder
-            || activePeer_->portNetworkOrder != peer.portNetworkOrder) && !pendingCommand_)
-        {
-            activePeer_ = peer;
-            sequenceGuard_ = {};
-            lastReply_.reset();
-        }
-        else if (!activePeer_)
-        {
-            activePeer_ = peer;
-        }
-
-        const auto decision = sequenceGuard_.Inspect(packet);
-        const auto makeReply = [this, &packet]
-        {
-            aerosimlab::communication::CommandReply reply;
-            reply.commandId = packet.commandId;
-            reply.sequence = packet.sequence;
-            reply.telemetry = CurrentTelemetry();
-            return reply;
-        };
-        const auto sendStatusReply = [this, &peer, &makeReply](const char* status)
-        {
-            auto reply = makeReply();
-            reply.status = status;
-            udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
-        };
-        if (decision == aerosimlab::communication::SequenceGuard::Decision::Duplicate)
-        {
-            if (lastReply_)
-                udpSocket_->Send(aerosimlab::communication::EncodeReply(*lastReply_), peer);
-            return;
-        }
-        if (decision == aerosimlab::communication::SequenceGuard::Decision::OutOfOrder)
-        {
-            sendStatusReply("rejected_sequence");
-            return;
-        }
-        if (pendingCommand_)
-        {
-            sendStatusReply("busy");
-            return;
-        }
-
-        sequenceGuard_.Commit(packet);
-        if (packet.fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
-        {
-            auto reply = makeReply();
-            reply.accepted = true;
-            reply.status = "fleet_status";
-            reply.appliedTick = simulation_.TickCount();
-            lastReply_ = reply;
-            udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
-            return;
-        }
-
-        externalControl_ = true;
-        if (!packet.sessionCommand && !packet.fleetCommand)
-        {
-            groundControlActive_ = true;
-            window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
-        }
-        pendingControllerAction_.reset();
-        pendingPilotCommand_.reset();
-        const auto elapsed = std::chrono::steady_clock::now() - startTime_;
-        const auto receivedAtMs = static_cast<std::uint64_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
-        pendingCommand_ = PendingGroundCommand{packet, peer, receivedAtMs};
+        packet = aerosimlab::communication::DecodeCommand(datagram);
     }
     catch (const std::exception& error)
     {
         udpSocket_->Send(aerosimlab::communication::EncodeError(error.what()), peer);
+        return;
     }
+
+    lastGroundControlMessage_ = std::chrono::steady_clock::now();
+    if (activePeer_ && (activePeer_->addressNetworkOrder != peer.addressNetworkOrder
+        || activePeer_->portNetworkOrder != peer.portNetworkOrder) && !pendingCommand_)
+    {
+        activePeer_ = peer;
+        sequenceGuard_ = {};
+        lastReply_.reset();
+    }
+    else if (!activePeer_)
+    {
+        activePeer_ = peer;
+    }
+
+    const auto decision = sequenceGuard_.Inspect(packet);
+    const auto makeReply = [this, &packet]
+    {
+        aerosimlab::communication::CommandReply reply;
+        reply.commandId = packet.commandId;
+        reply.sequence = packet.sequence;
+        reply.telemetry = CurrentTelemetry();
+        return reply;
+    };
+    const auto sendStatusReply = [this, &peer, &makeReply](const char* status)
+    {
+        auto reply = makeReply();
+        reply.status = status;
+        udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+    };
+    if (decision == aerosimlab::communication::SequenceGuard::Decision::Duplicate)
+    {
+        if (lastReply_)
+            udpSocket_->Send(aerosimlab::communication::EncodeReply(*lastReply_), peer);
+        return;
+    }
+    if (decision == aerosimlab::communication::SequenceGuard::Decision::OutOfOrder)
+    {
+        sendStatusReply("rejected_sequence");
+        return;
+    }
+    if (pendingCommand_)
+    {
+        sendStatusReply("busy");
+        return;
+    }
+
+    sequenceGuard_.Commit(packet);
+    if (packet.fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
+    {
+        auto reply = makeReply();
+        reply.accepted = true;
+        reply.status = "fleet_status";
+        reply.appliedTick = simulation_.TickCount();
+        lastReply_ = reply;
+        udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+        return;
+    }
+
+    externalControl_ = true;
+    if (!packet.sessionCommand && !packet.fleetCommand)
+    {
+        groundControlActive_ = true;
+        window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
+    }
+    pendingControllerAction_.reset();
+    pendingPilotCommand_.reset();
+    const auto elapsed = std::chrono::steady_clock::now() - startTime_;
+    const auto receivedAtMs = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+    pendingCommand_ = PendingGroundCommand{packet, peer, receivedAtMs};
 }
 #endif
 
