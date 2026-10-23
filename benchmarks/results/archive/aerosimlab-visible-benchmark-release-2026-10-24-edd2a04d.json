@@ -1,0 +1,841 @@
+{
+  "schema_version": 1,
+  "measurement_purpose": "자동 시연 중 장면과 EO 카메라를 함께 띄운 실제 창에서 앱 프레임 지연을 세 차례 확인",
+  "source_revision": "edd2a04d",
+  "mode": "Release, --benchmark-visible --demo",
+  "repetitions": 3,
+  "runs": [
+    {
+      "application_frame_duration_us": {
+        "maximum": 201880.3,
+        "p50": 2410.6,
+        "p95": 7434.2,
+        "p99": 11867.6,
+        "samples": 1359
+      },
+      "configuration": "visible OpenGL window with VSync off; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring",
+      "elapsed_seconds": 5.0020104,
+      "eo_gl_buffer_map_call_us": {
+        "maximum": 0.1,
+        "p50": 0.0,
+        "p95": 0.1,
+        "p99": 0.1,
+        "samples": 282
+      },
+      "eo_gl_buffer_unmap_call_us": {
+        "maximum": 0.5,
+        "p50": 0.1,
+        "p95": 0.3,
+        "p99": 0.4,
+        "samples": 282
+      },
+      "eo_gl_fallback_finish_us": {
+        "maximum": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "samples": 0
+      },
+      "eo_gl_fence_creation_call_us": {
+        "maximum": 140.6,
+        "p50": 20.3,
+        "p95": 28.0,
+        "p99": 41.0,
+        "samples": 282
+      },
+      "eo_gl_fence_wait_call_us": {
+        "maximum": 82.0,
+        "p50": 0.0,
+        "p95": 1.7,
+        "p99": 7.9,
+        "samples": 1359
+      },
+      "eo_gl_pixel_pack_buffer_bind_us": {
+        "maximum": 4.8,
+        "p50": 1.1,
+        "p95": 1.5,
+        "p99": 1.7,
+        "samples": 282
+      },
+      "eo_gl_readpixels_call_us": {
+        "maximum": 1438.0,
+        "p50": 54.6,
+        "p95": 99.8,
+        "p99": 155.7,
+        "samples": 282
+      },
+      "eo_gl_state_restore_us": {
+        "maximum": 11.0,
+        "p50": 2.7,
+        "p95": 5.1,
+        "p99": 6.2,
+        "samples": 282
+      },
+      "eo_pixel_buffer_resize_us": {
+        "maximum": 0.4,
+        "p50": 0.1,
+        "p95": 0.2,
+        "p99": 0.3,
+        "samples": 282
+      },
+      "eo_pixel_buffer_setup_us": {
+        "maximum": 4.0,
+        "p50": 1.2,
+        "p95": 1.6,
+        "p99": 3.8,
+        "samples": 282
+      },
+      "eo_pixel_copy_us": {
+        "maximum": 315.5,
+        "p50": 216.1,
+        "p95": 280.9,
+        "p99": 304.5,
+        "samples": 282
+      },
+      "eo_pixel_readback_enqueue_duration_us": {
+        "maximum": 1446.7,
+        "p50": 85.6,
+        "p95": 152.3,
+        "p99": 217.2,
+        "samples": 282
+      },
+      "eo_pixel_readback_poll_duration_us": {
+        "maximum": 333.5,
+        "p50": 0.2,
+        "p95": 256.7,
+        "p99": 299.0,
+        "samples": 1359
+      },
+      "eo_pixel_readback_slot_setup_us": {
+        "maximum": 0.5,
+        "p50": 0.0,
+        "p95": 0.1,
+        "p99": 0.4,
+        "samples": 282
+      },
+      "eo_read_target_setup_us": {
+        "maximum": 31.5,
+        "p50": 3.1,
+        "p95": 5.0,
+        "p99": 29.6,
+        "samples": 282
+      },
+      "eo_readback_cleanup_us": {
+        "maximum": 43.0,
+        "p50": 11.5,
+        "p95": 15.2,
+        "p99": 23.9,
+        "samples": 282
+      },
+      "framebuffer": {
+        "height": 720,
+        "width": 1280
+      },
+      "opengl": {
+        "renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "version": "3.3.0 NVIDIA 581.42"
+      },
+      "physics_step_duration_us": {
+        "maximum": 87.4,
+        "p50": 14.1,
+        "p95": 17.7,
+        "p99": 38.1,
+        "samples": 294
+      },
+      "private_bytes": 423051264,
+      "process_cpu_percent_approx": 99.99979208359903,
+      "render_fps": 271.69075857979027,
+      "render_frame_duration_us": {
+        "maximum": 201876.0,
+        "p50": 2399.1,
+        "p95": 7045.3,
+        "p99": 11072.4,
+        "samples": 1359
+      },
+      "render_frame_with_eo_readback_duration_us": {
+        "maximum": 54663.0,
+        "p50": 4653.9,
+        "p95": 8733.6,
+        "p99": 13394.2,
+        "samples": 555
+      },
+      "render_frame_without_eo_readback_duration_us": {
+        "maximum": 201876.0,
+        "p50": 2393.2,
+        "p95": 3109.1,
+        "p99": 6033.5,
+        "samples": 804
+      },
+      "rendered_frames": 1359,
+      "simulation_ticks": 294,
+      "slow_frames_over_16_67ms": [
+        {
+          "application_us": 22518.9,
+          "buffer_swap_us": 310.9,
+          "camera_scene_render_us": 0.0,
+          "eo_buffer_map_us": 0.0,
+          "eo_fence_wait_us": 0.0,
+          "eo_pixel_copy_us": 0.0,
+          "eo_readback_handling_us": 0.7,
+          "eo_readback_happened": false,
+          "event_polling_us": 12.2,
+          "frame_index": 404,
+          "gamepad_polling_us": 3.0,
+          "ground_control_polling_us": 0.1,
+          "hud_backend_draw_us": 53.5,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 2.6,
+          "hud_gpu_execution_us": 33.792,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1782,
+          "hud_interface_build_us": 22129.3,
+          "hud_vertex_count": 1048,
+          "render_us": 22191.8,
+          "scene_panel_render_us": 206.4,
+          "simulation_update_us": 0.4
+        },
+        {
+          "application_us": 42838.8,
+          "buffer_swap_us": 231.4,
+          "camera_scene_render_us": 93.2,
+          "eo_buffer_map_us": 0.0,
+          "eo_fence_wait_us": 0.0,
+          "eo_pixel_copy_us": 0.0,
+          "eo_readback_handling_us": 73.4,
+          "eo_readback_happened": true,
+          "event_polling_us": 41362.1,
+          "frame_index": 450,
+          "gamepad_polling_us": 3.2,
+          "ground_control_polling_us": 0.2,
+          "hud_backend_draw_us": 46.6,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 3.1,
+          "hud_gpu_execution_us": 34.816,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1788,
+          "hud_interface_build_us": 1148.3,
+          "hud_vertex_count": 1052,
+          "render_us": 1204.4,
+          "scene_panel_render_us": 237.7,
+          "simulation_update_us": 37.3
+        },
+        {
+          "application_us": 201880.3,
+          "buffer_swap_us": 1196.1,
+          "camera_scene_render_us": 0.0,
+          "eo_buffer_map_us": 0.0,
+          "eo_fence_wait_us": 0.0,
+          "eo_pixel_copy_us": 0.0,
+          "eo_readback_handling_us": 0.6,
+          "eo_readback_happened": false,
+          "event_polling_us": 1.5,
+          "frame_index": 647,
+          "gamepad_polling_us": 2.3,
+          "ground_control_polling_us": 0.1,
+          "hud_backend_draw_us": 53.0,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 2.4,
+          "hud_gpu_execution_us": 33.792,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1764,
+          "hud_interface_build_us": 200619.6,
+          "hud_vertex_count": 1036,
+          "render_us": 200679.7,
+          "scene_panel_render_us": 213.6,
+          "simulation_update_us": 0.3
+        },
+        {
+          "application_us": 18089.1,
+          "buffer_swap_us": 811.6,
+          "camera_scene_render_us": 77.5,
+          "eo_buffer_map_us": 0.0,
+          "eo_fence_wait_us": 0.0,
+          "eo_pixel_copy_us": 0.0,
+          "eo_readback_handling_us": 65.1,
+          "eo_readback_happened": true,
+          "event_polling_us": 1.2,
+          "frame_index": 648,
+          "gamepad_polling_us": 2.1,
+          "ground_control_polling_us": 0.1,
+          "hud_backend_draw_us": 45.0,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 3.0,
+          "hud_gpu_execution_us": 35.84,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1764,
+          "hud_interface_build_us": 17148.2,
+          "hud_vertex_count": 1036,
+          "render_us": 17200.1,
+          "scene_panel_render_us": 223.7,
+          "simulation_update_us": 73.6
+        },
+        {
+          "application_us": 74813.3,
+          "buffer_swap_us": 512.7,
+          "camera_scene_render_us": 107.6,
+          "eo_buffer_map_us": 0.0,
+          "eo_fence_wait_us": 1.3,
+          "eo_pixel_copy_us": 241.7,
+          "eo_readback_handling_us": 3675.7,
+          "eo_readback_happened": true,
+          "event_polling_us": 20118.7,
+          "frame_index": 832,
+          "gamepad_polling_us": 3.1,
+          "ground_control_polling_us": 0.2,
+          "hud_backend_draw_us": 62.9,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 3.6,
+          "hud_gpu_execution_us": 35.84,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1764,
+          "hud_interface_build_us": 54076.4,
+          "hud_vertex_count": 1036,
+          "render_us": 54150.2,
+          "scene_panel_render_us": 2431.2,
+          "simulation_update_us": 28.0
+        },
+        {
+          "application_us": 45762.0,
+          "buffer_swap_us": 1662.2,
+          "camera_scene_render_us": 76.5,
+          "eo_buffer_map_us": 0.0,
+          "eo_fence_wait_us": 1.6,
+          "eo_pixel_copy_us": 189.3,
+          "eo_readback_handling_us": 3639.1,
+          "eo_readback_happened": true,
+          "event_polling_us": 1.7,
+          "frame_index": 833,
+          "gamepad_polling_us": 2.5,
+          "ground_control_polling_us": 0.1,
+          "hud_backend_draw_us": 68.6,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 4.0,
+          "hud_gpu_execution_us": 34.816,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1764,
+          "hud_interface_build_us": 43973.8,
+          "hud_vertex_count": 1036,
+          "render_us": 44050.7,
+          "scene_panel_render_us": 218.5,
+          "simulation_update_us": 44.5
+        },
+        {
+          "application_us": 24460.8,
+          "buffer_swap_us": 694.6,
+          "camera_scene_render_us": 77.4,
+          "eo_buffer_map_us": 0.1,
+          "eo_fence_wait_us": 1.4,
+          "eo_pixel_copy_us": 226.6,
+          "eo_readback_handling_us": 3853.4,
+          "eo_readback_happened": true,
+          "event_polling_us": 1.7,
+          "frame_index": 834,
+          "gamepad_polling_us": 2.4,
+          "ground_control_polling_us": 0.2,
+          "hud_backend_draw_us": 82.0,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 4.6,
+          "hud_gpu_execution_us": 35.84,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1764,
+          "hud_interface_build_us": 23617.3,
+          "hud_vertex_count": 1036,
+          "render_us": 23709.3,
+          "scene_panel_render_us": 240.1,
+          "simulation_update_us": 52.3
+        }
+      ],
+      "source_revision": "edd2a04d",
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "maximum": 99.6,
+        "p50": 28.1,
+        "p95": 35.3,
+        "p99": 53.7,
+        "samples": 294
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "maximum": 6042.1,
+          "p50": 3699.4,
+          "p95": 4787.4,
+          "p99": 5019.3,
+          "samples": 282
+        },
+        "mean_brightness": 149.2540617208278,
+        "mean_contrast": 52.14129848119299,
+        "mean_sharpness": 33.20358801244815,
+        "samples": 282
+      },
+      "warmup_seconds": 1.0,
+      "window_visible": true,
+      "working_set_bytes": 204521472
+    },
+    {
+      "application_frame_duration_us": {
+        "maximum": 39100.8,
+        "p50": 2404.4,
+        "p95": 5714.9,
+        "p99": 7668.9,
+        "samples": 1644
+      },
+      "configuration": "visible OpenGL window with VSync off; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring",
+      "elapsed_seconds": 5.0043312,
+      "eo_gl_buffer_map_call_us": {
+        "maximum": 0.1,
+        "p50": 0.0,
+        "p95": 0.1,
+        "p99": 0.1,
+        "samples": 298
+      },
+      "eo_gl_buffer_unmap_call_us": {
+        "maximum": 0.6,
+        "p50": 0.1,
+        "p95": 0.3,
+        "p99": 0.5,
+        "samples": 298
+      },
+      "eo_gl_fallback_finish_us": {
+        "maximum": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "samples": 0
+      },
+      "eo_gl_fence_creation_call_us": {
+        "maximum": 72.5,
+        "p50": 18.9,
+        "p95": 27.5,
+        "p99": 65.9,
+        "samples": 298
+      },
+      "eo_gl_fence_wait_call_us": {
+        "maximum": 96.1,
+        "p50": 0.0,
+        "p95": 1.8,
+        "p99": 2.1,
+        "samples": 1644
+      },
+      "eo_gl_pixel_pack_buffer_bind_us": {
+        "maximum": 1.8,
+        "p50": 1.0,
+        "p95": 1.5,
+        "p99": 1.7,
+        "samples": 298
+      },
+      "eo_gl_readpixels_call_us": {
+        "maximum": 2316.1,
+        "p50": 51.0,
+        "p95": 120.6,
+        "p99": 1537.6,
+        "samples": 298
+      },
+      "eo_gl_state_restore_us": {
+        "maximum": 21.8,
+        "p50": 2.4,
+        "p95": 9.3,
+        "p99": 12.8,
+        "samples": 298
+      },
+      "eo_pixel_buffer_resize_us": {
+        "maximum": 0.3,
+        "p50": 0.1,
+        "p95": 0.3,
+        "p99": 0.3,
+        "samples": 298
+      },
+      "eo_pixel_buffer_setup_us": {
+        "maximum": 3.9,
+        "p50": 1.1,
+        "p95": 1.5,
+        "p99": 3.3,
+        "samples": 298
+      },
+      "eo_pixel_copy_us": {
+        "maximum": 511.8,
+        "p50": 228.5,
+        "p95": 328.1,
+        "p99": 463.1,
+        "samples": 298
+      },
+      "eo_pixel_readback_enqueue_duration_us": {
+        "maximum": 2328.2,
+        "p50": 77.7,
+        "p95": 158.1,
+        "p99": 1569.3,
+        "samples": 298
+      },
+      "eo_pixel_readback_poll_duration_us": {
+        "maximum": 531.8,
+        "p50": 0.2,
+        "p95": 271.4,
+        "p99": 346.6,
+        "samples": 1644
+      },
+      "eo_pixel_readback_slot_setup_us": {
+        "maximum": 0.4,
+        "p50": 0.0,
+        "p95": 0.1,
+        "p99": 0.4,
+        "samples": 298
+      },
+      "eo_read_target_setup_us": {
+        "maximum": 49.2,
+        "p50": 2.9,
+        "p95": 4.9,
+        "p99": 27.2,
+        "samples": 298
+      },
+      "eo_readback_cleanup_us": {
+        "maximum": 81.2,
+        "p50": 11.8,
+        "p95": 16.0,
+        "p99": 25.1,
+        "samples": 298
+      },
+      "framebuffer": {
+        "height": 720,
+        "width": 1280
+      },
+      "opengl": {
+        "renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "version": "3.3.0 NVIDIA 581.42"
+      },
+      "physics_step_duration_us": {
+        "maximum": 87.5,
+        "p50": 14.0,
+        "p95": 18.5,
+        "p99": 50.7,
+        "samples": 300
+      },
+      "private_bytes": 427405312,
+      "process_cpu_percent_approx": 99.9933817330076,
+      "render_fps": 328.5154267966916,
+      "render_frame_duration_us": {
+        "maximum": 29514.7,
+        "p50": 2379.9,
+        "p95": 5508.7,
+        "p99": 6461.7,
+        "samples": 1644
+      },
+      "render_frame_with_eo_readback_duration_us": {
+        "maximum": 29514.7,
+        "p50": 4371.5,
+        "p95": 6138.3,
+        "p99": 8230.8,
+        "samples": 593
+      },
+      "render_frame_without_eo_readback_duration_us": {
+        "maximum": 6612.1,
+        "p50": 2376.4,
+        "p95": 2454.3,
+        "p99": 4176.7,
+        "samples": 1051
+      },
+      "rendered_frames": 1644,
+      "simulation_ticks": 300,
+      "slow_frames_over_16_67ms": [
+        {
+          "application_us": 39100.8,
+          "buffer_swap_us": 618.6,
+          "camera_scene_render_us": 137.4,
+          "eo_buffer_map_us": 0.0,
+          "eo_fence_wait_us": 0.0,
+          "eo_pixel_copy_us": 0.0,
+          "eo_readback_handling_us": 74.1,
+          "eo_readback_happened": true,
+          "event_polling_us": 31996.1,
+          "frame_index": 335,
+          "gamepad_polling_us": 3.1,
+          "ground_control_polling_us": 0.2,
+          "hud_backend_draw_us": 50.0,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 3.2,
+          "hud_gpu_execution_us": 35.84,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1782,
+          "hud_interface_build_us": 6387.2,
+          "hud_vertex_count": 1048,
+          "render_us": 6448.1,
+          "scene_panel_render_us": 1446.4,
+          "simulation_update_us": 34.5
+        },
+        {
+          "application_us": 31703.5,
+          "buffer_swap_us": 412.9,
+          "camera_scene_render_us": 85.3,
+          "eo_buffer_map_us": 0.0,
+          "eo_fence_wait_us": 1.6,
+          "eo_pixel_copy_us": 234.1,
+          "eo_readback_handling_us": 4133.7,
+          "eo_readback_happened": true,
+          "event_polling_us": 2152.9,
+          "frame_index": 337,
+          "gamepad_polling_us": 3.5,
+          "ground_control_polling_us": 0.1,
+          "hud_backend_draw_us": 145.0,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 4.5,
+          "hud_gpu_execution_us": 40.96,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1782,
+          "hud_interface_build_us": 28945.3,
+          "hud_vertex_count": 1048,
+          "render_us": 29101.8,
+          "scene_panel_render_us": 248.1,
+          "simulation_update_us": 31.6
+        },
+        {
+          "application_us": 18264.0,
+          "buffer_swap_us": 12232.1,
+          "camera_scene_render_us": 0.0,
+          "eo_buffer_map_us": 0.1,
+          "eo_fence_wait_us": 2.0,
+          "eo_pixel_copy_us": 287.8,
+          "eo_readback_handling_us": 5292.9,
+          "eo_readback_happened": true,
+          "event_polling_us": 14.2,
+          "frame_index": 504,
+          "gamepad_polling_us": 2.5,
+          "ground_control_polling_us": 0.1,
+          "hud_backend_draw_us": 101.7,
+          "hud_draw_command_count": 8,
+          "hud_draw_list_count": 5,
+          "hud_frame_finalize_us": 4.2,
+          "hud_gpu_execution_us": 35.84,
+          "hud_gpu_timing_available": true,
+          "hud_index_count": 1788,
+          "hud_interface_build_us": 5901.3,
+          "hud_vertex_count": 1052,
+          "render_us": 6013.9,
+          "scene_panel_render_us": 380.9,
+          "simulation_update_us": 0.7
+        }
+      ],
+      "source_revision": "edd2a04d",
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "maximum": 101.2,
+        "p50": 28.0,
+        "p95": 38.4,
+        "p99": 68.9,
+        "samples": 300
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "maximum": 5961.4,
+          "p50": 3815.2,
+          "p95": 4579.7,
+          "p99": 5156.1,
+          "samples": 298
+        },
+        "mean_brightness": 148.0627853850977,
+        "mean_contrast": 51.85531768013055,
+        "mean_sharpness": 32.94976243471001,
+        "samples": 298
+      },
+      "warmup_seconds": 1.0,
+      "window_visible": true,
+      "working_set_bytes": 204701696
+    },
+    {
+      "application_frame_duration_us": {
+        "maximum": 13348.4,
+        "p50": 2410.7,
+        "p95": 6719.3,
+        "p99": 8215.2,
+        "samples": 1579
+      },
+      "configuration": "visible OpenGL window with VSync off; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring",
+      "elapsed_seconds": 5.0000611,
+      "eo_gl_buffer_map_call_us": {
+        "maximum": 0.1,
+        "p50": 0.0,
+        "p95": 0.1,
+        "p99": 0.1,
+        "samples": 300
+      },
+      "eo_gl_buffer_unmap_call_us": {
+        "maximum": 9.7,
+        "p50": 0.2,
+        "p95": 0.4,
+        "p99": 0.4,
+        "samples": 300
+      },
+      "eo_gl_fallback_finish_us": {
+        "maximum": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "samples": 0
+      },
+      "eo_gl_fence_creation_call_us": {
+        "maximum": 154.9,
+        "p50": 23.9,
+        "p95": 47.2,
+        "p99": 113.1,
+        "samples": 300
+      },
+      "eo_gl_fence_wait_call_us": {
+        "maximum": 171.0,
+        "p50": 0.0,
+        "p95": 2.3,
+        "p99": 9.8,
+        "samples": 1579
+      },
+      "eo_gl_pixel_pack_buffer_bind_us": {
+        "maximum": 3.1,
+        "p50": 1.2,
+        "p95": 1.6,
+        "p99": 1.7,
+        "samples": 300
+      },
+      "eo_gl_readpixels_call_us": {
+        "maximum": 366.8,
+        "p50": 65.7,
+        "p95": 147.8,
+        "p99": 204.0,
+        "samples": 300
+      },
+      "eo_gl_state_restore_us": {
+        "maximum": 22.3,
+        "p50": 3.7,
+        "p95": 12.3,
+        "p99": 16.0,
+        "samples": 300
+      },
+      "eo_pixel_buffer_resize_us": {
+        "maximum": 0.4,
+        "p50": 0.2,
+        "p95": 0.3,
+        "p99": 0.3,
+        "samples": 300
+      },
+      "eo_pixel_buffer_setup_us": {
+        "maximum": 2.3,
+        "p50": 1.2,
+        "p95": 1.6,
+        "p99": 1.8,
+        "samples": 300
+      },
+      "eo_pixel_copy_us": {
+        "maximum": 658.3,
+        "p50": 255.9,
+        "p95": 390.8,
+        "p99": 472.8,
+        "samples": 300
+      },
+      "eo_pixel_readback_enqueue_duration_us": {
+        "maximum": 437.3,
+        "p50": 100.6,
+        "p95": 202.6,
+        "p99": 264.3,
+        "samples": 300
+      },
+      "eo_pixel_readback_poll_duration_us": {
+        "maximum": 680.8,
+        "p50": 0.2,
+        "p95": 302.4,
+        "p99": 410.6,
+        "samples": 1579
+      },
+      "eo_pixel_readback_slot_setup_us": {
+        "maximum": 0.2,
+        "p50": 0.1,
+        "p95": 0.1,
+        "p99": 0.1,
+        "samples": 300
+      },
+      "eo_read_target_setup_us": {
+        "maximum": 46.4,
+        "p50": 3.9,
+        "p95": 7.6,
+        "p99": 26.6,
+        "samples": 300
+      },
+      "eo_readback_cleanup_us": {
+        "maximum": 76.1,
+        "p50": 13.2,
+        "p95": 18.0,
+        "p99": 31.3,
+        "samples": 300
+      },
+      "framebuffer": {
+        "height": 720,
+        "width": 1280
+      },
+      "opengl": {
+        "renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+        "version": "3.3.0 NVIDIA 581.42"
+      },
+      "physics_step_duration_us": {
+        "maximum": 378.9,
+        "p50": 16.6,
+        "p95": 24.3,
+        "p99": 55.2,
+        "samples": 300
+      },
+      "private_bytes": 424574976,
+      "process_cpu_percent_approx": 99.99877801493265,
+      "render_fps": 315.79614097115734,
+      "render_frame_duration_us": {
+        "maximum": 13328.9,
+        "p50": 2380.8,
+        "p95": 6655.7,
+        "p99": 8189.8,
+        "samples": 1579
+      },
+      "render_frame_with_eo_readback_duration_us": {
+        "maximum": 13328.9,
+        "p50": 4485.5,
+        "p95": 7455.3,
+        "p99": 9155.8,
+        "samples": 600
+      },
+      "render_frame_without_eo_readback_duration_us": {
+        "maximum": 7005.8,
+        "p50": 2372.2,
+        "p95": 2512.9,
+        "p99": 2716.9,
+        "samples": 979
+      },
+      "rendered_frames": 1579,
+      "simulation_ticks": 300,
+      "slow_frames_over_16_67ms": [],
+      "source_revision": "edd2a04d",
+      "tick_duration_us": {
+        "deadline_misses_over_16_67ms": 0,
+        "maximum": 399.0,
+        "p50": 33.5,
+        "p95": 56.0,
+        "p99": 96.0,
+        "samples": 300
+      },
+      "vision_analysis": {
+        "duration_us": {
+          "maximum": 8659.7,
+          "p50": 4601.0,
+          "p95": 5952.8,
+          "p99": 6825.3,
+          "samples": 300
+        },
+        "mean_brightness": 147.91675790201828,
+        "mean_contrast": 51.72787170228175,
+        "mean_sharpness": 32.90490281513787,
+        "samples": 300
+      },
+      "warmup_seconds": 1.0,
+      "window_visible": true,
+      "working_set_bytes": 202625024
+    }
+  ]
+}
