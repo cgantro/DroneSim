@@ -331,6 +331,7 @@ struct PhysicsWorld::Impl
         double collisionRadiusMeters = 0.0;
         double maximumMotorSpeed = 0.0;
         bool updatedSinceReset = false;
+        bool wasGrounded = false;
 
         Body(
             RigidBodyHandle bodyHandle,
@@ -590,6 +591,37 @@ struct PhysicsWorld::Impl
         return contactInfo;
     }
 
+    /**
+     * @brief AirSim이 지면에 고정된 순간에만 기체를 지면 위로 맞춘다.
+     * @details 지면 고정 경로는 겹친 깊이를 위치에 반영하지 않으므로, 고정 전환 직후 가장 깊은 상자의 관통량을 보정한다.
+     */
+    void CorrectGroundPenetration(Body& body)
+    {
+        body.collisionState = ToProjectState(body.kinematics.getState());
+        for (std::size_t boxIndex = 0;
+            boxIndex < body.collisionBoxes.size(); ++boxIndex)
+        {
+            body.worldCollisionBoxes[boxIndex] = ToWorldBox(
+                body.collisionState.positionMeters,
+                body.collisionState.orientation,
+                body.collisionBoxes[boxIndex]);
+        }
+
+        const auto contact = FindTerrainContact(body, stepCount);
+        if (!contact)
+            return;
+
+        const double penetrationMeters =
+            static_cast<double>(contact->penetration_depth);
+        if (!(penetrationMeters > 0.0))
+            return;
+
+        glm::dvec3 correctedPosition = body.collisionState.positionMeters;
+        correctedPosition.z += penetrationMeters + 1.0e-4;
+        body.model->setPose({ToAirSimWorldVector(correctedPosition),
+            ToAirSimOrientation(body.collisionState.orientation)});
+    }
+
     /** @brief 기체 상자와 고정 장애물 상자 중 가장 깊이 겹친 접촉을 찾는다. */
     std::optional<ContactCandidate> FindObstacleContact(const Body& body) const
     {
@@ -780,6 +812,7 @@ void PhysicsWorld::SetState(RigidBodyHandle handle, const RigidBodyState& state)
     body.model->setPose(airSimState.pose);
     body.model->setTwist(airSimState.twist);
     body.model->setCollisionInfo({});
+    body.wasGrounded = false;
 }
 
 void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
@@ -820,6 +853,13 @@ void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
         body->updatedSinceReset = true;
     }
     impl_->physicsEngine.update();
+    for (auto& body : impl_->bodies)
+    {
+        const bool isGrounded = body->model->isGrounded();
+        if (isGrounded && !body->wasGrounded)
+            impl_->CorrectGroundPenetration(*body);
+        body->wasGrounded = isGrounded;
+    }
 }
 
 bool PhysicsWorld::DestroyBody(RigidBodyHandle handle)

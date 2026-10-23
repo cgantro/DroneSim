@@ -1,4 +1,5 @@
 #include "simulation_core/PhysicsWorld.h"
+#include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "terrain/BuildingFootprint.h"
 #include "terrain/TerrainGrid.h"
@@ -95,15 +96,34 @@ void Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes()
 
 void Verify_AirSimPhysics_TerrainContactStopsTheDrone()
 {
-    PhysicsWorld world;
-    const RigidBodyHandle drone = MakeX500(world, 2.0);
+    const auto verifyGroundContact = [](double terrainHeightMeters, bool useHeightGrid)
+    {
+        PhysicsWorld world;
+        if (useHeightGrid)
+        {
+            terrain::TerrainGrid terrainGrid;
+            terrainGrid.sampleCount = 3;
+            terrainGrid.spacingXMeters = 2.0F;
+            terrainGrid.spacingYMeters = 2.0F;
+            terrainGrid.heightOffsetsMeters.assign(9U,
+                static_cast<float>(terrainHeightMeters));
+            world.SetTerrain(std::move(terrainGrid));
+        }
 
-    for (int tick = 0; tick < 240; ++tick)
-        world.Step(1.0 / 60.0);
+        const RigidBodyHandle drone = MakeX500(world, terrainHeightMeters + 2.0);
+        for (int tick = 0; tick < 240; ++tick)
+            world.Step(1.0 / 60.0);
 
-    const RigidBodyState state = world.State(drone);
-    EXPECT_GT(state.positionMeters.z, 0.0);
-    EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.2);
+        const RigidBodyState state = world.State(drone);
+        EXPECT_NEAR(state.positionMeters.z,
+            terrainHeightMeters
+                + QuadrotorFlightController::groundedModelOriginHeightMeters,
+            0.03);
+        EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.2);
+    };
+
+    verifyGroundContact(0.0, false);
+    verifyGroundContact(2.0, true);
 }
 
 void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
