@@ -880,24 +880,22 @@ void PhysicsWorld::SetState(RigidBodyHandle handle, const RigidBodyState& state)
     body.model->setCollisionInfo({});
 }
 
-void PhysicsWorld::Step(
-    double seconds,
-    double* durationMicroseconds,
-    double* contactGenerationMicroseconds)
+void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
 {
     if (!std::isfinite(seconds) || !(seconds > 0.0))
         throw std::invalid_argument("물리 시간 간격을 확인해 주세요.");
     static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
     static_cast<void>(impl_->clock->stepBy(seconds));
-    if (contactGenerationMicroseconds != nullptr)
-        *contactGenerationMicroseconds = 0.0;
+    if (measurements != nullptr)
+        measurements->contactGenerationMicroseconds = 0.0;
 
     auto advance = [&]
     {
         ++impl_->stepCount;
         double largestCollisionRadius = 0.0;
         {
-            ScopedDuration measureBodyOrdering(contactGenerationMicroseconds,
+            ScopedDuration measureBodyOrdering(measurements != nullptr
+                    ? &measurements->contactGenerationMicroseconds : nullptr,
                 ScopedDuration::Mode::Accumulate);
             largestCollisionRadius = impl_->PrepareCollisionData();
             impl_->PrepareDroneContacts(largestCollisionRadius);
@@ -906,7 +904,8 @@ void PhysicsWorld::Step(
         {
             auto& body = impl_->bodies[index];
             {
-                ScopedDuration measureContactGeneration(contactGenerationMicroseconds,
+                ScopedDuration measureContactGeneration(measurements != nullptr
+                        ? &measurements->contactGenerationMicroseconds : nullptr,
                     ScopedDuration::Mode::Accumulate);
                 body->environment.setPosition(body->kinematics.getPose().position);
                 body->environment.update();
@@ -921,7 +920,8 @@ void PhysicsWorld::Step(
         impl_->physicsEngine.update();
     };
 
-    ScopedDuration measurePhysicsStep(durationMicroseconds);
+    ScopedDuration measurePhysicsStep(measurements != nullptr
+        ? &measurements->stepDurationMicroseconds : nullptr);
     advance();
 }
 

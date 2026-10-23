@@ -348,12 +348,12 @@ struct SimulationCore::EcsStorage
 
     void AdvancePhysicsWorld()
     {
-        if (measurePhysicsStepDuration)
-            physics->Step(DroneModel::fixedStepSeconds,
-                &lastPhysicsStepDurationMicroseconds,
-                &lastContactGenerationDurationMicroseconds);
-        else
-            physics->Step(DroneModel::fixedStepSeconds);
+        PhysicsStepMeasurements measurements;
+        physics->Step(DroneModel::fixedStepSeconds,
+            measurePhysicsStepDuration ? &measurements : nullptr);
+        lastPhysicsStepDurationMicroseconds = measurements.stepDurationMicroseconds;
+        lastContactGenerationDurationMicroseconds =
+            measurements.contactGenerationMicroseconds;
 
         for (auto& [id, drone] : drones)
         {
