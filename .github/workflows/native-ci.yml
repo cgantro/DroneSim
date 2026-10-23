@@ -34,6 +34,7 @@ jobs:
             libxinerama-dev \
             libxcursor-dev \
             libxi-dev \
+            clang-tidy \
             ninja-build \
             pkg-config \
             xvfb \
@@ -44,6 +45,16 @@ jobs:
 
       - name: Build native targets
         run: cmake --build --preset linux-gcc-debug --parallel 4
+
+      - name: Run Clang static analysis
+        run: |
+          run-clang-tidy \
+            -p build-linux-gcc-debug \
+            -j 2 \
+            -checks='-*,clang-analyzer-core.*,clang-analyzer-cplusplus.*' \
+            -warnings-as-errors='*' \
+            -header-filter='^.*/(apps|modules|tests)/.*' \
+            -source-filter='^.*/(apps|modules|tests)/.*\.cpp$'
 
       - name: Run labeled CTest suite with virtual display
         env:
