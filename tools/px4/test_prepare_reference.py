@@ -19,12 +19,15 @@ class TopicSamplesTests(unittest.TestCase):
         self.assertEqual(samples.scalar("value", 2_500), 2.5)
 
         sparse_samples = TopicSamples(
-            SimpleNamespace(data={"timestamp": [0, 50_000], "value": [0.0, 1.0]}),
+            SimpleNamespace(data={
+                "timestamp": [0, 700_000, 800_000],
+                "value": [0.0, 1.0, 2.0],
+            }),
             topic_name="vehicle_attitude",
             maximum_gap_microseconds=20_000,
         )
-        with self.assertRaisesRegex(ValueError, r"vehicle_attitude.*50\.0ms.*20\.0ms"):
-            sparse_samples.scalar("value", 25_000)
+        with self.assertRaisesRegex(ValueError, r"vehicle_attitude.*700\.0ms.*20\.0ms"):
+            sparse_samples.scalar("value", 700_000)
 
 
 if __name__ == "__main__":
