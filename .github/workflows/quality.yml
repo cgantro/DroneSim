@@ -61,6 +61,7 @@ jobs:
           -L INTEGRATION -LE 'benchmark|e2e'
 
   coverage:
+    if: github.event_name == 'workflow_dispatch'
     name: GCC coverage
     runs-on: ubuntu-latest
     timeout-minutes: 45
