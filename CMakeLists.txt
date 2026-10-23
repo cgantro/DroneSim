@@ -317,9 +317,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     set_target_properties(aerosimlab_simulator PROPERTIES SUFFIX ".html")
     target_link_options(aerosimlab_simulator PRIVATE
       "-sALLOW_MEMORY_GROWTH=1"
-      "--preload-file" "${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
-      "--preload-file" "${CMAKE_SOURCE_DIR}/assets/maps@maps"
-      "--preload-file" "${CMAKE_SOURCE_DIR}/assets/models/drones@models/drones"
+      "SHELL:--preload-file \"${CMAKE_SOURCE_DIR}/assets/shaders@shaders\""
+      "SHELL:--preload-file \"${CMAKE_SOURCE_DIR}/assets/maps@maps\""
+      "SHELL:--preload-file \"${CMAKE_SOURCE_DIR}/assets/models/drones@models/drones\""
     )
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
