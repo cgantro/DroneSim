@@ -183,15 +183,16 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
         "tests/data/px4_x500_position_replay_12_05.json");
     const Json fixture = Json::parse(fixtureText);
     const Json& reference = fixture.at("reference_samples");
-    const auto calculateRmse = [&](const ScenarioResult& result)
+    const auto calculateRmse = [&](const Json& referenceSamples,
+                                   const ScenarioResult& result)
     {
         const glm::dvec3 initialPosition =
             result.trajectory.front().drones.front().second.positionMeters;
         std::array<double, 4> squaredErrorSums{};
-        for (std::size_t index = 0; index < reference.size(); ++index)
+        for (std::size_t index = 0; index < referenceSamples.size(); ++index)
         {
             const DroneState& state = result.trajectory[index].drones.front().second;
-            const Json& sample = reference[index];
+            const Json& sample = referenceSamples[index];
             const auto readVector = [&](const char* key)
             {
                 const Json& values = sample.at(key);
@@ -222,7 +223,7 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
         }
 
         for (double& sum : squaredErrorSums)
-            sum = std::sqrt(sum / static_cast<double>(reference.size()));
+            sum = std::sqrt(sum / static_cast<double>(referenceSamples.size()));
         squaredErrorSums[2] *= 180.0 / std::numbers::pi;
         return squaredErrorSums;
     };
@@ -230,7 +231,8 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     const ScenarioResult estimatedStartResult = RunScenario(fixtureText);
     ASSERT_TRUE(estimatedStartResult.passed);
     ASSERT_EQ(estimatedStartResult.trajectory.size(), reference.size());
-    const std::array<double, 4> estimatedStartRmse = calculateRmse(estimatedStartResult);
+    const std::array<double, 4> estimatedStartRmse = calculateRmse(
+        reference, estimatedStartResult);
 
     Json zeroStartScenario = fixture;
     zeroStartScenario["drones"][0]["initial_motor_speeds_radians_per_second"] =
@@ -238,7 +240,8 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     const ScenarioResult zeroStartResult = RunScenario(zeroStartScenario.dump());
     ASSERT_TRUE(zeroStartResult.passed);
     ASSERT_EQ(zeroStartResult.trajectory.size(), reference.size());
-    const std::array<double, 4> zeroStartRmse = calculateRmse(zeroStartResult);
+    const std::array<double, 4> zeroStartRmse = calculateRmse(
+        reference, zeroStartResult);
 
     // 초기 상태와 명령은 그대로 두고 추력 계수만 10% 높여 민감도를 비교한다.
     Json increasedThrustScenario = fixture;
@@ -250,8 +253,8 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
         RunScenario(increasedThrustScenario.dump());
     ASSERT_TRUE(increasedThrustResult.passed);
     ASSERT_EQ(increasedThrustResult.trajectory.size(), reference.size());
-    const std::array<double, 4> increasedThrustRmse =
-        calculateRmse(increasedThrustResult);
+    const std::array<double, 4> increasedThrustRmse = calculateRmse(
+        reference, increasedThrustResult);
 
     EXPECT_NEAR(estimatedStartRmse[0], 0.4779, 0.02);
     EXPECT_NEAR(estimatedStartRmse[1], 0.3707, 0.02);
@@ -265,6 +268,20 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     EXPECT_NEAR(increasedThrustRmse[1], 0.9695, 0.02);
     EXPECT_NEAR(increasedThrustRmse[2], 99.85, 0.5);
     EXPECT_NEAR(increasedThrustRmse[3], 1.4210, 0.02);
+
+    const Json recentFlightFixture = Json::parse(ReadScenarioFixture(
+        "tests/data/px4_x500_position_replay_2026_10_16_79s.json"));
+    const Json& recentReference = recentFlightFixture.at("reference_samples");
+    const ScenarioResult recentFlightResult = RunScenario(recentFlightFixture.dump());
+    ASSERT_TRUE(recentFlightResult.passed);
+    ASSERT_EQ(recentFlightResult.trajectory.size(), recentReference.size());
+    const std::array<double, 4> recentFlightRmse = calculateRmse(
+        recentReference, recentFlightResult);
+
+    EXPECT_NEAR(recentFlightRmse[0], 1.4622, 0.03);
+    EXPECT_NEAR(recentFlightRmse[1], 0.9196, 0.03);
+    EXPECT_NEAR(recentFlightRmse[2], 64.594, 0.5);
+    EXPECT_NEAR(recentFlightRmse[3], 0.6725, 0.03);
 }
 
 void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
