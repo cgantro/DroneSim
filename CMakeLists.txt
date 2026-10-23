@@ -274,6 +274,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
 
   add_library(aerosimlab_simulator_app STATIC
     apps/simulator/AeroSimLabApp.cpp
+    apps/simulator/AeroSimLabAppBenchmark.cpp
     apps/simulator/AeroSimLabAppGamepad.cpp
     apps/simulator/AeroSimLabAppInput.cpp
     apps/simulator/FleetDroneSpawn.cpp

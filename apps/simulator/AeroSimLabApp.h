@@ -76,6 +76,8 @@ public:
     int Run();
 
 private:
+    static constexpr double benchmarkWarmupDurationSeconds = 1.0;
+
     /** @brief 입력부터 화면 출력까지 현재 프레임에서만 쓰는 측정값이다. */
     struct CurrentFrameMeasurements
     {
