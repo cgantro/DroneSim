@@ -576,9 +576,10 @@ struct PhysicsWorld::Impl
                 glm::dvec3 corner = worldBox.centerMeters;
                 for (std::size_t axisIndex = 0; axisIndex < worldBox.axes.size(); ++axisIndex)
                 {
-                    const double direction = terrain
-                        ? ((cornerIndex & (1U << axisIndex)) != 0U ? 1.0 : -1.0)
-                        : (worldBox.axes[axisIndex].z >= 0.0 ? -1.0 : 1.0);
+                    const bool usePositiveSide = terrain
+                        ? (cornerIndex & (1U << axisIndex)) != 0U
+                        : !(worldBox.axes[axisIndex].z >= 0.0);
+                    const double direction = usePositiveSide ? 1.0 : -1.0;
                     corner += worldBox.axes[axisIndex]
                         * (direction * worldBox.halfExtentsMeters[axisIndex]);
                 }
