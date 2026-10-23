@@ -58,13 +58,24 @@ std::filesystem::path DefaultBenchmarkOutputPath()
 #endif
 }
 
-std::optional<std::size_t> ReadProcessWorkingSetBytes()
+struct ProcessMemorySample
+{
+    std::size_t workingSetBytes = 0;
+    std::size_t privateBytes = 0;
+};
+
+std::optional<ProcessMemorySample> ReadProcessMemorySample()
 {
 #ifdef _WIN32
-    PROCESS_MEMORY_COUNTERS memory{};
+    PROCESS_MEMORY_COUNTERS_EX memory{};
     memory.cb = sizeof(memory);
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof(memory)))
-        return memory.WorkingSetSize;
+    if (GetProcessMemoryInfo(GetCurrentProcess(),
+            reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory), sizeof(memory)))
+    {
+        return ProcessMemorySample{
+            static_cast<std::size_t>(memory.WorkingSetSize),
+            static_cast<std::size_t>(memory.PrivateUsage)};
+    }
 #endif
     return std::nullopt;
 }
@@ -195,8 +206,11 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             std::move(measurements.visionDurationsMicroseconds))}};
 #endif
 
-    if (const auto workingSetBytes = ReadProcessWorkingSetBytes())
-        report["working_set_bytes"] = *workingSetBytes;
+    if (const auto memory = ReadProcessMemorySample())
+    {
+        report["working_set_bytes"] = memory->workingSetBytes;
+        report["private_bytes"] = memory->privateBytes;
+    }
     return report;
 }
 
@@ -309,6 +323,7 @@ nlohmann::json MeasureDroneScaling(
             std::vector<double> contactGenerationDurations;
             std::vector<double> contactGenerationFractions;
             std::vector<std::size_t> workingSetSamples;
+            std::vector<std::size_t> privateMemorySamples;
             tickDurations.reserve(measuredTicks);
             flecsProgressDurations.reserve(measuredTicks);
             kinematicDroneSystemDurations.reserve(measuredTicks);
@@ -319,7 +334,9 @@ nlohmann::json MeasureDroneScaling(
             contactGenerationFractions.reserve(measuredTicks);
             workingSetSamples.reserve(
                 measuredTicks / workingSetSampleIntervalTicks + 1U);
-            const auto workingSetBefore = ReadProcessWorkingSetBytes();
+            privateMemorySamples.reserve(
+                measuredTicks / workingSetSampleIntervalTicks + 1U);
+            const auto memoryBefore = ReadProcessMemorySample();
             const std::clock_t cpuStart = std::clock();
             const auto measurementStart = std::chrono::steady_clock::now();
             bool timeLimitReached = false;
@@ -358,8 +375,11 @@ nlohmann::json MeasureDroneScaling(
 
                 if ((tick + 1U) % workingSetSampleIntervalTicks == 0U)
                 {
-                    if (const auto workingSet = ReadProcessWorkingSetBytes())
-                        workingSetSamples.push_back(*workingSet);
+                    if (const auto memory = ReadProcessMemorySample())
+                    {
+                        workingSetSamples.push_back(memory->workingSetBytes);
+                        privateMemorySamples.push_back(memory->privateBytes);
+                    }
                 }
 
                 if ((tick + 1U) % 1000U == 0U
@@ -375,9 +395,12 @@ nlohmann::json MeasureDroneScaling(
                 std::chrono::steady_clock::now() - measurementStart).count();
             const double cpuSeconds = static_cast<double>(std::clock() - cpuStart)
                 / CLOCKS_PER_SEC;
-            const auto workingSetAfter = ReadProcessWorkingSetBytes();
-            if (workingSetAfter)
-                workingSetSamples.push_back(*workingSetAfter);
+            const auto memoryAfter = ReadProcessMemorySample();
+            if (memoryAfter)
+            {
+                workingSetSamples.push_back(memoryAfter->workingSetBytes);
+                privateMemorySamples.push_back(memoryAfter->privateBytes);
+            }
             const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
                 tickDurations.begin(), tickDurations.end(), [](double duration)
                 {
@@ -449,13 +472,18 @@ nlohmann::json MeasureDroneScaling(
                 run["advance_kinematic_drone_system_duration_us"] = SummarizeDurations(
                     std::move(kinematicDroneSystemDurations));
             }
-            if (workingSetBefore && workingSetAfter)
+            if (memoryBefore && memoryAfter)
             {
-                run["process_working_set_before_bytes"] = *workingSetBefore;
-                run["process_working_set_after_bytes"] = *workingSetAfter;
+                run["process_working_set_before_bytes"] = memoryBefore->workingSetBytes;
+                run["process_working_set_after_bytes"] = memoryAfter->workingSetBytes;
                 run["process_working_set_change_bytes"] =
-                    static_cast<std::int64_t>(*workingSetAfter)
-                    - static_cast<std::int64_t>(*workingSetBefore);
+                    static_cast<std::int64_t>(memoryAfter->workingSetBytes)
+                    - static_cast<std::int64_t>(memoryBefore->workingSetBytes);
+                run["process_private_bytes_before"] = memoryBefore->privateBytes;
+                run["process_private_bytes_after"] = memoryAfter->privateBytes;
+                run["process_private_bytes_change"] =
+                    static_cast<std::int64_t>(memoryAfter->privateBytes)
+                    - static_cast<std::int64_t>(memoryBefore->privateBytes);
             }
             if (!workingSetSamples.empty())
             {
@@ -468,6 +496,18 @@ nlohmann::json MeasureDroneScaling(
                 run["working_set_sample_interval_ticks"] =
                     workingSetSampleIntervalTicks;
                 run["working_set_sample_count"] = workingSetSamples.size();
+            }
+            if (!privateMemorySamples.empty())
+            {
+                const double totalPrivateBytes = std::accumulate(
+                    privateMemorySamples.begin(), privateMemorySamples.end(), 0.0);
+                run["sampled_average_private_bytes"] =
+                    totalPrivateBytes / static_cast<double>(privateMemorySamples.size());
+                run["sampled_max_private_bytes"] = *std::max_element(
+                    privateMemorySamples.begin(), privateMemorySamples.end());
+                run["private_memory_sample_interval_ticks"] =
+                    workingSetSampleIntervalTicks;
+                run["private_memory_sample_count"] = privateMemorySamples.size();
             }
             runs.push_back(std::move(run));
             if (timeLimitReached)
