@@ -226,6 +226,67 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
     return drones;
 }
 
+std::vector<FormationOutage> ReadFormationOutages(
+    const Json& link, std::uint64_t tickCount)
+{
+    const auto outages = link.find("outages");
+    if (outages == link.end())
+        return {};
+    if (!outages->is_array())
+        throw std::invalid_argument("formation link의 outages는 배열이어야 합니다.");
+
+    std::vector<FormationOutage> result;
+    std::uint64_t previousEndTick = 0;
+    bool hasPreviousOutage = false;
+    for (const Json& outage : *outages)
+    {
+        if (!outage.is_object())
+            throw std::invalid_argument("각 통신 장애 구간은 JSON 객체여야 합니다.");
+        const std::uint64_t startTick = ReadUnsigned(
+            Required(outage, "start_tick"), "start_tick");
+        const std::uint64_t endTick = ReadUnsigned(
+            Required(outage, "end_tick"), "end_tick");
+        if (startTick >= endTick || endTick > tickCount
+            || (hasPreviousOutage && startTick < previousEndTick))
+        {
+            throw std::invalid_argument(
+                "통신 장애 구간은 겹치지 않는 오름차순 범위이며 시나리오 안에 있어야 합니다.");
+        }
+        result.push_back({startTick, endTick});
+        previousEndTick = endTick;
+        hasPreviousOutage = true;
+    }
+    return result;
+}
+
+FormationLink ReadFormationLink(
+    const Json& item,
+    std::uint64_t tickCount,
+    const std::unordered_set<std::string>& droneNames)
+{
+    if (!item.is_object())
+        throw std::invalid_argument("각 formation link는 JSON 객체여야 합니다.");
+    const Json& leaderValue = Required(item, "leader");
+    const Json& followerValue = Required(item, "follower");
+    if (!leaderValue.is_string() || !followerValue.is_string())
+        throw std::invalid_argument("formation link의 leader와 follower는 이름 문자열이어야 합니다.");
+
+    std::string leader = leaderValue.get<std::string>();
+    std::string follower = followerValue.get<std::string>();
+    if (!droneNames.contains(leader) || !droneNames.contains(follower)
+        || leader == follower)
+    {
+        throw std::invalid_argument(
+            "formation link는 서로 다른 드론을 지정하고, follower마다 하나만 설정해야 합니다.");
+    }
+
+    return {
+        std::move(leader),
+        std::move(follower),
+        ReadVector(Required(item, "offset_meters"), "offset_meters"),
+        ReadFormationOutages(item, tickCount)};
+}
+
 std::vector<FormationLink> ReadFormationLinks(
     const Json& document,
     std::uint64_t tickCount,
@@ -242,52 +303,11 @@ std::vector<FormationLink> ReadFormationLinks(
     links.reserve(found->size());
     for (const Json& item : *found)
     {
-        if (!item.is_object())
-            throw std::invalid_argument("각 formation link는 JSON 객체여야 합니다.");
-        const Json& leaderValue = Required(item, "leader");
-        const Json& followerValue = Required(item, "follower");
-        if (!leaderValue.is_string() || !followerValue.is_string())
-            throw std::invalid_argument("formation link의 leader와 follower는 이름 문자열이어야 합니다.");
-
-        std::string leader = leaderValue.get<std::string>();
-        std::string follower = followerValue.get<std::string>();
-        if (!droneNames.contains(leader) || !droneNames.contains(follower)
-            || leader == follower || !followers.insert(follower).second)
+        FormationLink link = ReadFormationLink(item, tickCount, droneNames);
+        if (!followers.insert(link.followerName).second)
         {
             throw std::invalid_argument(
                 "formation link는 서로 다른 드론을 지정하고, follower마다 하나만 설정해야 합니다.");
-        }
-
-        FormationLink link{
-            std::move(leader),
-            std::move(follower),
-            ReadVector(Required(item, "offset_meters"), "offset_meters"),
-            {}};
-        const auto outages = item.find("outages");
-        if (outages != item.end())
-        {
-            if (!outages->is_array())
-                throw std::invalid_argument("formation link의 outages는 배열이어야 합니다.");
-            std::uint64_t previousEndTick = 0;
-            bool hasPreviousOutage = false;
-            for (const Json& outage : *outages)
-            {
-                if (!outage.is_object())
-                    throw std::invalid_argument("각 통신 장애 구간은 JSON 객체여야 합니다.");
-                const std::uint64_t startTick = ReadUnsigned(
-                    Required(outage, "start_tick"), "start_tick");
-                const std::uint64_t endTick = ReadUnsigned(
-                    Required(outage, "end_tick"), "end_tick");
-                if (startTick >= endTick || endTick > tickCount
-                    || (hasPreviousOutage && startTick < previousEndTick))
-                {
-                    throw std::invalid_argument(
-                        "통신 장애 구간은 겹치지 않는 오름차순 범위이며 시나리오 안에 있어야 합니다.");
-                }
-                link.outages.push_back({startTick, endTick});
-                previousEndTick = endTick;
-                hasPreviousOutage = true;
-            }
         }
         links.push_back(std::move(link));
     }
