@@ -167,6 +167,10 @@ private:
     std::optional<std::uint64_t> groundControlCommandExpiresAtTick_;
     std::size_t renderedFrames_ = 0;
     std::uint64_t lastQueuedEoFrameTick_ = 0;
+#ifndef __EMSCRIPTEN__
+    // 같은 센서 Tick의 EO 화면은 화면 프레임마다 반복해서 그리지 않는다.
+    std::optional<std::uint64_t> lastRenderedEoFrameTick_;
+#endif
     std::clock_t benchmarkCpuStart_ = 0;
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
 #ifndef __EMSCRIPTEN__

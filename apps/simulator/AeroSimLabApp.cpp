@@ -636,11 +636,18 @@ std::uint32_t AeroSimLabApp::RenderCameraPanel()
     const auto& camera = simulation_.Camera();
     const int imageWidth = camera.imageWidthPixels;
     const int imageHeight = camera.imageHeightPixels;
+    const bool targetSizeChanged = cameraTarget_->GetWidth() != imageWidth
+        || cameraTarget_->GetHeight() != imageHeight;
     cameraTarget_->Resize(imageWidth, imageHeight);
-    UpdateEoCamera(imageWidth, imageHeight);
-    const std::uint32_t texture = RenderWorldToTarget(*cameraTarget_, *eoCamera_);
+    if (targetSizeChanged || !lastRenderedEoFrameTick_
+        || *lastRenderedEoFrameTick_ != camera.lastFrameTick)
+    {
+        UpdateEoCamera(imageWidth, imageHeight);
+        static_cast<void>(RenderWorldToTarget(*cameraTarget_, *eoCamera_));
+        lastRenderedEoFrameTick_ = camera.lastFrameTick;
+    }
     CaptureEoFrame();
-    return texture;
+    return cameraTarget_->GetTextureId();
 }
 
 std::uint32_t AeroSimLabApp::RenderWorldToTarget(

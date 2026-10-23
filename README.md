@@ -47,12 +47,12 @@ Windows Release 빌드에서 자동 시험 20개가 통과했습니다. 2026년 
 
 | 확인 항목 | 조건과 결과 | 해석 범위 |
 | --- | --- | --- |
-| 화면 프레임 | RTX 3060 Ti, 1280×720 숨김 창에서 5초 측정. 이전 기준선은 332.84FPS·p95 4.914ms, 최근 실행은 283.38FPS·p95 5.929ms | 최근 실행에서도 약 283FPS가 반복됐지만, 긴 프레임과 처리량 차이의 원인은 미확정. 실제 모니터 표시·입력 지연도 확인하지 않음 |
+| 화면 프레임 | RTX 3060 Ti, 1280×720 숨김 창에서 5초 측정. 이전 기준선은 332.84FPS·p95 4.914ms, EO 다시 그리기 제한 후 302.89FPS·p50 2.461ms·p95 6.125ms | 한 차례 측정. 중앙값은 낮았지만 p95와 최댓값은 여전히 높고, 실제 모니터 표시·입력 지연도 확인하지 않음 |
 | 운동학 확장 | 화면 없는 분리 배치 1,024대, Tick p95 중앙값 8.9µs, 30,000 Tick씩 3회 완료 | 처리량 시험 결과이며 GUI 실시간 조종 성능이나 물리 정확도를 뜻하지 않음 |
 | AirSim 강체 확장 | 분리 배치 512대에서 Tick p95 중앙값 949.3µs, 30,000 Tick씩 3회 완료 | 같은 PC의 화면 없는 시험. 1,024대 강체는 1회 실행 중 30초 제한에 걸려 완료 결과가 아님 |
 | 밀집 충돌 처리 | 0.55m 간격 256대에서 변경 전 Tick p95 중앙값 1,185.5µs·접촉 생성 p95 939.8µs, 변경 후 각각 955.5µs·722.8µs. 각 조건에서 30,000 Tick씩 3회 완료 | 밀집 배치에서는 줄었지만 분리 배치의 접촉 생성 p95는 206.1µs에서 242.5µs로 늘어남. 모든 배치의 개선을 뜻하지 않음 |
 | 협동 임무 | 운동학 1,024대와 AirSim 강체 128대까지 모든 기록된 반복에서 목표 완료 | 로컬 시나리오 결과이며 실제 통신 장애·충돌 회피·실비행 정확도 검증은 아님 |
 
-상세 조건과 실행 환경은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. [이전 기준선](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-bbb86f73-dirty.json)과 [충돌 검사 변경 후 원본](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-26cc0b07-dirty.json)도 보관합니다. 주요 문제 추적은 [문제 해결 기록](docs/public/문제해결.md)에 있습니다.
+상세 조건과 실행 환경은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. [이전 기준선](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-bbb86f73-dirty.json), [충돌 검사 변경 후 결과](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-26cc0b07-dirty.json), [EO 화면 재사용 변경 후 결과](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-245adc16-dirty.json)를 보관합니다. 주요 문제 추적은 [문제 해결 기록](docs/public/문제해결.md)에 있습니다.
 
 다중 드론과 공동 임무의 실행 범위, 실패한 규모 시험은 [개발 원리와 확인 결과](docs/public/기술검토.md)에 정리했습니다.
