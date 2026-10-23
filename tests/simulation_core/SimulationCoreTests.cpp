@@ -52,6 +52,24 @@ void Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks()
     }
     EXPECT_EQ(simulation.State().mode, FlightMode::Grounded);
     EXPECT_DOUBLE_EQ(simulation.State().positionMeters.z, 0.0);
+
+    constexpr double hillsideElevationMeters = 42.0;
+    SimulationCore hillside{SimulationDynamics::Kinematic};
+    const DroneId hillsideDrone = hillside.AddDrone(
+        {0.0, 0.0, hillsideElevationMeters}, 0.0, hillsideElevationMeters);
+    ASSERT_EQ(hillside.Apply(hillsideDrone, Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 120; ++tick)
+        hillside.AdvanceOneTick();
+    EXPECT_NEAR(hillside.State(hillsideDrone).positionMeters.z,
+        hillsideElevationMeters + DroneModel::takeoffHeightMeters, 1.0e-9);
+
+    ASSERT_EQ(hillside.Apply(hillsideDrone, Command(DroneCommand::Kind::Land)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 120; ++tick)
+        hillside.AdvanceOneTick();
+    EXPECT_NEAR(hillside.State(hillsideDrone).positionMeters.z,
+        hillsideElevationMeters, 1.0e-9);
 }
 
 void Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers()

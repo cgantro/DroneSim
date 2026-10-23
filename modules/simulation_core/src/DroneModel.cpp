@@ -151,6 +151,8 @@ CommandResult DroneModel::Apply(
 void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) noexcept
 {
     constexpr double step = fixedStepSeconds;
+    const double groundElevation = control.groundElevationMeters;
+    const double takeoffTarget = groundElevation + takeoffHeightMeters;
     state.yawRadians += control.commandedYawRateRadiansPerSecond * step;
     state.orientation = glm::angleAxis(state.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
     state.angularVelocityRadiansPerSecond = {
@@ -164,10 +166,10 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
         break;
 
     case FlightMode::TakingOff:
-        if (takeoffHeightMeters - state.positionMeters.z
+        if (takeoffTarget - state.positionMeters.z
             <= climbSpeedMetersPerSecond * step + altitudeToleranceMeters)
         {
-            state.positionMeters.z = takeoffHeightMeters;
+            state.positionMeters.z = takeoffTarget;
             state.velocityMetersPerSecond = glm::dvec3{0.0};
             state.mode = FlightMode::Hovering;
         }
@@ -200,9 +202,10 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
     }
 
     case FlightMode::Landing:
-        if (state.positionMeters.z <= climbSpeedMetersPerSecond * step + altitudeToleranceMeters)
+        if (state.positionMeters.z <= groundElevation
+            + climbSpeedMetersPerSecond * step + altitudeToleranceMeters)
         {
-            state.positionMeters.z = 0.0;
+            state.positionMeters.z = groundElevation;
             state.velocityMetersPerSecond = glm::dvec3{0.0};
             state.mode = FlightMode::Grounded;
         }
@@ -213,9 +216,9 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
         break;
     }
 
-    if (IsAirborne(state) && state.positionMeters.z <= 0.0)
+    if (IsAirborne(state) && state.positionMeters.z <= groundElevation)
     {
-        state.positionMeters.z = 0.0;
+        state.positionMeters.z = groundElevation;
         state.velocityMetersPerSecond = glm::dvec3{0.0};
         state.angularVelocityRadiansPerSecond = glm::dvec3{0.0};
         state.mode = FlightMode::Grounded;
