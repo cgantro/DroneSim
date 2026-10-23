@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <chrono>
 
 namespace aerosimlab::simulator
 {
@@ -90,8 +91,12 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     int cameraImageWidth, int cameraImageHeight,
     double missionDistanceMeters, bool missionComplete,
     const std::function<std::uint32_t(int, int)>& renderScene,
-    const std::function<std::uint32_t()>& renderCamera)
+    const std::function<std::uint32_t()>& renderCamera,
+    HudRenderTimings* timings)
 {
+    const auto interfaceBuildStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -223,7 +228,28 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     }
     ImGui::End();
 
+    if (timings != nullptr)
+    {
+        timings->interfaceBuildMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - interfaceBuildStart).count();
+    }
+    const auto frameFinalizeStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     ImGui::Render();
+    if (timings != nullptr)
+    {
+        timings->frameFinalizeMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - frameFinalizeStart).count();
+    }
+    const auto backendDrawStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    if (timings != nullptr)
+    {
+        timings->backendDrawMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - backendDrawStart).count();
+    }
 }
 }

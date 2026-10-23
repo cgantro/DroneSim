@@ -139,6 +139,9 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             {"eo_fence_wait_us", frame.eoFenceWaitMicroseconds},
             {"eo_buffer_map_us", frame.eoBufferMapMicroseconds},
             {"eo_pixel_copy_us", frame.eoPixelCopyMicroseconds},
+            {"hud_interface_build_us", frame.hudInterfaceBuildMicroseconds},
+            {"hud_frame_finalize_us", frame.hudFrameFinalizeMicroseconds},
+            {"hud_backend_draw_us", frame.hudBackendDrawMicroseconds},
             {"eo_readback_happened", frame.eoReadbackHappened}});
     }
 

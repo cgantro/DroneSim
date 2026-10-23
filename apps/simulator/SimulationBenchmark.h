@@ -43,6 +43,9 @@ struct ViewerBenchmarkMeasurements
         double eoFenceWaitMicroseconds = 0.0;
         double eoBufferMapMicroseconds = 0.0;
         double eoPixelCopyMicroseconds = 0.0;
+        double hudInterfaceBuildMicroseconds = 0.0;
+        double hudFrameFinalizeMicroseconds = 0.0;
+        double hudBackendDrawMicroseconds = 0.0;
         bool eoReadbackHappened = false;
     };
 

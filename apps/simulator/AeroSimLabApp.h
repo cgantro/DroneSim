@@ -186,6 +186,9 @@ private:
     double frameEoFenceWaitDurationMicroseconds_ = 0.0;
     double frameEoBufferMapDurationMicroseconds_ = 0.0;
     double frameEoPixelCopyDurationMicroseconds_ = 0.0;
+    double frameHudInterfaceBuildDurationMicroseconds_ = 0.0;
+    double frameHudFinalizeDurationMicroseconds_ = 0.0;
+    double frameHudBackendDrawDurationMicroseconds_ = 0.0;
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
 #ifndef __EMSCRIPTEN__
     double totalMeanBrightness_ = 0.0;

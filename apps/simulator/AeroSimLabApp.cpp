@@ -292,6 +292,9 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     frameEoFenceWaitDurationMicroseconds_ = 0.0;
     frameEoBufferMapDurationMicroseconds_ = 0.0;
     frameEoPixelCopyDurationMicroseconds_ = 0.0;
+    frameHudInterfaceBuildDurationMicroseconds_ = 0.0;
+    frameHudFinalizeDurationMicroseconds_ = 0.0;
+    frameHudBackendDrawDurationMicroseconds_ = 0.0;
     {
         aerosimlab::simulation::ScopedDuration measureRenderFrame(
             benchmarkMode_ ? &renderFrameDurationMicroseconds : nullptr);
@@ -339,6 +342,9 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
                 frameEoFenceWaitDurationMicroseconds_,
                 frameEoBufferMapDurationMicroseconds_,
                 frameEoPixelCopyDurationMicroseconds_,
+                frameHudInterfaceBuildDurationMicroseconds_,
+                frameHudFinalizeDurationMicroseconds_,
+                frameHudBackendDrawDurationMicroseconds_,
                 eoReadbackHappenedThisFrame_});
         }
     }
@@ -642,11 +648,16 @@ void AeroSimLabApp::RenderFrame()
         const bool missionComplete = simulation_.State().mode
                 == aerosimlab::simulation::FlightMode::Grounded
             && missionDistanceMeters <= 1.5;
+        HudRenderTimings hudTimings;
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
             camera.imageWidthPixels, camera.imageHeightPixels,
             missionDistanceMeters, missionComplete,
             [this](int width, int height) { return RenderScenePanel(width, height); },
-            [this] { return RenderCameraPanel(); });
+            [this] { return RenderCameraPanel(); },
+            benchmarkMode_ ? &hudTimings : nullptr);
+        frameHudInterfaceBuildDurationMicroseconds_ = hudTimings.interfaceBuildMicroseconds;
+        frameHudFinalizeDurationMicroseconds_ = hudTimings.frameFinalizeMicroseconds;
+        frameHudBackendDrawDurationMicroseconds_ = hudTimings.backendDrawMicroseconds;
     }
 #endif
 }
