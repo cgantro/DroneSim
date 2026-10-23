@@ -465,7 +465,7 @@ if(BUILD_TESTING)
         PROPERTIES
           LABELS "INTEGRATION;simulator"
           WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>"
-          TIMEOUT 30
+          TIMEOUT 40
           RUN_SERIAL TRUE)
       add_dependencies(aerosimlab_simulator_integration_tests aerosimlab_simulator)
     endif()

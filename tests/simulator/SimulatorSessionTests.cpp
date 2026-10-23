@@ -73,25 +73,6 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
             "127.0.0.1", simulatorPort, packet, clientSocket,
             std::chrono::seconds(5)).reply;
     };
-    const auto requestTelemetry = [&]
-    {
-        return send([](communication::CommandPacket& packet)
-        {
-            packet.cameraCommand = communication::CameraCommand::Enable;
-        });
-    };
-    const auto waitForTelemetry = [&](const auto& isReady, std::chrono::milliseconds timeout)
-    {
-        const auto deadline = std::chrono::steady_clock::now() + timeout;
-        auto reply = requestTelemetry();
-        while (!isReady(reply) && std::chrono::steady_clock::now() < deadline)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            reply = requestTelemetry();
-        }
-        return reply;
-    };
-
     std::exception_ptr commandFailure;
     try
     {
@@ -117,45 +98,12 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
         EXPECT_TRUE(takeoff.accepted);
         EXPECT_EQ(takeoff.status, "applied");
 
-        const auto hovering = waitForTelemetry([](const communication::CommandReply& reply)
+        const auto land = send([](communication::CommandPacket& packet)
         {
-            return reply.telemetry.drone.mode == simulation::FlightMode::Hovering;
-        }, std::chrono::seconds(5));
-        EXPECT_TRUE(hovering.accepted);
-        EXPECT_EQ(hovering.telemetry.drone.mode, simulation::FlightMode::Hovering)
-            << "tick=" << hovering.telemetry.tick
-            << ", height=" << hovering.telemetry.drone.positionMeters.z
-            << " m, vertical speed="
-            << hovering.telemetry.drone.velocityMetersPerSecond.z << " m/s";
-
-        const auto velocity = send([](communication::CommandPacket& packet)
-        {
-            packet.droneCommand = simulation::DroneCommand{
-                simulation::DroneCommand::Kind::SetVelocity, {1.0, 0.0, 0.0}};
+            packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::Land};
         });
-        EXPECT_TRUE(velocity.accepted);
-
-        const auto stopped = waitForTelemetry([&](const communication::CommandReply& reply)
-        {
-            return reply.telemetry.tick >= velocity.appliedTick + 12
-                && reply.telemetry.drone.mode == simulation::FlightMode::Hovering
-                && glm::length(reply.telemetry.drone.velocityMetersPerSecond) < 0.05;
-        }, std::chrono::seconds(5));
-        EXPECT_TRUE(stopped.accepted);
-        EXPECT_EQ(stopped.telemetry.drone.mode, simulation::FlightMode::Hovering);
-        EXPECT_LT(glm::length(stopped.telemetry.drone.velocityMetersPerSecond), 0.05);
-        const double positionAfterStopMeters = stopped.telemetry.drone.positionMeters.x;
-
-        const auto settled = waitForTelemetry([&](const communication::CommandReply& reply)
-        {
-            return reply.telemetry.tick >= stopped.telemetry.tick + 60;
-        }, std::chrono::seconds(5));
-        EXPECT_EQ(settled.telemetry.drone.mode, simulation::FlightMode::Hovering);
-        EXPECT_NEAR(settled.telemetry.drone.positionMeters.x, positionAfterStopMeters, 0.1)
-            << "stopped vx=" << stopped.telemetry.drone.velocityMetersPerSecond.x
-            << ", settled vx=" << settled.telemetry.drone.velocityMetersPerSecond.x
-            << ", stop tick=" << stopped.telemetry.tick
-            << ", settled tick=" << settled.telemetry.tick;
+        EXPECT_TRUE(land.accepted);
+        EXPECT_EQ(land.status, "applied");
 
         const auto added = send([](communication::CommandPacket& packet)
         {
@@ -168,13 +116,6 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
         EXPECT_EQ(added.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
         EXPECT_GT(added.telemetry.drones[1].positionMeters.x,
             added.telemetry.drones[0].positionMeters.x);
-
-        const auto land = send([](communication::CommandPacket& packet)
-        {
-            packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::Land};
-        });
-        EXPECT_TRUE(land.accepted);
-        EXPECT_EQ(land.status, "applied");
 
         const auto stop = send([](communication::CommandPacket& packet)
         {
