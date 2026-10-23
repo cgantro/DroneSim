@@ -849,11 +849,13 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
      "drones":[
        {"name":"scout","initial_position_meters":[10,0,0]},
        {"name":"reserve","initial_position_meters":[20,0,0]},
-       {"name":"worker","initial_position_meters":[30,0,0]}],
+       {"name":"worker","initial_position_meters":[30,0,0]},
+       {"name":"spare","initial_position_meters":[40,0,0]}],
      "commands":[
        {"tick":0,"drone":"scout","type":"takeoff"},
        {"tick":0,"drone":"reserve","type":"takeoff"},
-       {"tick":0,"drone":"worker","type":"takeoff"}],
+       {"tick":0,"drone":"worker","type":"takeoff"},
+       {"tick":0,"drone":"spare","type":"takeoff"}],
      "communication_outages":[
        {"drone":"scout","start_tick":95,"end_tick":250,
         "heartbeat_timeout_ticks":3,"on_timeout":"hold_position"}],
@@ -867,7 +869,8 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
      "expected":{"tolerance_meters":1000,"drones":[
        {"name":"scout","mode":"hovering","position_meters":[0,0,0]},
        {"name":"reserve","mode":"hovering","position_meters":[0,0,0]},
-       {"name":"worker","mode":"hovering","position_meters":[0,0,0]}]}}
+       {"name":"worker","mode":"hovering","position_meters":[0,0,0]},
+       {"name":"spare","mode":"hovering","position_meters":[0,0,0]}]}}
     )json";
     const ScenarioResult recoveredMissionResult = RunScenario(recoveredMissionScenario);
     ASSERT_TRUE(recoveredMissionResult.passed)
@@ -875,6 +878,7 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
             ? "" : recoveredMissionResult.issues.front());
     ASSERT_TRUE(recoveredMissionResult.mission.has_value());
     ASSERT_EQ(recoveredMissionResult.mission->tasks.size(), 2U);
+    EXPECT_EQ(recoveredMissionResult.mission->completedTaskCount, 2U);
     const auto& recoveredTask = recoveredMissionResult.mission->tasks.front();
     EXPECT_TRUE(recoveredTask.completed);
     EXPECT_EQ(recoveredTask.droneName, "reserve");
