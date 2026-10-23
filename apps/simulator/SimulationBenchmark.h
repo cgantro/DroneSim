@@ -46,6 +46,10 @@ struct ViewerBenchmarkMeasurements
         double hudInterfaceBuildMicroseconds = 0.0;
         double hudFrameFinalizeMicroseconds = 0.0;
         double hudBackendDrawMicroseconds = 0.0;
+        std::size_t hudDrawListCount = 0;
+        std::size_t hudDrawCommandCount = 0;
+        std::size_t hudVertexCount = 0;
+        std::size_t hudIndexCount = 0;
         bool eoReadbackHappened = false;
     };
 

@@ -3,6 +3,7 @@
 #include "communication/Protocol.h"
 #include "simulation_core/SimulationCore.h"
 
+#include <cstddef>
 #include <vector>
 #include <cstdint>
 #include <functional>
@@ -18,6 +19,10 @@ struct HudRenderTimings
     double interfaceBuildMicroseconds = 0.0;
     double frameFinalizeMicroseconds = 0.0;
     double backendDrawMicroseconds = 0.0;
+    std::size_t drawListCount = 0;
+    std::size_t drawCommandCount = 0;
+    std::size_t vertexCount = 0;
+    std::size_t indexCount = 0;
 };
 
 /** @brief 비행 상태와 편대 요약을 3D 화면 위에 표시한다. */

@@ -189,6 +189,10 @@ private:
     double frameHudInterfaceBuildDurationMicroseconds_ = 0.0;
     double frameHudFinalizeDurationMicroseconds_ = 0.0;
     double frameHudBackendDrawDurationMicroseconds_ = 0.0;
+    std::size_t frameHudDrawListCount_ = 0;
+    std::size_t frameHudDrawCommandCount_ = 0;
+    std::size_t frameHudVertexCount_ = 0;
+    std::size_t frameHudIndexCount_ = 0;
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
 #ifndef __EMSCRIPTEN__
     double totalMeanBrightness_ = 0.0;

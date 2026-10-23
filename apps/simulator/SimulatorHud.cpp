@@ -245,7 +245,16 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const auto backendDrawStart = timings != nullptr
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    ImDrawData* drawData = ImGui::GetDrawData();
+    if (timings != nullptr)
+    {
+        timings->drawListCount = static_cast<std::size_t>(drawData->CmdListsCount);
+        timings->vertexCount = static_cast<std::size_t>(drawData->TotalVtxCount);
+        timings->indexCount = static_cast<std::size_t>(drawData->TotalIdxCount);
+        for (const ImDrawList* list : drawData->CmdLists)
+            timings->drawCommandCount += static_cast<std::size_t>(list->CmdBuffer.Size);
+    }
+    ImGui_ImplOpenGL3_RenderDrawData(drawData);
     if (timings != nullptr)
     {
         timings->backendDrawMicroseconds = std::chrono::duration<double, std::micro>(

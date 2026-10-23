@@ -295,6 +295,10 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     frameHudInterfaceBuildDurationMicroseconds_ = 0.0;
     frameHudFinalizeDurationMicroseconds_ = 0.0;
     frameHudBackendDrawDurationMicroseconds_ = 0.0;
+    frameHudDrawListCount_ = 0;
+    frameHudDrawCommandCount_ = 0;
+    frameHudVertexCount_ = 0;
+    frameHudIndexCount_ = 0;
     {
         aerosimlab::simulation::ScopedDuration measureRenderFrame(
             benchmarkMode_ ? &renderFrameDurationMicroseconds : nullptr);
@@ -345,6 +349,10 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
                 frameHudInterfaceBuildDurationMicroseconds_,
                 frameHudFinalizeDurationMicroseconds_,
                 frameHudBackendDrawDurationMicroseconds_,
+                frameHudDrawListCount_,
+                frameHudDrawCommandCount_,
+                frameHudVertexCount_,
+                frameHudIndexCount_,
                 eoReadbackHappenedThisFrame_});
         }
     }
@@ -658,6 +666,10 @@ void AeroSimLabApp::RenderFrame()
         frameHudInterfaceBuildDurationMicroseconds_ = hudTimings.interfaceBuildMicroseconds;
         frameHudFinalizeDurationMicroseconds_ = hudTimings.frameFinalizeMicroseconds;
         frameHudBackendDrawDurationMicroseconds_ = hudTimings.backendDrawMicroseconds;
+        frameHudDrawListCount_ = hudTimings.drawListCount;
+        frameHudDrawCommandCount_ = hudTimings.drawCommandCount;
+        frameHudVertexCount_ = hudTimings.vertexCount;
+        frameHudIndexCount_ = hudTimings.indexCount;
     }
 #endif
 }
