@@ -124,6 +124,11 @@ private:
 #ifndef __EMSCRIPTEN__
     void ProcessGroundDatagram(const std::string& datagram,
         const aerosimlab::communication::UdpPeer& peer);
+    /** @brief 중복·역순·처리 중인 명령에 응답하고 새 명령 접수 여부를 돌려준다. */
+    [[nodiscard]] bool ReplyToUnqueueableGroundCommand(
+        const aerosimlab::communication::CommandPacket& packet,
+        const aerosimlab::communication::UdpPeer& peer,
+        aerosimlab::communication::SequenceGuard::Decision decision);
 #endif
     void PollGamepad();
     /** @brief 연결이 끊긴 뒤 남은 조종 입력을 지우고 필요한 정지 명령을 예약한다. */

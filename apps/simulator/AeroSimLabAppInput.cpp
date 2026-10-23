@@ -71,28 +71,8 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         reply.telemetry = CurrentTelemetry();
         return reply;
     };
-    const auto sendStatusReply = [this, &peer, &makeReply](const char* status)
-    {
-        auto reply = makeReply();
-        reply.status = status;
-        udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
-    };
-    if (decision == aerosimlab::communication::SequenceGuard::Decision::Duplicate)
-    {
-        if (lastReply_)
-            udpSocket_->Send(aerosimlab::communication::EncodeReply(*lastReply_), peer);
+    if (ReplyToUnqueueableGroundCommand(packet, peer, decision))
         return;
-    }
-    if (decision == aerosimlab::communication::SequenceGuard::Decision::OutOfOrder)
-    {
-        sendStatusReply("rejected_sequence");
-        return;
-    }
-    if (pendingCommand_)
-    {
-        sendStatusReply("busy");
-        return;
-    }
 
     sequenceGuard_.Commit(packet);
     if (packet.fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
@@ -118,6 +98,36 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     const auto receivedAtMs = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
     pendingCommand_ = PendingGroundCommand{packet, peer, receivedAtMs};
+}
+
+bool AeroSimLabApp::ReplyToUnqueueableGroundCommand(
+    const aerosimlab::communication::CommandPacket& packet,
+    const aerosimlab::communication::UdpPeer& peer,
+    aerosimlab::communication::SequenceGuard::Decision decision)
+{
+    using Decision = aerosimlab::communication::SequenceGuard::Decision;
+    if (decision == Decision::Duplicate)
+    {
+        if (lastReply_)
+            udpSocket_->Send(aerosimlab::communication::EncodeReply(*lastReply_), peer);
+        return true;
+    }
+
+    const char* status = nullptr;
+    if (decision == Decision::OutOfOrder)
+        status = "rejected_sequence";
+    else if (pendingCommand_)
+        status = "busy";
+    else
+        return false;
+
+    aerosimlab::communication::CommandReply reply;
+    reply.commandId = packet.commandId;
+    reply.sequence = packet.sequence;
+    reply.status = status;
+    reply.telemetry = CurrentTelemetry();
+    udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+    return true;
 }
 #endif
 
