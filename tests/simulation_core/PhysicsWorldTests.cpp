@@ -70,6 +70,62 @@ void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
     EXPECT_LT(laterSpeed, motorTargets[0]);
 }
 
+void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
+{
+    constexpr double stepSeconds = 1.0 / 60.0;
+    constexpr int simulationTicks = 600;
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+
+    PhysicsWorld world;
+    RigidBodyDefinition definition;
+    definition.positionMeters.z = 10.0;
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    DroneControlState control;
+    control.waypointMeters = definition.positionMeters;
+
+    for (int tick = 0; tick < simulationTicks; ++tick)
+    {
+        const RigidBodyState physicsState = world.State(drone);
+        DroneState controllerState;
+        controllerState.positionMeters = physicsState.positionMeters;
+        controllerState.velocityMetersPerSecond = physicsState.linearVelocityMetersPerSecond;
+        controllerState.orientation = physicsState.orientation;
+        controllerState.angularVelocityRadiansPerSecond =
+            physicsState.angularVelocityRadiansPerSecond;
+        controllerState.mode = FlightMode::FollowingWaypoint;
+        world.SetMotorTargets(drone, QuadrotorFlightController::MotorTargets(
+            controllerState, control, parameters));
+        world.Step(stepSeconds);
+    }
+
+    const RigidBodyState state = world.State(drone);
+    EXPECT_NEAR(state.positionMeters.z, control.waypointMeters.z, 0.1);
+    EXPECT_NEAR(state.linearVelocityMetersPerSecond.z, 0.0, 0.05);
+}
+
+void Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude()
+{
+    PhysicsWorld world;
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    RigidBodyDefinition definition;
+    definition.positionMeters.z = 10.0;
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(760.0);
+    // 두 로터의 목표 속도를 높여 한쪽으로 기울이는 토크를 만든다.
+    motorTargets[0] = 900.0;
+    motorTargets[2] = 900.0;
+    world.SetMotorTargets(drone, motorTargets);
+
+    for (int tick = 0; tick < 60; ++tick)
+        world.Step(1.0 / 60.0);
+
+    const RigidBodyState state = world.State(drone);
+    EXPECT_GT(std::abs(state.angularVelocityRadiansPerSecond.y), 0.1);
+    EXPECT_GT(std::abs(state.orientation.y), 0.01);
+}
+
 void Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes()
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
@@ -394,6 +450,8 @@ void Verify_AirSimBoundary_RejectsValuesItCannotRepresent()
 TEST(PhysicsWorldTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_HoldsAStationaryWaypoint());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
