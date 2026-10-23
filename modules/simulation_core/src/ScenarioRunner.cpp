@@ -340,6 +340,20 @@ void PopulateFinalSnapshot(
     result.finalCamera = simulation.Camera();
 }
 
+/** @brief 단일 드론 형식과 이름별 형식에 맞는 비행 상태 오류 문구를 만든다. */
+std::string FlightModeMismatchMessage(
+    const ExpectedDrone& expectedDrone,
+    const ScenarioResult::Drone& actualDrone,
+    bool hasNamedDroneExpectations)
+{
+    if (hasNamedDroneExpectations)
+        return expectedDrone.name + " 드론의 최종 비행 상태가 예상과 다릅니다.";
+
+    return "예상 비행 상태는 " + std::string(ToString(expectedDrone.mode))
+        + "이지만 실제 상태는 "
+        + std::string(ToString(actualDrone.finalState.mode)) + "입니다.";
+}
+
 void CheckExpectedDroneResults(
     const ScenarioDefinition& definition,
     ScenarioResult& result)
@@ -367,15 +381,8 @@ void CheckExpectedDroneResults(
             ? expectedDrone.name + " 드론의 "
             : "";
         if (drone.finalState.mode != expectedDrone.mode)
-        {
-            if (definition.hasExpectedDrones)
-                result.issues.push_back(dronePrefix + "최종 비행 상태가 예상과 다릅니다.");
-            else
-                result.issues.push_back(
-                    "예상 비행 상태는 " + std::string(ToString(expectedDrone.mode))
-                    + "이지만 실제 상태는 "
-                    + std::string(ToString(drone.finalState.mode)) + "입니다.");
-        }
+            result.issues.push_back(FlightModeMismatchMessage(
+                expectedDrone, drone, definition.hasExpectedDrones));
         if (glm::length(drone.finalState.positionMeters - expectedDrone.positionMeters)
             > definition.toleranceMeters)
         {
