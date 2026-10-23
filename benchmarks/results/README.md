@@ -8,7 +8,8 @@
 | --- | --- |
 | 최신 전체 Release 측정과 화면 없는 확장 시험 | [변경 후 전체 측정 결과](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json) |
 | 이전 전체 Release 기준선 | [이전 측정 결과](aerosimlab-full-benchmark-release-2026-10-23-4cb66d99.json) |
-| 보이는 창 프레임 시간 3회 측정 | [화면 반복 측정](aerosimlab-visible-warmup-repeats-release-2026-10-23-aac03875.json) |
+| 최신 코드의 보이는 창 프레임 시간 3회 측정 | [1회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-1.json), [2회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-2.json), [3회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-3.json) |
+| 이전 보이는 창 반복 측정 | [이전 결과](aerosimlab-visible-warmup-repeats-release-2026-10-23-aac03875.json) |
 | 시나리오 예상 결과의 이름 조회 변경 전후 | [협동 임무 비교](aerosimlab-scenario-result-index-2026-10-23.json) |
 | 여러 드론이 가까이 있을 때의 충돌 후보 검사 | [충돌 쌍 측정](aerosimlab-drone-collision-pair-sweep-release-2026-10-23-8623be5c.json) |
 | EO 영상 픽셀을 GPU에서 읽어 오는 방식의 변경 | [비동기 픽셀 읽기 측정](aerosimlab-visible-pbo-persistent-map-2026-10-23.json) |
