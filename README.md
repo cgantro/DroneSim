@@ -51,10 +51,10 @@ Windows Release 빌드에서 자동 시험 20개가 통과했습니다. 2026년 
 | EO 픽셀 읽기 추적 | 이전 숨김 창 측정에서 상태 조회 제거 전 요청 p50 2.283ms, 제거 후 두 실행은 0.064ms와 2.282ms. 앱 프레임 최댓값은 세 실행 모두 90ms 이상 | 결과 확인과 요청 제출 중 긴 시간이 기록된 위치가 실행마다 달라졌고, 전체 프레임 멈춤은 남음. 해당 측정만으로 GPU 원인이나 실제 표시 지연은 확정하지 못함 |
 | 운동학 확장 | 화면 없는 분리 배치 1,024대, Tick p95 중앙값 7.1µs, 30,000 Tick씩 3회 완료 | 처리량 시험 결과이며 GUI 실시간 조종 성능이나 물리 정확도를 뜻하지 않음 |
 | AirSim 강체 확장 | 분리 배치 512대에서 Tick p95 중앙값 622.2µs, 30,000 Tick씩 3회 완료 | 같은 PC의 화면 없는 시험. 1,024대 강체는 1회 실행 중 30초 제한에 걸려 완료 결과가 아님 |
-| 메모리 표본 | 프로세스 Private Bytes를 5,000 Tick마다 기록. 1,024대 운동학은 반복 평균 중앙값 401.5MiB·표본 최댓값 407.5MiB, 512대 AirSim은 405.7MiB·405.9MiB | 앱 전체의 메모리이며 드론 한 대의 추가 메모리로 환산할 수 없음 |
+| 메모리 표본 | 기존 반복 시험과 별도로 드론을 1대에서 1,024대까지 한 모의에 차례로 추가. Private Bytes 증가량을 추가 드론 수로 나눈 값은 운동학 약 384B, AirSim 강체 약 8.16KiB | 종류별 한 번의 실행에서 얻은 프로세스 전체 메모리의 단순 평균. 실제 드론 메모리 비용으로 단정할 수 없음 |
 | 밀집 충돌 처리 | 0.55m 간격 256대에서 접촉 생성 p95 중앙값 607.6µs → 496.3µs, 전체 Tick p95 801.6µs → 648.2µs. 변경 전후 각각 30,000 Tick씩 3회 완료 | 같은 PC와 입력 조건에서 측정했지만 코드 리비전은 다름. 이 장면의 결과이며 다른 배치의 성능을 보장하지 않음 |
 | 협동 임무 | 운동학 1,024대와 AirSim 강체 128대까지 모든 기록된 반복에서 목표 완료 | 로컬 시나리오 결과이며 실제 통신 장애·충돌 회피·실비행 정확도 검증은 아님 |
 
-상세 조건과 실행 환경은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. [확장 시험과 메모리 표본 원본](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-cd8344bc.json), 보이는 창의 [화면 측정 원본](benchmarks/results/aerosimlab-visible-gui-release-2026-10-23.json), [PBO 매핑 변경 전후 기록](benchmarks/results/aerosimlab-visible-pbo-persistent-map-2026-10-23.json), [ImGui CPU·GPU 시간 기록](benchmarks/results/aerosimlab-visible-imgui-gpu-timing-2026-10-23.json)을 보관합니다. 화면 지연 분석은 [EO 픽셀 읽기 기록](docs/public/문제해결/화면-프레임-지연.md), 주요 문제의 목록은 [문제 해결 기록](docs/public/문제해결.md)에서 확인할 수 있습니다.
+상세 조건과 실행 환경은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. [확장 시험과 메모리 표본 원본](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-e2510815.json), [이전 반복 시험 원본](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-cd8344bc.json), 보이는 창의 [화면 측정 원본](benchmarks/results/aerosimlab-visible-gui-release-2026-10-23.json), [PBO 매핑 변경 전후 기록](benchmarks/results/aerosimlab-visible-pbo-persistent-map-2026-10-23.json), [ImGui CPU·GPU 시간 기록](benchmarks/results/aerosimlab-visible-imgui-gpu-timing-2026-10-23.json)을 보관합니다. 화면 지연 분석은 [EO 픽셀 읽기 기록](docs/public/문제해결/화면-프레임-지연.md), 주요 문제의 목록은 [문제 해결 기록](docs/public/문제해결.md)에서 확인할 수 있습니다.
 
 다중 드론과 공동 임무의 실행 범위, 실패한 규모 시험은 [개발 원리와 확인 결과](docs/public/기술검토.md)에 정리했습니다.
