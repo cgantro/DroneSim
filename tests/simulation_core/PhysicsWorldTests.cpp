@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -195,6 +196,66 @@ void Verify_AirSimCollision_SeparatesOverlappingDrones()
     EXPECT_GT(world.State(right).positionMeters.x, rightDefinition.positionMeters.x);
 }
 
+void Verify_AirSimBoundary_RejectsValuesItCannotRepresent()
+{
+    PhysicsWorld world;
+    const RigidBodyHandle drone = MakeX500(world, 10.0);
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(800.0);
+    world.SetMotorTargets(drone, motorTargets);
+    world.Step(1.0 / 60.0);
+    const RigidBodyState stateBeforeRejectedUpdate = world.State(drone);
+    const auto motorSpeedsBeforeRejectedUpdate = world.MotorSpeedsRadiansPerSecond(drone);
+    const double tooLargeForFloat =
+        static_cast<double>(std::numeric_limits<float>::max()) * 2.0;
+
+    EXPECT_THROW(world.SetWindVelocityMetersPerSecond({tooLargeForFloat, 0.0, 0.0}),
+        std::invalid_argument);
+
+    RigidBodyState unrepresentableState = stateBeforeRejectedUpdate;
+    unrepresentableState.positionMeters.x = tooLargeForFloat;
+    EXPECT_THROW(world.SetState(drone, unrepresentableState), std::invalid_argument);
+
+    const RigidBodyState stateAfterRejectedUpdate = world.State(drone);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.positionMeters.x,
+        stateBeforeRejectedUpdate.positionMeters.x);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.positionMeters.y,
+        stateBeforeRejectedUpdate.positionMeters.y);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.positionMeters.z,
+        stateBeforeRejectedUpdate.positionMeters.z);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.linearVelocityMetersPerSecond.x,
+        stateBeforeRejectedUpdate.linearVelocityMetersPerSecond.x);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.linearVelocityMetersPerSecond.y,
+        stateBeforeRejectedUpdate.linearVelocityMetersPerSecond.y);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.linearVelocityMetersPerSecond.z,
+        stateBeforeRejectedUpdate.linearVelocityMetersPerSecond.z);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.orientation.w,
+        stateBeforeRejectedUpdate.orientation.w);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.orientation.x,
+        stateBeforeRejectedUpdate.orientation.x);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.orientation.y,
+        stateBeforeRejectedUpdate.orientation.y);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.orientation.z,
+        stateBeforeRejectedUpdate.orientation.z);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.angularVelocityRadiansPerSecond.x,
+        stateBeforeRejectedUpdate.angularVelocityRadiansPerSecond.x);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.angularVelocityRadiansPerSecond.y,
+        stateBeforeRejectedUpdate.angularVelocityRadiansPerSecond.y);
+    EXPECT_DOUBLE_EQ(stateAfterRejectedUpdate.angularVelocityRadiansPerSecond.z,
+        stateBeforeRejectedUpdate.angularVelocityRadiansPerSecond.z);
+    EXPECT_EQ(world.MotorSpeedsRadiansPerSecond(drone), motorSpeedsBeforeRejectedUpdate);
+
+    QuadrotorParameters unrepresentableMass = QuadrotorParameters::X500Gazebo();
+    unrepresentableMass.massKilograms = tooLargeForFloat;
+    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor({}, unrepresentableMass)),
+        std::invalid_argument);
+
+    QuadrotorParameters massThatRoundsToZero = QuadrotorParameters::X500Gazebo();
+    massThatRoundsToZero.massKilograms = std::numeric_limits<double>::denorm_min();
+    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor({}, massThatRoundsToZero)),
+        std::invalid_argument);
+}
+
 TEST(PhysicsWorldTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
@@ -204,6 +265,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_SeparatesOverlappingDrones());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimBoundary_RejectsValuesItCannotRepresent());
 }
 
 }

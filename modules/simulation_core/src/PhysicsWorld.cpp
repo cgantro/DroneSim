@@ -56,6 +56,25 @@ bool IsPositiveFinite(double value)
     return std::isfinite(value) && value > 0.0;
 }
 
+/** @brief AirSim의 float이 표현할 수 있는 값만 double에서 변환한다. */
+float ToAirSimFloat(double value)
+{
+    constexpr double maximumFloat = std::numeric_limits<float>::max();
+    if (!std::isfinite(value) || value < -maximumFloat || value > maximumFloat)
+        throw std::invalid_argument("물리값이 AirSim에서 표현할 수 있는 범위를 벗어났습니다.");
+
+    return static_cast<float>(value);
+}
+
+float ToAirSimPositiveFloat(double value)
+{
+    const float converted = ToAirSimFloat(value);
+    if (!(converted > 0.0F))
+        throw std::invalid_argument("양수 물리값이 AirSim 변환 뒤 0이 됩니다.");
+
+    return converted;
+}
+
 bool IsValidOrientation(const glm::dquat& value)
 {
     const double lengthSquared = glm::dot(value, value);
@@ -98,15 +117,15 @@ bool HasValidCollisionBox(const RigidBodyBox& box)
 AirSimVector ToAirSimWorldVector(const glm::dvec3& value)
 {
     const glm::dvec3 converted = projectToAirSimWorld * value;
-    return {static_cast<float>(converted.x), static_cast<float>(converted.y),
-        static_cast<float>(converted.z)};
+    return {ToAirSimFloat(converted.x), ToAirSimFloat(converted.y),
+        ToAirSimFloat(converted.z)};
 }
 
 AirSimVector ToAirSimBodyVector(const glm::dvec3& value)
 {
     const glm::dvec3 converted = projectToAirSimBody * value;
-    return {static_cast<float>(converted.x), static_cast<float>(converted.y),
-        static_cast<float>(converted.z)};
+    return {ToAirSimFloat(converted.x), ToAirSimFloat(converted.y),
+        ToAirSimFloat(converted.z)};
 }
 
 glm::dvec3 ToProjectWorldVector(const AirSimVector& value)
@@ -124,8 +143,8 @@ msr::airlib::Quaternionr ToAirSimOrientation(const glm::dquat& value)
     const glm::dmat3 rotation = glm::mat3_cast(glm::normalize(value));
     const glm::dquat converted = glm::quat_cast(
         projectToAirSimWorld * rotation * projectToAirSimBody);
-    return {static_cast<float>(converted.w), static_cast<float>(converted.x),
-        static_cast<float>(converted.y), static_cast<float>(converted.z)};
+    return {ToAirSimFloat(converted.w), ToAirSimFloat(converted.x),
+        ToAirSimFloat(converted.y), ToAirSimFloat(converted.z)};
 }
 
 glm::dquat ToProjectOrientation(const msr::airlib::Quaternionr& value)
@@ -219,28 +238,28 @@ protected:
     {
         Params& target = getParams();
         target.rotor_count = static_cast<msr::airlib::uint>(source_.rotors.size());
-        target.mass = static_cast<float>(source_.massKilograms);
+        target.mass = ToAirSimPositiveFloat(source_.massKilograms);
         target.inertia = msr::airlib::Matrix3x3r::Zero();
         target.inertia.diagonal() <<
-            static_cast<float>(source_.principalInertiaKilogramMetersSquared.x),
-            static_cast<float>(source_.principalInertiaKilogramMetersSquared.y),
-            static_cast<float>(source_.principalInertiaKilogramMetersSquared.z);
-        target.body_box = AirSimVector{static_cast<float>(source_.bodySizeMeters.x),
-            static_cast<float>(source_.bodySizeMeters.y),
-            static_cast<float>(source_.bodySizeMeters.z)};
-        target.rotor_params.max_rpm = static_cast<float>(
+            ToAirSimPositiveFloat(source_.principalInertiaKilogramMetersSquared.x),
+            ToAirSimPositiveFloat(source_.principalInertiaKilogramMetersSquared.y),
+            ToAirSimPositiveFloat(source_.principalInertiaKilogramMetersSquared.z);
+        target.body_box = AirSimVector{ToAirSimPositiveFloat(source_.bodySizeMeters.x),
+            ToAirSimPositiveFloat(source_.bodySizeMeters.y),
+            ToAirSimPositiveFloat(source_.bodySizeMeters.z)};
+        target.rotor_params.max_rpm = ToAirSimPositiveFloat(
             source_.maximumMotorSpeedRadiansPerSecond * 60.0 / (2.0 * M_PI));
         target.rotor_params.calculateMaxThrust();
-        target.rotor_params.max_speed_square = static_cast<float>(
+        target.rotor_params.max_speed_square = ToAirSimPositiveFloat(
             source_.maximumMotorSpeedRadiansPerSecond
                 * source_.maximumMotorSpeedRadiansPerSecond);
-        target.rotor_params.max_thrust = static_cast<float>(
+        target.rotor_params.max_thrust = ToAirSimPositiveFloat(
             source_.thrustCoefficientNewtonsPerSpeedSquared
                 * target.rotor_params.max_speed_square);
-        target.rotor_params.max_torque = static_cast<float>(
+        target.rotor_params.max_torque = ToAirSimPositiveFloat(
             source_.momentToThrustRatio * target.rotor_params.max_thrust);
-        target.rotor_params.control_signal_filter_tc = static_cast<float>(
-            source_.motorTimeConstantUpSeconds);
+        target.rotor_params.control_signal_filter_tc =
+            ToAirSimPositiveFloat(source_.motorTimeConstantUpSeconds);
         for (const RotorDefinition& rotor : source_.rotors)
         {
             const auto direction = rotor.rotation == RotorRotation::CounterClockwise
@@ -684,7 +703,7 @@ struct PhysicsWorld::Impl
                     ToAirSimWorldVector(GroundNormal({corner.x, corner.y})),
                     ToAirSimWorldVector({corner.x, corner.y, ground}),
                     ToAirSimWorldVector(state.positionMeters),
-                    static_cast<float>(penetration),
+                    ToAirSimFloat(penetration),
                     timestamp,
                     "ground",
                     0};
@@ -758,7 +777,7 @@ struct PhysicsWorld::Impl
             ToAirSimWorldVector(contact.normal),
             ToAirSimWorldVector(contact.impactPointMeters),
             ToAirSimWorldVector(body.collisionState.positionMeters),
-            static_cast<float>(contact.penetrationMeters),
+            ToAirSimFloat(contact.penetrationMeters),
             timestamp,
             deepestContact->objectName,
             deepestContact->objectId};
@@ -869,6 +888,7 @@ void PhysicsWorld::SetState(RigidBodyHandle handle, const RigidBodyState& state)
         throw std::invalid_argument("강체의 초기 상태를 확인해 주세요.");
     }
     Impl::Body& body = impl_->GetBody(handle);
+    const msr::airlib::Kinematics::State airSimState = ToAirSimState(state);
     static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
     if (body.updatedSinceReset)
     {
@@ -876,7 +896,6 @@ void PhysicsWorld::SetState(RigidBodyHandle handle, const RigidBodyState& state)
         body.model->reset();
         body.updatedSinceReset = false;
     }
-    const msr::airlib::Kinematics::State airSimState = ToAirSimState(state);
     body.kinematics.setState(airSimState);
     body.model->setPose(airSimState.pose);
     body.model->setTwist(airSimState.twist);
