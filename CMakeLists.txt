@@ -125,7 +125,10 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/QuadrotorFlightController.cpp
 )
 if(NOT EMSCRIPTEN)
-  target_sources(aerosimlab_simulation_core PRIVATE modules/simulation_core/src/PhysicsWorld.cpp)
+  target_sources(aerosimlab_simulation_core PRIVATE
+    modules/simulation_core/src/CollisionGeometry.cpp
+    modules/simulation_core/src/PhysicsWorld.cpp
+  )
 endif()
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core

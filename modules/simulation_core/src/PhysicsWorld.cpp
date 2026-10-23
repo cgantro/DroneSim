@@ -3,6 +3,7 @@
 #include "simulation_core/DroneModel.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/ScopedDuration.h"
+#include "CollisionGeometry.h"
 
 #include <mutex>
 #include <common/ClockFactory.hpp>
@@ -25,7 +26,6 @@
 #include <cmath>
 #include <limits>
 #include <optional>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -38,6 +38,12 @@ namespace
 {
 using AirSimBody = msr::airlib::MultiRotorPhysicsBody;
 using AirSimVector = msr::airlib::Vector3r;
+using detail::BoxContact;
+using detail::CollisionRadius;
+using detail::FindBoxContact;
+using detail::OrientedBox;
+using detail::SupportPoint;
+using detail::ToWorldBox;
 
 // 장면 좌표는 동·북·위(ENU), AirSim 월드는 북·동·아래(NED)다.
 const glm::dmat3 projectToAirSimWorld{
@@ -288,69 +294,12 @@ struct Obstacle
     glm::dvec3 halfExtentsMeters;
 };
 
-struct OrientedBox
-{
-    glm::dvec3 centerMeters;
-    glm::dvec3 halfExtentsMeters;
-    std::array<glm::dvec3, 3> axes;
-    glm::dvec3 axisAlignedHalfExtentsMeters;
-    double boundingRadiusMeters = 0.0;
-};
-
-struct BoxContact
-{
-    glm::dvec3 normal;
-    glm::dvec3 impactPointMeters;
-    double penetrationMeters = 0.0;
-};
-
 struct ContactCandidate
 {
     BoxContact contact;
     const char* objectName;
     int objectId;
 };
-
-double CollisionRadius(std::span<const RigidBodyBox> boxes)
-{
-    double radius = 0.0;
-    for (const RigidBodyBox& box : boxes)
-    {
-        radius = std::max(radius, glm::length(box.positionMeters)
-            + glm::length(glm::dvec3{box.halfExtentsMeters}));
-    }
-    return radius;
-}
-
-glm::dvec3 SupportPoint(const OrientedBox& box, const glm::dvec3& direction)
-{
-    glm::dvec3 point = box.centerMeters;
-    for (glm::length_t axis = 0; axis < 3; ++axis)
-    {
-        const double side = glm::dot(direction, box.axes[axis]) >= 0.0 ? 1.0 : -1.0;
-        point += box.axes[axis] * (side * box.halfExtentsMeters[axis]);
-    }
-    return point;
-}
-
-/**
- * @brief 회전 상자를 둘러싸는 월드 축 정렬 상자의 반크기를 구한다.
- * @details 한 Tick에서 상자 자세가 정해지면 여러 드론 쌍이 같은 값을 쓰므로, 쌍마다 반복하지 않도록 저장한다.
- */
-glm::dvec3 AxisAlignedHalfExtents(
-    const std::array<glm::dvec3, 3>& axes, const glm::dvec3& halfExtents)
-{
-    return {
-        std::abs(axes[0].x) * halfExtents.x
-            + std::abs(axes[1].x) * halfExtents.y
-            + std::abs(axes[2].x) * halfExtents.z,
-        std::abs(axes[0].y) * halfExtents.x
-            + std::abs(axes[1].y) * halfExtents.y
-            + std::abs(axes[2].y) * halfExtents.z,
-        std::abs(axes[0].z) * halfExtents.x
-            + std::abs(axes[1].z) * halfExtents.y
-            + std::abs(axes[2].z) * halfExtents.z};
-}
 
 void KeepDeeperContact(
     std::optional<ContactCandidate>& current,
@@ -362,100 +311,6 @@ void KeepDeeperContact(
         return;
 
     current = ContactCandidate{contact, objectName, objectId};
-}
-
-OrientedBox ToWorldBox(
-    const glm::dvec3& bodyPosition,
-    const glm::dquat& bodyOrientation,
-    const RigidBodyBox& box)
-{
-    const glm::dquat orientation = glm::normalize(bodyOrientation * box.orientation);
-    const glm::dvec3 halfExtents{box.halfExtentsMeters};
-    const std::array<glm::dvec3, 3> axes{
-        orientation * glm::dvec3{1.0, 0.0, 0.0},
-        orientation * glm::dvec3{0.0, 1.0, 0.0},
-        orientation * glm::dvec3{0.0, 0.0, 1.0}};
-    return {
-        bodyPosition + bodyOrientation * box.positionMeters,
-        halfExtents,
-        axes,
-        AxisAlignedHalfExtents(axes, halfExtents),
-        glm::length(halfExtents)};
-}
-
-/**
- * @brief 두 회전 상자의 겹침, 바깥쪽 방향, 기체 쪽 접촉점을 찾는다.
- * @details 분리축 정리는 상자 면 방향과 두 상자의 모서리 방향을 확인한다. 첫 번째 상자는 움직이는 기체여서 법선은 두 번째 상자에서 기체 바깥을 향한다.
- */
-std::optional<BoxContact> FindBoxContact(
-    const OrientedBox& droneBox,
-    const OrientedBox& otherBox)
-{
-    const glm::dvec3 centerOffset = otherBox.centerMeters - droneBox.centerMeters;
-    // 회전 상자마다 외접구로 먼저 거르면 서로 떨어진 상자의 세부 검사를 줄일 수 있다.
-    const double combinedBoundingRadius =
-        droneBox.boundingRadiusMeters + otherBox.boundingRadiusMeters;
-    if (glm::dot(centerOffset, centerOffset)
-        > combinedBoundingRadius * combinedBoundingRadius)
-    {
-        return std::nullopt;
-    }
-
-    // 먼저 회전 상자의 바깥 AABB를 검사해, 겹칠 수 없는 쌍은 15축 검사에서 제외한다.
-    for (glm::length_t axis = 0; axis < 3; ++axis)
-    {
-        if (std::abs(centerOffset[axis])
-            > droneBox.axisAlignedHalfExtentsMeters[axis]
-                + otherBox.axisAlignedHalfExtentsMeters[axis])
-            return std::nullopt;
-    }
-
-    std::array<glm::dvec3, 15> candidateAxes{};
-    std::size_t axisCount = 0;
-    for (const glm::dvec3& axis : droneBox.axes)
-        candidateAxes[axisCount++] = axis;
-    for (const glm::dvec3& axis : otherBox.axes)
-        candidateAxes[axisCount++] = axis;
-    for (const glm::dvec3& droneAxis : droneBox.axes)
-    {
-        for (const glm::dvec3& otherAxis : otherBox.axes)
-            candidateAxes[axisCount++] = glm::cross(droneAxis, otherAxis);
-    }
-
-    double smallestPenetration = std::numeric_limits<double>::infinity();
-    glm::dvec3 collisionNormal{0.0};
-    for (std::size_t axisIndex = 0; axisIndex < axisCount; ++axisIndex)
-    {
-        const glm::dvec3& candidate = candidateAxes[axisIndex];
-        const double axisLengthSquared = glm::dot(candidate, candidate);
-        if (axisLengthSquared < 1.0e-12)
-            continue;
-
-        const glm::dvec3 axis = candidate / std::sqrt(axisLengthSquared);
-        const auto projectedRadius = [&axis](const OrientedBox& box)
-        {
-            return std::abs(glm::dot(axis, box.axes[0])) * box.halfExtentsMeters.x
-                + std::abs(glm::dot(axis, box.axes[1])) * box.halfExtentsMeters.y
-                + std::abs(glm::dot(axis, box.axes[2])) * box.halfExtentsMeters.z;
-        };
-        const double centerDistance = glm::dot(centerOffset, axis);
-        const double penetration = projectedRadius(droneBox)
-            + projectedRadius(otherBox) - std::abs(centerDistance);
-        if (penetration < 0.0)
-            return std::nullopt;
-
-        if (penetration < smallestPenetration)
-        {
-            smallestPenetration = penetration;
-            collisionNormal = axis * (centerDistance >= 0.0 ? -1.0 : 1.0);
-        }
-    }
-
-    if (!std::isfinite(smallestPenetration))
-        return std::nullopt;
-
-    const glm::dvec3 impactPoint = SupportPoint(droneBox, -collisionNormal);
-    return BoxContact{collisionNormal, impactPoint, smallestPenetration};
 }
 
 }
