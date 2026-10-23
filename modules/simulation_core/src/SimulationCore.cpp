@@ -51,6 +51,10 @@ struct SimulationCore::EcsStorage
 #endif
 
     SimulationDynamics dynamics;
+#if !defined(__EMSCRIPTEN__)
+    /** @brief Flecs 콜백이 참조하므로 Flecs 월드보다 나중에 정리한다. */
+    std::unique_ptr<PhysicsWorld> physics;
+#endif
     flecs::world world;
     std::unordered_map<DroneId, flecs::entity> drones;
     DroneId primaryDroneId = 0;
@@ -62,9 +66,6 @@ struct SimulationCore::EcsStorage
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
     double lastContactGenerationDurationMicroseconds = 0.0;
-#if !defined(__EMSCRIPTEN__)
-    std::unique_ptr<PhysicsWorld> physics;
-#endif
     std::uint64_t tickCount = 0;
 
     static void ApplyInitialPose(
