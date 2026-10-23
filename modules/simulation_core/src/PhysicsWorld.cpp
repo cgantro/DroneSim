@@ -447,8 +447,14 @@ struct PhysicsWorld::Impl
      */
     double PrepareCollisionData()
     {
-        bodyPositionsByX.clear();
-        bodyPositionsByX.reserve(bodies.size());
+        if (bodyPositionsByX.size() != bodies.size())
+        {
+            bodyPositionsByX.clear();
+            bodyPositionsByX.reserve(bodies.size());
+            for (std::size_t index = 0; index < bodies.size(); ++index)
+                bodyPositionsByX.emplace_back(0.0, index);
+        }
+
         double largestCollisionRadius = 0.0;
         for (std::size_t index = 0; index < bodies.size(); ++index)
         {
@@ -462,12 +468,16 @@ struct PhysicsWorld::Impl
                     body.collisionState.orientation,
                     body.collisionBoxes[boxIndex]);
             }
-            bodyPositionsByX.emplace_back(
-                body.collisionState.positionMeters.x, index);
             largestCollisionRadius = std::max(
                 largestCollisionRadius, body.collisionRadiusMeters);
         }
-        std::sort(bodyPositionsByX.begin(), bodyPositionsByX.end());
+
+        // 드론의 X 좌표만 갱신하고, 순서가 바뀐 경우에만 다시 정렬한다.
+        // 호버링처럼 서로 앞지르지 않는 동안 매 Tick 반복하던 정렬을 건너뛴다.
+        for (auto& [positionX, bodyIndex] : bodyPositionsByX)
+            positionX = bodies[bodyIndex]->collisionState.positionMeters.x;
+        if (!std::is_sorted(bodyPositionsByX.begin(), bodyPositionsByX.end()))
+            std::sort(bodyPositionsByX.begin(), bodyPositionsByX.end());
         return largestCollisionRadius;
     }
 
