@@ -88,45 +88,52 @@ void Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp()
 {
     constexpr double stepSeconds = 1.0 / 60.0;
     constexpr int simulationTicks = 120;
-    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    const std::array<QuadrotorParameters, 2> models{
+        QuadrotorParameters::X500Gazebo(),
+        QuadrotorParameters::X500MotorTableEstimate()};
 
-    PhysicsWorld world;
-    RigidBodyDefinition definition;
-    definition.positionMeters.z = 10.0;
-    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
-    const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
-        / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
-    const double expectedRotorThrust = parameters.thrustCoefficientNewtonsPerSpeedSquared
-        * hoverSpeed * hoverSpeed;
-    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
-    motorTargets.fill(hoverSpeed);
-    world.SetMotorTargets(drone, motorTargets);
+    for (std::size_t modelIndex = 0; modelIndex < models.size(); ++modelIndex)
+    {
+        SCOPED_TRACE(modelIndex == 0 ? "PX4 Gazebo model" : "motor table estimate");
+        const QuadrotorParameters& parameters = models[modelIndex];
+        PhysicsWorld world;
+        RigidBodyDefinition definition;
+        definition.positionMeters.z = 10.0;
+        const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+        const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
+            / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+        const double expectedRotorThrust = parameters.thrustCoefficientNewtonsPerSpeedSquared
+            * hoverSpeed * hoverSpeed;
+        std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+        motorTargets.fill(hoverSpeed);
+        world.SetMotorTargets(drone, motorTargets);
 
-    // 이 시험은 기동 직후의 고도 유지가 아니라 모터가 안정된 뒤의 힘 균형을 확인한다.
-    for (int tick = 0; tick < simulationTicks; ++tick)
-        world.Step(stepSeconds);
+        // 모터가 안정된 뒤 로터 추력과 중력이 서로 상쇄되는지 확인한다.
+        for (int tick = 0; tick < simulationTicks; ++tick)
+            world.Step(stepSeconds);
 
-    const RigidBodyState state = world.State(drone);
-    for (const double speed : world.MotorSpeedsRadiansPerSecond(drone))
-        EXPECT_NEAR(speed, hoverSpeed, 1.0);
-    for (const double thrust : world.MotorThrustsNewtons(drone))
-        EXPECT_NEAR(thrust, expectedRotorThrust, 0.05);
-    const PhysicsDynamicsSample dynamics = world.DynamicsSample(drone);
-    EXPECT_NEAR(dynamics.appliedForceNewtons.z,
-        parameters.massKilograms * 9.81, 0.1);
-    EXPECT_NEAR(dynamics.gravityMetersPerSecondSquared.z, -9.80665, 1.0e-4);
-    EXPECT_NEAR(dynamics.linearAccelerationMetersPerSecondSquared.z,
-        dynamics.appliedForceNewtons.z / parameters.massKilograms
-            + dynamics.gravityMetersPerSecondSquared.z,
-        1.0e-3);
-    EXPECT_NEAR(dynamics.linearAccelerationMetersPerSecondSquared.z, 0.0, 0.02);
-    EXPECT_NEAR(state.positionMeters.x, definition.positionMeters.x, 0.01);
-    EXPECT_NEAR(state.positionMeters.y, definition.positionMeters.y, 0.01);
-    EXPECT_LT(glm::length(state.angularVelocityRadiansPerSecond), 0.01);
-    EXPECT_NEAR(state.orientation.w, 1.0, 1.0e-4);
-    EXPECT_NEAR(state.orientation.x, 0.0, 1.0e-4);
-    EXPECT_NEAR(state.orientation.y, 0.0, 1.0e-4);
-    EXPECT_NEAR(state.orientation.z, 0.0, 1.0e-4);
+        const RigidBodyState state = world.State(drone);
+        for (const double speed : world.MotorSpeedsRadiansPerSecond(drone))
+            EXPECT_NEAR(speed, hoverSpeed, 1.0);
+        for (const double thrust : world.MotorThrustsNewtons(drone))
+            EXPECT_NEAR(thrust, expectedRotorThrust, 0.05);
+        const PhysicsDynamicsSample dynamics = world.DynamicsSample(drone);
+        EXPECT_NEAR(dynamics.appliedForceNewtons.z,
+            parameters.massKilograms * 9.81, 0.1);
+        EXPECT_NEAR(dynamics.gravityMetersPerSecondSquared.z, -9.80665, 1.0e-4);
+        EXPECT_NEAR(dynamics.linearAccelerationMetersPerSecondSquared.z,
+            dynamics.appliedForceNewtons.z / parameters.massKilograms
+                + dynamics.gravityMetersPerSecondSquared.z,
+            1.0e-3);
+        EXPECT_NEAR(dynamics.linearAccelerationMetersPerSecondSquared.z, 0.0, 0.02);
+        EXPECT_NEAR(state.positionMeters.x, definition.positionMeters.x, 0.01);
+        EXPECT_NEAR(state.positionMeters.y, definition.positionMeters.y, 0.01);
+        EXPECT_LT(glm::length(state.angularVelocityRadiansPerSecond), 0.01);
+        EXPECT_NEAR(state.orientation.w, 1.0, 1.0e-4);
+        EXPECT_NEAR(state.orientation.x, 0.0, 1.0e-4);
+        EXPECT_NEAR(state.orientation.y, 0.0, 1.0e-4);
+        EXPECT_NEAR(state.orientation.z, 0.0, 1.0e-4);
+    }
 }
 
 void Verify_AirSimPhysics_GravityAndCollectiveThrustChangeVerticalMotion()
@@ -134,39 +141,47 @@ void Verify_AirSimPhysics_GravityAndCollectiveThrustChangeVerticalMotion()
     constexpr double stepSeconds = 1.0 / 60.0;
     constexpr int simulationTicks = 30;
     constexpr double gravityMetersPerSecondSquared = 9.80665;
-    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    const double hoverSpeed = std::sqrt(parameters.massKilograms
-        * gravityMetersPerSecondSquared
-        / (static_cast<double>(parameters.rotors.size())
-            * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    const std::array<QuadrotorParameters, 2> models{
+        QuadrotorParameters::X500Gazebo(),
+        QuadrotorParameters::X500MotorTableEstimate()};
 
-    const auto runWithCollectiveThrust = [&](double hoverSpeedRatio)
+    for (std::size_t modelIndex = 0; modelIndex < models.size(); ++modelIndex)
     {
-        PhysicsWorld world;
-        RigidBodyDefinition definition;
-        definition.positionMeters.z = 10.0;
-        const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
-        std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
-        motorTargets.fill(hoverSpeed * hoverSpeedRatio);
-        world.SetMotorTargets(drone, motorTargets);
-        for (int tick = 0; tick < simulationTicks; ++tick)
-            world.Step(stepSeconds);
-        return world.State(drone);
-    };
+        SCOPED_TRACE(modelIndex == 0 ? "PX4 Gazebo model" : "motor table estimate");
+        const QuadrotorParameters& parameters = models[modelIndex];
+        const double hoverSpeed = std::sqrt(parameters.massKilograms
+            * gravityMetersPerSecondSquared
+            / (static_cast<double>(parameters.rotors.size())
+                * parameters.thrustCoefficientNewtonsPerSpeedSquared));
 
-    // 호버 속도보다 낮은 입력은 하강하고, 높은 입력은 상승해야 한다.
-    const RigidBodyState freeFall = runWithCollectiveThrust(0.0);
-    const RigidBodyState belowHover = runWithCollectiveThrust(0.8);
-    const RigidBodyState aboveHover = runWithCollectiveThrust(1.2);
-    const double elapsedSeconds = simulationTicks * stepSeconds;
-    const double expectedFreeFallHeight = 10.0
-        - 0.5 * gravityMetersPerSecondSquared * elapsedSeconds * elapsedSeconds;
+        const auto runWithCollectiveThrust = [&](double hoverSpeedRatio)
+        {
+            PhysicsWorld world;
+            RigidBodyDefinition definition;
+            definition.positionMeters.z = 10.0;
+            const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+            std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+            motorTargets.fill(hoverSpeed * hoverSpeedRatio);
+            world.SetMotorTargets(drone, motorTargets);
+            for (int tick = 0; tick < simulationTicks; ++tick)
+                world.Step(stepSeconds);
+            return world.State(drone);
+        };
 
-    EXPECT_NEAR(freeFall.positionMeters.z, expectedFreeFallHeight, 0.3);
-    EXPECT_LT(freeFall.linearVelocityMetersPerSecond.z, -4.0);
-    EXPECT_LT(belowHover.linearVelocityMetersPerSecond.z, 0.0);
-    EXPECT_GT(aboveHover.linearVelocityMetersPerSecond.z, 0.0);
-    EXPECT_GT(aboveHover.positionMeters.z, belowHover.positionMeters.z);
+        // 호버 속도보다 낮은 입력은 하강하고, 높은 입력은 상승해야 한다.
+        const RigidBodyState freeFall = runWithCollectiveThrust(0.0);
+        const RigidBodyState belowHover = runWithCollectiveThrust(0.8);
+        const RigidBodyState aboveHover = runWithCollectiveThrust(1.2);
+        const double elapsedSeconds = simulationTicks * stepSeconds;
+        const double expectedFreeFallHeight = 10.0
+            - 0.5 * gravityMetersPerSecondSquared * elapsedSeconds * elapsedSeconds;
+
+        EXPECT_NEAR(freeFall.positionMeters.z, expectedFreeFallHeight, 0.3);
+        EXPECT_LT(freeFall.linearVelocityMetersPerSecond.z, -4.0);
+        EXPECT_LT(belowHover.linearVelocityMetersPerSecond.z, 0.0);
+        EXPECT_GT(aboveHover.linearVelocityMetersPerSecond.z, 0.0);
+        EXPECT_GT(aboveHover.positionMeters.z, belowHover.positionMeters.z);
+    }
 }
 
 void Verify_AirSimPhysics_MassChangesMotionUnderTheSameRotorInput()
@@ -329,14 +344,21 @@ void Verify_AirSimPhysics_RotorTorqueResponseScalesWithPitchInertia()
         return std::abs(world.State(drone).angularVelocityRadiansPerSecond.y);
     };
 
-    const QuadrotorParameters baseline = QuadrotorParameters::X500Gazebo();
-    QuadrotorParameters higherPitchInertia = baseline;
-    higherPitchInertia.principalInertiaKilogramMetersSquared.y *= 2.0;
+    const std::array<QuadrotorParameters, 2> models{
+        QuadrotorParameters::X500Gazebo(),
+        QuadrotorParameters::X500MotorTableEstimate()};
+    for (std::size_t modelIndex = 0; modelIndex < models.size(); ++modelIndex)
+    {
+        SCOPED_TRACE(modelIndex == 0 ? "PX4 Gazebo model" : "motor table estimate");
+        const QuadrotorParameters& baseline = models[modelIndex];
+        QuadrotorParameters higherPitchInertia = baseline;
+        higherPitchInertia.principalInertiaKilogramMetersSquared.y *= 2.0;
 
-    const double baselinePitchRate = pitchRateAfterAsymmetricInput(baseline);
-    const double higherInertiaPitchRate = pitchRateAfterAsymmetricInput(higherPitchInertia);
-    EXPECT_GT(baselinePitchRate, 0.1);
-    EXPECT_NEAR(higherInertiaPitchRate / baselinePitchRate, 0.5, 0.2);
+        const double baselinePitchRate = pitchRateAfterAsymmetricInput(baseline);
+        const double higherInertiaPitchRate = pitchRateAfterAsymmetricInput(higherPitchInertia);
+        EXPECT_GT(baselinePitchRate, 0.1);
+        EXPECT_NEAR(higherInertiaPitchRate / baselinePitchRate, 0.5, 0.2);
+    }
 }
 
 void Verify_AirSimPhysics_YawResponseScalesWithMomentToThrustRatio()
@@ -363,14 +385,21 @@ void Verify_AirSimPhysics_YawResponseScalesWithMomentToThrustRatio()
         return std::abs(world.State(drone).angularVelocityRadiansPerSecond.z);
     };
 
-    const QuadrotorParameters baseline = QuadrotorParameters::X500Gazebo();
-    QuadrotorParameters higherMomentRatio = baseline;
-    higherMomentRatio.momentToThrustRatio *= 2.0;
+    const std::array<QuadrotorParameters, 2> models{
+        QuadrotorParameters::X500Gazebo(),
+        QuadrotorParameters::X500MotorTableEstimate()};
+    for (std::size_t modelIndex = 0; modelIndex < models.size(); ++modelIndex)
+    {
+        SCOPED_TRACE(modelIndex == 0 ? "PX4 Gazebo model" : "motor table estimate");
+        const QuadrotorParameters& baseline = models[modelIndex];
+        QuadrotorParameters higherMomentRatio = baseline;
+        higherMomentRatio.momentToThrustRatio *= 2.0;
 
-    const double baselineYawRate = yawRateAfterAsymmetricInput(baseline);
-    const double higherMomentRatioYawRate = yawRateAfterAsymmetricInput(higherMomentRatio);
-    EXPECT_GT(baselineYawRate, 0.1);
-    EXPECT_NEAR(higherMomentRatioYawRate / baselineYawRate, 2.0, 0.2);
+        const double baselineYawRate = yawRateAfterAsymmetricInput(baseline);
+        const double higherMomentRatioYawRate = yawRateAfterAsymmetricInput(higherMomentRatio);
+        EXPECT_GT(baselineYawRate, 0.1);
+        EXPECT_NEAR(higherMomentRatioYawRate / baselineYawRate, 2.0, 0.2);
+    }
 }
 
 void Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes()
