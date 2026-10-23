@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -314,6 +315,51 @@ std::vector<FormationLink> ReadFormationLinks(
     return links;
 }
 
+std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
+    const Json& document,
+    std::uint64_t tickCount,
+    const std::unordered_set<std::string>& droneNames)
+{
+    const auto found = document.find("communication_outages");
+    if (found == document.end())
+        return {};
+    if (!found->is_array())
+        throw std::invalid_argument("communication_outages는 배열이어야 합니다.");
+
+    std::vector<DroneCommunicationOutage> outages;
+    std::unordered_map<std::string, std::uint64_t> previousEndByDrone;
+    outages.reserve(found->size());
+    for (const Json& item : *found)
+    {
+        if (!item.is_object())
+            throw std::invalid_argument("각 통신 장애는 JSON 객체여야 합니다.");
+        const Json& droneValue = Required(item, "drone");
+        if (!droneValue.is_string())
+            throw std::invalid_argument("통신 장애 drone은 이름 문자열이어야 합니다.");
+
+        std::string droneName = droneValue.get<std::string>();
+        const std::uint64_t startTick = ReadUnsigned(
+            Required(item, "start_tick"), "start_tick");
+        const std::uint64_t endTick = ReadUnsigned(
+            Required(item, "end_tick"), "end_tick");
+        const std::uint64_t heartbeatTimeoutTicks = ReadUnsigned(
+            Required(item, "heartbeat_timeout_ticks"), "heartbeat_timeout_ticks");
+        const auto previousEnd = previousEndByDrone.find(droneName);
+        if (!droneNames.contains(droneName) || startTick >= endTick
+            || endTick > tickCount || heartbeatTimeoutTicks == 0
+            || (previousEnd != previousEndByDrone.end()
+                && startTick < previousEnd->second))
+        {
+            throw std::invalid_argument(
+                "통신 장애는 등록된 드론의 겹치지 않는 Tick 구간과 양수 하트비트 제한을 지정해야 합니다.");
+        }
+        previousEndByDrone[droneName] = endTick;
+        outages.push_back({std::move(droneName), startTick, endTick,
+            heartbeatTimeoutTicks});
+    }
+    return outages;
+}
+
 /** @brief 임무 하나를 읽고 드론 배정과 Tick 범위를 확인한다. */
 ScenarioResult::MissionTask ReadMissionTask(
     const Json& taskValue,
@@ -340,6 +386,8 @@ ScenarioResult::MissionTask ReadMissionTask(
     task.name = taskNameValue.get<std::string>();
     task.role = roleValue.get<std::string>();
     task.droneName = droneValue.get<std::string>();
+    task.initialDroneName = task.droneName;
+    task.assignmentHistory.push_back(task.droneName);
     if (!taskNames.insert(task.name).second
         || !droneNames.contains(task.droneName)
         || !assignedDrones.insert(task.droneName).second)
@@ -690,6 +738,8 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
         Required(document, "commands"), definition.tickCount,
         definition.primaryDroneName, droneNames);
     definition.formationLinks = ReadFormationLinks(
+        document, definition.tickCount, droneNames);
+    definition.communicationOutages = ReadDroneCommunicationOutages(
         document, definition.tickCount, droneNames);
     ValidateFormationLinkCount(definition);
 

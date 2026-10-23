@@ -31,6 +31,10 @@ struct ScenarioResult
     {
         std::string name;
         DroneState finalState;
+        enum class CommunicationStatus { Connected, Stale, Unknown } communicationStatus =
+            CommunicationStatus::Connected;
+        /** @brief finalState가 실제 현재 위치인지, 마지막으로 전달된 위치인지 나타낸다. */
+        std::uint64_t lastHeartbeatTick = 0;
     };
     /** @brief 시나리오에 등장한 드론의 마지막 상태를 입력 순서대로 보관한다. */
     std::vector<Drone> drones;
@@ -41,6 +45,9 @@ struct ScenarioResult
         std::string name;
         std::string role;
         std::string droneName;
+        std::string initialDroneName;
+        std::vector<std::string> assignmentHistory;
+        std::uint32_t reassignmentCount = 0;
         glm::dvec3 targetPositionMeters{0.0};
         std::uint64_t startTick = 0;
         std::uint64_t deadlineTick = 0;

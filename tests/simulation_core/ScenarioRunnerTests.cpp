@@ -1,6 +1,7 @@
 #include "simulation_core/ScenarioRunner.h"
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <stdexcept>
 #include <string>
@@ -135,6 +136,60 @@ void Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones()
     EXPECT_DOUBLE_EQ(*result.minimumDroneSeparationMeters, 2.0);
 }
 
+void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":320,
+     "drones":[
+       {"name":"scout-1","initial_position_meters":[0,0,0]},
+       {"name":"scout-2","initial_position_meters":[10,0,0]},
+       {"name":"scout-3","initial_position_meters":[20,0,0]},
+       {"name":"scout-4","initial_position_meters":[30,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"scout-1","type":"takeoff"},
+       {"tick":0,"drone":"scout-2","type":"takeoff"},
+       {"tick":0,"drone":"scout-3","type":"takeoff"},
+       {"tick":0,"drone":"scout-4","type":"takeoff"}],
+     "communication_outages":[
+       {"drone":"scout-2","start_tick":95,"end_tick":320,"heartbeat_timeout_ticks":3}],
+     "mission":{"name":"four-sector-survey","tasks":[
+       {"name":"sector-1","role":"survey","drone":"scout-1",
+        "target_position_meters":[4,0,1.5],"start_tick":90,"deadline_tick":310,"tolerance_meters":0.1},
+       {"name":"sector-2","role":"survey","drone":"scout-2",
+        "target_position_meters":[14,0,1.5],"start_tick":90,"deadline_tick":310,"tolerance_meters":0.1},
+       {"name":"sector-3","role":"survey","drone":"scout-3",
+        "target_position_meters":[24,0,1.5],"start_tick":90,"deadline_tick":310,"tolerance_meters":0.1},
+       {"name":"sector-4","role":"survey","drone":"scout-4",
+        "target_position_meters":[34,0,1.5],"start_tick":90,"deadline_tick":310,"tolerance_meters":0.1}]},
+     "expected":{"tolerance_meters":0.01,"drones":[
+       {"name":"scout-1","mode":"hovering","position_meters":[4,0,1.5]},
+       {"name":"scout-2","mode":"following_waypoint","position_meters":[10.333333333333336,0,1.5]},
+       {"name":"scout-3","mode":"hovering","position_meters":[14,0,1.5]},
+       {"name":"scout-4","mode":"hovering","position_meters":[24,0,1.5]}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    ASSERT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_TRUE(result.mission.has_value());
+    EXPECT_TRUE(result.mission->passed);
+    ASSERT_EQ(result.mission->tasks.size(), 4);
+    const auto& reassignedTask = result.mission->tasks[1];
+    EXPECT_TRUE(reassignedTask.completed);
+    EXPECT_EQ(reassignedTask.droneName, "scout-3");
+    EXPECT_EQ(reassignedTask.reassignmentCount, 1U);
+    ASSERT_EQ(reassignedTask.assignmentHistory.size(), 2U);
+    EXPECT_EQ(reassignedTask.assignmentHistory[0], "scout-2");
+    EXPECT_EQ(reassignedTask.assignmentHistory[1], "scout-3");
+
+    const auto lostDrone = std::find_if(result.drones.begin(), result.drones.end(),
+        [](const ScenarioResult::Drone& drone) { return drone.name == "scout-2"; });
+    ASSERT_NE(lostDrone, result.drones.end());
+    EXPECT_EQ(lostDrone->communicationStatus,
+        ScenarioResult::Drone::CommunicationStatus::Unknown);
+    EXPECT_LT(lostDrone->lastHeartbeatTick, result.tickCount);
+    EXPECT_LT(lostDrone->finalState.positionMeters.x, 14.0);
+}
+
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
     constexpr std::array flightModes{
@@ -155,6 +210,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
+    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea());
 
     constexpr std::string_view duplicateMissionAssignment = R"json(
     {"version":1,"dynamics":"kinematic","ticks":2,

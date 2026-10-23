@@ -38,9 +38,28 @@ nlohmann::json ToJson(const aerosimlab::simulation::DroneState& state)
 
 nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
 {
+    using CommunicationStatus =
+        aerosimlab::simulation::ScenarioResult::Drone::CommunicationStatus;
+    const auto communicationStatusName = [](CommunicationStatus status)
+    {
+        switch (status)
+        {
+        case CommunicationStatus::Connected: return "connected";
+        case CommunicationStatus::Stale: return "stale";
+        case CommunicationStatus::Unknown: return "unknown";
+        }
+        return "unknown";
+    };
+
     nlohmann::json drones = nlohmann::json::array();
     for (const auto& drone : result.drones)
-        drones.push_back({{"name", drone.name}, {"state", ToJson(drone.finalState)}});
+    {
+        drones.push_back({
+            {"name", drone.name},
+            {"state", ToJson(drone.finalState)},
+            {"communication_status", communicationStatusName(drone.communicationStatus)},
+            {"last_heartbeat_tick", drone.lastHeartbeatTick}});
+    }
 
     nlohmann::json mission = nullptr;
     if (result.mission)
@@ -52,6 +71,9 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                 {"name", task.name},
                 {"role", task.role},
                 {"drone", task.droneName},
+                {"initial_drone", task.initialDroneName},
+                {"assignment_history", task.assignmentHistory},
+                {"reassignment_count", task.reassignmentCount},
                 {"target_position_meters", {
                     task.targetPositionMeters.x,
                     task.targetPositionMeters.y,

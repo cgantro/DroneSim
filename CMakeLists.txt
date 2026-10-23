@@ -452,7 +452,7 @@ if(BUILD_TESTING)
     PASS_REGULAR_EXPRESSION "위치 공유가 끊겼습니다")
 
   add_test(NAME HeadlessCooperativeMissionSmoke
-    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/two-point-survey.json")
+    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/four-drone-survey-outage.json")
   set_tests_properties(HeadlessCooperativeMissionSmoke PROPERTIES
     LABELS "INTEGRATION;simulation"
     PASS_REGULAR_EXPRESSION "\"mission\"")
