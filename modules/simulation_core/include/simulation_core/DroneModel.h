@@ -54,6 +54,8 @@ struct DroneControlState
     double commandedYawRateRadiansPerSecond = 0.0;
     double desiredYawRadians = 0.0;
     double groundElevationMeters = 0.0;
+    /** @brief 값이 있으면 비행 제어기 대신 시험용 로터 추력 비율을 사용한다. */
+    std::optional<std::array<double, 4>> commandedRotorThrustRatios;
 };
 
 /**
@@ -70,12 +72,14 @@ struct DroneCommand
         SetVelocity,
         SetWaypoint,
         SetYawRate,
+        SetRotorThrusts,
         Stop
     };
 
     Kind kind = Kind::Stop;
     glm::dvec3 vector{0.0};
     double yawRateRadiansPerSecond = 0.0;
+    std::array<double, 4> rotorThrustRatios{};
 };
 
 /** @brief 드론이 명령을 받았는지와 거부 이유를 나타낸다. */

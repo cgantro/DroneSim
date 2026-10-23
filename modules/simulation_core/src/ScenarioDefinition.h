@@ -38,6 +38,11 @@ struct ScenarioDrone
     std::string name;
     glm::dvec3 initialPositionMeters;
     double initialYawRadians;
+    glm::dvec3 initialVelocityMetersPerSecond{0.0};
+    std::optional<glm::dquat> initialOrientation;
+    glm::dvec3 initialAngularVelocityRadiansPerSecond{0.0};
+    FlightMode initialMode = FlightMode::Grounded;
+    bool hasFullInitialState = false;
     std::optional<double> batteryCapacityWattHours;
     double initialBatteryPercent = 100.0;
 };

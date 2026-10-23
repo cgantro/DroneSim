@@ -133,6 +133,15 @@ CommandResult DroneModel::Apply(
             maximumYawRateRadiansPerSecond);
         return CommandResult::Accepted;
 
+    case DroneCommand::Kind::SetRotorThrusts:
+        if (!std::all_of(command.rotorThrustRatios.begin(), command.rotorThrustRatios.end(),
+            [](double ratio) { return std::isfinite(ratio) && ratio >= 0.0 && ratio <= 1.0; }))
+        {
+            return CommandResult::InvalidValue;
+        }
+        control.commandedRotorThrustRatios = command.rotorThrustRatios;
+        return CommandResult::Accepted;
+
     case DroneCommand::Kind::Stop:
         if (!IsAirborne(state))
         {

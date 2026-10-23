@@ -316,9 +316,24 @@ struct SimulationCore::EcsStorage
         if (state.mode != FlightMode::Grounded)
             control.desiredYawRadians += control.commandedYawRateRadiansPerSecond * step;
 
-        const auto targetSpeeds = QuadrotorFlightController::MotorTargets(
-            state, control, quadrotorParameters, controllerParameters);
+        const auto targetSpeeds = control.commandedRotorThrustRatios
+            ? RotorSpeedTargets(*control.commandedRotorThrustRatios)
+            : QuadrotorFlightController::MotorTargets(
+                state, control, quadrotorParameters, controllerParameters);
         physics->SetMotorTargets(body, targetSpeeds);
+    }
+
+    [[nodiscard]] std::array<double, 4> RotorSpeedTargets(
+        const std::array<double, 4>& thrustRatios) const noexcept
+    {
+        std::array<double, 4> targets{};
+        for (std::size_t index = 0; index < targets.size(); ++index)
+        {
+            // AirSim은 속도 제곱에 비례해 추력을 계산하므로 비율의 제곱근을 속도로 바꾼다.
+            targets[index] = quadrotorParameters.maximumMotorSpeedRadiansPerSecond
+                * std::sqrt(thrustRatios[index]);
+        }
+        return targets;
     }
 
     void SynchronizeRigidBody(
@@ -460,6 +475,11 @@ CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         return CommandResult::UnsupportedDynamics;
 #endif
+    if (command.kind == DroneCommand::Kind::SetRotorThrusts
+        && ecs_->dynamics != SimulationDynamics::RigidBody)
+    {
+        return CommandResult::UnsupportedDynamics;
+    }
     const CommandResult result = DroneModel::Apply(state, control, command);
 #if !defined(__EMSCRIPTEN__)
     if (result == CommandResult::Accepted
@@ -501,6 +521,55 @@ void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yaw
         positionMeters, yawRadians, groundElevationMeters};
     drone.set<EcsStorage::InitialPose>(initialPose);
     ecs_->ResetDrone(drone);
+    ecs_->SynchronizeCameraPose();
+}
+
+void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
+{
+    if (ecs_->tickCount != 0)
+        throw std::logic_error("드론 시작 상태는 첫 Tick 전에만 바꿀 수 있습니다.");
+    const double orientationLength = glm::length(state.orientation);
+    if (!HasFinitePose(state.positionMeters, 0.0)
+        || !std::isfinite(state.velocityMetersPerSecond.x)
+        || !std::isfinite(state.velocityMetersPerSecond.y)
+        || !std::isfinite(state.velocityMetersPerSecond.z)
+        || !std::isfinite(state.angularVelocityRadiansPerSecond.x)
+        || !std::isfinite(state.angularVelocityRadiansPerSecond.y)
+        || !std::isfinite(state.angularVelocityRadiansPerSecond.z)
+        || !std::isfinite(orientationLength) || orientationLength < 1.0e-12
+        || !std::all_of(state.motorSpeedsRadiansPerSecond.begin(),
+            state.motorSpeedsRadiansPerSecond.end(),
+            [](double speed) { return std::isfinite(speed) && speed >= 0.0; }))
+    {
+        throw std::invalid_argument("드론 시작 상태의 위치·속도·자세를 확인해 주세요.");
+    }
+
+    flecs::entity& drone = ecs_->FindDrone(droneId);
+    DroneState normalized = state;
+    normalized.orientation = glm::normalize(normalized.orientation);
+    const glm::dquat& q = normalized.orientation;
+    normalized.yawRadians = std::atan2(
+        2.0 * (q.w * q.z + q.x * q.y),
+        1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+    DroneControlState& control = drone.get_mut<DroneControlState>();
+    control.desiredYawRadians = normalized.yawRadians;
+    control.groundElevationMeters = normalized.positionMeters.z
+        - QuadrotorFlightController::groundedModelOriginHeightMeters;
+#if !defined(__EMSCRIPTEN__)
+    if (ecs_->dynamics == SimulationDynamics::RigidBody)
+    {
+        const RigidBodyState rigidBodyState{
+            normalized.positionMeters,
+            normalized.orientation,
+            normalized.velocityMetersPerSecond,
+            normalized.angularVelocityRadiansPerSecond};
+        ecs_->physics->SetState(
+            drone.get<EcsStorage::PhysicsBody>().handle, rigidBodyState);
+        ecs_->CopyPhysicsState(normalized, drone.get<EcsStorage::PhysicsBody>().handle);
+        normalized.mode = state.mode;
+    }
+#endif
+    drone.set<DroneState>(normalized);
     ecs_->SynchronizeCameraPose();
 }
 

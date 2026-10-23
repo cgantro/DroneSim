@@ -145,6 +145,23 @@ DroneCommand ReadCommand(const Json& value)
             ReadFiniteNumber(Required(value, "yaw_rate_radians_per_second"), "yaw_rate_radians_per_second")
         };
     }
+    if (type == "set_rotor_thrusts")
+    {
+        const Json& values = Required(value, "normalized_thrust");
+        if (!values.is_array() || values.size() != 4)
+            throw std::invalid_argument("normalized_thrust에는 로터별 값 4개가 필요합니다.");
+        DroneCommand command;
+        command.kind = DroneCommand::Kind::SetRotorThrusts;
+        for (std::size_t index = 0; index < command.rotorThrustRatios.size(); ++index)
+        {
+            command.rotorThrustRatios[index] = ReadFiniteNumber(
+                values[index], "normalized_thrust");
+            if (command.rotorThrustRatios[index] < 0.0
+                || command.rotorThrustRatios[index] > 1.0)
+                throw std::invalid_argument("normalized_thrust 값은 0부터 1 사이여야 합니다.");
+        }
+        return command;
+    }
     throw std::invalid_argument(std::string("알 수 없는 명령입니다: ") + type);
 }
 
@@ -221,6 +238,27 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         const double initialYawRadians = yaw == item.end()
             ? 0.0
             : ReadFiniteNumber(*yaw, "initial_yaw_radians");
+        const auto velocity = item.find("initial_velocity_meters_per_second");
+        const auto orientation = item.find("initial_orientation_quaternion_wxyz");
+        const auto angularVelocity = item.find(
+            "initial_angular_velocity_radians_per_second");
+        const auto mode = item.find("initial_mode");
+        const bool hasFullInitialState = velocity != item.end()
+            || orientation != item.end() || angularVelocity != item.end()
+            || mode != item.end();
+        const glm::dvec3 initialVelocity = velocity == item.end()
+            ? glm::dvec3{0.0}
+            : ReadVector(*velocity, "initial_velocity_meters_per_second");
+        const std::optional<glm::dquat> initialOrientation = orientation == item.end()
+            ? std::nullopt
+            : std::optional<glm::dquat>{ReadOrientationQuaternion(*orientation)};
+        const glm::dvec3 initialAngularVelocity = angularVelocity == item.end()
+            ? glm::dvec3{0.0}
+            : ReadVector(*angularVelocity,
+                "initial_angular_velocity_radians_per_second");
+        FlightMode initialMode = FlightMode::Grounded;
+        if (mode != item.end())
+            initialMode = ReadFlightMode(*mode);
         std::optional<double> batteryCapacity;
         const auto capacity = item.find("battery_capacity_watt_hours");
         if (capacity != item.end())
@@ -237,7 +275,9 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
             throw std::invalid_argument("initial_battery_percent는 0부터 100 사이여야 합니다.");
         drones.push_back({std::move(name), ReadVector(
             Required(item, "initial_position_meters"), "initial_position_meters"),
-            initialYawRadians, batteryCapacity, initialBatteryPercent});
+            initialYawRadians, initialVelocity, initialOrientation,
+            initialAngularVelocity, initialMode, hasFullInitialState,
+            batteryCapacity, initialBatteryPercent});
     }
     return drones;
 }
@@ -1104,6 +1144,21 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     ValidateFormationMissionAssignment(definition);
 
     ReadEnvironmentSettings(document, definition);
+    for (const ScenarioDrone& drone : definition.drones)
+    {
+        if (drone.hasFullInitialState
+            && definition.dynamics != SimulationDynamics::RigidBody)
+            throw std::invalid_argument(
+                "완전한 초기 상태는 rigid_body 시나리오에서만 사용할 수 있습니다.");
+    }
+    if (definition.dynamics != SimulationDynamics::RigidBody
+        && std::any_of(definition.commands.begin(), definition.commands.end(),
+            [](const ScheduledCommand& command)
+            {
+                return command.command.kind == DroneCommand::Kind::SetRotorThrusts;
+            }))
+        throw std::invalid_argument(
+            "로터 추력 재생 명령은 rigid_body 시나리오에서만 사용할 수 있습니다.");
     ReadQuadrotorModelSettings(document, definition);
     ReadControllerSettings(document, definition);
     ReadCollisionAvoidanceSettings(document, definition);

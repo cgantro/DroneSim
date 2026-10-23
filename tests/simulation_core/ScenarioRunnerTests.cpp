@@ -103,6 +103,50 @@ void Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories()
     EXPECT_THROW(static_cast<void>(RunScenario(oversizedTrace)), std::invalid_argument);
 }
 
+void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"dynamics":"rigid_body","ticks":2,
+     "drones":[{"name":"x500","initial_position_meters":[1,2,3],
+       "initial_velocity_meters_per_second":[0.2,-0.1,0.05],
+       "initial_orientation_quaternion_wxyz":[0.9238795325,0,0,0.3826834324],
+       "initial_angular_velocity_radians_per_second":[0.01,0.02,0.03],
+       "initial_mode":"flying"}],
+     "commands":[{"tick":0,"type":"set_rotor_thrusts",
+       "normalized_thrust":[0.5,0.5,0.5,0.5]}],
+     "record_trajectory":{"sample_every_ticks":1},
+     "expected":{"drones":[{"name":"x500","mode":"flying",
+       "position_meters":[1,2,3],"tolerance_meters":1000}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    ASSERT_TRUE(result.passed)
+        << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_EQ(result.trajectory.size(), 3);
+    const DroneState& initial = result.trajectory.front().drones.front().second;
+    EXPECT_EQ(initial.positionMeters, (glm::dvec3{1, 2, 3}));
+    EXPECT_NEAR(initial.velocityMetersPerSecond.x, 0.2, 1.0e-6);
+    EXPECT_NEAR(initial.velocityMetersPerSecond.y, -0.1, 1.0e-6);
+    EXPECT_NEAR(initial.velocityMetersPerSecond.z, 0.05, 1.0e-6);
+    EXPECT_EQ(initial.mode, FlightMode::Flying);
+    EXPECT_NEAR(initial.orientation.z, 0.3826834324, 1.0e-6);
+    EXPECT_NEAR(initial.angularVelocityRadiansPerSecond.x, 0.01, 1.0e-6);
+    EXPECT_NEAR(initial.angularVelocityRadiansPerSecond.y, 0.02, 1.0e-6);
+    EXPECT_NEAR(initial.angularVelocityRadiansPerSecond.z, 0.03, 1.0e-6);
+    EXPECT_GT(result.trajectory[2].drones.front().second
+                  .motorSpeedsRadiansPerSecond[0],
+        0.0);
+
+    constexpr std::string_view kinematicRotorInput = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":1,
+     "commands":[{"tick":0,"type":"set_rotor_thrusts",
+       "normalized_thrust":[0,0,0,0]}],
+     "expected":{"mode":"grounded","position_meters":[0,0,0]}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(kinematicRotorInput)),
+        std::invalid_argument);
+}
+
 void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
 {
     constexpr std::string_view scenarioTemplate = R"json(
@@ -543,6 +587,8 @@ TEST(ScenarioRunnerTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange());
