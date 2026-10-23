@@ -122,6 +122,13 @@ void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(unsupportedMode)),
         std::invalid_argument);
+
+    constexpr std::string_view invalidGain = R"json(
+    {"version":1,"dynamics":"rigid_body","ticks":1,"commands":[],
+     "controller_gains":{"position":0}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(invalidGain)),
+        std::invalid_argument);
 }
 }
 
