@@ -101,10 +101,10 @@ glm::mat4 CubeTransform(const glm::vec3& position, const glm::vec3& size)
 }
 
 /**
- * @brief 북쪽부터 기록한 높이 격자를 화면의 삼각형 지형으로 바꾼다.
- * @details 화면은 Y축을 위로 쓰므로 높이를 Y에 둔다. 북쪽은 화면의 -Z 방향이다.
+ * @brief 높이 격자의 각 칸을 화면에 그릴 정점으로 바꾼다.
+ * @details 높이 차이로 지표면의 법선을 구하고, 격자 위치를 텍스처 좌표로 정규화한다.
  */
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
+std::vector<aerosimlab::graphics::Vertex> BuildTerrainVertices(
     const aerosimlab::terrain::TerrainGrid& terrain)
 {
     const std::size_t sampleCount = terrain.sampleCount;
@@ -149,6 +149,11 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
         }
     }
 
+    return vertices;
+}
+
+std::vector<std::uint32_t> BuildTerrainIndices(std::size_t sampleCount)
+{
     std::vector<std::uint32_t> indices;
     indices.reserve((sampleCount - 1U) * (sampleCount - 1U) * 6U);
     for (std::size_t row = 0; row + 1U < sampleCount; ++row)
@@ -164,7 +169,18 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
                 northEast, southWest, southEast});
         }
     }
+    return indices;
+}
 
+/**
+ * @brief 정점과 삼각형 연결 정보를 그래픽 메시로 묶는다.
+ * @details 화면은 Y축을 위로 쓰므로 높이를 Y에 둔다. 북쪽은 화면의 -Z 방향이다.
+ */
+std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
+    const aerosimlab::terrain::TerrainGrid& terrain)
+{
+    const auto vertices = BuildTerrainVertices(terrain);
+    const auto indices = BuildTerrainIndices(terrain.sampleCount);
     return std::make_unique<aerosimlab::graphics::Mesh>(
         vertices.data(), static_cast<std::uint32_t>(vertices.size()),
         indices.data(), static_cast<std::uint32_t>(indices.size()));
