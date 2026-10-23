@@ -180,8 +180,9 @@ void Verify_AirSimCollision_SeparatesOverlappingDrones()
     leftDefinition.positionMeters = {-0.16, 0.0, 10.0};
     RigidBodyDefinition rightDefinition;
     rightDefinition.positionMeters = {0.16, 0.0, 10.0};
-    const RigidBodyHandle left = world.CreateQuadrotor(leftDefinition, parameters);
     const RigidBodyHandle right = world.CreateQuadrotor(rightDefinition, parameters);
+    // 등록 순서가 공간상 왼쪽·오른쪽 순서와 반대여도 접촉을 찾아야 한다.
+    const RigidBodyHandle left = world.CreateQuadrotor(leftDefinition, parameters);
 
     RigidBodyState leftState = world.State(left);
     leftState.linearVelocityMetersPerSecond.x = 1.0;

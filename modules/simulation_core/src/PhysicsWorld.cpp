@@ -599,28 +599,22 @@ struct PhysicsWorld::Impl
         droneContacts.clear();
         droneContacts.resize(bodies.size());
 
-        for (std::size_t bodyIndex = 0; bodyIndex < bodies.size(); ++bodyIndex)
+        // X 좌표로 정렬했으므로 앞쪽 기체만 훑으면 각 쌍을 한 번만 확인할 수 있다.
+        // 검색 폭에는 가장 큰 충돌 반경을 써서 크기가 다른 기체도 후보에서 빠지지 않게 한다.
+        for (std::size_t orderIndex = 0;
+            orderIndex < bodyPositionsByX.size(); ++orderIndex)
         {
+            const std::size_t bodyIndex = bodyPositionsByX[orderIndex].second;
             const Body& body = *bodies[bodyIndex];
             const glm::dvec3 center = body.collisionState.positionMeters;
-            const double searchDistance =
-                body.collisionRadiusMeters + largestCollisionRadius;
-            const auto firstCandidate = std::lower_bound(
-                bodyPositionsByX.begin(), bodyPositionsByX.end(), center.x - searchDistance,
-                [](const auto& candidate, double minimumX)
-                {
-                    return candidate.first < minimumX;
-                });
-
-            for (auto candidate = firstCandidate;
-                candidate != bodyPositionsByX.end()
-                    && candidate->first <= center.x + searchDistance;
-                ++candidate)
+            const double maximumCandidateX = center.x
+                + body.collisionRadiusMeters + largestCollisionRadius;
+            for (std::size_t candidateOrder = orderIndex + 1U;
+                candidateOrder < bodyPositionsByX.size()
+                    && bodyPositionsByX[candidateOrder].first <= maximumCandidateX;
+                ++candidateOrder)
             {
-                const std::size_t otherIndex = candidate->second;
-                if (otherIndex <= bodyIndex)
-                    continue;
-
+                const std::size_t otherIndex = bodyPositionsByX[candidateOrder].second;
                 const Body& otherBody = *bodies[otherIndex];
                 const double combinedRadius =
                     body.collisionRadiusMeters + otherBody.collisionRadiusMeters;
