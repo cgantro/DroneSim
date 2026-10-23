@@ -299,6 +299,29 @@ double CollisionRadius(std::span<const RigidBodyBox> boxes)
     return radius;
 }
 
+glm::dvec3 SupportPoint(const OrientedBox& box, const glm::dvec3& direction)
+{
+    glm::dvec3 point = box.centerMeters;
+    for (std::size_t axis = 0; axis < box.axes.size(); ++axis)
+    {
+        const double side = glm::dot(direction, box.axes[axis]) >= 0.0 ? 1.0 : -1.0;
+        point += box.axes[axis] * (side * box.halfExtentsMeters[axis]);
+    }
+    return point;
+}
+
+void KeepDeeperContact(
+    std::optional<ContactCandidate>& current,
+    const BoxContact& contact,
+    const char* objectName,
+    int objectId)
+{
+    if (current && contact.penetrationMeters <= current->contact.penetrationMeters)
+        return;
+
+    current = ContactCandidate{contact, objectName, objectId};
+}
+
 OrientedBox ToWorldBox(
     const glm::dvec3& bodyPosition,
     const glm::dquat& bodyOrientation,
@@ -381,15 +404,7 @@ std::optional<BoxContact> FindBoxContact(
     if (!std::isfinite(smallestPenetration))
         return std::nullopt;
 
-    const glm::dvec3 towardOther = -collisionNormal;
-    glm::dvec3 impactPoint = droneBox.centerMeters;
-    for (std::size_t axis = 0; axis < droneBox.axes.size(); ++axis)
-    {
-        const double side = glm::dot(towardOther, droneBox.axes[axis]) >= 0.0
-            ? 1.0 : -1.0;
-        impactPoint += droneBox.axes[axis]
-            * (side * droneBox.halfExtentsMeters[axis]);
-    }
+    const glm::dvec3 impactPoint = SupportPoint(droneBox, -collisionNormal);
     return BoxContact{collisionNormal, impactPoint, smallestPenetration};
 }
 
@@ -457,6 +472,7 @@ struct PhysicsWorld::Impl
     std::vector<std::unique_ptr<Body>> bodies;
     std::unordered_map<std::uint32_t, std::size_t> bodyIndices;
     std::vector<std::pair<double, std::size_t>> bodyPositionsByX;
+    std::vector<std::optional<ContactCandidate>> droneContacts;
     std::vector<Obstacle> obstacles;
     std::optional<terrain::TerrainGrid> terrain;
     std::uint64_t stepCount = 0;
@@ -523,6 +539,67 @@ struct PhysicsWorld::Impl
         }
         std::sort(bodyPositionsByX.begin(), bodyPositionsByX.end());
         return largestCollisionRadius;
+    }
+
+    /** @brief 드론 한 쌍의 상자 충돌을 한 번 계산해 양쪽 기체에 저장한다. */
+    void PrepareDroneContacts(double largestCollisionRadius)
+    {
+        droneContacts.clear();
+        droneContacts.resize(bodies.size());
+
+        for (std::size_t bodyIndex = 0; bodyIndex < bodies.size(); ++bodyIndex)
+        {
+            const Body& body = *bodies[bodyIndex];
+            const glm::dvec3 center = body.collisionState.positionMeters;
+            const double searchDistance =
+                body.collisionRadiusMeters + largestCollisionRadius;
+            const auto firstCandidate = std::lower_bound(
+                bodyPositionsByX.begin(), bodyPositionsByX.end(), center.x - searchDistance,
+                [](const auto& candidate, double minimumX)
+                {
+                    return candidate.first < minimumX;
+                });
+
+            for (auto candidate = firstCandidate;
+                candidate != bodyPositionsByX.end()
+                    && candidate->first <= center.x + searchDistance;
+                ++candidate)
+            {
+                const std::size_t otherIndex = candidate->second;
+                if (otherIndex <= bodyIndex)
+                    continue;
+
+                const Body& otherBody = *bodies[otherIndex];
+                const double combinedRadius =
+                    body.collisionRadiusMeters + otherBody.collisionRadiusMeters;
+                const glm::dvec3 centerOffset = center
+                    - otherBody.collisionState.positionMeters;
+                if (glm::dot(centerOffset, centerOffset)
+                    >= combinedRadius * combinedRadius)
+                {
+                    continue;
+                }
+
+                for (const OrientedBox& ownBox : body.worldCollisionBoxes)
+                {
+                    for (const OrientedBox& otherBox : otherBody.worldCollisionBoxes)
+                    {
+                        const auto contact = FindBoxContact(ownBox, otherBox);
+                        if (!contact)
+                            continue;
+
+                        KeepDeeperContact(droneContacts[bodyIndex], *contact,
+                            "drone", static_cast<int>(otherBody.handle.value + 1U));
+                        const BoxContact reverseContact{
+                            -contact->normal,
+                            SupportPoint(otherBox, contact->normal),
+                            contact->penetrationMeters};
+                        KeepDeeperContact(droneContacts[otherIndex], reverseContact,
+                            "drone", static_cast<int>(body.handle.value + 1U));
+                    }
+                }
+            }
+        }
     }
 
     double GroundHeight(const glm::dvec2& position) const
@@ -649,72 +726,20 @@ struct PhysicsWorld::Impl
         return deepestContact;
     }
 
-    /** @brief X축 범위와 바깥 반경으로 후보를 거른 뒤 드론끼리 상자를 검사한다. */
-    std::optional<ContactCandidate> FindDroneContact(
-        const Body& body,
-        std::size_t bodyIndex,
-        double largestCollisionRadius) const
-    {
-        const glm::dvec3 center = body.collisionState.positionMeters;
-        const double bodyRadius = body.collisionRadiusMeters;
-        const double searchDistance = bodyRadius + largestCollisionRadius;
-        const auto firstCandidate = std::lower_bound(
-            bodyPositionsByX.begin(), bodyPositionsByX.end(), center.x - searchDistance,
-            [](const auto& candidate, double minimumX)
-            {
-                return candidate.first < minimumX;
-            });
-        std::optional<ContactCandidate> deepestContact;
-        double greatestPenetration = -1.0;
-        for (auto candidate = firstCandidate;
-            candidate != bodyPositionsByX.end()
-                && candidate->first <= center.x + searchDistance;
-            ++candidate)
-        {
-            const std::size_t index = candidate->second;
-            if (index == bodyIndex)
-                continue;
-
-            const Body& otherBody = *bodies[index];
-            const RigidBodyState& other = otherBody.collisionState;
-            const double combinedRadius = bodyRadius + otherBody.collisionRadiusMeters;
-            const glm::dvec3 centerOffset = center - other.positionMeters;
-            if (glm::dot(centerOffset, centerOffset) >= combinedRadius * combinedRadius)
-                continue;
-
-            for (const OrientedBox& ownBox : body.worldCollisionBoxes)
-            {
-                for (const OrientedBox& otherBox : otherBody.worldCollisionBoxes)
-                {
-                    const auto contact = FindBoxContact(ownBox, otherBox);
-                    if (!contact || contact->penetrationMeters <= greatestPenetration)
-                        continue;
-
-                    greatestPenetration = contact->penetrationMeters;
-                    deepestContact = ContactCandidate{
-                        *contact, "drone",
-                        static_cast<int>(otherBody.handle.value + 1U)};
-                }
-            }
-        }
-        return deepestContact;
-    }
-
     // 단독 실행에서는 Unreal이 접촉 정보를 만들지 않으므로, 장면 접촉을 찾아 AirSim에 넘긴다.
     msr::airlib::CollisionInfo BuildAirSimContactInfo(
         const Body& body,
         std::size_t bodyIndex,
-        double largestCollisionRadius) const
+        const std::optional<ContactCandidate>& droneContact) const
     {
         const std::uint64_t timestamp = stepCount + 1;
         if (auto groundContact = FindTerrainContact(body, timestamp))
             return *groundContact;
 
         std::optional<ContactCandidate> deepestContact = FindObstacleContact(body);
-        if (auto droneContact = FindDroneContact(body, bodyIndex, largestCollisionRadius);
-            droneContact && (!deepestContact
-                || droneContact->contact.penetrationMeters
-                    > deepestContact->contact.penetrationMeters))
+        if (droneContact && (!deepestContact
+            || droneContact->contact.penetrationMeters
+                > deepestContact->contact.penetrationMeters))
         {
             deepestContact = droneContact;
         }
@@ -873,6 +898,7 @@ void PhysicsWorld::Step(
             ScopedDuration measureBodyOrdering(contactGenerationMicroseconds,
                 ScopedDuration::Mode::Accumulate);
             largestCollisionRadius = impl_->PrepareCollisionData();
+            impl_->PrepareDroneContacts(largestCollisionRadius);
         }
         for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
         {
@@ -883,7 +909,8 @@ void PhysicsWorld::Step(
                 body->environment.setPosition(body->kinematics.getPose().position);
                 body->environment.update();
                 body->model->setCollisionInfo(
-                    impl_->BuildAirSimContactInfo(*body, index, largestCollisionRadius));
+                    impl_->BuildAirSimContactInfo(*body, index,
+                        impl_->droneContacts[index]));
             }
             body->ApplyMotorTargets();
             body->model->update();

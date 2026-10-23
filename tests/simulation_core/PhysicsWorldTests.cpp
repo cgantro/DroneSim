@@ -155,12 +155,37 @@ void Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere()
     EXPECT_GT(state.linearVelocityMetersPerSecond.x, 0.8);
 }
 
+void Verify_AirSimCollision_SeparatesOverlappingDrones()
+{
+    PhysicsWorld world;
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    RigidBodyDefinition leftDefinition;
+    leftDefinition.positionMeters = {-0.16, 0.0, 10.0};
+    RigidBodyDefinition rightDefinition;
+    rightDefinition.positionMeters = {0.16, 0.0, 10.0};
+    const RigidBodyHandle left = world.CreateQuadrotor(leftDefinition, parameters);
+    const RigidBodyHandle right = world.CreateQuadrotor(rightDefinition, parameters);
+
+    RigidBodyState leftState = world.State(left);
+    leftState.linearVelocityMetersPerSecond.x = 1.0;
+    world.SetState(left, leftState);
+    RigidBodyState rightState = world.State(right);
+    rightState.linearVelocityMetersPerSecond.x = -1.0;
+    world.SetState(right, rightState);
+
+    world.Step(1.0 / 60.0);
+
+    EXPECT_LT(world.State(left).positionMeters.x, leftDefinition.positionMeters.x);
+    EXPECT_GT(world.State(right).positionMeters.x, rightDefinition.positionMeters.x);
+}
+
 TEST(PhysicsWorldTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_SeparatesOverlappingDrones());
 }
 
 }
