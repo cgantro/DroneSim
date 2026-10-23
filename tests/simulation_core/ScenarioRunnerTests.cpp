@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace aerosimlab::simulation
 {
@@ -965,6 +966,63 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     ASSERT_TRUE(healthyDrone.batteryPercent.has_value());
     EXPECT_GT(*healthyDrone.batteryPercent, 40.0);
     EXPECT_NEAR(healthyDrone.finalState.positionMeters.x, 30.0, 0.2);
+
+    const ScenarioResult mixedFaultResult = RunScenario(ReadScenarioFixture(
+        "scenarios/multi-drone/energy-and-outage-reallocation.json"));
+    ASSERT_TRUE(mixedFaultResult.passed)
+        << (mixedFaultResult.issues.empty() ? "" : mixedFaultResult.issues.front());
+    ASSERT_TRUE(mixedFaultResult.mission.has_value());
+    EXPECT_EQ(mixedFaultResult.mission->outcome, ScenarioResult::Outcome::Passed);
+    EXPECT_EQ(mixedFaultResult.mission->completedTaskCount, 3U);
+    ASSERT_EQ(mixedFaultResult.mission->tasks.size(), 3U);
+
+    const auto findTask = [&](std::string_view name)
+        -> const ScenarioResult::MissionTask*
+    {
+        const auto task = std::find_if(
+            mixedFaultResult.mission->tasks.begin(),
+            mixedFaultResult.mission->tasks.end(),
+            [name](const ScenarioResult::MissionTask& item)
+            {
+                return item.name == name;
+            });
+        return task == mixedFaultResult.mission->tasks.end() ? nullptr : &*task;
+    };
+    const auto* lowBatteryTask = findTask("long-area");
+    ASSERT_NE(lowBatteryTask, nullptr);
+    EXPECT_EQ(lowBatteryTask->initialDroneName, "low-charge");
+    EXPECT_EQ(lowBatteryTask->droneName, "reserve-2");
+    EXPECT_EQ(lowBatteryTask->assignmentHistory,
+        (std::vector<std::string>{"low-charge", "reserve-2"}));
+    const auto* unconfirmedTask = findTask("unconfirmed-area");
+    ASSERT_NE(unconfirmedTask, nullptr);
+    EXPECT_EQ(unconfirmedTask->initialDroneName, "lost-link");
+    EXPECT_EQ(unconfirmedTask->droneName, "reserve-1");
+    EXPECT_TRUE(unconfirmedTask->completed);
+    EXPECT_FALSE(unconfirmedTask->failed);
+    EXPECT_EQ(unconfirmedTask->assignmentHistory,
+        (std::vector<std::string>{"lost-link", "reserve-1"}));
+    const auto* displacedTask = findTask("near-area");
+    ASSERT_NE(displacedTask, nullptr);
+    EXPECT_EQ(displacedTask->droneName, "reserve-2");
+    EXPECT_EQ(displacedTask->assignmentHistory,
+        (std::vector<std::string>{"reserve-1", "reserve-2"}));
+
+    ASSERT_EQ(mixedFaultResult.drones.size(), 4U);
+    const auto& lowBatteryDrone = mixedFaultResult.drones[0];
+    EXPECT_TRUE(lowBatteryDrone.returnedForLowBattery);
+    EXPECT_EQ(lowBatteryDrone.finalState.mode, FlightMode::Grounded);
+    const auto& disconnectedDrone = mixedFaultResult.drones[1];
+    EXPECT_EQ(disconnectedDrone.communicationStatus,
+        ScenarioResult::Drone::CommunicationStatus::Unknown);
+    EXPECT_EQ(disconnectedDrone.lastHeartbeatTick, 94U);
+    // 통신 단절 기체의 위치는 마지막 수신값이므로 실제 현재 상태로 단정하지 않는다.
+    EXPECT_EQ(disconnectedDrone.finalState.mode, FlightMode::FollowingWaypoint);
+    EXPECT_NEAR(disconnectedDrone.finalState.positionMeters.x, 10.3333333333, 1.0e-6);
+    ASSERT_TRUE(disconnectedDrone.batteryPercent.has_value());
+    ASSERT_TRUE(disconnectedDrone.reportedBatteryPercent.has_value());
+    EXPECT_GT(*disconnectedDrone.reportedBatteryPercent,
+        *disconnectedDrone.batteryPercent);
 
     constexpr std::string_view insufficientLandingReserve = R"json(
     {"version":1,"dynamics":"kinematic","ticks":10,

@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "dynamics": "kinematic",
+  "ticks": 720,
+  "drones": [
+    {
+      "name": "low-charge",
+      "initial_position_meters": [0, 0, 0],
+      "battery_capacity_watt_hours": 0.3,
+      "initial_battery_percent": 80
+    },
+    {"name": "lost-link", "initial_position_meters": [10, 0, 0]},
+    {"name": "reserve-1", "initial_position_meters": [20, 0, 0]},
+    {"name": "reserve-2", "initial_position_meters": [30, 0, 0]}
+  ],
+  "commands": [
+    {"tick": 0, "drone": "low-charge", "type": "takeoff"},
+    {"tick": 0, "drone": "lost-link", "type": "takeoff"},
+    {"tick": 0, "drone": "reserve-1", "type": "takeoff"},
+    {"tick": 0, "drone": "reserve-2", "type": "takeoff"}
+  ],
+  "communication_outages": [
+    {
+      "drone": "lost-link",
+      "start_tick": 95,
+      "end_tick": 720,
+      "heartbeat_timeout_ticks": 3,
+      "on_timeout": "hold_position"
+    }
+  ],
+  "energy_model": {
+    "capacity_watt_hours": 1,
+    "hover_power_watts": 40,
+    "flight_power_watts": 120,
+    "reserve_percent": 40
+  },
+  "mission": {
+    "name": "energy-and-link-loss-survey",
+    "tasks": [
+      {
+        "name": "long-area",
+        "role": "survey",
+        "drone": "low-charge",
+        "target_position_meters": [30, 0, 1.5],
+        "start_tick": 90,
+        "deadline_tick": 690,
+        "tolerance_meters": 0.2
+      },
+      {
+        "name": "unconfirmed-area",
+        "role": "survey",
+        "drone": "lost-link",
+        "target_position_meters": [15, 0, 1.5],
+        "start_tick": 90,
+        "deadline_tick": 690,
+        "tolerance_meters": 0.2
+      },
+      {
+        "name": "near-area",
+        "role": "survey",
+        "drone": "reserve-1",
+        "target_position_meters": [21, 0, 1.5],
+        "start_tick": 90,
+        "deadline_tick": 690,
+        "tolerance_meters": 0.2
+      }
+    ]
+  },
+  "expected": {
+    "tolerance_meters": 0.01,
+    "drones": [
+      {"name": "low-charge", "mode": "grounded", "position_meters": [10.58333333333334, 0, 0]},
+      {"name": "lost-link", "mode": "following_waypoint", "position_meters": [10.333333333333336, 0, 1.5]},
+      {"name": "reserve-1", "mode": "hovering", "position_meters": [15, 0, 1.5]},
+      {"name": "reserve-2", "mode": "hovering", "position_meters": [30, 0, 1.5]}
+    ]
+  }
+}
