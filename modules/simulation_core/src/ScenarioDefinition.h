@@ -60,6 +60,13 @@ struct DroneCommunicationOutage
     std::uint64_t heartbeatTimeoutTicks;
 };
 
+struct CollisionAvoidanceSettings
+{
+    double safetyDistanceMeters;
+    double predictionHorizonSeconds;
+    double lateralOffsetMeters;
+};
+
 /** @brief JSON 카메라 동작을 실행 단계에서 안전하게 구분한다. */
 enum class CameraEventAction
 {
@@ -84,6 +91,7 @@ struct ScenarioDefinition
     std::vector<ScheduledCommand> commands;
     std::vector<FormationLink> formationLinks;
     std::vector<DroneCommunicationOutage> communicationOutages;
+    std::optional<CollisionAvoidanceSettings> collisionAvoidance;
     std::optional<ScenarioResult::Mission> mission;
     SimulationDynamics dynamics = defaultSimulationDynamics;
     std::optional<glm::dvec3> windVelocity;

@@ -27,6 +27,10 @@ struct ScenarioResult
     std::vector<std::string> eventLog;
     /** @brief 기준을 요청한 시나리오에서 잰 최소 3차원 중심 간 거리다. */
     std::optional<double> minimumDroneSeparationMeters;
+    /** @brief 예측 회피를 켠 시나리오에서 일정 시간 앞의 최소 예상 거리다. */
+    std::optional<double> minimumPredictedDroneSeparationMeters;
+    /** @brief 예측 충돌 위험으로 회피 경로를 처음 적용한 횟수다. */
+    std::uint64_t collisionAvoidanceEvents = 0;
     /** @brief 시나리오에서 이름으로 지정한 드론의 마지막 상태다. */
     struct Drone
     {

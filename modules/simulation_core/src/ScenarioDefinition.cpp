@@ -746,6 +746,31 @@ void ReadEnvironmentSettings(const Json& document, ScenarioDefinition& definitio
         throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
 }
 
+void ReadCollisionAvoidanceSettings(const Json& document, ScenarioDefinition& definition)
+{
+    const auto settingsValue = document.find("collision_avoidance");
+    if (settingsValue == document.end())
+        return;
+    if (!settingsValue->is_object() || definition.drones.size() < 2)
+        throw std::invalid_argument("collision_avoidance는 드론 두 대 이상인 시나리오에서 설정해야 합니다.");
+
+    CollisionAvoidanceSettings settings{
+        ReadFiniteNumber(Required(*settingsValue, "safety_distance_meters"),
+            "safety_distance_meters"),
+        ReadFiniteNumber(Required(*settingsValue, "prediction_horizon_seconds"),
+            "prediction_horizon_seconds"),
+        ReadFiniteNumber(Required(*settingsValue, "lateral_offset_meters"),
+            "lateral_offset_meters")};
+    if (settings.safetyDistanceMeters <= 0.0
+        || settings.predictionHorizonSeconds <= 0.0
+        || settings.lateralOffsetMeters < settings.safetyDistanceMeters)
+    {
+        throw std::invalid_argument(
+            "충돌 회피 거리는 양수여야 하고 옆 이동 거리는 안전거리 이상이어야 합니다.");
+    }
+    definition.collisionAvoidance = settings;
+}
+
 void ReadExpectedDroneStates(const Json& expected, ScenarioDefinition& definition)
 {
     definition.hasExpectedDrones = expected.contains("drones");
@@ -868,6 +893,7 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     ValidateFormationMissionAssignment(definition);
 
     ReadEnvironmentSettings(document, definition);
+    ReadCollisionAvoidanceSettings(document, definition);
     definition.cameraEvents = ReadCameraEvents(document, definition.tickCount);
     ReadExpectedResults(document, definition);
     return definition;

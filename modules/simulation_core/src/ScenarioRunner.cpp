@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -25,6 +26,7 @@ using detail::FormationLink;
 using detail::FormationOutage;
 using detail::ScenarioDefinition;
 using detail::ScenarioDrone;
+using detail::CollisionAvoidanceSettings;
 using detail::ScheduledCameraEvent;
 using detail::ScheduledCommand;
 using detail::DroneCommunicationOutage;
@@ -39,6 +41,7 @@ struct DroneObservation
 };
 
 using DroneObservations = std::unordered_map<std::string, DroneObservation>;
+using DroneNameSet = std::unordered_set<std::string>;
 
 bool CanReceiveWaypoint(FlightMode mode) noexcept
 {
@@ -535,6 +538,149 @@ void UpdateFormationLinks(
     }
 }
 
+void UpdateCollisionAvoidance(
+    std::uint64_t tick,
+    const ScenarioDefinition& definition,
+    std::optional<ScenarioResult::Mission>& mission,
+    SimulationCore& simulation,
+    const DroneIds& droneIds,
+    const DroneObservations& observations,
+    DroneNameSet& dronesAvoiding,
+    std::unordered_map<std::string, glm::dvec3>& activeAvoidanceDirections,
+    ScenarioResult& result)
+{
+    if (!definition.collisionAvoidance || !mission)
+        return;
+
+    const CollisionAvoidanceSettings& settings = *definition.collisionAvoidance;
+    std::unordered_map<std::string, glm::dvec3> avoidanceDirections;
+    DroneNameSet currentlyAvoiding;
+    for (std::size_t firstIndex = 0; firstIndex < definition.drones.size(); ++firstIndex)
+    {
+        const std::string& firstName = definition.drones[firstIndex].name;
+        if (!IsConnected(observations, firstName))
+            continue;
+        const auto firstTask = std::find_if(mission->tasks.begin(), mission->tasks.end(),
+            [&firstName](const ScenarioResult::MissionTask& task)
+            {
+                return task.droneName == firstName && task.started
+                    && !task.completed && !task.failed;
+            });
+        if (firstTask == mission->tasks.end())
+            continue;
+
+        const DroneState& firstState = simulation.State(droneIds.at(firstName));
+        if (!CanReceiveWaypoint(firstState.mode))
+            continue;
+        for (std::size_t secondIndex = firstIndex + 1;
+            secondIndex < definition.drones.size(); ++secondIndex)
+        {
+            const std::string& secondName = definition.drones[secondIndex].name;
+            if (!IsConnected(observations, secondName))
+                continue;
+            const auto secondTask = std::find_if(mission->tasks.begin(), mission->tasks.end(),
+                [&secondName](const ScenarioResult::MissionTask& task)
+                {
+                    return task.droneName == secondName && task.started
+                        && !task.completed && !task.failed;
+                });
+            if (secondTask == mission->tasks.end())
+                continue;
+
+            const DroneState& secondState = simulation.State(droneIds.at(secondName));
+            if (!CanReceiveWaypoint(secondState.mode))
+                continue;
+
+            const glm::dvec3 relativePosition =
+                secondState.positionMeters - firstState.positionMeters;
+            const glm::dvec3 relativeVelocity =
+                secondState.velocityMetersPerSecond - firstState.velocityMetersPerSecond;
+            const double relativeSpeedSquared = glm::dot(relativeVelocity, relativeVelocity);
+            const double closestTime = relativeSpeedSquared > 1e-9
+                ? std::clamp(-glm::dot(relativePosition, relativeVelocity)
+                    / relativeSpeedSquared, 0.0, settings.predictionHorizonSeconds)
+                : 0.0;
+            const double predictedDistance = glm::length(
+                relativePosition + relativeVelocity * closestTime);
+            if (!result.minimumPredictedDroneSeparationMeters
+                || predictedDistance < *result.minimumPredictedDroneSeparationMeters)
+            {
+                result.minimumPredictedDroneSeparationMeters = predictedDistance;
+            }
+            const bool alreadyAvoiding = activeAvoidanceDirections.contains(secondName);
+            const double releaseDistance = settings.safetyDistanceMeters * 1.5;
+            const double avoidanceThreshold = alreadyAvoiding
+                ? releaseDistance : settings.safetyDistanceMeters;
+            if (predictedDistance >= avoidanceThreshold)
+                continue;
+
+            // 입력 순서상 뒤에 있는 드론이 비켜서 결과를 반복 실행해도 같은 선택을 한다.
+            glm::dvec3 side(-relativeVelocity.y, relativeVelocity.x, 0.0);
+            if (glm::length(side) < 1e-6)
+                side = {-relativePosition.y, relativePosition.x, 0.0};
+            if (glm::length(side) < 1e-6)
+                side = {0.0, 1.0, 0.0};
+            side = glm::normalize(side);
+
+            const auto [activeDirection, directionInserted] =
+                activeAvoidanceDirections.try_emplace(secondName, side);
+            if (!directionInserted)
+                side = activeDirection->second;
+            auto [direction, inserted] = avoidanceDirections.try_emplace(secondName, side);
+            if (!inserted)
+                direction->second += side;
+            currentlyAvoiding.insert(secondName);
+        }
+    }
+
+    for (const std::string& droneName : currentlyAvoiding)
+    {
+        const auto task = std::find_if(mission->tasks.begin(), mission->tasks.end(),
+            [&droneName](const ScenarioResult::MissionTask& candidate)
+            {
+                return candidate.droneName == droneName && candidate.started
+                    && !candidate.completed && !candidate.failed;
+            });
+        if (task == mission->tasks.end())
+            continue;
+
+        glm::dvec3 direction = avoidanceDirections.at(droneName);
+        if (glm::length(direction) < 1e-6)
+            direction = {0.0, 1.0, 0.0};
+        direction = glm::normalize(direction);
+        const glm::dvec3 avoidanceTarget = CurrentWaypoint(*task)
+            + direction * settings.lateralOffsetMeters;
+        const CommandResult commandResult = simulation.Apply(droneIds.at(droneName),
+            {DroneCommand::Kind::SetWaypoint, avoidanceTarget});
+        if (commandResult != CommandResult::Accepted)
+        {
+            result.issues.push_back(droneName + " 드론에 충돌 회피 경로를 전달하지 못했습니다.");
+            continue;
+        }
+        if (!dronesAvoiding.contains(droneName))
+        {
+            ++result.collisionAvoidanceEvents;
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + droneName + " 드론이 예상 충돌을 피해 옆 경로로 이동합니다.");
+        }
+    }
+
+    for (const std::string& droneName : dronesAvoiding)
+    {
+        if (!currentlyAvoiding.contains(droneName))
+        {
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + droneName + " 드론이 위험 구간을 벗어나 조사 경로로 돌아갑니다.");
+        }
+    }
+    std::erase_if(activeAvoidanceDirections,
+        [&currentlyAvoiding](const auto& entry)
+        {
+            return !currentlyAvoiding.contains(entry.first);
+        });
+    dronesAvoiding = std::move(currentlyAvoiding);
+}
+
 void ApplyCameraEvents(
     std::uint64_t tick,
     const std::vector<ScheduledCameraEvent>& cameraEvents,
@@ -754,6 +900,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
     std::size_t nextCommand = 0;
     std::size_t nextCameraEvent = 0;
     std::unordered_map<std::string, std::uint64_t> lastDeliveredSequence;
+    DroneNameSet dronesAvoiding;
+    std::unordered_map<std::string, glm::dvec3> activeAvoidanceDirections;
     std::vector<glm::dvec3> dronePositionsMeters;
     if (definition.minimumDroneSeparationMeters)
         dronePositionsMeters.reserve(definition.drones.size());
@@ -770,6 +918,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
             observations, definition, result);
         UpdateFormationLinks(tick, definition.formationLinks, simulation, droneIds,
             observations, result);
+        UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
+            droneIds, observations, dronesAvoiding, activeAvoidanceDirections, result);
         ApplyCameraEvents(tick, definition.cameraEvents, simulation, nextCameraEvent, result);
         simulation.AdvanceOneTick();
         RecordMinimumDroneSeparation(

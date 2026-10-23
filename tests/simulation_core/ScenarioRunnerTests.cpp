@@ -246,6 +246,39 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
         EXPECT_DOUBLE_EQ(task.waypointsMeters[1].x, 4.0 * static_cast<double>(index + 1));
         EXPECT_DOUBLE_EQ(task.waypointsMeters.back().y, 8.0);
     }
+
+    constexpr std::string_view collisionAvoidanceScenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":600,
+     "drones":[
+       {"name":"west","initial_position_meters":[-4,0,0]},
+       {"name":"east","initial_position_meters":[4,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"west","type":"takeoff"},
+       {"tick":0,"drone":"east","type":"takeoff"}],
+     "collision_avoidance":{"safety_distance_meters":3,
+       "prediction_horizon_seconds":2,"lateral_offset_meters":10},
+     "mission":{"name":"crossing-flight","tasks":[
+       {"name":"west-to-east","role":"cross","drone":"west",
+        "target_position_meters":[4,0,1.5],"start_tick":100,"deadline_tick":580,"tolerance_meters":0.2},
+       {"name":"east-to-west","role":"cross","drone":"east",
+        "target_position_meters":[-4,0,1.5],"start_tick":100,"deadline_tick":580,"tolerance_meters":0.2}]},
+     "expected":{"tolerance_meters":0.5,"minimum_drone_separation_meters":2.5,
+       "drones":[
+         {"name":"west","mode":"hovering","position_meters":[4,0,1.5]},
+         {"name":"east","mode":"hovering","position_meters":[-4,0,1.5]}]}}
+    )json";
+    const ScenarioResult avoidanceResult = RunScenario(collisionAvoidanceScenario);
+    EXPECT_TRUE(avoidanceResult.passed)
+        << (avoidanceResult.issues.empty() ? "" : avoidanceResult.issues.front())
+        << " minimum=" << avoidanceResult.minimumDroneSeparationMeters.value_or(-1.0)
+        << " avoidance_events=" << avoidanceResult.collisionAvoidanceEvents;
+    ASSERT_TRUE(avoidanceResult.mission.has_value());
+    EXPECT_TRUE(avoidanceResult.mission->passed);
+    EXPECT_GT(avoidanceResult.collisionAvoidanceEvents, 0U);
+    ASSERT_TRUE(avoidanceResult.minimumDroneSeparationMeters.has_value());
+    EXPECT_GE(*avoidanceResult.minimumDroneSeparationMeters, 2.5);
+    ASSERT_TRUE(avoidanceResult.minimumPredictedDroneSeparationMeters.has_value());
+    EXPECT_LT(*avoidanceResult.minimumPredictedDroneSeparationMeters, 3.0);
 }
 
 TEST(ScenarioRunnerTests, CoreScenarios)

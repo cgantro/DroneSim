@@ -102,6 +102,9 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
         {"drones", std::move(drones)},
         {"mission", std::move(mission)},
         {"minimum_drone_separation_meters", result.minimumDroneSeparationMeters},
+        {"minimum_predicted_drone_separation_meters",
+            result.minimumPredictedDroneSeparationMeters},
+        {"collision_avoidance_events", result.collisionAvoidanceEvents},
         {"camera", {
             {"status", aerosimlab::simulation::ToString(result.finalCamera.status)},
             {"frame_count", result.finalCamera.frameCount},
