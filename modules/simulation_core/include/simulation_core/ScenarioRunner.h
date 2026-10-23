@@ -15,10 +15,14 @@ namespace aerosimlab::simulation
 {
 /**
  * @brief JSON 시나리오 실행의 최종 상태와 시험 결과를 돌려준다.
- * @details 통과 여부는 명령 처리와 마지막 상태·위치·선택한 자세 기대값으로 정한다.
+ * @details 통신 단절로 임무가 남은 경우 실패로 단정하지 않고 미확정으로 기록한다.
  */
 struct ScenarioResult
 {
+    /** @brief 모든 기준을 만족하면 Passed, 명시적 오류면 Failed, 근거가 부족하면 Inconclusive다. */
+    enum class Outcome { Passed, Failed, Inconclusive };
+    Outcome outcome = Outcome::Inconclusive;
+    /** @brief outcome이 Passed일 때만 true다. */
     bool passed = false;
     std::uint64_t tickCount = 0;
     double simulationTimeSeconds = 0.0;
@@ -109,10 +113,12 @@ struct ScenarioResult
         bool failed = false;
         std::optional<std::uint64_t> completedTick;
     };
-    /** @brief 모든 임무가 기한 안에 끝났는지와 역할별 결과다. */
+    /** @brief 임무의 완료·실패·미확정 결과와 역할별 진행 상태다. */
     struct Mission
     {
         std::string name;
+        Outcome outcome = Outcome::Inconclusive;
+        /** @brief 모든 작업이 완료됐을 때만 true다. 실패와 미확정은 outcome으로 나눈다. */
         bool passed = false;
         /** @brief 완료한 작업 수와 전체 작업 중 완료한 비율이다. */
         std::size_t completedTaskCount = 0;
@@ -127,6 +133,9 @@ struct ScenarioResult
     /** @brief mission을 지정한 시나리오에만 결과가 들어간다. */
     std::optional<Mission> mission;
 };
+
+/** @brief 결과 상태를 JSON과 사용자 안내에 쓸 짧은 영문 이름으로 바꾼다. */
+[[nodiscard]] std::string_view ToString(ScenarioResult::Outcome outcome) noexcept;
 
 /**
  * @brief JSON 문자열에 적힌 명령을 고정 tick에 적용하고 예상 결과와 비교한다.

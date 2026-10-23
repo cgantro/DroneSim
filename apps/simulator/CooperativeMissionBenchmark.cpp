@@ -137,6 +137,8 @@ nlohmann::json MeasureCooperativeMissionRun(
         {"process_cpu_percent_approx", wallSeconds > 0.0
             ? 100.0 * cpuSeconds / wallSeconds : 0.0},
         {"scenario_passed", result.passed},
+        {"scenario_outcome", aerosimlab::simulation::ToString(result.outcome)},
+        {"mission_outcome", aerosimlab::simulation::ToString(result.mission->outcome)},
         {"mission_passed", result.mission->passed},
         {"mission_task_count", result.mission->tasks.size()},
         {"completed_task_count", completedTasks}};

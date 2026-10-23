@@ -1070,13 +1070,38 @@ void CheckExpectedResults(
         result.mission->passed = std::all_of(
             result.mission->tasks.begin(), result.mission->tasks.end(),
             [](const ScenarioResult::MissionTask& task) { return task.completed; });
+        const bool hasFailedTask = std::any_of(
+            result.mission->tasks.begin(), result.mission->tasks.end(),
+            [](const ScenarioResult::MissionTask& task) { return task.failed; });
+        result.mission->outcome = hasFailedTask
+            ? ScenarioResult::Outcome::Failed
+            : result.mission->passed
+                ? ScenarioResult::Outcome::Passed
+                : ScenarioResult::Outcome::Inconclusive;
     }
 
     CheckExpectedDroneResults(definition, result);
     CheckExpectedSeparation(definition, result);
     CheckExpectedCamera(definition, result);
-    result.passed = result.issues.empty();
+    if (!result.issues.empty())
+        result.outcome = ScenarioResult::Outcome::Failed;
+    else if (result.mission)
+        result.outcome = result.mission->outcome;
+    else
+        result.outcome = ScenarioResult::Outcome::Passed;
+    result.passed = result.outcome == ScenarioResult::Outcome::Passed;
 }
+}
+
+std::string_view ToString(ScenarioResult::Outcome outcome) noexcept
+{
+    switch (outcome)
+    {
+    case ScenarioResult::Outcome::Passed: return "passed";
+    case ScenarioResult::Outcome::Failed: return "failed";
+    case ScenarioResult::Outcome::Inconclusive: return "inconclusive";
+    }
+    return "inconclusive";
 }
 
 ScenarioResult RunScenario(std::string_view jsonText)

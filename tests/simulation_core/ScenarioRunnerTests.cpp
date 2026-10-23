@@ -244,8 +244,10 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     const ScenarioResult result = RunScenario(
         ReadScenarioFixture("scenarios/multi-drone/four-drone-survey-outage.json"));
     ASSERT_TRUE(result.passed);
+    EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Passed);
     ASSERT_TRUE(result.mission.has_value());
     ASSERT_TRUE(result.mission->passed);
+    EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Passed);
     EXPECT_EQ(result.mission->completedTaskCount, 4U);
 
     const auto disconnectedDrone = std::find_if(result.drones.begin(), result.drones.end(),
@@ -331,6 +333,7 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
 
     const ScenarioResult communicationFaults = RunScenario(communicationFaultScenario);
     EXPECT_FALSE(communicationFaults.passed);
+    EXPECT_EQ(communicationFaults.outcome, ScenarioResult::Outcome::Failed);
     ASSERT_EQ(communicationFaults.issues.size(), 1);
     EXPECT_NE(communicationFaults.issues.front().find("역순 명령"), std::string::npos);
     ASSERT_EQ(communicationFaults.eventLog.size(), 3);
@@ -389,6 +392,73 @@ void Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones()
     EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
     EXPECT_DOUBLE_EQ(*result.minimumDroneSeparationMeters, 2.0);
+}
+
+void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":145,
+     "drones":[{"name":"scout","initial_position_meters":[0,0,0]},
+       {"name":"relay","initial_position_meters":[5,0,0]}],
+     "commands":[{"tick":0,"drone":"scout","type":"takeoff"},
+       {"tick":0,"drone":"relay","type":"takeoff"}],
+     "communication_outages":[
+       {"drone":"scout","start_tick":122,"end_tick":145,"heartbeat_timeout_ticks":2},
+       {"drone":"relay","start_tick":122,"end_tick":145,"heartbeat_timeout_ticks":2}],
+     "mission":{"name":"unconfirmed-survey","tasks":[
+       {"name":"sector-1","role":"survey","drone":"scout",
+        "target_position_meters":[100,0,1.5],"start_tick":120,
+        "deadline_tick":144,"tolerance_meters":0.1},
+       {"name":"sector-2","role":"survey","drone":"relay",
+        "target_position_meters":[105,0,1.5],"start_tick":120,
+        "deadline_tick":144,"tolerance_meters":0.1}]},
+     "expected":{"tolerance_meters":1000,"drones":[
+       {"name":"scout","mode":"following_waypoint","position_meters":[0,0,1.5]},
+       {"name":"relay","mode":"following_waypoint","position_meters":[5,0,1.5]}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    ASSERT_TRUE(result.mission.has_value());
+    EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Inconclusive);
+    EXPECT_FALSE(result.passed);
+    EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Inconclusive);
+    EXPECT_FALSE(result.mission->passed);
+    ASSERT_EQ(result.mission->tasks.size(), 2U);
+    for (const ScenarioResult::MissionTask& task : result.mission->tasks)
+    {
+        EXPECT_FALSE(task.completed);
+        EXPECT_FALSE(task.failed);
+        EXPECT_TRUE(task.droneName.empty());
+    }
+    ASSERT_EQ(result.drones.size(), 2U);
+    EXPECT_EQ(result.drones.front().communicationStatus,
+        ScenarioResult::Drone::CommunicationStatus::Unknown);
+    EXPECT_EQ(ToString(result.outcome), "inconclusive");
+
+    constexpr std::string_view missedDeadlineScenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":123,
+     "drones":[{"name":"scout","initial_position_meters":[0,0,0]},
+       {"name":"relay","initial_position_meters":[5,0,0]}],
+     "commands":[{"tick":0,"drone":"scout","type":"takeoff"},
+       {"tick":0,"drone":"relay","type":"takeoff"}],
+     "mission":{"name":"missed-survey","tasks":[
+       {"name":"sector-1","role":"survey","drone":"scout",
+        "target_position_meters":[100,0,1.5],"start_tick":120,
+        "deadline_tick":121,"tolerance_meters":0.1},
+       {"name":"sector-2","role":"survey","drone":"relay",
+        "target_position_meters":[105,0,1.5],"start_tick":120,
+        "deadline_tick":121,"tolerance_meters":0.1}]},
+     "expected":{"tolerance_meters":1000,"drones":[
+       {"name":"scout","mode":"following_waypoint","position_meters":[0,0,1.5]},
+       {"name":"relay","mode":"following_waypoint","position_meters":[5,0,1.5]}]}}
+    )json";
+
+    const ScenarioResult failedResult = RunScenario(missedDeadlineScenario);
+    ASSERT_TRUE(failedResult.mission.has_value());
+    EXPECT_EQ(failedResult.outcome, ScenarioResult::Outcome::Failed);
+    EXPECT_EQ(failedResult.mission->outcome, ScenarioResult::Outcome::Failed);
+    EXPECT_FALSE(failedResult.passed);
+    EXPECT_FALSE(failedResult.issues.empty());
 }
 
 void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
@@ -614,6 +684,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
+    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea());
 
     constexpr std::string_view duplicateMissionAssignment = R"json(
