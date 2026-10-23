@@ -231,27 +231,38 @@ void Verify_AirSimFlightController_HoverTargetsFollowMassAndThrustCoefficient()
     EXPECT_LT(strongerThrustTargets[0], baselineTargets[0]);
 }
 
-void Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude()
+void Verify_AirSimPhysics_RotorTorqueResponseScalesWithPitchInertia()
 {
-    PhysicsWorld world;
-    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    RigidBodyDefinition definition;
-    definition.positionMeters.z = 10.0;
-    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    const auto pitchRateAfterAsymmetricInput = [](const QuadrotorParameters& parameters)
+    {
+        PhysicsWorld world;
+        RigidBodyDefinition definition;
+        definition.positionMeters.z = 10.0;
+        const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
 
-    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
-    motorTargets.fill(760.0);
-    // 두 로터의 목표 속도를 높여 한쪽으로 기울이는 토크를 만든다.
-    motorTargets[0] = 900.0;
-    motorTargets[2] = 900.0;
-    world.SetMotorTargets(drone, motorTargets);
+        std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+        motorTargets.fill(760.0);
+        world.SetMotorTargets(drone, motorTargets);
+        for (int tick = 0; tick < 120; ++tick)
+            world.Step(1.0 / 60.0);
 
-    for (int tick = 0; tick < 60; ++tick)
-        world.Step(1.0 / 60.0);
+        // 앞쪽 두 로터를 빠르게 돌려 기체의 좌우 축에 회전 토크를 만든다.
+        motorTargets[0] = 900.0;
+        motorTargets[2] = 900.0;
+        world.SetMotorTargets(drone, motorTargets);
+        for (int tick = 0; tick < 60; ++tick)
+            world.Step(1.0 / 60.0);
+        return std::abs(world.State(drone).angularVelocityRadiansPerSecond.y);
+    };
 
-    const RigidBodyState state = world.State(drone);
-    EXPECT_GT(std::abs(state.angularVelocityRadiansPerSecond.y), 0.1);
-    EXPECT_GT(std::abs(state.orientation.y), 0.01);
+    const QuadrotorParameters baseline = QuadrotorParameters::X500Gazebo();
+    QuadrotorParameters higherPitchInertia = baseline;
+    higherPitchInertia.principalInertiaKilogramMetersSquared.y *= 2.0;
+
+    const double baselinePitchRate = pitchRateAfterAsymmetricInput(baseline);
+    const double higherInertiaPitchRate = pitchRateAfterAsymmetricInput(higherPitchInertia);
+    EXPECT_GT(baselinePitchRate, 0.1);
+    EXPECT_NEAR(higherInertiaPitchRate / baselinePitchRate, 0.5, 0.2);
 }
 
 void Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes()
@@ -584,7 +595,8 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimFlightController_HoverTargetsFollowMassAndThrustCoefficient());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysics_RotorTorqueResponseScalesWithPitchInertia());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
