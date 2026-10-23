@@ -6,6 +6,8 @@
 
 먼저 표에서 **내가 알고 싶은 질문**을 찾으세요. 링크를 누르면 그 질문에 답하려고 실행한 원본 자료가 열립니다. 숫자의 의미와 해석 한계는 [성능 검증 문서](../../docs/public/성능검증.md)에 설명되어 있습니다.
 
+목록에서 가장 최근에 저장한 자료도 2026년 10월 23일 리비전 `69ecab93`에서 측정했습니다. 코드가 그 뒤에 바뀌었으므로 현재 코드의 성능으로 보려면 같은 시험을 다시 실행해야 합니다.
+
 | 알고 싶은 것 | 시험 목적 | 결과 자료 |
 | --- | --- | --- |
 | 화면이 실제 창에서 끊기는가? | 장면과 EO 카메라를 함께 켰을 때 앱 프레임에 긴 지연이 있는지 확인 | [최신 화면 측정 1회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-1.json), [2회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-2.json), [3회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-3.json), [이전 반복 측정](aerosimlab-visible-warmup-repeats-release-2026-10-23-aac03875.json) |
