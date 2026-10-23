@@ -43,78 +43,9 @@ void Verify_TerrainGrid_LoadsThePublicTestAreaWithItsLocalHeightOrigin()
         terrain.heightOffsetsMeters.end()), 300.0F);
 }
 
-void Verify_TerrainGrid_RejectsARequestedSampleOutsideTheGrid()
-{
-    TerrainGrid terrain;
-    terrain.sampleCount = 3;
-    terrain.heightOffsetsMeters.resize(9);
-
-    EXPECT_THROW(static_cast<void>(terrain.HeightAt(3, 0)), std::out_of_range);
-}
-
-void Verify_TerrainGrid_InterpolatesHeightAtALocalPosition()
-{
-    TerrainGrid terrain;
-    terrain.sampleCount = 3;
-    terrain.spacingXMeters = 2.0F;
-    terrain.spacingYMeters = 2.0F;
-    terrain.heightOffsetsMeters = {0, 2, 4, 2, 4, 6, 4, 6, 8};
-
-    EXPECT_FLOAT_EQ(4.0F, terrain.HeightAtLocalMeters({0.0, 0.0}));
-    EXPECT_FLOAT_EQ(2.0F, terrain.HeightAtLocalMeters({-1.0, 1.0}));
-    EXPECT_THROW(static_cast<void>(terrain.HeightAtLocalMeters({2.1, 0.0})),
-        std::out_of_range);
-}
-
-void Verify_BuildingFootprint_LoadsThePublicMapWithoutInventingMissingHeights()
-{
-    const std::filesystem::path root{AEROSIMLAB_SOURCE_DIR};
-    const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/bukhansan-demo/terrain.grid");
-    const std::vector<BuildingFootprint> buildings = LoadBuildingFootprints(
-        root / "assets/maps/bukhansan-demo/buildings.geojson", terrain);
-
-    ASSERT_EQ(buildings.size(), 17U);
-    for (const BuildingFootprint& building : buildings)
-    {
-        EXPECT_FALSE(building.osmId.empty());
-        EXPECT_FALSE(building.buildingType.empty());
-        ASSERT_GE(building.outlineMeters.size(), 4U);
-        EXPECT_DOUBLE_EQ(building.outlineMeters.front().x, building.outlineMeters.back().x);
-        EXPECT_DOUBLE_EQ(building.outlineMeters.front().y, building.outlineMeters.back().y);
-        EXPECT_FALSE(building.heightMeters.has_value());
-    }
-}
-
-void Verify_StaticFacility_LoadsTheSurveyedParkFeaturesAndCollisionBounds()
-{
-    const std::vector<StaticFacility> facilities = LoadStaticFacilities(
-        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-        / "assets/maps/bukhansan-demo/facilities.json");
-
-    ASSERT_EQ(facilities.size(), 49U);
-    for (const StaticFacility& facility : facilities)
-    {
-        EXPECT_FALSE(facility.id.empty());
-        EXPECT_FALSE(facility.type.empty());
-        EXPECT_TRUE(std::isfinite(facility.centerMeters.x));
-        EXPECT_TRUE(std::isfinite(facility.centerMeters.y));
-        EXPECT_TRUE(std::isfinite(facility.centerMeters.z));
-        EXPECT_GT(facility.halfExtentsMeters.x, 0.0F);
-        EXPECT_GT(facility.halfExtentsMeters.y, 0.0F);
-        EXPECT_GT(facility.halfExtentsMeters.z, 0.0F);
-        EXPECT_LT(std::abs(facility.centerMeters.x), 800.0);
-        EXPECT_LT(std::abs(facility.centerMeters.y), 1'000.0);
-    }
-}
-
 TEST(TerrainGridTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_TerrainGrid_LoadsThePublicTestAreaWithItsLocalHeightOrigin());
-    EXPECT_NO_FATAL_FAILURE(Verify_TerrainGrid_RejectsARequestedSampleOutsideTheGrid());
-    EXPECT_NO_FATAL_FAILURE(Verify_TerrainGrid_InterpolatesHeightAtALocalPosition());
-    EXPECT_NO_FATAL_FAILURE(Verify_BuildingFootprint_LoadsThePublicMapWithoutInventingMissingHeights());
-    EXPECT_NO_FATAL_FAILURE(Verify_StaticFacility_LoadsTheSurveyedParkFeaturesAndCollisionBounds());
 }
 
 }

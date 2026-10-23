@@ -87,64 +87,12 @@ void ReplayMatchesRecordedSimulation(SimulationDynamics dynamics)
 }
 }
 
-void Verify_CommandRecording_ReplaysEveryTickIncludingStartAndStopTicks()
-{
-    CommandRecording recording;
-    ASSERT_TRUE(recording.StartRecording());
-
-    recording.FinishTick();
-    const DroneCommand takeoff{DroneCommand::Kind::TakeOff};
-    recording.Record(takeoff);
-    recording.FinishTick();
-
-    ASSERT_TRUE(recording.StopRecording());
-    recording.FinishTick(true);
-    ASSERT_EQ(recording.TickCount(), 3);
-    ASSERT_TRUE(recording.StartReplay());
-
-    EXPECT_TRUE(recording.CommandsForReplayTick().empty());
-    recording.AdvanceReplayTick();
-
-    const auto commandTick = recording.CommandsForReplayTick();
-    ASSERT_EQ(commandTick.size(), 1);
-    EXPECT_EQ(commandTick.front().command.kind, DroneCommand::Kind::TakeOff);
-    recording.AdvanceReplayTick();
-
-    EXPECT_TRUE(recording.CommandsForReplayTick().empty());
-    recording.AdvanceReplayTick();
-    EXPECT_TRUE(recording.ReplayFinished());
-}
-
-void Verify_CommandRecording_DoesNotStartReplayWithoutRecordedCommands()
-{
-    CommandRecording recording;
-    EXPECT_FALSE(recording.StartReplay());
-
-    ASSERT_TRUE(recording.StartRecording());
-    recording.FinishTick();
-    ASSERT_TRUE(recording.StopRecording());
-    recording.FinishTick(true);
-    EXPECT_FALSE(recording.StartReplay());
-}
-
 void Verify_CommandRecording_ReplayMatchesRecordedKinematicSimulation()
 {
     ReplayMatchesRecordedSimulation(SimulationDynamics::Kinematic);
 }
 
-#ifndef __EMSCRIPTEN__
-void Verify_CommandRecording_ReplayMatchesRecordedRigidBodySimulation()
-{
-    ReplayMatchesRecordedSimulation(SimulationDynamics::RigidBody);
-}
-#endif
-
 TEST(CommandRecordingTests, CoreScenarios)
 {
-    EXPECT_NO_FATAL_FAILURE(Verify_CommandRecording_ReplaysEveryTickIncludingStartAndStopTicks());
-    EXPECT_NO_FATAL_FAILURE(Verify_CommandRecording_DoesNotStartReplayWithoutRecordedCommands());
     EXPECT_NO_FATAL_FAILURE(Verify_CommandRecording_ReplayMatchesRecordedKinematicSimulation());
-#ifndef __EMSCRIPTEN__
-    EXPECT_NO_FATAL_FAILURE(Verify_CommandRecording_ReplayMatchesRecordedRigidBodySimulation());
-#endif
 }

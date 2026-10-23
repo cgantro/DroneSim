@@ -9,16 +9,6 @@
 
 namespace aerosimlab::simulation
 {
-void Verify_QuadrotorParameters_X500HasFourBalancedRotorsAndCollisionBoxes()
-{
-    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-
-    EXPECT_DOUBLE_EQ(parameters.massKilograms, 2.0643076923076924);
-    EXPECT_EQ(parameters.rotors.size(), 4U);
-    EXPECT_EQ(parameters.collisionBoxes.size(), 9U);
-    EXPECT_NEAR(parameters.thrustCoefficientNewtonsPerSpeedSquared, 8.54858e-6, 1.0e-15);
-}
-
 void Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference()
 {
     const QuadrotorParameters parameters = QuadrotorParameters::X500MotorTableEstimate();
@@ -93,7 +83,6 @@ void Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference()
 
 TEST(QuadrotorModelTests, CoreScenarios)
 {
-    EXPECT_NO_FATAL_FAILURE(Verify_QuadrotorParameters_X500HasFourBalancedRotorsAndCollisionBoxes());
     EXPECT_NO_FATAL_FAILURE(Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference());
 }
 

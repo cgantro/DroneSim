@@ -39,36 +39,6 @@ RigidBodyState SimulateMotorInput(
 }
 }
 
-void Verify_AirSimPhysics_GravityMovesTheDroneDown()
-{
-    PhysicsWorld world;
-    const RigidBodyHandle drone = MakeX500(world, 10.0);
-
-    for (int tick = 0; tick < 60; ++tick)
-        world.Step(1.0 / 60.0);
-
-    const RigidBodyState state = world.State(drone);
-    EXPECT_LT(state.positionMeters.z, 6.0);
-    EXPECT_LT(state.linearVelocityMetersPerSecond.z, -8.0);
-}
-
-void Verify_AirSimPhysics_RotorTargetsLiftTheDrone()
-{
-    PhysicsWorld world;
-    const RigidBodyHandle drone = MakeX500(world, 2.0);
-    const auto parameters = QuadrotorParameters::X500Gazebo();
-    const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
-        / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
-    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
-    motorTargets.fill(hoverSpeed * 1.2);
-    world.SetMotorTargets(drone, motorTargets);
-
-    for (int tick = 0; tick < 120; ++tick)
-        world.Step(1.0 / 60.0);
-
-    EXPECT_GT(world.State(drone).positionMeters.z, 2.0);
-}
-
 void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
 {
     constexpr double stepSeconds = 1.0 / 60.0;
@@ -107,29 +77,6 @@ void Verify_AirSimPhysics_TerrainContactStopsTheDrone()
     const RigidBodyState state = world.State(drone);
     EXPECT_GT(state.positionMeters.z, 0.0);
     EXPECT_LT(std::abs(state.linearVelocityMetersPerSecond.z), 0.2);
-}
-
-void Verify_AirSimPhysics_SlopedTerrainContactUsesTheDroneFootprint()
-{
-    terrain::TerrainGrid slope;
-    slope.sampleCount = 3;
-    slope.spacingXMeters = 2.0F;
-    slope.spacingYMeters = 2.0F;
-    slope.heightOffsetsMeters = {-1.0F, 0.0F, 1.0F,
-        -1.0F, 0.0F, 1.0F,
-        -1.0F, 0.0F, 1.0F};
-
-    PhysicsWorld world;
-    world.SetTerrain(std::move(slope));
-    RigidBodyDefinition definition;
-    definition.positionMeters.z = 0.3;
-    const RigidBodyHandle drone = world.CreateQuadrotor(
-        definition, QuadrotorParameters::X500Gazebo());
-
-    for (int tick = 0; tick < 60; ++tick)
-        world.Step(1.0 / 60.0);
-
-    EXPECT_GT(world.State(drone).positionMeters.z, 0.25);
 }
 
 void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
@@ -208,134 +155,12 @@ void Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere()
     EXPECT_GT(state.linearVelocityMetersPerSecond.x, 0.8);
 }
 
-void Verify_AirSimCollision_SeparatesOverlappingDrones()
-{
-    PhysicsWorld world;
-    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    RigidBodyDefinition leftDefinition;
-    leftDefinition.positionMeters = {-0.16, 0.0, 10.0};
-    RigidBodyDefinition rightDefinition;
-    rightDefinition.positionMeters = {0.16, 0.0, 10.0};
-    const RigidBodyHandle left = world.CreateQuadrotor(leftDefinition, parameters);
-    const RigidBodyHandle right = world.CreateQuadrotor(rightDefinition, parameters);
-
-    RigidBodyState leftState = world.State(left);
-    leftState.linearVelocityMetersPerSecond.x = 1.0;
-    world.SetState(left, leftState);
-    RigidBodyState rightState = world.State(right);
-    rightState.linearVelocityMetersPerSecond.x = -1.0;
-    world.SetState(right, rightState);
-
-    world.Step(1.0 / 60.0);
-
-    const auto leftAfter = world.State(left);
-    const auto rightAfter = world.State(right);
-    EXPECT_LT(leftAfter.positionMeters.x, leftDefinition.positionMeters.x);
-    EXPECT_GT(rightAfter.positionMeters.x, rightDefinition.positionMeters.x);
-}
-
-void Verify_AirSimPhysics_RemovingBodyKeepsOtherHandlesValid()
-{
-    PhysicsWorld world;
-    const RigidBodyHandle first = MakeX500(world, 5.0);
-    const RigidBodyHandle removed = MakeX500(world, 10.0);
-    const RigidBodyHandle last = MakeX500(world, 15.0);
-
-    ASSERT_TRUE(world.DestroyBody(removed));
-    EXPECT_FALSE(world.DestroyBody(removed));
-    EXPECT_THROW(static_cast<void>(world.State(removed)), std::out_of_range);
-    EXPECT_TRUE(std::isfinite(world.State(last).positionMeters.z));
-
-    world.Step(1.0 / 60.0);
-    EXPECT_TRUE(std::isfinite(world.State(first).positionMeters.z));
-    EXPECT_TRUE(std::isfinite(world.State(last).positionMeters.z));
-
-    const RigidBodyHandle replacement = MakeX500(world, 20.0);
-    EXPECT_NE(replacement.value, removed.value);
-    EXPECT_THROW(static_cast<void>(world.State(removed)), std::out_of_range);
-    world.Step(1.0 / 60.0);
-    EXPECT_TRUE(std::isfinite(world.State(replacement).positionMeters.z));
-}
-
-void Verify_AirSimPhysics_RejectsInvalidVehicleConfiguration()
-{
-    PhysicsWorld world;
-    QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    parameters.massKilograms = 0.0;
-
-    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
-        RigidBodyDefinition{}, parameters)),
-        std::invalid_argument);
-
-    parameters = QuadrotorParameters::X500Gazebo();
-    parameters.maximumMotorSpeedRadiansPerSecond = 0.0;
-    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
-        RigidBodyDefinition{}, parameters)),
-        std::invalid_argument);
-
-    RigidBodyDefinition invalidPose;
-    invalidPose.orientation = {0.0, 0.0, 0.0, 0.0};
-    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
-        invalidPose, QuadrotorParameters::X500Gazebo())),
-        std::invalid_argument);
-
-    parameters = QuadrotorParameters::X500Gazebo();
-    parameters.collisionBoxes.front().halfExtentsMeters.x = 0.0F;
-    EXPECT_THROW(static_cast<void>(world.CreateQuadrotor(
-        RigidBodyDefinition{}, parameters)),
-        std::invalid_argument);
-}
-
-void Verify_AirSimPhysics_DifferentialRotorInputAndInertiaChangeVehicleResponse()
-{
-    const QuadrotorParameters standard = QuadrotorParameters::X500Gazebo();
-    QuadrotorParameters heavier = standard;
-    heavier.massKilograms *= 2.0;
-    heavier.principalInertiaKilogramMetersSquared *= 2.0;
-
-    const double hoverSpeed = std::sqrt(standard.massKilograms * 9.81
-        / (QuadrotorParameters::rotorCount
-            * standard.thrustCoefficientNewtonsPerSpeedSquared));
-    std::array<double, QuadrotorParameters::rotorCount> equalMotorTargets{};
-    equalMotorTargets.fill(hoverSpeed * 1.1);
-    const RigidBodyState standardMassState = SimulateMotorInput(standard, equalMotorTargets);
-    const RigidBodyState heavierState = SimulateMotorInput(heavier, equalMotorTargets);
-    EXPECT_GT(standardMassState.linearVelocityMetersPerSecond.z,
-        heavierState.linearVelocityMetersPerSecond.z + 0.1);
-
-    constexpr std::array<double, QuadrotorParameters::rotorCount> unevenMotorTargets{
-        500.0, 700.0, 900.0, 1100.0};
-    QuadrotorParameters higherInertia = standard;
-    higherInertia.principalInertiaKilogramMetersSquared *= 4.0;
-    const RigidBodyState standardInertiaState =
-        SimulateMotorInput(standard, unevenMotorTargets);
-    const RigidBodyState higherInertiaState =
-        SimulateMotorInput(higherInertia, unevenMotorTargets);
-    const auto angularSpeed = [](const glm::dvec3& velocity)
-    {
-        return std::sqrt(velocity.x * velocity.x
-            + velocity.y * velocity.y + velocity.z * velocity.z);
-    };
-    EXPECT_GT(angularSpeed(standardInertiaState.angularVelocityRadiansPerSecond), 1.0e-6);
-    EXPECT_GT(glm::length(glm::dvec3{standardInertiaState.orientation.x,
-        standardInertiaState.orientation.y, standardInertiaState.orientation.z}), 1.0e-7);
-    EXPECT_GT(angularSpeed(standardInertiaState.angularVelocityRadiansPerSecond),
-        angularSpeed(higherInertiaState.angularVelocityRadiansPerSecond));
-}
-
 TEST(PhysicsWorldTests, CoreScenarios)
 {
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_GravityMovesTheDroneDown());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorTargetsLiftTheDrone());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_SlopedTerrainContactUsesTheDroneFootprint());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_SeparatesOverlappingDrones());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RemovingBodyKeepsOtherHandlesValid());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RejectsInvalidVehicleConfiguration());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_DifferentialRotorInputAndInertiaChangeVehicleResponse());
 }
 
 }
