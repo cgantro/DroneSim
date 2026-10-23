@@ -1,6 +1,7 @@
 #include "simulation_core/PhysicsWorld.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/QuadrotorModel.h"
+#include "CollisionGeometry.h"
 #include "terrain/BuildingFootprint.h"
 #include "terrain/TerrainGrid.h"
 
@@ -210,6 +211,28 @@ void Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere()
     EXPECT_GT(state.linearVelocityMetersPerSecond.x, 0.8);
 }
 
+void Verify_CollisionBroadphase_KeepsTouchingBoxesForPreciseTest()
+{
+    using detail::BroadphaseMayOverlap;
+    using detail::CollisionRadius;
+    using detail::FindBoxContact;
+    using detail::ToWorldBox;
+
+    const std::array<RigidBodyBox, 1> boxes{
+        RigidBodyBox{glm::vec3{3.0F, 4.0F, 12.0F}, glm::dvec3{0.0},
+            glm::dquat{1.0, 0.0, 0.0, 0.0}}};
+    const double radius = CollisionRadius(boxes);
+    const detail::OrientedBox first = ToWorldBox(
+        glm::dvec3{0.0}, glm::dquat{1.0, 0.0, 0.0, 0.0}, boxes.front());
+    const detail::OrientedBox second = ToWorldBox(
+        glm::dvec3{6.0, 8.0, 24.0},
+        glm::dquat{1.0, 0.0, 0.0, 0.0}, boxes.front());
+
+    ASSERT_TRUE(FindBoxContact(first, second));
+    EXPECT_TRUE(BroadphaseMayOverlap(
+        first.centerMeters, radius, second.centerMeters, radius));
+}
+
 void Verify_AirSimCollision_SeparatesOverlappingDrones()
 {
     PhysicsWorld world;
@@ -332,6 +355,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
+    EXPECT_NO_FATAL_FAILURE(Verify_CollisionBroadphase_KeepsTouchingBoxesForPreciseTest());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_SeparatesOverlappingDrones());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimBoundary_RejectsValuesItCannotRepresent());
 }

@@ -29,6 +29,16 @@ struct BoxContact
 /** @brief 기체 기준 충돌 모양의 바깥 반경을 구한다. */
 double CollisionRadius(std::span<const RigidBodyBox> boxes);
 
+/**
+ * @brief 두 충돌 외접구가 겹칠 수 있으면 정밀 상자 검사를 허용한다.
+ * @details 정밀 검사는 맞닿은 상자도 접촉으로 보므로 외접구가 정확히 맞닿은 쌍도 남긴다.
+ */
+bool BroadphaseMayOverlap(
+    const glm::dvec3& firstCenter,
+    double firstRadius,
+    const glm::dvec3& secondCenter,
+    double secondRadius) noexcept;
+
 /** @brief 상자 표면에서 지정한 방향으로 가장 멀리 나온 꼭짓점을 구한다. */
 glm::dvec3 SupportPoint(const OrientedBox& box, const glm::dvec3& direction);
 

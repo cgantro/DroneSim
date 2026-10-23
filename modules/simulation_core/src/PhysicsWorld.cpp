@@ -39,6 +39,7 @@ namespace
 using AirSimBody = msr::airlib::MultiRotorPhysicsBody;
 using AirSimVector = msr::airlib::Vector3r;
 using detail::BoxContact;
+using detail::BroadphaseMayOverlap;
 using detail::CollisionRadius;
 using detail::FindBoxContact;
 using detail::OrientedBox;
@@ -472,12 +473,9 @@ struct PhysicsWorld::Impl
             {
                 const std::size_t otherIndex = bodyPositionsByX[candidateOrder].second;
                 const Body& otherBody = *bodies[otherIndex];
-                const double combinedRadius =
-                    body.collisionRadiusMeters + otherBody.collisionRadiusMeters;
-                const glm::dvec3 centerOffset = center
-                    - otherBody.collisionState.positionMeters;
-                if (glm::dot(centerOffset, centerOffset)
-                    >= combinedRadius * combinedRadius)
+                if (!BroadphaseMayOverlap(center, body.collisionRadiusMeters,
+                    otherBody.collisionState.positionMeters,
+                    otherBody.collisionRadiusMeters))
                 {
                     continue;
                 }

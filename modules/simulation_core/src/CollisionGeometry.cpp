@@ -36,6 +36,17 @@ double CollisionRadius(std::span<const RigidBodyBox> boxes)
     return radius;
 }
 
+bool BroadphaseMayOverlap(
+    const glm::dvec3& firstCenter,
+    double firstRadius,
+    const glm::dvec3& secondCenter,
+    double secondRadius) noexcept
+{
+    const double combinedRadius = firstRadius + secondRadius;
+    const glm::dvec3 centerOffset = firstCenter - secondCenter;
+    return glm::dot(centerOffset, centerOffset) <= combinedRadius * combinedRadius;
+}
+
 glm::dvec3 SupportPoint(const OrientedBox& box, const glm::dvec3& direction)
 {
     glm::dvec3 point = box.centerMeters;

@@ -360,6 +360,9 @@ if(BUILD_TESTING)
     AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   )
   if(NOT EMSCRIPTEN)
+    target_include_directories(aerosimlab_simulation_tests PRIVATE
+      modules/simulation_core/src
+    )
     target_sources(aerosimlab_simulation_tests PRIVATE tests/simulation_core/PhysicsWorldTests.cpp)
   endif()
   target_link_libraries(aerosimlab_simulation_tests PRIVATE
