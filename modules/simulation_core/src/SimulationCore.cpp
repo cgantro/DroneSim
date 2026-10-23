@@ -543,6 +543,12 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     {
         throw std::invalid_argument("드론 시작 상태의 위치·속도·자세를 확인해 주세요.");
     }
+    if (std::any_of(state.motorSpeedsRadiansPerSecond.begin(),
+        state.motorSpeedsRadiansPerSecond.end(),
+        [](double speed) { return speed > 0.0; }))
+    {
+        throw std::invalid_argument("현재는 시작 상태에 로터 회전수를 지정할 수 없습니다.");
+    }
 
     flecs::entity& drone = ecs_->FindDrone(droneId);
     DroneState normalized = state;

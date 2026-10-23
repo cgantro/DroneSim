@@ -110,6 +110,17 @@ void Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose()
     EXPECT_EQ(simulation.TickCount(), 0U);
 }
 
+void Verify_SimulationCore_RejectsInitialMotorSpeeds()
+{
+    SimulationCore simulation{SimulationDynamics::Kinematic};
+    DroneState initialState;
+    initialState.motorSpeedsRadiansPerSecond[0] = 120.0;
+
+    EXPECT_THROW(
+        simulation.SetInitialState(simulation.PrimaryDroneId(), initialState),
+        std::invalid_argument);
+}
+
 void Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether()
 {
     const auto verifyLifecycle = [](SimulationDynamics dynamics)
@@ -144,6 +155,7 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose());
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsInitialMotorSpeeds());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether());
 }
 
