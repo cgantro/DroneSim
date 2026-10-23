@@ -520,10 +520,7 @@ SimulationDynamics ReadDynamics(const Json& document)
     throw std::invalid_argument("알 수 없는 dynamics 설정입니다: " + name);
 }
 
-}
-
-/** @brief JSON 문법과 설정을 확인한 뒤 실행에 필요한 자료만 묶어 돌려준다. */
-ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
+Json ParseScenarioDocument(std::string_view jsonText)
 {
     Json document;
     try
@@ -536,51 +533,36 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     }
     if (!document.is_object())
         throw std::invalid_argument("시나리오의 첫 항목은 JSON 객체여야 합니다.");
+    return document;
+}
 
-    const std::uint64_t version = ReadUnsigned(Required(document, "version"), "version");
-    if (version != 1)
-        throw std::invalid_argument("지원하는 시나리오 형식은 version 1입니다.");
-
-    ScenarioDefinition definition;
-    definition.tickCount = ReadUnsigned(Required(document, "ticks"), "ticks");
-    if (definition.tickCount == 0 || definition.tickCount > maximumScenarioTicks)
-        throw std::invalid_argument("ticks는 1부터 5,184,000 사이여야 합니다.");
-
-    definition.drones = ReadDrones(document);
-    definition.primaryDroneName = definition.drones.empty()
-        ? "drone" : definition.drones.front().name;
-    std::unordered_set<std::string> droneNames;
-    if (definition.drones.empty())
-        droneNames.insert(definition.primaryDroneName);
-    else
-        for (const ScenarioDrone& drone : definition.drones)
-            droneNames.insert(drone.name);
-
-    definition.commands = ReadCommands(
-        Required(document, "commands"), definition.tickCount,
-        definition.primaryDroneName, droneNames);
-    definition.formationLinks = ReadFormationLinks(
-        document, definition.tickCount, droneNames);
+void ValidateFormationLinkCount(const ScenarioDefinition& definition)
+{
     if (!definition.formationLinks.empty() && definition.drones.size() < 2)
         throw std::invalid_argument("formation_links를 쓰려면 drones에 두 대 이상을 적어야 합니다.");
+}
 
-    definition.mission = ReadMission(document, definition.tickCount, droneNames);
-    if (definition.mission)
+void ValidateFormationMissionAssignment(const ScenarioDefinition& definition)
+{
+    if (!definition.mission)
+        return;
+
+    for (const FormationLink& link : definition.formationLinks)
     {
-        for (const FormationLink& link : definition.formationLinks)
-        {
-            const bool followerHasMission = std::any_of(
-                definition.mission->tasks.begin(), definition.mission->tasks.end(),
-                [&link](const ScenarioResult::MissionTask& task)
-                {
-                    return task.droneName == link.followerName;
-                });
-            if (followerHasMission)
-                throw std::invalid_argument(
-                    "같은 드론에 formation link와 mission 목표를 함께 지정할 수 없습니다.");
-        }
+        const bool followerHasMission = std::any_of(
+            definition.mission->tasks.begin(), definition.mission->tasks.end(),
+            [&link](const ScenarioResult::MissionTask& task)
+            {
+                return task.droneName == link.followerName;
+            });
+        if (followerHasMission)
+            throw std::invalid_argument(
+                "같은 드론에 formation link와 mission 목표를 함께 지정할 수 없습니다.");
     }
+}
 
+void ReadEnvironmentSettings(const Json& document, ScenarioDefinition& definition)
+{
     definition.dynamics = ReadDynamics(document);
     if (document.contains("wind_velocity_meters_per_second"))
     {
@@ -591,12 +573,10 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     if (definition.windVelocity
         && definition.dynamics != SimulationDynamics::RigidBody)
         throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
+}
 
-    definition.cameraEvents = ReadCameraEvents(document, definition.tickCount);
-    const Json& expected = Required(document, "expected");
-    if (!expected.is_object())
-        throw std::invalid_argument("expected는 JSON 객체여야 합니다.");
-
+void ReadExpectedDroneStates(const Json& expected, ScenarioDefinition& definition)
+{
     definition.hasExpectedDrones = expected.contains("drones");
     if (definition.hasExpectedDrones
         && (expected.contains("mode") || expected.contains("position_meters")
@@ -609,19 +589,21 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     if (definition.hasExpectedDrones)
     {
         definition.expectedDrones = ReadExpectedDrones(expected["drones"]);
-    }
-    else
-    {
-        std::optional<glm::dquat> orientation;
-        if (expected.contains("orientation_quaternion_wxyz"))
-            orientation = ReadOrientationQuaternion(expected["orientation_quaternion_wxyz"]);
-        definition.expectedDrones.push_back({
-            definition.primaryDroneName,
-            ReadFlightMode(Required(expected, "mode")),
-            ReadVector(Required(expected, "position_meters"), "position_meters"),
-            orientation});
+        return;
     }
 
+    std::optional<glm::dquat> orientation;
+    if (expected.contains("orientation_quaternion_wxyz"))
+        orientation = ReadOrientationQuaternion(expected["orientation_quaternion_wxyz"]);
+    definition.expectedDrones.push_back({
+        definition.primaryDroneName,
+        ReadFlightMode(Required(expected, "mode")),
+        ReadVector(Required(expected, "position_meters"), "position_meters"),
+        orientation});
+}
+
+void ReadExpectedLimitsAndCamera(const Json& expected, ScenarioDefinition& definition)
+{
     if (expected.contains("tolerance_meters"))
         definition.toleranceMeters = ReadFiniteNumber(expected["tolerance_meters"], "tolerance_meters");
     if (definition.toleranceMeters < 0.0)
@@ -654,6 +636,57 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
         definition.expectedFrameCount = ReadUnsigned(
             expected["camera_frame_count"], "camera_frame_count");
     }
+}
+
+void ReadExpectedResults(const Json& document, ScenarioDefinition& definition)
+{
+    const Json& expected = Required(document, "expected");
+    if (!expected.is_object())
+        throw std::invalid_argument("expected는 JSON 객체여야 합니다.");
+
+    ReadExpectedDroneStates(expected, definition);
+    ReadExpectedLimitsAndCamera(expected, definition);
+}
+
+}
+
+/** @brief JSON 문법과 설정을 확인한 뒤 실행에 필요한 자료만 묶어 돌려준다. */
+ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
+{
+    const Json document = ParseScenarioDocument(jsonText);
+
+    const std::uint64_t version = ReadUnsigned(Required(document, "version"), "version");
+    if (version != 1)
+        throw std::invalid_argument("지원하는 시나리오 형식은 version 1입니다.");
+
+    ScenarioDefinition definition;
+    definition.tickCount = ReadUnsigned(Required(document, "ticks"), "ticks");
+    if (definition.tickCount == 0 || definition.tickCount > maximumScenarioTicks)
+        throw std::invalid_argument("ticks는 1부터 5,184,000 사이여야 합니다.");
+
+    definition.drones = ReadDrones(document);
+    definition.primaryDroneName = definition.drones.empty()
+        ? "drone" : definition.drones.front().name;
+    std::unordered_set<std::string> droneNames;
+    if (definition.drones.empty())
+        droneNames.insert(definition.primaryDroneName);
+    else
+        for (const ScenarioDrone& drone : definition.drones)
+            droneNames.insert(drone.name);
+
+    definition.commands = ReadCommands(
+        Required(document, "commands"), definition.tickCount,
+        definition.primaryDroneName, droneNames);
+    definition.formationLinks = ReadFormationLinks(
+        document, definition.tickCount, droneNames);
+    ValidateFormationLinkCount(definition);
+
+    definition.mission = ReadMission(document, definition.tickCount, droneNames);
+    ValidateFormationMissionAssignment(definition);
+
+    ReadEnvironmentSettings(document, definition);
+    definition.cameraEvents = ReadCameraEvents(document, definition.tickCount);
+    ReadExpectedResults(document, definition);
     return definition;
 }
 }
