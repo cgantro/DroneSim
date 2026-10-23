@@ -41,7 +41,7 @@ public:
      * @param indices 삼각형을 구성하는 정점 번호 배열 주소.
      * @param indexCount indices의 uint32 원소 개수이며 byte 수가 아니다.
      * @throws std::invalid_argument 배열 주소가 null이거나 해당 원소 개수가 0인 경우.
-     * @throws std::runtime_error 정점 배열의 byte 크기가 VertexBuffer가 받는 범위를 넘는 경우.
+     * @throws std::runtime_error 정점 배열의 byte 크기가 OpenGL 버퍼의 표현 범위를 넘는 경우.
      * @details 각 연결 번호는 vertices 배열 안의 꼭짓점 번호여야 한다. 그리기 시작 위치는 번호 개수로 지정하지만 GPU에는 번호 하나의 byte 크기(4 byte)를 곱한 주소를 전달한다.
      * 이 생성자는 번호가 유효한지, 번호 개수가 삼각형을 이루도록 3의 배수인지 검사하지 않으므로 호출자가 맞는 배열을 제공해야 한다.
      */

@@ -124,12 +124,13 @@ Mesh::Mesh(const Vertex* vertices, std::uint32_t vertexCount,
     if (vertices == nullptr || vertexCount == 0U) { throw std::invalid_argument("Mesh has no vertices"); }
     if (indices == nullptr || indexCount == 0U) { throw std::invalid_argument("Mesh has no indices"); }
 
-    const std::size_t maximumBufferBytes = std::numeric_limits<std::uint32_t>::max();
-    if (vertexCount > maximumBufferBytes / sizeof(Vertex))
+    const std::size_t maximumBufferBytes = static_cast<std::size_t>(
+        std::numeric_limits<GLsizeiptr>::max());
+    if (static_cast<std::size_t>(vertexCount) > maximumBufferBytes / sizeof(Vertex))
     {
         throw std::runtime_error("Mesh vertex data exceeds the GPU buffer limit");
     }
-    const auto byteCount = static_cast<std::uint32_t>(
+    const GLsizeiptr byteCount = static_cast<GLsizeiptr>(
         sizeof(Vertex) * static_cast<std::size_t>(vertexCount));
     if (indexCount > static_cast<std::uint32_t>(std::numeric_limits<GLsizei>::max()))
         throw std::runtime_error("Mesh index count exceeds the OpenGL draw limit");

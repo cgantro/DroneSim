@@ -2,11 +2,16 @@
 
 #include "graphics/GlApi.h"
 
+#include <stdexcept>
+
 namespace aerosimlab::graphics
 {
 
-VertexBuffer::VertexBuffer(const void* data, uint32_t size)
+VertexBuffer::VertexBuffer(const void* data, GLsizeiptr size)
 {
+    if (size < 0)
+        throw std::invalid_argument("GPU buffer size must not be negative.");
+
     // 지정된 CPU 메모리 구간을 GPU 메모리에 복사한다. 이후 그리기 명령은 이 GPU 사본에서 정점 데이터를 읽는다.
     glGenBuffers(1, &m_RendererID);
     glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);

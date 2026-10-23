@@ -1,5 +1,7 @@
 #pragma once
 
+#include "graphics/GlApi.h"
+
 #include <cstdint>
 
 namespace aerosimlab::graphics
@@ -20,10 +22,11 @@ public:
      * @brief 연속된 꼭짓점 데이터를 GPU 메모리에 복사한다.
      * @param data 복사할 원본 byte 배열 주소. 업로드가 끝나면 원본을 보관할 필요가 없다.
      * @param size 복사할 전체 크기 [byte]. 정점 개수가 아니다.
-     * @details GPU에 처음 올린 뒤 드물게 바꿀 데이터라는 힌트를 전달한다. 주소와 크기는 검사하지 않으므로 호출자가 유효한 범위를 준다.
+     * @throws std::invalid_argument 크기가 음수인 경우.
+     * @details GPU에 처음 올린 뒤 드물게 바꿀 데이터라는 힌트를 전달한다. 원본 주소와 범위는 검사하지 않으므로 호출자가 유효한 메모리를 준다.
      * GPU 작업을 실행하는 OpenGL context가 현재 스레드에서 활성화되어야 한다.
      */
-    VertexBuffer(const void* data, uint32_t size);
+    VertexBuffer(const void* data, GLsizeiptr size);
 
     /** @brief GPU에 보관한 꼭짓점 데이터를 해제한다. 현재 스레드에서 OpenGL 실행 환경(context)이 활성화되어야 한다. */
     ~VertexBuffer();
