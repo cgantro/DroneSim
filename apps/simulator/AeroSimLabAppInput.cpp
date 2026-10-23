@@ -49,16 +49,17 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     }
 
     lastGroundControlMessage_ = std::chrono::steady_clock::now();
-    if (activePeer_ && (activePeer_->addressNetworkOrder != peer.addressNetworkOrder
-        || activePeer_->portNetworkOrder != peer.portNetworkOrder) && !pendingCommand_)
+    const bool peerChanged = activePeer_
+        && (activePeer_->addressNetworkOrder != peer.addressNetworkOrder
+            || activePeer_->portNetworkOrder != peer.portNetworkOrder);
+    if (!activePeer_ || (peerChanged && !pendingCommand_))
     {
         activePeer_ = peer;
-        sequenceGuard_ = {};
-        lastReply_.reset();
-    }
-    else if (!activePeer_)
-    {
-        activePeer_ = peer;
+        if (peerChanged)
+        {
+            sequenceGuard_ = {};
+            lastReply_.reset();
+        }
     }
 
     const auto decision = sequenceGuard_.Inspect(packet);
