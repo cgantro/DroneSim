@@ -38,6 +38,122 @@ struct MultisampleFramebuffer::PixelReadback
         return oldest;
     }
 
+    Slot* AvailableSlot()
+    {
+        for (Slot& slot : slots)
+        {
+            if (!slot.pending)
+                return &slot;
+        }
+        return nullptr;
+    }
+
+    void EnsureBufferSize(Slot& slot, std::size_t byteCount)
+    {
+        if (slot.byteCount == byteCount)
+            return;
+
+#ifndef __EMSCRIPTEN__
+        if (slot.mappedPixels != nullptr)
+        {
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            slot.mappedPixels = nullptr;
+            glDeleteBuffers(1, &slot.buffer);
+            glGenBuffers(1, &slot.buffer);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.buffer);
+        }
+
+        if (GLAD_GL_ARB_buffer_storage && glad_glBufferStorage != nullptr)
+        {
+            // 지원되는 그래픽 환경에서는 PBO를 한 번만 매핑한다. 픽셀은 fence가 끝난 뒤에 읽는다.
+            constexpr GLbitfield persistentReadFlags =
+                GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+            glBufferStorage(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
+                nullptr, persistentReadFlags);
+            slot.mappedPixels = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0,
+                static_cast<GLsizeiptr>(byteCount), persistentReadFlags);
+            if (slot.mappedPixels == nullptr)
+            {
+                glDeleteBuffers(1, &slot.buffer);
+                glGenBuffers(1, &slot.buffer);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.buffer);
+                glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
+                    nullptr, GL_STREAM_READ);
+            }
+        }
+        else
+#endif
+        {
+            glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
+                nullptr, GL_STREAM_READ);
+        }
+        slot.byteCount = byteCount;
+    }
+
+    bool SubmitReadback(
+        Slot& slot, int width, int height, GLuint resolvedFramebuffer,
+        std::uint64_t simulationTick, std::uint64_t& nextOrder,
+        RgbReadbackEnqueueTimings* timings)
+    {
+        const auto readTargetSetupStart = timings != nullptr
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, resolvedFramebuffer);
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        if (timings != nullptr)
+        {
+            timings->readTargetSetupMicroseconds = std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - readTargetSetupStart).count();
+        }
+
+        const auto readPixelsStart = timings != nullptr
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        if (timings != nullptr)
+        {
+            timings->readPixelsCallMicroseconds = std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - readPixelsStart).count();
+        }
+
+        const auto fenceCreationStart = timings != nullptr
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+        slot.completion = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (timings != nullptr)
+        {
+            timings->fenceCreationCallMicroseconds = std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - fenceCreationStart).count();
+        }
+        const bool queued = slot.completion != nullptr;
+        if (queued)
+        {
+            slot.simulationTick = simulationTick;
+            slot.order = nextOrder++;
+            slot.pending = true;
+        }
+        else
+        {
+            // Fence를 만들지 못하면 다음 전송이 같은 버퍼를 덮기 전에 현재 복사를 마친다.
+            glFinish();
+        }
+
+        const auto stateRestoreStart = timings != nullptr
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glReadBuffer(GL_BACK);
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        if (timings != nullptr)
+        {
+            timings->glStateRestoreMicroseconds = std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - stateRestoreStart).count();
+        }
+        return queued;
+    }
+
     bool WaitForCompletion(Slot& slot, RgbReadbackPollTimings* timings)
     {
         const auto waitStart = timings != nullptr
@@ -376,15 +492,7 @@ bool MultisampleFramebuffer::QueueRgbReadback(
     const auto slotSetupStart = timings != nullptr
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    PixelReadback::Slot* available = nullptr;
-    for (PixelReadback::Slot& slot : m_PixelReadback->slots)
-    {
-        if (!slot.pending)
-        {
-            available = &slot;
-            break;
-        }
-    }
+    PixelReadback::Slot* available = m_PixelReadback->AvailableSlot();
     if (available == nullptr)
         return false;
 
@@ -402,108 +510,17 @@ bool MultisampleFramebuffer::QueueRgbReadback(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
     glBindBuffer(GL_PIXEL_PACK_BUFFER, available->buffer);
-    if (available->byteCount != byteCount)
-    {
-#ifndef __EMSCRIPTEN__
-        if (available->mappedPixels != nullptr)
-        {
-            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-            available->mappedPixels = nullptr;
-            glDeleteBuffers(1, &available->buffer);
-            glGenBuffers(1, &available->buffer);
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, available->buffer);
-        }
-
-        if (GLAD_GL_ARB_buffer_storage && glad_glBufferStorage != nullptr)
-        {
-            // 지원되는 그래픽 환경에서는 PBO를 한 번만 매핑한다. 픽셀은 fence가 끝난 뒤에 읽는다.
-            constexpr GLbitfield persistentReadFlags =
-                GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
-            glBufferStorage(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
-                nullptr, persistentReadFlags);
-            available->mappedPixels = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0,
-                static_cast<GLsizeiptr>(byteCount), persistentReadFlags);
-            if (available->mappedPixels == nullptr)
-            {
-                glDeleteBuffers(1, &available->buffer);
-                glGenBuffers(1, &available->buffer);
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, available->buffer);
-                glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
-                    nullptr, GL_STREAM_READ);
-            }
-        }
-        else
-#endif
-        {
-            glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
-                nullptr, GL_STREAM_READ);
-        }
-        available->byteCount = byteCount;
-    }
+    m_PixelReadback->EnsureBufferSize(*available, byteCount);
     if (timings != nullptr)
     {
         timings->bufferBindingAndAllocationMicroseconds = std::chrono::duration<double, std::micro>(
             std::chrono::steady_clock::now() - bufferSetupStart).count();
     }
 
-    const auto readTargetSetupStart = timings != nullptr
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ResolvedFramebuffer);
-    glReadBuffer(GL_COLOR_ATTACHMENT0);
-    if (timings != nullptr)
-    {
-        timings->readTargetSetupMicroseconds = std::chrono::duration<double, std::micro>(
-            std::chrono::steady_clock::now() - readTargetSetupStart).count();
-    }
-    const auto readPixelsStart = timings != nullptr
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    glReadPixels(0, 0, m_Width, m_Height, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-    if (timings != nullptr)
-    {
-        timings->readPixelsCallMicroseconds = std::chrono::duration<double, std::micro>(
-            std::chrono::steady_clock::now() - readPixelsStart).count();
-    }
-
-    const auto fenceCreationStart = timings != nullptr
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    available->completion = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-    if (timings != nullptr)
-    {
-        timings->fenceCreationCallMicroseconds = std::chrono::duration<double, std::micro>(
-            std::chrono::steady_clock::now() - fenceCreationStart).count();
-    }
-    const bool queued = available->completion != nullptr;
-    if (queued)
-    {
-        available->simulationTick = simulationTick;
-        available->order = m_PixelReadback->nextOrder++;
-        available->pending = true;
-    }
-    else
-    {
-        // Fence를 만들지 못하면 다음 전송이 같은 버퍼를 덮기 전에 현재 복사를 마친다.
-        glFinish();
-    }
-
-    const auto stateRestoreStart = timings != nullptr
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    glReadBuffer(GL_BACK);
-    glPixelStorei(GL_PACK_ALIGNMENT, 4);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    if (timings != nullptr)
-    {
-        timings->glStateRestoreMicroseconds = std::chrono::duration<double, std::micro>(
-            std::chrono::steady_clock::now() - stateRestoreStart).count();
-    }
-    return queued;
+    return m_PixelReadback->SubmitReadback(
+        *available, m_Width, m_Height, m_ResolvedFramebuffer,
+        simulationTick, m_PixelReadback->nextOrder, timings);
 }
-
 bool MultisampleFramebuffer::TryReadRgbPixels(
     std::vector<std::uint8_t>& pixels, std::uint64_t& simulationTick,
     RgbReadbackPollTimings* timings)
