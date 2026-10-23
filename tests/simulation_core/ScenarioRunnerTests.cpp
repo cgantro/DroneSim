@@ -108,10 +108,33 @@ void Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesA
     EXPECT_NE(result.eventLog[4].find("위치 공유가 복구됐습니다"), std::string::npos);
 }
 
+void Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones()
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":1,
+     "drones":[
+       {"name":"first","initial_position_meters":[0,0,0]},
+       {"name":"second","initial_position_meters":[3,0,0]},
+       {"name":"third","initial_position_meters":[0,2,0]}],
+     "commands":[],
+     "expected":{"tolerance_meters":0.0,"minimum_drone_separation_meters":1.9,
+       "drones":[
+         {"name":"first","mode":"grounded","position_meters":[0,0,0]},
+         {"name":"second","mode":"grounded","position_meters":[3,0,0]},
+         {"name":"third","mode":"grounded","position_meters":[0,2,0]}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
+    EXPECT_DOUBLE_EQ(*result.minimumDroneSeparationMeters, 2.0);
+}
+
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward());
+    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
 }
 
 }

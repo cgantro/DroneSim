@@ -102,20 +102,32 @@ void RecordMinimumDroneSeparation(
     if (!definition.minimumDroneSeparationMeters)
         return;
 
-    for (std::size_t first = 0; first < definition.drones.size(); ++first)
+    std::vector<glm::dvec3> positionsMeters;
+    positionsMeters.reserve(definition.drones.size());
+    for (const ScenarioDrone& drone : definition.drones)
     {
-        const glm::dvec3 firstPositionMeters = simulation.State(
-            droneIds.at(definition.drones[first].name)).positionMeters;
-        for (std::size_t second = first + 1; second < definition.drones.size(); ++second)
+        positionsMeters.push_back(
+            simulation.State(droneIds.at(drone.name)).positionMeters);
+    }
+
+    std::optional<double> minimumDistanceSquaredMeters;
+    if (result.minimumDroneSeparationMeters)
+    {
+        const double previousMinimum = *result.minimumDroneSeparationMeters;
+        minimumDistanceSquaredMeters = previousMinimum * previousMinimum;
+    }
+
+    for (std::size_t first = 0; first < positionsMeters.size(); ++first)
+    {
+        for (std::size_t second = first + 1; second < positionsMeters.size(); ++second)
         {
-            const glm::dvec3 secondPositionMeters = simulation.State(
-                droneIds.at(definition.drones[second].name)).positionMeters;
-            const glm::dvec3 offset = firstPositionMeters - secondPositionMeters;
-            const double distanceMeters = glm::length(offset);
-            if (!result.minimumDroneSeparationMeters
-                || distanceMeters < *result.minimumDroneSeparationMeters)
+            const glm::dvec3 offset = positionsMeters[first] - positionsMeters[second];
+            const double distanceSquaredMeters = glm::dot(offset, offset);
+            if (!minimumDistanceSquaredMeters
+                || distanceSquaredMeters < *minimumDistanceSquaredMeters)
             {
-                result.minimumDroneSeparationMeters = distanceMeters;
+                minimumDistanceSquaredMeters = distanceSquaredMeters;
+                result.minimumDroneSeparationMeters = std::sqrt(distanceSquaredMeters);
             }
         }
     }
