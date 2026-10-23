@@ -176,25 +176,43 @@ void Verify_AirSimCollision_SeparatesOverlappingDrones()
 {
     PhysicsWorld world;
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-    RigidBodyDefinition leftDefinition;
-    leftDefinition.positionMeters = {-0.16, 0.0, 10.0};
-    RigidBodyDefinition rightDefinition;
-    rightDefinition.positionMeters = {0.16, 0.0, 10.0};
-    const RigidBodyHandle right = world.CreateQuadrotor(rightDefinition, parameters);
-    // 등록 순서가 공간상 왼쪽·오른쪽 순서와 반대여도 접촉을 찾아야 한다.
-    const RigidBodyHandle left = world.CreateQuadrotor(leftDefinition, parameters);
+    constexpr std::size_t pairCount = 4;
+    std::array<glm::dvec3, pairCount> leftPositions{};
+    std::array<glm::dvec3, pairCount> rightPositions{};
+    std::array<RigidBodyHandle, pairCount> leftBodies{};
+    std::array<RigidBodyHandle, pairCount> rightBodies{};
 
-    RigidBodyState leftState = world.State(left);
-    leftState.linearVelocityMetersPerSecond.x = 1.0;
-    world.SetState(left, leftState);
-    RigidBodyState rightState = world.State(right);
-    rightState.linearVelocityMetersPerSecond.x = -1.0;
-    world.SetState(right, rightState);
+    for (std::size_t index = 0; index < pairCount; ++index)
+    {
+        const double xOffset = static_cast<double>(index) * 0.02;
+        const double yOffset = static_cast<double>(index) * 10.0;
+        leftPositions[index] = {-0.16 + xOffset, yOffset, 10.0};
+        rightPositions[index] = {0.16 + xOffset, yOffset, 10.0};
+
+        RigidBodyDefinition definition;
+        definition.positionMeters = rightPositions[index];
+        rightBodies[index] = world.CreateQuadrotor(definition, parameters);
+        // 등록 순서를 공간상 순서와 반대로 두어 정렬 단계도 함께 확인한다.
+        definition.positionMeters = leftPositions[index];
+        leftBodies[index] = world.CreateQuadrotor(definition, parameters);
+
+        RigidBodyState leftState = world.State(leftBodies[index]);
+        leftState.linearVelocityMetersPerSecond.x = 1.0;
+        world.SetState(leftBodies[index], leftState);
+        RigidBodyState rightState = world.State(rightBodies[index]);
+        rightState.linearVelocityMetersPerSecond.x = -1.0;
+        world.SetState(rightBodies[index], rightState);
+    }
 
     world.Step(1.0 / 60.0);
 
-    EXPECT_LT(world.State(left).positionMeters.x, leftDefinition.positionMeters.x);
-    EXPECT_GT(world.State(right).positionMeters.x, rightDefinition.positionMeters.x);
+    for (std::size_t index = 0; index < pairCount; ++index)
+    {
+        EXPECT_LT(world.State(leftBodies[index]).positionMeters.x,
+            leftPositions[index].x) << "겹친 드론 쌍 " << index;
+        EXPECT_GT(world.State(rightBodies[index]).positionMeters.x,
+            rightPositions[index].x) << "겹친 드론 쌍 " << index;
+    }
 }
 
 void Verify_AirSimBoundary_RejectsValuesItCannotRepresent()
