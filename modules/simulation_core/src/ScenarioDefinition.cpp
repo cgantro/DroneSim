@@ -314,6 +314,55 @@ std::vector<FormationLink> ReadFormationLinks(
     return links;
 }
 
+/** @brief 임무 하나를 읽고 드론 배정과 Tick 범위를 확인한다. */
+ScenarioResult::MissionTask ReadMissionTask(
+    const Json& taskValue,
+    std::uint64_t tickCount,
+    const std::unordered_set<std::string>& droneNames,
+    std::unordered_set<std::string>& taskNames,
+    std::unordered_set<std::string>& assignedDrones)
+{
+    if (!taskValue.is_object())
+        throw std::invalid_argument("각 mission task는 JSON 객체여야 합니다.");
+
+    const Json& taskNameValue = Required(taskValue, "name");
+    const Json& roleValue = Required(taskValue, "role");
+    const Json& droneValue = Required(taskValue, "drone");
+    if (!taskNameValue.is_string() || taskNameValue.get<std::string>().empty()
+        || !roleValue.is_string() || roleValue.get<std::string>().empty()
+        || !droneValue.is_string())
+    {
+        throw std::invalid_argument(
+            "임무 name과 role은 비어 있지 않은 문자열이어야 하고 drone을 지정해야 합니다.");
+    }
+
+    ScenarioResult::MissionTask task;
+    task.name = taskNameValue.get<std::string>();
+    task.role = roleValue.get<std::string>();
+    task.droneName = droneValue.get<std::string>();
+    if (!taskNames.insert(task.name).second
+        || !droneNames.contains(task.droneName)
+        || !assignedDrones.insert(task.droneName).second)
+    {
+        throw std::invalid_argument("임무 이름은 고유해야 하며, 등록된 드론을 한 번만 배정할 수 있습니다.");
+    }
+
+    task.targetPositionMeters = ReadVector(
+        Required(taskValue, "target_position_meters"), "target_position_meters");
+    task.startTick = ReadUnsigned(Required(taskValue, "start_tick"), "start_tick");
+    task.deadlineTick = ReadUnsigned(
+        Required(taskValue, "deadline_tick"), "deadline_tick");
+    task.toleranceMeters = ReadFiniteNumber(
+        Required(taskValue, "tolerance_meters"), "tolerance_meters");
+    if (task.targetPositionMeters.z < 0.0 || task.toleranceMeters < 0.0
+        || task.startTick > task.deadlineTick || task.deadlineTick >= tickCount)
+    {
+        throw std::invalid_argument(
+            "임무 목표 고도와 허용 오차는 0 이상이고, 시작·기한 Tick은 시나리오 범위 안이어야 합니다.");
+    }
+    return task;
+}
+
 std::optional<ScenarioResult::Mission> ReadMission(
     const Json& document,
     std::uint64_t tickCount,
@@ -339,45 +388,8 @@ std::optional<ScenarioResult::Mission> ReadMission(
     mission.tasks.reserve(tasksValue.size());
     for (const Json& taskValue : tasksValue)
     {
-        if (!taskValue.is_object())
-            throw std::invalid_argument("각 mission task는 JSON 객체여야 합니다.");
-
-        const Json& taskNameValue = Required(taskValue, "name");
-        const Json& roleValue = Required(taskValue, "role");
-        const Json& droneValue = Required(taskValue, "drone");
-        if (!taskNameValue.is_string() || taskNameValue.get<std::string>().empty()
-            || !roleValue.is_string() || roleValue.get<std::string>().empty()
-            || !droneValue.is_string())
-        {
-            throw std::invalid_argument(
-                "임무 name과 role은 비어 있지 않은 문자열이어야 하고 drone을 지정해야 합니다.");
-        }
-
-        ScenarioResult::MissionTask task;
-        task.name = taskNameValue.get<std::string>();
-        task.role = roleValue.get<std::string>();
-        task.droneName = droneValue.get<std::string>();
-        if (!taskNames.insert(task.name).second
-            || !droneNames.contains(task.droneName)
-            || !assignedDrones.insert(task.droneName).second)
-        {
-            throw std::invalid_argument("임무 이름은 고유해야 하며, 등록된 드론을 한 번만 배정할 수 있습니다.");
-        }
-
-        task.targetPositionMeters = ReadVector(
-            Required(taskValue, "target_position_meters"), "target_position_meters");
-        task.startTick = ReadUnsigned(Required(taskValue, "start_tick"), "start_tick");
-        task.deadlineTick = ReadUnsigned(
-            Required(taskValue, "deadline_tick"), "deadline_tick");
-        task.toleranceMeters = ReadFiniteNumber(
-            Required(taskValue, "tolerance_meters"), "tolerance_meters");
-        if (task.targetPositionMeters.z < 0.0 || task.toleranceMeters < 0.0
-            || task.startTick > task.deadlineTick || task.deadlineTick >= tickCount)
-        {
-            throw std::invalid_argument(
-                "임무 목표 고도와 허용 오차는 0 이상이고, 시작·기한 Tick은 시나리오 범위 안이어야 합니다.");
-        }
-        mission.tasks.push_back(std::move(task));
+        mission.tasks.push_back(ReadMissionTask(
+            taskValue, tickCount, droneNames, taskNames, assignedDrones));
     }
     return mission;
 }

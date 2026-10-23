@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -151,6 +152,17 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
+
+    constexpr std::string_view duplicateMissionAssignment = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":2,
+     "drones":[{"name":"lead"},{"name":"wing"}],
+     "mission":{"name":"survey","tasks":[
+       {"name":"first","role":"scan","drone":"lead",
+        "target_position_meters":[0,0,1],"start_tick":0,"deadline_tick":1,"tolerance_meters":0},
+       {"name":"second","role":"guard","drone":"lead",
+        "target_position_meters":[1,0,1],"start_tick":0,"deadline_tick":1,"tolerance_meters":0}]}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(duplicateMissionAssignment)), std::invalid_argument);
 }
 
 }
