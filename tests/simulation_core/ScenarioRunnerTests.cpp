@@ -158,6 +158,34 @@ void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
     EXPECT_GT(std::abs(wind.finalState.positionMeters.x
         - calm.finalState.positionMeters.x), 0.01);
 }
+
+void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
+{
+    const ScenarioResult result = RunScenario(
+        ReadScenarioFixture("scenarios/multi-drone/four-drone-survey-outage.json"));
+    ASSERT_TRUE(result.passed);
+    ASSERT_TRUE(result.mission.has_value());
+    ASSERT_TRUE(result.mission->passed);
+    EXPECT_EQ(result.mission->completedTaskCount, 4U);
+
+    const auto disconnectedDrone = std::find_if(result.drones.begin(), result.drones.end(),
+        [](const ScenarioResult::Drone& drone) { return drone.name == "scout-2"; });
+    ASSERT_NE(disconnectedDrone, result.drones.end());
+    EXPECT_EQ(disconnectedDrone->communicationStatus,
+        ScenarioResult::Drone::CommunicationStatus::Unknown);
+
+    const auto reassignedTask = std::find_if(result.mission->tasks.begin(),
+        result.mission->tasks.end(),
+        [](const ScenarioResult::MissionTask& task) { return task.name == "sector-2"; });
+    ASSERT_NE(reassignedTask, result.mission->tasks.end());
+    EXPECT_TRUE(reassignedTask->completed);
+    EXPECT_FALSE(reassignedTask->failed);
+    EXPECT_EQ(reassignedTask->initialDroneName, "scout-2");
+    EXPECT_EQ(reassignedTask->droneName, "scout-3");
+    ASSERT_EQ(reassignedTask->assignmentHistory.size(), 2U);
+    EXPECT_EQ(reassignedTask->assignmentHistory[0], "scout-2");
+    EXPECT_EQ(reassignedTask->assignmentHistory[1], "scout-3");
+}
 }
 
 void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder()
@@ -482,6 +510,8 @@ TEST(ScenarioRunnerTests, CoreScenarios)
         Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss());
     constexpr std::array flightModes{
         FlightMode::Grounded,
         FlightMode::TakingOff,
