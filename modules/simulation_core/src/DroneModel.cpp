@@ -4,7 +4,9 @@
 #include <glm/geometric.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <string_view>
 
 namespace aerosimlab::simulation
 {
@@ -24,6 +26,41 @@ glm::dvec3 ClampLength(const glm::dvec3& value, double maximumLength) noexcept
     }
     return value * (maximumLength / length);
 }
+
+struct FlightModeName
+{
+    std::string_view name;
+    FlightMode mode;
+};
+
+constexpr std::array flightModeNames{
+    FlightModeName{"grounded", FlightMode::Grounded},
+    FlightModeName{"taking_off", FlightMode::TakingOff},
+    FlightModeName{"hovering", FlightMode::Hovering},
+    FlightModeName{"flying", FlightMode::Flying},
+    FlightModeName{"following_waypoint", FlightMode::FollowingWaypoint},
+    FlightModeName{"landing", FlightMode::Landing}
+};
+}
+
+std::string_view ToString(FlightMode mode) noexcept
+{
+    for (const FlightModeName& entry : flightModeNames)
+    {
+        if (entry.mode == mode)
+            return entry.name;
+    }
+    return "unknown";
+}
+
+std::optional<FlightMode> TryParseFlightMode(std::string_view name) noexcept
+{
+    for (const FlightModeName& entry : flightModeNames)
+    {
+        if (entry.name == name)
+            return entry.mode;
+    }
+    return std::nullopt;
 }
 
 CommandResult DroneModel::Apply(

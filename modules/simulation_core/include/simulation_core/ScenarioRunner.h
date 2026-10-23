@@ -69,6 +69,4 @@ struct ScenarioResult
  */
 [[nodiscard]] ScenarioResult RunScenario(std::string_view jsonText);
 
-/** @brief 비행 상태를 시나리오 결과에 기록할 짧은 이름으로 바꾼다. */
-[[nodiscard]] std::string_view ToString(FlightMode mode) noexcept;
 }

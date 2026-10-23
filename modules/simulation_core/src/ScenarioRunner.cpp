@@ -468,17 +468,4 @@ ScenarioResult RunScenario(std::string_view jsonText)
     return result;
 }
 
-std::string_view ToString(FlightMode mode) noexcept
-{
-    switch (mode)
-    {
-    case FlightMode::Grounded: return "grounded";
-    case FlightMode::TakingOff: return "taking_off";
-    case FlightMode::Hovering: return "hovering";
-    case FlightMode::Flying: return "flying";
-    case FlightMode::FollowingWaypoint: return "following_waypoint";
-    case FlightMode::Landing: return "landing";
-    }
-    return "unknown";
-}
 }

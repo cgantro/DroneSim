@@ -153,12 +153,8 @@ FlightMode ReadFlightMode(const Json& value)
         throw std::invalid_argument("expected.mode는 문자열이어야 합니다.");
     }
     const std::string name = value.get<std::string>();
-    if (name == "grounded") return FlightMode::Grounded;
-    if (name == "taking_off") return FlightMode::TakingOff;
-    if (name == "hovering") return FlightMode::Hovering;
-    if (name == "flying") return FlightMode::Flying;
-    if (name == "following_waypoint") return FlightMode::FollowingWaypoint;
-    if (name == "landing") return FlightMode::Landing;
+    if (const auto mode = TryParseFlightMode(name))
+        return *mode;
     throw std::invalid_argument(std::string("알 수 없는 비행 상태입니다: ") + name);
 }
 

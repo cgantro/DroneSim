@@ -96,13 +96,9 @@ simulation::FlightMode ReadFlightMode(const Json& value)
 {
     if (!value.is_string())
         throw std::invalid_argument("Telemetry의 비행 상태가 문자열이 아닙니다.");
-    const auto mode = value.get<std::string>();
-    if (mode == "grounded") return simulation::FlightMode::Grounded;
-    if (mode == "taking_off") return simulation::FlightMode::TakingOff;
-    if (mode == "hovering") return simulation::FlightMode::Hovering;
-    if (mode == "flying") return simulation::FlightMode::Flying;
-    if (mode == "following_waypoint") return simulation::FlightMode::FollowingWaypoint;
-    if (mode == "landing") return simulation::FlightMode::Landing;
+    const std::string name = value.get<std::string>();
+    if (const auto mode = simulation::TryParseFlightMode(name))
+        return *mode;
     throw std::invalid_argument("알 수 없는 비행 상태입니다.");
 }
 

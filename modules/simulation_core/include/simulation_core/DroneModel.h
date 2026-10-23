@@ -4,6 +4,8 @@
 #include <glm/vec3.hpp>
 
 #include <array>
+#include <optional>
+#include <string_view>
 
 namespace aerosimlab::simulation
 {
@@ -21,6 +23,12 @@ enum class FlightMode
     FollowingWaypoint,
     Landing
 };
+
+/** @brief 비행 상태를 통신과 시나리오에서 쓰는 짧은 이름으로 바꾼다. */
+[[nodiscard]] std::string_view ToString(FlightMode mode) noexcept;
+
+/** @brief 알려진 비행 상태 이름이면 해당 값으로 바꾼다. */
+[[nodiscard]] std::optional<FlightMode> TryParseFlightMode(std::string_view name) noexcept;
 
 /**
  * @brief 한 번의 모의 단계가 끝난 뒤 드론의 위치와 움직임을 보관한다.

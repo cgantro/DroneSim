@@ -1,6 +1,7 @@
 #include "simulation_core/ScenarioRunner.h"
 #include <gtest/gtest.h>
 
+#include <array>
 #include <string>
 #include <string_view>
 
@@ -132,6 +133,21 @@ void Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones()
 
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
+    constexpr std::array flightModes{
+        FlightMode::Grounded,
+        FlightMode::TakingOff,
+        FlightMode::Hovering,
+        FlightMode::Flying,
+        FlightMode::FollowingWaypoint,
+        FlightMode::Landing};
+    for (const FlightMode mode : flightModes)
+    {
+        const auto parsed = TryParseFlightMode(ToString(mode));
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(*parsed, mode);
+    }
+    EXPECT_FALSE(TryParseFlightMode("unknown_mode").has_value());
+
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
