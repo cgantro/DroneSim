@@ -118,6 +118,7 @@ void RecordMinimumDroneSeparation(
         minimumDistanceSquaredMeters = previousMinimum * previousMinimum;
     }
 
+    bool minimumDistanceChanged = false;
     for (std::size_t first = 0; first < positionsMeters.size(); ++first)
     {
         for (std::size_t second = first + 1; second < positionsMeters.size(); ++second)
@@ -128,10 +129,13 @@ void RecordMinimumDroneSeparation(
                 || distanceSquaredMeters < *minimumDistanceSquaredMeters)
             {
                 minimumDistanceSquaredMeters = distanceSquaredMeters;
-                result.minimumDroneSeparationMeters = std::sqrt(distanceSquaredMeters);
+                minimumDistanceChanged = true;
             }
         }
     }
+
+    if (minimumDistanceChanged)
+        result.minimumDroneSeparationMeters = std::sqrt(*minimumDistanceSquaredMeters);
 }
 
 /**
