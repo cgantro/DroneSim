@@ -129,6 +129,46 @@ void Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp()
     EXPECT_NEAR(state.orientation.z, 0.0, 1.0e-4);
 }
 
+void Verify_AirSimPhysics_GravityAndCollectiveThrustChangeVerticalMotion()
+{
+    constexpr double stepSeconds = 1.0 / 60.0;
+    constexpr int simulationTicks = 30;
+    constexpr double gravityMetersPerSecondSquared = 9.80665;
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    const double hoverSpeed = std::sqrt(parameters.massKilograms
+        * gravityMetersPerSecondSquared
+        / (static_cast<double>(parameters.rotors.size())
+            * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+
+    const auto runWithCollectiveThrust = [&](double hoverSpeedRatio)
+    {
+        PhysicsWorld world;
+        RigidBodyDefinition definition;
+        definition.positionMeters.z = 10.0;
+        const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+        std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+        motorTargets.fill(hoverSpeed * hoverSpeedRatio);
+        world.SetMotorTargets(drone, motorTargets);
+        for (int tick = 0; tick < simulationTicks; ++tick)
+            world.Step(stepSeconds);
+        return world.State(drone);
+    };
+
+    // 호버 속도보다 낮은 입력은 하강하고, 높은 입력은 상승해야 한다.
+    const RigidBodyState freeFall = runWithCollectiveThrust(0.0);
+    const RigidBodyState belowHover = runWithCollectiveThrust(0.8);
+    const RigidBodyState aboveHover = runWithCollectiveThrust(1.2);
+    const double elapsedSeconds = simulationTicks * stepSeconds;
+    const double expectedFreeFallHeight = 10.0
+        - 0.5 * gravityMetersPerSecondSquared * elapsedSeconds * elapsedSeconds;
+
+    EXPECT_NEAR(freeFall.positionMeters.z, expectedFreeFallHeight, 0.3);
+    EXPECT_LT(freeFall.linearVelocityMetersPerSecond.z, -4.0);
+    EXPECT_LT(belowHover.linearVelocityMetersPerSecond.z, 0.0);
+    EXPECT_GT(aboveHover.linearVelocityMetersPerSecond.z, 0.0);
+    EXPECT_GT(aboveHover.positionMeters.z, belowHover.positionMeters.z);
+}
+
 void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
 {
     constexpr double stepSeconds = 1.0 / 60.0;
@@ -625,6 +665,8 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysics_GravityAndCollectiveThrustChangeVerticalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_HoldsAStationaryWaypoint());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
     EXPECT_NO_FATAL_FAILURE(
