@@ -169,6 +169,40 @@ void Verify_AirSimPhysics_GravityAndCollectiveThrustChangeVerticalMotion()
     EXPECT_GT(aboveHover.positionMeters.z, belowHover.positionMeters.z);
 }
 
+void Verify_AirSimPhysics_MassChangesMotionUnderTheSameRotorInput()
+{
+    constexpr int settlingTicks = 10;
+    constexpr double stepSeconds = 1.0 / 60.0;
+    QuadrotorParameters baseline = QuadrotorParameters::X500Gazebo();
+    QuadrotorParameters heavier = baseline;
+    heavier.massKilograms *= 1.25;
+    const double baselineHoverSpeed = std::sqrt(baseline.massKilograms * 9.81
+        / (baseline.rotors.size()
+            * baseline.thrustCoefficientNewtonsPerSpeedSquared));
+
+    const auto run = [&](const QuadrotorParameters& parameters)
+    {
+        PhysicsWorld world;
+        RigidBodyDefinition definition;
+        definition.positionMeters.z = 10.0;
+        const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+        std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+        motorTargets.fill(baselineHoverSpeed);
+        world.SetMotorTargets(drone, motorTargets);
+        for (int tick = 0; tick < settlingTicks; ++tick)
+            world.Step(stepSeconds);
+        return world.DynamicsSample(drone);
+    };
+
+    // 같은 로터 명령이 안정된 뒤 질량만 바꾸고 힘과 가속도를 비교한다.
+    const PhysicsDynamicsSample baselineSample = run(baseline);
+    const PhysicsDynamicsSample heavierSample = run(heavier);
+    EXPECT_NEAR(baselineSample.appliedForceNewtons.z,
+        heavierSample.appliedForceNewtons.z, 0.1);
+    EXPECT_GT(baselineSample.linearAccelerationMetersPerSecondSquared.z,
+        heavierSample.linearAccelerationMetersPerSecondSquared.z + 1.0);
+}
+
 void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
 {
     constexpr double stepSeconds = 1.0 / 60.0;
@@ -667,6 +701,8 @@ TEST(PhysicsWorldTests, CoreScenarios)
         Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_GravityAndCollectiveThrustChangeVerticalMotion());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysics_MassChangesMotionUnderTheSameRotorInput());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_HoldsAStationaryWaypoint());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
     EXPECT_NO_FATAL_FAILURE(
