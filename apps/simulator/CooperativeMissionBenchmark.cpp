@@ -127,7 +127,7 @@ Json BuildCoordinatorReallocationScenario(std::size_t droneCount)
         ? droneCount / 4U : 1U;
 
     scenario["ticks"] = scenarioTicks;
-    scenario["expected"] = Json::object();
+    scenario["expected"]["tolerance_meters"] = 10'000.0;
     for (Json& task : scenario["mission"]["tasks"])
         task["deadline_tick"] = missionDeadlineTick;
 
