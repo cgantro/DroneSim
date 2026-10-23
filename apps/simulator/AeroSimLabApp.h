@@ -116,7 +116,8 @@ private:
         aerosimlab::communication::CommandReply& reply);
     /** @brief 새 드론의 지면 위치를 정하고 편대에 추가한 결과를 응답에 담는다. */
     void ApplyAddDroneCommand(aerosimlab::communication::CommandReply& reply);
-    void ApplyGroundCommand();
+    /** @brief 대기 중인 지상통제 명령을 적용하고 이번 Tick을 사용했는지 돌려준다. */
+    [[nodiscard]] bool ApplyGroundCommand();
     void ExpireGroundControlCommand();
     void ApplyRecordedCommands();
     void WriteBenchmarkReport(double elapsedSeconds) const;

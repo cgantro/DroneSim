@@ -297,13 +297,13 @@ void AeroSimLabApp::ExpireGroundControlCommand()
     groundControlCommandExpiresAtTick_.reset();
 }
 
-void AeroSimLabApp::ApplyGroundCommand()
+bool AeroSimLabApp::ApplyGroundCommand()
 {
 #ifdef __EMSCRIPTEN__
-    return;
+    return false;
 #else
     if (!pendingCommand_)
-        return;
+        return false;
 
     const auto& pending = *pendingCommand_;
     aerosimlab::communication::CommandReply reply;
@@ -349,6 +349,7 @@ void AeroSimLabApp::ApplyGroundCommand()
 #endif
     }
     pendingCommand_.reset();
+    return true;
 #endif
 }
 
