@@ -31,6 +31,18 @@ struct ScenarioResult
     std::optional<double> minimumPredictedDroneSeparationMeters;
     /** @brief 예측 충돌 위험으로 회피 경로를 처음 적용한 횟수다. */
     std::uint64_t collisionAvoidanceEvents = 0;
+    /** @brief 강체 실행에 실제 사용한 기체 값으로, 시험 결과의 조건을 다시 확인하는 데 쓴다. */
+    struct PhysicalModel
+    {
+        double massKilograms = 0.0;
+        glm::dvec3 principalInertiaKilogramMetersSquared{0.0};
+        double thrustCoefficientNewtonsPerSpeedSquared = 0.0;
+        double momentToThrustRatio = 0.0;
+        double motorTimeConstantUpSeconds = 0.0;
+        double maximumMotorSpeedRadiansPerSecond = 0.0;
+        bool customized = false;
+    };
+    std::optional<PhysicalModel> physicalModel;
     /** @brief 시나리오에서 이름으로 지정한 드론의 마지막 상태다. */
     struct Drone
     {

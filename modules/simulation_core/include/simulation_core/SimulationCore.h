@@ -13,6 +13,8 @@
 
 namespace aerosimlab::simulation
 {
+struct QuadrotorParameters;
+
 /**
  * @brief 운동학 기준선과 AirSim 강체 경로 중 사용할 계산 방식을 고른다.
  * @details 강체 경로에서는 AirSim이 로터 힘, 이동, 회전과 접촉 반응을 계산한다.
@@ -69,6 +71,9 @@ class SimulationCore
 public:
     /** @brief Flecs 실행 공간을 만들고 드론과 탑재 카메라를 준비한다. */
     explicit SimulationCore(SimulationDynamics dynamics = defaultSimulationDynamics);
+
+    /** @brief 지정한 기체 물성으로 강체 드론을 준비한다. */
+    SimulationCore(SimulationDynamics dynamics, QuadrotorParameters quadrotorParameters);
 
     /** @brief 모의 객체와 Flecs 실행 공간을 함께 정리한다. */
     ~SimulationCore();

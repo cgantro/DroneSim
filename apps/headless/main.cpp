@@ -119,12 +119,32 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
             {"tasks", std::move(tasks)}};
     }
 
+    nlohmann::json physicalModel = nullptr;
+    if (result.physicalModel)
+    {
+        const auto& model = *result.physicalModel;
+        physicalModel = {
+            {"mass_kg", model.massKilograms},
+            {"principal_inertia_kg_m2", {
+                model.principalInertiaKilogramMetersSquared.x,
+                model.principalInertiaKilogramMetersSquared.y,
+                model.principalInertiaKilogramMetersSquared.z}},
+            {"thrust_coefficient_newtons_per_speed_squared",
+                model.thrustCoefficientNewtonsPerSpeedSquared},
+            {"moment_to_thrust_ratio", model.momentToThrustRatio},
+            {"motor_time_constant_up_seconds", model.motorTimeConstantUpSeconds},
+            {"maximum_motor_speed_radians_per_second",
+                model.maximumMotorSpeedRadiansPerSecond},
+            {"customized", model.customized}};
+    }
+
     return {
         {"passed", result.passed},
         {"tick_count", result.tickCount},
         {"simulation_time_seconds", result.simulationTimeSeconds},
         {"final_state", ToJson(result.finalState)},
         {"drones", std::move(drones)},
+        {"physical_model", std::move(physicalModel)},
         {"mission", std::move(mission)},
         {"minimum_drone_separation_meters", result.minimumDroneSeparationMeters},
         {"minimum_predicted_drone_separation_meters",

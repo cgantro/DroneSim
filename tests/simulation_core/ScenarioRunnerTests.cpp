@@ -23,6 +23,31 @@ std::string ReadScenarioFixture(std::string_view relativePath)
         throw std::runtime_error("시나리오 시험 자료를 열지 못했습니다.");
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
+
+void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
+{
+    const ScenarioResult result = RunScenario(
+        ReadScenarioFixture("scenarios/flight/physical-model-override.json"));
+    ASSERT_TRUE(result.passed)
+        << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_TRUE(result.physicalModel.has_value());
+    EXPECT_TRUE(result.physicalModel->customized);
+    EXPECT_DOUBLE_EQ(result.physicalModel->massKilograms, 2.5);
+    EXPECT_EQ(result.physicalModel->principalInertiaKilogramMetersSquared,
+        (glm::dvec3{0.03, 0.031, 0.05}));
+    EXPECT_DOUBLE_EQ(
+        result.physicalModel->thrustCoefficientNewtonsPerSpeedSquared, 0.000011);
+    EXPECT_DOUBLE_EQ(result.physicalModel->momentToThrustRatio, 0.015);
+    EXPECT_DOUBLE_EQ(result.physicalModel->motorTimeConstantUpSeconds, 0.02);
+    EXPECT_DOUBLE_EQ(result.physicalModel->maximumMotorSpeedRadiansPerSecond, 900.0);
+
+    constexpr std::string_view kinematicOverride = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":1,"commands":[],
+     "quadrotor_model":{"mass_kg":2.5}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(kinematicOverride)),
+        std::invalid_argument);
+}
 }
 
 void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder()
@@ -342,6 +367,7 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
 
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides());
     constexpr std::array flightModes{
         FlightMode::Grounded,
         FlightMode::TakingOff,

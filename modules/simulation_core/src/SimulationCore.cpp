@@ -78,12 +78,16 @@ struct SimulationCore::EcsStorage
         control.groundElevationMeters = pose.groundElevationMeters;
     }
 
-    explicit EcsStorage(SimulationDynamics selectedDynamics)
+    explicit EcsStorage(
+        SimulationDynamics selectedDynamics, QuadrotorParameters selectedQuadrotorParameters)
         : dynamics(selectedDynamics)
 #if !defined(__EMSCRIPTEN__)
-        , quadrotorParameters(QuadrotorParameters::X500MotorTableEstimate())
+        , quadrotorParameters(std::move(selectedQuadrotorParameters))
 #endif
     {
+#if defined(__EMSCRIPTEN__)
+        static_cast<void>(selectedQuadrotorParameters);
+#endif
         RegisterDroneSystem();
         RegisterCameraSystem();
         SynchronizeCameraPose();
@@ -410,7 +414,13 @@ std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
 }
 
 SimulationCore::SimulationCore(SimulationDynamics dynamics)
-    : ecs_(std::make_unique<EcsStorage>(dynamics))
+    : SimulationCore(dynamics, QuadrotorParameters::X500MotorTableEstimate())
+{
+}
+
+SimulationCore::SimulationCore(
+    SimulationDynamics dynamics, QuadrotorParameters quadrotorParameters)
+    : ecs_(std::make_unique<EcsStorage>(dynamics, std::move(quadrotorParameters)))
 {
 }
 

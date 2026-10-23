@@ -1,5 +1,6 @@
 #pragma once
 
+#include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/ScenarioRunner.h"
 #include "simulation_core/SimulationCore.h"
 
@@ -105,6 +106,9 @@ struct ScenarioDefinition
     std::optional<EnergyModelSettings> energyModel;
     std::optional<ScenarioResult::Mission> mission;
     SimulationDynamics dynamics = defaultSimulationDynamics;
+    QuadrotorParameters quadrotorParameters =
+        QuadrotorParameters::X500MotorTableEstimate();
+    bool quadrotorParametersCustomized = false;
     std::optional<glm::dvec3> windVelocity;
     std::vector<ScheduledCameraEvent> cameraEvents;
     std::vector<ExpectedDrone> expectedDrones;

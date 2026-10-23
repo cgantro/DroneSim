@@ -858,6 +858,18 @@ void PopulateFinalSnapshot(
 {
     result.tickCount = simulation.TickCount();
     result.simulationTimeSeconds = simulation.SimulationTimeSeconds();
+    if (definition.dynamics == SimulationDynamics::RigidBody)
+    {
+        const QuadrotorParameters& model = definition.quadrotorParameters;
+        result.physicalModel = ScenarioResult::PhysicalModel{
+            model.massKilograms,
+            model.principalInertiaKilogramMetersSquared,
+            model.thrustCoefficientNewtonsPerSpeedSquared,
+            model.momentToThrustRatio,
+            model.motorTimeConstantUpSeconds,
+            model.maximumMotorSpeedRadiansPerSecond,
+            definition.quadrotorParametersCustomized};
+    }
     const auto appendDrone = [&](const std::string& droneName)
     {
         const DroneObservation& observation = observations.at(droneName);
@@ -1027,7 +1039,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
 {
     ScenarioDefinition definition = detail::ReadScenarioDefinition(jsonText);
     const std::uint64_t tickCount = definition.tickCount;
-    SimulationCore simulation{definition.dynamics};
+    SimulationCore simulation{definition.dynamics, definition.quadrotorParameters};
     if (definition.windVelocity)
         simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
 

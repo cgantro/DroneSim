@@ -760,6 +760,64 @@ void ReadEnvironmentSettings(const Json& document, ScenarioDefinition& definitio
         throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
 }
 
+void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& definition)
+{
+    const auto settings = document.find("quadrotor_model");
+    if (settings == document.end())
+        return;
+    if (!settings->is_object()
+        || definition.dynamics != SimulationDynamics::RigidBody)
+    {
+        throw std::invalid_argument(
+            "quadrotor_model은 rigid_body 시나리오의 JSON 객체여야 합니다.");
+    }
+
+    QuadrotorParameters& model = definition.quadrotorParameters;
+    if (settings->contains("mass_kg"))
+        model.massKilograms = ReadFiniteNumber((*settings)["mass_kg"], "mass_kg");
+    if (settings->contains("principal_inertia_kg_m2"))
+    {
+        model.principalInertiaKilogramMetersSquared = ReadVector(
+            (*settings)["principal_inertia_kg_m2"], "principal_inertia_kg_m2");
+    }
+    if (settings->contains("thrust_coefficient_newtons_per_speed_squared"))
+    {
+        model.thrustCoefficientNewtonsPerSpeedSquared = ReadFiniteNumber(
+            (*settings)["thrust_coefficient_newtons_per_speed_squared"],
+            "thrust_coefficient_newtons_per_speed_squared");
+    }
+    if (settings->contains("moment_to_thrust_ratio"))
+    {
+        model.momentToThrustRatio = ReadFiniteNumber(
+            (*settings)["moment_to_thrust_ratio"], "moment_to_thrust_ratio");
+    }
+    if (settings->contains("motor_time_constant_up_seconds"))
+    {
+        model.motorTimeConstantUpSeconds = ReadFiniteNumber(
+            (*settings)["motor_time_constant_up_seconds"],
+            "motor_time_constant_up_seconds");
+    }
+    if (settings->contains("maximum_motor_speed_radians_per_second"))
+    {
+        model.maximumMotorSpeedRadiansPerSecond = ReadFiniteNumber(
+            (*settings)["maximum_motor_speed_radians_per_second"],
+            "maximum_motor_speed_radians_per_second");
+    }
+
+    const glm::dvec3& inertia = model.principalInertiaKilogramMetersSquared;
+    if (model.massKilograms <= 0.0 || inertia.x <= 0.0 || inertia.y <= 0.0
+        || inertia.z <= 0.0
+        || model.thrustCoefficientNewtonsPerSpeedSquared <= 0.0
+        || model.momentToThrustRatio <= 0.0
+        || model.motorTimeConstantUpSeconds <= 0.0
+        || model.maximumMotorSpeedRadiansPerSecond <= 0.0)
+    {
+        throw std::invalid_argument(
+            "기체 질량·관성·추력·토크·모터 시간·최대 속도는 모두 양수여야 합니다.");
+    }
+    definition.quadrotorParametersCustomized = true;
+}
+
 void ReadCollisionAvoidanceSettings(const Json& document, ScenarioDefinition& definition)
 {
     const auto settingsValue = document.find("collision_avoidance");
@@ -977,6 +1035,7 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     ValidateFormationMissionAssignment(definition);
 
     ReadEnvironmentSettings(document, definition);
+    ReadQuadrotorModelSettings(document, definition);
     ReadCollisionAvoidanceSettings(document, definition);
     ReadEnergyModelSettings(document, definition);
     definition.cameraEvents = ReadCameraEvents(document, definition.tickCount);
