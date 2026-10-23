@@ -67,6 +67,11 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
         nlohmann::json tasks = nlohmann::json::array();
         for (const auto& task : result.mission->tasks)
         {
+            nlohmann::json waypoints = nlohmann::json::array();
+            for (const glm::dvec3& waypoint : task.waypointsMeters)
+            {
+                waypoints.push_back({waypoint.x, waypoint.y, waypoint.z});
+            }
             tasks.push_back({
                 {"name", task.name},
                 {"role", task.role},
@@ -78,6 +83,8 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                     task.targetPositionMeters.x,
                     task.targetPositionMeters.y,
                     task.targetPositionMeters.z}},
+                {"waypoints_meters", std::move(waypoints)},
+                {"current_waypoint_index", task.currentWaypointIndex},
                 {"started", task.started},
                 {"completed", task.completed},
                 {"failed", task.failed},

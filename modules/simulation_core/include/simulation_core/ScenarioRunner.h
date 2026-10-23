@@ -3,6 +3,7 @@
 #include "simulation_core/DroneModel.h"
 #include "simulation_core/EoCameraModel.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -49,6 +50,8 @@ struct ScenarioResult
         std::vector<std::string> assignmentHistory;
         std::uint32_t reassignmentCount = 0;
         glm::dvec3 targetPositionMeters{0.0};
+        std::vector<glm::dvec3> waypointsMeters;
+        std::size_t currentWaypointIndex = 0;
         std::uint64_t startTick = 0;
         std::uint64_t deadlineTick = 0;
         double toleranceMeters = 0.0;

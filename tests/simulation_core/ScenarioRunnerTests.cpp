@@ -209,6 +209,43 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
         {
             return event.find("통신이 복구") != std::string::npos;
         }));
+
+    constexpr std::string_view dividedSurveyScenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":480,
+     "drones":[
+       {"name":"survey-1","initial_position_meters":[2,0,0]},
+       {"name":"survey-2","initial_position_meters":[6,0,0]},
+       {"name":"survey-3","initial_position_meters":[10,0,0]},
+       {"name":"survey-4","initial_position_meters":[14,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"survey-1","type":"takeoff"},
+       {"tick":0,"drone":"survey-2","type":"takeoff"},
+       {"tick":0,"drone":"survey-3","type":"takeoff"},
+       {"tick":0,"drone":"survey-4","type":"takeoff"}],
+     "mission":{"name":"grid-survey","survey_area":{
+       "name":"field","bounds_meters":[0,0,16,8],
+       "altitude_meters":1.5,"lane_spacing_meters":8,
+       "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2}},
+     "expected":{"tolerance_meters":0.2,"drones":[
+       {"name":"survey-1","mode":"hovering","position_meters":[0,8,1.5]},
+       {"name":"survey-2","mode":"hovering","position_meters":[4,8,1.5]},
+       {"name":"survey-3","mode":"hovering","position_meters":[8,8,1.5]},
+       {"name":"survey-4","mode":"hovering","position_meters":[12,8,1.5]}]}}
+    )json";
+    const ScenarioResult areaResult = RunScenario(dividedSurveyScenario);
+    ASSERT_TRUE(areaResult.passed) << (areaResult.issues.empty() ? "" : areaResult.issues.front());
+    ASSERT_TRUE(areaResult.mission.has_value());
+    EXPECT_TRUE(areaResult.mission->passed);
+    ASSERT_EQ(areaResult.mission->tasks.size(), 4);
+    for (std::size_t index = 0; index < areaResult.mission->tasks.size(); ++index)
+    {
+        const auto& task = areaResult.mission->tasks[index];
+        EXPECT_TRUE(task.completed) << task.name;
+        ASSERT_EQ(task.waypointsMeters.size(), 4);
+        EXPECT_DOUBLE_EQ(task.waypointsMeters[0].x, 4.0 * static_cast<double>(index));
+        EXPECT_DOUBLE_EQ(task.waypointsMeters[1].x, 4.0 * static_cast<double>(index + 1));
+        EXPECT_DOUBLE_EQ(task.waypointsMeters.back().y, 8.0);
+    }
 }
 
 TEST(ScenarioRunnerTests, CoreScenarios)

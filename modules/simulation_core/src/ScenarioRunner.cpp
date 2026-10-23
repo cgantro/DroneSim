@@ -57,6 +57,11 @@ bool IsUnknown(const DroneObservations& observations, const std::string& droneNa
     return observations.at(droneName).status == DroneCommunicationStatus::Unknown;
 }
 
+const glm::dvec3& CurrentWaypoint(const ScenarioResult::MissionTask& task)
+{
+    return task.waypointsMeters[task.currentWaypointIndex];
+}
+
 const DroneCommunicationOutage* FindActiveCommunicationOutage(
     std::uint64_t tick,
     const std::string& droneName,
@@ -397,7 +402,7 @@ void UpdateMissionCommands(
             + " 드론의 완료 보고를 받지 못해 미확정으로 남았습니다.");
 
         const std::optional<std::string> replacement =
-            findNearestDrone(task.targetPositionMeters, true);
+            findNearestDrone(CurrentWaypoint(task), true);
         if (!replacement)
             continue;
 
@@ -431,7 +436,7 @@ void UpdateMissionCommands(
             || tick < task.startTick)
             continue;
         const std::optional<std::string> availableDrone =
-            findNearestDrone(task.targetPositionMeters, false);
+            findNearestDrone(CurrentWaypoint(task), false);
         if (!availableDrone)
             continue;
         task.droneName = *availableDrone;
@@ -464,7 +469,7 @@ void UpdateMissionCommands(
         }
 
         const CommandResult moveResult = simulation.Apply(droneId,
-            {DroneCommand::Kind::SetWaypoint, task.targetPositionMeters});
+            {DroneCommand::Kind::SetWaypoint, CurrentWaypoint(task)});
         if (moveResult != CommandResult::Accepted)
         {
             task.failed = true;
@@ -565,13 +570,24 @@ void UpdateMissionResults(
             continue;
 
         const glm::dvec3 distance = simulation.State(droneIds.at(task.droneName))
-            .positionMeters - task.targetPositionMeters;
+            .positionMeters - CurrentWaypoint(task);
         if (glm::length(distance) <= task.toleranceMeters)
         {
-            task.completed = true;
-            task.completedTick = tick;
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
+            if (task.currentWaypointIndex + 1 < task.waypointsMeters.size())
+            {
+                ++task.currentWaypointIndex;
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                    + task.droneName + " 드론이 '" + task.name + "' 경유점 "
+                    + std::to_string(task.currentWaypointIndex + 1) + "/"
+                    + std::to_string(task.waypointsMeters.size()) + "에 도착했습니다.");
+            }
+            else
+            {
+                task.completed = true;
+                task.completedTick = tick;
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                    + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
+            }
         }
         else if (tick >= task.deadlineTick)
         {

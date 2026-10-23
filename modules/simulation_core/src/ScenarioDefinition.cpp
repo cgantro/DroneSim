@@ -360,7 +360,7 @@ std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
     return outages;
 }
 
-/** @brief 임무 하나를 읽고 드론 배정과 Tick 범위를 확인한다. */
+/** @brief 임무 하나를 읽고 드론 배정, 경로와 Tick 범위를 확인한다. */
 ScenarioResult::MissionTask ReadMissionTask(
     const Json& taskValue,
     std::uint64_t tickCount,
@@ -395,14 +395,30 @@ ScenarioResult::MissionTask ReadMissionTask(
         throw std::invalid_argument("임무 이름은 고유해야 하며, 등록된 드론을 한 번만 배정할 수 있습니다.");
     }
 
-    task.targetPositionMeters = ReadVector(
-        Required(taskValue, "target_position_meters"), "target_position_meters");
+    const auto waypoints = taskValue.find("waypoints_meters");
+    if (waypoints != taskValue.end())
+    {
+        if (!waypoints->is_array() || waypoints->empty())
+            throw std::invalid_argument("waypoints_meters는 한 점 이상을 담은 배열이어야 합니다.");
+        task.waypointsMeters.reserve(waypoints->size());
+        for (const Json& waypoint : *waypoints)
+            task.waypointsMeters.push_back(ReadVector(waypoint, "waypoints_meters 항목"));
+        task.targetPositionMeters = task.waypointsMeters.front();
+    }
+    else
+    {
+        task.targetPositionMeters = ReadVector(
+            Required(taskValue, "target_position_meters"), "target_position_meters");
+        task.waypointsMeters.push_back(task.targetPositionMeters);
+    }
     task.startTick = ReadUnsigned(Required(taskValue, "start_tick"), "start_tick");
     task.deadlineTick = ReadUnsigned(
         Required(taskValue, "deadline_tick"), "deadline_tick");
     task.toleranceMeters = ReadFiniteNumber(
         Required(taskValue, "tolerance_meters"), "tolerance_meters");
-    if (task.targetPositionMeters.z < 0.0 || task.toleranceMeters < 0.0
+    const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
+        task.waypointsMeters.end(), [](const glm::dvec3& point) { return point.z < 0.0; });
+    if (hasNegativeAltitude || task.toleranceMeters < 0.0
         || task.startTick > task.deadlineTick || task.deadlineTick >= tickCount)
     {
         throw std::invalid_argument(
@@ -411,10 +427,95 @@ ScenarioResult::MissionTask ReadMissionTask(
     return task;
 }
 
+std::vector<ScenarioResult::MissionTask> GenerateSurveyTasks(
+    const Json& area,
+    const std::vector<std::string>& droneNames,
+    std::uint64_t tickCount)
+{
+    if (!area.is_object() || droneNames.size() < 2)
+        throw std::invalid_argument("구역 조사는 드론 두 대 이상과 설정 객체가 필요합니다.");
+
+    const Json& nameValue = Required(area, "name");
+    const Json& boundsValue = Required(area, "bounds_meters");
+    if (!nameValue.is_string() || nameValue.get<std::string>().empty()
+        || !boundsValue.is_array() || boundsValue.size() != 4)
+    {
+        throw std::invalid_argument(
+            "구역 name은 문자열이어야 하고 bounds_meters는 [xmin, ymin, xmax, ymax]여야 합니다.");
+    }
+
+    const double minX = ReadFiniteNumber(boundsValue[0], "bounds_meters[0]");
+    const double minY = ReadFiniteNumber(boundsValue[1], "bounds_meters[1]");
+    const double maxX = ReadFiniteNumber(boundsValue[2], "bounds_meters[2]");
+    const double maxY = ReadFiniteNumber(boundsValue[3], "bounds_meters[3]");
+    const double altitude = ReadFiniteNumber(
+        Required(area, "altitude_meters"), "altitude_meters");
+    const double laneSpacing = ReadFiniteNumber(
+        Required(area, "lane_spacing_meters"), "lane_spacing_meters");
+    const std::uint64_t startTick = ReadUnsigned(Required(area, "start_tick"), "start_tick");
+    const std::uint64_t deadlineTick = ReadUnsigned(
+        Required(area, "deadline_tick"), "deadline_tick");
+    const double tolerance = ReadFiniteNumber(
+        Required(area, "tolerance_meters"), "tolerance_meters");
+    const double widthMeters = maxX - minX;
+    const double heightMeters = maxY - minY;
+    if (!std::isfinite(widthMeters) || !std::isfinite(heightMeters)
+        || minX >= maxX || minY >= maxY || altitude < 0.0 || laneSpacing <= 0.0
+        || tolerance < 0.0 || startTick > deadlineTick || deadlineTick >= tickCount)
+    {
+        throw std::invalid_argument("구역 크기, 고도, 띠 간격 또는 임무 Tick 범위가 잘못되었습니다.");
+    }
+
+    const double rowCountValue = std::ceil(heightMeters / laneSpacing) + 1.0;
+    if (!std::isfinite(rowCountValue) || rowCountValue > 5'000.0)
+        throw std::invalid_argument("조사 구역의 띠 간격이 너무 촘촘해 경로가 지나치게 깁니다.");
+    const std::size_t rowCount = static_cast<std::size_t>(rowCountValue);
+
+    std::vector<double> rowYValues;
+    rowYValues.reserve(rowCount + 1);
+    for (std::size_t row = 0; row < rowCount; ++row)
+        rowYValues.push_back(std::min(maxY,
+            minY + static_cast<double>(row) * laneSpacing));
+    if (rowYValues.back() < maxY)
+        rowYValues.push_back(maxY);
+
+    const double sectorWidth = widthMeters / static_cast<double>(droneNames.size());
+    std::vector<ScenarioResult::MissionTask> tasks;
+    tasks.reserve(droneNames.size());
+    for (std::size_t droneIndex = 0; droneIndex < droneNames.size(); ++droneIndex)
+    {
+        const double sectorMinX = minX + static_cast<double>(droneIndex) * sectorWidth;
+        const double sectorMaxX = droneIndex + 1 == droneNames.size()
+            ? maxX : minX + static_cast<double>(droneIndex + 1) * sectorWidth;
+        ScenarioResult::MissionTask task;
+        task.name = nameValue.get<std::string>() + "-" + droneNames[droneIndex];
+        task.role = "area_survey";
+        task.droneName = droneNames[droneIndex];
+        task.initialDroneName = task.droneName;
+        task.assignmentHistory.push_back(task.droneName);
+        task.startTick = startTick;
+        task.deadlineTick = deadlineTick;
+        task.toleranceMeters = tolerance;
+
+        for (std::size_t row = 0; row < rowYValues.size(); ++row)
+        {
+            const bool reverse = row % 2 != 0;
+            const double firstX = reverse ? sectorMaxX : sectorMinX;
+            const double secondX = reverse ? sectorMinX : sectorMaxX;
+            task.waypointsMeters.emplace_back(firstX, rowYValues[row], altitude);
+            task.waypointsMeters.emplace_back(secondX, rowYValues[row], altitude);
+        }
+        task.targetPositionMeters = task.waypointsMeters.front();
+        tasks.push_back(std::move(task));
+    }
+    return tasks;
+}
+
 std::optional<ScenarioResult::Mission> ReadMission(
     const Json& document,
     std::uint64_t tickCount,
-    const std::unordered_set<std::string>& droneNames)
+    const std::unordered_set<std::string>& droneNames,
+    const std::vector<std::string>& droneOrder)
 {
     const auto found = document.find("mission");
     if (found == document.end())
@@ -423,18 +524,28 @@ std::optional<ScenarioResult::Mission> ReadMission(
         throw std::invalid_argument("mission은 JSON 객체여야 합니다.");
 
     const Json& nameValue = Required(*found, "name");
-    const Json& tasksValue = Required(*found, "tasks");
     if (!nameValue.is_string() || nameValue.get<std::string>().empty())
         throw std::invalid_argument("mission.name은 비어 있지 않은 문자열이어야 합니다.");
-    if (!tasksValue.is_array() || tasksValue.size() < 2)
-        throw std::invalid_argument("공동 임무에는 두 대 이상을 배정해야 합니다.");
+
+    const auto tasksValue = found->find("tasks");
+    const auto surveyArea = found->find("survey_area");
+    if ((tasksValue == found->end()) == (surveyArea == found->end()))
+        throw std::invalid_argument("mission에는 tasks 또는 survey_area 중 하나만 지정해야 합니다.");
 
     ScenarioResult::Mission mission;
     mission.name = nameValue.get<std::string>();
+    if (surveyArea != found->end())
+    {
+        mission.tasks = GenerateSurveyTasks(*surveyArea, droneOrder, tickCount);
+        return mission;
+    }
+
+    if (!tasksValue->is_array() || tasksValue->size() < 2)
+        throw std::invalid_argument("공동 임무에는 두 대 이상을 배정해야 합니다.");
     std::unordered_set<std::string> taskNames;
     std::unordered_set<std::string> assignedDrones;
-    mission.tasks.reserve(tasksValue.size());
-    for (const Json& taskValue : tasksValue)
+    mission.tasks.reserve(tasksValue->size());
+    for (const Json& taskValue : *tasksValue)
     {
         mission.tasks.push_back(ReadMissionTask(
             taskValue, tickCount, droneNames, taskNames, assignedDrones));
@@ -743,7 +854,17 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
         document, definition.tickCount, droneNames);
     ValidateFormationLinkCount(definition);
 
-    definition.mission = ReadMission(document, definition.tickCount, droneNames);
+    std::vector<std::string> droneOrder;
+    if (definition.drones.empty())
+        droneOrder.push_back(definition.primaryDroneName);
+    else
+    {
+        droneOrder.reserve(definition.drones.size());
+        for (const ScenarioDrone& drone : definition.drones)
+            droneOrder.push_back(drone.name);
+    }
+    definition.mission = ReadMission(
+        document, definition.tickCount, droneNames, droneOrder);
     ValidateFormationMissionAssignment(definition);
 
     ReadEnvironmentSettings(document, definition);
