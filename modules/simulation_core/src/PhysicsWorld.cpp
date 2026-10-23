@@ -39,6 +39,8 @@ namespace
 using AirSimBody = msr::airlib::MultiRotorPhysicsBody;
 using AirSimVector = msr::airlib::Vector3r;
 
+// 프로젝트의 X·Y 값은 각각 동쪽·북쪽이지만, 이 어댑터는 X·Y 순서를 유지하고 Z만 뒤집는다.
+// AirSim은 내부 물리 계산에만 쓰므로 원시 좌표를 지리 기준 NED 값으로 내보내면 안 된다.
 const glm::dmat3 axisReflection{
     {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, -1.0}};
 
