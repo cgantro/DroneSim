@@ -498,6 +498,7 @@ void AeroSimLabApp::AdvanceSimulationTick()
             ? "AeroSimLab | 게임패드 연결됨"
             : "AeroSimLab | 드론 관찰 · EO 영상");
     }
+    // 지상통제 명령이 이 Tick을 이미 진행했다면 재생·게임패드 입력을 더 적용하지 않는다.
     if (groundControlTickAdvanced)
         return;
 
