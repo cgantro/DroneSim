@@ -963,4 +963,32 @@ std::array<double, 4> PhysicsWorld::MotorSpeedsRadiansPerSecond(
     }
     return speeds;
 }
+
+std::array<double, 4> PhysicsWorld::MotorThrustsNewtons(
+    RigidBodyHandle handle) const
+{
+    const Impl::Body& body = impl_->GetBody(handle);
+    std::array<double, 4> thrusts{};
+    const auto& parameters = body.parameters.getParams();
+    const double airDensityRatio = body.environment.getState().air_density
+        / parameters.rotor_params.air_density;
+    for (std::size_t index = 0; index < thrusts.size(); ++index)
+    {
+        const auto output = body.model->getRotorOutput(
+            static_cast<msr::airlib::uint>(index));
+        thrusts[index] = static_cast<double>(output.thrust) * airDensityRatio;
+    }
+    return thrusts;
+}
+
+PhysicsDynamicsSample PhysicsWorld::DynamicsSample(RigidBodyHandle handle) const
+{
+    const Impl::Body& body = impl_->GetBody(handle);
+    const auto& kinematics = body.kinematics.getState();
+    const auto& gravity = body.environment.getState().gravity;
+    return {
+        ToProjectWorldVector(body.model->getWrench().force),
+        ToProjectWorldVector(gravity),
+        ToProjectWorldVector(kinematics.accelerations.linear)};
+}
 }

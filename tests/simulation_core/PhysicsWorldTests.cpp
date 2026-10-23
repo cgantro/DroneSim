@@ -84,6 +84,51 @@ void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
     EXPECT_NEAR(speedAfterSecondDownStep, expectedDownResponse, 0.5);
 }
 
+void Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp()
+{
+    constexpr double stepSeconds = 1.0 / 60.0;
+    constexpr int simulationTicks = 120;
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+
+    PhysicsWorld world;
+    RigidBodyDefinition definition;
+    definition.positionMeters.z = 10.0;
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
+        / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    const double expectedRotorThrust = parameters.thrustCoefficientNewtonsPerSpeedSquared
+        * hoverSpeed * hoverSpeed;
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(hoverSpeed);
+    world.SetMotorTargets(drone, motorTargets);
+
+    // 이 시험은 기동 직후의 고도 유지가 아니라 모터가 안정된 뒤의 힘 균형을 확인한다.
+    for (int tick = 0; tick < simulationTicks; ++tick)
+        world.Step(stepSeconds);
+
+    const RigidBodyState state = world.State(drone);
+    for (const double speed : world.MotorSpeedsRadiansPerSecond(drone))
+        EXPECT_NEAR(speed, hoverSpeed, 1.0);
+    for (const double thrust : world.MotorThrustsNewtons(drone))
+        EXPECT_NEAR(thrust, expectedRotorThrust, 0.05);
+    const PhysicsDynamicsSample dynamics = world.DynamicsSample(drone);
+    EXPECT_NEAR(dynamics.appliedForceNewtons.z,
+        parameters.massKilograms * 9.81, 0.1);
+    EXPECT_NEAR(dynamics.gravityMetersPerSecondSquared.z, -9.80665, 1.0e-4);
+    EXPECT_NEAR(dynamics.linearAccelerationMetersPerSecondSquared.z,
+        dynamics.appliedForceNewtons.z / parameters.massKilograms
+            + dynamics.gravityMetersPerSecondSquared.z,
+        1.0e-3);
+    EXPECT_NEAR(dynamics.linearAccelerationMetersPerSecondSquared.z, 0.0, 0.02);
+    EXPECT_NEAR(state.positionMeters.x, definition.positionMeters.x, 0.01);
+    EXPECT_NEAR(state.positionMeters.y, definition.positionMeters.y, 0.01);
+    EXPECT_LT(glm::length(state.angularVelocityRadiansPerSecond), 0.01);
+    EXPECT_NEAR(state.orientation.w, 1.0, 1.0e-4);
+    EXPECT_NEAR(state.orientation.x, 0.0, 1.0e-4);
+    EXPECT_NEAR(state.orientation.y, 0.0, 1.0e-4);
+    EXPECT_NEAR(state.orientation.z, 0.0, 1.0e-4);
+}
+
 void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
 {
     constexpr double stepSeconds = 1.0 / 60.0;
@@ -512,6 +557,8 @@ void Verify_AirSimBoundary_RejectsValuesItCannotRepresent()
 TEST(PhysicsWorldTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_HoldsAStationaryWaypoint());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
     EXPECT_NO_FATAL_FAILURE(

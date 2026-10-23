@@ -43,6 +43,14 @@ struct RigidBodyState
     glm::dvec3 angularVelocityRadiansPerSecond{0.0};
 };
 
+/** @brief AirSim이 마지막 Tick에서 사용한 힘·중력·가속도다. */
+struct PhysicsDynamicsSample
+{
+    glm::dvec3 appliedForceNewtons{0.0};
+    glm::dvec3 gravityMetersPerSecondSquared{0.0};
+    glm::dvec3 linearAccelerationMetersPerSecondSquared{0.0};
+};
+
 /** @brief 물리 Tick 전체와 접촉 생성에 걸린 시간을 마이크로초로 기록한다. */
 struct PhysicsStepMeasurements
 {
@@ -98,6 +106,13 @@ public:
     /** @brief AirSim이 계산한 로터별 회전 속도를 라디안/초 단위로 읽는다. */
     [[nodiscard]] std::array<double, 4> MotorSpeedsRadiansPerSecond(
         RigidBodyHandle body) const;
+
+    /** @brief 공기 밀도 영향을 반영한 로터별 추력을 뉴턴 단위로 읽는다. */
+    [[nodiscard]] std::array<double, 4> MotorThrustsNewtons(
+        RigidBodyHandle body) const;
+
+    /** @brief 마지막 물리 Tick에서 힘과 중력이 만든 가속도를 읽는다. */
+    [[nodiscard]] PhysicsDynamicsSample DynamicsSample(RigidBodyHandle body) const;
 
 private:
     struct Impl;
