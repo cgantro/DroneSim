@@ -45,6 +45,9 @@ struct ViewerBenchmarkMeasurements
     std::vector<double> physicsStepDurationsMicroseconds;
     // GPU에 픽셀 복사를 맡기는 CPU 호출 시간이다. 실제 GPU 복사 시간은 포함하지 않는다.
     std::vector<double> eoReadbackEnqueueDurationsMicroseconds;
+    // OpenGL이 픽셀 전송과 완료 표식을 접수하는 CPU 호출 시간이다.
+    std::vector<double> eoReadPixelsCallDurationsMicroseconds;
+    std::vector<double> eoFenceCreationCallDurationsMicroseconds;
     // 완료 여부를 확인하고 준비된 픽셀을 CPU 메모리로 복사하는 시간이다.
     std::vector<double> eoReadbackPollDurationsMicroseconds;
     std::vector<double> visionDurationsMicroseconds;

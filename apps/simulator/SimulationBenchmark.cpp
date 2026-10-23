@@ -123,6 +123,10 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
         std::move(measurements.physicsStepDurationsMicroseconds));
     report["eo_pixel_readback_enqueue_duration_us"] = SummarizeDurations(
         std::move(measurements.eoReadbackEnqueueDurationsMicroseconds));
+    report["eo_gl_readpixels_call_us"] = SummarizeDurations(
+        std::move(measurements.eoReadPixelsCallDurationsMicroseconds));
+    report["eo_gl_fence_creation_call_us"] = SummarizeDurations(
+        std::move(measurements.eoFenceCreationCallDurationsMicroseconds));
     report["eo_pixel_readback_poll_duration_us"] = SummarizeDurations(
         std::move(measurements.eoReadbackPollDurationsMicroseconds));
     report["vision_analysis"] = {

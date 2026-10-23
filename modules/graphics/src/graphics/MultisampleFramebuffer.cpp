@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstring>
 #include <stdexcept>
 
@@ -203,7 +204,8 @@ void MultisampleFramebuffer::ResolveToTexture() const
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-bool MultisampleFramebuffer::QueueRgbReadback(std::uint64_t simulationTick)
+bool MultisampleFramebuffer::QueueRgbReadback(
+    std::uint64_t simulationTick, RgbReadbackTimings* timings)
 {
     PixelReadback::Slot* available = nullptr;
     for (PixelReadback::Slot& slot : m_PixelReadback->slots)
@@ -242,9 +244,25 @@ bool MultisampleFramebuffer::QueueRgbReadback(std::uint64_t simulationTick)
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ResolvedFramebuffer);
     glReadBuffer(GL_COLOR_ATTACHMENT0);
+    const auto readPixelsStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     glReadPixels(0, 0, m_Width, m_Height, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    if (timings != nullptr)
+    {
+        timings->readPixelsCallMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - readPixelsStart).count();
+    }
 
+    const auto fenceCreationStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     available->completion = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    if (timings != nullptr)
+    {
+        timings->fenceCreationCallMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - fenceCreationStart).count();
+    }
     const bool queued = available->completion != nullptr;
     if (queued)
     {

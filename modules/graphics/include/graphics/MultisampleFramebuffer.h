@@ -7,6 +7,13 @@
 namespace aerosimlab::graphics
 {
 
+/** @brief 픽셀 전송과 완료 표식을 요청한 CPU 호출 시간이다. GPU 실행 시간은 포함하지 않는다. */
+struct RgbReadbackTimings
+{
+    double readPixelsCallMicroseconds = 0.0;
+    double fenceCreationCallMicroseconds = 0.0;
+};
+
 /**
  * @brief MSAA 색·깊이를 저장하고, 화면용 질감을 따로 만들어 장면 패널에 보여 준다.
  * @details Framebuffer는 그려진 색과 깊이를 저장할 GPU 대상이며 실제 창 화면과 다르다. 색은 픽셀마다 RGBA 채널 각각 8 bit, 카메라 앞뒤 비교용 깊이는 24 bit, stencil 표식은 8 bit로 저장한다.
@@ -67,7 +74,8 @@ public:
     [[nodiscard]] std::uint32_t GetTextureId() const { return m_ResolvedColorTexture; }
 
     /** @brief 화면 픽셀 읽기를 GPU에 맡기고, 읽을 때 함께 저장할 시뮬레이션 Tick을 기록한다. */
-    [[nodiscard]] bool QueueRgbReadback(std::uint64_t simulationTick);
+    [[nodiscard]] bool QueueRgbReadback(
+        std::uint64_t simulationTick, RgbReadbackTimings* timings = nullptr);
 
     /** @brief GPU가 이미 다 읽은 가장 오래된 화면을 CPU로 복사한다. 아직 준비되지 않았으면 false를 돌려준다. */
     [[nodiscard]] bool TryReadRgbPixels(

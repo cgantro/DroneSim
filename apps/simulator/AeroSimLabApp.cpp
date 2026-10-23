@@ -686,10 +686,12 @@ void AeroSimLabApp::CaptureEoFrame()
 
     double enqueueDurationMicroseconds = 0.0;
     bool queued = false;
+    aerosimlab::graphics::RgbReadbackTimings readbackTimings;
     {
         aerosimlab::simulation::ScopedDuration measureEnqueue(
             benchmarkMode_ ? &enqueueDurationMicroseconds : nullptr);
-        queued = cameraTarget_->QueueRgbReadback(camera.lastFrameTick);
+        queued = cameraTarget_->QueueRgbReadback(camera.lastFrameTick,
+            benchmarkMode_ ? &readbackTimings : nullptr);
     }
     if (queued)
     {
@@ -699,6 +701,10 @@ void AeroSimLabApp::CaptureEoFrame()
             eoReadbackHappenedThisFrame_ = true;
             benchmarkMeasurements_.eoReadbackEnqueueDurationsMicroseconds.push_back(
                 enqueueDurationMicroseconds);
+            benchmarkMeasurements_.eoReadPixelsCallDurationsMicroseconds.push_back(
+                readbackTimings.readPixelsCallMicroseconds);
+            benchmarkMeasurements_.eoFenceCreationCallDurationsMicroseconds.push_back(
+                readbackTimings.fenceCreationCallMicroseconds);
         }
     }
 }
