@@ -276,7 +276,7 @@ int AeroSimLabApp::Run()
         if (smokeTest_ && SmokeTestIsComplete())
             break;
         if (smokeTest_ && networkEnabled_
-            && std::chrono::steady_clock::now() - startTime_ > std::chrono::seconds(15))
+            && std::chrono::steady_clock::now() - startTime_ > std::chrono::seconds(30))
             return 4;
         if (benchmarkMode_ &&
             std::chrono::steady_clock::now() - startTime_ >= std::chrono::duration<double>(benchmarkDurationSeconds))

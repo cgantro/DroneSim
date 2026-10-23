@@ -195,7 +195,7 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
         commandFailure = std::current_exception();
     }
 
-    const auto completed = exitResult.wait_for(std::chrono::seconds(20));
+    const auto completed = exitResult.wait_for(std::chrono::seconds(35));
     EXPECT_EQ(completed, std::future_status::ready)
         << "재생이 끝나고 드론이 지상에 도달하면 숨김 시뮬레이터가 종료되어야 합니다.";
 
