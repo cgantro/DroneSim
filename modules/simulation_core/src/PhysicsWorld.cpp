@@ -665,7 +665,6 @@ struct PhysicsWorld::Impl
     // 단독 실행에서는 Unreal이 접촉 정보를 만들지 않으므로, 장면 접촉을 찾아 AirSim에 넘긴다.
     msr::airlib::CollisionInfo BuildAirSimContactInfo(
         const Body& body,
-        std::size_t bodyIndex,
         const std::optional<ContactCandidate>& droneContact) const
     {
         const std::uint64_t timestamp = stepCount + 1;
@@ -845,8 +844,7 @@ void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
             body->environment.setPosition(body->kinematics.getPose().position);
             body->environment.update();
             body->model->setCollisionInfo(
-                impl_->BuildAirSimContactInfo(*body, index,
-                    impl_->droneContacts[index]));
+                impl_->BuildAirSimContactInfo(*body, impl_->droneContacts[index]));
         }
         body->ApplyMotorTargets();
         body->model->update();
