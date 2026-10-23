@@ -546,15 +546,17 @@ void AeroSimLabApp::AdvanceSimulationTick()
     if (demoMode_ && !externalControl_)
         ApplyDemoCommands();
     ExpireGroundControlCommand();
-    const bool groundCommandApplied = ApplyGroundCommand();
-    if (!groundCommandApplied && !groundControlCommandExpiresAtTick_ && groundControlActive_)
+    const bool groundControlTickAdvanced = ProcessPendingGroundCommand();
+    if (!groundControlTickAdvanced
+        && !groundControlCommandExpiresAtTick_
+        && groundControlActive_)
     {
         groundControlActive_ = false;
         window_->SetTitle(gamepadConnected_
             ? "AeroSimLab | 게임패드 연결됨"
             : "AeroSimLab | 드론 관찰 · EO 영상");
     }
-    if (groundCommandApplied)
+    if (groundControlTickAdvanced)
         return;
 
     if (commandRecording_.IsReplaying())

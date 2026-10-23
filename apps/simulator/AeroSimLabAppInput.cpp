@@ -309,7 +309,7 @@ void AeroSimLabApp::ExpireGroundControlCommand()
     groundControlCommandExpiresAtTick_.reset();
 }
 
-bool AeroSimLabApp::ApplyGroundCommand()
+bool AeroSimLabApp::ProcessPendingGroundCommand()
 {
 #ifdef __EMSCRIPTEN__
     return false;
