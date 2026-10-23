@@ -155,12 +155,6 @@ RigidBodyState ToProjectState(const msr::airlib::Kinematics::State& value)
         ToProjectBodyVector(value.twist.angular)};
 }
 
-std::shared_ptr<msr::airlib::SteppableClock> CreateSimulationClock()
-{
-    return std::make_shared<msr::airlib::SteppableClock>(
-        DroneModel::fixedStepSeconds);
-}
-
 /** @brief 시뮬레이터의 목표 모터 속도를 AirSim이 받는 0~1 신호로 바꾼다. */
 class ActuationApi final : public msr::airlib::VehicleApiBase
 {
@@ -474,7 +468,9 @@ struct PhysicsWorld::Impl
         }
     };
 
-    std::shared_ptr<msr::airlib::SteppableClock> clock = CreateSimulationClock();
+    // AirSim 시계는 전역으로 보관된다. 월드는 자기 시계를 소유하고 호출 전에 다시 활성화한다.
+    std::shared_ptr<msr::airlib::SteppableClock> clock =
+        std::make_shared<msr::airlib::SteppableClock>(DroneModel::fixedStepSeconds);
     msr::airlib::FastPhysicsEngine physicsEngine{true};
     // 핸들 값은 고정하고, 벡터에는 현재 살아 있는 강체만 보관한다.
     std::vector<std::unique_ptr<Body>> bodies;
