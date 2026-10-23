@@ -52,7 +52,7 @@ Windows Release 빌드에서 자동 시험 20개가 통과했습니다. 2026년 
 | 운동학 확장 | 화면 없는 분리 배치 1,024대, Tick p95 중앙값 7.1µs, 30,000 Tick씩 3회 완료 | 처리량 시험 결과이며 GUI 실시간 조종 성능이나 물리 정확도를 뜻하지 않음 |
 | AirSim 강체 확장 | 분리 배치 512대에서 Tick p95 중앙값 622.2µs, 30,000 Tick씩 3회 완료 | 같은 PC의 화면 없는 시험. 1,024대 강체는 1회 실행 중 30초 제한에 걸려 완료 결과가 아님 |
 | 메모리 표본 | 기존 반복 시험과 별도로 드론을 1대에서 1,024대까지 한 모의에 차례로 추가. Private Bytes 증가량을 추가 드론 수로 나눈 값은 운동학 약 384B, AirSim 강체 약 8.16KiB | 종류별 한 번의 실행에서 얻은 프로세스 전체 메모리의 단순 평균. 실제 드론 메모리 비용으로 단정할 수 없음 |
-| 밀집 충돌 처리 | 0.55m 간격 256대에서 접촉 생성 p95 중앙값 607.6µs → 496.3µs, 전체 Tick p95 801.6µs → 648.2µs. 변경 전후 각각 30,000 Tick씩 3회 완료 | 같은 PC와 입력 조건에서 측정했지만 코드 리비전은 다름. 이 장면의 결과이며 다른 배치의 성능을 보장하지 않음 |
+| 밀집 충돌 처리 | 256대 비교에서 밀집 배치는 접촉 생성 p95 3.6%, Tick p95 3.2% 감소했고, 분리 배치는 Tick p95가 5.1% 증가했습니다. 각 조건은 30,000 Tick씩 3회 측정했습니다. 분리 1,024대는 양쪽 실행 모두 30초 제한에 걸려 27,000 Tick에서 멈췄습니다. [자세한 결과와 측정 한계](docs/public/문제해결/다중드론-충돌-성능.md) | 장면별 효과가 달라 전반적인 성능 개선으로 볼 수 없습니다. 1,024대는 완료된 반복 측정이 아닙니다. |
 | 협동 임무 | 운동학 1,024대와 AirSim 강체 128대까지 모든 기록된 반복에서 목표 완료 | 로컬 시나리오 결과이며 실제 통신 장애·충돌 회피·실비행 정확도 검증은 아님 |
 
 상세 조건과 실행 환경은 [기술 검토](docs/public/기술검토.md)에서 확인할 수 있습니다. [확장 시험과 메모리 표본 원본](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-e2510815.json), [이전 반복 시험 원본](benchmarks/results/aerosimlab-full-benchmark-release-2026-10-23-cd8344bc.json), 보이는 창의 [화면 측정 원본](benchmarks/results/aerosimlab-visible-gui-release-2026-10-23.json), [PBO 매핑 변경 전후 기록](benchmarks/results/aerosimlab-visible-pbo-persistent-map-2026-10-23.json), [ImGui CPU·GPU 시간 기록](benchmarks/results/aerosimlab-visible-imgui-gpu-timing-2026-10-23.json)을 보관합니다. 화면 지연 분석은 [EO 픽셀 읽기 기록](docs/public/문제해결/화면-프레임-지연.md), 주요 문제의 목록은 [문제 해결 기록](docs/public/문제해결.md)에서 확인할 수 있습니다.
