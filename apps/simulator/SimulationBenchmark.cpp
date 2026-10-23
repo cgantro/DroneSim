@@ -132,8 +132,13 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             {"gamepad_polling_us", frame.gamepadPollingMicroseconds},
             {"simulation_update_us", frame.simulationUpdateMicroseconds},
             {"render_us", frame.renderMicroseconds},
+            {"scene_panel_render_us", frame.scenePanelRenderMicroseconds},
+            {"camera_scene_render_us", frame.cameraSceneRenderMicroseconds},
             {"buffer_swap_us", frame.bufferSwapMicroseconds},
             {"eo_readback_handling_us", frame.eoReadbackHandlingMicroseconds},
+            {"eo_fence_wait_us", frame.eoFenceWaitMicroseconds},
+            {"eo_buffer_map_us", frame.eoBufferMapMicroseconds},
+            {"eo_pixel_copy_us", frame.eoPixelCopyMicroseconds},
             {"eo_readback_happened", frame.eoReadbackHappened}});
     }
 

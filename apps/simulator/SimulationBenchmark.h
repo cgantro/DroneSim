@@ -36,8 +36,13 @@ struct ViewerBenchmarkMeasurements
         double gamepadPollingMicroseconds = 0.0;
         double simulationUpdateMicroseconds = 0.0;
         double renderMicroseconds = 0.0;
+        double scenePanelRenderMicroseconds = 0.0;
+        double cameraSceneRenderMicroseconds = 0.0;
         double bufferSwapMicroseconds = 0.0;
         double eoReadbackHandlingMicroseconds = 0.0;
+        double eoFenceWaitMicroseconds = 0.0;
+        double eoBufferMapMicroseconds = 0.0;
+        double eoPixelCopyMicroseconds = 0.0;
         bool eoReadbackHappened = false;
     };
 

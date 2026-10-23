@@ -180,7 +180,12 @@ private:
     std::optional<std::uint64_t> lastRenderedEoFrameTick_;
 #endif
     std::clock_t benchmarkCpuStart_ = 0;
+    double frameScenePanelRenderDurationMicroseconds_ = 0.0;
+    double frameCameraSceneRenderDurationMicroseconds_ = 0.0;
     double frameEoReadbackHandlingDurationMicroseconds_ = 0.0;
+    double frameEoFenceWaitDurationMicroseconds_ = 0.0;
+    double frameEoBufferMapDurationMicroseconds_ = 0.0;
+    double frameEoPixelCopyDurationMicroseconds_ = 0.0;
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
 #ifndef __EMSCRIPTEN__
     double totalMeanBrightness_ = 0.0;

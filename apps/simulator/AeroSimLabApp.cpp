@@ -286,7 +286,12 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     double renderFrameDurationMicroseconds = 0.0;
     double renderDurationMicroseconds = 0.0;
     double bufferSwapDurationMicroseconds = 0.0;
+    frameScenePanelRenderDurationMicroseconds_ = 0.0;
+    frameCameraSceneRenderDurationMicroseconds_ = 0.0;
     frameEoReadbackHandlingDurationMicroseconds_ = 0.0;
+    frameEoFenceWaitDurationMicroseconds_ = 0.0;
+    frameEoBufferMapDurationMicroseconds_ = 0.0;
+    frameEoPixelCopyDurationMicroseconds_ = 0.0;
     {
         aerosimlab::simulation::ScopedDuration measureRenderFrame(
             benchmarkMode_ ? &renderFrameDurationMicroseconds : nullptr);
@@ -327,8 +332,13 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
                 gamepadPollingMicroseconds,
                 simulationUpdateMicroseconds,
                 renderDurationMicroseconds,
+                frameScenePanelRenderDurationMicroseconds_,
+                frameCameraSceneRenderDurationMicroseconds_,
                 bufferSwapDurationMicroseconds,
                 frameEoReadbackHandlingDurationMicroseconds_,
+                frameEoFenceWaitDurationMicroseconds_,
+                frameEoBufferMapDurationMicroseconds_,
+                frameEoPixelCopyDurationMicroseconds_,
                 eoReadbackHappenedThisFrame_});
         }
     }
@@ -670,6 +680,8 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
 #ifndef __EMSCRIPTEN__
 std::uint32_t AeroSimLabApp::RenderScenePanel(int width, int height)
 {
+    aerosimlab::simulation::ScopedDuration measureScenePanel(
+        benchmarkMode_ ? &frameScenePanelRenderDurationMicroseconds_ : nullptr);
     sceneTarget_->Resize(width, height);
     UpdateObserverCamera(width, height);
     return RenderWorldToTarget(*sceneTarget_, *observerCamera_);
@@ -686,6 +698,8 @@ std::uint32_t AeroSimLabApp::RenderCameraPanel()
     if (targetSizeChanged || !lastRenderedEoFrameTick_
         || *lastRenderedEoFrameTick_ != camera.lastFrameTick)
     {
+        aerosimlab::simulation::ScopedDuration measureCameraScene(
+            benchmarkMode_ ? &frameCameraSceneRenderDurationMicroseconds_ : nullptr);
         UpdateEoCamera(imageWidth, imageHeight);
         static_cast<void>(RenderWorldToTarget(*cameraTarget_, *eoCamera_));
         lastRenderedEoFrameTick_ = camera.lastFrameTick;
@@ -726,6 +740,9 @@ void AeroSimLabApp::ProcessCompletedEoReadback()
     }
     if (benchmarkMode_)
     {
+        frameEoFenceWaitDurationMicroseconds_ = pollTimings.fenceWaitCallMicroseconds;
+        frameEoBufferMapDurationMicroseconds_ = pollTimings.bufferMapCallMicroseconds;
+        frameEoPixelCopyDurationMicroseconds_ = pollTimings.pixelCopyMicroseconds;
         benchmarkMeasurements_.eoReadbackPollDurationsMicroseconds.push_back(
             pollDurationMicroseconds);
         benchmarkMeasurements_.eoFenceWaitCallDurationsMicroseconds.push_back(
