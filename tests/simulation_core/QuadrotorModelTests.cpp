@@ -81,9 +81,42 @@ void Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference()
     EXPECT_NEAR(parameters.momentToThrustRatio, 0.01403352, 1.0e-8);
 }
 
+void Verify_X500GazeboParameters_KeepAggregatedMassInertiaAndRotorLayout()
+{
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+
+    // 공개 X500의 중심 기체와 네 로터를 한 강체로 합산한 기준값이다.
+    EXPECT_NEAR(parameters.massKilograms, 2.0643076923076924, 1.0e-12);
+    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.x,
+        0.023846692647701416, 1.0e-12);
+    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.y,
+        0.02394961745804886, 1.0e-12);
+    EXPECT_NEAR(parameters.principalInertiaKilogramMetersSquared.z,
+        0.043999953714003955, 1.0e-12);
+
+    constexpr std::array<glm::dvec3, QuadrotorParameters::rotorCount> expectedPositions{{
+        {0.174, -0.174, 0.06}, {-0.174, 0.174, 0.06},
+        {0.174, 0.174, 0.06}, {-0.174, -0.174, 0.06}}};
+    constexpr std::array<RotorRotation, QuadrotorParameters::rotorCount> expectedRotations{{
+        RotorRotation::CounterClockwise, RotorRotation::CounterClockwise,
+        RotorRotation::Clockwise, RotorRotation::Clockwise}};
+    ASSERT_EQ(parameters.rotors.size(), expectedPositions.size());
+    for (std::size_t index = 0; index < parameters.rotors.size(); ++index)
+    {
+        EXPECT_DOUBLE_EQ(parameters.rotors[index].positionMeters.x,
+            expectedPositions[index].x);
+        EXPECT_DOUBLE_EQ(parameters.rotors[index].positionMeters.y,
+            expectedPositions[index].y);
+        EXPECT_DOUBLE_EQ(parameters.rotors[index].positionMeters.z,
+            expectedPositions[index].z);
+        EXPECT_EQ(parameters.rotors[index].rotation, expectedRotations[index]);
+    }
+}
+
 TEST(QuadrotorModelTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference());
+    EXPECT_NO_FATAL_FAILURE(Verify_X500GazeboParameters_KeepAggregatedMassInertiaAndRotorLayout());
 }
 
 }
