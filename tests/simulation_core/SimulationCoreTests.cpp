@@ -92,6 +92,24 @@ void Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInva
     EXPECT_EQ(simulation.State().mode, FlightMode::Hovering);
 }
 
+void Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose()
+{
+    SimulationCore simulation{SimulationDynamics::Kinematic};
+    const glm::dvec3 startPositionMeters{4.0, -2.0, 3.0};
+    constexpr double startYawRadians = 0.4;
+    simulation.SetInitialPose(startPositionMeters, startYawRadians);
+
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
+    simulation.AdvanceOneTick();
+    simulation.Reset();
+
+    const DroneState& state = simulation.State();
+    EXPECT_EQ(state.mode, FlightMode::Grounded);
+    EXPECT_EQ(state.positionMeters, startPositionMeters);
+    EXPECT_DOUBLE_EQ(state.yawRadians, startYawRadians);
+    EXPECT_EQ(simulation.TickCount(), 0U);
+}
+
 void Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether()
 {
     const auto verifyLifecycle = [](SimulationDynamics dynamics)
@@ -125,6 +143,7 @@ TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers());
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether());
 }
 

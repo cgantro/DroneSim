@@ -283,6 +283,7 @@ struct SimulationCore::EcsStorage
         physics->SetState(body, initialState);
         CopyPhysicsState(drone.get_mut<DroneState>(), body);
     }
+#endif
 
     void ResetDrone(flecs::entity& drone)
     {
@@ -297,6 +298,7 @@ struct SimulationCore::EcsStorage
 #endif
     }
 
+#if !defined(__EMSCRIPTEN__)
     void ApplyRigidBodyForces(
         DroneState& state,
         DroneControlState& control,
