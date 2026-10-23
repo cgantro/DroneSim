@@ -134,6 +134,11 @@ void RecordMinimumDroneSeparation(
     }
 }
 
+/**
+ * @brief 통신 장애와 명령 순서를 반영해 이번 명령을 전달할지 결정한다.
+ * @details 유실된 명령은 순서 번호를 갱신하지 않는다. 전달 대상으로 정해지면
+ *          시뮬레이터가 명령을 받아들이는지와 별개로 마지막 전달 순서를 갱신한다.
+ */
 bool PrepareScheduledCommandDelivery(
     std::uint64_t tick,
     const ScheduledCommand& scheduled,
@@ -166,6 +171,7 @@ bool PrepareScheduledCommandDelivery(
     return true;
 }
 
+/** @brief 전달이 결정된 명령을 한 번 적용하고 결과를 기록한다. */
 void ApplyDeliveredCommand(
     std::uint64_t tick,
     const ScheduledCommand& scheduled,

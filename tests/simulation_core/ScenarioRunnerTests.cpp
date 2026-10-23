@@ -41,6 +41,8 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
     EXPECT_DOUBLE_EQ(result.drones[0].finalState.positionMeters.z, 1.5);
     EXPECT_DOUBLE_EQ(result.drones[1].finalState.positionMeters.x, 12.0);
     EXPECT_EQ(result.finalState.positionMeters, result.drones[0].finalState.positionMeters);
+    ASSERT_GE(result.eventLog.size(), 3);
+    EXPECT_NE(result.eventLog[1].find("늦게 전달"), std::string::npos);
     ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
     EXPECT_NEAR(*result.minimumDroneSeparationMeters, 10.0, 1.0e-12);
 
@@ -77,6 +79,7 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
     EXPECT_NE(communicationFaults.issues.front().find("역순 명령"), std::string::npos);
     ASSERT_EQ(communicationFaults.eventLog.size(), 3);
     EXPECT_NE(communicationFaults.eventLog[0].find("통신 장애"), std::string::npos);
+    EXPECT_NE(communicationFaults.eventLog[1].find("명령을 적용했습니다"), std::string::npos);
     EXPECT_NE(communicationFaults.eventLog[2].find("중복 재전송"), std::string::npos);
     EXPECT_EQ(communicationFaults.finalState.mode, FlightMode::Hovering);
 }
