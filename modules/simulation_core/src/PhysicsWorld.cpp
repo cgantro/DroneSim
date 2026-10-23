@@ -314,6 +314,27 @@ void KeepDeeperContact(
     current = ContactCandidate{contact, objectName, objectId};
 }
 
+/**
+ * @brief 지면 높이를 검사할 충돌 상자 꼭짓점을 고른다.
+ * @details 높이 격자에서는 여덟 꼭짓점을 차례로 검사하고, 평지에서는 Z축 기준 최저 꼭짓점만 고른다.
+ */
+glm::dvec3 GroundSampleCorner(
+    const OrientedBox& box, unsigned int cornerIndex, bool sampleAllCorners)
+{
+    glm::dvec3 corner = box.centerMeters;
+    for (std::size_t axisIndex = 0; axisIndex < box.axes.size(); ++axisIndex)
+    {
+        const bool usePositiveSide = sampleAllCorners
+            ? (cornerIndex & (1U << axisIndex)) != 0U
+            : !(box.axes[axisIndex].z >= 0.0);
+        const double direction = usePositiveSide ? 1.0 : -1.0;
+        corner += box.axes[axisIndex]
+            * (direction * box.halfExtentsMeters[
+                static_cast<glm::length_t>(axisIndex)]);
+    }
+    return corner;
+}
+
 }
 
 struct PhysicsWorld::Impl
@@ -568,17 +589,8 @@ struct PhysicsWorld::Impl
             const unsigned int cornerCount = terrain ? 8U : 1U;
             for (unsigned int cornerIndex = 0; cornerIndex < cornerCount; ++cornerIndex)
             {
-                glm::dvec3 corner = worldBox.centerMeters;
-                for (std::size_t axisIndex = 0; axisIndex < worldBox.axes.size(); ++axisIndex)
-                {
-                    const bool usePositiveSide = terrain
-                        ? (cornerIndex & (1U << axisIndex)) != 0U
-                        : !(worldBox.axes[axisIndex].z >= 0.0);
-                    const double direction = usePositiveSide ? 1.0 : -1.0;
-                    corner += worldBox.axes[axisIndex]
-                        * (direction * worldBox.halfExtentsMeters[
-                            static_cast<glm::length_t>(axisIndex)]);
-                }
+                const glm::dvec3 corner = GroundSampleCorner(
+                    worldBox, cornerIndex, terrain.has_value());
 
                 const double ground = GroundHeight({corner.x, corner.y});
                 const double penetration = ground - corner.z;
