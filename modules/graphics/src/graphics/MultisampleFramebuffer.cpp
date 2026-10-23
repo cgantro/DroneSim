@@ -16,6 +16,7 @@ struct MultisampleFramebuffer::PixelReadback
     struct Slot
     {
         GLuint buffer = 0;
+        const void* mappedPixels = nullptr;
         GLsync completion = nullptr;
         std::uint64_t simulationTick = 0;
         std::uint64_t order = 0;
@@ -28,6 +29,14 @@ struct MultisampleFramebuffer::PixelReadback
 
     void Destroy() noexcept
     {
+        const bool hasMappedReadbackInFlight = std::any_of(
+            slots.begin(), slots.end(), [](const Slot& slot)
+            {
+                return slot.pending && slot.mappedPixels != nullptr;
+            });
+        if (hasMappedReadbackInFlight)
+            glFinish();
+
         for (Slot& slot : slots)
         {
             if (slot.completion != nullptr)
@@ -37,6 +46,15 @@ struct MultisampleFramebuffer::PixelReadback
             }
             if (slot.buffer != 0)
             {
+#ifndef __EMSCRIPTEN__
+                if (slot.mappedPixels != nullptr)
+                {
+                    glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.buffer);
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+                    slot.mappedPixels = nullptr;
+                }
+#endif
                 glDeleteBuffers(1, &slot.buffer);
                 slot.buffer = 0;
             }
@@ -241,8 +259,40 @@ bool MultisampleFramebuffer::QueueRgbReadback(
     glBindBuffer(GL_PIXEL_PACK_BUFFER, available->buffer);
     if (available->byteCount != byteCount)
     {
-        glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
-            nullptr, GL_STREAM_READ);
+#ifndef __EMSCRIPTEN__
+        if (available->mappedPixels != nullptr)
+        {
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            available->mappedPixels = nullptr;
+            glDeleteBuffers(1, &available->buffer);
+            glGenBuffers(1, &available->buffer);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, available->buffer);
+        }
+
+        if (GLAD_GL_ARB_buffer_storage && glad_glBufferStorage != nullptr)
+        {
+            // 지원되는 그래픽 환경에서는 PBO를 한 번만 매핑한다. 픽셀은 fence가 끝난 뒤에 읽는다.
+            constexpr GLbitfield persistentReadFlags =
+                GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+            glBufferStorage(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
+                nullptr, persistentReadFlags);
+            available->mappedPixels = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0,
+                static_cast<GLsizeiptr>(byteCount), persistentReadFlags);
+            if (available->mappedPixels == nullptr)
+            {
+                glDeleteBuffers(1, &available->buffer);
+                glGenBuffers(1, &available->buffer);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, available->buffer);
+                glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
+                    nullptr, GL_STREAM_READ);
+            }
+        }
+        else
+#endif
+        {
+            glBufferData(GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(byteCount),
+                nullptr, GL_STREAM_READ);
+        }
         available->byteCount = byteCount;
     }
     if (timings != nullptr)
@@ -389,8 +439,16 @@ bool MultisampleFramebuffer::TryReadRgbPixels(
     const auto mapStart = timings != nullptr
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    const void* source = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0,
-        static_cast<GLsizeiptr>(oldest->byteCount), GL_MAP_READ_BIT);
+#ifndef __EMSCRIPTEN__
+    const void* source = oldest->mappedPixels;
+    if (source == nullptr)
+#else
+    const void* source = nullptr;
+#endif
+    {
+        source = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0,
+            static_cast<GLsizeiptr>(oldest->byteCount), GL_MAP_READ_BIT);
+    }
     if (timings != nullptr)
     {
         timings->bufferMapCallMicroseconds = std::chrono::duration<double, std::micro>(
@@ -410,8 +468,14 @@ bool MultisampleFramebuffer::TryReadRgbPixels(
     const auto unmapStart = timings != nullptr
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
+#ifndef __EMSCRIPTEN__
+    const GLboolean valid = oldest->mappedPixels != nullptr
+        ? GL_TRUE : (source != nullptr
+            ? glUnmapBuffer(GL_PIXEL_PACK_BUFFER) : GL_FALSE);
+#else
     const GLboolean valid = source != nullptr
         ? glUnmapBuffer(GL_PIXEL_PACK_BUFFER) : GL_FALSE;
+#endif
     if (timings != nullptr && source != nullptr)
     {
         timings->bufferUnmapCallMicroseconds = std::chrono::duration<double, std::micro>(
