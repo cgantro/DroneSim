@@ -330,11 +330,6 @@ bool AeroSimLabApp::ApplyGroundCommand()
         simulation_.AdvanceOneTick();
     commandRecording_.FinishTick(wasRecordingAtTickStart);
 
-    if (commandRecording_.IsReplaying() && commandRecording_.ReplayFinished())
-    {
-        commandRecording_.StopReplay();
-        window_->SetTitle("AeroSimLab | 기록 재생 완료");
-    }
     reply.appliedTick = simulation_.TickCount();
     reply.telemetry = CurrentTelemetry();
     lastReply_ = reply;
