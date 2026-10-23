@@ -221,9 +221,10 @@ protected:
         target.rotor_count = static_cast<msr::airlib::uint>(source_.rotors.size());
         target.mass = static_cast<float>(source_.massKilograms);
         target.inertia = msr::airlib::Matrix3x3r::Zero();
-        target.inertia.diagonal() << source_.principalInertiaKilogramMetersSquared.x,
-            source_.principalInertiaKilogramMetersSquared.y,
-            source_.principalInertiaKilogramMetersSquared.z;
+        target.inertia.diagonal() <<
+            static_cast<float>(source_.principalInertiaKilogramMetersSquared.x),
+            static_cast<float>(source_.principalInertiaKilogramMetersSquared.y),
+            static_cast<float>(source_.principalInertiaKilogramMetersSquared.z);
         target.body_box = AirSimVector{static_cast<float>(source_.bodySizeMeters.x),
             static_cast<float>(source_.bodySizeMeters.y),
             static_cast<float>(source_.bodySizeMeters.z)};
@@ -302,7 +303,7 @@ double CollisionRadius(std::span<const RigidBodyBox> boxes)
 glm::dvec3 SupportPoint(const OrientedBox& box, const glm::dvec3& direction)
 {
     glm::dvec3 point = box.centerMeters;
-    for (std::size_t axis = 0; axis < box.axes.size(); ++axis)
+    for (glm::length_t axis = 0; axis < 3; ++axis)
     {
         const double side = glm::dot(direction, box.axes[axis]) >= 0.0 ? 1.0 : -1.0;
         point += box.axes[axis] * (side * box.halfExtentsMeters[axis]);
@@ -346,7 +347,7 @@ std::optional<BoxContact> FindBoxContact(
 {
     const glm::dvec3 centerOffset = otherBox.centerMeters - droneBox.centerMeters;
     // 먼저 회전 상자의 바깥 AABB를 검사해, 겹칠 수 없는 쌍은 15축 검사에서 제외한다.
-    for (std::size_t worldAxis = 0; worldAxis < 3; ++worldAxis)
+    for (glm::length_t worldAxis = 0; worldAxis < 3; ++worldAxis)
     {
         const double droneRadius =
             std::abs(droneBox.axes[0][worldAxis]) * droneBox.halfExtentsMeters.x
@@ -665,7 +666,8 @@ struct PhysicsWorld::Impl
                         : !(worldBox.axes[axisIndex].z >= 0.0);
                     const double direction = usePositiveSide ? 1.0 : -1.0;
                     corner += worldBox.axes[axisIndex]
-                        * (direction * worldBox.halfExtentsMeters[axisIndex]);
+                        * (direction * worldBox.halfExtentsMeters[
+                            static_cast<glm::length_t>(axisIndex)]);
                 }
 
                 const double ground = GroundHeight({corner.x, corner.y});

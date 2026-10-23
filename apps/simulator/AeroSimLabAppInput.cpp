@@ -26,7 +26,8 @@ std::optional<detail::FleetDroneSpawnPose> detail::FindFleetDroneSpawnPose(
     std::size_t slot)
 {
     const double eastMeters = static_cast<double>(slot % 3U + 1U) * 5.0;
-    const double northMeters = static_cast<double>(slot / 3U) * 5.0;
+    const std::size_t row = slot / 3U;
+    const double northMeters = static_cast<double>(row) * 5.0;
     const glm::dvec2 spawnPosition{
         primaryPositionMeters.x + eastMeters,
         primaryPositionMeters.y + northMeters};
