@@ -97,13 +97,13 @@ void RecordMinimumDroneSeparation(
     const ScenarioDefinition& definition,
     const SimulationCore& simulation,
     const DroneIds& droneIds,
+    std::vector<glm::dvec3>& positionsMeters,
     ScenarioResult& result)
 {
     if (!definition.minimumDroneSeparationMeters)
         return;
 
-    std::vector<glm::dvec3> positionsMeters;
-    positionsMeters.reserve(definition.drones.size());
+    positionsMeters.clear();
     for (const ScenarioDrone& drone : definition.drones)
     {
         positionsMeters.push_back(
@@ -450,7 +450,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
     std::size_t nextCommand = 0;
     std::size_t nextCameraEvent = 0;
     std::unordered_map<std::string, std::uint64_t> lastDeliveredSequence;
-    RecordMinimumDroneSeparation(definition, simulation, droneIds, result);
+    std::vector<glm::dvec3> dronePositionsMeters;
+    if (definition.minimumDroneSeparationMeters)
+        dronePositionsMeters.reserve(definition.drones.size());
+
+    RecordMinimumDroneSeparation(
+        definition, simulation, droneIds, dronePositionsMeters, result);
     for (std::uint64_t tick = 0; tick < tickCount; ++tick)
     {
         ApplyScheduledCommands(tick, definition.commands, simulation, droneIds,
@@ -459,7 +464,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
         UpdateFormationLinks(tick, definition.formationLinks, simulation, droneIds, result);
         ApplyCameraEvents(tick, definition.cameraEvents, simulation, nextCameraEvent, result);
         simulation.AdvanceOneTick();
-        RecordMinimumDroneSeparation(definition, simulation, droneIds, result);
+        RecordMinimumDroneSeparation(
+            definition, simulation, droneIds, dronePositionsMeters, result);
         UpdateMissionResults(tick, result.mission, simulation, droneIds, result);
     }
 
