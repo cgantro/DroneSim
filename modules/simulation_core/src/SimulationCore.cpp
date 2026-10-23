@@ -284,6 +284,19 @@ struct SimulationCore::EcsStorage
         CopyPhysicsState(drone.get_mut<DroneState>(), body);
     }
 
+    void ResetDrone(flecs::entity& drone)
+    {
+        const InitialPose& initialPose = drone.get<InitialPose>();
+        ApplyInitialPose(
+            drone.get_mut<DroneState>(),
+            drone.get_mut<DroneControlState>(),
+            initialPose);
+#if !defined(__EMSCRIPTEN__)
+        if (dynamics == SimulationDynamics::RigidBody)
+            ResetPhysicsBody(drone);
+#endif
+    }
+
     void ApplyRigidBodyForces(
         DroneState& state,
         DroneControlState& control,
@@ -463,12 +476,7 @@ void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yaw
     const EcsStorage::InitialPose initialPose{
         positionMeters, yawRadians, groundElevationMeters};
     drone.set<EcsStorage::InitialPose>(initialPose);
-    EcsStorage::ApplyInitialPose(
-        drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>(), initialPose);
-#if !defined(__EMSCRIPTEN__)
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-        ecs_->ResetPhysicsBody(drone);
-#endif
+    ecs_->ResetDrone(drone);
     ecs_->SynchronizeCameraPose();
 }
 
@@ -538,13 +546,7 @@ void SimulationCore::Reset()
     for (auto& [id, drone] : ecs_->drones)
     {
         (void)id;
-        const EcsStorage::InitialPose& initialPose = drone.get<EcsStorage::InitialPose>();
-        EcsStorage::ApplyInitialPose(
-            drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>(), initialPose);
-#if !defined(__EMSCRIPTEN__)
-        if (ecs_->dynamics == SimulationDynamics::RigidBody)
-            ecs_->ResetPhysicsBody(drone);
-#endif
+        ecs_->ResetDrone(drone);
     }
     EoCameraModel::Reset(ecs_->camera.get_mut<CameraState>());
     ecs_->tickCount = 0;
