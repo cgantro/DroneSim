@@ -36,6 +36,8 @@ struct ScenarioDrone
     std::string name;
     glm::dvec3 initialPositionMeters;
     double initialYawRadians;
+    std::optional<double> batteryCapacityWattHours;
+    double initialBatteryPercent = 100.0;
 };
 
 struct FormationOutage
@@ -67,6 +69,14 @@ struct CollisionAvoidanceSettings
     double lateralOffsetMeters;
 };
 
+struct EnergyModelSettings
+{
+    double capacityWattHours;
+    double hoverPowerWatts;
+    double flightPowerWatts;
+    double reservePercent;
+};
+
 /** @brief JSON 카메라 동작을 실행 단계에서 안전하게 구분한다. */
 enum class CameraEventAction
 {
@@ -92,6 +102,7 @@ struct ScenarioDefinition
     std::vector<FormationLink> formationLinks;
     std::vector<DroneCommunicationOutage> communicationOutages;
     std::optional<CollisionAvoidanceSettings> collisionAvoidance;
+    std::optional<EnergyModelSettings> energyModel;
     std::optional<ScenarioResult::Mission> mission;
     SimulationDynamics dynamics = defaultSimulationDynamics;
     std::optional<glm::dvec3> windVelocity;

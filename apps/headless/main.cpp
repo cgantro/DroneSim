@@ -54,11 +54,23 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
     nlohmann::json drones = nlohmann::json::array();
     for (const auto& drone : result.drones)
     {
+        nlohmann::json battery = nullptr;
+        if (drone.batteryCapacityWattHours)
+        {
+            battery = {
+                {"capacity_watt_hours", drone.batteryCapacityWattHours},
+                {"consumed_watt_hours", drone.energyConsumedWattHours},
+                {"remaining_watt_hours", drone.batteryRemainingWattHours},
+                {"remaining_percent", drone.batteryPercent},
+                {"reported_percent", drone.reportedBatteryPercent},
+                {"returned_for_low_battery", drone.returnedForLowBattery}};
+        }
         drones.push_back({
             {"name", drone.name},
             {"state", ToJson(drone.finalState)},
             {"communication_status", communicationStatusName(drone.communicationStatus)},
-            {"last_heartbeat_tick", drone.lastHeartbeatTick}});
+            {"last_heartbeat_tick", drone.lastHeartbeatTick},
+            {"battery", std::move(battery)}});
     }
 
     nlohmann::json mission = nullptr;
@@ -91,7 +103,20 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                 {"completed_tick", task.completedTick}});
         }
         mission = {{"name", result.mission->name},
-            {"passed", result.mission->passed}, {"tasks", std::move(tasks)}};
+            {"passed", result.mission->passed},
+            {"completed_task_count", result.mission->completedTaskCount},
+            {"task_count", result.mission->tasks.size()},
+            {"completion_percent", result.mission->completionPercent},
+            {"coverage_percent", result.mission->coveragePercent},
+            {"started_tick", result.mission->startedTick},
+            {"completed_tick", result.mission->completedTick},
+            {"completion_time_seconds", result.mission->completedTick
+                    && result.mission->startedTick
+                ? nlohmann::json(static_cast<double>(*result.mission->completedTick
+                    - *result.mission->startedTick)
+                    * aerosimlab::simulation::DroneModel::fixedStepSeconds)
+                : nlohmann::json(nullptr)},
+            {"tasks", std::move(tasks)}};
     }
 
     return {

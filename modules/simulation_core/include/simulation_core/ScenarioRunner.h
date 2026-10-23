@@ -40,6 +40,16 @@ struct ScenarioResult
             CommunicationStatus::Connected;
         /** @brief finalState가 실제 현재 위치인지, 마지막으로 전달된 위치인지 나타낸다. */
         std::uint64_t lastHeartbeatTick = 0;
+        /** @brief 에너지 모형을 켠 시나리오에서 설정한 배터리 용량과 사용·잔량이다. */
+        std::optional<double> batteryCapacityWattHours;
+        /** @brief 시작 잔량에서 시나리오 동안 실제로 소비한 에너지다. */
+        std::optional<double> energyConsumedWattHours;
+        std::optional<double> batteryRemainingWattHours;
+        std::optional<double> batteryPercent;
+        /** @brief 조정기에 마지막으로 전달된 배터리 비율이다. 통신 단절 중에는 오래된 값일 수 있다. */
+        std::optional<double> reportedBatteryPercent;
+        /** @brief 배터리 예비량에 도달해 임무를 넘기고 착륙을 시작했는지 나타낸다. */
+        bool returnedForLowBattery = false;
     };
     /** @brief 시나리오에 등장한 드론의 마지막 상태를 입력 순서대로 보관한다. */
     std::vector<Drone> drones;
@@ -54,6 +64,7 @@ struct ScenarioResult
         std::vector<std::string> assignmentHistory;
         std::uint32_t reassignmentCount = 0;
         glm::dvec3 targetPositionMeters{0.0};
+        /** @brief 점 임무는 한 점, 구역 임무는 왕복 경로의 순서 있는 지점 목록이다. */
         std::vector<glm::dvec3> waypointsMeters;
         std::size_t currentWaypointIndex = 0;
         std::uint64_t startTick = 0;
@@ -69,6 +80,14 @@ struct ScenarioResult
     {
         std::string name;
         bool passed = false;
+        /** @brief 완료한 작업 수와 전체 작업 중 완료한 비율이다. */
+        std::size_t completedTaskCount = 0;
+        double completionPercent = 0.0;
+        /** @brief 방문한 경유점 수를 전체 경유점 수로 나눈 비율이다. */
+        double coveragePercent = 0.0;
+        /** @brief 첫 임무를 실제로 시작한 Tick과 모든 임무를 끝낸 Tick이다. */
+        std::optional<std::uint64_t> startedTick;
+        std::optional<std::uint64_t> completedTick;
         std::vector<MissionTask> tasks;
     };
     /** @brief mission을 지정한 시나리오에만 결과가 들어간다. */

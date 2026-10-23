@@ -220,9 +220,23 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         const double initialYawRadians = yaw == item.end()
             ? 0.0
             : ReadFiniteNumber(*yaw, "initial_yaw_radians");
+        std::optional<double> batteryCapacity;
+        const auto capacity = item.find("battery_capacity_watt_hours");
+        if (capacity != item.end())
+        {
+            batteryCapacity = ReadFiniteNumber(
+                *capacity, "battery_capacity_watt_hours");
+            if (*batteryCapacity <= 0.0)
+                throw std::invalid_argument("battery_capacity_watt_hours는 양수여야 합니다.");
+        }
+        const auto initialBattery = item.find("initial_battery_percent");
+        const double initialBatteryPercent = initialBattery == item.end()
+            ? 100.0 : ReadFiniteNumber(*initialBattery, "initial_battery_percent");
+        if (initialBatteryPercent < 0.0 || initialBatteryPercent > 100.0)
+            throw std::invalid_argument("initial_battery_percent는 0부터 100 사이여야 합니다.");
         drones.push_back({std::move(name), ReadVector(
             Required(item, "initial_position_meters"), "initial_position_meters"),
-            initialYawRadians});
+            initialYawRadians, batteryCapacity, initialBatteryPercent});
     }
     return drones;
 }
@@ -771,6 +785,76 @@ void ReadCollisionAvoidanceSettings(const Json& document, ScenarioDefinition& de
     definition.collisionAvoidance = settings;
 }
 
+void ReadEnergyModelSettings(const Json& document, ScenarioDefinition& definition)
+{
+    const auto settingsValue = document.find("energy_model");
+    if (settingsValue == document.end())
+    {
+        const bool hasDroneEnergyOverrides = std::any_of(
+            definition.drones.begin(), definition.drones.end(),
+            [](const ScenarioDrone& drone)
+            {
+                return drone.batteryCapacityWattHours.has_value()
+                    || drone.initialBatteryPercent != 100.0;
+            });
+        if (hasDroneEnergyOverrides)
+            throw std::invalid_argument("드론 배터리 설정을 쓰려면 energy_model을 지정해야 합니다.");
+        return;
+    }
+    if (!settingsValue->is_object())
+        throw std::invalid_argument("energy_model은 JSON 객체여야 합니다.");
+
+    EnergyModelSettings settings{
+        ReadFiniteNumber(Required(*settingsValue, "capacity_watt_hours"),
+            "capacity_watt_hours"),
+        ReadFiniteNumber(Required(*settingsValue, "hover_power_watts"),
+            "hover_power_watts"),
+        ReadFiniteNumber(Required(*settingsValue, "flight_power_watts"),
+            "flight_power_watts"),
+        ReadFiniteNumber(Required(*settingsValue, "reserve_percent"),
+            "reserve_percent")};
+    if (settings.capacityWattHours <= 0.0
+        || settings.hoverPowerWatts <= 0.0
+        || settings.flightPowerWatts <= 0.0
+        || settings.reservePercent < 0.0 || settings.reservePercent >= 100.0)
+    {
+        throw std::invalid_argument(
+            "배터리 용량과 소비 전력은 양수이고 reserve_percent는 0 이상 100 미만이어야 합니다.");
+    }
+
+    constexpr double secondsPerHour = 3'600.0;
+    const double landingEnergyWattHours = settings.flightPowerWatts
+        * DroneModel::takeoffHeightMeters
+        / DroneModel::climbSpeedMetersPerSecond / secondsPerHour
+        + settings.flightPowerWatts * DroneModel::fixedStepSeconds / secondsPerHour;
+    const auto validateDroneBattery = [&](double capacityWattHours,
+        double initialPercent, std::string_view droneName)
+    {
+        const double reserveWattHours = capacityWattHours
+            * (settings.reservePercent / 100.0);
+        const double initialWattHours = capacityWattHours * (initialPercent / 100.0);
+        if (reserveWattHours < landingEnergyWattHours
+            || initialWattHours < landingEnergyWattHours)
+        {
+            throw std::invalid_argument(std::string(droneName)
+                + " 드론의 배터리 예비량은 기본 착륙에 필요한 에너지보다 커야 합니다.");
+        }
+    };
+    if (definition.drones.empty())
+    {
+        validateDroneBattery(settings.capacityWattHours, 100.0, "기본");
+    }
+    else
+    {
+        for (const ScenarioDrone& drone : definition.drones)
+        {
+            validateDroneBattery(drone.batteryCapacityWattHours.value_or(
+                settings.capacityWattHours), drone.initialBatteryPercent, drone.name);
+        }
+    }
+    definition.energyModel = settings;
+}
+
 void ReadExpectedDroneStates(const Json& expected, ScenarioDefinition& definition)
 {
     definition.hasExpectedDrones = expected.contains("drones");
@@ -894,6 +978,7 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
 
     ReadEnvironmentSettings(document, definition);
     ReadCollisionAvoidanceSettings(document, definition);
+    ReadEnergyModelSettings(document, definition);
     definition.cameraEvents = ReadCameraEvents(document, definition.tickCount);
     ReadExpectedResults(document, definition);
     return definition;

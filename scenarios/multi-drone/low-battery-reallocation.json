@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "dynamics": "kinematic",
+  "ticks": 720,
+  "drones": [
+    {
+      "name": "low-charge",
+      "initial_position_meters": [0, 0, 0],
+      "battery_capacity_watt_hours": 0.3,
+      "initial_battery_percent": 80
+    },
+    {
+      "name": "reserve",
+      "initial_position_meters": [20, 0, 0]
+    }
+  ],
+  "commands": [
+    {"tick": 0, "drone": "low-charge", "type": "takeoff"},
+    {"tick": 0, "drone": "reserve", "type": "takeoff"}
+  ],
+  "energy_model": {
+    "capacity_watt_hours": 1,
+    "hover_power_watts": 40,
+    "flight_power_watts": 120,
+    "reserve_percent": 40
+  },
+  "mission": {
+    "name": "energy-limited-survey",
+    "tasks": [
+      {
+        "name": "long-area",
+        "role": "survey",
+        "drone": "low-charge",
+        "target_position_meters": [30, 0, 1.5],
+        "start_tick": 90,
+        "deadline_tick": 690,
+        "tolerance_meters": 0.2
+      },
+      {
+        "name": "near-area",
+        "role": "survey",
+        "drone": "reserve",
+        "target_position_meters": [21, 0, 1.5],
+        "start_tick": 90,
+        "deadline_tick": 690,
+        "tolerance_meters": 0.2
+      }
+    ]
+  },
+  "expected": {
+    "tolerance_meters": 0.2,
+    "drones": [
+      {"name": "low-charge", "mode": "grounded", "position_meters": [10.58333333333334, 0, 0]},
+      {"name": "reserve", "mode": "hovering", "position_meters": [30, 0, 1.5]}
+    ]
+  }
+}

@@ -3,6 +3,9 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -11,6 +14,15 @@ namespace aerosimlab::simulation
 {
 namespace
 {
+std::string ReadScenarioFixture(std::string_view relativePath)
+{
+    const std::filesystem::path path =
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR} / relativePath;
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        throw std::runtime_error("시나리오 시험 자료를 열지 못했습니다.");
+    return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
+}
 }
 
 void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder()
@@ -173,6 +185,11 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     ASSERT_TRUE(result.mission.has_value());
     EXPECT_TRUE(result.mission->passed);
     ASSERT_EQ(result.mission->tasks.size(), 4);
+    EXPECT_EQ(result.mission->completedTaskCount, 4U);
+    EXPECT_DOUBLE_EQ(result.mission->completionPercent, 100.0);
+    EXPECT_DOUBLE_EQ(result.mission->coveragePercent, 100.0);
+    ASSERT_TRUE(result.mission->completedTick.has_value());
+    EXPECT_LT(*result.mission->completedTick, result.tickCount);
     const auto& reassignedTask = result.mission->tasks[1];
     EXPECT_TRUE(reassignedTask.completed);
     EXPECT_EQ(reassignedTask.droneName, "scout-3");
@@ -236,6 +253,7 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     ASSERT_TRUE(areaResult.passed) << (areaResult.issues.empty() ? "" : areaResult.issues.front());
     ASSERT_TRUE(areaResult.mission.has_value());
     EXPECT_TRUE(areaResult.mission->passed);
+    EXPECT_DOUBLE_EQ(areaResult.mission->coveragePercent, 100.0);
     ASSERT_EQ(areaResult.mission->tasks.size(), 4);
     for (std::size_t index = 0; index < areaResult.mission->tasks.size(); ++index)
     {
@@ -279,6 +297,47 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     EXPECT_GE(*avoidanceResult.minimumDroneSeparationMeters, 2.5);
     ASSERT_TRUE(avoidanceResult.minimumPredictedDroneSeparationMeters.has_value());
     EXPECT_LT(*avoidanceResult.minimumPredictedDroneSeparationMeters, 3.0);
+
+    const std::string lowBatteryScenario = ReadScenarioFixture(
+        "scenarios/multi-drone/low-battery-reallocation.json");
+    const ScenarioResult energyResult = RunScenario(lowBatteryScenario);
+    ASSERT_TRUE(energyResult.passed)
+        << (energyResult.issues.empty() ? "" : energyResult.issues.front());
+    ASSERT_TRUE(energyResult.mission.has_value());
+    EXPECT_TRUE(energyResult.mission->passed);
+    ASSERT_EQ(energyResult.mission->tasks.size(), 2);
+    EXPECT_EQ(energyResult.mission->tasks[0].droneName, "reserve");
+    EXPECT_EQ(energyResult.mission->tasks[0].reassignmentCount, 1U);
+    ASSERT_EQ(energyResult.drones.size(), 2);
+    const auto& depletedDrone = energyResult.drones[0];
+    EXPECT_TRUE(depletedDrone.returnedForLowBattery);
+    ASSERT_TRUE(depletedDrone.batteryPercent.has_value());
+    ASSERT_TRUE(depletedDrone.energyConsumedWattHours.has_value());
+    EXPECT_LT(*depletedDrone.batteryPercent, 40.0);
+    EXPECT_GT(*depletedDrone.batteryPercent, 0.0);
+    EXPECT_GT(*depletedDrone.energyConsumedWattHours, 0.0);
+    EXPECT_EQ(depletedDrone.finalState.mode, FlightMode::Grounded);
+    EXPECT_LT(depletedDrone.finalState.positionMeters.x, 30.0);
+    const auto& healthyDrone = energyResult.drones[1];
+    EXPECT_FALSE(healthyDrone.returnedForLowBattery);
+    ASSERT_TRUE(healthyDrone.batteryPercent.has_value());
+    EXPECT_GT(*healthyDrone.batteryPercent, 40.0);
+    EXPECT_NEAR(healthyDrone.finalState.positionMeters.x, 30.0, 0.2);
+
+    constexpr std::string_view insufficientLandingReserve = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":10,
+     "drones":[
+       {"name":"first","initial_position_meters":[0,0,0],"battery_capacity_watt_hours":0.15},
+       {"name":"second","initial_position_meters":[1,0,0]}],
+     "commands":[],
+     "energy_model":{"capacity_watt_hours":1,"hover_power_watts":40,
+       "flight_power_watts":120,"reserve_percent":20},
+     "expected":{"drones":[
+       {"name":"first","mode":"grounded","position_meters":[0,0,0]},
+       {"name":"second","mode":"grounded","position_meters":[1,0,0]}]}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(insufficientLandingReserve)),
+        std::invalid_argument);
 }
 
 TEST(ScenarioRunnerTests, CoreScenarios)

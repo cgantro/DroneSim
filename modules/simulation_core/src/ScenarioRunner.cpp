@@ -27,6 +27,7 @@ using detail::FormationOutage;
 using detail::ScenarioDefinition;
 using detail::ScenarioDrone;
 using detail::CollisionAvoidanceSettings;
+using detail::EnergyModelSettings;
 using detail::ScheduledCameraEvent;
 using detail::ScheduledCommand;
 using detail::DroneCommunicationOutage;
@@ -38,16 +39,111 @@ struct DroneObservation
     DroneCommunicationStatus status = DroneCommunicationStatus::Connected;
     std::uint64_t lastHeartbeatTick = 0;
     DroneState lastKnownState;
+    std::optional<double> lastKnownBatteryPercent;
 };
 
 using DroneObservations = std::unordered_map<std::string, DroneObservation>;
 using DroneNameSet = std::unordered_set<std::string>;
+
+struct DroneEnergy
+{
+    double capacityWattHours = 0.0;
+    double remainingWattHours = 0.0;
+    double initialWattHours = 0.0;
+    bool returningForLowBattery = false;
+};
+
+using DroneEnergies = std::unordered_map<std::string, DroneEnergy>;
+
+double BatteryPercent(const DroneEnergy& energy)
+{
+    return 100.0 * energy.remainingWattHours / energy.capacityWattHours;
+}
 
 bool CanReceiveWaypoint(FlightMode mode) noexcept
 {
     return mode == FlightMode::Hovering
         || mode == FlightMode::Flying
         || mode == FlightMode::FollowingWaypoint;
+}
+
+void UpdateEnergyPolicy(
+    std::uint64_t tick,
+    const EnergyModelSettings& settings,
+    std::optional<ScenarioResult::Mission>& mission,
+    SimulationCore& simulation,
+    const DroneIds& droneIds,
+    const ScenarioDefinition& definition,
+    DroneEnergies& energies,
+    ScenarioResult& result)
+{
+    const auto handleDrone = [&](const std::string& droneName)
+    {
+        DroneEnergy& energy = energies.at(droneName);
+        if (energy.returningForLowBattery
+            || BatteryPercent(energy) > settings.reservePercent)
+            return;
+
+        energy.returningForLowBattery = true;
+        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+            + droneName + " 드론이 배터리 예비량에 도달해 임무를 넘기고 착륙합니다.");
+
+        if (mission)
+        {
+            for (ScenarioResult::MissionTask& task : mission->tasks)
+            {
+                if (task.droneName != droneName || task.completed || task.failed)
+                    continue;
+                task.droneName.clear();
+                task.started = false;
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
+                    + task.name + "' 임무를 대기열에 돌려놓았습니다.");
+            }
+        }
+
+        const FlightMode mode = simulation.State(droneIds.at(droneName)).mode;
+        if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
+        {
+            const CommandResult landResult = simulation.Apply(droneIds.at(droneName),
+                {DroneCommand::Kind::Land});
+            if (landResult != CommandResult::Accepted)
+                result.issues.push_back(droneName + " 드론을 낮은 배터리로 착륙시키지 못했습니다.");
+        }
+    };
+
+    if (definition.drones.empty())
+    {
+        handleDrone(definition.primaryDroneName);
+        return;
+    }
+    for (const ScenarioDrone& drone : definition.drones)
+        handleDrone(drone.name);
+}
+
+void AdvanceEnergy(
+    const EnergyModelSettings& settings,
+    const DroneIds& droneIds,
+    const SimulationCore& simulation,
+    DroneEnergies& energies)
+{
+    constexpr double secondsPerHour = 3'600.0;
+    for (auto& [droneName, energy] : energies)
+    {
+        if (energy.remainingWattHours <= 0.0)
+            continue;
+
+        const FlightMode mode = simulation.State(droneIds.at(droneName)).mode;
+        double powerWatts = 0.0;
+        if (mode == FlightMode::Hovering)
+            powerWatts = settings.hoverPowerWatts;
+        else if (mode != FlightMode::Grounded)
+            powerWatts = settings.flightPowerWatts;
+
+        const double consumedWattHours = powerWatts
+            * DroneModel::fixedStepSeconds / secondsPerHour;
+        energy.remainingWattHours = std::max(0.0,
+            energy.remainingWattHours - consumedWattHours);
+    }
 }
 
 bool IsConnected(const DroneObservations& observations, const std::string& droneName)
@@ -84,6 +180,7 @@ void UpdateDroneObservations(
     const ScenarioDefinition& definition,
     const SimulationCore& simulation,
     const DroneIds& droneIds,
+    const DroneEnergies& energies,
     DroneObservations& observations,
     ScenarioResult& result)
 {
@@ -103,6 +200,9 @@ void UpdateDroneObservations(
             observation.status = DroneCommunicationStatus::Connected;
             observation.lastHeartbeatTick = tick;
             observation.lastKnownState = simulation.State(droneId);
+            const auto energy = energies.find(droneName);
+            observation.lastKnownBatteryPercent = energy == energies.end()
+                ? std::nullopt : std::optional<double>{BatteryPercent(energy->second)};
             return;
         }
 
@@ -338,6 +438,7 @@ void UpdateMissionCommands(
     SimulationCore& simulation,
     const DroneIds& droneIds,
     const DroneObservations& observations,
+    const DroneEnergies& energies,
     const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
@@ -352,6 +453,9 @@ void UpdateMissionCommands(
         const auto considerDrone = [&](const std::string& droneName)
         {
             if (!IsConnected(observations, droneName))
+                return;
+            const auto energy = energies.find(droneName);
+            if (energy != energies.end() && energy->second.returningForLowBattery)
                 return;
             const bool isFormationFollower = std::any_of(
                 definition.formationLinks.begin(), definition.formationLinks.end(),
@@ -467,6 +571,8 @@ void UpdateMissionCommands(
         if (!task.started)
         {
             task.started = true;
+            if (!mission->startedTick)
+                mission->startedTick = tick;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + task.droneName + " 드론이 '" + task.role + "' 임무를 시작했습니다.");
         }
@@ -747,25 +853,39 @@ void PopulateFinalSnapshot(
     const ScenarioDefinition& definition,
     const SimulationCore& simulation,
     const DroneObservations& observations,
+    const DroneEnergies& energies,
     ScenarioResult& result)
 {
     result.tickCount = simulation.TickCount();
     result.simulationTimeSeconds = simulation.SimulationTimeSeconds();
+    const auto appendDrone = [&](const std::string& droneName)
+    {
+        const DroneObservation& observation = observations.at(droneName);
+        ScenarioResult::Drone drone{
+            droneName, observation.lastKnownState,
+            observation.status, observation.lastHeartbeatTick};
+        drone.reportedBatteryPercent = observation.lastKnownBatteryPercent;
+        const auto energy = energies.find(droneName);
+        if (energy != energies.end())
+        {
+            drone.batteryCapacityWattHours = energy->second.capacityWattHours;
+            drone.energyConsumedWattHours =
+                energy->second.initialWattHours - energy->second.remainingWattHours;
+            drone.batteryRemainingWattHours = energy->second.remainingWattHours;
+            drone.batteryPercent = BatteryPercent(energy->second);
+            drone.returnedForLowBattery = energy->second.returningForLowBattery;
+        }
+        result.drones.push_back(std::move(drone));
+    };
+
     if (definition.drones.empty())
     {
-        const DroneObservation& observation = observations.at(definition.primaryDroneName);
-        result.drones.push_back({definition.primaryDroneName, observation.lastKnownState,
-            observation.status, observation.lastHeartbeatTick});
+        appendDrone(definition.primaryDroneName);
     }
     else
-    {
         for (const ScenarioDrone& drone : definition.drones)
-        {
-            const DroneObservation& observation = observations.at(drone.name);
-            result.drones.push_back({drone.name, observation.lastKnownState,
-                observation.status, observation.lastHeartbeatTick});
-        }
-    }
+            appendDrone(drone.name);
+
     result.finalState = result.drones.front().finalState;
     result.finalCamera = simulation.Camera();
 }
@@ -869,6 +989,28 @@ void CheckExpectedResults(
 {
     if (result.mission)
     {
+        std::size_t totalWaypointCount = 0;
+        std::size_t visitedWaypointCount = 0;
+        for (const ScenarioResult::MissionTask& task : result.mission->tasks)
+        {
+            totalWaypointCount += task.waypointsMeters.size();
+            visitedWaypointCount += task.completed
+                ? task.waypointsMeters.size() : task.currentWaypointIndex;
+            if (task.completed)
+            {
+                ++result.mission->completedTaskCount;
+                if (task.completedTick
+                    && (!result.mission->completedTick
+                        || *task.completedTick > *result.mission->completedTick))
+                    result.mission->completedTick = task.completedTick;
+            }
+        }
+        result.mission->completionPercent = 100.0
+            * static_cast<double>(result.mission->completedTaskCount)
+            / static_cast<double>(result.mission->tasks.size());
+        result.mission->coveragePercent = totalWaypointCount == 0 ? 0.0
+            : 100.0 * static_cast<double>(visitedWaypointCount)
+                / static_cast<double>(totalWaypointCount);
         result.mission->passed = std::all_of(
             result.mission->tasks.begin(), result.mission->tasks.end(),
             [](const ScenarioResult::MissionTask& task) { return task.completed; });
@@ -894,6 +1036,33 @@ ScenarioResult RunScenario(std::string_view jsonText)
     for (const auto& [droneName, droneId] : droneIds)
         observations.emplace(droneName, DroneObservation{
             DroneCommunicationStatus::Connected, 0, simulation.State(droneId)});
+    DroneEnergies energies;
+    if (definition.energyModel)
+    {
+        const auto addEnergy = [&](const std::string& droneName,
+            const ScenarioDrone* scenarioDrone)
+        {
+            const double capacity = scenarioDrone
+                && scenarioDrone->batteryCapacityWattHours
+                ? *scenarioDrone->batteryCapacityWattHours
+                : definition.energyModel->capacityWattHours;
+            const double initialPercent = scenarioDrone
+                ? scenarioDrone->initialBatteryPercent : 100.0;
+            const double initialWattHours = capacity * (initialPercent / 100.0);
+            DroneEnergy energy{capacity, initialWattHours, initialWattHours, false};
+            observations.at(droneName).lastKnownBatteryPercent = BatteryPercent(energy);
+            energies.emplace(droneName, energy);
+        };
+        if (definition.drones.empty())
+        {
+            addEnergy(definition.primaryDroneName, nullptr);
+        }
+        else
+        {
+            for (const ScenarioDrone& drone : definition.drones)
+                addEnergy(drone.name, &drone);
+        }
+    }
 
     ScenarioResult result;
     result.mission = std::move(definition.mission);
@@ -910,18 +1079,25 @@ ScenarioResult RunScenario(std::string_view jsonText)
         definition, simulation, droneIds, dronePositionsMeters, result);
     for (std::uint64_t tick = 0; tick < tickCount; ++tick)
     {
-        UpdateDroneObservations(tick, definition, simulation, droneIds,
+        UpdateDroneObservations(tick, definition, simulation, droneIds, energies,
             observations, result);
         ApplyScheduledCommands(tick, definition.commands, simulation, droneIds,
             observations, nextCommand, lastDeliveredSequence, result);
+        if (definition.energyModel)
+        {
+            UpdateEnergyPolicy(tick, *definition.energyModel, result.mission,
+                simulation, droneIds, definition, energies, result);
+        }
         UpdateMissionCommands(tick, result.mission, simulation, droneIds,
-            observations, definition, result);
+            observations, energies, definition, result);
         UpdateFormationLinks(tick, definition.formationLinks, simulation, droneIds,
             observations, result);
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
             droneIds, observations, dronesAvoiding, activeAvoidanceDirections, result);
         ApplyCameraEvents(tick, definition.cameraEvents, simulation, nextCameraEvent, result);
         simulation.AdvanceOneTick();
+        if (definition.energyModel)
+            AdvanceEnergy(*definition.energyModel, droneIds, simulation, energies);
         RecordMinimumDroneSeparation(
             definition, simulation, droneIds, dronePositionsMeters, result);
         UpdateMissionResults(tick, result.mission, simulation, droneIds,
@@ -935,9 +1111,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
         {
             observation.lastKnownState = simulation.State(droneId);
             observation.lastHeartbeatTick = tickCount;
+            const auto energy = energies.find(droneName);
+            if (energy != energies.end())
+                observation.lastKnownBatteryPercent = BatteryPercent(energy->second);
         }
     }
-    PopulateFinalSnapshot(definition, simulation, observations, result);
+    PopulateFinalSnapshot(definition, simulation, observations, energies, result);
     CheckExpectedResults(definition, result);
     return result;
 }
