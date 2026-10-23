@@ -450,6 +450,39 @@ struct PhysicsWorld::Impl
         return largestCollisionRadius;
     }
 
+    /** @brief 후보 기체 두 대의 상자 접촉을 계산해 양쪽 기체에 기록한다. */
+    void RecordDronePairContacts(std::size_t bodyIndex, std::size_t otherIndex)
+    {
+        const Body& body = *bodies[bodyIndex];
+        const Body& otherBody = *bodies[otherIndex];
+        if (!BroadphaseMayOverlap(body.collisionState.positionMeters,
+                body.collisionRadiusMeters,
+                otherBody.collisionState.positionMeters,
+                otherBody.collisionRadiusMeters))
+        {
+            return;
+        }
+
+        for (const OrientedBox& ownBox : body.worldCollisionBoxes)
+        {
+            for (const OrientedBox& otherBox : otherBody.worldCollisionBoxes)
+            {
+                const auto contact = FindBoxContact(ownBox, otherBox);
+                if (!contact)
+                    continue;
+
+                KeepDeeperContact(droneContacts[bodyIndex], *contact,
+                    "drone", static_cast<int>(otherBody.handle.value + 1U));
+                const BoxContact reverseContact{
+                    -contact->normal,
+                    SupportPoint(otherBox, contact->normal),
+                    contact->penetrationMeters};
+                KeepDeeperContact(droneContacts[otherIndex], reverseContact,
+                    "drone", static_cast<int>(body.handle.value + 1U));
+            }
+        }
+    }
+
     /** @brief 드론 한 쌍의 상자 충돌을 한 번 계산해 양쪽 기체에 저장한다. */
     void PrepareDroneContacts(double largestCollisionRadius)
     {
@@ -472,32 +505,7 @@ struct PhysicsWorld::Impl
                 ++candidateOrder)
             {
                 const std::size_t otherIndex = bodyPositionsByX[candidateOrder].second;
-                const Body& otherBody = *bodies[otherIndex];
-                if (!BroadphaseMayOverlap(center, body.collisionRadiusMeters,
-                    otherBody.collisionState.positionMeters,
-                    otherBody.collisionRadiusMeters))
-                {
-                    continue;
-                }
-
-                for (const OrientedBox& ownBox : body.worldCollisionBoxes)
-                {
-                    for (const OrientedBox& otherBox : otherBody.worldCollisionBoxes)
-                    {
-                        const auto contact = FindBoxContact(ownBox, otherBox);
-                        if (!contact)
-                            continue;
-
-                        KeepDeeperContact(droneContacts[bodyIndex], *contact,
-                            "drone", static_cast<int>(otherBody.handle.value + 1U));
-                        const BoxContact reverseContact{
-                            -contact->normal,
-                            SupportPoint(otherBox, contact->normal),
-                            contact->penetrationMeters};
-                        KeepDeeperContact(droneContacts[otherIndex], reverseContact,
-                            "drone", static_cast<int>(body.handle.value + 1U));
-                    }
-                }
+                RecordDronePairContacts(bodyIndex, otherIndex);
             }
         }
     }
