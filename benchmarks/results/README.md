@@ -6,12 +6,13 @@
 
 먼저 표에서 **내가 알고 싶은 질문**을 찾으세요. 링크를 누르면 그 질문에 답하려고 실행한 원본 자료가 열립니다. 숫자의 의미와 해석 한계는 [성능 검증 문서](../../docs/public/성능검증.md)에 설명되어 있습니다.
 
-가장 최근 자료는 2026년 10월 24일 Release 빌드에서 측정했습니다. 기록된 리비전은 `edd2a04d`입니다. 화면 측정은 5초씩 세 번 실행했고, 확장성 측정은 각 드론 수에서 최대 30,000 Tick을 세 번 실행했습니다. 1,024대 AirSim 강체 시험만 30초 제한으로 한 번의 부분 실행에 그쳤습니다. 시험 목적과 결과 해석은 [성능 검증 문서](../../docs/public/성능검증.md)에서 확인할 수 있습니다.
+2026년 10월 24일 Release 측정에는 두 기록이 있습니다. 실제 창을 보인 프레임 시험은 `edd2a04d`에서 5초씩 세 번 실행했습니다. 최신 전체 측정은 `c55c76de`에서 숨김 창으로 프레임을 5초 기록한 뒤 드론 확장성과 협동 임무를 실행했습니다. 드론 수별 시험은 최대 30,000 Tick씩 세 번 진행했고, 1,024대 AirSim 강체만 30초 제한에 걸려 한 번의 부분 실행으로 끝났습니다. 4대 통신 단절·재할당 시나리오는 모의 방식별로 한 번 준비한 뒤 세 번씩 반복했습니다. 시험 목적과 결과 해석은 [성능 검증 문서](../../docs/public/성능검증.md)에서 확인할 수 있습니다.
 
 | 알고 싶은 것 | 시험 목적 | 결과 자료 |
 | --- | --- | --- |
 | 실제 창에서 앱 프레임이 얼마나 걸리고 긴 지연이 있는가? | 장면·EO 카메라·HUD를 켜고 자동 시연을 실행해 프레임 처리 시간을 5초씩 3회 측정 | [2026년 10월 24일 화면 측정 3회](archive/aerosimlab-visible-benchmark-release-2026-10-24-edd2a04d.json), [이전 반복 측정](aerosimlab-visible-warmup-repeats-release-2026-10-23-aac03875.json) |
-| 드론 수가 늘면 비행·충돌 계산이 얼마나 무거워지는가? | 화면 렌더링을 끄고 운동학·AirSim 강체·밀집 배치의 Tick 비용을 비교 | [2026년 10월 24일 전체 측정](archive/aerosimlab-full-benchmark-release-2026-10-24-edd2a04d.json), [이전 전체 측정](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json) |
+| 드론 수가 늘면 비행·충돌 계산이 얼마나 무거워지는가? | 숨김 창으로 운동학·AirSim 강체·밀집 배치의 Tick 비용을 비교 | [2026년 10월 24일 전체 측정](archive/aerosimlab-full-benchmark-release-2026-10-24-c55c76de.json), [이전 전체 측정](archive/aerosimlab-full-benchmark-release-2026-10-24-edd2a04d.json), [더 이전 전체 측정](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json) |
+| 통신이 끊긴 4대 협동 임무가 끝나고 안전거리를 지키는가? | 운동학 320 Tick·강체 1,800 Tick을 각각 준비 1회와 측정 3회 실행 | [2026년 10월 24일 전체 측정의 협동 임무 기록](archive/aerosimlab-full-benchmark-release-2026-10-24-c55c76de.json) |
 | 충돌 후보를 찾는 방식을 바꾸면 계산이 달라지는가? | 서로 다른 배치에서 변경 전후의 충돌 계산 비용을 비교 | [충돌 후보 쌍 측정](aerosimlab-drone-collision-pair-sweep-release-2026-10-23-8623be5c.json), [정렬 재사용 변경 전후 자료와 조건](../../docs/public/성능검증.md) |
 | EO 카메라 픽셀을 가져오는 방식이 긴 프레임과 관련 있는가? | GPU 픽셀 읽기 경로의 호출 방식별 지연과 프레임 지연의 연관성을 조사 | [비동기 픽셀 읽기 자료](aerosimlab-visible-pbo-persistent-map-2026-10-23.json) |
 | 화면을 그릴 때 CPU와 GPU 중 어디서 시간이 걸리는가? | 화면 처리 구간을 나눠 다음 조사 대상을 찾는 진단 | [화면 처리 진단 자료](aerosimlab-visible-imgui-gpu-timing-2026-10-23.json) |
