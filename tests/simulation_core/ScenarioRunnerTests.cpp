@@ -1068,6 +1068,49 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
         }
     }
 
+#if !defined(__EMSCRIPTEN__)
+    const std::string rigidBodyMixedFaultScenario = ReadScenarioFixture(
+        "scenarios/multi-drone/rigid-body-energy-and-outage.json");
+    for (int repeat = 0; repeat < 3; ++repeat)
+    {
+        const ScenarioResult rigidBodyResult = RunScenario(rigidBodyMixedFaultScenario);
+        ASSERT_TRUE(rigidBodyResult.passed)
+            << (rigidBodyResult.issues.empty() ? "" : rigidBodyResult.issues.front());
+        ASSERT_TRUE(rigidBodyResult.mission.has_value());
+        EXPECT_EQ(rigidBodyResult.mission->outcome, ScenarioResult::Outcome::Passed);
+        EXPECT_EQ(rigidBodyResult.mission->completedTaskCount, 3U);
+        ASSERT_TRUE(rigidBodyResult.mission->startedTick.has_value());
+        EXPECT_EQ(*rigidBodyResult.mission->startedTick, 121U);
+        ASSERT_TRUE(rigidBodyResult.mission->completedTick.has_value());
+        EXPECT_EQ(*rigidBodyResult.mission->completedTick, 337U);
+        ASSERT_EQ(rigidBodyResult.mission->tasks.size(), 3U);
+        ASSERT_TRUE(rigidBodyResult.mission->tasks[0].completedTick.has_value());
+        EXPECT_EQ(*rigidBodyResult.mission->tasks[0].completedTick, 163U);
+        EXPECT_EQ(rigidBodyResult.mission->tasks[0].assignmentHistory,
+            (std::vector<std::string>{"low-charge", "reserve-2"}));
+        ASSERT_TRUE(rigidBodyResult.mission->tasks[1].completedTick.has_value());
+        EXPECT_EQ(*rigidBodyResult.mission->tasks[1].completedTick, 331U);
+        EXPECT_EQ(rigidBodyResult.mission->tasks[1].assignmentHistory,
+            (std::vector<std::string>{"lost-link", "reserve-1"}));
+        ASSERT_EQ(rigidBodyResult.drones.size(), 4U);
+        EXPECT_TRUE(rigidBodyResult.drones[0].returnedForLowBattery);
+        EXPECT_EQ(rigidBodyResult.drones[0].finalState.mode, FlightMode::Grounded);
+        ASSERT_TRUE(rigidBodyResult.drones[0].batteryPercent.has_value());
+        EXPECT_NEAR(*rigidBodyResult.drones[0].batteryPercent, 24.9383, 0.2);
+        EXPECT_EQ(rigidBodyResult.drones[1].communicationStatus,
+            ScenarioResult::Drone::CommunicationStatus::Unknown);
+        EXPECT_EQ(rigidBodyResult.drones[1].lastHeartbeatTick, 179U);
+        EXPECT_NEAR(rigidBodyResult.drones[1].finalState.positionMeters.x,
+            10.79582, 0.01);
+        EXPECT_TRUE(std::any_of(rigidBodyResult.eventLog.begin(),
+            rigidBodyResult.eventLog.end(), [](const std::string& event)
+            {
+                return event.find("tick 185: lost-link 드론의 상태를 확인할 수 없어")
+                    != std::string::npos;
+            }));
+    }
+#endif
+
     constexpr std::string_view insufficientLandingReserve = R"json(
     {"version":1,"dynamics":"kinematic","ticks":10,
      "drones":[
