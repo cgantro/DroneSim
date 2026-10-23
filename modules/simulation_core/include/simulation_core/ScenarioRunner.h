@@ -21,6 +21,8 @@ struct ScenarioResult
     bool passed = false;
     std::uint64_t tickCount = 0;
     double simulationTimeSeconds = 0.0;
+    /** @brief 시나리오에서 강체 물리에 적용한 ENU 기준 바람 속도다. */
+    std::optional<glm::dvec3> windVelocityMetersPerSecond;
     DroneState finalState;
     CameraState finalCamera;
     std::vector<std::string> issues;

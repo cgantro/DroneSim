@@ -858,6 +858,7 @@ void PopulateFinalSnapshot(
 {
     result.tickCount = simulation.TickCount();
     result.simulationTimeSeconds = simulation.SimulationTimeSeconds();
+    result.windVelocityMetersPerSecond = definition.windVelocity;
     if (definition.dynamics == SimulationDynamics::RigidBody)
     {
         const QuadrotorParameters& model = definition.quadrotorParameters;

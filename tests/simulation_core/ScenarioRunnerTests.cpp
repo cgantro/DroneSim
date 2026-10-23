@@ -130,6 +130,34 @@ void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
     EXPECT_THROW(static_cast<void>(RunScenario(invalidGain)),
         std::invalid_argument);
 }
+
+void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
+{
+    constexpr std::string_view calmScenario = R"json(
+    {"version":1,"dynamics":"rigid_body","ticks":600,
+     "commands":[{"tick":0,"type":"takeoff"},
+       {"tick":240,"type":"set_waypoint","position_meters":[0,0,1.5]}],
+     "expected":{"mode":"hovering","position_meters":[0,0,1.5],
+       "tolerance_meters":10}}
+    )json";
+    constexpr std::string_view windScenario = R"json(
+    {"version":1,"dynamics":"rigid_body","ticks":600,
+     "wind_velocity_meters_per_second":[2,0,0],
+     "commands":[{"tick":0,"type":"takeoff"},
+       {"tick":240,"type":"set_waypoint","position_meters":[0,0,1.5]}],
+     "expected":{"mode":"hovering","position_meters":[0,0,1.5],
+       "tolerance_meters":10}}
+    )json";
+
+    const ScenarioResult calm = RunScenario(calmScenario);
+    const ScenarioResult wind = RunScenario(windScenario);
+    ASSERT_TRUE(calm.passed);
+    ASSERT_TRUE(wind.passed);
+    ASSERT_TRUE(calm.windVelocityMetersPerSecond == std::nullopt);
+    ASSERT_EQ(wind.windVelocityMetersPerSecond, (glm::dvec3{2.0, 0.0, 0.0}));
+    EXPECT_GT(std::abs(wind.finalState.positionMeters.x
+        - calm.finalState.positionMeters.x), 0.01);
+}
 }
 
 void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder()
@@ -452,6 +480,8 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath());
     constexpr std::array flightModes{
         FlightMode::Grounded,
         FlightMode::TakingOff,

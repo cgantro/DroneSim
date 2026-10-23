@@ -155,6 +155,11 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
         {"passed", result.passed},
         {"tick_count", result.tickCount},
         {"simulation_time_seconds", result.simulationTimeSeconds},
+        {"wind_velocity_meters_per_second", result.windVelocityMetersPerSecond
+            ? nlohmann::json{result.windVelocityMetersPerSecond->x,
+                result.windVelocityMetersPerSecond->y,
+                result.windVelocityMetersPerSecond->z}
+            : nlohmann::json(nullptr)},
         {"final_state", ToJson(result.finalState)},
         {"drones", std::move(drones)},
         {"physical_model", std::move(physicalModel)},
