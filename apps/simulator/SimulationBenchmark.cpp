@@ -236,6 +236,303 @@ void SaveViewerBenchmarkReport(
 }
 
 #ifndef __EMSCRIPTEN__
+namespace
+{
+using aerosimlab::simulation::DroneId;
+using aerosimlab::simulation::SimulationCore;
+
+struct DroneScalingMeasurements
+{
+    std::vector<double> tickDurations;
+    std::vector<double> flecsProgressDurations;
+    std::vector<double> kinematicDroneSystemDurations;
+    std::vector<double> rigidBodyForceSystemDurations;
+    std::vector<double> cameraSystemDurations;
+    std::vector<double> physicsDurations;
+    std::vector<double> contactGenerationDurations;
+    std::vector<double> contactGenerationFractions;
+    std::vector<ProcessMemorySample> memorySamples;
+    std::optional<ProcessMemorySample> memoryBefore;
+    std::optional<ProcessMemorySample> memoryAfter;
+    double wallSeconds = 0.0;
+    double cpuSeconds = 0.0;
+    bool timeLimitReached = false;
+};
+
+std::vector<DroneId> AddScalingDrones(
+    SimulationCore& simulation,
+    std::size_t droneCount,
+    bool usesCompactLayout,
+    double separatedSpacingMeters,
+    double compactSpacingMeters,
+    std::size_t compactGridWidth,
+    std::vector<double>& creationDurations)
+{
+    std::vector<DroneId> droneIds;
+    droneIds.reserve(droneCount);
+    droneIds.push_back(simulation.PrimaryDroneId());
+    creationDurations.reserve(droneCount - 1U);
+    const double groundOriginMeters = simulation.State().positionMeters.z;
+
+    for (std::size_t index = 1; index < droneCount; ++index)
+    {
+        glm::dvec3 positionMeters{};
+        positionMeters.z = groundOriginMeters;
+        if (usesCompactLayout)
+        {
+            positionMeters.x = static_cast<double>(index % compactGridWidth)
+                * compactSpacingMeters;
+            positionMeters.y = static_cast<double>(index / compactGridWidth)
+                * compactSpacingMeters;
+        }
+        else
+        {
+            positionMeters.x = static_cast<double>(index) * separatedSpacingMeters;
+        }
+
+        double durationMicroseconds = 0.0;
+        DroneId droneId = 0;
+        {
+            simulation::ScopedDuration measureCreation(&durationMicroseconds);
+            droneId = simulation.AddDrone(positionMeters);
+        }
+        creationDurations.push_back(durationMicroseconds);
+        droneIds.push_back(droneId);
+    }
+
+    return droneIds;
+}
+
+void StartScalingDrones(SimulationCore& simulation, const std::vector<DroneId>& droneIds)
+{
+    const aerosimlab::simulation::DroneCommand takeoff{
+        aerosimlab::simulation::DroneCommand::Kind::TakeOff};
+    for (const DroneId droneId : droneIds)
+    {
+        if (simulation.Apply(droneId, takeoff)
+            != aerosimlab::simulation::CommandResult::Accepted)
+            throw std::runtime_error("멀티드론 성능 측정용 이륙 명령을 적용하지 못했습니다.");
+    }
+}
+
+DroneScalingMeasurements MeasureScalingTicks(
+    SimulationCore& simulation,
+    bool usesRigidBodyPhysics,
+    std::size_t measuredTicks,
+    std::size_t workingSetSampleIntervalTicks,
+    std::chrono::seconds runTimeLimit)
+{
+    DroneScalingMeasurements measurements;
+    measurements.tickDurations.reserve(measuredTicks);
+    measurements.flecsProgressDurations.reserve(measuredTicks);
+    measurements.kinematicDroneSystemDurations.reserve(measuredTicks);
+    measurements.rigidBodyForceSystemDurations.reserve(measuredTicks);
+    measurements.cameraSystemDurations.reserve(measuredTicks);
+    measurements.physicsDurations.reserve(measuredTicks);
+    measurements.contactGenerationDurations.reserve(measuredTicks);
+    measurements.contactGenerationFractions.reserve(measuredTicks);
+    measurements.memorySamples.reserve(measuredTicks / workingSetSampleIntervalTicks + 1U);
+    measurements.memoryBefore = ReadProcessMemorySample();
+
+    const std::clock_t cpuStart = std::clock();
+    const auto measurementStart = std::chrono::steady_clock::now();
+    for (std::size_t tick = 0; tick < measuredTicks; ++tick)
+    {
+        double tickDurationMicroseconds = 0.0;
+        {
+            simulation::ScopedDuration measureTick(&tickDurationMicroseconds);
+            simulation.AdvanceOneTick();
+        }
+        measurements.tickDurations.push_back(tickDurationMicroseconds);
+        measurements.flecsProgressDurations.push_back(
+            simulation.LastFlecsProgressDurationMicroseconds());
+        const aerosimlab::simulation::EcsSystemDurations systemDurations =
+            simulation.LastEcsSystemDurations();
+        measurements.kinematicDroneSystemDurations.push_back(
+            systemDurations.advanceKinematicDroneMicroseconds);
+        measurements.rigidBodyForceSystemDurations.push_back(
+            systemDurations.applyRigidBodyForcesMicroseconds);
+        measurements.cameraSystemDurations.push_back(
+            systemDurations.advanceCameraMicroseconds);
+
+        if (usesRigidBodyPhysics)
+        {
+            const double physicsDuration = simulation.LastPhysicsStepDurationMicroseconds();
+            const double contactDuration =
+                simulation.LastContactGenerationDurationMicroseconds();
+            measurements.physicsDurations.push_back(physicsDuration);
+            measurements.contactGenerationDurations.push_back(contactDuration);
+            if (physicsDuration > 0.0)
+                measurements.contactGenerationFractions.push_back(
+                    contactDuration / physicsDuration);
+        }
+
+        if ((tick + 1U) % workingSetSampleIntervalTicks == 0U)
+        {
+            if (const auto memory = ReadProcessMemorySample())
+                measurements.memorySamples.push_back(*memory);
+        }
+
+        if ((tick + 1U) % 1000U == 0U
+            && std::chrono::steady_clock::now() - measurementStart >= runTimeLimit)
+        {
+            measurements.timeLimitReached = true;
+            break;
+        }
+    }
+
+    measurements.wallSeconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - measurementStart).count();
+    measurements.cpuSeconds = static_cast<double>(std::clock() - cpuStart) / CLOCKS_PER_SEC;
+    measurements.memoryAfter = ReadProcessMemorySample();
+    if (measurements.memoryAfter)
+        measurements.memorySamples.push_back(*measurements.memoryAfter);
+    return measurements;
+}
+
+std::vector<double> RemoveScalingDrones(
+    SimulationCore& simulation, const std::vector<DroneId>& droneIds)
+{
+    std::vector<double> durations;
+    durations.reserve(droneIds.size() - 1U);
+    for (std::size_t index = droneIds.size(); index > 1U; --index)
+    {
+        double durationMicroseconds = 0.0;
+        bool removed = false;
+        {
+            simulation::ScopedDuration measureRemoval(&durationMicroseconds);
+            removed = simulation.RemoveDrone(droneIds[index - 1U]);
+        }
+        if (!removed)
+            throw std::runtime_error("멀티드론 성능 측정용 드론을 삭제하지 못했습니다.");
+        durations.push_back(durationMicroseconds);
+    }
+    return durations;
+}
+
+void AddMemorySummary(
+    nlohmann::json& run, const std::vector<ProcessMemorySample>& samples,
+    std::size_t sampleIntervalTicks)
+{
+    if (samples.empty())
+        return;
+
+    const double totalWorkingSetBytes = std::accumulate(
+        samples.begin(), samples.end(), 0.0,
+        [](double total, const ProcessMemorySample& sample)
+        {
+            return total + static_cast<double>(sample.workingSetBytes);
+        });
+    const double totalPrivateBytes = std::accumulate(
+        samples.begin(), samples.end(), 0.0,
+        [](double total, const ProcessMemorySample& sample)
+        {
+            return total + static_cast<double>(sample.privateBytes);
+        });
+    const auto maximumWorkingSet = std::max_element(
+        samples.begin(), samples.end(), [](const auto& first, const auto& second)
+        {
+            return first.workingSetBytes < second.workingSetBytes;
+        });
+    const auto maximumPrivateMemory = std::max_element(
+        samples.begin(), samples.end(), [](const auto& first, const auto& second)
+        {
+            return first.privateBytes < second.privateBytes;
+        });
+    const double sampleCount = static_cast<double>(samples.size());
+    run["sampled_average_working_set_bytes"] = totalWorkingSetBytes / sampleCount;
+    run["sampled_max_working_set_bytes"] = maximumWorkingSet->workingSetBytes;
+    run["working_set_sample_interval_ticks"] = sampleIntervalTicks;
+    run["working_set_sample_count"] = samples.size();
+    run["sampled_average_private_bytes"] = totalPrivateBytes / sampleCount;
+    run["sampled_max_private_bytes"] = maximumPrivateMemory->privateBytes;
+    run["private_memory_sample_interval_ticks"] = sampleIntervalTicks;
+    run["private_memory_sample_count"] = samples.size();
+}
+
+nlohmann::json BuildDroneScalingRun(
+    DroneScalingMeasurements& measurements,
+    std::vector<double> creationDurations,
+    std::vector<double> removalDurations,
+    bool usesRigidBodyPhysics,
+    const char* dynamicsName,
+    const char* layoutName,
+    std::size_t droneCount,
+    std::size_t repetition,
+    std::size_t warmupTicks,
+    std::size_t targetTicks,
+    std::size_t sampleIntervalTicks)
+{
+    const std::size_t completedTicks = measurements.tickDurations.size();
+    const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
+        measurements.tickDurations.begin(), measurements.tickDurations.end(),
+        [](double duration) { return duration > 1'000'000.0 / 60.0; }));
+    nlohmann::json run{
+        {"dynamics", dynamicsName},
+        {"layout", layoutName},
+        {"drone_count", droneCount},
+        {"repetition", repetition + 1U},
+        {"warmup_ticks", warmupTicks},
+        {"target_ticks", targetTicks},
+        {"measured_ticks", completedTicks},
+        {"tick_duration_us", SummarizeDurations(std::move(measurements.tickDurations))},
+        {"flecs_progress_duration_us", SummarizeDurations(
+            std::move(measurements.flecsProgressDurations))},
+        {"advance_camera_system_duration_us", SummarizeDurations(
+            std::move(measurements.cameraSystemDurations))},
+        {"measurement_wall_seconds", measurements.wallSeconds},
+        {"simulation_ticks_per_second", measurements.wallSeconds > 0.0
+            ? static_cast<double>(completedTicks) / measurements.wallSeconds : 0.0},
+        {"drone_ticks_per_second", measurements.wallSeconds > 0.0
+            ? static_cast<double>(droneCount) * static_cast<double>(completedTicks)
+                / measurements.wallSeconds : 0.0},
+        {"real_time_factor", measurements.wallSeconds > 0.0
+            ? static_cast<double>(completedTicks)
+                * aerosimlab::simulation::DroneModel::fixedStepSeconds / measurements.wallSeconds
+            : 0.0},
+        {"deadline_misses_over_16_67ms", deadlineMisses},
+        {"time_limit_reached", measurements.timeLimitReached},
+        {"process_cpu_percent_approx", measurements.wallSeconds > 0.0
+            ? 100.0 * measurements.cpuSeconds / measurements.wallSeconds : 0.0}};
+    run["entity_lifecycle"] = {
+        {"additional_drone_add_duration_us", SummarizeDurations(std::move(creationDurations))},
+        {"additional_drone_remove_duration_us", SummarizeDurations(std::move(removalDurations))},
+        {"measured_add_count", droneCount - 1U},
+        {"measured_remove_count", droneCount - 1U}};
+    if (usesRigidBodyPhysics)
+    {
+        run["apply_rigid_body_forces_system_duration_us"] =
+            SummarizeDurations(std::move(measurements.rigidBodyForceSystemDurations));
+        run["physics_step_duration_us"] = SummarizeDurations(
+            std::move(measurements.physicsDurations));
+        run["contact_generation_duration_us"] =
+            SummarizeDurations(std::move(measurements.contactGenerationDurations));
+        run["contact_generation_fraction"] =
+            SummarizeDurations(std::move(measurements.contactGenerationFractions));
+    }
+    else
+    {
+        run["advance_kinematic_drone_system_duration_us"] =
+            SummarizeDurations(std::move(measurements.kinematicDroneSystemDurations));
+    }
+    if (measurements.memoryBefore && measurements.memoryAfter)
+    {
+        run["process_working_set_before_bytes"] = measurements.memoryBefore->workingSetBytes;
+        run["process_working_set_after_bytes"] = measurements.memoryAfter->workingSetBytes;
+        run["process_working_set_change_bytes"] =
+            static_cast<std::int64_t>(measurements.memoryAfter->workingSetBytes)
+            - static_cast<std::int64_t>(measurements.memoryBefore->workingSetBytes);
+        run["process_private_bytes_before"] = measurements.memoryBefore->privateBytes;
+        run["process_private_bytes_after"] = measurements.memoryAfter->privateBytes;
+        run["process_private_bytes_change"] =
+            static_cast<std::int64_t>(measurements.memoryAfter->privateBytes)
+            - static_cast<std::int64_t>(measurements.memoryBefore->privateBytes);
+    }
+    AddMemorySummary(run, measurements.memorySamples, sampleIntervalTicks);
+    return run;
+}
+}
+
 nlohmann::json MeasureDroneScaling(
     aerosimlab::simulation::SimulationDynamics dynamics,
     DroneScalingLayout layout)
@@ -246,6 +543,8 @@ nlohmann::json MeasureDroneScaling(
     constexpr std::size_t measuredTicks = 30000U;
     constexpr std::size_t workingSetSampleIntervalTicks = 5000U;
     constexpr auto runTimeLimit = std::chrono::seconds{30};
+    constexpr double separatedSpacingMeters = 2.5;
+    constexpr double compactSpacingMeters = 0.55;
     const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
     const bool usesCompactLayout = layout == DroneScalingLayout::Compact;
     const std::vector<std::size_t> droneCounts = usesCompactLayout
@@ -253,272 +552,37 @@ nlohmann::json MeasureDroneScaling(
         : std::vector<std::size_t>{1U, 8U, 32U, 64U, 128U, 256U, 512U, 1024U};
     const char* dynamicsName = usesRigidBodyPhysics ? "rigid_body" : "kinematic";
     const char* layoutName = usesCompactLayout ? "compact" : "separated";
-    constexpr double separatedSpacingMeters = 2.5;
-    constexpr double compactSpacingMeters = 0.55;
     nlohmann::json runs = nlohmann::json::array();
     bool stoppedAtTimeLimit = false;
 
     for (const std::size_t droneCount : droneCounts)
     {
+        const std::size_t compactGridWidth = static_cast<std::size_t>(
+            std::ceil(std::sqrt(static_cast<double>(droneCount))));
         for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
         {
-            aerosimlab::simulation::SimulationCore simulation{
-                dynamics};
+            SimulationCore simulation{dynamics};
             simulation.SetEcsSystemTimingEnabled(true);
             simulation.SetPhysicsStepTimingEnabled(usesRigidBodyPhysics);
 
-            std::vector<aerosimlab::simulation::DroneId> droneIds;
-            droneIds.reserve(droneCount);
-            droneIds.push_back(simulation.PrimaryDroneId());
-            std::vector<double> droneCreationDurations;
-            droneCreationDurations.reserve(droneCount - 1U);
-            const double groundOriginMeters = simulation.State().positionMeters.z;
-            const std::size_t compactGridWidth = static_cast<std::size_t>(
-                std::ceil(std::sqrt(static_cast<double>(droneCount))));
-            for (std::size_t index = 1; index < droneCount; ++index)
-            {
-                glm::dvec3 positionMeters{};
-                positionMeters.z = groundOriginMeters;
-                if (usesCompactLayout)
-                {
-                    positionMeters.x = static_cast<double>(index % compactGridWidth)
-                        * compactSpacingMeters;
-                    const std::size_t gridRow = index / compactGridWidth;
-                    positionMeters.y = static_cast<double>(gridRow)
-                        * compactSpacingMeters;
-                }
-                else
-                {
-                    positionMeters.x = static_cast<double>(index)
-                        * separatedSpacingMeters;
-                }
-                double creationDurationMicroseconds = 0.0;
-                aerosimlab::simulation::DroneId droneId = 0;
-                {
-                    simulation::ScopedDuration measureCreation(
-                        &creationDurationMicroseconds);
-                    droneId = simulation.AddDrone(positionMeters);
-                }
-                droneCreationDurations.push_back(creationDurationMicroseconds);
-                droneIds.push_back(droneId);
-            }
-
-            const aerosimlab::simulation::DroneCommand takeoff{
-                aerosimlab::simulation::DroneCommand::Kind::TakeOff};
-            for (const aerosimlab::simulation::DroneId droneId : droneIds)
-            {
-                if (simulation.Apply(droneId, takeoff)
-                    != aerosimlab::simulation::CommandResult::Accepted)
-                    throw std::runtime_error("멀티드론 성능 측정용 이륙 명령을 적용하지 못했습니다.");
-            }
-
+            std::vector<double> creationDurations;
+            const std::vector<DroneId> droneIds = AddScalingDrones(
+                simulation, droneCount, usesCompactLayout, separatedSpacingMeters,
+                compactSpacingMeters, compactGridWidth, creationDurations);
+            StartScalingDrones(simulation, droneIds);
             for (std::size_t tick = 0; tick < warmupTicks; ++tick)
                 simulation.AdvanceOneTick();
 
-            std::vector<double> tickDurations;
-            std::vector<double> flecsProgressDurations;
-            std::vector<double> kinematicDroneSystemDurations;
-            std::vector<double> rigidBodyForceSystemDurations;
-            std::vector<double> cameraSystemDurations;
-            std::vector<double> physicsDurations;
-            std::vector<double> contactGenerationDurations;
-            std::vector<double> contactGenerationFractions;
-            std::vector<ProcessMemorySample> memorySamples;
-            tickDurations.reserve(measuredTicks);
-            flecsProgressDurations.reserve(measuredTicks);
-            kinematicDroneSystemDurations.reserve(measuredTicks);
-            rigidBodyForceSystemDurations.reserve(measuredTicks);
-            cameraSystemDurations.reserve(measuredTicks);
-            physicsDurations.reserve(measuredTicks);
-            contactGenerationDurations.reserve(measuredTicks);
-            contactGenerationFractions.reserve(measuredTicks);
-            memorySamples.reserve(
-                measuredTicks / workingSetSampleIntervalTicks + 1U);
-            const auto memoryBefore = ReadProcessMemorySample();
-            const std::clock_t cpuStart = std::clock();
-            const auto measurementStart = std::chrono::steady_clock::now();
-            bool timeLimitReached = false;
-            for (std::size_t tick = 0; tick < measuredTicks; ++tick)
-            {
-                double tickDurationMicroseconds = 0.0;
-                {
-                    simulation::ScopedDuration measureTick(&tickDurationMicroseconds);
-                    simulation.AdvanceOneTick();
-                }
-                tickDurations.push_back(tickDurationMicroseconds);
-                flecsProgressDurations.push_back(
-                    simulation.LastFlecsProgressDurationMicroseconds());
-                const simulation::EcsSystemDurations systemDurations =
-                    simulation.LastEcsSystemDurations();
-                kinematicDroneSystemDurations.push_back(
-                    systemDurations.advanceKinematicDroneMicroseconds);
-                rigidBodyForceSystemDurations.push_back(
-                    systemDurations.applyRigidBodyForcesMicroseconds);
-                cameraSystemDurations.push_back(
-                    systemDurations.advanceCameraMicroseconds);
-                if (usesRigidBodyPhysics)
-                {
-                    const double physicsDuration =
-                        simulation.LastPhysicsStepDurationMicroseconds();
-                    const double contactGenerationDuration =
-                        simulation.LastContactGenerationDurationMicroseconds();
-                    physicsDurations.push_back(physicsDuration);
-                    contactGenerationDurations.push_back(contactGenerationDuration);
-                    if (physicsDuration > 0.0)
-                    {
-                        contactGenerationFractions.push_back(
-                            contactGenerationDuration / physicsDuration);
-                    }
-                }
+            DroneScalingMeasurements measurements = MeasureScalingTicks(
+                simulation, usesRigidBodyPhysics, measuredTicks,
+                workingSetSampleIntervalTicks, runTimeLimit);
+            std::vector<double> removalDurations = RemoveScalingDrones(simulation, droneIds);
+            runs.push_back(BuildDroneScalingRun(
+                measurements, std::move(creationDurations), std::move(removalDurations),
+                usesRigidBodyPhysics, dynamicsName, layoutName, droneCount, repetition,
+                warmupTicks, measuredTicks, workingSetSampleIntervalTicks));
 
-                if ((tick + 1U) % workingSetSampleIntervalTicks == 0U)
-                {
-                    if (const auto memory = ReadProcessMemorySample())
-                        memorySamples.push_back(*memory);
-                }
-
-                if ((tick + 1U) % 1000U == 0U
-                    && std::chrono::steady_clock::now() - measurementStart >= runTimeLimit)
-                {
-                    timeLimitReached = true;
-                    break;
-                }
-            }
-
-            const std::size_t completedTicks = tickDurations.size();
-            const double wallSeconds = std::chrono::duration<double>(
-                std::chrono::steady_clock::now() - measurementStart).count();
-            const double cpuSeconds = static_cast<double>(std::clock() - cpuStart)
-                / CLOCKS_PER_SEC;
-            const auto memoryAfter = ReadProcessMemorySample();
-            if (memoryAfter)
-                memorySamples.push_back(*memoryAfter);
-            const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
-                tickDurations.begin(), tickDurations.end(), [](double duration)
-                {
-                    return duration > 1'000'000.0 / 60.0;
-                }));
-            std::vector<double> droneRemovalDurations;
-            droneRemovalDurations.reserve(droneIds.size() - 1U);
-            for (std::size_t index = droneIds.size(); index > 1U; --index)
-            {
-                double removalDurationMicroseconds = 0.0;
-                bool removed = false;
-                {
-                    simulation::ScopedDuration measureRemoval(
-                        &removalDurationMicroseconds);
-                    removed = simulation.RemoveDrone(droneIds[index - 1U]);
-                }
-                if (!removed)
-                    throw std::runtime_error("멀티드론 성능 측정용 드론을 삭제하지 못했습니다.");
-                droneRemovalDurations.push_back(removalDurationMicroseconds);
-            }
-
-            nlohmann::json run{
-                {"dynamics", dynamicsName},
-                {"layout", layoutName},
-                {"drone_count", droneCount},
-                {"repetition", repetition + 1U},
-                {"warmup_ticks", warmupTicks},
-                {"target_ticks", measuredTicks},
-                {"measured_ticks", completedTicks},
-                {"tick_duration_us", SummarizeDurations(std::move(tickDurations))},
-                {"flecs_progress_duration_us", SummarizeDurations(
-                    std::move(flecsProgressDurations))},
-                {"advance_camera_system_duration_us", SummarizeDurations(
-                    std::move(cameraSystemDurations))},
-                {"measurement_wall_seconds", wallSeconds},
-                {"simulation_ticks_per_second", wallSeconds > 0.0
-                    ? static_cast<double>(completedTicks) / wallSeconds : 0.0},
-                {"drone_ticks_per_second", wallSeconds > 0.0
-                    ? static_cast<double>(droneCount) * static_cast<double>(completedTicks)
-                        / wallSeconds : 0.0},
-                {"real_time_factor", wallSeconds > 0.0
-                    ? static_cast<double>(completedTicks)
-                        * aerosimlab::simulation::DroneModel::fixedStepSeconds / wallSeconds
-                    : 0.0},
-                {"deadline_misses_over_16_67ms", deadlineMisses},
-                {"time_limit_reached", timeLimitReached},
-                {"process_cpu_percent_approx", wallSeconds > 0.0
-                    ? 100.0 * cpuSeconds / wallSeconds : 0.0}};
-            run["entity_lifecycle"] = {
-                {"additional_drone_add_duration_us", SummarizeDurations(
-                    std::move(droneCreationDurations))},
-                {"additional_drone_remove_duration_us", SummarizeDurations(
-                    std::move(droneRemovalDurations))},
-                {"measured_add_count", droneCount - 1U},
-                {"measured_remove_count", droneCount - 1U}};
-            if (usesRigidBodyPhysics)
-            {
-                run["apply_rigid_body_forces_system_duration_us"] = SummarizeDurations(
-                    std::move(rigidBodyForceSystemDurations));
-                run["physics_step_duration_us"] = SummarizeDurations(
-                    std::move(physicsDurations));
-                run["contact_generation_duration_us"] = SummarizeDurations(
-                    std::move(contactGenerationDurations));
-                run["contact_generation_fraction"] = SummarizeDurations(
-                    std::move(contactGenerationFractions));
-            }
-            else
-            {
-                run["advance_kinematic_drone_system_duration_us"] = SummarizeDurations(
-                    std::move(kinematicDroneSystemDurations));
-            }
-            if (memoryBefore && memoryAfter)
-            {
-                run["process_working_set_before_bytes"] = memoryBefore->workingSetBytes;
-                run["process_working_set_after_bytes"] = memoryAfter->workingSetBytes;
-                run["process_working_set_change_bytes"] =
-                    static_cast<std::int64_t>(memoryAfter->workingSetBytes)
-                    - static_cast<std::int64_t>(memoryBefore->workingSetBytes);
-                run["process_private_bytes_before"] = memoryBefore->privateBytes;
-                run["process_private_bytes_after"] = memoryAfter->privateBytes;
-                run["process_private_bytes_change"] =
-                    static_cast<std::int64_t>(memoryAfter->privateBytes)
-                    - static_cast<std::int64_t>(memoryBefore->privateBytes);
-            }
-            if (!memorySamples.empty())
-            {
-                const double totalWorkingSetBytes = std::accumulate(
-                    memorySamples.begin(), memorySamples.end(), 0.0,
-                    [](double total, const ProcessMemorySample& sample)
-                    {
-                        return total + static_cast<double>(sample.workingSetBytes);
-                    });
-                const double totalPrivateBytes = std::accumulate(
-                    memorySamples.begin(), memorySamples.end(), 0.0,
-                    [](double total, const ProcessMemorySample& sample)
-                    {
-                        return total + static_cast<double>(sample.privateBytes);
-                    });
-                const auto maximumWorkingSet = std::max_element(
-                    memorySamples.begin(), memorySamples.end(),
-                    [](const ProcessMemorySample& first, const ProcessMemorySample& second)
-                    {
-                        return first.workingSetBytes < second.workingSetBytes;
-                    });
-                const auto maximumPrivateMemory = std::max_element(
-                    memorySamples.begin(), memorySamples.end(),
-                    [](const ProcessMemorySample& first, const ProcessMemorySample& second)
-                    {
-                        return first.privateBytes < second.privateBytes;
-                    });
-                const double sampleCount = static_cast<double>(memorySamples.size());
-                run["sampled_average_working_set_bytes"] =
-                    totalWorkingSetBytes / sampleCount;
-                run["sampled_max_working_set_bytes"] = maximumWorkingSet->workingSetBytes;
-                run["working_set_sample_interval_ticks"] =
-                    workingSetSampleIntervalTicks;
-                run["working_set_sample_count"] = memorySamples.size();
-                run["sampled_average_private_bytes"] =
-                    totalPrivateBytes / sampleCount;
-                run["sampled_max_private_bytes"] = maximumPrivateMemory->privateBytes;
-                run["private_memory_sample_interval_ticks"] =
-                    workingSetSampleIntervalTicks;
-                run["private_memory_sample_count"] = memorySamples.size();
-            }
-            runs.push_back(std::move(run));
-            if (timeLimitReached)
+            if (measurements.timeLimitReached)
             {
                 stoppedAtTimeLimit = true;
                 break;
