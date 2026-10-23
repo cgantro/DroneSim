@@ -118,9 +118,24 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             std::move(measurements.renderFrameDurationsWithEoReadbackMicroseconds))},
         {"render_frame_without_eo_readback_duration_us", SummarizeDurations(
             std::move(measurements.renderFrameDurationsWithoutEoReadbackMicroseconds))},
+        {"slow_frames_over_16_67ms", nlohmann::json::array()},
         {"process_cpu_percent_approx", measurements.elapsedSeconds > 0.0
             ? 100.0 * measurements.processCpuSeconds / measurements.elapsedSeconds : 0.0}};
     report["tick_duration_us"]["deadline_misses_over_16_67ms"] = deadlineMisses;
+    for (const ViewerBenchmarkMeasurements::SlowFrame& frame : measurements.slowFrames)
+    {
+        report["slow_frames_over_16_67ms"].push_back({
+            {"frame_index", frame.frameIndex},
+            {"application_us", frame.applicationMicroseconds},
+            {"event_polling_us", frame.eventPollingMicroseconds},
+            {"ground_control_polling_us", frame.groundControlPollingMicroseconds},
+            {"gamepad_polling_us", frame.gamepadPollingMicroseconds},
+            {"simulation_update_us", frame.simulationUpdateMicroseconds},
+            {"render_us", frame.renderMicroseconds},
+            {"buffer_swap_us", frame.bufferSwapMicroseconds},
+            {"eo_readback_handling_us", frame.eoReadbackHandlingMicroseconds},
+            {"eo_readback_happened", frame.eoReadbackHappened}});
+    }
 
 #ifndef __EMSCRIPTEN__
     report["physics_step_duration_us"] = SummarizeDurations(

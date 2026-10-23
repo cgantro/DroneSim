@@ -27,6 +27,20 @@ nlohmann::json SummarizeDurations(std::vector<double> durations);
 /** @brief 화면 성능 기록에 들어갈 한 번의 실행 측정값이다. */
 struct ViewerBenchmarkMeasurements
 {
+    struct SlowFrame
+    {
+        std::uint64_t frameIndex = 0;
+        double applicationMicroseconds = 0.0;
+        double eventPollingMicroseconds = 0.0;
+        double groundControlPollingMicroseconds = 0.0;
+        double gamepadPollingMicroseconds = 0.0;
+        double simulationUpdateMicroseconds = 0.0;
+        double renderMicroseconds = 0.0;
+        double bufferSwapMicroseconds = 0.0;
+        double eoReadbackHandlingMicroseconds = 0.0;
+        bool eoReadbackHappened = false;
+    };
+
     std::string sourceRevision;
     bool windowVisible = false;
     int framebufferWidth = 0;
@@ -42,6 +56,7 @@ struct ViewerBenchmarkMeasurements
     std::vector<double> renderFrameDurationsMicroseconds;
     std::vector<double> renderFrameDurationsWithEoReadbackMicroseconds;
     std::vector<double> renderFrameDurationsWithoutEoReadbackMicroseconds;
+    std::vector<SlowFrame> slowFrames;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds;
     // GPU에 픽셀 복사를 맡기는 CPU 호출 시간이다. 실제 GPU 복사 시간은 포함하지 않는다.

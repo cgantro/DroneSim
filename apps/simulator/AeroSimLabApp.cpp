@@ -241,9 +241,24 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     const auto applicationFrameStart = benchmarkMode_
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    window_->PollEvents();
-    PollGroundControl();
-    PollGamepad();
+    double eventPollingMicroseconds = 0.0;
+    {
+        aerosimlab::simulation::ScopedDuration measureEvents(
+            benchmarkMode_ ? &eventPollingMicroseconds : nullptr);
+        window_->PollEvents();
+    }
+    double groundControlPollingMicroseconds = 0.0;
+    {
+        aerosimlab::simulation::ScopedDuration measureGroundControl(
+            benchmarkMode_ ? &groundControlPollingMicroseconds : nullptr);
+        PollGroundControl();
+    }
+    double gamepadPollingMicroseconds = 0.0;
+    {
+        aerosimlab::simulation::ScopedDuration measureGamepad(
+            benchmarkMode_ ? &gamepadPollingMicroseconds : nullptr);
+        PollGamepad();
+    }
     const auto now = std::chrono::steady_clock::now();
     const double elapsedSeconds = std::chrono::duration<double>(now - previousFrame).count();
     // 화면 스모크는 프레임마다 한 Tick, 네트워크 스모크는 프레임마다 최대 따라잡기만큼 진행한다.
@@ -260,31 +275,62 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         && !benchmarkMode_
         ? networkSmokeSimulationBatchesPerFrame
         : 1U;
-    for (std::size_t batch = 0; batch < simulationBatches; ++batch)
-        AdvanceSimulation(frameSeconds);
-    eoReadbackHappenedThisFrame_ = false;
-    double renderDurationMicroseconds = 0.0;
+    double simulationUpdateMicroseconds = 0.0;
     {
-        aerosimlab::simulation::ScopedDuration measureRender(
-            benchmarkMode_ ? &renderDurationMicroseconds : nullptr);
-        RenderFrame();
-        window_->SwapBuffers();
+        aerosimlab::simulation::ScopedDuration measureSimulation(
+            benchmarkMode_ ? &simulationUpdateMicroseconds : nullptr);
+        for (std::size_t batch = 0; batch < simulationBatches; ++batch)
+            AdvanceSimulation(frameSeconds);
+    }
+    eoReadbackHappenedThisFrame_ = false;
+    double renderFrameDurationMicroseconds = 0.0;
+    double renderDurationMicroseconds = 0.0;
+    double bufferSwapDurationMicroseconds = 0.0;
+    frameEoReadbackHandlingDurationMicroseconds_ = 0.0;
+    {
+        aerosimlab::simulation::ScopedDuration measureRenderFrame(
+            benchmarkMode_ ? &renderFrameDurationMicroseconds : nullptr);
+        {
+            aerosimlab::simulation::ScopedDuration measureRender(
+                benchmarkMode_ ? &renderDurationMicroseconds : nullptr);
+            RenderFrame();
+        }
+        {
+            aerosimlab::simulation::ScopedDuration measureBufferSwap(
+                benchmarkMode_ ? &bufferSwapDurationMicroseconds : nullptr);
+            window_->SwapBuffers();
+        }
     }
     if (benchmarkMode_)
     {
         benchmarkMeasurements_.renderFrameDurationsMicroseconds.push_back(
-            renderDurationMicroseconds);
+            renderFrameDurationMicroseconds);
         auto& frameDurations = eoReadbackHappenedThisFrame_
             ? benchmarkMeasurements_.renderFrameDurationsWithEoReadbackMicroseconds
             : benchmarkMeasurements_.renderFrameDurationsWithoutEoReadbackMicroseconds;
-        frameDurations.push_back(renderDurationMicroseconds);
+        frameDurations.push_back(renderFrameDurationMicroseconds);
     }
     ++renderedFrames_;
     if (benchmarkMode_)
     {
+        const double applicationMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - applicationFrameStart).count();
         benchmarkMeasurements_.applicationFrameDurationsMicroseconds.push_back(
-            std::chrono::duration<double, std::micro>(
-                std::chrono::steady_clock::now() - applicationFrameStart).count());
+            applicationMicroseconds);
+        if (applicationMicroseconds > 1'000'000.0 / 60.0)
+        {
+            benchmarkMeasurements_.slowFrames.push_back({
+                static_cast<std::uint64_t>(renderedFrames_),
+                applicationMicroseconds,
+                eventPollingMicroseconds,
+                groundControlPollingMicroseconds,
+                gamepadPollingMicroseconds,
+                simulationUpdateMicroseconds,
+                renderDurationMicroseconds,
+                bufferSwapDurationMicroseconds,
+                frameEoReadbackHandlingDurationMicroseconds_,
+                eoReadbackHappenedThisFrame_});
+        }
     }
 }
 
@@ -644,6 +690,8 @@ std::uint32_t AeroSimLabApp::RenderCameraPanel()
         static_cast<void>(RenderWorldToTarget(*cameraTarget_, *eoCamera_));
         lastRenderedEoFrameTick_ = camera.lastFrameTick;
     }
+    aerosimlab::simulation::ScopedDuration measureEoReadbackHandling(
+        benchmarkMode_ ? &frameEoReadbackHandlingDurationMicroseconds_ : nullptr);
     CaptureEoFrame();
     return cameraTarget_->GetTextureId();
 }
