@@ -189,7 +189,7 @@ std::string EncodeCommand(const CommandPacket& packet)
         + static_cast<unsigned int>(packet.sessionCommand.has_value())
         + static_cast<unsigned int>(packet.fleetCommand.has_value());
     if (targetCount != 1)
-        throw std::invalid_argument("한 메시지에는 비행·카메라·기록 명령 중 하나만 넣을 수 있습니다.");
+        throw std::invalid_argument("한 메시지에는 드론·카메라·기록·편대 명령 중 하나만 넣을 수 있습니다.");
 
     Json payload{{"command_id", packet.commandId}, {"sequence", packet.sequence}};
     if (packet.droneCommand)
