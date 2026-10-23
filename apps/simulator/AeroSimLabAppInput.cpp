@@ -10,10 +10,22 @@
 #include <chrono>
 #include <exception>
 #include <string>
-#include <type_traits>
+#include <variant>
 
 namespace aerosimlab::simulator
 {
+namespace
+{
+template <typename... Callables>
+struct Overloaded : Callables...
+{
+    using Callables::operator()...;
+};
+
+template <typename... Callables>
+Overloaded(Callables...) -> Overloaded<Callables...>;
+}
+
 void AeroSimLabApp::PollGroundControl()
 {
 #ifdef __EMSCRIPTEN__
@@ -330,20 +342,22 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
 
     const bool wasRecordingAtTickStart = commandRecording_.IsRecording();
     bool replayTickAdvanced = false;
-    std::visit([this, &reply, &replayTickAdvanced](const auto& command)
-    {
-        using Command = std::decay_t<decltype(command)>;
-        if constexpr (std::is_same_v<Command,
-            aerosimlab::communication::SessionCommand>)
-            replayTickAdvanced = ApplySessionCommand(command, reply);
-        else if constexpr (std::is_same_v<Command,
-            aerosimlab::simulation::DroneCommand>)
+    std::visit(Overloaded{
+        [](std::monostate) {},
+        [this, &reply](const aerosimlab::simulation::DroneCommand& command)
+        {
             ApplyDroneCommand(command, reply);
-        else if constexpr (std::is_same_v<Command,
-            aerosimlab::communication::CameraCommand>)
+        },
+        [this, &reply](aerosimlab::communication::CameraCommand command)
+        {
             ApplyCameraCommand(command, reply);
-        else if constexpr (std::is_same_v<Command,
-            aerosimlab::communication::FleetCommand>)
+        },
+        [this, &reply, &replayTickAdvanced](
+            aerosimlab::communication::SessionCommand command)
+        {
+            replayTickAdvanced = ApplySessionCommand(command, reply);
+        },
+        [this, &reply](aerosimlab::communication::FleetCommand command)
         {
             if (command == aerosimlab::communication::FleetCommand::AddDrone)
                 ApplyAddDroneCommand(reply);
