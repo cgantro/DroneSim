@@ -220,11 +220,10 @@ void AeroSimLabApp::ApplyDroneCommand(
         window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
     }
 
-    const auto result = simulation_.Apply(command);
+    const auto result = ApplyAndRecordCommand(command);
     reply.accepted = result == aerosimlab::simulation::CommandResult::Accepted;
     if (reply.accepted)
     {
-        commandRecording_.Record(command);
         const bool hasActiveVelocityCommand = command.kind
                 == aerosimlab::simulation::DroneCommand::Kind::SetVelocity
             && glm::length(command.vector) > 0.0;
@@ -306,8 +305,7 @@ void AeroSimLabApp::ExpireGroundControlCommand()
 
     const aerosimlab::simulation::DroneCommand stop{
         aerosimlab::simulation::DroneCommand::Kind::Stop};
-    if (simulation_.Apply(stop) == aerosimlab::simulation::CommandResult::Accepted)
-        commandRecording_.Record(stop);
+    static_cast<void>(ApplyAndRecordCommand(stop));
     groundControlCommandExpiresAtTick_.reset();
 }
 

@@ -120,6 +120,9 @@ private:
     void AdvanceReplayTick();
     void AdvanceManualControlTick();
     void ApplyDemoCommands();
+    /** @brief 명령을 적용하고 성공한 명령만 입력 기록에 남긴다. */
+    [[nodiscard]] aerosimlab::simulation::CommandResult ApplyAndRecordCommand(
+        const aerosimlab::simulation::DroneCommand& command);
     void PollGroundControl();
 #ifndef __EMSCRIPTEN__
     void ProcessGroundDatagram(const std::string& datagram,
