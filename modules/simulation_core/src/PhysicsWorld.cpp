@@ -896,40 +896,35 @@ void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
     if (measurements != nullptr)
         measurements->contactGenerationMicroseconds = 0.0;
 
-    auto advance = [&]
-    {
-        ++impl_->stepCount;
-        double largestCollisionRadius = 0.0;
-        {
-            ScopedDuration measureBodyOrdering(measurements != nullptr
-                    ? &measurements->contactGenerationMicroseconds : nullptr,
-                ScopedDuration::Mode::Accumulate);
-            largestCollisionRadius = impl_->PrepareCollisionData();
-            impl_->PrepareDroneContacts(largestCollisionRadius);
-        }
-        for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
-        {
-            auto& body = impl_->bodies[index];
-            {
-                ScopedDuration measureContactGeneration(measurements != nullptr
-                        ? &measurements->contactGenerationMicroseconds : nullptr,
-                    ScopedDuration::Mode::Accumulate);
-                body->environment.setPosition(body->kinematics.getPose().position);
-                body->environment.update();
-                body->model->setCollisionInfo(
-                    impl_->BuildAirSimContactInfo(*body, index,
-                        impl_->droneContacts[index]));
-            }
-            body->ApplyMotorTargets();
-            body->model->update();
-            body->updatedSinceReset = true;
-        }
-        impl_->physicsEngine.update();
-    };
-
     ScopedDuration measurePhysicsStep(measurements != nullptr
         ? &measurements->stepDurationMicroseconds : nullptr);
-    advance();
+    ++impl_->stepCount;
+    double largestCollisionRadius = 0.0;
+    {
+        ScopedDuration measureBodyOrdering(measurements != nullptr
+                ? &measurements->contactGenerationMicroseconds : nullptr,
+            ScopedDuration::Mode::Accumulate);
+        largestCollisionRadius = impl_->PrepareCollisionData();
+        impl_->PrepareDroneContacts(largestCollisionRadius);
+    }
+    for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
+    {
+        auto& body = impl_->bodies[index];
+        {
+            ScopedDuration measureContactGeneration(measurements != nullptr
+                    ? &measurements->contactGenerationMicroseconds : nullptr,
+                ScopedDuration::Mode::Accumulate);
+            body->environment.setPosition(body->kinematics.getPose().position);
+            body->environment.update();
+            body->model->setCollisionInfo(
+                impl_->BuildAirSimContactInfo(*body, index,
+                    impl_->droneContacts[index]));
+        }
+        body->ApplyMotorTargets();
+        body->model->update();
+        body->updatedSinceReset = true;
+    }
+    impl_->physicsEngine.update();
 }
 
 bool PhysicsWorld::DestroyBody(RigidBodyHandle handle)
