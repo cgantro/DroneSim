@@ -190,13 +190,14 @@ AeroSimLabApp::~AeroSimLabApp() = default;
 
 int AeroSimLabApp::Run()
 {
-    InitializeGraphics();
 #ifndef __EMSCRIPTEN__
     if (networkEnabled_)
     {
         udpSocket_ = std::make_unique<aerosimlab::communication::UdpSocket>(udpPort_);
     }
 #endif
+    // 그래픽 자산을 불러오는 동안 도착한 UDP 요청도 소켓 수신 큐에 남긴다.
+    InitializeGraphics();
     startTime_ = std::chrono::steady_clock::now();
     benchmarkCpuStart_ = std::clock();
     auto previousFrame = startTime_;
