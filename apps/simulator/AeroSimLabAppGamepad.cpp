@@ -10,44 +10,64 @@
 
 namespace aerosimlab::simulator
 {
-void AeroSimLabApp::PollGamepad()
+#ifndef __EMSCRIPTEN__
+namespace
 {
-#ifdef __EMSCRIPTEN__
-    return;
-#else
+struct GamepadScanResult
+{
     GLFWgamepadstate state{};
     int connectedJoystickId = -1;
     int unsupportedJoystickId = -1;
+};
+
+/**
+ * @brief 연결된 조이스틱을 훑어 GLFW가 읽을 수 있는 게임패드를 찾는다.
+ * @details 게임패드가 없을 때 창에 안내할 수 있도록, 처음 발견한 미지원 장치도 함께 기억한다.
+ */
+GamepadScanResult ScanForGamepad()
+{
+    GamepadScanResult result;
     for (int joystickId = GLFW_JOYSTICK_1; joystickId <= GLFW_JOYSTICK_LAST; ++joystickId)
     {
         if (glfwJoystickPresent(joystickId) != GLFW_TRUE)
             continue;
 
         if (glfwJoystickIsGamepad(joystickId) == GLFW_TRUE
-            && glfwGetGamepadState(joystickId, &state) == GLFW_TRUE)
+            && glfwGetGamepadState(joystickId, &result.state) == GLFW_TRUE)
         {
-            connectedJoystickId = joystickId;
+            result.connectedJoystickId = joystickId;
             break;
         }
 
-        if (unsupportedJoystickId < 0)
-            unsupportedJoystickId = joystickId;
+        if (result.unsupportedJoystickId < 0)
+            result.unsupportedJoystickId = joystickId;
     }
+    return result;
+}
+}
+#endif
 
-    if (connectedJoystickId < 0)
+void AeroSimLabApp::PollGamepad()
+{
+#ifdef __EMSCRIPTEN__
+    return;
+#else
+    const GamepadScanResult scan = ScanForGamepad();
+
+    if (scan.connectedJoystickId < 0)
     {
         HandleGamepadDisconnected();
         gamepadJoystickId_ = -1;
 
-        if (unsupportedJoystickId >= 0
-            && unsupportedJoystickId_ != unsupportedJoystickId)
+        if (scan.unsupportedJoystickId >= 0
+            && unsupportedJoystickId_ != scan.unsupportedJoystickId)
         {
-            const char* deviceName = glfwGetJoystickName(unsupportedJoystickId);
+            const char* deviceName = glfwGetJoystickName(scan.unsupportedJoystickId);
             const std::string name = deviceName != nullptr ? deviceName : "이름 없음";
             window_->SetTitle("AeroSimLab | 게임패드 형식 미지원: " + name);
-            unsupportedJoystickId_ = unsupportedJoystickId;
+            unsupportedJoystickId_ = scan.unsupportedJoystickId;
         }
-        else if (unsupportedJoystickId < 0 && unsupportedJoystickId_ >= 0)
+        else if (scan.unsupportedJoystickId < 0 && unsupportedJoystickId_ >= 0)
         {
             window_->SetTitle(groundControlActive_
                 ? "AeroSimLab | 지상통제 입력 사용 중"
@@ -59,16 +79,16 @@ void AeroSimLabApp::PollGamepad()
 
     unsupportedJoystickId_ = -1;
 
-    if (gamepadJoystickId_ != connectedJoystickId)
+    if (gamepadJoystickId_ != scan.connectedJoystickId)
     {
         previousTakeoffButton_ = false;
         previousLandButton_ = false;
         pendingPilotCommand_.reset();
-        gamepadJoystickId_ = connectedJoystickId;
+        gamepadJoystickId_ = scan.connectedJoystickId;
     }
 
-    const bool takeoffPressed = state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
-    const bool landPressed = state.buttons[GLFW_GAMEPAD_BUTTON_B] == GLFW_PRESS;
+    const bool takeoffPressed = scan.state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
+    const bool landPressed = scan.state.buttons[GLFW_GAMEPAD_BUTTON_B] == GLFW_PRESS;
     std::optional<aerosimlab::manual_control::GamepadAxes> pilotAxes;
     if (!groundControlActive_)
     {
@@ -83,11 +103,11 @@ void AeroSimLabApp::PollGamepad()
                 return (static_cast<double>(value) + 1.0) * 0.5;
             };
             pilotAxes = aerosimlab::manual_control::GamepadAxes{
-                .forward = -static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]),
-                .right = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_LEFT_X]),
-                .vertical = triggerValue(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER])
-                    - triggerValue(state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER]),
-                .yaw = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X])
+                .forward = -static_cast<double>(scan.state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]),
+                .right = static_cast<double>(scan.state.axes[GLFW_GAMEPAD_AXIS_LEFT_X]),
+                .vertical = triggerValue(scan.state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER])
+                    - triggerValue(scan.state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER]),
+                .yaw = static_cast<double>(scan.state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X])
             };
         }
     }
