@@ -11,7 +11,6 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
-#include <future>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -42,140 +41,146 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
     }
 
     communication::UdpSocket clientSocket(0);
-    std::promise<int> simulatorExit;
-    auto exitResult = simulatorExit.get_future();
-    std::jthread simulatorThread([&]
-    {
-        try
-        {
-            simulator::AeroSimLabApp app({
-                .smokeTest = true,
-                .udpPort = simulatorPort,
-                .demoMode = false,
-                .networkEnabled = true,
-                .benchmarkMode = false,
-                .groundControlCommandTimeoutTicks = 10
-            });
-            simulatorExit.set_value(app.Run());
-        }
-        catch (...)
-        {
-            simulatorExit.set_exception(std::current_exception());
-        }
+    simulator::AeroSimLabApp app({
+        .smokeTest = true,
+        .udpPort = simulatorPort,
+        .demoMode = false,
+        .networkEnabled = true,
+        .benchmarkMode = false,
+        .groundControlCommandTimeoutTicks = 10
     });
 
     std::uint32_t sequence = 0;
-    auto send = [&](const char* operation, const auto& setCommand,
-        std::chrono::milliseconds timeout = std::chrono::seconds(5))
+    std::exception_ptr commandFailure;
+    std::jthread groundControlThread([&]
     {
-        communication::CommandPacket packet;
-        packet.commandId = ++sequence;
-        packet.sequence = sequence;
-        setCommand(packet);
+        const auto send = [&](const char* operation, const auto& setCommand,
+            std::chrono::milliseconds timeout = std::chrono::seconds(5))
+        {
+            communication::CommandPacket packet;
+            packet.commandId = ++sequence;
+            packet.sequence = sequence;
+            setCommand(packet);
+            try
+            {
+                return ground_control::SendCommand(
+                    "127.0.0.1", simulatorPort, packet, clientSocket, timeout).reply;
+            }
+            catch (const std::exception& error)
+            {
+                throw std::runtime_error(std::string{operation} + ": " + error.what());
+            }
+        };
+        const auto require = [](bool condition, const char* message)
+        {
+            if (!condition)
+                throw std::runtime_error(message);
+        };
+
         try
         {
-            return ground_control::SendCommand(
-                "127.0.0.1", simulatorPort, packet, clientSocket, timeout).reply;
+            // 초기 그래픽 준비가 끝나고 응답할 때까지 상태 조회를 기다린다.
+            const auto beforeStatus = send("초기 상태 조회",
+                [](communication::CommandPacket& packet)
+            {
+                packet.fleetCommand = communication::FleetCommand::GetStatus;
+            }, std::chrono::seconds(15));
+            require(beforeStatus.accepted, "초기 상태 조회가 거부되었습니다.");
+            require(beforeStatus.telemetry.drones.size() == 1U,
+                "초기 상태 응답에 드론 한 대가 있어야 합니다.");
+            require(beforeStatus.appliedTick == beforeStatus.telemetry.tick,
+                "초기 상태 응답의 Tick 값이 서로 다릅니다.");
+
+            const auto start = send("기록 시작", [](communication::CommandPacket& packet)
+            {
+                packet.sessionCommand = communication::SessionCommand::StartRecording;
+            });
+            require(start.accepted && start.status == "recording_started",
+                "기록을 시작하지 못했습니다.");
+
+            const auto takeoff = send("이륙", [](communication::CommandPacket& packet)
+            {
+                packet.droneCommand = simulation::DroneCommand{
+                    simulation::DroneCommand::Kind::TakeOff};
+            });
+            require(takeoff.accepted && takeoff.status == "applied",
+                "이륙 명령을 적용하지 못했습니다.");
+
+            const auto land = send("착륙", [](communication::CommandPacket& packet)
+            {
+                packet.droneCommand = simulation::DroneCommand{
+                    simulation::DroneCommand::Kind::Land};
+            });
+            require(land.accepted && land.status == "applied",
+                "착륙 명령을 적용하지 못했습니다.");
+
+            const auto added = send("드론 추가", [](communication::CommandPacket& packet)
+            {
+                packet.fleetCommand = communication::FleetCommand::AddDrone;
+            });
+            require(added.accepted && added.status == "drone_added",
+                "두 번째 드론을 추가하지 못했습니다.");
+            require(added.telemetry.drones.size() == 2U,
+                "드론 추가 응답에 두 대가 있어야 합니다.");
+            require(added.telemetry.drones[1].name == "드론 2",
+                "추가된 드론 이름이 예상과 다릅니다.");
+            require(added.telemetry.drones[1].mode == simulation::FlightMode::Grounded,
+                "추가된 드론이 지상 상태가 아닙니다.");
+            require(added.telemetry.drones[1].positionMeters.x
+                    > added.telemetry.drones[0].positionMeters.x,
+                "추가된 드론이 기존 드론과 겹친 위치에 있습니다.");
+
+            const auto stop = send("기록 종료", [](communication::CommandPacket& packet)
+            {
+                packet.sessionCommand = communication::SessionCommand::StopRecording;
+            });
+            require(stop.accepted && stop.status == "recording_stopped",
+                "기록을 종료하지 못했습니다.");
+
+            const auto replay = send("기록 재생", [](communication::CommandPacket& packet)
+            {
+                packet.sessionCommand = communication::SessionCommand::ReplayRecording;
+            });
+            require(replay.accepted && replay.status == "recording_replay_started",
+                "기록을 재생하지 못했습니다.");
         }
-        catch (const std::exception& error)
+        catch (...)
         {
-            throw std::runtime_error(std::string{operation} + ": " + error.what());
+            commandFailure = std::current_exception();
         }
-    };
-    std::exception_ptr commandFailure;
+    });
+
+    int simulatorExitCode = -1;
+    std::exception_ptr simulatorFailure;
     try
     {
-        // 첫 창 초기화 중 UDP 요청이 먼저 도착할 수 있어 초기 상태 조회만 여유를 둔다.
-        const auto beforeStatus = send("초기 상태 조회",
-            [](communication::CommandPacket& packet)
-        {
-            packet.fleetCommand = communication::FleetCommand::GetStatus;
-        }, std::chrono::seconds(15));
-        ASSERT_TRUE(beforeStatus.accepted);
-        ASSERT_EQ(beforeStatus.telemetry.drones.size(), 1U);
-        EXPECT_EQ(beforeStatus.appliedTick, beforeStatus.telemetry.tick);
-
-        const auto start = send("기록 시작", [](communication::CommandPacket& packet)
-        {
-            packet.sessionCommand = communication::SessionCommand::StartRecording;
-        });
-        EXPECT_TRUE(start.accepted);
-        EXPECT_EQ(start.status, "recording_started");
-
-        const auto takeoff = send("이륙", [](communication::CommandPacket& packet)
-        {
-            packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::TakeOff};
-        });
-        EXPECT_TRUE(takeoff.accepted);
-        EXPECT_EQ(takeoff.status, "applied");
-
-        const auto land = send("착륙", [](communication::CommandPacket& packet)
-        {
-            packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::Land};
-        });
-        EXPECT_TRUE(land.accepted);
-        EXPECT_EQ(land.status, "applied");
-
-        const auto added = send("드론 추가", [](communication::CommandPacket& packet)
-        {
-            packet.fleetCommand = communication::FleetCommand::AddDrone;
-        });
-        ASSERT_TRUE(added.accepted);
-        EXPECT_EQ(added.status, "drone_added");
-        ASSERT_EQ(added.telemetry.drones.size(), 2U);
-        EXPECT_EQ(added.telemetry.drones[1].name, "드론 2");
-        EXPECT_EQ(added.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
-        EXPECT_GT(added.telemetry.drones[1].positionMeters.x,
-            added.telemetry.drones[0].positionMeters.x);
-
-        const auto stop = send("기록 종료", [](communication::CommandPacket& packet)
-        {
-            packet.sessionCommand = communication::SessionCommand::StopRecording;
-        });
-        EXPECT_TRUE(stop.accepted);
-        EXPECT_EQ(stop.status, "recording_stopped");
-
-        const auto replay = send("기록 재생", [](communication::CommandPacket& packet)
-        {
-            packet.sessionCommand = communication::SessionCommand::ReplayRecording;
-        });
-        EXPECT_TRUE(replay.accepted);
-        EXPECT_EQ(replay.status, "recording_replay_started");
+        // GLFW 창과 이벤트는 GLFW가 요구하는 메인 스레드에서만 다룬다.
+        simulatorExitCode = app.Run();
     }
     catch (...)
     {
-        commandFailure = std::current_exception();
+        simulatorFailure = std::current_exception();
     }
 
-    const auto completed = exitResult.wait_for(std::chrono::seconds(35));
-    EXPECT_EQ(completed, std::future_status::ready)
-        << "재생이 끝나고 드론이 지상에 도달하면 숨김 시뮬레이터가 종료되어야 합니다.";
+    groundControlThread.join();
+    EXPECT_EQ(simulatorExitCode, 0)
+        << "기록 재생이 끝나고 드론이 지상에 도달하면 숨김 시뮬레이터가 종료되어야 합니다.";
 
-    if (completed == std::future_status::ready)
+    const auto reportFailure = [](const char* context, std::exception_ptr failure)
     {
+        if (!failure)
+            return;
         try
         {
-            EXPECT_EQ(exitResult.get(), 0);
+            std::rethrow_exception(failure);
         }
         catch (const std::exception& error)
         {
-            ADD_FAILURE() << "시뮬레이터 실행 실패: " << error.what();
+            ADD_FAILURE() << context << error.what();
         }
-    }
-    if (commandFailure)
-    {
-        try
-        {
-            std::rethrow_exception(commandFailure);
-        }
-        catch (const std::exception& error)
-        {
-            ADD_FAILURE() << "UDP 기록·재생 명령 실패: " << error.what();
-        }
-    }
-
-    if (simulatorThread.joinable())
-        simulatorThread.join();
+    };
+    reportFailure("시뮬레이터 실행 실패: ", simulatorFailure);
+    reportFailure("UDP 기록·재생 명령 실패: ", commandFailure);
 }
 
 TEST(SimulatorSessionTests, CoreScenarios)
