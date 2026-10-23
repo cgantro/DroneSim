@@ -282,6 +282,47 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     EXPECT_NEAR(recentFlightRmse[1], 0.9196, 0.03);
     EXPECT_NEAR(recentFlightRmse[2], 64.594, 0.5);
     EXPECT_NEAR(recentFlightRmse[3], 0.6725, 0.03);
+
+    Json zeroSpeedRecentScenario = recentFlightFixture;
+    zeroSpeedRecentScenario["drones"][0]["initial_motor_speeds_radians_per_second"] =
+        {0.0, 0.0, 0.0, 0.0};
+    const ScenarioResult zeroSpeedRecentResult =
+        RunScenario(zeroSpeedRecentScenario.dump());
+    ASSERT_TRUE(zeroSpeedRecentResult.passed);
+    ASSERT_EQ(zeroSpeedRecentResult.trajectory.size(), recentReference.size());
+    const std::array<double, 4> zeroSpeedRecentRmse = calculateRmse(
+        recentReference, zeroSpeedRecentResult);
+
+    EXPECT_NEAR(zeroSpeedRecentRmse[0], 1.5591, 0.03);
+    EXPECT_NEAR(zeroSpeedRecentRmse[1], 0.9167, 0.03);
+    EXPECT_NEAR(zeroSpeedRecentRmse[2], 60.5205, 0.5);
+    EXPECT_NEAR(zeroSpeedRecentRmse[3], 0.6184, 0.03);
+
+    // 제조사 시험표에서 추정한 모터 값을 쓰되, 시작 속도도 같은 설정으로 다시 계산한다.
+    Json motorTableRecentScenario = recentFlightFixture;
+    auto& motorModel = motorTableRecentScenario["quadrotor_model"];
+    motorModel["thrust_coefficient_newtons_per_speed_squared"] = 1.2294935e-5;
+    motorModel["moment_to_thrust_ratio"] = 0.01403352;
+    motorModel["maximum_motor_speed_radians_per_second"] = 1032.2226;
+    const auto& firstThrust =
+        motorTableRecentScenario["commands"][0]["normalized_thrust"];
+    for (std::size_t rotor = 0; rotor < firstThrust.size(); ++rotor)
+    {
+        motorTableRecentScenario["drones"][0]
+            ["initial_motor_speeds_radians_per_second"][rotor] =
+                std::sqrt(firstThrust[rotor].get<double>()) * 1032.2226;
+    }
+    const ScenarioResult motorTableRecentResult =
+        RunScenario(motorTableRecentScenario.dump());
+    ASSERT_TRUE(motorTableRecentResult.passed);
+    ASSERT_EQ(motorTableRecentResult.trajectory.size(), recentReference.size());
+    const std::array<double, 4> motorTableRecentRmse = calculateRmse(
+        recentReference, motorTableRecentResult);
+
+    EXPECT_NEAR(motorTableRecentRmse[0], 5.8606, 0.05);
+    EXPECT_NEAR(motorTableRecentRmse[1], 4.8458, 0.05);
+    EXPECT_NEAR(motorTableRecentRmse[2], 104.237, 0.5);
+    EXPECT_NEAR(motorTableRecentRmse[3], 1.9827, 0.05);
 }
 
 void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
