@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -182,8 +183,7 @@ struct SimulationCore::EcsStorage
         ApplyInitialPose(initialState, initialControl, initialPose);
         flecs::entity drone = world.entity();
 #if !defined(__EMSCRIPTEN__)
-        RigidBodyHandle createdBody{};
-        bool hasCreatedBody = false;
+        std::optional<RigidBodyHandle> createdBody;
 #endif
 
         try
@@ -198,9 +198,8 @@ struct SimulationCore::EcsStorage
                 definition.positionMeters = positionMeters;
                 definition.orientation = initialState.orientation;
                 createdBody = physics->CreateQuadrotor(definition, quadrotorParameters);
-                hasCreatedBody = true;
-                drone.set<PhysicsBody>({createdBody});
-                CopyPhysicsState(drone.get_mut<DroneState>(), createdBody);
+                drone.set<PhysicsBody>({*createdBody});
+                CopyPhysicsState(drone.get_mut<DroneState>(), *createdBody);
             }
 #endif
 
@@ -209,8 +208,8 @@ struct SimulationCore::EcsStorage
         catch (...)
         {
 #if !defined(__EMSCRIPTEN__)
-            if (hasCreatedBody)
-                static_cast<void>(physics->DestroyBody(createdBody));
+            if (createdBody)
+                static_cast<void>(physics->DestroyBody(*createdBody));
 #endif
             // ECS에만 남은 엔티티가 다음 시스템 실행에 섞이지 않도록 함께 지운다.
             drone.destruct();
