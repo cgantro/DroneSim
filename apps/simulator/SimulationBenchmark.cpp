@@ -123,12 +123,36 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
         std::move(measurements.physicsStepDurationsMicroseconds));
     report["eo_pixel_readback_enqueue_duration_us"] = SummarizeDurations(
         std::move(measurements.eoReadbackEnqueueDurationsMicroseconds));
+    report["eo_pixel_readback_slot_setup_us"] = SummarizeDurations(
+        std::move(measurements.eoReadbackSlotSetupDurationsMicroseconds));
+    report["eo_pixel_buffer_setup_us"] = SummarizeDurations(
+        std::move(measurements.eoPixelBufferSetupDurationsMicroseconds));
+    report["eo_read_target_setup_us"] = SummarizeDurations(
+        std::move(measurements.eoReadTargetSetupDurationsMicroseconds));
     report["eo_gl_readpixels_call_us"] = SummarizeDurations(
         std::move(measurements.eoReadPixelsCallDurationsMicroseconds));
     report["eo_gl_fence_creation_call_us"] = SummarizeDurations(
         std::move(measurements.eoFenceCreationCallDurationsMicroseconds));
+    report["eo_gl_state_restore_us"] = SummarizeDurations(
+        std::move(measurements.eoGlStateRestoreDurationsMicroseconds));
     report["eo_pixel_readback_poll_duration_us"] = SummarizeDurations(
         std::move(measurements.eoReadbackPollDurationsMicroseconds));
+    report["eo_gl_fence_wait_call_us"] = SummarizeDurations(
+        std::move(measurements.eoFenceWaitCallDurationsMicroseconds));
+    report["eo_gl_fallback_finish_us"] = SummarizeDurations(
+        std::move(measurements.eoReadbackFallbackFinishDurationsMicroseconds));
+    report["eo_pixel_buffer_resize_us"] = SummarizeDurations(
+        std::move(measurements.eoPixelBufferResizeDurationsMicroseconds));
+    report["eo_gl_pixel_pack_buffer_bind_us"] = SummarizeDurations(
+        std::move(measurements.eoPixelPackBufferBindDurationsMicroseconds));
+    report["eo_gl_buffer_map_call_us"] = SummarizeDurations(
+        std::move(measurements.eoPixelBufferMapCallDurationsMicroseconds));
+    report["eo_pixel_copy_us"] = SummarizeDurations(
+        std::move(measurements.eoPixelCopyDurationsMicroseconds));
+    report["eo_gl_buffer_unmap_call_us"] = SummarizeDurations(
+        std::move(measurements.eoPixelBufferUnmapCallDurationsMicroseconds));
+    report["eo_readback_cleanup_us"] = SummarizeDurations(
+        std::move(measurements.eoReadbackCleanupDurationsMicroseconds));
     report["vision_analysis"] = {
         {"samples", measurements.visionSampleCount},
         {"mean_brightness", measurements.meanBrightness},

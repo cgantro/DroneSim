@@ -205,8 +205,14 @@ void MultisampleFramebuffer::ResolveToTexture() const
 }
 
 bool MultisampleFramebuffer::QueueRgbReadback(
-    std::uint64_t simulationTick, RgbReadbackTimings* timings)
+    std::uint64_t simulationTick, RgbReadbackEnqueueTimings* timings)
 {
+    if (timings != nullptr)
+        *timings = {};
+
+    const auto slotSetupStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     PixelReadback::Slot* available = nullptr;
     for (PixelReadback::Slot& slot : m_PixelReadback->slots)
     {
@@ -221,18 +227,17 @@ bool MultisampleFramebuffer::QueueRgbReadback(
 
     if (available->buffer == 0)
         glGenBuffers(1, &available->buffer);
+    if (timings != nullptr)
+    {
+        timings->slotAndBufferCreationMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - slotSetupStart).count();
+    }
 
     const std::size_t byteCount =
         static_cast<std::size_t>(m_Width) * static_cast<std::size_t>(m_Height) * 3U;
-    GLint previousPackBuffer = 0;
-    GLint previousPackAlignment = 4;
-    GLint previousReadFramebuffer = 0;
-    GLint previousReadBuffer = GL_BACK;
-    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &previousPackBuffer);
-    glGetIntegerv(GL_PACK_ALIGNMENT, &previousPackAlignment);
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFramebuffer);
-    glGetIntegerv(GL_READ_BUFFER, &previousReadBuffer);
-
+    const auto bufferSetupStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     glBindBuffer(GL_PIXEL_PACK_BUFFER, available->buffer);
     if (available->byteCount != byteCount)
     {
@@ -240,10 +245,23 @@ bool MultisampleFramebuffer::QueueRgbReadback(
             nullptr, GL_STREAM_READ);
         available->byteCount = byteCount;
     }
+    if (timings != nullptr)
+    {
+        timings->bufferBindingAndAllocationMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - bufferSetupStart).count();
+    }
 
+    const auto readTargetSetupStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ResolvedFramebuffer);
     glReadBuffer(GL_COLOR_ATTACHMENT0);
+    if (timings != nullptr)
+    {
+        timings->readTargetSetupMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - readTargetSetupStart).count();
+    }
     const auto readPixelsStart = timings != nullptr
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -276,16 +294,28 @@ bool MultisampleFramebuffer::QueueRgbReadback(
         glFinish();
     }
 
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previousReadFramebuffer));
-    glReadBuffer(static_cast<GLenum>(previousReadBuffer));
-    glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
+    const auto stateRestoreStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glReadBuffer(GL_BACK);
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    if (timings != nullptr)
+    {
+        timings->glStateRestoreMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - stateRestoreStart).count();
+    }
     return queued;
 }
 
 bool MultisampleFramebuffer::TryReadRgbPixels(
-    std::vector<std::uint8_t>& pixels, std::uint64_t& simulationTick)
+    std::vector<std::uint8_t>& pixels, std::uint64_t& simulationTick,
+    RgbReadbackPollTimings* timings)
 {
+    if (timings != nullptr)
+        *timings = {};
+
     PixelReadback::Slot* oldest = nullptr;
     for (PixelReadback::Slot& slot : m_PixelReadback->slots)
     {
@@ -295,35 +325,113 @@ bool MultisampleFramebuffer::TryReadRgbPixels(
     if (oldest == nullptr)
         return false;
 
+    const auto waitStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     const GLenum result = glClientWaitSync(
         oldest->completion, GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+    if (timings != nullptr)
+    {
+        timings->fenceWaitCallMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - waitStart).count();
+    }
     if (result == GL_TIMEOUT_EXPIRED)
         return false;
     if (result == GL_WAIT_FAILED)
     {
+        if (timings != nullptr)
+            timings->fenceWaitFailed = true;
+        const auto finishStart = timings != nullptr
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         glFinish();
+        if (timings != nullptr)
+        {
+            timings->fallbackFinishMicroseconds = std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - finishStart).count();
+        }
+        const auto cleanupStart = timings != nullptr
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         glDeleteSync(oldest->completion);
         oldest->completion = nullptr;
         oldest->pending = false;
+        if (timings != nullptr)
+        {
+            timings->cleanupMicroseconds = std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - cleanupStart).count();
+        }
         return false;
     }
 
+    if (timings != nullptr)
+        timings->pixelsReady = true;
+
+    const auto resizeStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     pixels.resize(oldest->byteCount);
-    GLint previousPackBuffer = 0;
-    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &previousPackBuffer);
+    if (timings != nullptr)
+    {
+        timings->pixelBufferResizeMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - resizeStart).count();
+    }
+
+    const auto bufferBindStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     glBindBuffer(GL_PIXEL_PACK_BUFFER, oldest->buffer);
+    if (timings != nullptr)
+    {
+        timings->pixelPackBufferBindMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - bufferBindStart).count();
+    }
+    const auto mapStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     const void* source = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0,
         static_cast<GLsizeiptr>(oldest->byteCount), GL_MAP_READ_BIT);
+    if (timings != nullptr)
+    {
+        timings->bufferMapCallMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - mapStart).count();
+        timings->bufferMapped = source != nullptr;
+    }
+    const auto copyStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     if (source != nullptr)
         std::memcpy(pixels.data(), source, oldest->byteCount);
+    if (timings != nullptr && source != nullptr)
+    {
+        timings->pixelCopyMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - copyStart).count();
+    }
+    const auto unmapStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     const GLboolean valid = source != nullptr
         ? glUnmapBuffer(GL_PIXEL_PACK_BUFFER) : GL_FALSE;
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(previousPackBuffer));
+    if (timings != nullptr && source != nullptr)
+    {
+        timings->bufferUnmapCallMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - unmapStart).count();
+    }
+
+    const auto cleanupStart = timings != nullptr
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
     simulationTick = oldest->simulationTick;
     glDeleteSync(oldest->completion);
     oldest->completion = nullptr;
     oldest->pending = false;
+    if (timings != nullptr)
+    {
+        timings->cleanupMicroseconds = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - cleanupStart).count();
+    }
     return valid == GL_TRUE;
 }
 

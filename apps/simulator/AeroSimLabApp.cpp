@@ -666,14 +666,45 @@ void AeroSimLabApp::CaptureEoFrame()
     std::uint64_t simulationTick = 0;
     double pollDurationMicroseconds = 0.0;
     bool readCompleted = false;
+    aerosimlab::graphics::RgbReadbackPollTimings pollTimings;
     {
         aerosimlab::simulation::ScopedDuration measurePoll(
             benchmarkMode_ ? &pollDurationMicroseconds : nullptr);
-        readCompleted = cameraTarget_->TryReadRgbPixels(eoFrame_.pixels, simulationTick);
+        readCompleted = cameraTarget_->TryReadRgbPixels(eoFrame_.pixels, simulationTick,
+            benchmarkMode_ ? &pollTimings : nullptr);
     }
     if (benchmarkMode_)
+    {
         benchmarkMeasurements_.eoReadbackPollDurationsMicroseconds.push_back(
             pollDurationMicroseconds);
+        benchmarkMeasurements_.eoFenceWaitCallDurationsMicroseconds.push_back(
+            pollTimings.fenceWaitCallMicroseconds);
+        if (pollTimings.fenceWaitFailed)
+        {
+            benchmarkMeasurements_.eoReadbackFallbackFinishDurationsMicroseconds.push_back(
+                pollTimings.fallbackFinishMicroseconds);
+            benchmarkMeasurements_.eoReadbackCleanupDurationsMicroseconds.push_back(
+                pollTimings.cleanupMicroseconds);
+        }
+        if (pollTimings.pixelsReady)
+        {
+            benchmarkMeasurements_.eoPixelBufferResizeDurationsMicroseconds.push_back(
+                pollTimings.pixelBufferResizeMicroseconds);
+        benchmarkMeasurements_.eoPixelPackBufferBindDurationsMicroseconds.push_back(
+            pollTimings.pixelPackBufferBindMicroseconds);
+            benchmarkMeasurements_.eoPixelBufferMapCallDurationsMicroseconds.push_back(
+                pollTimings.bufferMapCallMicroseconds);
+            if (pollTimings.bufferMapped)
+            {
+                benchmarkMeasurements_.eoPixelCopyDurationsMicroseconds.push_back(
+                    pollTimings.pixelCopyMicroseconds);
+                benchmarkMeasurements_.eoPixelBufferUnmapCallDurationsMicroseconds.push_back(
+                    pollTimings.bufferUnmapCallMicroseconds);
+            }
+            benchmarkMeasurements_.eoReadbackCleanupDurationsMicroseconds.push_back(
+                pollTimings.cleanupMicroseconds);
+        }
+    }
     if (readCompleted)
     {
         eoReadbackHappenedThisFrame_ = true;
@@ -686,7 +717,7 @@ void AeroSimLabApp::CaptureEoFrame()
 
     double enqueueDurationMicroseconds = 0.0;
     bool queued = false;
-    aerosimlab::graphics::RgbReadbackTimings readbackTimings;
+    aerosimlab::graphics::RgbReadbackEnqueueTimings readbackTimings;
     {
         aerosimlab::simulation::ScopedDuration measureEnqueue(
             benchmarkMode_ ? &enqueueDurationMicroseconds : nullptr);
@@ -701,10 +732,18 @@ void AeroSimLabApp::CaptureEoFrame()
             eoReadbackHappenedThisFrame_ = true;
             benchmarkMeasurements_.eoReadbackEnqueueDurationsMicroseconds.push_back(
                 enqueueDurationMicroseconds);
+            benchmarkMeasurements_.eoReadbackSlotSetupDurationsMicroseconds.push_back(
+                readbackTimings.slotAndBufferCreationMicroseconds);
+            benchmarkMeasurements_.eoPixelBufferSetupDurationsMicroseconds.push_back(
+                readbackTimings.bufferBindingAndAllocationMicroseconds);
+            benchmarkMeasurements_.eoReadTargetSetupDurationsMicroseconds.push_back(
+                readbackTimings.readTargetSetupMicroseconds);
             benchmarkMeasurements_.eoReadPixelsCallDurationsMicroseconds.push_back(
                 readbackTimings.readPixelsCallMicroseconds);
             benchmarkMeasurements_.eoFenceCreationCallDurationsMicroseconds.push_back(
                 readbackTimings.fenceCreationCallMicroseconds);
+            benchmarkMeasurements_.eoGlStateRestoreDurationsMicroseconds.push_back(
+                readbackTimings.glStateRestoreMicroseconds);
         }
     }
 }

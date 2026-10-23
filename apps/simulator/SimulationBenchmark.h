@@ -46,10 +46,22 @@ struct ViewerBenchmarkMeasurements
     // GPU에 픽셀 복사를 맡기는 CPU 호출 시간이다. 실제 GPU 복사 시간은 포함하지 않는다.
     std::vector<double> eoReadbackEnqueueDurationsMicroseconds;
     // OpenGL이 픽셀 전송과 완료 표식을 접수하는 CPU 호출 시간이다.
+    std::vector<double> eoReadbackSlotSetupDurationsMicroseconds;
+    std::vector<double> eoPixelBufferSetupDurationsMicroseconds;
+    std::vector<double> eoReadTargetSetupDurationsMicroseconds;
     std::vector<double> eoReadPixelsCallDurationsMicroseconds;
     std::vector<double> eoFenceCreationCallDurationsMicroseconds;
+    std::vector<double> eoGlStateRestoreDurationsMicroseconds;
     // 완료 여부를 확인하고 준비된 픽셀을 CPU 메모리로 복사하는 시간이다.
     std::vector<double> eoReadbackPollDurationsMicroseconds;
+    std::vector<double> eoFenceWaitCallDurationsMicroseconds;
+    std::vector<double> eoReadbackFallbackFinishDurationsMicroseconds;
+    std::vector<double> eoPixelBufferResizeDurationsMicroseconds;
+    std::vector<double> eoPixelPackBufferBindDurationsMicroseconds;
+    std::vector<double> eoPixelBufferMapCallDurationsMicroseconds;
+    std::vector<double> eoPixelCopyDurationsMicroseconds;
+    std::vector<double> eoPixelBufferUnmapCallDurationsMicroseconds;
+    std::vector<double> eoReadbackCleanupDurationsMicroseconds;
     std::vector<double> visionDurationsMicroseconds;
     double meanBrightness = 0.0;
     double meanContrast = 0.0;

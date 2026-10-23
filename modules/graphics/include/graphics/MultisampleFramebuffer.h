@@ -7,11 +7,31 @@
 namespace aerosimlab::graphics
 {
 
-/** @brief 픽셀 전송과 완료 표식을 요청한 CPU 호출 시간이다. GPU 실행 시간은 포함하지 않는다. */
-struct RgbReadbackTimings
+/** @brief 픽셀 읽기 요청을 OpenGL에 전달한 CPU 호출 시간이다. GPU 실행 시간은 포함하지 않는다. */
+struct RgbReadbackEnqueueTimings
 {
+    double slotAndBufferCreationMicroseconds = 0.0;
+    double bufferBindingAndAllocationMicroseconds = 0.0;
+    double readTargetSetupMicroseconds = 0.0;
     double readPixelsCallMicroseconds = 0.0;
     double fenceCreationCallMicroseconds = 0.0;
+    double glStateRestoreMicroseconds = 0.0;
+};
+
+/** @brief 완료된 픽셀을 가져올 때 실행한 CPU 호출 시간이다. */
+struct RgbReadbackPollTimings
+{
+    double fenceWaitCallMicroseconds = 0.0;
+    double fallbackFinishMicroseconds = 0.0;
+    double pixelBufferResizeMicroseconds = 0.0;
+    double pixelPackBufferBindMicroseconds = 0.0;
+    double bufferMapCallMicroseconds = 0.0;
+    double pixelCopyMicroseconds = 0.0;
+    double bufferUnmapCallMicroseconds = 0.0;
+    double cleanupMicroseconds = 0.0;
+    bool pixelsReady = false;
+    bool bufferMapped = false;
+    bool fenceWaitFailed = false;
 };
 
 /**
@@ -73,13 +93,20 @@ public:
     /** @brief 최근에 합성한 화면을 ImGui에서 사용할 OpenGL 텍스처 번호로 돌려준다. */
     [[nodiscard]] std::uint32_t GetTextureId() const { return m_ResolvedColorTexture; }
 
-    /** @brief 화면 픽셀 읽기를 GPU에 맡기고, 읽을 때 함께 저장할 시뮬레이션 Tick을 기록한다. */
+    /**
+     * @brief 화면 픽셀 읽기를 GPU에 맡기고, 읽을 때 함께 저장할 시뮬레이션 Tick을 기록한다.
+     * @details 기본 프레임버퍼가 바인딩된 상태에서 호출한다. 끝나면 읽기 프레임버퍼와 픽셀 전송 상태를 기본값으로 맞춘다.
+     */
     [[nodiscard]] bool QueueRgbReadback(
-        std::uint64_t simulationTick, RgbReadbackTimings* timings = nullptr);
+        std::uint64_t simulationTick, RgbReadbackEnqueueTimings* timings = nullptr);
 
-    /** @brief GPU가 이미 다 읽은 가장 오래된 화면을 CPU로 복사한다. 아직 준비되지 않았으면 false를 돌려준다. */
+    /**
+     * @brief GPU가 이미 다 읽은 가장 오래된 화면을 CPU로 복사한다. 아직 준비되지 않았으면 false를 돌려준다.
+     * @details 픽셀 버퍼 바인딩은 기본값으로 돌려놓는다.
+     */
     [[nodiscard]] bool TryReadRgbPixels(
-        std::vector<std::uint8_t>& pixels, std::uint64_t& simulationTick);
+        std::vector<std::uint8_t>& pixels, std::uint64_t& simulationTick,
+        RgbReadbackPollTimings* timings = nullptr);
 
     /** @brief 종료·시험 직전에 남은 GPU 읽기를 마치고 결과를 꺼낼 수 있게 한다. */
     void FinishRgbReadbacks();
