@@ -280,7 +280,10 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     apps/simulator/SimulationBenchmark.cpp
   )
   if(NOT EMSCRIPTEN)
-    target_sources(aerosimlab_simulator_app PRIVATE apps/simulator/SimulatorHud.cpp)
+    target_sources(aerosimlab_simulator_app PRIVATE
+      apps/simulator/AeroSimLabAppEoCapture.cpp
+      apps/simulator/SimulatorHud.cpp
+    )
   endif()
   target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator)
   target_link_libraries(aerosimlab_simulator_app PUBLIC
