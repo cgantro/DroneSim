@@ -66,6 +66,63 @@ void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
     EXPECT_THROW(static_cast<void>(RunScenario(kinematicOverride)),
         std::invalid_argument);
 }
+
+void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
+{
+    constexpr std::string_view scenarioTemplate = R"json(
+    {"version":1,"dynamics":"rigid_body","ticks":300,
+     "commands":[
+       {"tick":0,"type":"takeoff"},
+       {"tick":240,"type":"set_waypoint","position_meters":[2,0,1.5]}],
+     "controller_gains":{"position":POSITION_GAIN,"velocity":2.5,
+       "attitude":25,"angular_rate":8.5},
+     "expected":{"mode":"hovering","position_meters":[0,0,1.5],
+       "tolerance_meters":10}}
+    )json";
+    std::string lowGainScenario{scenarioTemplate};
+    std::string highGainScenario{scenarioTemplate};
+    std::string defaultGainScenario{scenarioTemplate};
+    const std::string gainPlaceholder = "POSITION_GAIN";
+    ASSERT_NE(lowGainScenario.find(gainPlaceholder), std::string::npos);
+    lowGainScenario.replace(lowGainScenario.find(gainPlaceholder),
+        gainPlaceholder.size(), "0.5");
+    highGainScenario.replace(highGainScenario.find(gainPlaceholder),
+        gainPlaceholder.size(), "3.0");
+    defaultGainScenario.replace(defaultGainScenario.find(gainPlaceholder),
+        gainPlaceholder.size(), "3.0");
+    defaultGainScenario.replace(defaultGainScenario.find("25"), 2, "20");
+    defaultGainScenario.replace(defaultGainScenario.find("8.5"), 3, "7.0");
+
+    const ScenarioResult lowGain = RunScenario(lowGainScenario);
+    const ScenarioResult highGain = RunScenario(highGainScenario);
+    const ScenarioResult explicitDefault = RunScenario(defaultGainScenario);
+    const std::string customGainBlock =
+        "     \"controller_gains\":{\"position\":3.0,\"velocity\":2.5,\n"
+        "       \"attitude\":20,\"angular_rate\":7.0},\n";
+    ASSERT_NE(defaultGainScenario.find(customGainBlock), std::string::npos);
+    defaultGainScenario.erase(defaultGainScenario.find(customGainBlock), customGainBlock.size());
+    const ScenarioResult implicitDefault = RunScenario(defaultGainScenario);
+    ASSERT_TRUE(lowGain.controllerSettings.has_value());
+    ASSERT_TRUE(highGain.controllerSettings.has_value());
+    EXPECT_TRUE(lowGain.controllerSettings->customized);
+    EXPECT_DOUBLE_EQ(lowGain.controllerSettings->positionGain, 0.5);
+    EXPECT_DOUBLE_EQ(lowGain.controllerSettings->velocityGain, 2.5);
+    EXPECT_DOUBLE_EQ(lowGain.controllerSettings->attitudeGain, 25.0);
+    EXPECT_DOUBLE_EQ(lowGain.controllerSettings->angularRateGain, 8.5);
+    EXPECT_DOUBLE_EQ(highGain.controllerSettings->positionGain, 3.0);
+    EXPECT_GT(highGain.finalState.positionMeters.x, lowGain.finalState.positionMeters.x);
+    ASSERT_TRUE(implicitDefault.controllerSettings.has_value());
+    EXPECT_FALSE(implicitDefault.controllerSettings->customized);
+    EXPECT_EQ(explicitDefault.finalState.positionMeters,
+        implicitDefault.finalState.positionMeters);
+
+    constexpr std::string_view unsupportedMode = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":1,"commands":[],
+     "controller_gains":{"position":2.0}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(unsupportedMode)),
+        std::invalid_argument);
+}
 }
 
 void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder()
@@ -386,6 +443,8 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange());
     constexpr std::array flightModes{
         FlightMode::Grounded,
         FlightMode::TakingOff,

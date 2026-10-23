@@ -139,6 +139,18 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
             {"customized", model.customized}};
     }
 
+    nlohmann::json controllerSettings = nullptr;
+    if (result.controllerSettings)
+    {
+        const auto& controller = *result.controllerSettings;
+        controllerSettings = {
+            {"position", controller.positionGain},
+            {"velocity", controller.velocityGain},
+            {"attitude", controller.attitudeGain},
+            {"angular_rate", controller.angularRateGain},
+            {"customized", controller.customized}};
+    }
+
     return {
         {"passed", result.passed},
         {"tick_count", result.tickCount},
@@ -146,6 +158,7 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
         {"final_state", ToJson(result.finalState)},
         {"drones", std::move(drones)},
         {"physical_model", std::move(physicalModel)},
+        {"controller_gains", std::move(controllerSettings)},
         {"mission", std::move(mission)},
         {"minimum_drone_separation_meters", result.minimumDroneSeparationMeters},
         {"minimum_predicted_drone_separation_meters",

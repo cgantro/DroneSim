@@ -870,6 +870,13 @@ void PopulateFinalSnapshot(
             model.motorTimeConstantDownSeconds,
             model.maximumMotorSpeedRadiansPerSecond,
             definition.quadrotorParametersCustomized};
+        const QuadrotorControllerParameters& controller = definition.controllerParameters;
+        result.controllerSettings = ScenarioResult::ControllerSettings{
+            controller.positionGain,
+            controller.velocityGain,
+            controller.attitudeGain,
+            controller.angularRateGain,
+            definition.controllerParametersCustomized};
     }
     const auto appendDrone = [&](const std::string& droneName)
     {
@@ -1040,7 +1047,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
 {
     ScenarioDefinition definition = detail::ReadScenarioDefinition(jsonText);
     const std::uint64_t tickCount = definition.tickCount;
-    SimulationCore simulation{definition.dynamics, definition.quadrotorParameters};
+    SimulationCore simulation{definition.dynamics,
+        definition.quadrotorParameters, definition.controllerParameters};
     if (definition.windVelocity)
         simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
 

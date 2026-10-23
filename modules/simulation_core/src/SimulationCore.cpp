@@ -48,6 +48,7 @@ struct SimulationCore::EcsStorage
 #endif
 
     SimulationDynamics dynamics;
+    QuadrotorControllerParameters controllerParameters;
 #if !defined(__EMSCRIPTEN__)
     QuadrotorParameters quadrotorParameters;
     /** @brief Flecs 콜백이 참조하므로 Flecs 월드보다 나중에 정리한다. */
@@ -79,8 +80,11 @@ struct SimulationCore::EcsStorage
     }
 
     explicit EcsStorage(
-        SimulationDynamics selectedDynamics, QuadrotorParameters selectedQuadrotorParameters)
+        SimulationDynamics selectedDynamics,
+        QuadrotorParameters selectedQuadrotorParameters,
+        QuadrotorControllerParameters selectedControllerParameters = {})
         : dynamics(selectedDynamics)
+        , controllerParameters(selectedControllerParameters)
 #if !defined(__EMSCRIPTEN__)
         , quadrotorParameters(std::move(selectedQuadrotorParameters))
 #endif
@@ -313,7 +317,7 @@ struct SimulationCore::EcsStorage
             control.desiredYawRadians += control.commandedYawRateRadiansPerSecond * step;
 
         const auto targetSpeeds = QuadrotorFlightController::MotorTargets(
-            state, control, quadrotorParameters);
+            state, control, quadrotorParameters, controllerParameters);
         physics->SetMotorTargets(body, targetSpeeds);
     }
 
@@ -414,13 +418,21 @@ std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
 }
 
 SimulationCore::SimulationCore(SimulationDynamics dynamics)
-    : SimulationCore(dynamics, QuadrotorParameters::X500MotorTableEstimate())
+    : SimulationCore(dynamics, QuadrotorParameters::X500MotorTableEstimate(), {})
 {
 }
 
 SimulationCore::SimulationCore(
     SimulationDynamics dynamics, QuadrotorParameters quadrotorParameters)
-    : ecs_(std::make_unique<EcsStorage>(dynamics, std::move(quadrotorParameters)))
+    : SimulationCore(dynamics, std::move(quadrotorParameters), {})
+{
+}
+
+SimulationCore::SimulationCore(SimulationDynamics dynamics,
+    QuadrotorParameters quadrotorParameters,
+    const QuadrotorControllerParameters& controllerParameters)
+    : ecs_(std::make_unique<EcsStorage>(
+        dynamics, std::move(quadrotorParameters), controllerParameters))
 {
 }
 

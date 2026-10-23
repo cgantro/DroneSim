@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simulation_core/QuadrotorModel.h"
+#include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScenarioRunner.h"
 #include "simulation_core/SimulationCore.h"
 
@@ -109,6 +110,8 @@ struct ScenarioDefinition
     QuadrotorParameters quadrotorParameters =
         QuadrotorParameters::X500MotorTableEstimate();
     bool quadrotorParametersCustomized = false;
+    QuadrotorControllerParameters controllerParameters;
+    bool controllerParametersCustomized = false;
     std::optional<glm::dvec3> windVelocity;
     std::vector<ScheduledCameraEvent> cameraEvents;
     std::vector<ExpectedDrone> expectedDrones;

@@ -13,10 +13,6 @@ namespace aerosimlab::simulation
 namespace
 {
 constexpr double gravityMetersPerSecondSquared = 9.81;
-constexpr double positionGain = 3.0;
-constexpr double velocityGain = 2.5;
-constexpr double attitudeGain = 20.0;
-constexpr double angularRateGain = 7.0;
 constexpr double maximumAccelerationMetersPerSecondSquared = 4.0;
 constexpr double maximumTorqueNewtonMeters = 0.5;
 
@@ -41,10 +37,12 @@ double DirectionSign(RotorRotation direction)
 
 /** @brief 위치 오차로 목표점에 다가가고 현재 속도로 지나침을 줄인다. */
 glm::dvec3 PositionControlAcceleration(
-    const DroneState& state, const glm::dvec3& targetPosition)
+    const DroneState& state,
+    const glm::dvec3& targetPosition,
+    const QuadrotorControllerParameters& controller)
 {
-    return positionGain * (targetPosition - state.positionMeters)
-        - velocityGain * state.velocityMetersPerSecond;
+    return controller.positionGain * (targetPosition - state.positionMeters)
+        - controller.velocityGain * state.velocityMetersPerSecond;
 }
 
 /** @brief 로터 추력 방향을 기체 위쪽 축에 맞추고 yaw 방향을 유지한다. */
@@ -64,7 +62,8 @@ glm::dquat DesiredOrientation(const glm::dvec3& worldThrust, double yawRadians)
 glm::dvec3 AttitudeTorque(
     const DroneState& state,
     const QuadrotorParameters& parameters,
-    const glm::dquat& desiredOrientation)
+    const glm::dquat& desiredOrientation,
+    const QuadrotorControllerParameters& controller)
 {
     const glm::dquat currentOrientation = glm::normalize(state.orientation);
     glm::dquat error = glm::normalize(glm::inverse(currentOrientation) * desiredOrientation);
@@ -83,7 +82,7 @@ glm::dvec3 AttitudeTorque(
     const glm::dvec3 angularVelocityBody =
         glm::inverse(currentOrientation) * state.angularVelocityRadiansPerSecond;
     const glm::dvec3 angularAcceleration =
-        attitudeGain * angleError - angularRateGain * angularVelocityBody;
+        controller.attitudeGain * angleError - controller.angularRateGain * angularVelocityBody;
     return LimitMagnitude(
         parameters.principalInertiaKilogramMetersSquared * angularAcceleration,
         maximumTorqueNewtonMeters);
@@ -150,7 +149,8 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
 std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::MotorTargets(
     const DroneState& state,
     const DroneControlState& control,
-    const QuadrotorParameters& parameters)
+    const QuadrotorParameters& parameters,
+    const QuadrotorControllerParameters& controller)
 {
     glm::dvec3 desiredAcceleration{0.0};
     switch (state.mode)
@@ -162,7 +162,7 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
         const glm::dvec3 targetPosition{
             state.positionMeters.x, state.positionMeters.y,
             control.groundElevationMeters + DroneModel::takeoffHeightMeters};
-        desiredAcceleration = PositionControlAcceleration(state, targetPosition);
+        desiredAcceleration = PositionControlAcceleration(state, targetPosition, controller);
         break;
     }
     case FlightMode::Landing:
@@ -170,15 +170,16 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
         const glm::dvec3 targetPosition{
             state.positionMeters.x, state.positionMeters.y,
             control.groundElevationMeters + groundedModelOriginHeightMeters};
-        desiredAcceleration = PositionControlAcceleration(state, targetPosition);
+        desiredAcceleration = PositionControlAcceleration(state, targetPosition, controller);
         break;
     }
     case FlightMode::FollowingWaypoint:
-        desiredAcceleration = PositionControlAcceleration(state, control.waypointMeters);
+        desiredAcceleration = PositionControlAcceleration(
+            state, control.waypointMeters, controller);
         break;
     case FlightMode::Hovering:
     case FlightMode::Flying:
-        desiredAcceleration = velocityGain * (
+        desiredAcceleration = controller.velocityGain * (
             control.targetVelocityMetersPerSecond - state.velocityMetersPerSecond);
         break;
     }
@@ -191,7 +192,8 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
 
     const glm::dquat desiredOrientation = DesiredOrientation(
         desiredWorldThrust, control.desiredYawRadians);
-    const glm::dvec3 torqueBody = AttitudeTorque(state, parameters, desiredOrientation);
+    const glm::dvec3 torqueBody = AttitudeTorque(
+        state, parameters, desiredOrientation, controller);
     const glm::dvec3 forceBody{0.0, 0.0, glm::length(desiredWorldThrust)};
     const DesiredWrench desiredWrench{forceBody, torqueBody};
     const auto rotorThrusts = SolveRotorThrusts(desiredWrench, parameters);

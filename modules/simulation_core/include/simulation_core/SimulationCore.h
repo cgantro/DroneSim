@@ -14,6 +14,7 @@
 namespace aerosimlab::simulation
 {
 struct QuadrotorParameters;
+struct QuadrotorControllerParameters;
 
 /**
  * @brief 운동학 기준선과 AirSim 강체 경로 중 사용할 계산 방식을 고른다.
@@ -74,6 +75,10 @@ public:
 
     /** @brief 지정한 기체 물성으로 강체 드론을 준비한다. */
     SimulationCore(SimulationDynamics dynamics, QuadrotorParameters quadrotorParameters);
+
+    /** @brief 기체 물성과 제어기 이득을 지정해 강체 드론을 준비한다. */
+    SimulationCore(SimulationDynamics dynamics, QuadrotorParameters quadrotorParameters,
+        const QuadrotorControllerParameters& controllerParameters);
 
     /** @brief 모의 객체와 Flecs 실행 공간을 함께 정리한다. */
     ~SimulationCore();

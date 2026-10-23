@@ -825,6 +825,36 @@ void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& defini
     definition.quadrotorParametersCustomized = true;
 }
 
+void ReadControllerSettings(const Json& document, ScenarioDefinition& definition)
+{
+    const auto settings = document.find("controller_gains");
+    if (settings == document.end())
+        return;
+    if (!settings->is_object()
+        || definition.dynamics != SimulationDynamics::RigidBody)
+    {
+        throw std::invalid_argument(
+            "controller_gains는 rigid_body 시나리오의 JSON 객체여야 합니다.");
+    }
+
+    QuadrotorControllerParameters& controller = definition.controllerParameters;
+    if (settings->contains("position"))
+        controller.positionGain = ReadFiniteNumber((*settings)["position"], "position");
+    if (settings->contains("velocity"))
+        controller.velocityGain = ReadFiniteNumber((*settings)["velocity"], "velocity");
+    if (settings->contains("attitude"))
+        controller.attitudeGain = ReadFiniteNumber((*settings)["attitude"], "attitude");
+    if (settings->contains("angular_rate"))
+        controller.angularRateGain = ReadFiniteNumber((*settings)["angular_rate"], "angular_rate");
+
+    if (controller.positionGain <= 0.0 || controller.velocityGain <= 0.0
+        || controller.attitudeGain <= 0.0 || controller.angularRateGain <= 0.0)
+    {
+        throw std::invalid_argument("controller_gains 값은 모두 양수여야 합니다.");
+    }
+    definition.controllerParametersCustomized = true;
+}
+
 void ReadCollisionAvoidanceSettings(const Json& document, ScenarioDefinition& definition)
 {
     const auto settingsValue = document.find("collision_avoidance");
@@ -1043,6 +1073,7 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
 
     ReadEnvironmentSettings(document, definition);
     ReadQuadrotorModelSettings(document, definition);
+    ReadControllerSettings(document, definition);
     ReadCollisionAvoidanceSettings(document, definition);
     ReadEnergyModelSettings(document, definition);
     definition.cameraEvents = ReadCameraEvents(document, definition.tickCount);

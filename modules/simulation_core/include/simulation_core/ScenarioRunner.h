@@ -44,6 +44,16 @@ struct ScenarioResult
         bool customized = false;
     };
     std::optional<PhysicalModel> physicalModel;
+    /** @brief 강체 시나리오에서 사용한 제어기 이득이다. */
+    struct ControllerSettings
+    {
+        double positionGain = 0.0;
+        double velocityGain = 0.0;
+        double attitudeGain = 0.0;
+        double angularRateGain = 0.0;
+        bool customized = false;
+    };
+    std::optional<ControllerSettings> controllerSettings;
     /** @brief 시나리오에서 이름으로 지정한 드론의 마지막 상태다. */
     struct Drone
     {
