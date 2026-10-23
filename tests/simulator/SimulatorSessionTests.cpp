@@ -13,6 +13,8 @@
 #include <exception>
 #include <future>
 #include <optional>
+#include <stdexcept>
+#include <string>
 #include <thread>
 
 using namespace aerosimlab;
@@ -63,49 +65,58 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
     });
 
     std::uint32_t sequence = 0;
-    auto send = [&](const auto& setCommand)
+    auto send = [&](const char* operation, const auto& setCommand,
+        std::chrono::milliseconds timeout = std::chrono::seconds(5))
     {
         communication::CommandPacket packet;
         packet.commandId = ++sequence;
         packet.sequence = sequence;
         setCommand(packet);
-        return ground_control::SendCommand(
-            "127.0.0.1", simulatorPort, packet, clientSocket,
-            std::chrono::seconds(5)).reply;
+        try
+        {
+            return ground_control::SendCommand(
+                "127.0.0.1", simulatorPort, packet, clientSocket, timeout).reply;
+        }
+        catch (const std::exception& error)
+        {
+            throw std::runtime_error(std::string{operation} + ": " + error.what());
+        }
     };
     std::exception_ptr commandFailure;
     try
     {
-        const auto beforeStatus = send([](communication::CommandPacket& packet)
+        // 첫 창 초기화 중 UDP 요청이 먼저 도착할 수 있어 초기 상태 조회만 여유를 둔다.
+        const auto beforeStatus = send("초기 상태 조회",
+            [](communication::CommandPacket& packet)
         {
             packet.fleetCommand = communication::FleetCommand::GetStatus;
-        });
+        }, std::chrono::seconds(15));
         ASSERT_TRUE(beforeStatus.accepted);
         ASSERT_EQ(beforeStatus.telemetry.drones.size(), 1U);
         EXPECT_EQ(beforeStatus.appliedTick, beforeStatus.telemetry.tick);
 
-        const auto start = send([](communication::CommandPacket& packet)
+        const auto start = send("기록 시작", [](communication::CommandPacket& packet)
         {
             packet.sessionCommand = communication::SessionCommand::StartRecording;
         });
         EXPECT_TRUE(start.accepted);
         EXPECT_EQ(start.status, "recording_started");
 
-        const auto takeoff = send([](communication::CommandPacket& packet)
+        const auto takeoff = send("이륙", [](communication::CommandPacket& packet)
         {
             packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::TakeOff};
         });
         EXPECT_TRUE(takeoff.accepted);
         EXPECT_EQ(takeoff.status, "applied");
 
-        const auto land = send([](communication::CommandPacket& packet)
+        const auto land = send("착륙", [](communication::CommandPacket& packet)
         {
             packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::Land};
         });
         EXPECT_TRUE(land.accepted);
         EXPECT_EQ(land.status, "applied");
 
-        const auto added = send([](communication::CommandPacket& packet)
+        const auto added = send("드론 추가", [](communication::CommandPacket& packet)
         {
             packet.fleetCommand = communication::FleetCommand::AddDrone;
         });
@@ -117,14 +128,14 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
         EXPECT_GT(added.telemetry.drones[1].positionMeters.x,
             added.telemetry.drones[0].positionMeters.x);
 
-        const auto stop = send([](communication::CommandPacket& packet)
+        const auto stop = send("기록 종료", [](communication::CommandPacket& packet)
         {
             packet.sessionCommand = communication::SessionCommand::StopRecording;
         });
         EXPECT_TRUE(stop.accepted);
         EXPECT_EQ(stop.status, "recording_stopped");
 
-        const auto replay = send([](communication::CommandPacket& packet)
+        const auto replay = send("기록 재생", [](communication::CommandPacket& packet)
         {
             packet.sessionCommand = communication::SessionCommand::ReplayRecording;
         });
