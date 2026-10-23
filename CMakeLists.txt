@@ -268,6 +268,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   add_library(aerosimlab_simulator_app STATIC
     apps/simulator/AeroSimLabApp.cpp
     apps/simulator/AeroSimLabAppInput.cpp
+    apps/simulator/FleetDroneSpawn.cpp
     apps/simulator/SimulationBenchmark.cpp
   )
   if(NOT EMSCRIPTEN)
