@@ -247,68 +247,76 @@ simulation::DroneCommand ReadDroneCommand(const Json& payload, std::string_view 
 
     throw std::invalid_argument("알 수 없는 드론 명령입니다.");
 }
+
+Json EncodeCommandPayload(const simulation::DroneCommand& command)
+{
+    Json payload{{"target", "drone"}};
+    switch (command.kind)
+    {
+    case simulation::DroneCommand::Kind::TakeOff: payload["action"] = "takeoff"; break;
+    case simulation::DroneCommand::Kind::Land: payload["action"] = "land"; break;
+    case simulation::DroneCommand::Kind::Stop: payload["action"] = "stop"; break;
+    case simulation::DroneCommand::Kind::SetVelocity:
+        payload["action"] = "set_velocity";
+        payload["vector"] = {command.vector.x, command.vector.y, command.vector.z};
+        break;
+    case simulation::DroneCommand::Kind::SetWaypoint:
+        payload["action"] = "set_waypoint";
+        payload["vector"] = {command.vector.x, command.vector.y, command.vector.z};
+        break;
+    case simulation::DroneCommand::Kind::SetYawRate:
+        payload["action"] = "set_yaw_rate";
+        payload["yaw_rate_radians_per_second"] = command.yawRateRadiansPerSecond;
+        break;
+    }
+    return payload;
+}
+
+Json EncodeCommandPayload(CameraCommand command)
+{
+    const char* action = nullptr;
+    switch (command)
+    {
+    case CameraCommand::Enable: action = "enable"; break;
+    case CameraCommand::Disable: action = "disable"; break;
+    case CameraCommand::InjectFault: action = "fault"; break;
+    case CameraCommand::Recover: action = "recover"; break;
+    }
+    return {{"target", "camera"}, {"action", action}};
+}
+
+Json EncodeCommandPayload(SessionCommand command)
+{
+    const char* action = nullptr;
+    switch (command)
+    {
+    case SessionCommand::StartRecording: action = "record_start"; break;
+    case SessionCommand::StopRecording: action = "record_stop"; break;
+    case SessionCommand::ReplayRecording: action = "record_replay"; break;
+    }
+    return {{"target", "session"}, {"action", action}};
+}
+
+Json EncodeCommandPayload(FleetCommand command)
+{
+    const char* action = command == FleetCommand::AddDrone ? "add_drone" : "status";
+    return {{"target", "fleet"}, {"action", action}};
+}
+
+Json EncodeCommandPayload(std::monostate)
+{
+    throw std::invalid_argument("보낼 명령을 선택해 주세요.");
+}
 }
 
 std::string EncodeCommand(const CommandPacket& packet)
 {
-    const unsigned int targetCount = static_cast<unsigned int>(packet.droneCommand.has_value())
-        + static_cast<unsigned int>(packet.cameraCommand.has_value())
-        + static_cast<unsigned int>(packet.sessionCommand.has_value())
-        + static_cast<unsigned int>(packet.fleetCommand.has_value());
-    if (targetCount != 1)
-        throw std::invalid_argument("한 메시지에는 드론·카메라·기록·편대 명령 중 하나만 넣을 수 있습니다.");
-
-    Json payload{{"command_id", packet.commandId}, {"sequence", packet.sequence}};
-    if (packet.droneCommand)
+    Json payload = std::visit([](const auto& command)
     {
-        const auto& command = *packet.droneCommand;
-        switch (command.kind)
-        {
-        case simulation::DroneCommand::Kind::TakeOff: payload["action"] = "takeoff"; break;
-        case simulation::DroneCommand::Kind::Land: payload["action"] = "land"; break;
-        case simulation::DroneCommand::Kind::Stop: payload["action"] = "stop"; break;
-        case simulation::DroneCommand::Kind::SetVelocity:
-            payload["action"] = "set_velocity";
-            payload["vector"] = {command.vector.x, command.vector.y, command.vector.z};
-            break;
-        case simulation::DroneCommand::Kind::SetWaypoint:
-            payload["action"] = "set_waypoint";
-            payload["vector"] = {command.vector.x, command.vector.y, command.vector.z};
-            break;
-        case simulation::DroneCommand::Kind::SetYawRate:
-            payload["action"] = "set_yaw_rate";
-            payload["yaw_rate_radians_per_second"] = command.yawRateRadiansPerSecond;
-            break;
-        }
-        payload["target"] = "drone";
-    }
-    else if (packet.cameraCommand)
-    {
-        payload["target"] = "camera";
-        switch (*packet.cameraCommand)
-        {
-        case CameraCommand::Enable: payload["action"] = "enable"; break;
-        case CameraCommand::Disable: payload["action"] = "disable"; break;
-        case CameraCommand::InjectFault: payload["action"] = "fault"; break;
-        case CameraCommand::Recover: payload["action"] = "recover"; break;
-        }
-    }
-    else if (packet.sessionCommand)
-    {
-        payload["target"] = "session";
-        switch (*packet.sessionCommand)
-        {
-        case SessionCommand::StartRecording: payload["action"] = "record_start"; break;
-        case SessionCommand::StopRecording: payload["action"] = "record_stop"; break;
-        case SessionCommand::ReplayRecording: payload["action"] = "record_replay"; break;
-        }
-    }
-    else
-    {
-        payload["target"] = "fleet";
-        payload["action"] = *packet.fleetCommand == FleetCommand::AddDrone
-            ? "add_drone" : "status";
-    }
+        return EncodeCommandPayload(command);
+    }, packet.command);
+    payload["command_id"] = packet.commandId;
+    payload["sequence"] = packet.sequence;
     return Wrap("command", std::move(payload)).dump();
 }
 
@@ -329,25 +337,25 @@ CommandPacket DecodeCommand(std::string_view datagram)
 
     if (target == "camera")
     {
-        packet.cameraCommand = ReadCameraCommand(action);
+        packet.command = ReadCameraCommand(action);
         return packet;
     }
     if (target == "session")
     {
-        packet.sessionCommand = ReadSessionCommand(action);
+        packet.command = ReadSessionCommand(action);
         return packet;
     }
     if (target == "fleet")
     {
-        if (action == "add_drone") packet.fleetCommand = FleetCommand::AddDrone;
-        else if (action == "status") packet.fleetCommand = FleetCommand::GetStatus;
+        if (action == "add_drone") packet.command = FleetCommand::AddDrone;
+        else if (action == "status") packet.command = FleetCommand::GetStatus;
         else throw std::invalid_argument("알 수 없는 편대 동작입니다.");
         return packet;
     }
     if (target != "drone")
         throw std::invalid_argument("알 수 없는 명령 대상입니다.");
 
-    packet.droneCommand = ReadDroneCommand(payload, action);
+    packet.command = ReadDroneCommand(payload, action);
     return packet;
 }
 

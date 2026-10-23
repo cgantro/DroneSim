@@ -83,7 +83,7 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
             const auto beforeStatus = send("초기 상태 조회",
                 [](communication::CommandPacket& packet)
             {
-                packet.fleetCommand = communication::FleetCommand::GetStatus;
+                packet.command = communication::FleetCommand::GetStatus;
             }, std::chrono::seconds(15));
             require(beforeStatus.accepted, "초기 상태 조회가 거부되었습니다.");
             require(beforeStatus.telemetry.drones.size() == 1U,
@@ -93,14 +93,14 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
             const auto start = send("기록 시작", [](communication::CommandPacket& packet)
             {
-                packet.sessionCommand = communication::SessionCommand::StartRecording;
+                packet.command = communication::SessionCommand::StartRecording;
             });
             require(start.accepted && start.status == "recording_started",
                 "기록을 시작하지 못했습니다.");
 
             const auto takeoff = send("이륙", [](communication::CommandPacket& packet)
             {
-                packet.droneCommand = simulation::DroneCommand{
+                packet.command = simulation::DroneCommand{
                     simulation::DroneCommand::Kind::TakeOff};
             });
             require(takeoff.accepted && takeoff.status == "applied",
@@ -108,7 +108,7 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
             const auto land = send("착륙", [](communication::CommandPacket& packet)
             {
-                packet.droneCommand = simulation::DroneCommand{
+                packet.command = simulation::DroneCommand{
                     simulation::DroneCommand::Kind::Land};
             });
             require(land.accepted && land.status == "applied",
@@ -116,7 +116,7 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
             const auto added = send("드론 추가", [](communication::CommandPacket& packet)
             {
-                packet.fleetCommand = communication::FleetCommand::AddDrone;
+                packet.command = communication::FleetCommand::AddDrone;
             });
             require(added.accepted && added.status == "drone_added",
                 "두 번째 드론을 추가하지 못했습니다.");
@@ -132,14 +132,14 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
             const auto stop = send("기록 종료", [](communication::CommandPacket& packet)
             {
-                packet.sessionCommand = communication::SessionCommand::StopRecording;
+                packet.command = communication::SessionCommand::StopRecording;
             });
             require(stop.accepted && stop.status == "recording_stopped",
                 "기록을 종료하지 못했습니다.");
 
             const auto replay = send("기록 재생", [](communication::CommandPacket& packet)
             {
-                packet.sessionCommand = communication::SessionCommand::ReplayRecording;
+                packet.command = communication::SessionCommand::ReplayRecording;
             });
             require(replay.accepted && replay.status == "recording_replay_started",
                 "기록을 재생하지 못했습니다.");

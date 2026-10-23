@@ -23,14 +23,15 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
         CommandPacket packet;
         packet.commandId = commandId;
         packet.sequence = commandId;
-        packet.droneCommand = expected;
+        packet.command = expected;
         const auto decoded = DecodeCommand(EncodeCommand(packet));
-        ASSERT_TRUE(decoded.droneCommand);
+        const auto* decodedDrone = std::get_if<simulation::DroneCommand>(&decoded.command);
+        ASSERT_NE(decodedDrone, nullptr);
         EXPECT_EQ(decoded.commandId, commandId);
         EXPECT_EQ(decoded.sequence, commandId);
-        EXPECT_EQ(decoded.droneCommand->kind, expected.kind);
-        EXPECT_EQ(decoded.droneCommand->vector, expected.vector);
-        EXPECT_DOUBLE_EQ(decoded.droneCommand->yawRateRadiansPerSecond,
+        EXPECT_EQ(decodedDrone->kind, expected.kind);
+        EXPECT_EQ(decodedDrone->vector, expected.vector);
+        EXPECT_DOUBLE_EQ(decodedDrone->yawRateRadiansPerSecond,
             expected.yawRateRadiansPerSecond);
         ++commandId;
     }
@@ -38,26 +39,29 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     CommandPacket camera;
     camera.commandId = 8;
     camera.sequence = 12;
-    camera.cameraCommand = CameraCommand::InjectFault;
-    EXPECT_EQ(DecodeCommand(EncodeCommand(camera)).cameraCommand, CameraCommand::InjectFault);
+    camera.command = CameraCommand::InjectFault;
+    EXPECT_EQ(std::get<CameraCommand>(DecodeCommand(EncodeCommand(camera)).command),
+        CameraCommand::InjectFault);
 
     CommandPacket recording;
     recording.commandId = 9;
     recording.sequence = 13;
-    recording.sessionCommand = SessionCommand::ReplayRecording;
-    EXPECT_EQ(DecodeCommand(EncodeCommand(recording)).sessionCommand,
+    recording.command = SessionCommand::ReplayRecording;
+    EXPECT_EQ(std::get<SessionCommand>(DecodeCommand(EncodeCommand(recording)).command),
         SessionCommand::ReplayRecording);
 
     CommandPacket addDrone;
     addDrone.commandId = 10;
     addDrone.sequence = 14;
-    addDrone.fleetCommand = FleetCommand::AddDrone;
-    EXPECT_EQ(DecodeCommand(EncodeCommand(addDrone)).fleetCommand, FleetCommand::AddDrone);
+    addDrone.command = FleetCommand::AddDrone;
+    EXPECT_EQ(std::get<FleetCommand>(DecodeCommand(EncodeCommand(addDrone)).command),
+        FleetCommand::AddDrone);
     CommandPacket fleetStatus;
     fleetStatus.commandId = 11;
     fleetStatus.sequence = 15;
-    fleetStatus.fleetCommand = FleetCommand::GetStatus;
-    EXPECT_EQ(DecodeCommand(EncodeCommand(fleetStatus)).fleetCommand, FleetCommand::GetStatus);
+    fleetStatus.command = FleetCommand::GetStatus;
+    EXPECT_EQ(std::get<FleetCommand>(DecodeCommand(EncodeCommand(fleetStatus)).command),
+        FleetCommand::GetStatus);
 
     CommandReply reply;
     reply.commandId = 3;
@@ -120,11 +124,10 @@ void Verify_Protocol_RejectsInvalidPacketsAndSequenceNumbers()
     CommandPacket packet;
     packet.commandId = 1;
     packet.sequence = 1;
-    packet.droneCommand = simulation::DroneCommand{simulation::DroneCommand::Kind::TakeOff};
+    packet.command = simulation::DroneCommand{simulation::DroneCommand::Kind::TakeOff};
     const auto valid = EncodeCommand(packet);
-    packet.cameraCommand = CameraCommand::Enable;
+    packet.command = std::monostate{};
     EXPECT_THROW(static_cast<void>(EncodeCommand(packet)), std::invalid_argument);
-    packet.cameraCommand.reset();
     auto wrongLength = valid;
     const auto lengthPosition = wrongLength.find("\"length\":");
     ASSERT_NE(lengthPosition, std::string::npos);

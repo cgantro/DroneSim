@@ -151,11 +151,11 @@ int main(int argc, char** argv)
         packet.sequence = 1;
         if (!commandName.empty() && cameraName.empty())
         {
-            packet.droneCommand = ParseDroneCommand(commandName, actionValues);
+            packet.command = ParseDroneCommand(commandName, actionValues);
         }
         else if (commandName.empty() && !cameraName.empty())
         {
-            packet.cameraCommand = ParseCameraCommand(cameraName);
+            packet.command = ParseCameraCommand(cameraName);
         }
         else
         {

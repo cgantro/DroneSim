@@ -5,9 +5,9 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace aerosimlab::communication
@@ -40,15 +40,15 @@ enum class FleetCommand
     GetStatus
 };
 
-/** @brief UDP로 받은 한 번의 비행·카메라·기록 제어 명령을 보관한다. */
+/** @brief UDP로 받은 비행·카메라·기록·편대 명령 중 하나를 보관한다. */
 struct CommandPacket
 {
+    using Command = std::variant<std::monostate, simulation::DroneCommand,
+        CameraCommand, SessionCommand, FleetCommand>;
+
     std::uint32_t commandId = 0;
     std::uint32_t sequence = 0;
-    std::optional<simulation::DroneCommand> droneCommand;
-    std::optional<CameraCommand> cameraCommand;
-    std::optional<SessionCommand> sessionCommand;
-    std::optional<FleetCommand> fleetCommand;
+    Command command;
 };
 
 /** @brief 편대 목록에 표시할 드론의 간단한 상태다. */

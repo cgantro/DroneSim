@@ -348,21 +348,21 @@ LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
     switch (LOWORD(wParam))
     {
     case takeoffButtonId:
-        packet.droneCommand = aerosimlab::simulation::DroneCommand{
+        packet.command = aerosimlab::simulation::DroneCommand{
             aerosimlab::simulation::DroneCommand::Kind::TakeOff};
         break;
     case stopButtonId:
-        packet.droneCommand = aerosimlab::simulation::DroneCommand{
+        packet.command = aerosimlab::simulation::DroneCommand{
             aerosimlab::simulation::DroneCommand::Kind::Stop};
         break;
     case landButtonId:
-        packet.droneCommand = aerosimlab::simulation::DroneCommand{
+        packet.command = aerosimlab::simulation::DroneCommand{
             aerosimlab::simulation::DroneCommand::Kind::Land};
         break;
     case waypointButtonId:
         try
         {
-            packet.droneCommand = aerosimlab::simulation::DroneCommand{
+            packet.command = aerosimlab::simulation::DroneCommand{
                 aerosimlab::simulation::DroneCommand::Kind::SetWaypoint,
                 {ReadNumber(state.waypointInputs[0]), ReadNumber(state.waypointInputs[1]),
                  ReadNumber(state.waypointInputs[2])}};
@@ -373,21 +373,21 @@ LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
             return 0;
         }
         break;
-    case cameraOnButtonId: packet.cameraCommand = aerosimlab::communication::CameraCommand::Enable; break;
-    case cameraOffButtonId: packet.cameraCommand = aerosimlab::communication::CameraCommand::Disable; break;
-    case cameraFaultButtonId: packet.cameraCommand = aerosimlab::communication::CameraCommand::InjectFault; break;
-    case cameraRecoverButtonId: packet.cameraCommand = aerosimlab::communication::CameraCommand::Recover; break;
+    case cameraOnButtonId: packet.command = aerosimlab::communication::CameraCommand::Enable; break;
+    case cameraOffButtonId: packet.command = aerosimlab::communication::CameraCommand::Disable; break;
+    case cameraFaultButtonId: packet.command = aerosimlab::communication::CameraCommand::InjectFault; break;
+    case cameraRecoverButtonId: packet.command = aerosimlab::communication::CameraCommand::Recover; break;
     case recordingStartButtonId:
-        packet.sessionCommand = aerosimlab::communication::SessionCommand::StartRecording;
+        packet.command = aerosimlab::communication::SessionCommand::StartRecording;
         break;
     case recordingStopButtonId:
-        packet.sessionCommand = aerosimlab::communication::SessionCommand::StopRecording;
+        packet.command = aerosimlab::communication::SessionCommand::StopRecording;
         break;
     case recordingReplayButtonId:
-        packet.sessionCommand = aerosimlab::communication::SessionCommand::ReplayRecording;
+        packet.command = aerosimlab::communication::SessionCommand::ReplayRecording;
         break;
     case addDroneButtonId:
-        packet.fleetCommand = aerosimlab::communication::FleetCommand::AddDrone;
+        packet.command = aerosimlab::communication::FleetCommand::AddDrone;
         break;
     default: return 0;
     }
@@ -421,7 +421,7 @@ LRESULT HandleTimer(HWND window, AppState& state, WPARAM wParam)
         && std::chrono::steady_clock::now() >= state.nextStatusPoll)
     {
         aerosimlab::communication::CommandPacket packet;
-        packet.fleetCommand = aerosimlab::communication::FleetCommand::GetStatus;
+        packet.command = aerosimlab::communication::FleetCommand::GetStatus;
         StartRequest(window, state, std::move(packet), true);
     }
     return 0;

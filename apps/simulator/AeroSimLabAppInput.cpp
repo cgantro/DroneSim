@@ -10,6 +10,7 @@
 #include <chrono>
 #include <exception>
 #include <string>
+#include <type_traits>
 
 namespace aerosimlab::simulator
 {
@@ -75,7 +76,10 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         return;
 
     sequenceGuard_.Commit(packet);
-    if (packet.fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
+    const auto* fleetCommand = std::get_if<aerosimlab::communication::FleetCommand>(
+        &packet.command);
+    if (fleetCommand
+        && *fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
     {
         auto reply = makeReply();
         reply.accepted = true;
@@ -87,7 +91,8 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     }
 
     externalControl_ = true;
-    if (!packet.sessionCommand && !packet.fleetCommand)
+    if (!std::holds_alternative<aerosimlab::communication::SessionCommand>(packet.command)
+        && !std::holds_alternative<aerosimlab::communication::FleetCommand>(packet.command))
     {
         groundControlActive_ = true;
         window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
@@ -325,15 +330,25 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
 
     const bool wasRecordingAtTickStart = commandRecording_.IsRecording();
     bool replayTickAdvanced = false;
-    if (pending.packet.sessionCommand)
-        replayTickAdvanced = ApplySessionCommand(*pending.packet.sessionCommand, reply);
-    else if (pending.packet.droneCommand)
-        ApplyDroneCommand(*pending.packet.droneCommand, reply);
-    else if (pending.packet.cameraCommand)
-        ApplyCameraCommand(*pending.packet.cameraCommand, reply);
-    else if (pending.packet.fleetCommand
-        == aerosimlab::communication::FleetCommand::AddDrone)
-        ApplyAddDroneCommand(reply);
+    std::visit([this, &reply, &replayTickAdvanced](const auto& command)
+    {
+        using Command = std::decay_t<decltype(command)>;
+        if constexpr (std::is_same_v<Command,
+            aerosimlab::communication::SessionCommand>)
+            replayTickAdvanced = ApplySessionCommand(command, reply);
+        else if constexpr (std::is_same_v<Command,
+            aerosimlab::simulation::DroneCommand>)
+            ApplyDroneCommand(command, reply);
+        else if constexpr (std::is_same_v<Command,
+            aerosimlab::communication::CameraCommand>)
+            ApplyCameraCommand(command, reply);
+        else if constexpr (std::is_same_v<Command,
+            aerosimlab::communication::FleetCommand>)
+        {
+            if (command == aerosimlab::communication::FleetCommand::AddDrone)
+                ApplyAddDroneCommand(reply);
+        }
+    }, pending.packet.command);
 
     if (!replayTickAdvanced)
         simulation_.AdvanceOneTick();

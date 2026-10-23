@@ -40,7 +40,7 @@ void Verify_GroundControlClient_SendsCommandAndReadsMatchingUdpReply()
     communication::CommandPacket command;
     command.commandId = 7;
     command.sequence = 3;
-    command.droneCommand = simulation::DroneCommand{
+    command.command = simulation::DroneCommand{
         simulation::DroneCommand::Kind::TakeOff};
 
     auto request = std::async(std::launch::async, [&]
