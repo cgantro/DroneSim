@@ -224,54 +224,7 @@ int AeroSimLabApp::Run()
 
     while (!window_->ShouldClose())
     {
-        const auto applicationFrameStart = benchmarkMode_
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        window_->PollEvents();
-        PollGroundControl();
-        PollGamepad();
-        const auto now = std::chrono::steady_clock::now();
-        const double elapsedSeconds = std::chrono::duration<double>(now - previousFrame).count();
-        // 화면 스모크는 프레임마다 한 Tick, 네트워크 스모크는 프레임마다 최대 따라잡기만큼 진행한다.
-        double frameSeconds = elapsedSeconds;
-        if (smokeTest_ && !benchmarkMode_)
-        {
-            frameSeconds = networkEnabled_
-                ? aerosimlab::simulation::FixedTickAccumulator::maximumFrameSeconds
-                : aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds;
-        }
-        previousFrame = now;
-
-        const std::size_t simulationBatches = smokeTest_ && networkEnabled_
-            && !benchmarkMode_
-            ? networkSmokeSimulationBatchesPerFrame
-            : 1U;
-        for (std::size_t batch = 0; batch < simulationBatches; ++batch)
-            AdvanceSimulation(frameSeconds);
-        eoReadbackHappenedThisFrame_ = false;
-        double renderDurationMicroseconds = 0.0;
-        {
-            aerosimlab::simulation::ScopedDuration measureRender(
-                benchmarkMode_ ? &renderDurationMicroseconds : nullptr);
-            RenderFrame();
-            window_->SwapBuffers();
-        }
-        if (benchmarkMode_)
-        {
-            benchmarkMeasurements_.renderFrameDurationsMicroseconds.push_back(
-                renderDurationMicroseconds);
-            auto& frameDurations = eoReadbackHappenedThisFrame_
-                ? benchmarkMeasurements_.renderFrameDurationsWithEoReadbackMicroseconds
-                : benchmarkMeasurements_.renderFrameDurationsWithoutEoReadbackMicroseconds;
-            frameDurations.push_back(renderDurationMicroseconds);
-        }
-        ++renderedFrames_;
-        if (benchmarkMode_)
-        {
-            benchmarkMeasurements_.applicationFrameDurationsMicroseconds.push_back(
-                std::chrono::duration<double, std::micro>(
-                    std::chrono::steady_clock::now() - applicationFrameStart).count());
-        }
+        RunFrame(previousFrame);
 
         if (smokeTest_ && SmokeTestIsComplete())
             break;
@@ -297,6 +250,58 @@ int AeroSimLabApp::Run()
         WriteBenchmarkReport(elapsedSeconds);
     }
     return 0;
+}
+
+void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
+{
+    const auto applicationFrameStart = benchmarkMode_
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+    window_->PollEvents();
+    PollGroundControl();
+    PollGamepad();
+    const auto now = std::chrono::steady_clock::now();
+    const double elapsedSeconds = std::chrono::duration<double>(now - previousFrame).count();
+    // 화면 스모크는 프레임마다 한 Tick, 네트워크 스모크는 프레임마다 최대 따라잡기만큼 진행한다.
+    double frameSeconds = elapsedSeconds;
+    if (smokeTest_ && !benchmarkMode_)
+    {
+        frameSeconds = networkEnabled_
+            ? aerosimlab::simulation::FixedTickAccumulator::maximumFrameSeconds
+            : aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds;
+    }
+    previousFrame = now;
+
+    const std::size_t simulationBatches = smokeTest_ && networkEnabled_
+        && !benchmarkMode_
+        ? networkSmokeSimulationBatchesPerFrame
+        : 1U;
+    for (std::size_t batch = 0; batch < simulationBatches; ++batch)
+        AdvanceSimulation(frameSeconds);
+    eoReadbackHappenedThisFrame_ = false;
+    double renderDurationMicroseconds = 0.0;
+    {
+        aerosimlab::simulation::ScopedDuration measureRender(
+            benchmarkMode_ ? &renderDurationMicroseconds : nullptr);
+        RenderFrame();
+        window_->SwapBuffers();
+    }
+    if (benchmarkMode_)
+    {
+        benchmarkMeasurements_.renderFrameDurationsMicroseconds.push_back(
+            renderDurationMicroseconds);
+        auto& frameDurations = eoReadbackHappenedThisFrame_
+            ? benchmarkMeasurements_.renderFrameDurationsWithEoReadbackMicroseconds
+            : benchmarkMeasurements_.renderFrameDurationsWithoutEoReadbackMicroseconds;
+        frameDurations.push_back(renderDurationMicroseconds);
+    }
+    ++renderedFrames_;
+    if (benchmarkMode_)
+    {
+        benchmarkMeasurements_.applicationFrameDurationsMicroseconds.push_back(
+            std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - applicationFrameStart).count());
+    }
 }
 
 bool AeroSimLabApp::SmokeTestIsComplete() const

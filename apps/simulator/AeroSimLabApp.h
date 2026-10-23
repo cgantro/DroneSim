@@ -73,6 +73,8 @@ public:
     int Run();
 
 private:
+    /** @brief 입력을 읽고 시뮬레이션과 화면을 한 프레임 진행한다. */
+    void RunFrame(std::chrono::steady_clock::time_point& previousFrame);
     void InitializeGraphics();
     /** @brief 지도·기체 화면 자산을 불러오고 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();
