@@ -5,6 +5,7 @@
 #include "simulation_core/ScenarioRunner.h"
 #include "simulation_core/SimulationCore.h"
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -41,6 +42,7 @@ struct ScenarioDrone
     glm::dvec3 initialVelocityMetersPerSecond{0.0};
     std::optional<glm::dquat> initialOrientation;
     glm::dvec3 initialAngularVelocityRadiansPerSecond{0.0};
+    std::array<double, QuadrotorParameters::rotorCount> initialMotorSpeedsRadiansPerSecond{};
     FlightMode initialMode = FlightMode::Grounded;
     bool hasFullInitialState = false;
     std::optional<double> batteryCapacityWattHours;

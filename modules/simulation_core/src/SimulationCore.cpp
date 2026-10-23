@@ -543,12 +543,25 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     {
         throw std::invalid_argument("드론 시작 상태의 위치·속도·자세를 확인해 주세요.");
     }
-    if (std::any_of(state.motorSpeedsRadiansPerSecond.begin(),
+    const bool hasInitialMotorSpeed = std::any_of(
+        state.motorSpeedsRadiansPerSecond.begin(),
         state.motorSpeedsRadiansPerSecond.end(),
-        [](double speed) { return speed > 0.0; }))
+        [](double speed) { return speed > 0.0; });
+#if !defined(__EMSCRIPTEN__)
+    if (hasInitialMotorSpeed && ecs_->dynamics != SimulationDynamics::RigidBody)
+        throw std::invalid_argument("초기 로터 속도는 강체 물리 모드에서만 지정할 수 있습니다.");
+    if (std::any_of(state.motorSpeedsRadiansPerSecond.begin(),
+        state.motorSpeedsRadiansPerSecond.end(), [&](double speed)
+        {
+            return speed > ecs_->quadrotorParameters.maximumMotorSpeedRadiansPerSecond;
+        }))
     {
-        throw std::invalid_argument("현재는 시작 상태에 로터 회전수를 지정할 수 없습니다.");
+        throw std::invalid_argument("초기 로터 속도가 기체의 최대 속도를 넘었습니다.");
     }
+#else
+    if (hasInitialMotorSpeed)
+        throw std::invalid_argument("초기 로터 속도는 강체 물리 모드에서만 지정할 수 있습니다.");
+#endif
 
     flecs::entity& drone = ecs_->FindDrone(droneId);
     DroneState normalized = state;
@@ -571,6 +584,9 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
             normalized.angularVelocityRadiansPerSecond};
         ecs_->physics->SetState(
             drone.get<EcsStorage::PhysicsBody>().handle, rigidBodyState);
+        ecs_->physics->SetInitialMotorSpeeds(
+            drone.get<EcsStorage::PhysicsBody>().handle,
+            normalized.motorSpeedsRadiansPerSecond);
         ecs_->CopyPhysicsState(normalized, drone.get<EcsStorage::PhysicsBody>().handle);
         normalized.mode = state.mode;
     }

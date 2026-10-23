@@ -288,6 +288,8 @@ DroneIds CreateScenarioDrones(
                 glm::angleAxis(drone.initialYawRadians, glm::dvec3{0.0, 0.0, 1.0}));
             initialState.angularVelocityRadiansPerSecond =
                 drone.initialAngularVelocityRadiansPerSecond;
+            initialState.motorSpeedsRadiansPerSecond =
+                drone.initialMotorSpeedsRadiansPerSecond;
             initialState.mode = drone.initialMode;
             simulation.SetInitialState(id, initialState);
         }

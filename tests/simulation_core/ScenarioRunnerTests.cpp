@@ -125,6 +125,7 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
        "initial_velocity_meters_per_second":[0.2,-0.1,0.05],
        "initial_orientation_quaternion_wxyz":[0.9238795325,0,0,0.3826834324],
        "initial_angular_velocity_radians_per_second":[0.01,0.02,0.03],
+       "initial_motor_speeds_radians_per_second":[120,240,360,480],
        "initial_mode":"flying"}],
      "commands":[{"tick":0,"type":"set_rotor_thrusts",
        "normalized_thrust":[0.5,0.5,0.5,0.5]}],
@@ -147,6 +148,8 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
     EXPECT_NEAR(initial.angularVelocityRadiansPerSecond.x, 0.01, 1.0e-6);
     EXPECT_NEAR(initial.angularVelocityRadiansPerSecond.y, 0.02, 1.0e-6);
     EXPECT_NEAR(initial.angularVelocityRadiansPerSecond.z, 0.03, 1.0e-6);
+    EXPECT_EQ(initial.motorSpeedsRadiansPerSecond,
+        (std::array<double, 4>{120.0, 240.0, 360.0, 480.0}));
     EXPECT_GT(result.trajectory[2].drones.front().second
                   .motorSpeedsRadiansPerSecond[0],
         0.0);
@@ -158,6 +161,15 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
      "expected":{"mode":"grounded","position_meters":[0,0,0]}}
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(kinematicRotorInput)),
+        std::invalid_argument);
+
+    constexpr std::string_view invalidInitialMotorSpeeds = R"json(
+    {"version":1,"dynamics":"rigid_body","ticks":1,
+     "drones":[{"name":"x500","initial_position_meters":[0,0,2],
+       "initial_motor_speeds_radians_per_second":[100,200,300]}],
+     "commands":[],"expected":{"mode":"grounded","position_meters":[0,0,2]}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(invalidInitialMotorSpeeds)),
         std::invalid_argument);
 }
 

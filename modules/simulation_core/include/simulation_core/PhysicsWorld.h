@@ -85,6 +85,11 @@ public:
         RigidBodyHandle body,
         const std::array<double, 4>& speedRadiansPerSecond);
 
+    /** @brief 첫 물리 Tick 전에 로터의 현재 속도를 설정한다. */
+    void SetInitialMotorSpeeds(
+        RigidBodyHandle body,
+        const std::array<double, 4>& speedRadiansPerSecond);
+
     /** @brief 물리 월드에 적용할 바람을 지정한다. */
     void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity);
 

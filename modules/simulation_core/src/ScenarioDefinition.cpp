@@ -242,10 +242,12 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         const auto orientation = item.find("initial_orientation_quaternion_wxyz");
         const auto angularVelocity = item.find(
             "initial_angular_velocity_radians_per_second");
+        const auto motorSpeeds = item.find(
+            "initial_motor_speeds_radians_per_second");
         const auto mode = item.find("initial_mode");
         const bool hasFullInitialState = velocity != item.end()
             || orientation != item.end() || angularVelocity != item.end()
-            || mode != item.end();
+            || motorSpeeds != item.end() || mode != item.end();
         const glm::dvec3 initialVelocity = velocity == item.end()
             ? glm::dvec3{0.0}
             : ReadVector(*velocity, "initial_velocity_meters_per_second");
@@ -256,6 +258,21 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
             ? glm::dvec3{0.0}
             : ReadVector(*angularVelocity,
                 "initial_angular_velocity_radians_per_second");
+        std::array<double, QuadrotorParameters::rotorCount> initialMotorSpeeds{};
+        if (motorSpeeds != item.end())
+        {
+            if (!motorSpeeds->is_array() || motorSpeeds->size() != initialMotorSpeeds.size())
+                throw std::invalid_argument(
+                    "initial_motor_speeds_radians_per_second에는 로터별 값 4개가 필요합니다.");
+            for (std::size_t index = 0; index < initialMotorSpeeds.size(); ++index)
+            {
+                initialMotorSpeeds[index] = ReadFiniteNumber(
+                    (*motorSpeeds)[index], "initial_motor_speeds_radians_per_second");
+                if (initialMotorSpeeds[index] < 0.0)
+                    throw std::invalid_argument(
+                        "초기 로터 속도는 0 이상이어야 합니다.");
+            }
+        }
         FlightMode initialMode = FlightMode::Grounded;
         if (mode != item.end())
             initialMode = ReadFlightMode(*mode);
@@ -276,7 +293,7 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         drones.push_back({std::move(name), ReadVector(
             Required(item, "initial_position_meters"), "initial_position_meters"),
             initialYawRadians, initialVelocity, initialOrientation,
-            initialAngularVelocity, initialMode, hasFullInitialState,
+            initialAngularVelocity, initialMotorSpeeds, initialMode, hasFullInitialState,
             batteryCapacity, initialBatteryPercent});
     }
     return drones;

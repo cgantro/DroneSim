@@ -200,6 +200,24 @@ public:
             targetSpeeds_[index] = std::clamp(speeds[index], 0.0, maximumSpeed);
     }
 
+    void SetInitialMotorSpeeds(
+        const std::array<double, QuadrotorParameters::rotorCount>& speeds,
+        double maximumSpeed)
+    {
+        for (std::size_t index = 0; index < signals_.size(); ++index)
+        {
+            filteredSpeeds_[index] = speeds[index];
+            targetSpeeds_[index] = speeds[index];
+            const double ratio = speeds[index] / maximumSpeed;
+            signals_[index] = static_cast<float>(ratio * ratio);
+        }
+    }
+
+    const std::array<double, QuadrotorParameters::rotorCount>& MotorSpeeds() const
+    {
+        return filteredSpeeds_;
+    }
+
     /** @brief 이번 물리 Tick만큼 모터 속도를 목표 쪽으로 갱신한다. */
     void AdvanceMotorResponse(double seconds, double maximumSpeed)
     {
@@ -837,6 +855,24 @@ void PhysicsWorld::SetMotorTargets(
     body.actuation.SetMotorTargets(speeds, body.maximumMotorSpeed);
 }
 
+void PhysicsWorld::SetInitialMotorSpeeds(
+    RigidBodyHandle handle,
+    const std::array<double, 4>& speeds)
+{
+    Impl::Body& body = impl_->GetBody(handle);
+    if (body.updatedSinceReset)
+        throw std::logic_error("초기 로터 속도는 첫 물리 Tick 전에만 바꿀 수 있습니다.");
+    if (!std::all_of(speeds.begin(), speeds.end(), [&](double speed)
+        {
+            return std::isfinite(speed) && speed >= 0.0
+                && speed <= body.maximumMotorSpeed;
+        }))
+    {
+        throw std::invalid_argument("초기 로터 속도는 0부터 최대 속도 사이의 유한한 값이어야 합니다.");
+    }
+    body.actuation.SetInitialMotorSpeeds(speeds, body.maximumMotorSpeed);
+}
+
 void PhysicsWorld::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
     if (!IsFinite(velocity))
@@ -955,6 +991,9 @@ std::array<double, 4> PhysicsWorld::MotorSpeedsRadiansPerSecond(
     RigidBodyHandle handle) const
 {
     const Impl::Body& body = impl_->GetBody(handle);
+    if (!body.updatedSinceReset)
+        return body.actuation.MotorSpeeds();
+
     std::array<double, 4> speeds{};
     for (std::size_t index = 0; index < speeds.size(); ++index)
     {
