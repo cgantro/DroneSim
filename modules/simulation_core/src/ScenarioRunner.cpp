@@ -104,11 +104,13 @@ void RecordMinimumDroneSeparation(
 
     for (std::size_t first = 0; first < definition.drones.size(); ++first)
     {
+        const glm::dvec3 firstPositionMeters = simulation.State(
+            droneIds.at(definition.drones[first].name)).positionMeters;
         for (std::size_t second = first + 1; second < definition.drones.size(); ++second)
         {
-            const glm::dvec3 offset = simulation.State(droneIds.at(definition.drones[first].name))
-                .positionMeters
-                - simulation.State(droneIds.at(definition.drones[second].name)).positionMeters;
+            const glm::dvec3 secondPositionMeters = simulation.State(
+                droneIds.at(definition.drones[second].name)).positionMeters;
+            const glm::dvec3 offset = firstPositionMeters - secondPositionMeters;
             const double distanceMeters = glm::length(offset);
             if (!result.minimumDroneSeparationMeters
                 || distanceMeters < *result.minimumDroneSeparationMeters)
