@@ -277,6 +277,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
 {
     CollectCompletedGpuTimings(timings);
 
+    // 패널을 만드는 동안 장면·카메라 그리기 콜백도 실행되므로 순수 UI 시간은 아니다.
     const auto interfaceBuildStart = timings != nullptr
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
