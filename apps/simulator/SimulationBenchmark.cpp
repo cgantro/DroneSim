@@ -215,7 +215,8 @@ nlohmann::json MeasureDroneScaling(
                 {
                     positionMeters.x = static_cast<double>(index % compactGridWidth)
                         * compactSpacingMeters;
-                    positionMeters.y = static_cast<double>(index / compactGridWidth)
+                    const std::size_t gridRow = index / compactGridWidth;
+                    positionMeters.y = static_cast<double>(gridRow)
                         * compactSpacingMeters;
                 }
                 else
