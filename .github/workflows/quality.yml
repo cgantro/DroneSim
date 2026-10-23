@@ -49,7 +49,7 @@ jobs:
         run: >-
           ctest --test-dir build-linux-gcc-asan-ubsan
           --output-on-failure --timeout 120
-          -L UNIT -LE 'benchmark|e2e|integration'
+          -L UNIT -LE 'BENCHMARK|E2E|INTEGRATION'
 
       - name: Run integration suite
         env:
@@ -58,7 +58,7 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x1024x24"
           ctest --test-dir build-linux-gcc-asan-ubsan
           --output-on-failure --timeout 120
-          -L INTEGRATION -LE 'benchmark|e2e'
+          -L INTEGRATION -LE 'BENCHMARK|E2E'
 
   coverage:
     if: github.event_name == 'workflow_dispatch'
@@ -96,7 +96,7 @@ jobs:
         run: >-
           ctest --test-dir build-linux-gcc-coverage
           --output-on-failure --timeout 120
-          -L UNIT -LE 'benchmark|e2e|integration'
+          -L UNIT -LE 'BENCHMARK|E2E|INTEGRATION'
 
       - name: Run integration suite
         env:
@@ -105,7 +105,7 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x1024x24"
           ctest --test-dir build-linux-gcc-coverage
           --output-on-failure --timeout 120
-          -L INTEGRATION -LE 'benchmark|e2e'
+          -L INTEGRATION -LE 'BENCHMARK|E2E'
 
       - name: Generate coverage summary and reports
         run: |
