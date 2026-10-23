@@ -1,0 +1,249 @@
+{
+  "title": "시나리오 예상 결과 이름 조회 비교",
+  "date": "2026-10-23",
+  "machine": {
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13600KF",
+    "ram_bytes": 34130567168,
+    "gpu": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+    "opengl_version": "3.3.0 NVIDIA 581.42"
+  },
+  "build": {
+    "configuration": "Windows Release",
+    "before_revision": "bb2a7e0f",
+    "after_build_revision": "1c8c653a-dirty",
+    "after_code_commit": "124dcc87"
+  },
+  "method": {
+    "runs": "두 전체 벤치마크를 순서대로 한 번씩 실행. 각 협동 임무 규모마다 준비 1회 후 측정 3회",
+    "scenario": "분리 배치, 드론 간격 5m. 운동학은 300 Tick, AirSim 강체는 480 Tick. 측정값은 JSON 파싱과 시나리오 실행·판정을 포함한 RunScenario 전체 시간이며, 개별 결과 조회 함수만의 시간은 아님",
+    "comparison": "같은 PC, 그래픽 설정, 빌드 구성과 벤치마크 입력. 동시 실행은 없었음"
+  },
+  "results": {
+    "kinematic": [
+      {
+        "drone_count": 2,
+        "before_duration_us": [
+          1665.0,
+          1570.1,
+          1678.6
+        ],
+        "after_duration_us": [
+          1589.4,
+          1698.6,
+          1660.2
+        ],
+        "before_median_us": 1665.0,
+        "after_median_us": 1660.2,
+        "median_change_percent": -0.29,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 8,
+        "before_duration_us": [
+          1779.4,
+          1621.3,
+          1738.0
+        ],
+        "after_duration_us": [
+          1661.3,
+          1762.7,
+          1659.8
+        ],
+        "before_median_us": 1738.0,
+        "after_median_us": 1661.3,
+        "median_change_percent": -4.41,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 32,
+        "before_duration_us": [
+          1939.3,
+          1961.8,
+          1985.8
+        ],
+        "after_duration_us": [
+          1881.5,
+          1930.0,
+          1932.6
+        ],
+        "before_median_us": 1961.8,
+        "after_median_us": 1930.0,
+        "median_change_percent": -1.62,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 64,
+        "before_duration_us": [
+          2387.6,
+          2707.6,
+          2600.6
+        ],
+        "after_duration_us": [
+          2200.1,
+          2260.4,
+          2138.3
+        ],
+        "before_median_us": 2600.6,
+        "after_median_us": 2200.1,
+        "median_change_percent": -15.4,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 128,
+        "before_duration_us": [
+          3295.8,
+          3263.3,
+          2904.7
+        ],
+        "after_duration_us": [
+          3101.8,
+          2974.7,
+          2920.4
+        ],
+        "before_median_us": 3263.3,
+        "after_median_us": 2974.7,
+        "median_change_percent": -8.84,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 256,
+        "before_duration_us": [
+          4271.5,
+          5845.2,
+          5129.8
+        ],
+        "after_duration_us": [
+          4195.2,
+          4198.3,
+          3921.6
+        ],
+        "before_median_us": 5129.8,
+        "after_median_us": 4195.2,
+        "median_change_percent": -18.22,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 512,
+        "before_duration_us": [
+          7027.1,
+          6839.0,
+          6714.1
+        ],
+        "after_duration_us": [
+          7111.8,
+          6929.8,
+          6450.1
+        ],
+        "before_median_us": 6839.0,
+        "after_median_us": 6929.8,
+        "median_change_percent": 1.33,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 1024,
+        "before_duration_us": [
+          12338.1,
+          13008.8,
+          12333.8
+        ],
+        "after_duration_us": [
+          11607.7,
+          11580.1,
+          11960.7
+        ],
+        "before_median_us": 12338.1,
+        "after_median_us": 11607.7,
+        "median_change_percent": -5.92,
+        "all_runs_passed": true
+      }
+    ],
+    "rigid_body": [
+      {
+        "drone_count": 2,
+        "before_duration_us": [
+          3126.6,
+          2988.3,
+          3030.3
+        ],
+        "after_duration_us": [
+          2776.2,
+          2733.9,
+          2826.0
+        ],
+        "before_median_us": 3030.3,
+        "after_median_us": 2776.2,
+        "median_change_percent": -8.39,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 8,
+        "before_duration_us": [
+          5873.2,
+          5855.6,
+          5879.5
+        ],
+        "after_duration_us": [
+          5710.3,
+          5713.4,
+          6029.4
+        ],
+        "before_median_us": 5873.2,
+        "after_median_us": 5713.4,
+        "median_change_percent": -2.72,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 32,
+        "before_duration_us": [
+          17973.2,
+          17825.9,
+          17846.8
+        ],
+        "after_duration_us": [
+          17762.5,
+          17937.1,
+          17966.2
+        ],
+        "before_median_us": 17846.8,
+        "after_median_us": 17937.1,
+        "median_change_percent": 0.51,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 64,
+        "before_duration_us": [
+          33924.2,
+          34954.1,
+          34505.3
+        ],
+        "after_duration_us": [
+          34620.1,
+          34635.1,
+          34865.8
+        ],
+        "before_median_us": 34505.3,
+        "after_median_us": 34635.1,
+        "median_change_percent": 0.38,
+        "all_runs_passed": true
+      },
+      {
+        "drone_count": 128,
+        "before_duration_us": [
+          66514.2,
+          65939.6,
+          66349.6
+        ],
+        "after_duration_us": [
+          65913.8,
+          66203.9,
+          68233.5
+        ],
+        "before_median_us": 66349.6,
+        "after_median_us": 66203.9,
+        "median_change_percent": -0.22,
+        "all_runs_passed": true
+      }
+    ]
+  },
+  "interpretation": "모든 측정 반복에서 시나리오와 임무 판정이 통과했다. 운동학 1,024대는 세 번 모두 빨라졌지만 512대는 중앙값이 1.3% 느려졌다. 반복 횟수가 세 번이고 시나리오 전체 시간을 잰 결과이므로 개선 폭은 이 측정 조건에 한정한다."
+}
