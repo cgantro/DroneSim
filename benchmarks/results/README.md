@@ -2,19 +2,18 @@
 
 먼저 [성능 검증과 측정 결과](../../docs/public/성능검증.md)에서 각 시험이 확인하려는 내용과 해석 범위를 읽어 주세요. 이곳의 JSON은 실행별 원자료입니다.
 
-## 대표 결과
+## 어떤 시험의 자료인가요?
 
-| 무엇을 확인하나요? | 결과 |
-| --- | --- |
-| 최신 전체 Release 측정과 화면 없는 확장 시험 | [변경 후 전체 측정 결과](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json) |
-| 이전 전체 Release 기준선 | [이전 측정 결과](aerosimlab-full-benchmark-release-2026-10-23-4cb66d99.json) |
-| 최신 코드의 보이는 창 프레임 시간 3회 측정 | [1회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-1.json), [2회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-2.json), [3회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-3.json) |
-| 이전 보이는 창 반복 측정 | [이전 결과](aerosimlab-visible-warmup-repeats-release-2026-10-23-aac03875.json) |
-| 시나리오 예상 결과의 이름 조회 변경 전후 | [협동 임무 비교](aerosimlab-scenario-result-index-2026-10-23.json) |
-| 여러 드론이 가까이 있을 때의 충돌 후보 검사 | [충돌 쌍 측정](aerosimlab-drone-collision-pair-sweep-release-2026-10-23-8623be5c.json) |
-| EO 영상 픽셀을 GPU에서 읽어 오는 방식의 변경 | [비동기 픽셀 읽기 측정](aerosimlab-visible-pbo-persistent-map-2026-10-23.json) |
-| 화면 그리기 구간의 CPU·GPU 측정 | [화면 처리 진단](aerosimlab-visible-imgui-gpu-timing-2026-10-23.json) |
-| 강체 드론 충돌 후보 정렬 변경 전후 | [변경 전 원자료](archive/aerosimlab-full-benchmark-release-2026-10-23-94c39b94-before-sort-reuse.json), [변경 후 원자료](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json), [조건과 해석](../../docs/public/성능검증.md) |
+먼저 표에서 **내가 알고 싶은 질문**을 찾으세요. 링크를 누르면 그 질문에 답하려고 실행한 원본 자료가 열립니다. 숫자의 의미와 해석 한계는 [성능 검증 문서](../../docs/public/성능검증.md)에 설명되어 있습니다.
+
+| 알고 싶은 것 | 시험 목적 | 결과 자료 |
+| --- | --- | --- |
+| 화면이 실제 창에서 끊기는가? | 장면과 EO 카메라를 함께 켰을 때 앱 프레임에 긴 지연이 있는지 확인 | [최신 화면 측정 1회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-1.json), [2회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-2.json), [3회차](archive/aerosimlab-visible-warmup-repeat-release-2026-10-23-69ecab93-run-3.json), [이전 반복 측정](aerosimlab-visible-warmup-repeats-release-2026-10-23-aac03875.json) |
+| 드론 수와 간격이 계산 시간에 어떤 영향을 주는가? | 화면 렌더링을 빼고 운동학·강체·밀집 배치의 처리 시간을 확인 | [최신 전체 측정](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json), [이전 전체 측정](aerosimlab-full-benchmark-release-2026-10-23-4cb66d99.json) |
+| 충돌 후보를 찾는 방식을 바꾸면 계산이 달라지는가? | 서로 다른 배치에서 변경 전후의 충돌 계산 비용을 비교 | [충돌 후보 쌍 측정](aerosimlab-drone-collision-pair-sweep-release-2026-10-23-8623be5c.json), [정렬 재사용 변경 전후 자료와 조건](../../docs/public/성능검증.md) |
+| EO 카메라 픽셀을 가져오는 방식이 긴 프레임과 관련 있는가? | GPU 픽셀 읽기 경로의 호출 방식별 지연과 프레임 지연의 연관성을 조사 | [비동기 픽셀 읽기 자료](aerosimlab-visible-pbo-persistent-map-2026-10-23.json) |
+| 화면을 그릴 때 CPU와 GPU 중 어디서 시간이 걸리는가? | 화면 처리 구간을 나눠 다음 조사 대상을 찾는 진단 | [화면 처리 진단 자료](aerosimlab-visible-imgui-gpu-timing-2026-10-23.json) |
+| 임무 결과 검색 방식이 실행 시간에 영향을 주는가? | 협동 임무에서 예상 결과를 찾는 변경 전후를 비교 | [시나리오 결과 검색 비교](aerosimlab-scenario-result-index-2026-10-23.json) |
 
 ## 과거 원자료
 
