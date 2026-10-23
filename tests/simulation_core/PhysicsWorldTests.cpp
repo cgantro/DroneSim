@@ -148,6 +148,23 @@ void Verify_AirSimFlightController_GainsChangeYawMotorTargets()
     EXPECT_NE(weakDampingTargets, strongDampingTargets);
 }
 
+void Verify_AirSimFlightController_ThrustCoefficientChangesMotorTargets()
+{
+    DroneState state;
+    state.positionMeters.z = 10.0;
+    state.mode = FlightMode::Hovering;
+    DroneControlState control;
+    QuadrotorParameters lowerThrust = QuadrotorParameters::X500Gazebo();
+    QuadrotorParameters higherThrust = lowerThrust;
+    higherThrust.thrustCoefficientNewtonsPerSpeedSquared *= 1.5;
+
+    const auto lowerThrustTargets = QuadrotorFlightController::MotorTargets(
+        state, control, lowerThrust);
+    const auto higherThrustTargets = QuadrotorFlightController::MotorTargets(
+        state, control, higherThrust);
+    EXPECT_GT(lowerThrustTargets[0], higherThrustTargets[0]);
+}
+
 void Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude()
 {
     PhysicsWorld world;
@@ -497,6 +514,8 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_HoldsAStationaryWaypoint());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimFlightController_ThrustCoefficientChangesMotorTargets());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
