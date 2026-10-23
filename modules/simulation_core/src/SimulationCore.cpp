@@ -263,11 +263,10 @@ struct SimulationCore::EcsStorage
 #if !defined(__EMSCRIPTEN__)
     void ResetPhysicsBody(flecs::entity& drone)
     {
+        const DroneState& droneState = drone.get<DroneState>();
         RigidBodyState initialState;
-        const InitialPose& initialPose = drone.get<InitialPose>();
-        initialState.positionMeters = initialPose.positionMeters;
-        initialState.orientation = glm::angleAxis(
-            initialPose.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
+        initialState.positionMeters = droneState.positionMeters;
+        initialState.orientation = droneState.orientation;
         const RigidBodyHandle body = drone.get<PhysicsBody>().handle;
         physics->SetState(body, initialState);
         CopyPhysicsState(drone.get_mut<DroneState>(), body);
