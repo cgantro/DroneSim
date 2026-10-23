@@ -844,6 +844,55 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
             return event.find("통신이 복구") != std::string::npos;
         }));
 
+    constexpr std::string_view recoveredMissionScenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":320,
+     "drones":[
+       {"name":"scout","initial_position_meters":[10,0,0]},
+       {"name":"reserve","initial_position_meters":[20,0,0]},
+       {"name":"worker","initial_position_meters":[30,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"scout","type":"takeoff"},
+       {"tick":0,"drone":"reserve","type":"takeoff"},
+       {"tick":0,"drone":"worker","type":"takeoff"}],
+     "communication_outages":[
+       {"drone":"scout","start_tick":95,"end_tick":250,
+        "heartbeat_timeout_ticks":3,"on_timeout":"hold_position"}],
+     "mission":{"name":"recovered-link-survey","tasks":[
+       {"name":"sector-1","role":"survey","drone":"scout",
+        "target_position_meters":[14,0,1.5],"start_tick":90,
+        "deadline_tick":310,"tolerance_meters":0.1},
+       {"name":"sector-2","role":"survey","drone":"worker",
+        "target_position_meters":[34,0,1.5],"start_tick":90,
+        "deadline_tick":310,"tolerance_meters":0.1}]},
+     "expected":{"tolerance_meters":1000,"drones":[
+       {"name":"scout","mode":"hovering","position_meters":[0,0,0]},
+       {"name":"reserve","mode":"hovering","position_meters":[0,0,0]},
+       {"name":"worker","mode":"hovering","position_meters":[0,0,0]}]}}
+    )json";
+    const ScenarioResult recoveredMissionResult = RunScenario(recoveredMissionScenario);
+    ASSERT_TRUE(recoveredMissionResult.passed)
+        << (recoveredMissionResult.issues.empty()
+            ? "" : recoveredMissionResult.issues.front());
+    ASSERT_TRUE(recoveredMissionResult.mission.has_value());
+    ASSERT_EQ(recoveredMissionResult.mission->tasks.size(), 2U);
+    const auto& recoveredTask = recoveredMissionResult.mission->tasks.front();
+    EXPECT_TRUE(recoveredTask.completed);
+    EXPECT_EQ(recoveredTask.droneName, "reserve");
+    EXPECT_EQ(recoveredTask.assignmentHistory,
+        (std::vector<std::string>{"scout", "reserve"}));
+    const auto recoveredScout = std::find_if(
+        recoveredMissionResult.drones.begin(), recoveredMissionResult.drones.end(),
+        [](const ScenarioResult::Drone& drone) { return drone.name == "scout"; });
+    ASSERT_NE(recoveredScout, recoveredMissionResult.drones.end());
+    EXPECT_EQ(recoveredScout->communicationStatus,
+        ScenarioResult::Drone::CommunicationStatus::Connected);
+    EXPECT_EQ(recoveredScout->lastHeartbeatTick, 320U);
+    EXPECT_TRUE(std::any_of(recoveredMissionResult.eventLog.begin(),
+        recoveredMissionResult.eventLog.end(), [](const std::string& event)
+        {
+            return event.find("통신이 복구") != std::string::npos;
+        }));
+
     constexpr std::string_view dividedSurveyScenario = R"json(
     {"version":1,"dynamics":"kinematic","ticks":480,
      "drones":[
