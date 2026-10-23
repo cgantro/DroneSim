@@ -188,6 +188,27 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
         ScenarioResult::Drone::CommunicationStatus::Unknown);
     EXPECT_LT(lostDrone->lastHeartbeatTick, result.tickCount);
     EXPECT_LT(lostDrone->finalState.positionMeters.x, 14.0);
+
+    constexpr std::string_view recoveredLinkScenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":10,
+     "drones":[{"name":"scout","initial_position_meters":[0,0,0]}],
+     "commands":[],
+     "communication_outages":[
+       {"drone":"scout","start_tick":3,"end_tick":6,"heartbeat_timeout_ticks":2}],
+     "expected":{"drones":[
+       {"name":"scout","mode":"grounded","position_meters":[0,0,0]}]}}
+    )json";
+    const ScenarioResult recoveredResult = RunScenario(recoveredLinkScenario);
+    ASSERT_TRUE(recoveredResult.passed);
+    ASSERT_EQ(recoveredResult.drones.size(), 1);
+    EXPECT_EQ(recoveredResult.drones.front().communicationStatus,
+        ScenarioResult::Drone::CommunicationStatus::Connected);
+    EXPECT_EQ(recoveredResult.drones.front().lastHeartbeatTick, 10U);
+    EXPECT_TRUE(std::any_of(recoveredResult.eventLog.begin(), recoveredResult.eventLog.end(),
+        [](const std::string& event)
+        {
+            return event.find("통신이 복구") != std::string::npos;
+        }));
 }
 
 TEST(ScenarioRunnerTests, CoreScenarios)
