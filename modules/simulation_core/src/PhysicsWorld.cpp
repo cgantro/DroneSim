@@ -293,6 +293,7 @@ struct OrientedBox
     glm::dvec3 centerMeters;
     glm::dvec3 halfExtentsMeters;
     std::array<glm::dvec3, 3> axes;
+    glm::dvec3 axisAlignedHalfExtentsMeters;
     double boundingRadiusMeters = 0.0;
 };
 
@@ -332,6 +333,25 @@ glm::dvec3 SupportPoint(const OrientedBox& box, const glm::dvec3& direction)
     return point;
 }
 
+/**
+ * @brief 회전 상자를 둘러싸는 월드 축 정렬 상자의 반크기를 구한다.
+ * @details 한 Tick에서 상자 자세가 정해지면 여러 드론 쌍이 같은 값을 쓰므로, 쌍마다 반복하지 않도록 저장한다.
+ */
+glm::dvec3 AxisAlignedHalfExtents(
+    const std::array<glm::dvec3, 3>& axes, const glm::dvec3& halfExtents)
+{
+    return {
+        std::abs(axes[0].x) * halfExtents.x
+            + std::abs(axes[1].x) * halfExtents.y
+            + std::abs(axes[2].x) * halfExtents.z,
+        std::abs(axes[0].y) * halfExtents.x
+            + std::abs(axes[1].y) * halfExtents.y
+            + std::abs(axes[2].y) * halfExtents.z,
+        std::abs(axes[0].z) * halfExtents.x
+            + std::abs(axes[1].z) * halfExtents.y
+            + std::abs(axes[2].z) * halfExtents.z};
+}
+
 void KeepDeeperContact(
     std::optional<ContactCandidate>& current,
     const BoxContact& contact,
@@ -351,12 +371,15 @@ OrientedBox ToWorldBox(
 {
     const glm::dquat orientation = glm::normalize(bodyOrientation * box.orientation);
     const glm::dvec3 halfExtents{box.halfExtentsMeters};
+    const std::array<glm::dvec3, 3> axes{
+        orientation * glm::dvec3{1.0, 0.0, 0.0},
+        orientation * glm::dvec3{0.0, 1.0, 0.0},
+        orientation * glm::dvec3{0.0, 0.0, 1.0}};
     return {
         bodyPosition + bodyOrientation * box.positionMeters,
         halfExtents,
-        {orientation * glm::dvec3{1.0, 0.0, 0.0},
-            orientation * glm::dvec3{0.0, 1.0, 0.0},
-            orientation * glm::dvec3{0.0, 0.0, 1.0}},
+        axes,
+        AxisAlignedHalfExtents(axes, halfExtents),
         glm::length(halfExtents)};
 }
 
@@ -379,17 +402,11 @@ std::optional<BoxContact> FindBoxContact(
     }
 
     // 먼저 회전 상자의 바깥 AABB를 검사해, 겹칠 수 없는 쌍은 15축 검사에서 제외한다.
-    for (glm::length_t worldAxis = 0; worldAxis < 3; ++worldAxis)
+    for (glm::length_t axis = 0; axis < 3; ++axis)
     {
-        const double droneRadius =
-            std::abs(droneBox.axes[0][worldAxis]) * droneBox.halfExtentsMeters.x
-            + std::abs(droneBox.axes[1][worldAxis]) * droneBox.halfExtentsMeters.y
-            + std::abs(droneBox.axes[2][worldAxis]) * droneBox.halfExtentsMeters.z;
-        const double otherRadius =
-            std::abs(otherBox.axes[0][worldAxis]) * otherBox.halfExtentsMeters.x
-            + std::abs(otherBox.axes[1][worldAxis]) * otherBox.halfExtentsMeters.y
-            + std::abs(otherBox.axes[2][worldAxis]) * otherBox.halfExtentsMeters.z;
-        if (std::abs(centerOffset[worldAxis]) > droneRadius + otherRadius)
+        if (std::abs(centerOffset[axis])
+            > droneBox.axisAlignedHalfExtentsMeters[axis]
+                + otherBox.axisAlignedHalfExtentsMeters[axis])
             return std::nullopt;
     }
 
@@ -748,6 +765,7 @@ struct PhysicsWorld::Impl
                 obstacle.halfExtentsMeters,
                 {glm::dvec3{1.0, 0.0, 0.0}, glm::dvec3{0.0, 1.0, 0.0},
                     glm::dvec3{0.0, 0.0, 1.0}},
+                obstacle.halfExtentsMeters,
                 glm::length(obstacle.halfExtentsMeters)};
             for (const OrientedBox& worldBox : body.worldCollisionBoxes)
             {
