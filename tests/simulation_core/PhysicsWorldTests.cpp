@@ -12,6 +12,7 @@
 #include <cmath>
 #include <filesystem>
 #include <limits>
+#include <random>
 #include <stdexcept>
 #include <utility>
 
@@ -231,6 +232,49 @@ void Verify_CollisionBroadphase_KeepsTouchingBoxesForPreciseTest()
     ASSERT_TRUE(FindBoxContact(first, second));
     EXPECT_TRUE(BroadphaseMayOverlap(
         first.centerMeters, radius, second.centerMeters, radius));
+
+    // 고정 시드로 여러 위치와 자세를 만들고, 정밀 검사에서 겹친 상자를
+    // 빠른 후보 검사에서 놓치지 않는지 확인한다.
+    std::mt19937 random{0xA3E05U};
+    std::uniform_real_distribution<double> positionMeters{-3.0, 3.0};
+    std::uniform_real_distribution<double> localOffsetMeters{-0.5, 0.5};
+    std::uniform_real_distribution<double> halfExtentMeters{0.1, 1.5};
+    std::uniform_real_distribution<double> angleRadians{-glm::pi<double>(), glm::pi<double>()};
+    const auto randomOrientation = [&]()
+    {
+        return glm::angleAxis(angleRadians(random), glm::dvec3{0.0, 0.0, 1.0})
+            * glm::angleAxis(angleRadians(random), glm::dvec3{0.0, 1.0, 0.0})
+            * glm::angleAxis(angleRadians(random), glm::dvec3{1.0, 0.0, 0.0});
+    };
+
+    std::size_t exactContacts = 0;
+    for (std::size_t sample = 0; sample < 2'000; ++sample)
+    {
+        const glm::dvec3 firstCenter{
+            positionMeters(random), positionMeters(random), positionMeters(random)};
+        const glm::dvec3 secondCenter{
+            positionMeters(random), positionMeters(random), positionMeters(random)};
+        const std::array<RigidBodyBox, 1> firstBoxes{
+            RigidBodyBox{
+                glm::vec3{halfExtentMeters(random), halfExtentMeters(random), halfExtentMeters(random)},
+                glm::dvec3{localOffsetMeters(random), localOffsetMeters(random), localOffsetMeters(random)},
+                randomOrientation()}};
+        const std::array<RigidBodyBox, 1> secondBoxes{
+            RigidBodyBox{
+                glm::vec3{halfExtentMeters(random), halfExtentMeters(random), halfExtentMeters(random)},
+                glm::dvec3{localOffsetMeters(random), localOffsetMeters(random), localOffsetMeters(random)},
+                randomOrientation()}};
+        const auto firstWorldBox = ToWorldBox(firstCenter, randomOrientation(), firstBoxes.front());
+        const auto secondWorldBox = ToWorldBox(secondCenter, randomOrientation(), secondBoxes.front());
+        if (!FindBoxContact(firstWorldBox, secondWorldBox))
+            continue;
+
+        ++exactContacts;
+        EXPECT_TRUE(BroadphaseMayOverlap(
+            firstCenter, CollisionRadius(firstBoxes),
+            secondCenter, CollisionRadius(secondBoxes))) << "표본 " << sample;
+    }
+    EXPECT_GT(exactContacts, 0U);
 }
 
 void Verify_AirSimCollision_SeparatesOverlappingDrones()
