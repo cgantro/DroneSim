@@ -9,7 +9,6 @@
 
 #include <chrono>
 #include <exception>
-#include <stdexcept>
 #include <string>
 
 namespace aerosimlab::simulator
