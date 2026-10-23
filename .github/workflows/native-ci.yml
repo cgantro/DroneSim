@@ -48,14 +48,13 @@ jobs:
 
       - name: Run Clang static analysis
         run: |
-          mapfile -t source_files < <(git ls-files apps modules tests | grep -E '\.cpp$')
           run-clang-tidy \
             -p build-linux-gcc-debug \
             -j 2 \
             -checks='-*,clang-analyzer-core.*,clang-analyzer-cplusplus.*,bugprone-narrowing-conversions' \
             -warnings-as-errors='*' \
             -header-filter='^.*/(apps|modules|tests)/.*' \
-            "${source_files[@]}"
+            '^.*/(apps|modules|tests)/.*\.cpp$'
 
       - name: Run labeled CTest suite with virtual display
         env:
