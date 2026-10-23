@@ -44,14 +44,11 @@ struct SimulationCore::EcsStorage
         RigidBodyHandle handle;
     };
 
-    struct DroneActuation
-    {
-        QuadrotorParameters parameters;
-    };
 #endif
 
     SimulationDynamics dynamics;
 #if !defined(__EMSCRIPTEN__)
+    QuadrotorParameters quadrotorParameters;
     /** @brief Flecs 콜백이 참조하므로 Flecs 월드보다 나중에 정리한다. */
     std::unique_ptr<PhysicsWorld> physics;
 #endif
@@ -82,6 +79,9 @@ struct SimulationCore::EcsStorage
 
     explicit EcsStorage(SimulationDynamics selectedDynamics)
         : dynamics(selectedDynamics)
+#if !defined(__EMSCRIPTEN__)
+        , quadrotorParameters(QuadrotorParameters::X500MotorTableEstimate())
+#endif
     {
         RegisterDroneSystem();
         RegisterCameraSystem();
@@ -129,7 +129,7 @@ struct SimulationCore::EcsStorage
         physics = std::make_unique<PhysicsWorld>();
         primaryDroneId = CreateDrone(glm::dvec3{
             0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters}, 0.0);
-        world.system<DroneState, DroneControlState, PhysicsBody, DroneActuation>(
+        world.system<DroneState, DroneControlState, PhysicsBody>(
             "ApplyRigidBodyForces")
             .kind(flecs::OnUpdate)
             .run([this](flecs::iter& iterator)
@@ -143,11 +143,10 @@ struct SimulationCore::EcsStorage
                     auto states = iterator.field<DroneState>(0);
                     auto controls = iterator.field<DroneControlState>(1);
                     auto bodies = iterator.field<const PhysicsBody>(2);
-                    auto actuations = iterator.field<DroneActuation>(3);
                     for (const std::size_t row : iterator)
                     {
                         ApplyRigidBodyForces(
-                            states[row], controls[row], bodies[row].handle, actuations[row]);
+                            states[row], controls[row], bodies[row].handle);
                     }
                 }
             });
@@ -195,15 +194,12 @@ struct SimulationCore::EcsStorage
 #if !defined(__EMSCRIPTEN__)
             if (dynamics == SimulationDynamics::RigidBody)
             {
-                const QuadrotorParameters parameters =
-                    QuadrotorParameters::X500MotorTableEstimate();
                 RigidBodyDefinition definition;
                 definition.positionMeters = positionMeters;
                 definition.orientation = initialState.orientation;
-                createdBody = physics->CreateQuadrotor(definition, parameters);
+                createdBody = physics->CreateQuadrotor(definition, quadrotorParameters);
                 hasCreatedBody = true;
                 drone.set<PhysicsBody>({createdBody});
-                drone.set<DroneActuation>({parameters});
                 CopyPhysicsState(drone.get_mut<DroneState>(), createdBody);
             }
 #endif
@@ -292,15 +288,14 @@ struct SimulationCore::EcsStorage
     void ApplyRigidBodyForces(
         DroneState& state,
         DroneControlState& control,
-        RigidBodyHandle body,
-        DroneActuation& actuation)
+        RigidBodyHandle body)
     {
         const double step = DroneModel::fixedStepSeconds;
         if (state.mode != FlightMode::Grounded)
             control.desiredYawRadians += control.commandedYawRateRadiansPerSecond * step;
 
         const auto targetSpeeds = QuadrotorFlightController::MotorTargets(
-            state, control, actuation.parameters);
+            state, control, quadrotorParameters);
         physics->SetMotorTargets(body, targetSpeeds);
     }
 
