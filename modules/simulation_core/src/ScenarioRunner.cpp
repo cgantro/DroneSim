@@ -595,12 +595,24 @@ void UpdateMissionCommands(
             || task.droneName.empty() || !IsConnected(observations, task.droneName))
             continue;
         const DroneId droneId = droneIds.at(task.droneName);
-        if (!CanReceiveWaypoint(simulation.State(droneId).mode))
+        const FlightMode mode = simulation.State(droneId).mode;
+        if (!CanReceiveWaypoint(mode))
         {
+            // 이륙 중이면 정해 둔 기한까지 기다린 뒤 시작 가능 여부를 판정한다.
+            if (!task.started && mode == FlightMode::TakingOff
+                && tick < task.deadlineTick)
+                continue;
+
             task.failed = true;
-            result.issues.push_back(task.started
-                ? task.droneName + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다."
-                : task.droneName + " 드론이 비행 중이어서 임무를 시작하지 못했습니다.");
+            if (task.started)
+                result.issues.push_back(task.droneName
+                    + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다.");
+            else if (tick >= task.deadlineTick)
+                result.issues.push_back(task.droneName
+                    + " 드론이 임무 시작 기한까지 이륙하지 못했습니다.");
+            else
+                result.issues.push_back(task.droneName
+                    + " 드론이 비행 중이어서 임무를 시작하지 못했습니다.");
             continue;
         }
         if (!task.started)

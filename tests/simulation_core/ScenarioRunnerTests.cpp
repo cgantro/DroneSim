@@ -249,6 +249,8 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     ASSERT_TRUE(result.mission->passed);
     EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Passed);
     EXPECT_EQ(result.mission->completedTaskCount, 4U);
+    ASSERT_TRUE(result.mission->startedTick.has_value());
+    EXPECT_EQ(*result.mission->startedTick, 90U);
 
     const auto disconnectedDrone = std::find_if(result.drones.begin(), result.drones.end(),
         [](const ScenarioResult::Drone& drone) { return drone.name == "scout-2"; });
@@ -267,6 +269,50 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     ASSERT_EQ(reassignedTask->assignmentHistory.size(), 2U);
     EXPECT_EQ(reassignedTask->assignmentHistory[0], "scout-2");
     EXPECT_EQ(reassignedTask->assignmentHistory[1], "scout-3");
+
+#if !defined(__EMSCRIPTEN__)
+    std::string physicalScenario =
+        ReadScenarioFixture("scenarios/multi-drone/four-drone-survey-outage.json");
+    constexpr std::string_view kinematicMode = "\"dynamics\": \"kinematic\"";
+    const std::size_t dynamicsPosition = physicalScenario.find(kinematicMode);
+    ASSERT_NE(dynamicsPosition, std::string::npos);
+    physicalScenario.replace(dynamicsPosition, kinematicMode.size(),
+        "\"dynamics\": \"rigid_body\"");
+    const auto replaceSetting = [&physicalScenario](
+        std::string_view oldValue, std::string_view newValue)
+    {
+        std::size_t position = 0;
+        bool replaced = false;
+        while ((position = physicalScenario.find(oldValue, position))
+            != std::string::npos)
+        {
+            physicalScenario.replace(position, oldValue.size(), newValue);
+            position += newValue.size();
+            replaced = true;
+        }
+        return replaced;
+    };
+    ASSERT_TRUE(replaceSetting(
+        "\"ticks\": 320", "\"ticks\": 1200"));
+    ASSERT_TRUE(replaceSetting(
+        "\"end_tick\": 320", "\"end_tick\": 1200"));
+    ASSERT_TRUE(replaceSetting(
+        "\"deadline_tick\": 310", "\"deadline_tick\": 1190"));
+    ASSERT_TRUE(replaceSetting(
+        "\"tolerance_meters\": 0.1", "\"tolerance_meters\": 0.5"));
+    ASSERT_TRUE(replaceSetting(
+        "\"tolerance_meters\": 0.01", "\"tolerance_meters\": 1000"));
+    const ScenarioResult physicalResult = RunScenario(physicalScenario);
+    EXPECT_EQ(physicalResult.outcome, ScenarioResult::Outcome::Passed)
+        << (physicalResult.issues.empty() ? "" : physicalResult.issues.front());
+    ASSERT_TRUE(physicalResult.mission.has_value());
+    EXPECT_EQ(physicalResult.mission->outcome, ScenarioResult::Outcome::Passed);
+    ASSERT_TRUE(physicalResult.mission->startedTick.has_value());
+    EXPECT_GT(*physicalResult.mission->startedTick, 90U);
+    EXPECT_EQ(physicalResult.mission->completedTaskCount, 4U);
+    EXPECT_EQ(physicalResult.mission->tasks[1].assignmentHistory,
+        (std::vector<std::string>{"scout-2", "scout-3"}));
+#endif
 }
 }
 
@@ -501,6 +547,8 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     EXPECT_EQ(result.mission->completedTaskCount, 4U);
     EXPECT_DOUBLE_EQ(result.mission->completionPercent, 100.0);
     EXPECT_DOUBLE_EQ(result.mission->coveragePercent, 100.0);
+    ASSERT_TRUE(result.mission->startedTick.has_value());
+    EXPECT_EQ(*result.mission->startedTick, 90U);
     ASSERT_TRUE(result.mission->completedTick.has_value());
     EXPECT_LT(*result.mission->completedTick, result.tickCount);
     const auto& reassignedTask = result.mission->tasks[1];
