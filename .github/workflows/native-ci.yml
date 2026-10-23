@@ -51,7 +51,7 @@ jobs:
           run-clang-tidy \
             -p build-linux-gcc-debug \
             -j 2 \
-            -checks='-*,clang-analyzer-core.*,clang-analyzer-cplusplus.*' \
+            -checks='-*,clang-analyzer-core.*,clang-analyzer-cplusplus.*,bugprone-narrowing-conversions' \
             -warnings-as-errors='*' \
             -header-filter='^.*/(apps|modules|tests)/.*' \
             -source-filter='^.*/(apps|modules|tests)/.*\.cpp$'
