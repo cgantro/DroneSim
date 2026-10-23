@@ -193,21 +193,42 @@ void Verify_AirSimFlightController_GainsChangeYawMotorTargets()
     EXPECT_NE(weakDampingTargets, strongDampingTargets);
 }
 
-void Verify_AirSimFlightController_ThrustCoefficientChangesMotorTargets()
+void Verify_AirSimFlightController_HoverTargetsFollowMassAndThrustCoefficient()
 {
     DroneState state;
     state.positionMeters.z = 10.0;
     state.mode = FlightMode::Hovering;
     DroneControlState control;
-    QuadrotorParameters lowerThrust = QuadrotorParameters::X500Gazebo();
-    QuadrotorParameters higherThrust = lowerThrust;
-    higherThrust.thrustCoefficientNewtonsPerSpeedSquared *= 1.5;
+    const QuadrotorParameters baseline = QuadrotorParameters::X500Gazebo();
+    QuadrotorParameters heavier = baseline;
+    heavier.massKilograms *= 1.25;
+    QuadrotorParameters strongerThrust = baseline;
+    strongerThrust.thrustCoefficientNewtonsPerSpeedSquared *= 1.5;
 
-    const auto lowerThrustTargets = QuadrotorFlightController::MotorTargets(
-        state, control, lowerThrust);
-    const auto higherThrustTargets = QuadrotorFlightController::MotorTargets(
-        state, control, higherThrust);
-    EXPECT_GT(lowerThrustTargets[0], higherThrustTargets[0]);
+    const auto baselineTargets = QuadrotorFlightController::MotorTargets(
+        state, control, baseline);
+    const auto heavierTargets = QuadrotorFlightController::MotorTargets(
+        state, control, heavier);
+    const auto strongerThrustTargets = QuadrotorFlightController::MotorTargets(
+        state, control, strongerThrust);
+    constexpr double gravityMetersPerSecondSquared = 9.81;
+    const auto expectedHoverSpeed = [gravityMetersPerSecondSquared](
+        const QuadrotorParameters& parameters)
+    {
+        return std::sqrt(parameters.massKilograms
+            * gravityMetersPerSecondSquared
+            / (static_cast<double>(parameters.rotors.size())
+                * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    };
+
+    for (std::size_t rotor = 0; rotor < baselineTargets.size(); ++rotor)
+    {
+        EXPECT_NEAR(baselineTargets[rotor], expectedHoverSpeed(baseline), 1.0e-9);
+        EXPECT_NEAR(heavierTargets[rotor], expectedHoverSpeed(heavier), 1.0e-9);
+        EXPECT_NEAR(strongerThrustTargets[rotor], expectedHoverSpeed(strongerThrust), 1.0e-9);
+    }
+    EXPECT_GT(heavierTargets[0], baselineTargets[0]);
+    EXPECT_LT(strongerThrustTargets[0], baselineTargets[0]);
 }
 
 void Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude()
@@ -562,7 +583,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_HoldsAStationaryWaypoint());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
     EXPECT_NO_FATAL_FAILURE(
-        Verify_AirSimFlightController_ThrustCoefficientChangesMotorTargets());
+        Verify_AirSimFlightController_HoverTargetsFollowMassAndThrustCoefficient());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_AsymmetricRotorTargetsChangeAttitude());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
