@@ -283,6 +283,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     target_sources(aerosimlab_simulator_app PRIVATE
       apps/simulator/AeroSimLabAppEoCapture.cpp
       apps/simulator/CooperativeMissionBenchmark.cpp
+      apps/simulator/DroneScalingBenchmark.cpp
       apps/simulator/SimulatorHud.cpp
     )
   endif()
