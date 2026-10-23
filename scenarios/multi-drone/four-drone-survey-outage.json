@@ -19,9 +19,15 @@
       "drone": "scout-2",
       "start_tick": 95,
       "end_tick": 320,
-      "heartbeat_timeout_ticks": 3
+      "heartbeat_timeout_ticks": 3,
+      "on_timeout": "hold_position"
     }
   ],
+  "collision_avoidance": {
+    "safety_distance_meters": 2.0,
+    "prediction_horizon_seconds": 6.0,
+    "lateral_offset_meters": 5.0
+  },
   "mission": {
     "name": "four-sector-survey",
     "tasks": [
@@ -65,6 +71,7 @@
   },
   "expected": {
     "tolerance_meters": 0.01,
+    "minimum_drone_separation_meters": 1.0,
     "drones": [
       {"name": "scout-1", "mode": "hovering", "position_meters": [4, 0, 1.5]},
       {"name": "scout-2", "mode": "following_waypoint", "position_meters": [10.333333333333336, 0, 1.5]},

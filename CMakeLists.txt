@@ -302,6 +302,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   endif()
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"
+    AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   )
   if(WIN32)
     target_link_libraries(aerosimlab_simulator_app PRIVATE Psapi)

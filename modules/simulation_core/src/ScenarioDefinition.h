@@ -65,10 +65,17 @@ struct FormationLink
 
 struct DroneCommunicationOutage
 {
+    enum class OnTimeout
+    {
+        ContinueLastCommand,
+        HoldPosition
+    };
+
     std::string droneName;
     std::uint64_t startTick;
     std::uint64_t endTick;
     std::uint64_t heartbeatTimeoutTicks;
+    OnTimeout onTimeout = OnTimeout::ContinueLastCommand;
 };
 
 struct CollisionAvoidanceSettings

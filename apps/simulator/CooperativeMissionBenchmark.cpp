@@ -12,6 +12,9 @@
 
 #include <cstdint>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -23,6 +26,34 @@ namespace
 {
 using aerosimlab::simulation::ScenarioResult;
 using aerosimlab::simulation::SimulationDynamics;
+using Json = nlohmann::json;
+
+Json BuildFourDroneOutageScenario(SimulationDynamics dynamics)
+{
+    const std::filesystem::path fixturePath = std::filesystem::path{
+        AEROSIMLAB_SOURCE_DIR} / "scenarios/multi-drone/four-drone-survey-outage.json";
+    std::ifstream fixture(fixturePath, std::ios::binary);
+    if (!fixture)
+        throw std::runtime_error("4대 드론 통신 단절 시나리오를 열지 못했습니다.");
+
+    Json scenario = Json::parse(std::string{
+        std::istreambuf_iterator<char>{fixture}, std::istreambuf_iterator<char>{}});
+    if (dynamics != SimulationDynamics::RigidBody)
+        return scenario;
+
+    // 강체 물리는 이륙 시간이 더 필요하므로 기존 물리 회귀 시험과 같은 조건으로 늘린다.
+    constexpr std::uint64_t scenarioTicks = 1800U;
+    scenario["dynamics"] = "rigid_body";
+    scenario["ticks"] = scenarioTicks;
+    scenario["communication_outages"][0]["end_tick"] = scenarioTicks;
+    for (Json& task : scenario["mission"]["tasks"])
+    {
+        task["deadline_tick"] = scenarioTicks - 10U;
+        task["tolerance_meters"] = 0.5;
+    }
+    scenario["expected"]["tolerance_meters"] = 1000.0;
+    return scenario;
+}
 
 nlohmann::json BuildCooperativeMissionScenario(
     SimulationDynamics dynamics, std::size_t droneCount)
@@ -116,13 +147,23 @@ nlohmann::json MeasureCooperativeMissionRun(
     RequireCooperativeMissionSuccess(result, false);
 
     std::size_t completedTasks = 0;
+    std::size_t reassignedTasks = 0;
+    std::size_t unknownDrones = 0;
     for (const auto& task : result.mission->tasks)
     {
         if (task.completed)
             ++completedTasks;
+        if (task.reassignmentCount > 0U)
+            ++reassignedTasks;
+    }
+    for (const auto& drone : result.drones)
+    {
+        if (drone.communicationStatus ==
+            ScenarioResult::Drone::CommunicationStatus::Unknown)
+            ++unknownDrones;
     }
     durationMicroseconds = wallSeconds * 1'000'000.0;
-    return {
+    Json run{
         {"dynamics", dynamicsName},
         {"drone_count", droneCount},
         {"repetition", repetition + 1U},
@@ -141,7 +182,55 @@ nlohmann::json MeasureCooperativeMissionRun(
         {"mission_outcome", aerosimlab::simulation::ToString(result.mission->outcome)},
         {"mission_passed", result.mission->passed},
         {"mission_task_count", result.mission->tasks.size()},
-        {"completed_task_count", completedTasks}};
+        {"completed_task_count", completedTasks},
+        {"reassigned_task_count", reassignedTasks},
+        {"unknown_drone_count", unknownDrones},
+        {"mission_completion_percent", result.mission->completionPercent},
+        {"mission_coverage_percent", result.mission->coveragePercent}};
+    if (result.minimumDroneSeparationMeters)
+        run["minimum_drone_separation_meters"] =
+            *result.minimumDroneSeparationMeters;
+    else
+        run["minimum_drone_separation_meters"] = nullptr;
+    return run;
+}
+
+Json MeasureFourDroneOutageRecovery(SimulationDynamics dynamics)
+{
+    const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
+    const char* dynamicsName = usesRigidBodyPhysics ? "rigid_body" : "kinematic";
+    const std::string scenarioText = BuildFourDroneOutageScenario(dynamics).dump();
+    constexpr std::size_t repetitions = 3U;
+    constexpr std::size_t warmupRuns = 1U;
+
+    for (std::size_t warmup = 0; warmup < warmupRuns; ++warmup)
+    {
+        const ScenarioResult result = aerosimlab::simulation::RunScenario(scenarioText);
+        RequireCooperativeMissionSuccess(result, true);
+    }
+
+    Json runs = Json::array();
+    std::vector<double> durationsMicroseconds;
+    durationsMicroseconds.reserve(repetitions);
+    for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
+    {
+        double durationMicroseconds = 0.0;
+        runs.push_back(MeasureCooperativeMissionRun(
+            scenarioText, dynamicsName, 4U, repetition, warmupRuns,
+            durationMicroseconds));
+        durationsMicroseconds.push_back(durationMicroseconds);
+    }
+
+    return {
+        {"dynamics", dynamicsName},
+        {"drone_count", 4U},
+        {"outage_drone", "scout-2"},
+        {"warmup_runs", warmupRuns},
+        {"target_repetitions", repetitions},
+        {"scenario_ticks", usesRigidBodyPhysics ? 1800U : 320U},
+        {"outcome", "all measured runs passed; four survey tasks completed"},
+        {"duration_summary_us", SummarizeDurations(std::move(durationsMicroseconds))},
+        {"runs", std::move(runs)}};
 }
 
 void MeasureCooperativeMissionCount(
@@ -216,7 +305,12 @@ nlohmann::json MeasureCooperativeMissionScaling()
         {"kinematic", MeasureCooperativeMissionDynamics(
             aerosimlab::simulation::SimulationDynamics::Kinematic)},
         {"rigid_body", MeasureCooperativeMissionDynamics(
-            aerosimlab::simulation::SimulationDynamics::RigidBody)}};
+            aerosimlab::simulation::SimulationDynamics::RigidBody)},
+        {"four_drone_outage_recovery", {
+            {"kinematic", MeasureFourDroneOutageRecovery(
+                aerosimlab::simulation::SimulationDynamics::Kinematic)},
+            {"rigid_body", MeasureFourDroneOutageRecovery(
+                aerosimlab::simulation::SimulationDynamics::RigidBody)}}}};
 }
 
 }

@@ -363,7 +363,10 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
 {
     const ScenarioResult result = RunScenario(
         ReadScenarioFixture("scenarios/multi-drone/four-drone-survey-outage.json"));
-    ASSERT_TRUE(result.passed);
+    EXPECT_TRUE(result.passed)
+        << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
+    EXPECT_GE(*result.minimumDroneSeparationMeters, 1.0);
     EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Passed);
     ASSERT_TRUE(result.mission.has_value());
     ASSERT_TRUE(result.mission->passed);
@@ -377,6 +380,11 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     ASSERT_NE(disconnectedDrone, result.drones.end());
     EXPECT_EQ(disconnectedDrone->communicationStatus,
         ScenarioResult::Drone::CommunicationStatus::Unknown);
+    EXPECT_TRUE(std::any_of(result.eventLog.begin(), result.eventLog.end(),
+        [](const std::string& event)
+        {
+            return event.find("현재 위치를 유지합니다") != std::string::npos;
+        }));
 
     const auto reassignedTask = std::find_if(result.mission->tasks.begin(),
         result.mission->tasks.end(),
@@ -399,18 +407,24 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     physicalScenario.replace(dynamicsPosition, kinematicMode.size(),
         "\"dynamics\": \"rigid_body\"");
     ASSERT_TRUE(ReplaceAll(physicalScenario,
-        "\"ticks\": 320", "\"ticks\": 1200"));
+        "\"ticks\": 320", "\"ticks\": 1800"));
     ASSERT_TRUE(ReplaceAll(physicalScenario,
-        "\"end_tick\": 320", "\"end_tick\": 1200"));
+        "\"end_tick\": 320", "\"end_tick\": 1800"));
     ASSERT_TRUE(ReplaceAll(physicalScenario,
-        "\"deadline_tick\": 310", "\"deadline_tick\": 1190"));
+        "\"deadline_tick\": 310", "\"deadline_tick\": 1790"));
     ASSERT_TRUE(ReplaceAll(physicalScenario,
         "\"tolerance_meters\": 0.1", "\"tolerance_meters\": 0.5"));
     ASSERT_TRUE(ReplaceAll(physicalScenario,
         "\"tolerance_meters\": 0.01", "\"tolerance_meters\": 1000"));
     const ScenarioResult physicalResult = RunScenario(physicalScenario);
     EXPECT_EQ(physicalResult.outcome, ScenarioResult::Outcome::Passed)
-        << (physicalResult.issues.empty() ? "" : physicalResult.issues.front());
+        << (physicalResult.issues.empty() ? "" : physicalResult.issues.front())
+        << " minimum=" << physicalResult.minimumDroneSeparationMeters.value_or(-1.0)
+        << " predicted=" << physicalResult.minimumPredictedDroneSeparationMeters.value_or(-1.0)
+        << " avoidance_events=" << physicalResult.collisionAvoidanceEvents;
+    ASSERT_TRUE(physicalResult.minimumDroneSeparationMeters.has_value());
+    EXPECT_GE(*physicalResult.minimumDroneSeparationMeters, 1.0);
+    EXPECT_GT(physicalResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(physicalResult.mission.has_value());
     EXPECT_EQ(physicalResult.mission->outcome, ScenarioResult::Outcome::Passed);
     ASSERT_TRUE(physicalResult.mission->startedTick.has_value());
