@@ -134,6 +134,64 @@ void RecordMinimumDroneSeparation(
     }
 }
 
+bool PrepareScheduledCommandDelivery(
+    std::uint64_t tick,
+    const ScheduledCommand& scheduled,
+    std::unordered_map<std::string, std::uint64_t>& lastDeliveredSequence,
+    ScenarioResult& result)
+{
+    if (scheduled.dropped)
+    {
+        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+            + scheduled.droneName + " 드론 명령을 통신 장애로 버렸습니다.");
+        return false;
+    }
+
+    std::uint64_t& lastSequence = lastDeliveredSequence[scheduled.droneName];
+    if (scheduled.sequence <= lastSequence)
+    {
+        result.issues.push_back("tick " + std::to_string(tick) + "에서 "
+            + scheduled.droneName + " 드론의 역순 명령을 거부했습니다.");
+        return false;
+    }
+    lastSequence = scheduled.sequence;
+
+    if (scheduled.delayTicks > 0)
+    {
+        result.eventLog.push_back(scheduled.droneName + " 드론에 tick "
+            + std::to_string(scheduled.sendTick)
+            + "에 보낸 명령을 " + std::to_string(scheduled.delayTicks)
+            + " Tick 늦게 전달했습니다.");
+    }
+    return true;
+}
+
+void ApplyDeliveredCommand(
+    std::uint64_t tick,
+    const ScheduledCommand& scheduled,
+    SimulationCore& simulation,
+    const DroneIds& droneIds,
+    ScenarioResult& result)
+{
+    const CommandResult commandResult = simulation.Apply(
+        droneIds.at(scheduled.droneName), scheduled.command);
+    if (commandResult != CommandResult::Accepted)
+    {
+        result.issues.push_back("tick " + std::to_string(tick) + "에서 "
+            + scheduled.droneName + " 드론 명령을 적용하지 못했습니다.");
+    }
+    else
+    {
+        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+            + scheduled.droneName + " 드론 명령을 적용했습니다.");
+    }
+    if (scheduled.duplicated)
+    {
+        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+            + scheduled.droneName + " 드론의 중복 재전송 명령을 한 번만 처리했습니다.");
+    }
+}
+
 void ApplyScheduledCommands(
     std::uint64_t tick,
     const std::vector<ScheduledCommand>& commands,
@@ -146,39 +204,12 @@ void ApplyScheduledCommands(
     while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
     {
         const ScheduledCommand& scheduled = commands[nextCommand++];
-        if (scheduled.dropped)
+        if (!PrepareScheduledCommandDelivery(
+                tick, scheduled, lastDeliveredSequence, result))
         {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + scheduled.droneName + " 드론 명령을 통신 장애로 버렸습니다.");
             continue;
         }
-
-        std::uint64_t& lastSequence = lastDeliveredSequence[scheduled.droneName];
-        if (scheduled.sequence <= lastSequence)
-        {
-            result.issues.push_back("tick " + std::to_string(tick) + "에서 "
-                + scheduled.droneName + " 드론의 역순 명령을 거부했습니다.");
-            continue;
-        }
-        lastSequence = scheduled.sequence;
-        if (scheduled.delayTicks > 0)
-        {
-            result.eventLog.push_back(scheduled.droneName + " 드론에 tick "
-                + std::to_string(scheduled.sendTick)
-                + "에 보낸 명령을 " + std::to_string(scheduled.delayTicks)
-                + " Tick 늦게 전달했습니다.");
-        }
-        const CommandResult commandResult = simulation.Apply(
-            droneIds.at(scheduled.droneName), scheduled.command);
-        if (commandResult != CommandResult::Accepted)
-            result.issues.push_back("tick " + std::to_string(tick) + "에서 "
-                + scheduled.droneName + " 드론 명령을 적용하지 못했습니다.");
-        else
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + scheduled.droneName + " 드론 명령을 적용했습니다.");
-        if (scheduled.duplicated)
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + scheduled.droneName + " 드론의 중복 재전송 명령을 한 번만 처리했습니다.");
+        ApplyDeliveredCommand(tick, scheduled, simulation, droneIds, result);
     }
 }
 
