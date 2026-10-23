@@ -146,6 +146,8 @@ class TopicSamples:
 
     def _bracket(self, time_us: int) -> tuple[int, int, float]:
         right = bisect.bisect_left(self.times, time_us)
+        if right < len(self.times) and self.times[right] == time_us:
+            return right, right, 0.0
         if right == 0 or right == len(self.times):
             raise ValueError("선택한 구간에 보간할 표본이 부족합니다.")
         left = right - 1

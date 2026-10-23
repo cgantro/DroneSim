@@ -16,6 +16,7 @@ class TopicSamplesTests(unittest.TestCase):
             maximum_gap_microseconds=20_000,
         )
 
+        self.assertEqual(samples.scalar("value", 0), 0.0)
         self.assertEqual(samples.scalar("value", 2_500), 2.5)
 
         sparse_samples = TopicSamples(
@@ -27,7 +28,7 @@ class TopicSamplesTests(unittest.TestCase):
             maximum_gap_microseconds=20_000,
         )
         with self.assertRaisesRegex(ValueError, r"vehicle_attitude.*700\.0ms.*20\.0ms"):
-            sparse_samples.scalar("value", 700_000)
+            sparse_samples.scalar("value", 350_000)
 
     def test_state_at_converts_ned_frd_samples_to_enu_flu(self) -> None:
         position = TopicSamples(SimpleNamespace(data={
