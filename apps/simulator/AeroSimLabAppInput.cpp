@@ -59,6 +59,14 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         }
 
         const auto decision = sequenceGuard_.Inspect(packet);
+        const auto makeReply = [this, &packet]
+        {
+            aerosimlab::communication::CommandReply reply;
+            reply.commandId = packet.commandId;
+            reply.sequence = packet.sequence;
+            reply.telemetry = CurrentTelemetry();
+            return reply;
+        };
         if (decision == aerosimlab::communication::SequenceGuard::Decision::Duplicate)
         {
             if (lastReply_)
@@ -67,21 +75,15 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         }
         if (decision == aerosimlab::communication::SequenceGuard::Decision::OutOfOrder)
         {
-            aerosimlab::communication::CommandReply reply;
-            reply.commandId = packet.commandId;
-            reply.sequence = packet.sequence;
+            auto reply = makeReply();
             reply.status = "rejected_sequence";
-            reply.telemetry = CurrentTelemetry();
             udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
             return;
         }
         if (pendingCommand_)
         {
-            aerosimlab::communication::CommandReply reply;
-            reply.commandId = packet.commandId;
-            reply.sequence = packet.sequence;
+            auto reply = makeReply();
             reply.status = "busy";
-            reply.telemetry = CurrentTelemetry();
             udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
             return;
         }
@@ -89,13 +91,10 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         sequenceGuard_.Commit(packet);
         if (packet.fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
         {
-            aerosimlab::communication::CommandReply reply;
-            reply.commandId = packet.commandId;
-            reply.sequence = packet.sequence;
+            auto reply = makeReply();
             reply.accepted = true;
             reply.status = "fleet_status";
             reply.appliedTick = simulation_.TickCount();
-            reply.telemetry = CurrentTelemetry();
             lastReply_ = reply;
             udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
             return;
