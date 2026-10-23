@@ -26,8 +26,9 @@ std::string ReadScenarioFixture(std::string_view relativePath)
 
 void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
 {
-    const ScenarioResult result = RunScenario(
-        ReadScenarioFixture("scenarios/flight/physical-model-override.json"));
+    std::string customModelScenario =
+        ReadScenarioFixture("scenarios/flight/physical-model-override.json");
+    const ScenarioResult result = RunScenario(customModelScenario);
     ASSERT_TRUE(result.passed)
         << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_TRUE(result.physicalModel.has_value());
@@ -40,6 +41,22 @@ void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
     EXPECT_DOUBLE_EQ(result.physicalModel->momentToThrustRatio, 0.015);
     EXPECT_DOUBLE_EQ(result.physicalModel->motorTimeConstantUpSeconds, 0.02);
     EXPECT_DOUBLE_EQ(result.physicalModel->maximumMotorSpeedRadiansPerSecond, 900.0);
+
+    const std::string customMass = "\"mass_kg\": 2.5";
+    const std::string baselineMass = "\"mass_kg\": 2.0643076923076924";
+    customModelScenario.replace(customModelScenario.find(customMass),
+        customMass.size(), baselineMass);
+    const ScenarioResult baselineResult = RunScenario(customModelScenario);
+    ASSERT_TRUE(baselineResult.passed)
+        << (baselineResult.issues.empty() ? "" : baselineResult.issues.front());
+    const auto meanMotorSpeed = [](const DroneState& state)
+    {
+        double sum = 0.0;
+        for (const double speed : state.motorSpeedsRadiansPerSecond)
+            sum += speed;
+        return sum / static_cast<double>(state.motorSpeedsRadiansPerSecond.size());
+    };
+    EXPECT_GT(meanMotorSpeed(result.finalState), meanMotorSpeed(baselineResult.finalState));
 
     constexpr std::string_view kinematicOverride = R"json(
     {"version":1,"dynamics":"kinematic","ticks":1,"commands":[],
