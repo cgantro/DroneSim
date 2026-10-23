@@ -879,6 +879,20 @@ void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& defini
         model.principalInertiaKilogramMetersSquared = ReadVector(
             (*settings)["principal_inertia_kg_m2"], "principal_inertia_kg_m2");
     }
+    if (settings->contains("rotor_positions_meters"))
+    {
+        const Json& positions = (*settings)["rotor_positions_meters"];
+        if (!positions.is_array() || positions.size() != model.rotors.size())
+        {
+            throw std::invalid_argument(
+                "rotor_positions_meters에는 로터별 위치 4개가 필요합니다.");
+        }
+        for (std::size_t rotor = 0; rotor < model.rotors.size(); ++rotor)
+        {
+            model.rotors[rotor].positionMeters = ReadVector(
+                positions[rotor], "rotor_positions_meters");
+        }
+    }
     if (settings->contains("thrust_coefficient_newtons_per_speed_squared"))
     {
         model.thrustCoefficientNewtonsPerSpeedSquared = ReadFiniteNumber(

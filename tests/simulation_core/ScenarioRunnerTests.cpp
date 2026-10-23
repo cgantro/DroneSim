@@ -283,6 +283,23 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     EXPECT_NEAR(recentFlightRmse[2], 64.594, 0.5);
     EXPECT_NEAR(recentFlightRmse[3], 0.6725, 0.03);
 
+    Json px4GeometryRecentScenario = recentFlightFixture;
+    // 공개 기록에 저장된 FRD 위치를 프로젝트의 FLU 좌표로 바꾼 로터 배치다.
+    px4GeometryRecentScenario["quadrotor_model"]["rotor_positions_meters"] = {
+        {0.24, -0.24, 0.0}, {-0.24, 0.24, 0.0},
+        {0.24, 0.24, 0.0}, {-0.24, -0.24, 0.0}};
+    const ScenarioResult px4GeometryRecentResult =
+        RunScenario(px4GeometryRecentScenario.dump());
+    ASSERT_TRUE(px4GeometryRecentResult.passed);
+    ASSERT_EQ(px4GeometryRecentResult.trajectory.size(), recentReference.size());
+    const std::array<double, 4> px4GeometryRecentRmse = calculateRmse(
+        recentReference, px4GeometryRecentResult);
+
+    EXPECT_NEAR(px4GeometryRecentRmse[0], 1.5218, 0.03);
+    EXPECT_NEAR(px4GeometryRecentRmse[1], 0.9462, 0.03);
+    EXPECT_NEAR(px4GeometryRecentRmse[2], 61.2608, 0.5);
+    EXPECT_NEAR(px4GeometryRecentRmse[3], 0.7334, 0.03);
+
     Json zeroSpeedRecentScenario = recentFlightFixture;
     zeroSpeedRecentScenario["drones"][0]["initial_motor_speeds_radians_per_second"] =
         {0.0, 0.0, 0.0, 0.0};
