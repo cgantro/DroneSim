@@ -124,6 +124,24 @@ void Verify_AirSimPhysics_TerrainContactStopsTheDrone()
 
     verifyGroundContact(0.0, false);
     verifyGroundContact(2.0, true);
+
+    PhysicsWorld world;
+    terrain::TerrainGrid terrainGrid;
+    terrainGrid.sampleCount = 3;
+    terrainGrid.spacingXMeters = 2.0F;
+    terrainGrid.spacingYMeters = 2.0F;
+    terrainGrid.heightOffsetsMeters.assign(9U, 5.0F);
+    world.SetTerrain(std::move(terrainGrid));
+
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    RigidBodyDefinition definition;
+    definition.positionMeters = {3.0, 0.0, 2.0};
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    for (int tick = 0; tick < 240; ++tick)
+        world.Step(1.0 / 60.0);
+
+    EXPECT_NEAR(world.State(drone).positionMeters.z,
+        QuadrotorFlightController::groundedModelOriginHeightMeters, 0.03);
 }
 
 void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()

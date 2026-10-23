@@ -508,14 +508,17 @@ struct PhysicsWorld::Impl
     {
         if (!terrain)
             return 0.0;
-        try
+        const double halfWidth = static_cast<double>(terrain->sampleCount - 1U)
+            * terrain->spacingXMeters * 0.5;
+        const double halfDepth = static_cast<double>(terrain->sampleCount - 1U)
+            * terrain->spacingYMeters * 0.5;
+        if (position.x < -halfWidth || position.x > halfWidth
+            || position.y < -halfDepth || position.y > halfDepth)
         {
-            return terrain->HeightAtLocalMeters(position);
-        }
-        catch (const std::out_of_range&)
-        {
+            // 지도 바깥은 높이 자료가 없는 평지로 취급한다. 정상적인 경계 이탈을 예외로 처리하지 않는다.
             return 0.0;
         }
+        return terrain->HeightAtLocalMeters(position);
     }
 
     /** @brief 높이 격자의 주변 변화량으로 그 지점의 바깥쪽 방향을 구한다. */
