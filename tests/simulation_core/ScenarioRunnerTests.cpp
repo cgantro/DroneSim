@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -1023,6 +1024,49 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     ASSERT_TRUE(disconnectedDrone.reportedBatteryPercent.has_value());
     EXPECT_GT(*disconnectedDrone.reportedBatteryPercent,
         *disconnectedDrone.batteryPercent);
+
+    struct ReplayCondition
+    {
+        int reservePercent;
+        int outageStartTick;
+        int heartbeatTimeoutTicks;
+        int expectedCompletionTick;
+    };
+    constexpr std::array<ReplayCondition, 4> replayConditions{{
+        {40, 95, 3, 322},
+        {30, 95, 3, 376},
+        {40, 115, 8, 217},
+        {50, 95, 8, 171}}};
+    const auto baseMixedFaultScenario = nlohmann::json::parse(ReadScenarioFixture(
+        "scenarios/multi-drone/energy-and-outage-reallocation.json"));
+    for (const ReplayCondition& condition : replayConditions)
+    {
+        auto scenarioVariant = baseMixedFaultScenario;
+        scenarioVariant["energy_model"]["reserve_percent"] = condition.reservePercent;
+        scenarioVariant["communication_outages"][0]["start_tick"] =
+            condition.outageStartTick;
+        scenarioVariant["communication_outages"][0]["heartbeat_timeout_ticks"] =
+            condition.heartbeatTimeoutTicks;
+        scenarioVariant["expected"]["tolerance_meters"] = 1000.0;
+
+        for (int repeat = 0; repeat < 3; ++repeat)
+        {
+            const ScenarioResult repeatedResult = RunScenario(scenarioVariant.dump());
+            ASSERT_TRUE(repeatedResult.passed)
+                << (repeatedResult.issues.empty() ? "" : repeatedResult.issues.front());
+            ASSERT_TRUE(repeatedResult.mission.has_value());
+            EXPECT_EQ(repeatedResult.mission->completedTaskCount, 3U);
+            ASSERT_TRUE(repeatedResult.mission->completedTick.has_value());
+            EXPECT_EQ(*repeatedResult.mission->completedTick,
+                static_cast<std::uint64_t>(condition.expectedCompletionTick));
+            ASSERT_EQ(repeatedResult.drones.size(), 4U);
+            EXPECT_TRUE(repeatedResult.drones[0].returnedForLowBattery);
+            EXPECT_EQ(repeatedResult.drones[1].communicationStatus,
+                ScenarioResult::Drone::CommunicationStatus::Unknown);
+            EXPECT_EQ(repeatedResult.drones[1].lastHeartbeatTick,
+                static_cast<std::uint64_t>(condition.outageStartTick - 1));
+        }
+    }
 
     constexpr std::string_view insufficientLandingReserve = R"json(
     {"version":1,"dynamics":"kinematic","ticks":10,
