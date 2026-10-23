@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -133,7 +134,8 @@ nlohmann::json MeasureCooperativeMissionRun(
     std::size_t droneCount,
     std::size_t repetition,
     std::size_t warmupRuns,
-    double& durationMicroseconds)
+    double& durationMicroseconds,
+    std::optional<double>& missionCompletionTimeSeconds)
 {
     const std::clock_t cpuStart = std::clock();
     double scenarioDurationMicroseconds = 0.0;
@@ -163,6 +165,13 @@ nlohmann::json MeasureCooperativeMissionRun(
             ++unknownDrones;
     }
     durationMicroseconds = wallSeconds * 1'000'000.0;
+    if (result.mission->startedTick && result.mission->completedTick
+        && *result.mission->completedTick >= *result.mission->startedTick)
+    {
+        missionCompletionTimeSeconds = static_cast<double>(
+            *result.mission->completedTick - *result.mission->startedTick)
+            * aerosimlab::simulation::DroneModel::fixedStepSeconds;
+    }
     Json run{
         {"dynamics", dynamicsName},
         {"drone_count", droneCount},
@@ -187,6 +196,12 @@ nlohmann::json MeasureCooperativeMissionRun(
         {"unknown_drone_count", unknownDrones},
         {"mission_completion_percent", result.mission->completionPercent},
         {"mission_coverage_percent", result.mission->coveragePercent}};
+    run["mission_started_tick"] = result.mission->startedTick
+        ? Json(*result.mission->startedTick) : Json(nullptr);
+    run["mission_completed_tick"] = result.mission->completedTick
+        ? Json(*result.mission->completedTick) : Json(nullptr);
+    run["mission_completion_time_seconds"] = missionCompletionTimeSeconds
+        ? Json(*missionCompletionTimeSeconds) : Json(nullptr);
     if (result.minimumDroneSeparationMeters)
         run["minimum_drone_separation_meters"] =
             *result.minimumDroneSeparationMeters;
@@ -211,14 +226,19 @@ Json MeasureFourDroneOutageRecovery(SimulationDynamics dynamics)
 
     Json runs = Json::array();
     std::vector<double> durationsMicroseconds;
+    std::vector<double> missionCompletionTimesSeconds;
     durationsMicroseconds.reserve(repetitions);
+    missionCompletionTimesSeconds.reserve(repetitions);
     for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
     {
         double durationMicroseconds = 0.0;
+        std::optional<double> missionCompletionTimeSeconds;
         runs.push_back(MeasureCooperativeMissionRun(
             scenarioText, dynamicsName, 4U, repetition, warmupRuns,
-            durationMicroseconds));
+            durationMicroseconds, missionCompletionTimeSeconds));
         durationsMicroseconds.push_back(durationMicroseconds);
+        if (missionCompletionTimeSeconds)
+            missionCompletionTimesSeconds.push_back(*missionCompletionTimeSeconds);
     }
 
     return {
@@ -230,6 +250,8 @@ Json MeasureFourDroneOutageRecovery(SimulationDynamics dynamics)
         {"scenario_ticks", usesRigidBodyPhysics ? 1800U : 320U},
         {"outcome", "all measured runs passed; four survey tasks completed"},
         {"duration_summary_us", SummarizeDurations(std::move(durationsMicroseconds))},
+        {"mission_completion_time_summary_seconds",
+            SummarizeDurations(std::move(missionCompletionTimesSeconds))},
         {"runs", std::move(runs)}};
 }
 
@@ -251,19 +273,26 @@ void MeasureCooperativeMissionCount(
     }
 
     std::vector<double> durationsMicroseconds;
+    std::vector<double> missionCompletionTimesSeconds;
     durationsMicroseconds.reserve(repetitions);
+    missionCompletionTimesSeconds.reserve(repetitions);
     for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
     {
         double durationMicroseconds = 0.0;
+        std::optional<double> missionCompletionTimeSeconds;
         nlohmann::json run = MeasureCooperativeMissionRun(
             scenarioText, dynamicsName, droneCount, repetition, warmupRuns,
-            durationMicroseconds);
+            durationMicroseconds, missionCompletionTimeSeconds);
         durationsMicroseconds.push_back(durationMicroseconds);
+        if (missionCompletionTimeSeconds)
+            missionCompletionTimesSeconds.push_back(*missionCompletionTimeSeconds);
         runs.push_back(std::move(run));
     }
     summaries.push_back({
         {"drone_count", droneCount},
-        {"scenario_duration_us", SummarizeDurations(std::move(durationsMicroseconds))}});
+        {"scenario_duration_us", SummarizeDurations(std::move(durationsMicroseconds))},
+        {"mission_completion_time_seconds",
+            SummarizeDurations(std::move(missionCompletionTimesSeconds))}});
 }
 
 nlohmann::json MeasureCooperativeMissionDynamics(SimulationDynamics dynamics)
