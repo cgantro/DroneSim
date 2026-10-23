@@ -1,7 +1,7 @@
 #include "SimulationBenchmark.h"
+#include "ExecutableDirectory.h"
 
 #ifdef _WIN32
-#define NOMINMAX
 #include <Windows.h>
 #include <Psapi.h>
 #endif
@@ -52,15 +52,7 @@ std::filesystem::path DefaultBenchmarkOutputPath()
     }
 
 #ifdef _WIN32
-    std::wstring executablePath(32768U, L'\0');
-    const DWORD pathLength = GetModuleFileNameW(
-        nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
-    if (pathLength == 0U || pathLength >= executablePath.size())
-        throw std::runtime_error("실행 파일의 위치를 확인할 수 없습니다.");
-
-    executablePath.resize(pathLength);
-    return std::filesystem::path(executablePath).parent_path()
-        / L"benchmark-latest.json";
+    return detail::ExecutableDirectory() / L"benchmark-latest.json";
 #else
     return std::filesystem::current_path() / "benchmark-latest.json";
 #endif

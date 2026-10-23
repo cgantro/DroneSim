@@ -1,7 +1,7 @@
 #include "AeroSimLabApp.h"
+#include "ExecutableDirectory.h"
 
 #ifdef _WIN32
-#define NOMINMAX
 #include <Windows.h>
 #endif
 
@@ -67,30 +67,9 @@ constexpr double benchmarkDurationSeconds = 5.0;
 // OSM에 높이가 없어서 시연 상자에만 쓰는 명시적 가정이다. 실측값이 아니다.
 constexpr float missingBuildingHeightProxyMeters = 3.0F;
 
-std::filesystem::path ApplicationDirectory()
-{
-#ifdef _WIN32
-    std::wstring executablePath(32768U, L'\0');
-    const DWORD pathLength = GetModuleFileNameW(
-        nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
-    if (pathLength == 0U || pathLength >= executablePath.size())
-        throw std::runtime_error("프로그램이 있는 폴더를 확인하지 못했습니다.");
-    executablePath.resize(pathLength);
-    return std::filesystem::path(executablePath).parent_path();
-#elif defined(__EMSCRIPTEN__)
-    return {};
-#else
-    std::error_code error;
-    const auto executablePath = std::filesystem::read_symlink("/proc/self/exe", error);
-    if (error)
-        throw std::runtime_error("프로그램이 있는 폴더를 확인하지 못했습니다.");
-    return executablePath.parent_path();
-#endif
-}
-
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
-    return ApplicationDirectory() / relativePath;
+    return detail::ExecutableDirectory() / relativePath;
 }
 
 glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
