@@ -281,6 +281,13 @@ struct BoxContact
     double penetrationMeters = 0.0;
 };
 
+struct ContactCandidate
+{
+    BoxContact contact;
+    const char* objectName;
+    int objectId;
+};
+
 double CollisionRadius(std::span<const RigidBodyBox> boxes)
 {
     double radius = 0.0;
@@ -604,22 +611,13 @@ struct PhysicsWorld::Impl
         return contactInfo;
     }
 
-    // 단독 실행에서는 Unreal이 접촉 정보를 만들지 않으므로, 장면과의 접촉만 찾아 AirSim에 넘긴다.
-    msr::airlib::CollisionInfo BuildAirSimContactInfo(
-        const Body& body,
-        std::size_t bodyIndex,
-        double largestCollisionRadius) const
+    /** @brief 기체 상자와 고정 장애물 상자 중 가장 깊이 겹친 접촉을 찾는다. */
+    std::optional<ContactCandidate> FindObstacleContact(const Body& body) const
     {
-        const RigidBodyState& state = body.collisionState;
-        const glm::dvec3 center = state.positionMeters;
-        const std::uint64_t timestamp = stepCount + 1;
-
-        if (auto groundContact = FindTerrainContact(body, timestamp))
-            return *groundContact;
-
-        // 경계 반경은 멀리 떨어진 후보만 빠르게 거른다. 실제 겹침은 아래 상자 검사로 결정한다.
+        const glm::dvec3 center = body.collisionState.positionMeters;
+        // 바깥 반경으로 멀리 떨어진 장애물을 먼저 거른 뒤 상자끼리 정확히 검사한다.
         const double bodyRadius = body.collisionRadiusMeters;
-        std::optional<msr::airlib::CollisionInfo> deepestContact;
+        std::optional<ContactCandidate> deepestContact;
         double greatestPenetration = -1.0;
         for (std::size_t index = 0; index < obstacles.size(); ++index)
         {
@@ -644,18 +642,21 @@ struct PhysicsWorld::Impl
                     continue;
 
                 greatestPenetration = contact->penetrationMeters;
-                deepestContact = msr::airlib::CollisionInfo{
-                    true,
-                    ToAirSimPosition(contact->normal),
-                    ToAirSimPosition(contact->impactPointMeters),
-                    ToAirSimPosition(center),
-                    static_cast<float>(contact->penetrationMeters),
-                    timestamp,
-                    "obstacle",
-                    static_cast<int>(index + 1)};
+                deepestContact = ContactCandidate{
+                    *contact, "obstacle", static_cast<int>(index + 1)};
             }
         }
-        // X축 범위가 겹치는 기체만 비교한다. 충돌 모양을 감싸는 반경으로 후보를 거른 뒤 기존 상자 검사를 한다.
+        return deepestContact;
+    }
+
+    /** @brief X축 범위와 바깥 반경으로 후보를 거른 뒤 드론끼리 상자를 검사한다. */
+    std::optional<ContactCandidate> FindDroneContact(
+        const Body& body,
+        std::size_t bodyIndex,
+        double largestCollisionRadius) const
+    {
+        const glm::dvec3 center = body.collisionState.positionMeters;
+        const double bodyRadius = body.collisionRadiusMeters;
         const double searchDistance = bodyRadius + largestCollisionRadius;
         const auto firstCandidate = std::lower_bound(
             bodyPositionsByX.begin(), bodyPositionsByX.end(), center.x - searchDistance,
@@ -663,6 +664,8 @@ struct PhysicsWorld::Impl
             {
                 return candidate.first < minimumX;
             });
+        std::optional<ContactCandidate> deepestContact;
+        double greatestPenetration = -1.0;
         for (auto candidate = firstCandidate;
             candidate != bodyPositionsByX.end()
                 && candidate->first <= center.x + searchDistance;
@@ -688,19 +691,47 @@ struct PhysicsWorld::Impl
                         continue;
 
                     greatestPenetration = contact->penetrationMeters;
-                    deepestContact = msr::airlib::CollisionInfo{
-                        true,
-                        ToAirSimPosition(contact->normal),
-                        ToAirSimPosition(contact->impactPointMeters),
-                        ToAirSimPosition(center),
-                        static_cast<float>(contact->penetrationMeters),
-                        timestamp,
-                        "drone",
+                    deepestContact = ContactCandidate{
+                        *contact, "drone",
                         static_cast<int>(otherBody.handle.value + 1U)};
                 }
             }
         }
-        return deepestContact.value_or(msr::airlib::CollisionInfo{});
+        return deepestContact;
+    }
+
+    // 단독 실행에서는 Unreal이 접촉 정보를 만들지 않으므로, 장면 접촉을 찾아 AirSim에 넘긴다.
+    msr::airlib::CollisionInfo BuildAirSimContactInfo(
+        const Body& body,
+        std::size_t bodyIndex,
+        double largestCollisionRadius) const
+    {
+        const std::uint64_t timestamp = stepCount + 1;
+        if (auto groundContact = FindTerrainContact(body, timestamp))
+            return *groundContact;
+
+        std::optional<ContactCandidate> deepestContact = FindObstacleContact(body);
+        if (auto droneContact = FindDroneContact(body, bodyIndex, largestCollisionRadius);
+            droneContact && (!deepestContact
+                || droneContact->contact.penetrationMeters
+                    > deepestContact->contact.penetrationMeters))
+        {
+            deepestContact = droneContact;
+        }
+
+        if (!deepestContact)
+            return {};
+
+        const BoxContact& contact = deepestContact->contact;
+        return {
+            true,
+            ToAirSimPosition(contact.normal),
+            ToAirSimPosition(contact.impactPointMeters),
+            ToAirSimPosition(body.collisionState.positionMeters),
+            static_cast<float>(contact.penetrationMeters),
+            timestamp,
+            deepestContact->objectName,
+            deepestContact->objectId};
     }
 };
 
