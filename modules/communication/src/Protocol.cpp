@@ -143,21 +143,42 @@ simulation::DroneCommand ReadDroneCommand(const Json& payload, std::string_view 
     using Kind = simulation::DroneCommand::Kind;
     simulation::DroneCommand command;
 
-    if (action == "takeoff") command.kind = Kind::TakeOff;
-    else if (action == "land") command.kind = Kind::Land;
-    else if (action == "stop") command.kind = Kind::Stop;
-    else if (action == "set_velocity") command.kind = Kind::SetVelocity;
-    else if (action == "set_waypoint") command.kind = Kind::SetWaypoint;
-    else if (action == "set_yaw_rate") command.kind = Kind::SetYawRate;
-    else throw std::invalid_argument("알 수 없는 드론 명령입니다.");
-
-    if (command.kind == Kind::SetVelocity || command.kind == Kind::SetWaypoint)
+    if (action == "takeoff")
+    {
+        command.kind = Kind::TakeOff;
+        return command;
+    }
+    if (action == "land")
+    {
+        command.kind = Kind::Land;
+        return command;
+    }
+    if (action == "stop")
+    {
+        command.kind = Kind::Stop;
+        return command;
+    }
+    if (action == "set_velocity")
+    {
+        command.kind = Kind::SetVelocity;
         command.vector = ReadVector(Required(payload, "vector"));
-    else if (command.kind == Kind::SetYawRate)
+        return command;
+    }
+    if (action == "set_waypoint")
+    {
+        command.kind = Kind::SetWaypoint;
+        command.vector = ReadVector(Required(payload, "vector"));
+        return command;
+    }
+    if (action == "set_yaw_rate")
+    {
+        command.kind = Kind::SetYawRate;
         command.yawRateRadiansPerSecond = ReadFinite(
             Required(payload, "yaw_rate_radians_per_second"), "yaw_rate_radians_per_second");
+        return command;
+    }
 
-    return command;
+    throw std::invalid_argument("알 수 없는 드론 명령입니다.");
 }
 }
 

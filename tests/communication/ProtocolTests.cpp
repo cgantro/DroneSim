@@ -2,23 +2,38 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <stdexcept>
 
 namespace aerosimlab::communication
 {
 void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
 {
-    CommandPacket drone;
-    drone.commandId = 7;
-    drone.sequence = 11;
-    drone.droneCommand = simulation::DroneCommand{
-        simulation::DroneCommand::Kind::SetWaypoint, glm::dvec3{2.0, -1.0, 1.5}};
-    const auto decodedDrone = DecodeCommand(EncodeCommand(drone));
-    ASSERT_TRUE(decodedDrone.droneCommand);
-    EXPECT_EQ(decodedDrone.commandId, 7);
-    EXPECT_EQ(decodedDrone.sequence, 11);
-    EXPECT_EQ(decodedDrone.droneCommand->kind, simulation::DroneCommand::Kind::SetWaypoint);
-    EXPECT_EQ(decodedDrone.droneCommand->vector, glm::dvec3(2.0, -1.0, 1.5));
+    using Kind = simulation::DroneCommand::Kind;
+    const std::array droneCommands{
+        simulation::DroneCommand{Kind::TakeOff},
+        simulation::DroneCommand{Kind::Land},
+        simulation::DroneCommand{Kind::Stop},
+        simulation::DroneCommand{Kind::SetVelocity, {1.0, 2.0, 3.0}},
+        simulation::DroneCommand{Kind::SetWaypoint, {2.0, -1.0, 1.5}},
+        simulation::DroneCommand{Kind::SetYawRate, {}, 0.25}};
+    std::uint32_t commandId = 1;
+    for (const simulation::DroneCommand& expected : droneCommands)
+    {
+        CommandPacket packet;
+        packet.commandId = commandId;
+        packet.sequence = commandId;
+        packet.droneCommand = expected;
+        const auto decoded = DecodeCommand(EncodeCommand(packet));
+        ASSERT_TRUE(decoded.droneCommand);
+        EXPECT_EQ(decoded.commandId, commandId);
+        EXPECT_EQ(decoded.sequence, commandId);
+        EXPECT_EQ(decoded.droneCommand->kind, expected.kind);
+        EXPECT_EQ(decoded.droneCommand->vector, expected.vector);
+        EXPECT_DOUBLE_EQ(decoded.droneCommand->yawRateRadiansPerSecond,
+            expected.yawRateRadiansPerSecond);
+        ++commandId;
+    }
 
     CommandPacket camera;
     camera.commandId = 8;
