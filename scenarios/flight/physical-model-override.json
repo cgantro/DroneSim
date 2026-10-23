@@ -11,6 +11,7 @@
     "thrust_coefficient_newtons_per_speed_squared": 0.000011,
     "moment_to_thrust_ratio": 0.015,
     "motor_time_constant_up_seconds": 0.02,
+    "motor_time_constant_down_seconds": 0.025,
     "maximum_motor_speed_radians_per_second": 900
   },
   "expected": {

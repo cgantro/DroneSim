@@ -79,6 +79,8 @@ void Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference()
     EXPECT_NEAR(measuredMaximumRpm, 9857.0, 0.1);
     EXPECT_NEAR(estimatedMaximumThrustGrams, 1332.0, 10.0);
     EXPECT_NEAR(parameters.momentToThrustRatio, 0.01403352, 1.0e-8);
+    EXPECT_DOUBLE_EQ(parameters.motorTimeConstantUpSeconds, 0.0125);
+    EXPECT_DOUBLE_EQ(parameters.motorTimeConstantDownSeconds, 0.025);
 }
 
 void Verify_X500GazeboParameters_KeepAggregatedMassInertiaAndRotorLayout()

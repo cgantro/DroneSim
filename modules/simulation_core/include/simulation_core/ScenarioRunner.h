@@ -39,6 +39,7 @@ struct ScenarioResult
         double thrustCoefficientNewtonsPerSpeedSquared = 0.0;
         double momentToThrustRatio = 0.0;
         double motorTimeConstantUpSeconds = 0.0;
+        double motorTimeConstantDownSeconds = 0.0;
         double maximumMotorSpeedRadiansPerSecond = 0.0;
         bool customized = false;
     };

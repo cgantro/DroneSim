@@ -56,8 +56,8 @@ void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
     const double speedAfterFirstStep = world.MotorSpeedsRadiansPerSecond(drone)[0];
     world.Step(stepSeconds);
     const double speedAfterSecondStep = world.MotorSpeedsRadiansPerSecond(drone)[0];
-    const double expectedFirstOrderResponse = motorTargets[0] * std::sqrt(
-        1.0 - std::exp(-stepSeconds
+    const double expectedFirstOrderResponse = motorTargets[0]
+        * (1.0 - std::exp(-stepSeconds
             / QuadrotorParameters::X500Gazebo().motorTimeConstantUpSeconds));
     EXPECT_LT(speedAfterFirstStep, speedAfterSecondStep);
     EXPECT_NEAR(speedAfterSecondStep, expectedFirstOrderResponse, 1.0);
@@ -68,6 +68,20 @@ void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
 
     EXPECT_LT(speedAfterSecondStep, laterSpeed);
     EXPECT_LT(laterSpeed, motorTargets[0]);
+
+    motorTargets.fill(0.0);
+    world.SetMotorTargets(drone, motorTargets);
+    world.Step(stepSeconds);
+    const double speedAfterFirstDownStep =
+        world.MotorSpeedsRadiansPerSecond(drone)[0];
+    world.Step(stepSeconds);
+    const double speedAfterSecondDownStep =
+        world.MotorSpeedsRadiansPerSecond(drone)[0];
+    const double expectedDownResponse = speedAfterFirstDownStep
+        * std::exp(-stepSeconds
+            / QuadrotorParameters::X500Gazebo().motorTimeConstantDownSeconds);
+    EXPECT_LT(speedAfterSecondDownStep, speedAfterFirstDownStep);
+    EXPECT_NEAR(speedAfterSecondDownStep, expectedDownResponse, 0.5);
 }
 
 void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
@@ -389,8 +403,8 @@ void Verify_AirSimBoundary_RejectsValuesItCannotRepresent()
     invalidMotorTargets.back() = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW(world.SetMotorTargets(drone, invalidMotorTargets), std::invalid_argument);
     world.Step(1.0 / 60.0);
-    const double expectedMotorSpeed = motorTargets[0] * std::sqrt(
-        1.0 - std::exp(-1.0 / 60.0
+    const double expectedMotorSpeed = motorTargets[0]
+        * (1.0 - std::exp(-1.0 / 60.0
             / QuadrotorParameters::X500Gazebo().motorTimeConstantUpSeconds));
     for (const double motorSpeed : world.MotorSpeedsRadiansPerSecond(drone))
         EXPECT_NEAR(motorSpeed, expectedMotorSpeed, 1.0);

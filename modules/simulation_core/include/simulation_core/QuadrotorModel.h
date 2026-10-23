@@ -43,6 +43,7 @@ struct QuadrotorParameters
     double thrustCoefficientNewtonsPerSpeedSquared = 8.54858e-6;
     double momentToThrustRatio = 0.016;
     double motorTimeConstantUpSeconds = 0.0125;
+    double motorTimeConstantDownSeconds = 0.025;
     double maximumMotorSpeedRadiansPerSecond = 1000.0;
 
     /** @brief PX4가 공개한 X500 Gazebo 모델의 중심 기체와 모터 설정값을 반환한다. */

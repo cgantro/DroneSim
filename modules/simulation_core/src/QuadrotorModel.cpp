@@ -48,6 +48,7 @@ QuadrotorParameters QuadrotorParameters::X500Gazebo()
     parameters.thrustCoefficientNewtonsPerSpeedSquared = 8.54858e-6;
     parameters.momentToThrustRatio = 0.016;
     parameters.motorTimeConstantUpSeconds = 0.0125;
+    parameters.motorTimeConstantDownSeconds = 0.025;
     parameters.maximumMotorSpeedRadiansPerSecond = 1000.0;
     return parameters;
 }

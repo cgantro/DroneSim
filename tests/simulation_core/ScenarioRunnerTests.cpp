@@ -40,6 +40,7 @@ void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
         result.physicalModel->thrustCoefficientNewtonsPerSpeedSquared, 0.000011);
     EXPECT_DOUBLE_EQ(result.physicalModel->momentToThrustRatio, 0.015);
     EXPECT_DOUBLE_EQ(result.physicalModel->motorTimeConstantUpSeconds, 0.02);
+    EXPECT_DOUBLE_EQ(result.physicalModel->motorTimeConstantDownSeconds, 0.025);
     EXPECT_DOUBLE_EQ(result.physicalModel->maximumMotorSpeedRadiansPerSecond, 900.0);
 
     const std::string customMass = "\"mass_kg\": 2.5";

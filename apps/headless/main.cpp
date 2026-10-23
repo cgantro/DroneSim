@@ -133,6 +133,7 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                 model.thrustCoefficientNewtonsPerSpeedSquared},
             {"moment_to_thrust_ratio", model.momentToThrustRatio},
             {"motor_time_constant_up_seconds", model.motorTimeConstantUpSeconds},
+            {"motor_time_constant_down_seconds", model.motorTimeConstantDownSeconds},
             {"maximum_motor_speed_radians_per_second",
                 model.maximumMotorSpeedRadiansPerSecond},
             {"customized", model.customized}};

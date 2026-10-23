@@ -797,6 +797,12 @@ void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& defini
             (*settings)["motor_time_constant_up_seconds"],
             "motor_time_constant_up_seconds");
     }
+    if (settings->contains("motor_time_constant_down_seconds"))
+    {
+        model.motorTimeConstantDownSeconds = ReadFiniteNumber(
+            (*settings)["motor_time_constant_down_seconds"],
+            "motor_time_constant_down_seconds");
+    }
     if (settings->contains("maximum_motor_speed_radians_per_second"))
     {
         model.maximumMotorSpeedRadiansPerSecond = ReadFiniteNumber(
@@ -810,6 +816,7 @@ void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& defini
         || model.thrustCoefficientNewtonsPerSpeedSquared <= 0.0
         || model.momentToThrustRatio <= 0.0
         || model.motorTimeConstantUpSeconds <= 0.0
+        || model.motorTimeConstantDownSeconds <= 0.0
         || model.maximumMotorSpeedRadiansPerSecond <= 0.0)
     {
         throw std::invalid_argument(

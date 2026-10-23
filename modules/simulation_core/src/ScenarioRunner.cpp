@@ -867,6 +867,7 @@ void PopulateFinalSnapshot(
             model.thrustCoefficientNewtonsPerSpeedSquared,
             model.momentToThrustRatio,
             model.motorTimeConstantUpSeconds,
+            model.motorTimeConstantDownSeconds,
             model.maximumMotorSpeedRadiansPerSecond,
             definition.quadrotorParametersCustomized};
     }

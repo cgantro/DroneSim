@@ -105,6 +105,7 @@ bool HasValidVehicleConfiguration(
         && IsPositiveFinite(parameters.thrustCoefficientNewtonsPerSpeedSquared)
         && IsPositiveFinite(parameters.momentToThrustRatio)
         && IsPositiveFinite(parameters.motorTimeConstantUpSeconds)
+        && IsPositiveFinite(parameters.motorTimeConstantDownSeconds)
         && IsPositiveFinite(parameters.maximumMotorSpeedRadiansPerSecond)
         && std::all_of(parameters.rotors.begin(), parameters.rotors.end(),
             [](const RotorDefinition& rotor)
@@ -181,17 +182,36 @@ RigidBodyState ToProjectState(const msr::airlib::Kinematics::State& value)
         ToProjectBodyVector(value.twist.angular)};
 }
 
-/** @brief 시뮬레이터의 목표 모터 속도를 AirSim이 받는 0~1 신호로 바꾼다. */
+/** @brief 상승·하강 응답을 반영한 모터 속도를 AirSim 추력 신호로 바꾼다. */
 class ActuationApi final : public msr::airlib::VehicleApiBase
 {
 public:
+    ActuationApi(double timeConstantUpSeconds, double timeConstantDownSeconds)
+        : timeConstantUpSeconds_(timeConstantUpSeconds),
+          timeConstantDownSeconds_(timeConstantDownSeconds)
+    {
+    }
+
     void SetMotorTargets(
         const std::array<double, QuadrotorParameters::rotorCount>& speeds,
         double maximumSpeed)
     {
         for (std::size_t index = 0; index < signals_.size(); ++index)
+            targetSpeeds_[index] = std::clamp(speeds[index], 0.0, maximumSpeed);
+    }
+
+    /** @brief 이번 물리 Tick만큼 모터 속도를 목표 쪽으로 갱신한다. */
+    void AdvanceMotorResponse(double seconds, double maximumSpeed)
+    {
+        for (std::size_t index = 0; index < signals_.size(); ++index)
         {
-            const double ratio = std::clamp(speeds[index] / maximumSpeed, 0.0, 1.0);
+            const double targetSpeed = targetSpeeds_[index];
+            const double timeConstant = targetSpeed >= filteredSpeeds_[index]
+                ? timeConstantUpSeconds_ : timeConstantDownSeconds_;
+            const double blend = 1.0 - std::exp(-seconds / timeConstant);
+            filteredSpeeds_[index] +=
+                (targetSpeed - filteredSpeeds_[index]) * blend;
+            const double ratio = filteredSpeeds_[index] / maximumSpeed;
             signals_[index] = static_cast<float>(ratio * ratio);
         }
     }
@@ -210,12 +230,18 @@ protected:
     void resetImplementation() override
     {
         signals_.fill(0.0F);
+        targetSpeeds_.fill(0.0);
+        filteredSpeeds_.fill(0.0);
         apiControlEnabled_ = false;
         armed_ = false;
     }
 
 private:
+    double timeConstantUpSeconds_;
+    double timeConstantDownSeconds_;
     std::array<float, QuadrotorParameters::rotorCount> signals_{};
+    std::array<double, QuadrotorParameters::rotorCount> targetSpeeds_{};
+    std::array<double, QuadrotorParameters::rotorCount> filteredSpeeds_{};
     msr::airlib::GeoPoint home_{0.0, 0.0, 0.0F};
     bool apiControlEnabled_ = false;
     bool armed_ = false;
@@ -265,8 +291,8 @@ protected:
                 * target.rotor_params.max_speed_square);
         target.rotor_params.max_torque = ToAirSimPositiveFloat(
             source_.momentToThrustRatio * target.rotor_params.max_thrust);
-        target.rotor_params.control_signal_filter_tc =
-            ToAirSimPositiveFloat(source_.motorTimeConstantUpSeconds);
+        // 속도 응답은 위에서 상승·하강 시간을 따로 계산한다. AirSim 내부 필터는 겹치지 않게 거의 즉시 반응하도록 둔다.
+        target.rotor_params.control_signal_filter_tc = 1.0e-6F;
         for (const RotorDefinition& rotor : source_.rotors)
         {
             const auto direction = rotor.rotation == RotorRotation::CounterClockwise
@@ -361,6 +387,8 @@ struct PhysicsWorld::Impl
             const QuadrotorParameters& quadrotor)
             : handle(bodyHandle),
               parameters(quadrotor),
+              actuation(quadrotor.motorTimeConstantUpSeconds,
+                  quadrotor.motorTimeConstantDownSeconds),
               kinematics(ToAirSimState({definition.positionMeters,
                   definition.orientation, {}, {}})),
               collisionBoxes(quadrotor.collisionBoxes.begin(), quadrotor.collisionBoxes.end()),
@@ -391,6 +419,11 @@ struct PhysicsWorld::Impl
                     model->getWrenchVertex(index));
                 rotor.setControlSignal(actuation.getActuation(index));
             }
+        }
+
+        void AdvanceMotorResponse(double seconds)
+        {
+            actuation.AdvanceMotorResponse(seconds, maximumMotorSpeed);
         }
     };
 
@@ -882,6 +915,7 @@ void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
             body->model->setCollisionInfo(
                 impl_->BuildAirSimContactInfo(*body, impl_->droneContacts[index]));
         }
+        body->AdvanceMotorResponse(seconds);
         body->ApplyMotorTargets();
         body->model->update();
         body->updatedSinceReset = true;
