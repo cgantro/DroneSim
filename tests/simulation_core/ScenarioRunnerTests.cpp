@@ -331,6 +331,47 @@ void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
         std::invalid_argument);
 }
 
+void Verify_ScenarioRunner_AccountsForFlightAndHoverPower()
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":1,
+     "drones":[
+       {"name":"flight-drone","initial_position_meters":[0,0,0],
+        "battery_capacity_watt_hours":10},
+       {"name":"hover-drone","initial_position_meters":[0,2,1.5],
+        "battery_capacity_watt_hours":10}],
+     "commands":[
+       {"tick":0,"drone":"flight-drone","type":"takeoff"},
+       {"tick":0,"drone":"hover-drone","type":"takeoff"}],
+     "energy_model":{"capacity_watt_hours":10,"hover_power_watts":40,
+       "flight_power_watts":120,"reserve_percent":20},
+     "expected":{"tolerance_meters":0.000001,"drones":[
+       {"name":"flight-drone","mode":"taking_off",
+        "position_meters":[0,0,0.016666666666666666]},
+       {"name":"hover-drone","mode":"hovering","position_meters":[0,2,1.5]}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    ASSERT_TRUE(result.passed);
+    ASSERT_EQ(result.drones.size(), 2U);
+    for (const auto& drone : result.drones)
+    {
+        ASSERT_TRUE(drone.energyConsumedWattHours.has_value());
+        ASSERT_TRUE(drone.batteryRemainingWattHours.has_value());
+    }
+
+    constexpr double expectedFlightUseWattHours = 120.0 / 60.0 / 3600.0;
+    constexpr double expectedHoverUseWattHours = 40.0 / 60.0 / 3600.0;
+    EXPECT_NEAR(*result.drones[0].energyConsumedWattHours,
+        expectedFlightUseWattHours, 1.0e-12);
+    EXPECT_NEAR(*result.drones[0].batteryRemainingWattHours,
+        10.0 - expectedFlightUseWattHours, 1.0e-12);
+    EXPECT_NEAR(*result.drones[1].energyConsumedWattHours,
+        expectedHoverUseWattHours, 1.0e-12);
+    EXPECT_NEAR(*result.drones[1].batteryRemainingWattHours,
+        10.0 - expectedHoverUseWattHours, 1.0e-12);
+}
+
 void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
 {
     constexpr std::string_view calmScenario = R"json(
@@ -877,6 +918,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange());
+    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_AccountsForFlightAndHoverPower());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath());
     EXPECT_NO_FATAL_FAILURE(
