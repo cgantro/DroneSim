@@ -21,12 +21,14 @@ inline constexpr std::string_view helpOption = "--help";
 inline constexpr std::string_view smokeTestOption = "--smoke-test";
 inline constexpr std::string_view demoOption = "--demo";
 inline constexpr std::string_view benchmarkOption = "--benchmark";
+inline constexpr std::string_view visibleBenchmarkOption = "--benchmark-visible";
 inline constexpr std::string_view portOption = "--udp-port";
 inline constexpr std::string_view usage =
     "시뮬레이터 실행 옵션\n"
     "--udp-port 번호: 지상통제 연결 포트 (기본값 27015)\n"
     "--demo: 자동 비행 시연\n"
     "--benchmark: 화면 5초 측정과 전체 드론 확장성 시험 (오래 걸릴 수 있음)\n"
+    "--benchmark-visible: 실제 창을 띄워 화면만 5초 측정 (--demo를 함께 쓰면 자동 비행)\n"
     "--smoke-test: 자동 화면 시험\n";
 inline constexpr std::string_view unknownOptionPrefix = "알 수 없는 옵션: ";
 inline constexpr std::string_view fatalErrorPrefix = "[오류] ";
@@ -71,6 +73,7 @@ int RunSimulator(int argc, char** argv)
         bool networkEnabled = true;
 #endif
         bool benchmarkMode = false;
+        bool visibleBenchmarkMode = false;
         std::uint16_t udpPort = aerosimlab::communication::defaultPort;
         for (int i = 1; i < argc; ++i)
         {
@@ -101,6 +104,13 @@ int RunSimulator(int argc, char** argv)
                 continue;
             }
 
+            if (argument == command_line::visibleBenchmarkOption)
+            {
+                visibleBenchmarkMode = true;
+                networkEnabled = false;
+                continue;
+            }
+
             if (argument == command_line::portOption && i + 1 < argc)
             {
                 const std::string_view value(argv[++i]);
@@ -125,7 +135,8 @@ int RunSimulator(int argc, char** argv)
             .udpPort = udpPort,
             .demoMode = demoMode,
             .networkEnabled = networkEnabled,
-            .benchmarkMode = benchmarkMode
+            .benchmarkMode = benchmarkMode,
+            .visibleBenchmarkMode = visibleBenchmarkMode
         };
         aerosimlab::simulator::AeroSimLabApp app(options);
         return app.Run();

@@ -28,6 +28,7 @@ nlohmann::json SummarizeDurations(std::vector<double> durations);
 struct ViewerBenchmarkMeasurements
 {
     std::string sourceRevision;
+    bool windowVisible = false;
     int framebufferWidth = 0;
     int framebufferHeight = 0;
     std::string graphicsRenderer;

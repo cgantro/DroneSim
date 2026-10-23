@@ -62,6 +62,8 @@ public:
         bool demoMode = false;
         bool networkEnabled = true;
         bool benchmarkMode = false;
+        /** @brief 전체 확장성 시험 없이 보이는 창에서 프레임만 측정한다. */
+        bool visibleBenchmarkMode = false;
         /** @brief 지상통제의 연속 명령을 유지할 시뮬레이션 Tick 수다. 기본값은 1초다. */
         std::uint64_t groundControlCommandTimeoutTicks = 60;
     };
@@ -168,6 +170,7 @@ private:
     bool networkEnabled_ = false;
     bool smokeReplayStarted_ = false;
     bool benchmarkMode_ = false;
+    bool visibleBenchmarkMode_ = false;
     std::uint64_t groundControlCommandTimeoutTicks_ = 60;
     std::optional<std::uint64_t> groundControlCommandExpiresAtTick_;
     std::size_t renderedFrames_ = 0;

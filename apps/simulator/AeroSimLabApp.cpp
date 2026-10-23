@@ -173,7 +173,9 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
 
 AeroSimLabApp::AeroSimLabApp(Options options)
     : smokeTest_(options.smokeTest), demoMode_(options.demoMode),
-      networkEnabled_(options.networkEnabled), benchmarkMode_(options.benchmarkMode),
+      networkEnabled_(options.networkEnabled),
+      benchmarkMode_(options.benchmarkMode || options.visibleBenchmarkMode),
+      visibleBenchmarkMode_(options.visibleBenchmarkMode),
       groundControlCommandTimeoutTicks_(options.groundControlCommandTimeoutTicks),
       udpPort_(options.udpPort)
 {
@@ -326,7 +328,7 @@ void AeroSimLabApp::InitializeGraphics()
         aerosimlab::graphics::Window::Properties{windowWidth, windowHeight,
             "AeroSimLab | 드론 관찰 · EO 영상 | © OpenStreetMap contributors",
             !smokeTest_ && !benchmarkMode_,
-            !smokeTest_ && !benchmarkMode_});
+            !smokeTest_ && (!benchmarkMode_ || visibleBenchmarkMode_)});
 
     int framebufferWidth = 0;
     int framebufferHeight = 0;
@@ -853,6 +855,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
 
     ViewerBenchmarkMeasurements measurements = benchmarkMeasurements_;
     measurements.sourceRevision = AEROSIMLAB_SOURCE_REVISION;
+    measurements.windowVisible = visibleBenchmarkMode_;
     measurements.framebufferWidth = framebufferWidth;
     measurements.framebufferHeight = framebufferHeight;
     measurements.graphicsRenderer = glString(GL_RENDERER);
@@ -874,6 +877,12 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
 #endif
     nlohmann::json report = BuildViewerBenchmarkReport(std::move(measurements));
 #ifndef __EMSCRIPTEN__
+    if (visibleBenchmarkMode_)
+    {
+        SaveViewerBenchmarkReport(report);
+        return;
+    }
+
     report["entity_scaling"] = {
         {"kinematic", MeasureDroneScaling(
             aerosimlab::simulation::SimulationDynamics::Kinematic,

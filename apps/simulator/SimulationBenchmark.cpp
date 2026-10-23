@@ -91,8 +91,12 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
         }));
 
     nlohmann::json report{
-        {"configuration", "hidden OpenGL window; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring"},
+        {"configuration", std::string(measurements.windowVisible
+            ? "visible OpenGL window with VSync off; "
+            : "hidden OpenGL window with VSync off; ")
+            + "one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring"},
         {"source_revision", measurements.sourceRevision},
+        {"window_visible", measurements.windowVisible},
         {"framebuffer", {
             {"width", measurements.framebufferWidth},
             {"height", measurements.framebufferHeight}}},
