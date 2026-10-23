@@ -69,6 +69,7 @@ struct ViewerBenchmarkMeasurements
     std::string graphicsRenderer;
     std::string graphicsVersion;
     double elapsedSeconds = 0.0;
+    double warmupSeconds = 0.0;
     std::uint64_t simulationTicks = 0;
     std::size_t renderedFrames = 0;
     double processCpuSeconds = 0.0;

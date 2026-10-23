@@ -64,6 +64,7 @@ constexpr std::size_t demoLengthTicks = 900;
 // 지도 원점은 경사가 급해 이륙이 막히므로 주변에서 고른 완만한 지점을 쓴다.
 constexpr glm::dvec2 demoDroneStartMeters{171.3545, -92.7667};
 constexpr double benchmarkDurationSeconds = 5.0;
+constexpr double benchmarkWarmupDurationSeconds = 1.0;
 // OSM에 높이가 없어서 시연 상자에만 쓰는 명시적 가정이다. 실측값이 아니다.
 constexpr float missingBuildingHeightProxyMeters = 3.0F;
 
@@ -203,6 +204,24 @@ int AeroSimLabApp::Run()
     startTime_ = std::chrono::steady_clock::now();
     benchmarkCpuStart_ = std::clock();
     auto previousFrame = startTime_;
+
+    if (benchmarkMode_)
+    {
+        while (!window_->ShouldClose()
+            && std::chrono::steady_clock::now() - startTime_
+                < std::chrono::duration<double>(benchmarkWarmupDurationSeconds))
+        {
+            RunFrame(previousFrame);
+        }
+
+        // 초기 셰이더·버퍼 생성 지연은 측정 구간에서 빼고, 워밍업 뒤 기준값부터 기록한다.
+        benchmarkMeasurements_ = {};
+        benchmarkStartRenderedFrames_ = renderedFrames_;
+        benchmarkStartSimulationTicks_ = simulation_.TickCount();
+        benchmarkCpuStart_ = std::clock();
+        startTime_ = std::chrono::steady_clock::now();
+        previousFrame = startTime_;
+    }
 
     while (!window_->ShouldClose())
     {
@@ -958,13 +977,14 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     ViewerBenchmarkMeasurements measurements = benchmarkMeasurements_;
     measurements.sourceRevision = AEROSIMLAB_SOURCE_REVISION;
     measurements.windowVisible = visibleBenchmarkMode_;
+    measurements.warmupSeconds = benchmarkWarmupDurationSeconds;
     measurements.framebufferWidth = framebufferWidth;
     measurements.framebufferHeight = framebufferHeight;
     measurements.graphicsRenderer = glString(GL_RENDERER);
     measurements.graphicsVersion = glString(GL_VERSION);
     measurements.elapsedSeconds = elapsedSeconds;
-    measurements.simulationTicks = simulation_.TickCount();
-    measurements.renderedFrames = renderedFrames_;
+    measurements.simulationTicks = simulation_.TickCount() - benchmarkStartSimulationTicks_;
+    measurements.renderedFrames = renderedFrames_ - benchmarkStartRenderedFrames_;
     measurements.processCpuSeconds = static_cast<double>(
         std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC;
 #ifndef __EMSCRIPTEN__

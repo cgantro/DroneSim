@@ -115,6 +115,7 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             {"renderer", measurements.graphicsRenderer},
             {"version", measurements.graphicsVersion}}},
         {"elapsed_seconds", measurements.elapsedSeconds},
+        {"warmup_seconds", measurements.warmupSeconds},
         {"simulation_ticks", measurements.simulationTicks},
         {"rendered_frames", measurements.renderedFrames},
         {"render_fps", measurements.elapsedSeconds > 0.0
