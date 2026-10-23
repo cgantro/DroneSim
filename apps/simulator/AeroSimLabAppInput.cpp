@@ -97,6 +97,12 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
             reply.telemetry = CurrentTelemetry();
             return reply;
         };
+        const auto sendStatusReply = [this, &peer, &makeReply](const char* status)
+        {
+            auto reply = makeReply();
+            reply.status = status;
+            udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+        };
         if (decision == aerosimlab::communication::SequenceGuard::Decision::Duplicate)
         {
             if (lastReply_)
@@ -105,16 +111,12 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         }
         if (decision == aerosimlab::communication::SequenceGuard::Decision::OutOfOrder)
         {
-            auto reply = makeReply();
-            reply.status = "rejected_sequence";
-            udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+            sendStatusReply("rejected_sequence");
             return;
         }
         if (pendingCommand_)
         {
-            auto reply = makeReply();
-            reply.status = "busy";
-            udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+            sendStatusReply("busy");
             return;
         }
 
