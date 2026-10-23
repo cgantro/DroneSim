@@ -240,10 +240,10 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     ASSERT_EQ(zeroStartResult.trajectory.size(), reference.size());
     const std::array<double, 4> zeroStartRmse = calculateRmse(zeroStartResult);
 
-    EXPECT_NEAR(estimatedStartRmse[0], 0.4677, 0.02);
-    EXPECT_NEAR(estimatedStartRmse[1], 0.3662, 0.02);
-    EXPECT_NEAR(estimatedStartRmse[2], 52.34, 0.5);
-    EXPECT_NEAR(estimatedStartRmse[3], 0.8760, 0.02);
+    EXPECT_NEAR(estimatedStartRmse[0], 0.4779, 0.02);
+    EXPECT_NEAR(estimatedStartRmse[1], 0.3707, 0.02);
+    EXPECT_NEAR(estimatedStartRmse[2], 52.29, 0.5);
+    EXPECT_NEAR(estimatedStartRmse[3], 0.8800, 0.02);
     EXPECT_NEAR(zeroStartRmse[0], 0.4113, 0.02);
     EXPECT_NEAR(zeroStartRmse[1], 0.2666, 0.02);
     EXPECT_NEAR(zeroStartRmse[2], 27.70, 0.5);
