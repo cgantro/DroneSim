@@ -119,6 +119,9 @@ void SaveViewerBenchmarkReport(
 nlohmann::json MeasureDroneScaling(
     simulation::SimulationDynamics dynamics, DroneScalingLayout layout);
 
+/** @brief 같은 모의에 드론을 차례로 추가해 프로세스 메모리 증가를 추정한다. */
+nlohmann::json MeasureDroneMemoryScaling(simulation::SimulationDynamics dynamics);
+
 /** @brief 실제 시나리오 실행 경로에서 여러 드론의 공동 임무를 측정한다. */
 nlohmann::json MeasureCooperativeMissionScaling();
 #endif

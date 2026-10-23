@@ -996,6 +996,11 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
         return;
     }
 
+    report["drone_memory_scaling"] = {
+        {"kinematic", MeasureDroneMemoryScaling(
+            aerosimlab::simulation::SimulationDynamics::Kinematic)},
+        {"rigid_body", MeasureDroneMemoryScaling(
+            aerosimlab::simulation::SimulationDynamics::RigidBody)}};
     report["entity_scaling"] = {
         {"kinematic", MeasureDroneScaling(
             aerosimlab::simulation::SimulationDynamics::Kinematic,

@@ -552,6 +552,72 @@ nlohmann::json MeasureDroneScaling(
         {"runs", std::move(runs)}};
 }
 
+nlohmann::json MeasureDroneMemoryScaling(
+    aerosimlab::simulation::SimulationDynamics dynamics)
+{
+    constexpr std::array<std::size_t, 8> droneCounts{
+        1U, 8U, 32U, 64U, 128U, 256U, 512U, 1024U};
+    constexpr double droneSpacingMeters = 2.5;
+    const char* dynamicsName = dynamics
+            == aerosimlab::simulation::SimulationDynamics::RigidBody
+        ? "rigid_body" : "kinematic";
+
+    simulation::SimulationCore simulation{dynamics};
+    const auto oneDroneMemory = ReadProcessMemorySample();
+    const double groundOriginMeters = simulation.State().positionMeters.z;
+    nlohmann::json snapshots = nlohmann::json::array();
+
+    for (const std::size_t droneCount : droneCounts)
+    {
+        while (simulation.DroneCount() < droneCount)
+        {
+            const std::size_t nextIndex = simulation.DroneCount();
+            const glm::dvec3 positionMeters{
+                static_cast<double>(nextIndex) * droneSpacingMeters,
+                0.0,
+                groundOriginMeters};
+            static_cast<void>(simulation.AddDrone(positionMeters));
+        }
+
+        nlohmann::json snapshot{
+            {"drone_count", droneCount},
+            {"additional_drone_count", droneCount - 1U}};
+        const auto currentMemory = ReadProcessMemorySample();
+        if (currentMemory)
+        {
+            snapshot["process_private_bytes"] = currentMemory->privateBytes;
+            snapshot["process_working_set_bytes"] = currentMemory->workingSetBytes;
+        }
+        if (droneCount > 1U && oneDroneMemory && currentMemory)
+        {
+            const std::int64_t addedPrivateBytes =
+                static_cast<std::int64_t>(currentMemory->privateBytes)
+                - static_cast<std::int64_t>(oneDroneMemory->privateBytes);
+            snapshot["private_bytes_added_since_one_drone"] = addedPrivateBytes;
+            snapshot["estimate_valid"] = addedPrivateBytes >= 0;
+            if (addedPrivateBytes >= 0)
+            {
+                snapshot["estimated_private_bytes_per_additional_drone"] =
+                    static_cast<double>(addedPrivateBytes)
+                    / static_cast<double>(droneCount - 1U);
+            }
+        }
+        else
+        {
+            snapshot["estimate_valid"] = false;
+        }
+        snapshots.push_back(std::move(snapshot));
+    }
+
+    return {
+        {"dynamics", dynamicsName},
+        {"layout", "separated"},
+        {"spacing_meters", droneSpacingMeters},
+        {"method", "같은 SimulationCore에 드론을 1대부터 차례로 추가하고, 첫 1대 기준의 프로세스 메모리 증가를 기록"},
+        {"memory_source", "Windows PROCESS_MEMORY_COUNTERS_EX.PrivateUsage and WorkingSetSize"},
+        {"snapshots", std::move(snapshots)}};
+}
+
 nlohmann::json MeasureCooperativeMissionScaling()
 {
     using aerosimlab::simulation::RunScenario;
