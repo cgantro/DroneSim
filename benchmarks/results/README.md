@@ -12,6 +12,7 @@
 | 여러 드론이 가까이 있을 때의 충돌 후보 검사 | [충돌 쌍 측정](aerosimlab-drone-collision-pair-sweep-release-2026-10-23-8623be5c.json) |
 | EO 영상 픽셀을 GPU에서 읽어 오는 방식의 변경 | [비동기 픽셀 읽기 측정](aerosimlab-visible-pbo-persistent-map-2026-10-23.json) |
 | 화면 그리기 구간의 CPU·GPU 측정 | [화면 처리 진단](aerosimlab-visible-imgui-gpu-timing-2026-10-23.json) |
+| 강체 드론 충돌 후보 정렬 변경 전후 | [변경 전 원자료](archive/aerosimlab-full-benchmark-release-2026-10-23-94c39b94-before-sort-reuse.json), [변경 후 원자료](archive/aerosimlab-full-benchmark-release-2026-10-23-69ecab93-after-sort-reuse.json), [조건과 해석](../../docs/public/기술검토.md) |
 
 ## 과거 원자료
 
