@@ -70,11 +70,11 @@ struct SimulationCore::EcsStorage
     static void ApplyInitialPose(
         DroneState& state, DroneControlState& control, const InitialPose& pose) noexcept
     {
+        DroneModel::Reset(state, control);
         state.positionMeters = pose.positionMeters;
         state.yawRadians = pose.yawRadians;
         state.orientation = glm::angleAxis(
             pose.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
-        control = {};
         control.desiredYawRadians = pose.yawRadians;
         control.groundElevationMeters = pose.groundElevationMeters;
     }
@@ -528,7 +528,6 @@ void SimulationCore::Reset() noexcept
     for (auto& [id, drone] : ecs_->drones)
     {
         (void)id;
-        DroneModel::Reset(drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>());
         const EcsStorage::InitialPose& initialPose = drone.get<EcsStorage::InitialPose>();
         EcsStorage::ApplyInitialPose(
             drone.get_mut<DroneState>(), drone.get_mut<DroneControlState>(), initialPose);
