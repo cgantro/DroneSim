@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <future>
 #include <optional>
 #include <sstream>
@@ -65,7 +66,7 @@ struct AppState
     std::uint32_t nextSequence = 1;
     /** @brief 비동기 작업이 빌려 쓴다. 뒤에 선언된 future가 먼저 파괴되어, 작업이 끝난 뒤 소켓이 닫힌다. */
     std::optional<aerosimlab::communication::UdpSocket> socket;
-    std::optional<aerosimlab::communication::CommandPacket> queuedCommand;
+    std::deque<aerosimlab::communication::CommandPacket> queuedCommands;
     std::stop_source requestStopSource;
     std::future<aerosimlab::ground_control::CommandResult> request;
     std::chrono::steady_clock::time_point nextStatusPoll{};
@@ -412,7 +413,7 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
         }
         if (state->requestPending && state->statusRequest)
         {
-            state->queuedCommand = std::move(packet);
+            state->queuedCommands.push_back(std::move(packet));
             return 0;
         }
         StartRequest(window, *state, std::move(packet));
@@ -423,10 +424,10 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
             && state->request.wait_for(std::chrono::milliseconds::zero()) == std::future_status::ready)
         {
             ShowResult(*state);
-            if (state->queuedCommand)
+            if (!state->queuedCommands.empty())
             {
-                auto packet = std::move(*state->queuedCommand);
-                state->queuedCommand.reset();
+                auto packet = std::move(state->queuedCommands.front());
+                state->queuedCommands.pop_front();
                 StartRequest(window, *state, std::move(packet));
             }
         }
@@ -440,7 +441,7 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
         return 0;
     case WM_CLOSE:
         KillTimer(window, requestTimerId);
-        state->queuedCommand.reset();
+        state->queuedCommands.clear();
         if (state->requestPending)
         {
             // 작업이 빌려 쓴 UDP 소켓은 취소된 요청이 끝난 뒤 정리한다.
