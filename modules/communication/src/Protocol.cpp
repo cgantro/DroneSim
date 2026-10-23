@@ -121,6 +121,73 @@ std::uint32_t Read32(const Json& value, const char* name)
     return static_cast<std::uint32_t>(number);
 }
 
+void ReadOptionalDroneState(const Json& telemetry, simulation::DroneState& state)
+{
+    if (telemetry.contains("velocity_meters_per_second"))
+        state.velocityMetersPerSecond = ReadVector(Required(telemetry, "velocity_meters_per_second"));
+    if (telemetry.contains("orientation_quaternion"))
+        state.orientation = ReadQuaternion(Required(telemetry, "orientation_quaternion"));
+    if (telemetry.contains("angular_velocity_radians_per_second"))
+        state.angularVelocityRadiansPerSecond =
+            ReadVector(Required(telemetry, "angular_velocity_radians_per_second"));
+    if (telemetry.contains("motor_speeds_radians_per_second"))
+    {
+        const Json& speeds = Required(telemetry, "motor_speeds_radians_per_second");
+        if (!speeds.is_array() || speeds.size() != state.motorSpeedsRadiansPerSecond.size())
+            throw std::invalid_argument("로터 속도는 네 개 숫자로 된 배열이어야 합니다.");
+        for (std::size_t index = 0; index < speeds.size(); ++index)
+        {
+            state.motorSpeedsRadiansPerSecond[index] =
+                ReadFinite(speeds[index], "motor_speeds_radians_per_second");
+        }
+    }
+    if (telemetry.contains("yaw_radians"))
+        state.yawRadians = ReadFinite(Required(telemetry, "yaw_radians"), "yaw_radians");
+}
+
+std::vector<DroneTelemetry> ReadFleetTelemetry(const Json& telemetry)
+{
+    std::vector<DroneTelemetry> drones;
+    if (!telemetry.contains("drones"))
+        return drones;
+
+    const Json& items = telemetry["drones"];
+    if (!items.is_array() || items.size() > maximumFleetDroneCount)
+        throw std::invalid_argument("편대 드론 목록의 형식이나 크기가 잘못되었습니다.");
+    drones.reserve(items.size());
+    for (const Json& item : items)
+    {
+        if (!item.is_object() || !Required(item, "name").is_string())
+            throw std::invalid_argument("편대 드론 이름이 올바르지 않습니다.");
+        drones.push_back({
+            ReadUnsigned(Required(item, "id"), "drone.id"),
+            Required(item, "name").get<std::string>(),
+            ReadFlightMode(Required(item, "flight_mode")),
+            ReadVector(Required(item, "position_meters"))});
+    }
+    return drones;
+}
+
+Telemetry ReadTelemetry(const Json& value)
+{
+    Telemetry telemetry;
+    telemetry.tick = ReadUnsigned(Required(value, "tick"), "tick");
+    telemetry.simulationTimeSeconds = ReadFinite(
+        Required(value, "simulation_time_seconds"), "simulation_time_seconds");
+
+    auto& drone = telemetry.drone;
+    drone.mode = ReadFlightMode(Required(value, "flight_mode"));
+    drone.positionMeters = ReadVector(Required(value, "position_meters"));
+    ReadOptionalDroneState(value, drone);
+
+    auto& camera = telemetry.camera;
+    camera.status = ReadCameraStatus(Required(value, "camera_status"));
+    camera.frameCount = ReadUnsigned(Required(value, "camera_frame_count"), "camera_frame_count");
+    camera.lastFrameTick = ReadUnsigned(Required(value, "camera_last_frame_tick"), "camera_last_frame_tick");
+    telemetry.drones = ReadFleetTelemetry(value);
+    return telemetry;
+}
+
 CameraCommand ReadCameraCommand(std::string_view action)
 {
     if (action == "enable") return CameraCommand::Enable;
@@ -348,54 +415,7 @@ CommandReply DecodeReply(std::string_view datagram)
     reply.status = Required(payload, "status").get<std::string>();
     reply.receivedAtMilliseconds = ReadUnsigned(Required(payload, "received_at_ms"), "received_at_ms");
     reply.appliedTick = ReadUnsigned(Required(payload, "applied_tick"), "applied_tick");
-    const Json& telemetry = Required(payload, "telemetry");
-    reply.telemetry.tick = ReadUnsigned(Required(telemetry, "tick"), "tick");
-    reply.telemetry.simulationTimeSeconds = ReadFinite(
-        Required(telemetry, "simulation_time_seconds"), "simulation_time_seconds");
-    auto& state = reply.telemetry.drone;
-    state.mode = ReadFlightMode(Required(telemetry, "flight_mode"));
-    state.positionMeters = ReadVector(Required(telemetry, "position_meters"));
-    if (telemetry.contains("velocity_meters_per_second"))
-        state.velocityMetersPerSecond = ReadVector(Required(telemetry, "velocity_meters_per_second"));
-    if (telemetry.contains("orientation_quaternion"))
-        state.orientation = ReadQuaternion(Required(telemetry, "orientation_quaternion"));
-    if (telemetry.contains("angular_velocity_radians_per_second"))
-        state.angularVelocityRadiansPerSecond =
-            ReadVector(Required(telemetry, "angular_velocity_radians_per_second"));
-    if (telemetry.contains("motor_speeds_radians_per_second"))
-    {
-        const Json& speeds = Required(telemetry, "motor_speeds_radians_per_second");
-        if (!speeds.is_array() || speeds.size() != state.motorSpeedsRadiansPerSecond.size())
-            throw std::invalid_argument("로터 속도는 네 개 숫자로 된 배열이어야 합니다.");
-        for (std::size_t index = 0; index < speeds.size(); ++index)
-        {
-            state.motorSpeedsRadiansPerSecond[index] =
-                ReadFinite(speeds[index], "motor_speeds_radians_per_second");
-        }
-    }
-    if (telemetry.contains("yaw_radians"))
-        state.yawRadians = ReadFinite(Required(telemetry, "yaw_radians"), "yaw_radians");
-    auto& camera = reply.telemetry.camera;
-    camera.status = ReadCameraStatus(Required(telemetry, "camera_status"));
-    camera.frameCount = ReadUnsigned(Required(telemetry, "camera_frame_count"), "camera_frame_count");
-    camera.lastFrameTick = ReadUnsigned(Required(telemetry, "camera_last_frame_tick"), "camera_last_frame_tick");
-    if (telemetry.contains("drones"))
-    {
-        const Json& drones = telemetry["drones"];
-        if (!drones.is_array() || drones.size() > maximumFleetDroneCount)
-            throw std::invalid_argument("편대 드론 목록의 형식이나 크기가 잘못되었습니다.");
-        reply.telemetry.drones.reserve(drones.size());
-        for (const Json& item : drones)
-        {
-            if (!item.is_object() || !Required(item, "name").is_string())
-                throw std::invalid_argument("편대 드론 이름이 올바르지 않습니다.");
-            reply.telemetry.drones.push_back({
-                ReadUnsigned(Required(item, "id"), "drone.id"),
-                Required(item, "name").get<std::string>(),
-                ReadFlightMode(Required(item, "flight_mode")),
-                ReadVector(Required(item, "position_meters"))});
-        }
-    }
+    reply.telemetry = ReadTelemetry(Required(payload, "telemetry"));
     return reply;
 }
 
