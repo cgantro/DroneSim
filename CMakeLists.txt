@@ -282,6 +282,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_simulator_app PRIVATE
       apps/simulator/AeroSimLabAppEoCapture.cpp
+      apps/simulator/CooperativeMissionBenchmark.cpp
       apps/simulator/SimulatorHud.cpp
     )
   endif()
