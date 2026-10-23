@@ -272,7 +272,7 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     EXPECT_NEAR(increasedThrustRmse[3], 1.4210, 0.02);
 
     const Json recentFlightFixture = Json::parse(ReadScenarioFixture(
-        "tests/data/px4_x500_position_replay_2026_10_16_79s.json"));
+        "tests/data/px4_x500_position_replay_2026_10_16_100s.json"));
     const Json& recentReference = recentFlightFixture.at("reference_samples");
     const ScenarioResult recentFlightResult = RunScenario(recentFlightFixture.dump());
     ASSERT_TRUE(recentFlightResult.passed);
@@ -280,13 +280,31 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     const std::array<double, 4> recentFlightRmse = calculateRmse(
         recentReference, recentFlightResult);
 
-    EXPECT_NEAR(recentFlightRmse[0], 1.4622, 0.03);
-    EXPECT_NEAR(recentFlightRmse[1], 0.9196, 0.03);
-    EXPECT_NEAR(recentFlightRmse[2], 64.594, 0.5);
-    EXPECT_NEAR(recentFlightRmse[3], 0.6725, 0.03);
+    EXPECT_NEAR(recentFlightRmse[0], 1.0406, 0.03);
+    EXPECT_NEAR(recentFlightRmse[1], 0.8019, 0.03);
+    EXPECT_NEAR(recentFlightRmse[2], 58.96, 0.5);
+    EXPECT_NEAR(recentFlightRmse[3], 0.7965, 0.03);
+
+    // 같은 구간에서 추력 계수만 높였을 때 오차가 어떻게 달라지는지 확인한다.
+    Json increasedThrustRecentScenario = recentFlightFixture;
+    auto& recentQuadrotorModel = increasedThrustRecentScenario["quadrotor_model"];
+    recentQuadrotorModel["thrust_coefficient_newtons_per_speed_squared"] = 1.1
+        * recentQuadrotorModel
+            ["thrust_coefficient_newtons_per_speed_squared"].get<double>();
+    const ScenarioResult increasedThrustRecentResult =
+        RunScenario(increasedThrustRecentScenario.dump());
+    ASSERT_TRUE(increasedThrustRecentResult.passed);
+    ASSERT_EQ(increasedThrustRecentResult.trajectory.size(), recentReference.size());
+    const std::array<double, 4> increasedThrustRecentRmse = calculateRmse(
+        recentReference, increasedThrustRecentResult);
+
+    EXPECT_NEAR(increasedThrustRecentRmse[0], 2.1274, 0.03);
+    EXPECT_NEAR(increasedThrustRecentRmse[1], 1.5109, 0.03);
+    EXPECT_NEAR(increasedThrustRecentRmse[2], 82.98, 0.5);
+    EXPECT_NEAR(increasedThrustRecentRmse[3], 1.0697, 0.03);
 
     Json px4GeometryRecentScenario = recentFlightFixture;
-    // 공개 기록에 저장된 FRD 위치를 프로젝트의 FLU 좌표로 바꾼 로터 배치다.
+    // 공개 기록의 FRD 로터 위치를 프로젝트의 FLU 좌표로 바꿔 적용한다.
     px4GeometryRecentScenario["quadrotor_model"]["rotor_positions_meters"] = {
         {0.24, -0.24, 0.0}, {-0.24, 0.24, 0.0},
         {0.24, 0.24, 0.0}, {-0.24, -0.24, 0.0}};
@@ -297,10 +315,10 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     const std::array<double, 4> px4GeometryRecentRmse = calculateRmse(
         recentReference, px4GeometryRecentResult);
 
-    EXPECT_NEAR(px4GeometryRecentRmse[0], 1.5218, 0.03);
-    EXPECT_NEAR(px4GeometryRecentRmse[1], 0.9462, 0.03);
-    EXPECT_NEAR(px4GeometryRecentRmse[2], 61.2608, 0.5);
-    EXPECT_NEAR(px4GeometryRecentRmse[3], 0.7334, 0.03);
+    EXPECT_NEAR(px4GeometryRecentRmse[0], 1.2417, 0.03);
+    EXPECT_NEAR(px4GeometryRecentRmse[1], 0.9491, 0.03);
+    EXPECT_NEAR(px4GeometryRecentRmse[2], 76.30, 0.5);
+    EXPECT_NEAR(px4GeometryRecentRmse[3], 1.0214, 0.03);
 
     Json zeroSpeedRecentScenario = recentFlightFixture;
     zeroSpeedRecentScenario["drones"][0]["initial_motor_speeds_radians_per_second"] =
@@ -312,12 +330,12 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     const std::array<double, 4> zeroSpeedRecentRmse = calculateRmse(
         recentReference, zeroSpeedRecentResult);
 
-    EXPECT_NEAR(zeroSpeedRecentRmse[0], 1.5591, 0.03);
-    EXPECT_NEAR(zeroSpeedRecentRmse[1], 0.9167, 0.03);
-    EXPECT_NEAR(zeroSpeedRecentRmse[2], 60.5205, 0.5);
-    EXPECT_NEAR(zeroSpeedRecentRmse[3], 0.6184, 0.03);
+    EXPECT_NEAR(zeroSpeedRecentRmse[0], 0.8946, 0.03);
+    EXPECT_NEAR(zeroSpeedRecentRmse[1], 0.6488, 0.03);
+    EXPECT_NEAR(zeroSpeedRecentRmse[2], 51.14, 0.5);
+    EXPECT_NEAR(zeroSpeedRecentRmse[3], 0.7191, 0.03);
 
-    // 제조사 시험표에서 추정한 모터 값을 쓰되, 시작 속도도 같은 설정으로 다시 계산한다.
+    // 제조사 시험표 추정값으로 바꾸고, 시작 RPM도 같은 설정으로 다시 계산한다.
     Json motorTableRecentScenario = recentFlightFixture;
     auto& motorModel = motorTableRecentScenario["quadrotor_model"];
     motorModel["thrust_coefficient_newtons_per_speed_squared"] = 1.2294935e-5;
@@ -338,10 +356,10 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     const std::array<double, 4> motorTableRecentRmse = calculateRmse(
         recentReference, motorTableRecentResult);
 
-    EXPECT_NEAR(motorTableRecentRmse[0], 5.8606, 0.05);
-    EXPECT_NEAR(motorTableRecentRmse[1], 4.8458, 0.05);
-    EXPECT_NEAR(motorTableRecentRmse[2], 104.237, 0.5);
-    EXPECT_NEAR(motorTableRecentRmse[3], 1.9827, 0.05);
+    EXPECT_NEAR(motorTableRecentRmse[0], 5.4541, 0.05);
+    EXPECT_NEAR(motorTableRecentRmse[1], 3.8809, 0.05);
+    EXPECT_NEAR(motorTableRecentRmse[2], 138.29, 0.5);
+    EXPECT_NEAR(motorTableRecentRmse[3], 1.8037, 0.05);
 }
 
 void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()

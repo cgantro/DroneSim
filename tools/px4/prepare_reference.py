@@ -8,10 +8,13 @@ import json
 import math
 from pathlib import Path
 
-from pyulog import ULog
-
-
 STEP_SECONDS = 1.0 / 60.0
+MAXIMUM_SAMPLE_GAP_MICROSECONDS = {
+    "vehicle_local_position": 250_000,
+    "vehicle_attitude": 20_000,
+    "vehicle_angular_velocity": 20_000,
+    "actuator_motors": 20_000,
+}
 QUADROTOR_MODEL = {
     "mass_kg": 2.0643076923076924,
     "principal_inertia_kg_m2": [
@@ -125,8 +128,16 @@ def _project_attitude(px4_quaternion: list[float]) -> list[float]:
 class TopicSamples:
     """한 ULog 주제의 시각 배열과 필요한 값만 보관한다."""
 
-    def __init__(self, dataset) -> None:
+    def __init__(
+        self,
+        dataset,
+        topic_name: str,
+        maximum_gap_microseconds: int,
+    ) -> None:
         self.data = dataset.data
+        self.topic_name = topic_name
+        self.maximum_gap_microseconds = maximum_gap_microseconds
+        self.maximum_observed_gap_microseconds = 0
         self.times = [int(value) for value in self.data["timestamp"]]
         if len(self.times) < 2 or any(
             current <= previous for previous, current in zip(self.times, self.times[1:])
@@ -138,7 +149,17 @@ class TopicSamples:
         if right == 0 or right == len(self.times):
             raise ValueError("선택한 구간에 보간할 표본이 부족합니다.")
         left = right - 1
-        ratio = (time_us - self.times[left]) / (self.times[right] - self.times[left])
+        gap_microseconds = self.times[right] - self.times[left]
+        self.maximum_observed_gap_microseconds = max(
+            self.maximum_observed_gap_microseconds,
+            gap_microseconds,
+        )
+        if gap_microseconds > self.maximum_gap_microseconds:
+            raise ValueError(
+                f"{self.topic_name} 표본 사이 공백 {gap_microseconds / 1000.0:.1f}ms가 "
+                f"허용치 {self.maximum_gap_microseconds / 1000.0:.1f}ms를 넘습니다."
+            )
+        ratio = (time_us - self.times[left]) / gap_microseconds
         return left, right, ratio
 
     def scalar(self, field: str, time_us: int) -> float:
@@ -211,7 +232,14 @@ def _load_topics(log: ULog) -> tuple[TopicSamples, TopicSamples, TopicSamples, T
     missing = [name for name in required if name not in datasets]
     if missing:
         raise ValueError("로그에 필요한 주제가 없습니다: " + ", ".join(missing))
-    return tuple(TopicSamples(datasets[name]) for name in required)
+    return tuple(
+        TopicSamples(
+            datasets[name],
+            name,
+            MAXIMUM_SAMPLE_GAP_MICROSECONDS[name],
+        )
+        for name in required
+    )
 
 
 def prepare_scenario(
@@ -220,6 +248,8 @@ def prepare_scenario(
     duration_seconds: float,
     source_id: str | None,
 ) -> dict:
+    from pyulog import ULog
+
     log = ULog(str(log_path))
     position, attitude, angular_velocity, motors = _load_topics(log)
     tick_count_float = duration_seconds / STEP_SECONDS
@@ -303,6 +333,13 @@ def prepare_scenario(
             "angular_velocity": "FRD [forward,right,down] to FLU [forward,left,up]",
             "motor_input": "actuator_motors.control; normalized thrust, linearly interpolated",
             "initial_motor_speed": "estimated from normalized thrust; not measured RPM",
+            "maximum_observed_sample_gap_microseconds": {
+                "vehicle_local_position": position.maximum_observed_gap_microseconds,
+                "vehicle_attitude": attitude.maximum_observed_gap_microseconds,
+                "vehicle_angular_velocity": angular_velocity.maximum_observed_gap_microseconds,
+                "actuator_motors": motors.maximum_observed_gap_microseconds,
+            },
+            "maximum_allowed_sample_gap_microseconds": MAXIMUM_SAMPLE_GAP_MICROSECONDS,
         },
         "reference_samples": reference_samples,
     }
