@@ -1145,6 +1145,81 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
         std::invalid_argument);
 }
 
+void Verify_ScenarioRunner_CompletesTasksAfterSimultaneousOutage()
+{
+    using Json = nlohmann::json;
+    constexpr std::uint64_t missionStartTick = 90U;
+    constexpr std::uint64_t missionDeadlineTick = missionStartTick + 600U;
+    constexpr std::uint64_t scenarioTicks = missionDeadlineTick + 30U;
+    constexpr std::array droneCounts{4U, 16U, 64U, 256U};
+    for (const std::size_t droneCount : droneCounts)
+    {
+        Json drones = Json::array();
+        Json commands = Json::array();
+        Json tasks = Json::array();
+        Json expectedDrones = Json::array();
+        Json outages = Json::array();
+        const std::size_t outageCount = droneCount / 4U;
+        for (std::size_t index = 0; index < droneCount; ++index)
+        {
+            const std::string name = "drone-" + std::to_string(index);
+            const double startX = static_cast<double>(index) * 5.0;
+            drones.push_back({
+                {"name", name},
+                {"initial_position_meters", {startX, 0.0, 0.0}}});
+            commands.push_back({{"tick", 0}, {"drone", name}, {"type", "takeoff"}});
+            tasks.push_back({
+                {"name", "task-" + std::to_string(index)},
+                {"role", "survey"},
+                {"drone", name},
+                {"target_position_meters", {startX + 0.5, 0.0, 1.5}},
+                {"start_tick", missionStartTick},
+                {"deadline_tick", missionDeadlineTick},
+                {"tolerance_meters", 0.05}});
+            expectedDrones.push_back({
+                {"name", name},
+                {"mode", "hovering"},
+                {"position_meters", {startX + 0.5, 0.0, 1.5}}});
+            if (index % 4U == 0U)
+            {
+                outages.push_back({
+                    {"drone", name},
+                    {"start_tick", missionStartTick - 5U},
+                    {"end_tick", scenarioTicks},
+                    {"heartbeat_timeout_ticks", 3U},
+                    {"on_timeout", "hold_position"}});
+            }
+        }
+
+        const Json scenario{
+            {"version", 1},
+            {"dynamics", "kinematic"},
+            {"ticks", scenarioTicks},
+            {"drones", std::move(drones)},
+            {"commands", std::move(commands)},
+            {"communication_outages", std::move(outages)},
+            {"mission", {{"name", "reallocation"}, {"tasks", std::move(tasks)}}},
+            {"expected", {
+                {"tolerance_meters", 10'000.0},
+                {"drones", std::move(expectedDrones)}}}};
+
+        const ScenarioResult result = RunScenario(scenario.dump());
+        ASSERT_TRUE(result.passed) << "drone_count=" << droneCount << ": "
+            << (result.issues.empty() ? "임무가 완료되지 않았습니다." : result.issues.front());
+        ASSERT_TRUE(result.mission.has_value());
+        EXPECT_TRUE(result.mission->passed) << "drone_count=" << droneCount;
+        EXPECT_EQ(result.mission->completedTaskCount, droneCount)
+            << "drone_count=" << droneCount;
+        const std::size_t reassignedTaskCount = static_cast<std::size_t>(std::count_if(
+            result.mission->tasks.begin(), result.mission->tasks.end(),
+            [](const ScenarioResult::MissionTask& task)
+            {
+                return task.reassignmentCount > 0U;
+            }));
+        EXPECT_GE(reassignedTaskCount, outageCount) << "drone_count=" << droneCount;
+    }
+}
+
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
@@ -1181,6 +1256,8 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_CompletesTasksAfterSimultaneousOutage());
 
     constexpr std::string_view duplicateMissionAssignment = R"json(
     {"version":1,"dynamics":"kinematic","ticks":2,

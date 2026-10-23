@@ -132,10 +132,11 @@ Json BuildCoordinatorReallocationScenario(std::size_t droneCount)
         task["deadline_tick"] = missionDeadlineTick;
 
     Json outages = Json::array();
-    for (std::size_t index = 0; index < outageCount; ++index)
+    for (std::size_t outageIndex = 0; outageIndex < outageCount; ++outageIndex)
     {
+        const std::size_t droneIndex = outageIndex * 4U;
         outages.push_back({
-            {"drone", "drone-" + std::to_string(index)},
+            {"drone", "drone-" + std::to_string(droneIndex)},
             {"start_tick", outageStartTick},
             {"end_tick", scenarioTicks},
             {"heartbeat_timeout_ticks", 3U},
