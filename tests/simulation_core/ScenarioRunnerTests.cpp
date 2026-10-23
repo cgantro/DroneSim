@@ -1,11 +1,14 @@
 #include "simulation_core/ScenarioRunner.h"
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -171,6 +174,80 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(invalidInitialMotorSpeeds)),
         std::invalid_argument);
+}
+
+void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
+{
+    using Json = nlohmann::json;
+    const std::string fixtureText = ReadScenarioFixture(
+        "tests/data/px4_x500_position_replay_12_05.json");
+    const Json fixture = Json::parse(fixtureText);
+    const Json& reference = fixture.at("reference_samples");
+    const auto calculateRmse = [&](const ScenarioResult& result)
+    {
+        const glm::dvec3 initialPosition =
+            result.trajectory.front().drones.front().second.positionMeters;
+        std::array<double, 4> squaredErrorSums{};
+        for (std::size_t index = 0; index < reference.size(); ++index)
+        {
+            const DroneState& state = result.trajectory[index].drones.front().second;
+            const Json& sample = reference[index];
+            const auto readVector = [&](const char* key)
+            {
+                const Json& values = sample.at(key);
+                return glm::dvec3{
+                    values[0].get<double>(), values[1].get<double>(),
+                    values[2].get<double>()};
+            };
+            const glm::dvec3 positionError = state.positionMeters - initialPosition
+                - readVector("position_delta_enu");
+            const glm::dvec3 velocityError = state.velocityMetersPerSecond
+                - readVector("velocity_enu");
+            const glm::dvec3 angularVelocityError =
+                state.angularVelocityRadiansPerSecond
+                - readVector("angular_velocity_flu");
+            squaredErrorSums[0] += glm::dot(positionError, positionError);
+            squaredErrorSums[1] += glm::dot(velocityError, velocityError);
+            squaredErrorSums[3] += glm::dot(angularVelocityError, angularVelocityError);
+
+            const Json& values = sample.at("orientation_wxyz");
+            const glm::dquat referenceOrientation{
+                values[0].get<double>(), values[1].get<double>(),
+                values[2].get<double>(), values[3].get<double>()};
+            const double cosineHalfAngle = std::clamp(
+                std::abs(glm::dot(glm::normalize(state.orientation), referenceOrientation)),
+                0.0, 1.0);
+            const double attitudeErrorRadians = 2.0 * std::acos(cosineHalfAngle);
+            squaredErrorSums[2] += attitudeErrorRadians * attitudeErrorRadians;
+        }
+
+        for (double& sum : squaredErrorSums)
+            sum = std::sqrt(sum / static_cast<double>(reference.size()));
+        squaredErrorSums[2] *= 180.0 / std::numbers::pi;
+        return squaredErrorSums;
+    };
+
+    const ScenarioResult estimatedStartResult = RunScenario(fixtureText);
+    ASSERT_TRUE(estimatedStartResult.passed);
+    ASSERT_EQ(estimatedStartResult.trajectory.size(), reference.size());
+    const std::array<double, 4> estimatedStartRmse = calculateRmse(estimatedStartResult);
+
+    Json zeroStartScenario = fixture;
+    zeroStartScenario["drones"][0]["initial_motor_speeds_radians_per_second"] =
+        {0.0, 0.0, 0.0, 0.0};
+    const ScenarioResult zeroStartResult = RunScenario(zeroStartScenario.dump());
+    ASSERT_TRUE(zeroStartResult.passed);
+    ASSERT_EQ(zeroStartResult.trajectory.size(), reference.size());
+    const std::array<double, 4> zeroStartRmse = calculateRmse(zeroStartResult);
+
+    EXPECT_NEAR(estimatedStartRmse[0], 0.4677, 0.02);
+    EXPECT_NEAR(estimatedStartRmse[1], 0.3662, 0.02);
+    EXPECT_NEAR(estimatedStartRmse[2], 52.34, 0.5);
+    EXPECT_NEAR(estimatedStartRmse[3], 0.8760, 0.02);
+    EXPECT_NEAR(zeroStartRmse[0], 0.4113, 0.02);
+    EXPECT_NEAR(zeroStartRmse[1], 0.2666, 0.02);
+    EXPECT_NEAR(zeroStartRmse[2], 27.70, 0.5);
+    EXPECT_NEAR(zeroStartRmse[3], 0.5568, 0.02);
 }
 
 void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
@@ -764,6 +841,8 @@ TEST(ScenarioRunnerTests, CoreScenarios)
         Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange());

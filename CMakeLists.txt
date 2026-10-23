@@ -368,6 +368,7 @@ if(BUILD_TESTING)
   endif()
   target_link_libraries(aerosimlab_simulation_tests PRIVATE
     aerosimlab_simulation_core
+    nlohmann_json::nlohmann_json
     GTest::gtest_main
   )
   gtest_discover_tests(aerosimlab_simulation_tests
