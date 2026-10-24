@@ -71,7 +71,7 @@
   },
   "expected": {
     "tolerance_meters": 0.01,
-    "minimum_drone_separation_meters": 1.0,
+    "minimum_drone_separation_meters": 2.0,
     "drones": [
       {"name": "scout-1", "mode": "hovering", "position_meters": [4, 0, 1.5]},
       {"name": "scout-2", "mode": "following_waypoint", "position_meters": [10.333333333333336, 0, 1.5]},

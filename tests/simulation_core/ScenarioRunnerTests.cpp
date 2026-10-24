@@ -526,7 +526,7 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     EXPECT_TRUE(result.passed)
         << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
-    EXPECT_GE(*result.minimumDroneSeparationMeters, 1.0);
+    EXPECT_GE(*result.minimumDroneSeparationMeters, 2.0);
     EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Passed);
     ASSERT_TRUE(result.mission.has_value());
     ASSERT_TRUE(result.mission->passed);
@@ -583,7 +583,7 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
         << " predicted=" << physicalResult.minimumPredictedDroneSeparationMeters.value_or(-1.0)
         << " avoidance_events=" << physicalResult.collisionAvoidanceEvents;
     ASSERT_TRUE(physicalResult.minimumDroneSeparationMeters.has_value());
-    EXPECT_GE(*physicalResult.minimumDroneSeparationMeters, 1.0);
+    EXPECT_GE(*physicalResult.minimumDroneSeparationMeters, 2.0);
     EXPECT_GT(physicalResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(physicalResult.mission.has_value());
     EXPECT_EQ(physicalResult.mission->outcome, ScenarioResult::Outcome::Passed);
