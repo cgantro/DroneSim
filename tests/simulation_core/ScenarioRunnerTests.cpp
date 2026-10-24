@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
 #include <string>
@@ -178,7 +179,7 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
         std::invalid_argument);
 }
 
-void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
+void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
 {
     using Json = nlohmann::json;
     const std::string fixtureText = ReadScenarioFixture(
@@ -284,6 +285,29 @@ void Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts()
     EXPECT_NEAR(recentFlightRmse[1], 0.8019, 0.03);
     EXPECT_NEAR(recentFlightRmse[2], 58.96, 0.5);
     EXPECT_NEAR(recentFlightRmse[3], 0.7965, 0.03);
+
+    // 상대 궤적과 입력은 그대로 두고 시작 높이만 올려 평지 접촉을 피한다.
+    Json freeFlightScenario = recentFlightFixture;
+    freeFlightScenario["drones"][0]["initial_position_meters"][2] =
+        freeFlightScenario["drones"][0]["initial_position_meters"][2].get<double>()
+        + 100.0;
+    const ScenarioResult freeFlightResult = RunScenario(freeFlightScenario.dump());
+    ASSERT_TRUE(freeFlightResult.passed);
+    ASSERT_EQ(freeFlightResult.trajectory.size(), recentReference.size());
+    const std::array<double, 4> freeFlightRmse = calculateRmse(
+        recentReference, freeFlightResult);
+    double lowestFreeFlightHeightMeters = std::numeric_limits<double>::infinity();
+    for (const ScenarioResult::TrajectorySample& frame : freeFlightResult.trajectory)
+    {
+        lowestFreeFlightHeightMeters = std::min(
+            lowestFreeFlightHeightMeters,
+            frame.drones.front().second.positionMeters.z);
+    }
+    EXPECT_GT(lowestFreeFlightHeightMeters, 50.0);
+    EXPECT_NEAR(freeFlightRmse[0], 20.6406, 0.03);
+    EXPECT_NEAR(freeFlightRmse[1], 14.9430, 0.03);
+    EXPECT_NEAR(freeFlightRmse[2], 106.55, 0.5);
+    EXPECT_NEAR(freeFlightRmse[3], 2.9175, 0.03);
 
     // 같은 구간에서 추력 계수만 높였을 때 오차가 어떻게 달라지는지 확인한다.
     Json increasedThrustRecentScenario = recentFlightFixture;
@@ -1287,7 +1311,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust());
     EXPECT_NO_FATAL_FAILURE(
-        Verify_ScenarioRunner_ComparesPx4ReferenceWithEstimatedAndZeroRotorStarts());
+        Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange());
