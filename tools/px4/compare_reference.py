@@ -189,7 +189,8 @@ def main() -> int:
         f"추력 계수 {model['thrust_coefficient_newtons_per_speed_squared']:.5g}, "
         f"토크 비 {model['moment_to_thrust_ratio']:.5g}, "
         f"모터 응답 {model['motor_time_constant_up_seconds']:.4g}/"
-        f"{model['motor_time_constant_down_seconds']:.4g}s"
+        f"{model['motor_time_constant_down_seconds']:.4g}s, "
+        f"최대 회전수 {model['maximum_motor_speed_radians_per_second']:.5g}rad/s"
     )
     print("오차 RMSE")
     print(f"  위치:     {metrics['position_rmse_meters']:.4f} m")
