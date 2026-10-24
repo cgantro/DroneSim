@@ -24,15 +24,16 @@ class TopicSamplesTests(unittest.TestCase):
             "z_reset_counter": [7, 7, 7, 7, 7, 7],
         }), "vehicle_local_position", 250_000)
         landed = TopicSamples(SimpleNamespace(data={
-            "timestamp": [0, 100_000, 200_000, 300_000, 400_000, 500_000],
-            "landed": [True, True, True, False, False, False],
+            "timestamp": [100_000, 200_000, 300_000, 400_000, 500_000],
+            "landed": [True, True, False, False, False],
         }), "vehicle_land_detected", 2_000_000)
 
-        height, ground_z = _initial_height_above_ground(
+        height, ground_z, sample_count = _initial_height_above_ground(
             position, landed, 400_000, 500_000)
 
         self.assertAlmostEqual(ground_z, 564.70)
         self.assertAlmostEqual(height, 0.50)
+        self.assertEqual(sample_count, 2)
 
     def test_start_height_rejects_vertical_origin_reset_in_comparison_window(self) -> None:
         position = TopicSamples(SimpleNamespace(data={

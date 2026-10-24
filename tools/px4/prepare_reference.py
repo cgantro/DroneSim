@@ -288,7 +288,7 @@ def _initial_height_above_ground(
     landed: TopicSamples | None,
     start_us: int,
     end_us: int,
-) -> tuple[float, float | None]:
+) -> tuple[float, float | None, int]:
     """시뮬레이터 지면을 기준으로 시작 높이를 구한다."""
     start_left, start_right, _ = position._bracket(start_us)
     end_left, end_right, _ = position._bracket(end_us)
@@ -300,11 +300,13 @@ def _initial_height_above_ground(
             raise ValueError("선택 구간 중 PX4 수직 위치 원점이 바뀌어 연속 비교할 수 없습니다.")
 
     if landed is None:
-        return -position.scalar("z", start_us), None
+        return -position.scalar("z", start_us), None, 0
 
     ground_samples = []
     first_reset = None
-    for position_index, time_us in enumerate(position.times):
+    first_position_index = bisect.bisect_left(position.times, landed.times[0])
+    for position_index in range(first_position_index, len(position.times)):
+        time_us = position.times[position_index]
         if time_us > start_us:
             break
         landed_index = bisect.bisect_right(landed.times, time_us) - 1
@@ -313,6 +315,12 @@ def _initial_height_above_ground(
                 > MAXIMUM_LANDED_SAMPLE_GAP_MICROSECONDS
                 or not bool(landed.data["landed"][landed_index])):
             break
+        if ("z_valid" in position.data
+                and not bool(position.data["z_valid"][position_index])):
+            break
+        ground_z_sample = float(position.data["z"][position_index])
+        if not math.isfinite(ground_z_sample):
+            break
 
         if reset_counters is not None:
             reset_counter = int(reset_counters[position_index])
@@ -320,10 +328,10 @@ def _initial_height_above_ground(
                 first_reset = reset_counter
             elif reset_counter != first_reset:
                 raise ValueError("착륙 기준 구간에서 PX4 수직 위치 원점이 바뀌었습니다.")
-        ground_samples.append(float(position.data["z"][position_index]))
+        ground_samples.append(ground_z_sample)
 
     if len(ground_samples) < 2:
-        return -position.scalar("z", start_us), None
+        return -position.scalar("z", start_us), None, len(ground_samples)
 
     if reset_counters is not None and any(
         int(reset_counters[index]) != first_reset
@@ -335,7 +343,7 @@ def _initial_height_above_ground(
     height_above_ground = ground_z - position.scalar("z", start_us)
     if not math.isfinite(height_above_ground):
         raise ValueError("시작 높이를 유한한 값으로 계산할 수 없습니다.")
-    return height_above_ground, ground_z
+    return height_above_ground, ground_z, len(ground_samples)
 
 
 def _measured_motor_speeds(
@@ -417,7 +425,7 @@ def prepare_scenario(
     start_us = int(log.start_timestamp + start_seconds * 1_000_000)
     end_us = start_us + round(duration_seconds * 1_000_000)
     initial = _state_at(position, attitude, angular_velocity, start_us)
-    initial_height, ground_z = _initial_height_above_ground(
+    initial_height, ground_z, ground_sample_count = _initial_height_above_ground(
         position, landed, start_us, end_us)
     first_command = motors.vector("control", start_us, 4)
     if any(value < 0.0 or value > 1.0 for value in first_command):
@@ -508,6 +516,7 @@ def prepare_scenario(
                 else "PX4 local NED origin assumed to match the simulation ground"
             ),
             "ground_reference_z_ned_meters": ground_z,
+            "ground_reference_sample_count": ground_sample_count,
             "initial_height_above_ground_meters": initial_height,
             "maximum_observed_sample_gap_microseconds": {
                 "vehicle_local_position": position.maximum_observed_gap_microseconds,
