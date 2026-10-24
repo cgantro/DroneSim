@@ -6,6 +6,7 @@ import argparse
 import bisect
 import json
 import math
+import statistics
 from pathlib import Path
 
 STEP_SECONDS = 1.0 / 60.0
@@ -16,6 +17,7 @@ MAXIMUM_SAMPLE_GAP_MICROSECONDS = {
     "actuator_motors": 20_000,
 }
 MAXIMUM_ESC_SAMPLE_GAP_MICROSECONDS = 20_000
+MAXIMUM_LANDED_SAMPLE_GAP_MICROSECONDS = 2_000_000
 MOTOR_FUNCTION_TO_INDEX = {101: 0, 102: 1, 103: 2, 104: 3}
 QUADROTOR_MODEL = {
     "mass_kg": 2.0643076923076924,
@@ -265,6 +267,77 @@ def _load_esc_topic(log) -> TopicSamples | None:
     )
 
 
+def _load_landed_topic(log) -> TopicSamples | None:
+    dataset = next((
+        item for item in log.data_list
+        if item.name == "vehicle_land_detected" and item.multi_id == 0
+    ), None)
+    if dataset is None:
+        return None
+    if "landed" not in dataset.data:
+        raise ValueError("착륙 상태 주제에 landed 값이 없습니다.")
+    return TopicSamples(
+        dataset,
+        "vehicle_land_detected",
+        MAXIMUM_LANDED_SAMPLE_GAP_MICROSECONDS,
+    )
+
+
+def _initial_height_above_ground(
+    position: TopicSamples,
+    landed: TopicSamples | None,
+    start_us: int,
+    end_us: int,
+) -> tuple[float, float | None]:
+    """시뮬레이터 지면을 기준으로 시작 높이를 구한다."""
+    start_left, start_right, _ = position._bracket(start_us)
+    end_left, end_right, _ = position._bracket(end_us)
+    reset_counters = position.data.get("z_reset_counter")
+    selected_indices = range(start_left, end_right + 1)
+    if reset_counters is not None:
+        selected_resets = {int(reset_counters[index]) for index in selected_indices}
+        if len(selected_resets) > 1:
+            raise ValueError("선택 구간 중 PX4 수직 위치 원점이 바뀌어 연속 비교할 수 없습니다.")
+
+    if landed is None:
+        return -position.scalar("z", start_us), None
+
+    ground_samples = []
+    first_reset = None
+    for position_index, time_us in enumerate(position.times):
+        if time_us > start_us:
+            break
+        landed_index = bisect.bisect_right(landed.times, time_us) - 1
+        if (landed_index < 0
+                or time_us - landed.times[landed_index]
+                > MAXIMUM_LANDED_SAMPLE_GAP_MICROSECONDS
+                or not bool(landed.data["landed"][landed_index])):
+            break
+
+        if reset_counters is not None:
+            reset_counter = int(reset_counters[position_index])
+            if first_reset is None:
+                first_reset = reset_counter
+            elif reset_counter != first_reset:
+                raise ValueError("착륙 기준 구간에서 PX4 수직 위치 원점이 바뀌었습니다.")
+        ground_samples.append(float(position.data["z"][position_index]))
+
+    if len(ground_samples) < 2:
+        return -position.scalar("z", start_us), None
+
+    if reset_counters is not None and any(
+        int(reset_counters[index]) != first_reset
+        for index in selected_indices
+    ):
+        raise ValueError("착륙 기준과 선택 구간 사이에 PX4 수직 위치 원점이 바뀌었습니다.")
+
+    ground_z = statistics.median(ground_samples)
+    height_above_ground = ground_z - position.scalar("z", start_us)
+    if not math.isfinite(height_above_ground):
+        raise ValueError("시작 높이를 유한한 값으로 계산할 수 없습니다.")
+    return height_above_ground, ground_z
+
+
 def _measured_motor_speeds(
     esc_status: TopicSamples,
     time_us: int,
@@ -335,13 +408,17 @@ def prepare_scenario(
     position, attitude, angular_velocity, motors = _load_topics(
         log, maximum_sample_gap_microseconds)
     esc_status = _load_esc_topic(log)
+    landed = _load_landed_topic(log)
     tick_count_float = duration_seconds / STEP_SECONDS
     tick_count = round(tick_count_float)
     if tick_count <= 0 or not math.isclose(tick_count_float, tick_count, abs_tol=1.0e-9):
         raise ValueError("재생 구간 길이는 60Hz Tick 수로 정확히 나뉘어야 합니다.")
 
     start_us = int(log.start_timestamp + start_seconds * 1_000_000)
+    end_us = start_us + round(duration_seconds * 1_000_000)
     initial = _state_at(position, attitude, angular_velocity, start_us)
+    initial_height, ground_z = _initial_height_above_ground(
+        position, landed, start_us, end_us)
     first_command = motors.vector("control", start_us, 4)
     if any(value < 0.0 or value > 1.0 for value in first_command):
         raise ValueError("현재 기체 모델은 0~1 범위의 정규화 추력만 재생합니다.")
@@ -381,7 +458,7 @@ def prepare_scenario(
             "normalized_thrust": thrust,
         })
 
-    initial_position = [0.0, 0.0, initial["position_enu"][2]]
+    initial_position = [0.0, 0.0, initial_height]
     return {
         "version": 1,
         "dynamics": "rigid_body",
@@ -425,6 +502,13 @@ def prepare_scenario(
             "initial_motor_speed": "ESC RPM converted to rad/s"
                 if esc_status is not None
                 else "estimated from normalized thrust; not measured RPM",
+            "vertical_ground_reference": (
+                "median of the initial landed position samples"
+                if ground_z is not None
+                else "PX4 local NED origin assumed to match the simulation ground"
+            ),
+            "ground_reference_z_ned_meters": ground_z,
+            "initial_height_above_ground_meters": initial_height,
             "maximum_observed_sample_gap_microseconds": {
                 "vehicle_local_position": position.maximum_observed_gap_microseconds,
                 "vehicle_attitude": attitude.maximum_observed_gap_microseconds,

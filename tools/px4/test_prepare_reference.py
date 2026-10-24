@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from prepare_reference import (
     TopicSamples,
     _load_topics,
+    _initial_height_above_ground,
     _measured_motor_speeds,
     _project_attitude,
     _slerp,
@@ -16,6 +17,37 @@ from prepare_reference import (
 
 
 class TopicSamplesTests(unittest.TestCase):
+    def test_start_height_uses_initial_ground_samples_not_ned_origin(self) -> None:
+        position = TopicSamples(SimpleNamespace(data={
+            "timestamp": [0, 100_000, 200_000, 300_000, 400_000, 500_000],
+            "z": [564.70, 564.71, 564.69, 564.45, 564.20, 564.10],
+            "z_reset_counter": [7, 7, 7, 7, 7, 7],
+        }), "vehicle_local_position", 250_000)
+        landed = TopicSamples(SimpleNamespace(data={
+            "timestamp": [0, 100_000, 200_000, 300_000, 400_000, 500_000],
+            "landed": [True, True, True, False, False, False],
+        }), "vehicle_land_detected", 2_000_000)
+
+        height, ground_z = _initial_height_above_ground(
+            position, landed, 400_000, 500_000)
+
+        self.assertAlmostEqual(ground_z, 564.70)
+        self.assertAlmostEqual(height, 0.50)
+
+    def test_start_height_rejects_vertical_origin_reset_in_comparison_window(self) -> None:
+        position = TopicSamples(SimpleNamespace(data={
+            "timestamp": [0, 100_000, 200_000, 300_000, 400_000],
+            "z": [0.0, 0.0, 0.0, 0.1, 0.2],
+            "z_reset_counter": [2, 2, 2, 2, 3],
+        }), "vehicle_local_position", 250_000)
+        landed = TopicSamples(SimpleNamespace(data={
+            "timestamp": [0, 100_000, 200_000, 300_000, 400_000],
+            "landed": [True, True, False, False, False],
+        }), "vehicle_land_detected", 2_000_000)
+
+        with self.assertRaisesRegex(ValueError, "수직 위치 원점이 바뀌어"):
+            _initial_height_above_ground(position, landed, 300_000, 400_000)
+
     def test_esc_rpm_uses_px4_motor_function_mapping_and_interpolates(self) -> None:
         data = {"timestamp": [0, 10_000], "esc_count": [4, 4],
                 "esc_online_flags": [15, 15]}
