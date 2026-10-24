@@ -112,8 +112,9 @@ void Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp()
         RigidBodyDefinition definition;
         definition.positionMeters.z = 10.0;
         const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+        const double rotorCount = static_cast<double>(parameters.rotors.size());
         const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
-            / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+            / (rotorCount * parameters.thrustCoefficientNewtonsPerSpeedSquared));
         const double expectedRotorThrust = parameters.thrustCoefficientNewtonsPerSpeedSquared
             * hoverSpeed * hoverSpeed;
         std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
