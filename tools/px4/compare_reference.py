@@ -40,6 +40,12 @@ def _orientation_error_radians(actual: list[float], reference: list[float]) -> f
 
 def compare_reference(scenario: dict, result: dict) -> dict:
     """같은 시각의 참조 표본과 시뮬레이션 궤적에서 네 가지 RMSE를 구한다."""
+    if scenario.get("dynamics") != "rigid_body":
+        raise ValueError("물리 비교에는 rigid_body 시나리오가 필요합니다.")
+    physical_model = result.get("physical_model")
+    if not physical_model:
+        raise ValueError("실행 결과에 강체 물리 모델 설정이 없습니다.")
+
     reference_samples = scenario["reference_samples"]
     trajectory = result["trajectory"]
     if not reference_samples or len(reference_samples) != len(trajectory):
@@ -92,11 +98,33 @@ def compare_reference(scenario: dict, result: dict) -> dict:
 
     count = len(reference_samples)
     rmse = [math.sqrt(total / count) for total in squared_errors]
+    metadata = scenario.get("reference_metadata", {})
+    relative_start = reference_samples[0]["t"]
+    relative_end = reference_samples[-1]["t"]
+    start_since_boot = metadata.get("window_start_seconds_since_boot")
     return {
         "drone": drone_name,
         "outcome": result["outcome"],
         "sample_count": count,
-        "duration_seconds": reference_samples[-1]["t"] - reference_samples[0]["t"],
+        "duration_seconds": relative_end - relative_start,
+        "reference_source": metadata.get("source", "출처 정보 없음"),
+        "window_start_seconds_since_boot": (
+            None if start_since_boot is None else start_since_boot + relative_start
+        ),
+        "window_end_seconds_since_boot": (
+            None if start_since_boot is None else start_since_boot + relative_end
+        ),
+        "sample_period_seconds": metadata.get("sample_period_seconds"),
+        "maximum_observed_sample_gap_microseconds": metadata.get(
+            "maximum_observed_sample_gap_microseconds", {}
+        ),
+        "maximum_allowed_sample_gap_microseconds": metadata.get(
+            "maximum_allowed_sample_gap_microseconds", {}
+        ),
+        "sample_gap_override_microseconds": metadata.get(
+            "sample_gap_override_microseconds"
+        ),
+        "physical_model": physical_model,
         "position_rmse_meters": rmse[0],
         "velocity_rmse_meters_per_second": rmse[1],
         "attitude_rmse_degrees": math.degrees(rmse[2]),
@@ -122,6 +150,47 @@ def main() -> int:
     print(f"대상 드론: {metrics['drone']}")
     print(f"실행 결과: {metrics['outcome']} (시나리오 판정이며 물리 정확도 판정은 아님)")
     print(f"비교 표본: {metrics['sample_count']}개, {metrics['duration_seconds']:.3f}초")
+    print(f"참조 자료: {metrics['reference_source']}")
+    if metrics["window_start_seconds_since_boot"] is not None:
+        print(
+            "로그 구간: "
+            f"{metrics['window_start_seconds_since_boot']:.3f}~"
+            f"{metrics['window_end_seconds_since_boot']:.3f}초 (부팅 후)"
+        )
+    if metrics["sample_period_seconds"] is not None:
+        print(f"재표본 간격: {metrics['sample_period_seconds'] * 1000.0:.3f}ms")
+    gap_labels = (
+        ("vehicle_local_position", "위치·속도"),
+        ("vehicle_attitude", "자세"),
+        ("vehicle_angular_velocity", "각속도"),
+        ("actuator_motors", "모터 명령"),
+    )
+    observed_gaps = metrics["maximum_observed_sample_gap_microseconds"]
+    allowed_gaps = metrics["maximum_allowed_sample_gap_microseconds"]
+    if observed_gaps:
+        print("참조 표본 간격 최대: " + ", ".join(
+            f"{label} {observed_gaps[name] / 1000.0:.3f}/"
+            f"{allowed_gaps[name] / 1000.0:.3f}ms"
+            for name, label in gap_labels
+            if name in observed_gaps and name in allowed_gaps
+        ) + " (관측/허용)")
+    if metrics["sample_gap_override_microseconds"] is not None:
+        print(
+            "표본 간격 완화 옵션: "
+            f"{metrics['sample_gap_override_microseconds'] / 1000.0:.3f}ms"
+        )
+    model = metrics["physical_model"]
+    inertia = ", ".join(
+        f"{value:.5g}" for value in model["principal_inertia_kg_m2"]
+    )
+    print(
+        "물리 설정: "
+        f"질량 {model['mass_kg']:.4g}kg, 관성 [{inertia}]kg·m², "
+        f"추력 계수 {model['thrust_coefficient_newtons_per_speed_squared']:.5g}, "
+        f"토크 비 {model['moment_to_thrust_ratio']:.5g}, "
+        f"모터 응답 {model['motor_time_constant_up_seconds']:.4g}/"
+        f"{model['motor_time_constant_down_seconds']:.4g}s"
+    )
     print("오차 RMSE")
     print(f"  위치:     {metrics['position_rmse_meters']:.4f} m")
     print(f"  속도:     {metrics['velocity_rmse_meters_per_second']:.4f} m/s")
