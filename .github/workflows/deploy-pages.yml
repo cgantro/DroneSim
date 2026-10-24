@@ -3,8 +3,34 @@ name: Build and deploy AeroSimLab Web
 on:
   push:
     branches: [main]
+    paths:
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'cmake/**'
+      - 'apps/simulator/**'
+      - 'apps/headless/**'
+      - 'modules/**'
+      - 'assets/**'
+      - 'scenarios/**'
+      - 'third_party/**'
+      - 'vcpkg.json'
+      - 'vcpkg-configuration.json'
+      - '.github/workflows/deploy-pages.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'cmake/**'
+      - 'apps/simulator/**'
+      - 'apps/headless/**'
+      - 'modules/**'
+      - 'assets/**'
+      - 'scenarios/**'
+      - 'third_party/**'
+      - 'vcpkg.json'
+      - 'vcpkg-configuration.json'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -39,7 +65,7 @@ jobs:
         run: emcmake cmake --preset emscripten-single-thread
 
       - name: Build web simulator
-        run: cmake --build --preset emscripten-single-thread
+        run: cmake --build --preset emscripten-single-thread --target aerosimlab_simulator
 
       - name: Check and prepare Pages files
         run: |
