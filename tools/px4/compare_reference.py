@@ -190,7 +190,8 @@ def main() -> int:
             f"{label} {observed_gaps[name] / 1000.0:.3f}/"
             f"{allowed_gaps[name] / 1000.0:.3f}ms"
             for name, label in gap_labels
-            if name in observed_gaps and name in allowed_gaps
+            if observed_gaps.get(name) is not None
+            and allowed_gaps.get(name) is not None
         ) + " (관측/허용)")
     if metrics["sample_gap_override_microseconds"] is not None:
         print(

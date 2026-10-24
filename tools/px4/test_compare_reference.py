@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from compare_reference import compare_reference
+from compare_reference import compare_reference, main
 
 
 class CompareReferenceTests(unittest.TestCase):
@@ -104,6 +110,29 @@ class CompareReferenceTests(unittest.TestCase):
 
         self.assertAlmostEqual(
             metrics["motor_speed_rmse_radians_per_second"], 50.0 ** 0.5)
+
+    def test_cli_accepts_log_without_esc_telemetry(self) -> None:
+        self.scenario["reference_metadata"][
+            "maximum_observed_sample_gap_microseconds"]["esc_status"] = None
+        self.scenario["reference_metadata"][
+            "maximum_allowed_sample_gap_microseconds"]["esc_status"] = None
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            scenario_path = Path(temporary_directory) / "scenario.json"
+            result_path = Path(temporary_directory) / "result.json"
+            scenario_path.write_text(json.dumps(self.scenario), encoding="utf-8")
+            result_path.write_text(json.dumps(self.result), encoding="utf-8")
+            output = io.StringIO()
+            arguments = [
+                "compare_reference.py",
+                str(scenario_path),
+                str(result_path),
+            ]
+            with patch("sys.argv", arguments):
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(main(), 0)
+
+        self.assertIn("비교 표본: 1개", output.getvalue())
 
     def test_different_sample_times_are_rejected(self) -> None:
         self.result["trajectory"][0]["time_seconds"] = 0.1
