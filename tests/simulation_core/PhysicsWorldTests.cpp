@@ -478,6 +478,26 @@ void Verify_AirSimPhysics_TerrainContactStopsTheDrone()
         QuadrotorFlightController::groundedModelOriginHeightMeters, 0.03);
 }
 
+void Verify_AirSimPhysicsKeepsContactAcrossMicroscopicGroundGaps()
+{
+    PhysicsWorld world;
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    RigidBodyDefinition definition;
+    // X500 로터 가드의 가장 낮은 면은 기체 중심에서 0.227m 아래에 있다.
+    definition.positionMeters.z = 0.227 + 1.0e-8;
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+
+    RigidBodyState fallingState;
+    fallingState.positionMeters = definition.positionMeters;
+    fallingState.linearVelocityMetersPerSecond.z = -0.1;
+    world.SetState(drone, fallingState);
+    world.Step(1.0 / 60.0);
+
+    const RigidBodyState state = world.State(drone);
+    EXPECT_NEAR(state.positionMeters.z, definition.positionMeters.z, 5.0e-4);
+    EXPECT_NEAR(state.linearVelocityMetersPerSecond.z, 0.0, 1.0e-4);
+}
+
 void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
 {
     const std::filesystem::path mapPath = std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
@@ -743,6 +763,8 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysicsKeepsContactAcrossMicroscopicGroundGaps());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
     EXPECT_NO_FATAL_FAILURE(Verify_CollisionBroadphase_KeepsTouchingBoxesForPreciseTest());

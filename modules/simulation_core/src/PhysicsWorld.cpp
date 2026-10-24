@@ -636,13 +636,14 @@ struct PhysicsWorld::Impl
 
     /**
      * @brief 기체 충돌 상자의 꼭짓점에서 지면과 겹치는 정도를 찾는다.
-     * @details 가장 깊은 한 곳을 AirSim에 넘겨 위치, 방향, 겹친 깊이로 쓰게 한다.
+     * @details 부동소수점 반올림으로 생긴 아주 작은 틈도 접촉으로 본다.
+     * 실제 겹친 깊이는 0보다 작게 AirSim에 전달하지 않는다.
      */
     std::optional<msr::airlib::CollisionInfo> FindTerrainContact(
         const Body& body, std::uint64_t timestamp) const
     {
         std::optional<msr::airlib::CollisionInfo> contactInfo;
-        double greatestPenetration = 0.0;
+        double greatestPenetration = -std::numeric_limits<double>::infinity();
         const RigidBodyState& state = body.collisionState;
         for (const OrientedBox& worldBox : body.worldCollisionBoxes)
         {
@@ -655,6 +656,11 @@ struct PhysicsWorld::Impl
 
                 const double ground = GroundHeight({corner.x, corner.y});
                 const double penetration = ground - corner.z;
+                const double roundingTolerance = 2.0
+                    * std::numeric_limits<float>::epsilon()
+                    * std::max({1.0, std::abs(ground), std::abs(corner.z)});
+                if (penetration < -roundingTolerance)
+                    continue;
                 if (penetration <= greatestPenetration)
                     continue;
 
@@ -664,7 +670,7 @@ struct PhysicsWorld::Impl
                     ToAirSimWorldVector(GroundNormal({corner.x, corner.y})),
                     ToAirSimWorldVector({corner.x, corner.y, ground}),
                     ToAirSimWorldVector(state.positionMeters),
-                    ToAirSimFloat(penetration),
+                    ToAirSimFloat(std::max(penetration, 0.0)),
                     timestamp,
                     "ground",
                     0};
