@@ -62,14 +62,25 @@ class TopicSamplesTests(unittest.TestCase):
 
         self.assertEqual(midpoint, [1.0, 0.0, 0.0, 0.0])
 
-    def test_project_attitude_converts_px4_roll_into_project_axes(self) -> None:
+    def test_project_attitude_converts_px4_axis_rotations(self) -> None:
         half_turn_component = 2 ** -0.5
-        projected = _project_attitude([
-            half_turn_component, half_turn_component, 0.0, 0.0,
-        ])
+        cases = (
+            ([half_turn_component, half_turn_component, 0.0, 0.0],
+             [0.5, 0.5, 0.5, 0.5]),
+            ([half_turn_component, 0.0, half_turn_component, 0.0],
+             [0.5, 0.5, -0.5, 0.5]),
+            ([half_turn_component, 0.0, 0.0, half_turn_component],
+             [1.0, 0.0, 0.0, 0.0]),
+        )
 
-        for component in projected:
-            self.assertAlmostEqual(component, 0.5)
+        for px4_orientation, expected in cases:
+            with self.subTest(px4_orientation=px4_orientation):
+                projected = _project_attitude(px4_orientation)
+                orientation_dot = abs(sum(
+                    actual_component * expected_component
+                    for actual_component, expected_component in zip(projected, expected)
+                ))
+                self.assertAlmostEqual(orientation_dot, 1.0)
 
 
 if __name__ == "__main__":
