@@ -823,7 +823,7 @@ void UpdateCollisionAvoidance(
                 * (firstHasTask && secondHasTask ? 1.5 : 1.0);
             const double avoidanceThreshold = alreadyAvoiding
                 ? releaseDistance : settings.safetyDistanceMeters;
-            if (predictedDistance >= avoidanceThreshold)
+            if (predictedDistance > avoidanceThreshold)
                 continue;
 
             // 입력 순서상 뒤에 있는 드론이 비켜서 결과를 반복 실행해도 같은 선택을 한다.

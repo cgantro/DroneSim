@@ -1094,7 +1094,7 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     EXPECT_EQ(physicalAvoidanceResult.mission->completedTaskCount, 2U);
     EXPECT_GT(physicalAvoidanceResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(physicalAvoidanceResult.minimumDroneSeparationMeters.has_value());
-    EXPECT_GE(*physicalAvoidanceResult.minimumDroneSeparationMeters, 3.0);
+    EXPECT_GE(*physicalAvoidanceResult.minimumDroneSeparationMeters, 5.5);
 #endif
 
     const std::string lowBatteryScenario = ReadScenarioFixture(
