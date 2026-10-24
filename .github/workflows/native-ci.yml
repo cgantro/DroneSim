@@ -23,6 +23,9 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
 
+      - name: Run PX4 reference data tests
+        run: python3 -m unittest discover -s tools/px4 -p 'test_*.py'
+
       - name: Install graphics and virtual display dependencies
         run: |
           sudo apt-get update
