@@ -62,6 +62,7 @@ Desktop.ini
 *.temp
 *.swp
 *~
+__pycache__/
 
 # Local simulator and controller endpoints/credentials.  Commit only the
 # documented template so a developer's LAN address and Wi-Fi secrets never
