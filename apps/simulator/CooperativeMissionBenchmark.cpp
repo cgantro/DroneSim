@@ -183,6 +183,9 @@ nlohmann::json MeasureCooperativeMissionRun(
     std::size_t reassignedTasks = 0;
     std::size_t totalTaskReassignments = 0;
     std::size_t unknownDrones = 0;
+    std::size_t lowBatteryReturns = 0;
+    double totalEnergyConsumedWattHours = 0.0;
+    bool hasEnergyMeasurements = false;
     for (const auto& task : result.mission->tasks)
     {
         if (task.completed)
@@ -196,6 +199,13 @@ nlohmann::json MeasureCooperativeMissionRun(
         if (drone.communicationStatus ==
             ScenarioResult::Drone::CommunicationStatus::Unknown)
             ++unknownDrones;
+        if (drone.returnedForLowBattery)
+            ++lowBatteryReturns;
+        if (drone.energyConsumedWattHours)
+        {
+            totalEnergyConsumedWattHours += *drone.energyConsumedWattHours;
+            hasEnergyMeasurements = true;
+        }
     }
     durationMicroseconds = wallSeconds * 1'000'000.0;
     if (result.mission->startedTick && result.mission->completedTick
@@ -228,6 +238,10 @@ nlohmann::json MeasureCooperativeMissionRun(
         {"reassigned_task_count", reassignedTasks},
         {"total_task_reassignment_events", totalTaskReassignments},
         {"unknown_drone_count", unknownDrones},
+        {"low_battery_return_count", lowBatteryReturns},
+        {"total_energy_consumed_watt_hours", hasEnergyMeasurements
+            ? Json(totalEnergyConsumedWattHours) : Json(nullptr)},
+        {"collision_avoidance_event_count", result.collisionAvoidanceEvents},
         {"mission_completion_percent", result.mission->completionPercent},
         {"mission_coverage_percent", result.mission->coveragePercent}};
     run["mission_started_tick"] = result.mission->startedTick
@@ -241,6 +255,11 @@ nlohmann::json MeasureCooperativeMissionRun(
             *result.minimumDroneSeparationMeters;
     else
         run["minimum_drone_separation_meters"] = nullptr;
+    if (result.minimumPredictedDroneSeparationMeters)
+        run["minimum_predicted_drone_separation_meters"] =
+            *result.minimumPredictedDroneSeparationMeters;
+    else
+        run["minimum_predicted_drone_separation_meters"] = nullptr;
     return run;
 }
 
@@ -414,6 +433,81 @@ Json MeasureCoordinatorReallocationScaling()
         {"runs", std::move(runs)}};
 }
 
+Json MeasureEnergyAndOutageScenario(const char* scenarioFile)
+{
+    const std::filesystem::path fixturePath = std::filesystem::path{
+        AEROSIMLAB_SOURCE_DIR} / scenarioFile;
+    std::ifstream fixture(fixturePath, std::ios::binary);
+    if (!fixture)
+        throw std::runtime_error("에너지·통신 장애 시나리오를 열지 못했습니다.");
+
+    const Json scenario = Json::parse(std::string{
+        std::istreambuf_iterator<char>{fixture}, std::istreambuf_iterator<char>{}});
+    const std::string scenarioText = scenario.dump();
+    const std::string dynamicsName = scenario.at("dynamics").get<std::string>();
+    const std::size_t droneCount = scenario.at("drones").size();
+    constexpr std::size_t repetitions = 3U;
+    constexpr std::size_t warmupRuns = 1U;
+
+    for (std::size_t warmup = 0; warmup < warmupRuns; ++warmup)
+    {
+        const ScenarioResult result = aerosimlab::simulation::RunScenario(scenarioText);
+        RequireCooperativeMissionSuccess(result, true);
+    }
+
+    Json runs = Json::array();
+    std::vector<double> durationsMicroseconds;
+    std::vector<double> missionCompletionTimesSeconds;
+    std::vector<double> totalEnergyConsumedWattHours;
+    std::vector<double> lowBatteryReturnCounts;
+    durationsMicroseconds.reserve(repetitions);
+    missionCompletionTimesSeconds.reserve(repetitions);
+    totalEnergyConsumedWattHours.reserve(repetitions);
+    lowBatteryReturnCounts.reserve(repetitions);
+    for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
+    {
+        double durationMicroseconds = 0.0;
+        std::optional<double> missionCompletionTimeSeconds;
+        Json run = MeasureCooperativeMissionRun(
+            scenarioText, dynamicsName.c_str(), droneCount, repetition, warmupRuns,
+            durationMicroseconds, missionCompletionTimeSeconds);
+        durationsMicroseconds.push_back(durationMicroseconds);
+        lowBatteryReturnCounts.push_back(
+            run["low_battery_return_count"].get<double>());
+        if (missionCompletionTimeSeconds)
+            missionCompletionTimesSeconds.push_back(*missionCompletionTimeSeconds);
+        if (!run["total_energy_consumed_watt_hours"].is_null())
+            totalEnergyConsumedWattHours.push_back(
+                run["total_energy_consumed_watt_hours"].get<double>());
+        runs.push_back(std::move(run));
+    }
+
+    return {
+        {"scenario", scenario.at("mission").at("name")},
+        {"dynamics", dynamicsName},
+        {"drone_count", droneCount},
+        {"scenario_ticks", scenario.at("ticks")},
+        {"warmup_runs", warmupRuns},
+        {"target_repetitions", repetitions},
+        {"scenario_duration_us", SummarizeDurations(std::move(durationsMicroseconds))},
+        {"mission_completion_time_seconds",
+            SummarizeDurations(std::move(missionCompletionTimesSeconds))},
+        {"total_energy_consumed_watt_hours",
+            SummarizeDurations(std::move(totalEnergyConsumedWattHours))},
+        {"low_battery_return_count",
+            SummarizeDurations(std::move(lowBatteryReturnCounts))},
+        {"runs", std::move(runs)}};
+}
+
+Json MeasureEnergyAndOutageReallocation()
+{
+    return {
+        {"kinematic", MeasureEnergyAndOutageScenario(
+            "scenarios/multi-drone/energy-and-outage-reallocation.json")},
+        {"rigid_body", MeasureEnergyAndOutageScenario(
+            "scenarios/multi-drone/rigid-body-energy-and-outage.json")}};
+}
+
 nlohmann::json MeasureCooperativeMissionDynamics(SimulationDynamics dynamics)
 {
     const bool usesRigidBodyPhysics = dynamics == SimulationDynamics::RigidBody;
@@ -460,7 +554,8 @@ nlohmann::json MeasureCooperativeMissionScaling()
             {"kinematic", MeasureFourDroneOutageRecovery(
                 aerosimlab::simulation::SimulationDynamics::Kinematic)},
             {"rigid_body", MeasureFourDroneOutageRecovery(
-                aerosimlab::simulation::SimulationDynamics::RigidBody)}}}};
+                aerosimlab::simulation::SimulationDynamics::RigidBody)}}},
+        {"energy_and_outage_reallocation", MeasureEnergyAndOutageReallocation()}};
 }
 
 }
