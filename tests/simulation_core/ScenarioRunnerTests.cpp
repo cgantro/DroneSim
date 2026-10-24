@@ -1184,16 +1184,19 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
         ASSERT_TRUE(rigidBodyResult.mission->startedTick.has_value());
         EXPECT_EQ(*rigidBodyResult.mission->startedTick, 121U);
         ASSERT_TRUE(rigidBodyResult.mission->completedTick.has_value());
-        EXPECT_EQ(*rigidBodyResult.mission->completedTick, 337U);
+        EXPECT_EQ(*rigidBodyResult.mission->completedTick, 512U);
         ASSERT_EQ(rigidBodyResult.mission->tasks.size(), 3U);
         ASSERT_TRUE(rigidBodyResult.mission->tasks[0].completedTick.has_value());
         EXPECT_EQ(*rigidBodyResult.mission->tasks[0].completedTick, 163U);
         EXPECT_EQ(rigidBodyResult.mission->tasks[0].assignmentHistory,
             (std::vector<std::string>{"low-charge", "reserve-2"}));
         ASSERT_TRUE(rigidBodyResult.mission->tasks[1].completedTick.has_value());
-        EXPECT_EQ(*rigidBodyResult.mission->tasks[1].completedTick, 331U);
+        EXPECT_EQ(*rigidBodyResult.mission->tasks[1].completedTick, 512U);
         EXPECT_EQ(rigidBodyResult.mission->tasks[1].assignmentHistory,
             (std::vector<std::string>{"lost-link", "reserve-1"}));
+        EXPECT_GT(rigidBodyResult.collisionAvoidanceEvents, 0U);
+        ASSERT_TRUE(rigidBodyResult.minimumDroneSeparationMeters.has_value());
+        EXPECT_GE(*rigidBodyResult.minimumDroneSeparationMeters, 2.0);
         ASSERT_EQ(rigidBodyResult.drones.size(), 4U);
         EXPECT_TRUE(rigidBodyResult.drones[0].returnedForLowBattery);
         EXPECT_EQ(rigidBodyResult.drones[0].finalState.mode, FlightMode::Grounded);

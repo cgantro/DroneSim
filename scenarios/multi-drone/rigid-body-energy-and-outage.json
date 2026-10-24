@@ -34,6 +34,11 @@
     "flight_power_watts": 120,
     "reserve_percent": 50
   },
+  "collision_avoidance": {
+    "safety_distance_meters": 2.0,
+    "prediction_horizon_seconds": 3.0,
+    "lateral_offset_meters": 3.0
+  },
   "mission": {
     "name": "rigid-body-energy-and-link-loss-survey",
     "tasks": [
@@ -67,6 +72,7 @@
     ]
   },
   "expected": {
+    "minimum_drone_separation_meters": 2.0,
     "tolerance_meters": 0.5,
     "drones": [
       {"name": "low-charge", "mode": "grounded", "position_meters": [1.46278, 0, 0.2271]},
