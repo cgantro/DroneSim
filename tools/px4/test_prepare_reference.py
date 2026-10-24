@@ -10,6 +10,7 @@ from prepare_reference import (
     _load_topics,
     _initial_height_above_ground,
     _measured_motor_speeds,
+    _measured_motor_thrust_ratios,
     _project_attitude,
     _slerp,
     _state_at,
@@ -66,6 +67,23 @@ class TopicSamplesTests(unittest.TestCase):
         expected_rpms_by_motor = [7_000, 6_000, 4_000, 5_000]
         for speed, rpm in zip(speeds, expected_rpms_by_motor):
             self.assertAlmostEqual(speed, rpm * (2.0 * 3.141592653589793 / 60.0))
+
+    def test_esc_rpm_becomes_normalized_thrust_for_replay(self) -> None:
+        data = {"timestamp": [0, 10_000], "esc_count": [4, 4],
+                "esc_online_flags": [15, 15]}
+        for slot in range(4):
+            data[f"esc[{slot}].actuator_function"] = [101 + slot, 101 + slot]
+            data[f"esc[{slot}].esc_rpm"] = [3_000, 6_000]
+        esc_status = TopicSamples(
+            SimpleNamespace(data=data), "esc_status", 20_000)
+
+        thrust_ratios = _measured_motor_thrust_ratios(
+            esc_status, 5_000, 1_000.0)
+
+        expected_speed = 4_500 * (2.0 * 3.141592653589793 / 60.0)
+        expected_ratio = (expected_speed / 1_000.0) ** 2
+        for thrust_ratio in thrust_ratios:
+            self.assertAlmostEqual(thrust_ratio, expected_ratio)
 
     def test_esc_rpm_rejects_missing_online_motor(self) -> None:
         data = {"timestamp": [0, 10_000], "esc_count": [4, 4],

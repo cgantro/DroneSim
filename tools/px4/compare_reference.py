@@ -39,7 +39,7 @@ def _orientation_error_radians(actual: list[float], reference: list[float]) -> f
 
 
 def compare_reference(scenario: dict, result: dict) -> dict:
-    """같은 시각의 참조 표본과 시뮬레이션 궤적에서 네 가지 RMSE를 구한다."""
+    """참조 기록과 시뮬레이션의 위치·속도·자세·각속도·회전수 오차를 구한다."""
     if scenario.get("dynamics") != "rigid_body":
         raise ValueError("물리 비교에는 rigid_body 시나리오가 필요합니다.")
     physical_model = result.get("physical_model")
@@ -151,7 +151,7 @@ def compare_reference(scenario: dict, result: dict) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="참조 궤적과 시뮬레이션 결과의 위치·속도·자세·각속도 오차를 계산합니다."
+        description="참조 기록과 시뮬레이터 결과의 비행 상태·로터 회전수 오차를 계산합니다."
     )
     parser.add_argument("scenario", type=Path, help="참조 표본이 포함된 입력 시나리오 JSON")
     parser.add_argument("result", type=Path, help="화면 없는 실행 결과 JSON")

@@ -394,6 +394,17 @@ def _measured_motor_speeds(
     return motor_speeds
 
 
+def _measured_motor_thrust_ratios(
+    esc_status: TopicSamples,
+    time_us: int,
+    maximum_speed_radians_per_second: float,
+) -> list[float]:
+    """측정한 회전수를 시나리오가 받는 로터 추력 비율로 바꾼다."""
+    speeds = _measured_motor_speeds(
+        esc_status, time_us, maximum_speed_radians_per_second)
+    return [(speed / maximum_speed_radians_per_second) ** 2 for speed in speeds]
+
+
 def prepare_scenario(
     log_path: Path,
     start_seconds: float,
@@ -457,7 +468,12 @@ def prepare_scenario(
         if tick == tick_count:
             continue
         command_time_us = start_us + round(tick * STEP_SECONDS * 1_000_000)
-        thrust = motors.vector("control", command_time_us, 4)
+        thrust = (
+            _measured_motor_thrust_ratios(
+                esc_status, command_time_us, maximum_speed)
+            if esc_status is not None
+            else motors.vector("control", command_time_us, 4)
+        )
         if any(value < 0.0 or value > 1.0 for value in thrust):
             raise ValueError("현재 기체 모델은 0~1 범위의 정규화 추력만 재생합니다.")
         commands.append({
@@ -504,7 +520,11 @@ def prepare_scenario(
             "position_and_velocity": "NED [north,east,down] to ENU [east,north,up]",
             "attitude": "PX4 FRD-to-NED to project FLU-to-ENU",
             "angular_velocity": "FRD [forward,right,down] to FLU [forward,left,up]",
-            "motor_input": "actuator_motors.control; normalized thrust, linearly interpolated",
+            "motor_input": (
+                "esc_status RPM converted to normalized thrust"
+                if esc_status is not None
+                else "actuator_motors.control; normalized thrust, linearly interpolated"
+            ),
             "motor_speed_reference": "esc_status RPM mapped by actuator_function"
                 if esc_status is not None else None,
             "initial_motor_speed": "ESC RPM converted to rad/s"
