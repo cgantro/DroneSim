@@ -15,6 +15,8 @@ MAXIMUM_SAMPLE_GAP_MICROSECONDS = {
     "vehicle_angular_velocity": 20_000,
     "actuator_motors": 20_000,
 }
+MAXIMUM_ESC_SAMPLE_GAP_MICROSECONDS = 20_000
+MOTOR_FUNCTION_TO_INDEX = {101: 0, 102: 1, 103: 2, 104: 3}
 QUADROTOR_MODEL = {
     "mass_kg": 2.0643076923076924,
     "principal_inertia_kg_m2": [
@@ -249,6 +251,68 @@ def _load_topics(
     )
 
 
+def _load_esc_topic(log) -> TopicSamples | None:
+    dataset = next((
+        item for item in log.data_list
+        if item.name == "esc_status" and item.multi_id == 0
+    ), None)
+    if dataset is None:
+        return None
+    return TopicSamples(
+        dataset,
+        "esc_status",
+        MAXIMUM_ESC_SAMPLE_GAP_MICROSECONDS,
+    )
+
+
+def _measured_motor_speeds(
+    esc_status: TopicSamples,
+    time_us: int,
+    maximum_speed_radians_per_second: float,
+) -> list[float]:
+    left, right, _ = esc_status._bracket(time_us)
+    data = esc_status.data
+    motor_speeds = [0.0] * len(MOTOR_FUNCTION_TO_INDEX)
+    mappings = []
+
+    for sample_index in {left, right}:
+        if int(data["esc_count"][sample_index]) != len(motor_speeds):
+            raise ValueError("선택한 구간에서 네 ESC의 회전수 자료를 모두 확인할 수 없습니다.")
+        online_flags = int(data["esc_online_flags"][sample_index])
+        required_flags = (1 << len(motor_speeds)) - 1
+        if online_flags & required_flags != required_flags:
+            raise ValueError("선택한 구간에 연결이 끊긴 ESC가 있습니다.")
+
+        mapping = []
+        mapped_motors = set()
+        for esc_index in range(len(motor_speeds)):
+            prefix = f"esc[{esc_index}]"
+            function = int(data[f"{prefix}.actuator_function"][sample_index])
+            motor_index = MOTOR_FUNCTION_TO_INDEX.get(function)
+            if motor_index is None or motor_index in mapped_motors:
+                raise ValueError("ESC 출력과 PX4 모터 1~4의 연결을 확인할 수 없습니다.")
+            mapped_motors.add(motor_index)
+            mapping.append(motor_index)
+
+        if mapped_motors != set(range(len(motor_speeds))):
+            raise ValueError("ESC 출력과 PX4 모터 1~4의 연결이 완전하지 않습니다.")
+        mappings.append(mapping)
+
+    if any(mapping != mappings[0] for mapping in mappings[1:]):
+        raise ValueError("선택한 구간에서 ESC와 PX4 모터의 연결 순서가 바뀝니다.")
+
+    for esc_index, motor_index in enumerate(mappings[0]):
+        rpm = esc_status.scalar(f"esc[{esc_index}].esc_rpm", time_us)
+        if rpm < 0.0:
+            raise ValueError("ESC가 음수 회전수를 보고했습니다.")
+        speed = rpm * (2.0 * math.pi / 60.0)
+        if speed > maximum_speed_radians_per_second:
+            raise ValueError("ESC 회전수가 시나리오의 최대 모터 속도를 넘습니다.")
+        motor_speeds[motor_index] = speed
+
+    return motor_speeds
+
+
 def prepare_scenario(
     log_path: Path,
     start_seconds: float,
@@ -270,6 +334,7 @@ def prepare_scenario(
     }
     position, attitude, angular_velocity, motors = _load_topics(
         log, maximum_sample_gap_microseconds)
+    esc_status = _load_esc_topic(log)
     tick_count_float = duration_seconds / STEP_SECONDS
     tick_count = round(tick_count_float)
     if tick_count <= 0 or not math.isclose(tick_count_float, tick_count, abs_tol=1.0e-9):
@@ -284,6 +349,11 @@ def prepare_scenario(
     reference_samples = []
     commands = []
     maximum_speed = QUADROTOR_MODEL["maximum_motor_speed_radians_per_second"]
+    initial_motor_speeds = (
+        _measured_motor_speeds(esc_status, start_us, maximum_speed)
+        if esc_status is not None
+        else [math.sqrt(value) * maximum_speed for value in first_command]
+    )
     for tick in range(tick_count + 1):
         time_us = start_us + round(tick * STEP_SECONDS * 1_000_000)
         state = _state_at(position, attitude, angular_velocity, time_us)
@@ -296,6 +366,8 @@ def prepare_scenario(
             "velocity_enu": state["velocity_enu"],
             "orientation_wxyz": state["orientation_wxyz"],
             "angular_velocity_flu": state["angular_velocity_flu"],
+            **({"motor_speeds_radians_per_second": _measured_motor_speeds(
+                esc_status, time_us, maximum_speed)} if esc_status is not None else {}),
         })
         if tick == tick_count:
             continue
@@ -320,9 +392,7 @@ def prepare_scenario(
             "initial_velocity_meters_per_second": initial["velocity_enu"],
             "initial_orientation_quaternion_wxyz": initial["orientation_wxyz"],
             "initial_angular_velocity_radians_per_second": initial["angular_velocity_flu"],
-            "initial_motor_speeds_radians_per_second": [
-                math.sqrt(value) * maximum_speed for value in first_command
-            ],
+            "initial_motor_speeds_radians_per_second": initial_motor_speeds,
             "initial_mode": "flying",
         }],
         "commands": commands,
@@ -350,14 +420,24 @@ def prepare_scenario(
             "attitude": "PX4 FRD-to-NED to project FLU-to-ENU",
             "angular_velocity": "FRD [forward,right,down] to FLU [forward,left,up]",
             "motor_input": "actuator_motors.control; normalized thrust, linearly interpolated",
-            "initial_motor_speed": "estimated from normalized thrust; not measured RPM",
+            "motor_speed_reference": "esc_status RPM mapped by actuator_function"
+                if esc_status is not None else None,
+            "initial_motor_speed": "ESC RPM converted to rad/s"
+                if esc_status is not None
+                else "estimated from normalized thrust; not measured RPM",
             "maximum_observed_sample_gap_microseconds": {
                 "vehicle_local_position": position.maximum_observed_gap_microseconds,
                 "vehicle_attitude": attitude.maximum_observed_gap_microseconds,
                 "vehicle_angular_velocity": angular_velocity.maximum_observed_gap_microseconds,
                 "actuator_motors": motors.maximum_observed_gap_microseconds,
+                "esc_status": esc_status.maximum_observed_gap_microseconds
+                    if esc_status is not None else None,
             },
-            "maximum_allowed_sample_gap_microseconds": maximum_sample_gaps,
+            "maximum_allowed_sample_gap_microseconds": {
+                **maximum_sample_gaps,
+                "esc_status": MAXIMUM_ESC_SAMPLE_GAP_MICROSECONDS
+                    if esc_status is not None else None,
+            },
             "sample_gap_override_microseconds": maximum_sample_gap_microseconds,
         },
         "reference_samples": reference_samples,

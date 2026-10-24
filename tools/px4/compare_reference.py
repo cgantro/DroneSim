@@ -58,6 +58,10 @@ def compare_reference(scenario: dict, result: dict) -> dict:
         "초기 위치",
     )
     squared_errors = [0.0, 0.0, 0.0, 0.0]
+    compare_motor_speeds = (
+        "motor_speeds_radians_per_second" in reference_samples[0]
+    )
+    squared_motor_speed_error = 0.0
 
     for reference, sample in zip(reference_samples, trajectory):
         if not math.isclose(reference["t"], sample["time_seconds"], abs_tol=1.0e-9):
@@ -89,6 +93,15 @@ def compare_reference(scenario: dict, result: dict) -> dict:
         squared_errors[0] += sum(value * value for value in position_error)
         squared_errors[1] += sum(value * value for value in velocity_error)
         squared_errors[3] += sum(value * value for value in angular_velocity_error)
+        if compare_motor_speeds:
+            motor_speed = _read_vector(
+                state["motor_speeds_radians_per_second"], 4, "시뮬레이션 로터 회전수")
+            motor_speed_reference = _read_vector(
+                reference["motor_speeds_radians_per_second"], 4, "참조 로터 회전수")
+            squared_motor_speed_error += sum(
+                (actual - expected) ** 2
+                for actual, expected in zip(motor_speed, motor_speed_reference)
+            )
 
         attitude_error = _orientation_error_radians(
             state["orientation_quaternion_wxyz"],
@@ -129,6 +142,10 @@ def compare_reference(scenario: dict, result: dict) -> dict:
         "velocity_rmse_meters_per_second": rmse[1],
         "attitude_rmse_degrees": math.degrees(rmse[2]),
         "angular_velocity_rmse_radians_per_second": rmse[3],
+        "motor_speed_rmse_radians_per_second": (
+            math.sqrt(squared_motor_speed_error / (count * 4))
+            if compare_motor_speeds else None
+        ),
     }
 
 
@@ -164,6 +181,7 @@ def main() -> int:
         ("vehicle_attitude", "자세"),
         ("vehicle_angular_velocity", "각속도"),
         ("actuator_motors", "모터 명령"),
+        ("esc_status", "ESC 회전수"),
     )
     observed_gaps = metrics["maximum_observed_sample_gap_microseconds"]
     allowed_gaps = metrics["maximum_allowed_sample_gap_microseconds"]
@@ -197,6 +215,8 @@ def main() -> int:
     print(f"  속도:     {metrics['velocity_rmse_meters_per_second']:.4f} m/s")
     print(f"  자세:     {metrics['attitude_rmse_degrees']:.4f}°")
     print(f"  각속도:   {metrics['angular_velocity_rmse_radians_per_second']:.4f} rad/s")
+    if metrics["motor_speed_rmse_radians_per_second"] is not None:
+        print(f"  로터 회전수: {metrics['motor_speed_rmse_radians_per_second']:.3f} rad/s")
     return 0
 
 

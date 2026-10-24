@@ -94,6 +94,17 @@ class CompareReferenceTests(unittest.TestCase):
 
         self.assertEqual(metrics["attitude_rmse_degrees"], 0.0)
 
+    def test_compares_esc_motor_speed_telemetry_when_present(self) -> None:
+        self.scenario["reference_samples"][0]["motor_speeds_radians_per_second"] = [
+            100.0, 200.0, 300.0, 400.0]
+        self.result["trajectory"][0]["drones"][0]["state"][
+            "motor_speeds_radians_per_second"] = [100.0, 210.0, 300.0, 390.0]
+
+        metrics = compare_reference(self.scenario, self.result)
+
+        self.assertAlmostEqual(
+            metrics["motor_speed_rmse_radians_per_second"], 50.0 ** 0.5)
+
     def test_different_sample_times_are_rejected(self) -> None:
         self.result["trajectory"][0]["time_seconds"] = 0.1
 

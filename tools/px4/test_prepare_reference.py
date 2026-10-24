@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from prepare_reference import (
     TopicSamples,
     _load_topics,
+    _measured_motor_speeds,
     _project_attitude,
     _slerp,
     _state_at,
@@ -15,6 +16,50 @@ from prepare_reference import (
 
 
 class TopicSamplesTests(unittest.TestCase):
+    def test_esc_rpm_uses_px4_motor_function_mapping_and_interpolates(self) -> None:
+        data = {"timestamp": [0, 10_000], "esc_count": [4, 4],
+                "esc_online_flags": [15, 15]}
+        functions = [103, 101, 104, 102]
+        first_rpms = [3_000, 6_000, 4_000, 5_000]
+        second_rpms = [5_000, 8_000, 6_000, 7_000]
+        for slot, function in enumerate(functions):
+            data[f"esc[{slot}].actuator_function"] = [function, function]
+            data[f"esc[{slot}].esc_rpm"] = [first_rpms[slot], second_rpms[slot]]
+        esc_status = TopicSamples(
+            SimpleNamespace(data=data), "esc_status", 20_000)
+
+        speeds = _measured_motor_speeds(esc_status, 5_000, 1_000.0)
+
+        expected_rpms_by_motor = [7_000, 6_000, 4_000, 5_000]
+        for speed, rpm in zip(speeds, expected_rpms_by_motor):
+            self.assertAlmostEqual(speed, rpm * (2.0 * 3.141592653589793 / 60.0))
+
+    def test_esc_rpm_rejects_missing_online_motor(self) -> None:
+        data = {"timestamp": [0, 10_000], "esc_count": [4, 4],
+                "esc_online_flags": [15, 7]}
+        for slot in range(4):
+            data[f"esc[{slot}].actuator_function"] = [101 + slot, 101 + slot]
+            data[f"esc[{slot}].esc_rpm"] = [3_000, 3_000]
+        esc_status = TopicSamples(
+            SimpleNamespace(data=data), "esc_status", 20_000)
+
+        with self.assertRaisesRegex(ValueError, "연결이 끊긴 ESC"):
+            _measured_motor_speeds(esc_status, 5_000, 1_000.0)
+
+    def test_esc_rpm_rejects_a_motor_mapping_change_inside_the_sample_gap(self) -> None:
+        data = {"timestamp": [0, 10_000], "esc_count": [4, 4],
+                "esc_online_flags": [15, 15]}
+        for slot in range(4):
+            data[f"esc[{slot}].actuator_function"] = [101 + slot, 101 + slot]
+            data[f"esc[{slot}].esc_rpm"] = [3_000, 3_000]
+        data["esc[0].actuator_function"][1] = 102
+        data["esc[1].actuator_function"][1] = 101
+        esc_status = TopicSamples(
+            SimpleNamespace(data=data), "esc_status", 20_000)
+
+        with self.assertRaisesRegex(ValueError, "연결 순서가 바뀝니다"):
+            _measured_motor_speeds(esc_status, 5_000, 1_000.0)
+
     def test_topic_specific_limits_can_be_overridden_for_a_known_log(self) -> None:
         log = SimpleNamespace(data_list=[
             SimpleNamespace(name=name, multi_id=0, data={"timestamp": [0, 100_000]})
