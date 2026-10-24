@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from prepare_reference import TopicSamples, _slerp, _state_at
+from prepare_reference import TopicSamples, _project_attitude, _slerp, _state_at
 
 
 class TopicSamplesTests(unittest.TestCase):
@@ -61,6 +61,15 @@ class TopicSamplesTests(unittest.TestCase):
         midpoint = _slerp([1.0, 0.0, 0.0, 0.0], [-1.0, 0.0, 0.0, 0.0], 0.5)
 
         self.assertEqual(midpoint, [1.0, 0.0, 0.0, 0.0])
+
+    def test_project_attitude_converts_px4_roll_into_project_axes(self) -> None:
+        half_turn_component = 2 ** -0.5
+        projected = _project_attitude([
+            half_turn_component, half_turn_component, 0.0, 0.0,
+        ])
+
+        for component in projected:
+            self.assertAlmostEqual(component, 0.5)
 
 
 if __name__ == "__main__":
