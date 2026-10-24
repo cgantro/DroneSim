@@ -318,6 +318,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   if(EMSCRIPTEN)
     set_target_properties(aerosimlab_simulator PROPERTIES SUFFIX ".html")
     target_link_options(aerosimlab_simulator PRIVATE
+      "--shell-file=${CMAKE_SOURCE_DIR}/apps/simulator/web/web_shell_single_thread.html"
       "-sALLOW_MEMORY_GROWTH=1"
       "--preload-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
       "--preload-file=${CMAKE_SOURCE_DIR}/assets/maps@maps"

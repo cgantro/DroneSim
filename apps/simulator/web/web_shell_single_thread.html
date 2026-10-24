@@ -8,7 +8,7 @@
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #141719; }
       body { display: grid; place-items: center; }
       canvas { display: block; width: 100%; height: 100%; outline: none; }
-      #startup-status { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; color: #e5e7eb; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
+      #startup-status { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; color: #e5e7eb; background: #141719; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
       #startup-status[hidden] { display: none; }
       #startup-message { max-width: 560px; }
     </style>
@@ -21,16 +21,23 @@
     <script>
       var Module = {
         canvas: document.getElementById("canvas"),
-        getPreloadedPackage: function () {
-          var encoded = document.getElementById("minibcg-asset-package").textContent.trim();
-          var binary = atob(encoded);
-          var packageBytes = new Uint8Array(binary.length);
-          for (var i = 0; i < binary.length; i++) packageBytes[i] = binary.charCodeAt(i);
-          return packageBytes.buffer;
+        setStatus: function (text) {
+          if (text) {
+            document.getElementById("startup-message").textContent = "시뮬레이터를 불러오고 있습니다.";
+            document.getElementById("startup-status").hidden = false;
+          }
+        },
+        monitorRunDependencies: function (remaining) {
+          if (remaining > 0) {
+            document.getElementById("startup-message").textContent = "시뮬레이터 자료를 준비하고 있습니다.";
+            document.getElementById("startup-status").hidden = false;
+          }
+        },
+        onRuntimeInitialized: function () {
+          document.getElementById("startup-status").hidden = true;
         }
       };
     </script>
-    <script id="minibcg-asset-package" type="application/octet-stream">__MINIBCG_ASSET_PACKAGE__</script>
     <template id="simulator-script-template">
       {{{ SCRIPT }}}
     </template>
@@ -41,6 +48,7 @@
         var source = document.getElementById("simulator-script-template").content.querySelector("script");
         if (!source) {
           message.textContent = "시뮬레이터 파일을 찾지 못했습니다. 새로고침해 주세요.";
+          status.setAttribute("role", "alert");
           return;
         }
 
@@ -51,9 +59,14 @@
         script.textContent = source.textContent;
         script.addEventListener("error", function () {
           status.hidden = false;
+          status.setAttribute("role", "alert");
           message.textContent = "시뮬레이터를 불러오지 못했습니다. 새로고침해 주세요.";
         });
-        status.hidden = true;
+        window.addEventListener("error", function () {
+          status.hidden = false;
+          status.setAttribute("role", "alert");
+          message.textContent = "시뮬레이터 실행에 실패했습니다. 브라우저를 새로고침해 주세요.";
+        });
         document.body.appendChild(script);
       })();
     </script>
