@@ -128,7 +128,12 @@ void Verify_SimulationCore_UsesInitialMotorSpeedsInRigidBodyMode()
     EXPECT_EQ(simulation.State().motorSpeedsRadiansPerSecond,
         initialState.motorSpeedsRadiansPerSecond);
     simulation.AdvanceOneTick();
-    EXPECT_NEAR(simulation.State().motorSpeedsRadiansPerSecond[0], 0.0, 1.0e-9);
+    for (std::size_t index = 0;
+        index < initialState.motorSpeedsRadiansPerSecond.size(); ++index)
+    {
+        EXPECT_NEAR(simulation.State().motorSpeedsRadiansPerSecond[index],
+            initialState.motorSpeedsRadiansPerSecond[index], 5.0e-5);
+    }
     simulation.AdvanceOneTick();
     const auto& actualSpeeds = simulation.State().motorSpeedsRadiansPerSecond;
     for (std::size_t index = 0; index < actualSpeeds.size(); ++index)

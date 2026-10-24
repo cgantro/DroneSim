@@ -397,6 +397,7 @@ struct PhysicsWorld::Impl
         double collisionRadiusMeters = 0.0;
         double maximumMotorSpeed = 0.0;
         bool updatedSinceReset = false;
+        bool initialMotorOutputsPending = false;
         bool wasGrounded = false;
 
         Body(
@@ -437,6 +438,23 @@ struct PhysicsWorld::Impl
                     model->getWrenchVertex(index));
                 rotor.setControlSignal(actuation.getActuation(index));
             }
+        }
+
+        /**
+         * @brief 첫 물리 적분 전에 AirSim 필터에 초기 회전수를 반영한다.
+         * @details 첫 갱신은 필터를 진행하고, 두 번째 갱신은 그 출력으로 로터 힘을 만든다.
+         */
+        void InitializeMotorOutputs()
+        {
+            ApplyMotorTargets();
+            for (msr::airlib::uint index = 0; index < parameters.getParams().rotor_count; ++index)
+            {
+                auto& rotor = static_cast<msr::airlib::RotorActuator&>(
+                    model->getWrenchVertex(index));
+                rotor.update();
+                rotor.update();
+            }
+            initialMotorOutputsPending = false;
         }
 
         void AdvanceMotorResponse(double seconds)
@@ -877,6 +895,7 @@ void PhysicsWorld::SetInitialMotorSpeeds(
         throw std::invalid_argument("초기 로터 속도는 0부터 최대 속도 사이의 유한한 값이어야 합니다.");
     }
     body.actuation.SetInitialMotorSpeeds(speeds, body.maximumMotorSpeed);
+    body.initialMotorOutputsPending = true;
 }
 
 void PhysicsWorld::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
@@ -957,6 +976,8 @@ void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
             body->model->setCollisionInfo(
                 impl_->BuildAirSimContactInfo(*body, impl_->droneContacts[index]));
         }
+        if (body->initialMotorOutputsPending)
+            body->InitializeMotorOutputs();
         body->AdvanceMotorResponse(seconds);
         body->ApplyMotorTargets();
         body->model->update();

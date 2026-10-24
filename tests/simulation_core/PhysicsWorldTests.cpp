@@ -46,6 +46,18 @@ RigidBodyState SimulateMotorInput(
 void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
 {
     constexpr double stepSeconds = 1.0 / 60.0;
+
+    PhysicsWorld initializedWorld;
+    const RigidBodyHandle initializedDrone = MakeX500(initializedWorld, 10.0);
+    const std::array<double, QuadrotorParameters::rotorCount> initialSpeeds{
+        420.0, 510.0, 600.0, 690.0};
+    initializedWorld.SetInitialMotorSpeeds(initializedDrone, initialSpeeds);
+    initializedWorld.Step(stepSeconds);
+    const auto speedsAfterInitialStep =
+        initializedWorld.MotorSpeedsRadiansPerSecond(initializedDrone);
+    for (std::size_t index = 0; index < initialSpeeds.size(); ++index)
+        EXPECT_NEAR(speedsAfterInitialStep[index], initialSpeeds[index], 1.0);
+
     PhysicsWorld world;
     const RigidBodyHandle drone = MakeX500(world, 2.0);
     std::array<double, QuadrotorParameters::rotorCount> motorTargets{};

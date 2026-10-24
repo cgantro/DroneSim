@@ -259,18 +259,18 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     const std::array<double, 4> increasedThrustRmse = calculateRmse(
         reference, increasedThrustResult);
 
-    EXPECT_NEAR(estimatedStartRmse[0], 0.4779, 0.02);
-    EXPECT_NEAR(estimatedStartRmse[1], 0.3707, 0.02);
-    EXPECT_NEAR(estimatedStartRmse[2], 52.29, 0.5);
-    EXPECT_NEAR(estimatedStartRmse[3], 0.8800, 0.02);
-    EXPECT_NEAR(zeroStartRmse[0], 0.4113, 0.02);
-    EXPECT_NEAR(zeroStartRmse[1], 0.2666, 0.02);
-    EXPECT_NEAR(zeroStartRmse[2], 27.70, 0.5);
-    EXPECT_NEAR(zeroStartRmse[3], 0.5568, 0.02);
-    EXPECT_NEAR(increasedThrustRmse[0], 0.9727, 0.02);
-    EXPECT_NEAR(increasedThrustRmse[1], 0.9695, 0.02);
-    EXPECT_NEAR(increasedThrustRmse[2], 99.85, 0.5);
-    EXPECT_NEAR(increasedThrustRmse[3], 1.4210, 0.02);
+    EXPECT_NEAR(estimatedStartRmse[0], 0.7520, 0.02);
+    EXPECT_NEAR(estimatedStartRmse[1], 0.8016, 0.02);
+    EXPECT_NEAR(estimatedStartRmse[2], 89.98, 0.5);
+    EXPECT_NEAR(estimatedStartRmse[3], 1.2986, 0.02);
+    EXPECT_NEAR(zeroStartRmse[0], 0.6534, 0.02);
+    EXPECT_NEAR(zeroStartRmse[1], 0.5808, 0.02);
+    EXPECT_NEAR(zeroStartRmse[2], 71.81, 0.5);
+    EXPECT_NEAR(zeroStartRmse[3], 1.2205, 0.02);
+    EXPECT_NEAR(increasedThrustRmse[0], 1.6491, 0.02);
+    EXPECT_NEAR(increasedThrustRmse[1], 2.6448, 0.02);
+    EXPECT_NEAR(increasedThrustRmse[2], 108.95, 0.5);
+    EXPECT_NEAR(increasedThrustRmse[3], 2.9164, 0.02);
 
     const Json recentFlightFixture = Json::parse(ReadScenarioFixture(
         "tests/data/px4_x500_position_replay_2026_10_16_100s.json"));
@@ -281,10 +281,10 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     const std::array<double, 4> recentFlightRmse = calculateRmse(
         recentReference, recentFlightResult);
 
-    EXPECT_NEAR(recentFlightRmse[0], 1.0406, 0.03);
-    EXPECT_NEAR(recentFlightRmse[1], 0.8019, 0.03);
-    EXPECT_NEAR(recentFlightRmse[2], 58.96, 0.5);
-    EXPECT_NEAR(recentFlightRmse[3], 0.7965, 0.03);
+    EXPECT_NEAR(recentFlightRmse[0], 1.9598, 0.03);
+    EXPECT_NEAR(recentFlightRmse[1], 1.3199, 0.03);
+    EXPECT_NEAR(recentFlightRmse[2], 75.76, 0.5);
+    EXPECT_NEAR(recentFlightRmse[3], 0.9667, 0.03);
 
     // 상대 궤적과 입력은 그대로 두고 시작 높이만 올려 평지 접촉을 피한다.
     Json freeFlightScenario = recentFlightFixture;
@@ -304,10 +304,10 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
             frame.drones.front().second.positionMeters.z);
     }
     EXPECT_GT(lowestFreeFlightHeightMeters, 50.0);
-    EXPECT_NEAR(freeFlightRmse[0], 20.6406, 0.03);
-    EXPECT_NEAR(freeFlightRmse[1], 14.9430, 0.03);
-    EXPECT_NEAR(freeFlightRmse[2], 106.55, 0.5);
-    EXPECT_NEAR(freeFlightRmse[3], 2.9175, 0.03);
+    EXPECT_NEAR(freeFlightRmse[0], 21.2287, 0.03);
+    EXPECT_NEAR(freeFlightRmse[1], 15.2663, 0.03);
+    EXPECT_NEAR(freeFlightRmse[2], 110.19, 0.5);
+    EXPECT_NEAR(freeFlightRmse[3], 2.9820, 0.03);
 
     // 같은 구간에서 추력 계수만 높였을 때 오차가 어떻게 달라지는지 확인한다.
     Json increasedThrustRecentScenario = recentFlightFixture;
@@ -322,10 +322,10 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     const std::array<double, 4> increasedThrustRecentRmse = calculateRmse(
         recentReference, increasedThrustRecentResult);
 
-    EXPECT_NEAR(increasedThrustRecentRmse[0], 2.1274, 0.03);
-    EXPECT_NEAR(increasedThrustRecentRmse[1], 1.5109, 0.03);
-    EXPECT_NEAR(increasedThrustRecentRmse[2], 82.98, 0.5);
-    EXPECT_NEAR(increasedThrustRecentRmse[3], 1.0697, 0.03);
+    EXPECT_NEAR(increasedThrustRecentRmse[0], 2.4399, 0.03);
+    EXPECT_NEAR(increasedThrustRecentRmse[1], 1.8423, 0.03);
+    EXPECT_NEAR(increasedThrustRecentRmse[2], 97.12, 0.5);
+    EXPECT_NEAR(increasedThrustRecentRmse[3], 1.2038, 0.03);
 
     Json px4GeometryRecentScenario = recentFlightFixture;
     // 공개 기록의 FRD 로터 위치를 프로젝트의 FLU 좌표로 바꿔 적용한다.
@@ -339,10 +339,10 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     const std::array<double, 4> px4GeometryRecentRmse = calculateRmse(
         recentReference, px4GeometryRecentResult);
 
-    EXPECT_NEAR(px4GeometryRecentRmse[0], 1.2417, 0.03);
-    EXPECT_NEAR(px4GeometryRecentRmse[1], 0.9491, 0.03);
-    EXPECT_NEAR(px4GeometryRecentRmse[2], 76.30, 0.5);
-    EXPECT_NEAR(px4GeometryRecentRmse[3], 1.0214, 0.03);
+    EXPECT_NEAR(px4GeometryRecentRmse[0], 1.8435, 0.03);
+    EXPECT_NEAR(px4GeometryRecentRmse[1], 1.3661, 0.03);
+    EXPECT_NEAR(px4GeometryRecentRmse[2], 93.61, 0.5);
+    EXPECT_NEAR(px4GeometryRecentRmse[3], 1.2075, 0.03);
 
     Json zeroSpeedRecentScenario = recentFlightFixture;
     zeroSpeedRecentScenario["drones"][0]["initial_motor_speeds_radians_per_second"] =
@@ -354,10 +354,10 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     const std::array<double, 4> zeroSpeedRecentRmse = calculateRmse(
         recentReference, zeroSpeedRecentResult);
 
-    EXPECT_NEAR(zeroSpeedRecentRmse[0], 0.8946, 0.03);
-    EXPECT_NEAR(zeroSpeedRecentRmse[1], 0.6488, 0.03);
-    EXPECT_NEAR(zeroSpeedRecentRmse[2], 51.14, 0.5);
-    EXPECT_NEAR(zeroSpeedRecentRmse[3], 0.7191, 0.03);
+    EXPECT_NEAR(zeroSpeedRecentRmse[0], 0.8214, 0.03);
+    EXPECT_NEAR(zeroSpeedRecentRmse[1], 0.5706, 0.03);
+    EXPECT_NEAR(zeroSpeedRecentRmse[2], 46.13, 0.5);
+    EXPECT_NEAR(zeroSpeedRecentRmse[3], 0.6607, 0.03);
 
     // 제조사 시험표 추정값으로 바꾸고, 시작 RPM도 같은 설정으로 다시 계산한다.
     Json motorTableRecentScenario = recentFlightFixture;
@@ -380,10 +380,10 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     const std::array<double, 4> motorTableRecentRmse = calculateRmse(
         recentReference, motorTableRecentResult);
 
-    EXPECT_NEAR(motorTableRecentRmse[0], 5.4541, 0.05);
-    EXPECT_NEAR(motorTableRecentRmse[1], 3.8809, 0.05);
-    EXPECT_NEAR(motorTableRecentRmse[2], 138.29, 0.5);
-    EXPECT_NEAR(motorTableRecentRmse[3], 1.8037, 0.05);
+    EXPECT_NEAR(motorTableRecentRmse[0], 5.7186, 0.05);
+    EXPECT_NEAR(motorTableRecentRmse[1], 3.9962, 0.05);
+    EXPECT_NEAR(motorTableRecentRmse[2], 133.74, 0.5);
+    EXPECT_NEAR(motorTableRecentRmse[3], 1.8523, 0.05);
 }
 
 void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
