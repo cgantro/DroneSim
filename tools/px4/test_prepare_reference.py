@@ -5,10 +5,39 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from prepare_reference import TopicSamples, _project_attitude, _slerp, _state_at
+from prepare_reference import (
+    TopicSamples,
+    _load_topics,
+    _project_attitude,
+    _slerp,
+    _state_at,
+)
 
 
 class TopicSamplesTests(unittest.TestCase):
+    def test_topic_specific_limits_can_be_overridden_for_a_known_log(self) -> None:
+        log = SimpleNamespace(data_list=[
+            SimpleNamespace(name=name, multi_id=0, data={"timestamp": [0, 100_000]})
+            for name in (
+                "vehicle_local_position",
+                "vehicle_attitude",
+                "vehicle_angular_velocity",
+                "actuator_motors",
+            )
+        ])
+
+        default_topics = _load_topics(log)
+        overridden_topics = _load_topics(log, maximum_gap_override_microseconds=120_000)
+
+        self.assertEqual(
+            [topic.maximum_gap_microseconds for topic in default_topics],
+            [250_000, 20_000, 20_000, 20_000],
+        )
+        self.assertEqual(
+            [topic.maximum_gap_microseconds for topic in overridden_topics],
+            [120_000, 120_000, 120_000, 120_000],
+        )
+
     def test_interpolates_normal_samples_and_rejects_a_large_gap(self) -> None:
         samples = TopicSamples(
             SimpleNamespace(data={"timestamp": [0, 5_000, 10_000], "value": [0.0, 5.0, 10.0]}),

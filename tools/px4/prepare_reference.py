@@ -223,7 +223,10 @@ def _state_at(
     }
 
 
-def _load_topics(log: ULog) -> tuple[TopicSamples, TopicSamples, TopicSamples, TopicSamples]:
+def _load_topics(
+    log: ULog,
+    maximum_gap_override_microseconds: int | None = None,
+) -> tuple[TopicSamples, TopicSamples, TopicSamples, TopicSamples]:
     datasets = {dataset.name: dataset for dataset in log.data_list if dataset.multi_id == 0}
     required = (
         "vehicle_local_position",
@@ -238,7 +241,9 @@ def _load_topics(log: ULog) -> tuple[TopicSamples, TopicSamples, TopicSamples, T
         TopicSamples(
             datasets[name],
             name,
-            MAXIMUM_SAMPLE_GAP_MICROSECONDS[name],
+            maximum_gap_override_microseconds
+            if maximum_gap_override_microseconds is not None
+            else MAXIMUM_SAMPLE_GAP_MICROSECONDS[name],
         )
         for name in required
     )
@@ -249,11 +254,22 @@ def prepare_scenario(
     start_seconds: float,
     duration_seconds: float,
     source_id: str | None,
+    maximum_sample_gap_microseconds: int | None = None,
 ) -> dict:
     from pyulog import ULog
 
     log = ULog(str(log_path))
-    position, attitude, angular_velocity, motors = _load_topics(log)
+    if (maximum_sample_gap_microseconds is not None
+            and maximum_sample_gap_microseconds <= 0):
+        raise ValueError("표본 간격 허용치는 0보다 커야 합니다.")
+    maximum_sample_gaps = {
+        name: maximum_sample_gap_microseconds
+        if maximum_sample_gap_microseconds is not None
+        else default_gap
+        for name, default_gap in MAXIMUM_SAMPLE_GAP_MICROSECONDS.items()
+    }
+    position, attitude, angular_velocity, motors = _load_topics(
+        log, maximum_sample_gap_microseconds)
     tick_count_float = duration_seconds / STEP_SECONDS
     tick_count = round(tick_count_float)
     if tick_count <= 0 or not math.isclose(tick_count_float, tick_count, abs_tol=1.0e-9):
@@ -341,7 +357,8 @@ def prepare_scenario(
                 "vehicle_angular_velocity": angular_velocity.maximum_observed_gap_microseconds,
                 "actuator_motors": motors.maximum_observed_gap_microseconds,
             },
-            "maximum_allowed_sample_gap_microseconds": MAXIMUM_SAMPLE_GAP_MICROSECONDS,
+            "maximum_allowed_sample_gap_microseconds": maximum_sample_gaps,
+            "sample_gap_override_microseconds": maximum_sample_gap_microseconds,
         },
         "reference_samples": reference_samples,
     }
@@ -356,6 +373,11 @@ def main() -> int:
     parser.add_argument("--start", type=float, default=12.05, help="로그 시작 후 구간 시작 시각(초)")
     parser.add_argument("--duration", type=float, default=4.0, help="재생 구간 길이(초, 60Hz 배수)")
     parser.add_argument("--source-id", help="공개 Flight Review 로그 ID; 출처 링크와 이용 조건 기록용")
+    parser.add_argument(
+        "--maximum-sample-gap-ms",
+        type=float,
+        help="모든 필수 주제의 보간 허용 간격을 지정합니다. 기본값은 주제별 제한입니다.",
+    )
     args = parser.parse_args()
 
     try:
@@ -366,7 +388,21 @@ def main() -> int:
         if (not math.isfinite(args.start) or not math.isfinite(args.duration)
                 or args.start < 0.0 or args.duration <= 0.0):
             raise ValueError("시작 시각은 0 이상, 구간 길이는 0보다 커야 합니다.")
-        scenario = prepare_scenario(args.ulog, args.start, args.duration, args.source_id)
+        maximum_sample_gap_microseconds = None
+        if args.maximum_sample_gap_ms is not None:
+            if (not math.isfinite(args.maximum_sample_gap_ms)
+                    or args.maximum_sample_gap_ms <= 0.0):
+                raise ValueError("표본 간격 허용치는 유한한 0 초과 값이어야 합니다.")
+            maximum_sample_gap_microseconds = round(args.maximum_sample_gap_ms * 1000.0)
+            if maximum_sample_gap_microseconds <= 0:
+                raise ValueError("표본 간격 허용치는 0보다 커야 합니다.")
+        scenario = prepare_scenario(
+            args.ulog,
+            args.start,
+            args.duration,
+            args.source_id,
+            maximum_sample_gap_microseconds,
+        )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(scenario, ensure_ascii=False, separators=(",", ":")) + "\n",
