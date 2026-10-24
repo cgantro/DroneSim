@@ -764,9 +764,12 @@ void UpdateCollisionAvoidance(
             const std::string* yieldingDrone = nullptr;
             if (firstConnected && secondConnected)
             {
-                if (!firstHasTask || !secondHasTask)
+                if (!firstHasTask && !secondHasTask)
                     continue;
-                yieldingDrone = &secondName;
+                // 임무가 없는 연결 드론도 장애물로 본다. 둘 다 임무 중이면
+                // 목록에서 뒤에 있는 드론이 양보해 결과를 반복할 수 있게 한다.
+                yieldingDrone = firstHasTask && !secondHasTask
+                    ? &firstName : &secondName;
             }
             else if (firstConnected && firstHasTask)
             {
@@ -813,7 +816,11 @@ void UpdateCollisionAvoidance(
                 result.minimumPredictedDroneSeparationMeters = predictedDistance;
             }
             const bool alreadyAvoiding = activeAvoidanceDirections.contains(*yieldingDrone);
-            const double releaseDistance = settings.safetyDistanceMeters * 1.5;
+            // 두 드론이 모두 임무 중일 때는 충분히 멀어진 뒤 회피를 풀어 떨림을 막는다.
+            // 한쪽이 정지 장애물이면 안전거리까지만 확보해도 회피를 풀어야
+            // 두 목표점 간격이 안전거리보다 좁은 경우 임무가 영원히 멈추지 않는다.
+            const double releaseDistance = settings.safetyDistanceMeters
+                * (firstHasTask && secondHasTask ? 1.5 : 1.0);
             const double avoidanceThreshold = alreadyAvoiding
                 ? releaseDistance : settings.safetyDistanceMeters;
             if (predictedDistance >= avoidanceThreshold)

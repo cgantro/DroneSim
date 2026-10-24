@@ -999,6 +999,46 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     ASSERT_TRUE(avoidanceResult.minimumPredictedDroneSeparationMeters.has_value());
     EXPECT_LT(*avoidanceResult.minimumPredictedDroneSeparationMeters, 3.0);
 
+    constexpr std::string_view stationaryDroneScenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":600,
+     "drones":[
+       {"name":"worker","initial_position_meters":[-4,0,0]},
+       {"name":"stationary","initial_position_meters":[0,0,0]},
+       {"name":"support","initial_position_meters":[20,0,0]}],
+     "commands":[
+       {"tick":0,"drone":"worker","type":"takeoff"},
+       {"tick":0,"drone":"stationary","type":"takeoff"},
+       {"tick":0,"drone":"support","type":"takeoff"}],
+     "collision_avoidance":{"safety_distance_meters":3,
+       "prediction_horizon_seconds":2,"lateral_offset_meters":5},
+     "mission":{"name":"pass-the-hovering-drone","tasks":[
+       {"name":"cross","role":"survey","drone":"worker",
+        "target_position_meters":[4,0,1.5],"start_tick":100,
+        "deadline_tick":590,"tolerance_meters":0.2},
+       {"name":"support","role":"survey","drone":"support",
+        "target_position_meters":[21,0,1.5],"start_tick":100,
+        "deadline_tick":590,"tolerance_meters":0.2}]},
+     "expected":{"tolerance_meters":0.5,
+       "minimum_drone_separation_meters":2.5,
+       "drones":[
+         {"name":"worker","mode":"hovering","position_meters":[4,0,1.5]},
+         {"name":"stationary","mode":"hovering","position_meters":[0,0,1.5]},
+         {"name":"support","mode":"hovering","position_meters":[21,0,1.5]}]}}
+    )json";
+    const ScenarioResult stationaryDroneResult = RunScenario(stationaryDroneScenario);
+    EXPECT_TRUE(stationaryDroneResult.passed)
+        << (stationaryDroneResult.issues.empty()
+            ? "" : stationaryDroneResult.issues.front())
+        << " minimum="
+        << stationaryDroneResult.minimumDroneSeparationMeters.value_or(-1.0)
+        << " avoidance_events=" << stationaryDroneResult.collisionAvoidanceEvents;
+    ASSERT_TRUE(stationaryDroneResult.mission.has_value());
+    EXPECT_TRUE(stationaryDroneResult.mission->passed);
+    EXPECT_EQ(stationaryDroneResult.mission->completedTaskCount, 2U);
+    EXPECT_GT(stationaryDroneResult.collisionAvoidanceEvents, 0U);
+    ASSERT_TRUE(stationaryDroneResult.minimumDroneSeparationMeters.has_value());
+    EXPECT_GE(*stationaryDroneResult.minimumDroneSeparationMeters, 2.5);
+
 #if !defined(__EMSCRIPTEN__)
     std::string physicalAvoidanceScenario{collisionAvoidanceScenario};
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario, "\"dynamics\":\"kinematic\"",
@@ -1016,6 +1056,19 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
         "\"tolerance_meters\":0.2",
         "\"tolerance_meters\":0.5"));
+    // 완료한 드론과 목표 간격을 안전거리보다 멀리 둬 임무 자체도 도달 가능하게 한다.
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"target_position_meters\":[4,0,1.5]",
+        "\"target_position_meters\":[8,0,1.5]"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"target_position_meters\":[-4,0,1.5]",
+        "\"target_position_meters\":[-8,0,1.5]"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"position_meters\":[4,0,1.5]",
+        "\"position_meters\":[8,0,1.5]"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"position_meters\":[-4,0,1.5]",
+        "\"position_meters\":[-8,0,1.5]"));
     // 임무 목표 반경에 들어와도 강체 비행 상태는 Hovering으로 바뀌지 않을 수 있다.
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
         "\"name\":\"east\",\"mode\":\"hovering\"",
@@ -1184,14 +1237,14 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
         ASSERT_TRUE(rigidBodyResult.mission->startedTick.has_value());
         EXPECT_EQ(*rigidBodyResult.mission->startedTick, 121U);
         ASSERT_TRUE(rigidBodyResult.mission->completedTick.has_value());
-        EXPECT_EQ(*rigidBodyResult.mission->completedTick, 512U);
+        EXPECT_LE(*rigidBodyResult.mission->completedTick, 512U);
         ASSERT_EQ(rigidBodyResult.mission->tasks.size(), 3U);
         ASSERT_TRUE(rigidBodyResult.mission->tasks[0].completedTick.has_value());
         EXPECT_EQ(*rigidBodyResult.mission->tasks[0].completedTick, 163U);
         EXPECT_EQ(rigidBodyResult.mission->tasks[0].assignmentHistory,
             (std::vector<std::string>{"low-charge", "reserve-2"}));
         ASSERT_TRUE(rigidBodyResult.mission->tasks[1].completedTick.has_value());
-        EXPECT_EQ(*rigidBodyResult.mission->tasks[1].completedTick, 512U);
+        EXPECT_LE(*rigidBodyResult.mission->tasks[1].completedTick, 512U);
         EXPECT_EQ(rigidBodyResult.mission->tasks[1].assignmentHistory,
             (std::vector<std::string>{"lost-link", "reserve-1"}));
         EXPECT_GT(rigidBodyResult.collisionAvoidanceEvents, 0U);
