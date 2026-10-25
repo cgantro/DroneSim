@@ -152,6 +152,9 @@ int RunSimulator(int argc, char** argv)
         // 브라우저 프레임 함수가 계속 실행되므로 앱을 프로그램이 끝날 때까지 보관한다.
         static std::unique_ptr<aerosimlab::simulator::AeroSimLabApp> app;
         app = std::make_unique<aerosimlab::simulator::AeroSimLabApp>(options);
+#ifdef __EMSCRIPTEN__
+        EM_ASM({ window.setSimulatorStartupStatus("시뮬레이션 상태 구성을 마쳤습니다."); });
+#endif
         return app->Run();
 #else
         aerosimlab::simulator::AeroSimLabApp app(options);
@@ -177,10 +180,16 @@ int RunSimulator(int argc, char** argv)
 }
 
 #ifdef __EMSCRIPTEN__
+void RunWebSimulator(void*)
+{
+    EM_ASM({ window.setSimulatorStartupStatus("시뮬레이션 상태를 구성하고 있습니다."); });
+    static_cast<void>(RunSimulator(0, nullptr));
+}
+
 void StartWebSimulator(void*)
 {
-    EM_ASM({ window.setSimulatorStartupStatus("시뮬레이터 초기화 작업을 시작했습니다."); });
-    static_cast<void>(RunSimulator(0, nullptr));
+    EM_ASM({ window.setSimulatorStartupStatus("웹 초기화 예약이 실행됐습니다."); });
+    emscripten_async_call(&RunWebSimulator, nullptr, 16);
 }
 #endif
 }
