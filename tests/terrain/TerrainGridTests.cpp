@@ -1,6 +1,7 @@
 #include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
 #include "terrain/MapRoads.h"
+#include "terrain/MapWaterBodies.h"
 #include "terrain/TerrainGrid.h"
 #include "simulation_core/EoCameraModel.h"
 
@@ -210,6 +211,21 @@ void Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths()
         roads.end());
 }
 
+void Verify_TancheonRiverUsesOSMWaterBoundaryAndKeepsItsIslands()
+{
+    const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/tancheon/terrain.aerotrn");
+    const auto waterBodies = LoadMapWaterBodies(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+
+    ASSERT_EQ(waterBodies.size(), 1U);
+    EXPECT_GT(waterBodies.front().outerBoundaryMeters.size(), 1000U);
+    EXPECT_EQ(waterBodies.front().innerBoundariesMeters.size(), 25U);
+    const glm::dvec2 riverPoint = terrain.ToLocalMeters(37.4932057, 127.1025281);
+    EXPECT_TRUE(ContainsWater(waterBodies.front(), riverPoint));
+}
+
 void Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
@@ -278,6 +294,8 @@ TEST(TerrainGridTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_MapBuildingFacadeFollowsASlopedFootprintEdge());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_TancheonRiverUsesOSMWaterBoundaryAndKeepsItsIslands());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection());
     EXPECT_NO_FATAL_FAILURE(Verify_BridgeOutsideTerrainIsSkipped());

@@ -110,6 +110,7 @@ add_library(aerosimlab_terrain STATIC
   modules/terrain/src/MapBridges.cpp
   modules/terrain/src/MapBuildings.cpp
   modules/terrain/src/MapRoads.cpp
+  modules/terrain/src/MapWaterBodies.cpp
   modules/terrain/src/TerrainGrid.cpp
 )
 target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)

@@ -22,6 +22,7 @@
 #include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
 #include "terrain/MapRoads.h"
+#include "terrain/MapWaterBodies.h"
 #include "terrain/TerrainGrid.h"
 #include <glm/geometric.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -479,6 +480,60 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
         vertices.data(), static_cast<std::uint32_t>(vertices.size()),
         indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
+
+/** @brief OSM 물 경계와 DEM 높이로 물 표면을 만든다. */
+std::unique_ptr<aerosimlab::graphics::Mesh> CreateWaterMesh(
+    const std::vector<aerosimlab::terrain::MapWaterBody>& waterBodies,
+    const aerosimlab::terrain::TerrainGrid& terrain)
+{
+    constexpr double cellSizeMeters = 12.0;
+    constexpr double surfaceOffsetMeters = 0.25;
+    const double halfX = (static_cast<double>(terrain.sampleCount) - 1.0)
+        * terrain.spacingXMeters * 0.5;
+    const double halfY = (static_cast<double>(terrain.sampleCount) - 1.0)
+        * terrain.spacingYMeters * 0.5;
+    std::vector<aerosimlab::graphics::Vertex> vertices;
+    std::vector<std::uint32_t> indices;
+
+    for (double south = -halfY; south < halfY; south += cellSizeMeters)
+    {
+        const double north = std::min(south + cellSizeMeters, halfY);
+        for (double west = -halfX; west < halfX; west += cellSizeMeters)
+        {
+            const double east = std::min(west + cellSizeMeters, halfX);
+            const glm::dvec2 center{(west + east) * 0.5, (south + north) * 0.5};
+            const bool isWater = std::any_of(waterBodies.begin(), waterBodies.end(),
+                [&](const aerosimlab::terrain::MapWaterBody& body)
+                {
+                    return aerosimlab::terrain::ContainsWater(body, center);
+                });
+            if (!isWater)
+                continue;
+
+            const std::uint32_t first = static_cast<std::uint32_t>(vertices.size());
+            const auto addCorner = [&](double x, double y, float u, float v)
+            {
+                const glm::dvec2 point{x, y};
+                const double elevation = terrain.HeightAtLocalMeters(point)
+                    + surfaceOffsetMeters;
+                vertices.push_back({ToRenderPosition({x, y, elevation}),
+                    {0.0F, 1.0F, 0.0F}, {u, v}});
+            };
+            addCorner(west, south, 0.0F, 0.0F);
+            addCorner(west, north, 0.0F, 1.0F);
+            addCorner(east, north, 1.0F, 1.0F);
+            addCorner(east, south, 1.0F, 0.0F);
+            indices.insert(indices.end(), {first, first + 1U, first + 2U,
+                first, first + 2U, first + 3U});
+        }
+    }
+
+    if (indices.empty())
+        return {};
+    return std::make_unique<aerosimlab::graphics::Mesh>(
+        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
+        indices.data(), static_cast<std::uint32_t>(indices.size()));
+}
 }
 
 AeroSimLabApp::AeroSimLabApp(Options options)
@@ -903,9 +958,12 @@ void AeroSimLabApp::LoadMapFeatures()
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto bridges = aerosimlab::terrain::LoadMapBridgeFootprints(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+    const auto waterBodies = aerosimlab::terrain::LoadMapWaterBodies(
+        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     roadMesh_ = CreateRoadMesh(roads, false);
     bridgeMesh_ = CreateRoadMesh(roads, true);
     bridgeFootprintMesh_ = CreateBridgeFootprintMesh(bridges);
+    waterMesh_ = CreateWaterMesh(waterBodies, terrainGrid_);
     taggedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::OsmHeightTag);
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
@@ -1439,6 +1497,9 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 {
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
         view, projection, cameraPosition);
+    if (waterMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *waterMesh_, waterMaterial_, *shader_,
+            view, projection, cameraPosition);
     if (roadMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *roadMesh_, roadMaterial_, *shader_,
             view, projection, cameraPosition);

@@ -331,6 +331,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> waterMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> roadMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeFootprintMesh_;
@@ -350,6 +351,8 @@ private:
         glm::vec4{1.0F}, 0.16F, 0.40F};
     aerosimlab::graphics::Material groundMaterial_{
         glm::vec4{0.25F, 0.40F, 0.25F, 1.0F}, 0.0F, 0.92F};
+    aerosimlab::graphics::Material waterMaterial_{
+        glm::vec4{0.08F, 0.35F, 0.55F, 1.0F}, 0.0F, 0.38F};
     aerosimlab::graphics::Material roadMaterial_{
         glm::vec4{0.22F, 0.25F, 0.27F, 1.0F}, 0.0F, 0.95F};
     aerosimlab::graphics::Material bridgeMaterial_{
