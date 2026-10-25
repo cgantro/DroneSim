@@ -206,6 +206,34 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
         CaptureAssessment::Ready);
     EXPECT_EQ(successful.drones[0].finalCamera.model.imageWidthPixels, 1280);
 
+    nlohmann::json obstructedSurface = nlohmann::json::parse(source);
+    obstructedSurface["mission"]["tasks"][0]["inspection_occluders"] =
+        nlohmann::json::array({{{"center_meters", {5.0, 0.0, 1.0}},
+            {"half_extents_meters", {0.5, 2.0, 2.0}}}});
+    const ScenarioResult obstructed = RunScenario(obstructedSurface.dump());
+    ASSERT_TRUE(obstructed.mission.has_value());
+    EXPECT_FALSE(obstructed.mission->tasks[0].completed);
+    EXPECT_FALSE(obstructed.mission->tasks[0].firstGeometryCaptureTick.has_value());
+    EXPECT_EQ(obstructed.mission->tasks[0].lastCaptureAssessment,
+        CaptureAssessment::Occluded);
+
+    nlohmann::json boxBehindSurface = nlohmann::json::parse(source);
+    boxBehindSurface["mission"]["tasks"][0]["inspection_occluders"] =
+        nlohmann::json::array({{{"center_meters", {12.0, 0.0, 1.0}},
+            {"half_extents_meters", {0.5, 2.0, 2.0}}}});
+    const ScenarioResult visibleSurface = RunScenario(boxBehindSurface.dump());
+    ASSERT_TRUE(visibleSurface.mission.has_value());
+    EXPECT_TRUE(visibleSurface.mission->tasks[0].completed);
+    EXPECT_EQ(visibleSurface.mission->tasks[0].lastCaptureAssessment,
+        CaptureAssessment::Ready);
+
+    nlohmann::json invalidOccluder = nlohmann::json::parse(source);
+    invalidOccluder["mission"]["tasks"][0]["inspection_occluders"] =
+        nlohmann::json::array({{{"center_meters", {5.0, 0.0, 1.0}},
+            {"half_extents_meters", {0.5, 0.0, 2.0}}}});
+    EXPECT_THROW(static_cast<void>(RunScenario(invalidOccluder.dump())),
+        std::invalid_argument);
+
     nlohmann::json differentCameraModels = nlohmann::json::parse(source);
     differentCameraModels["camera_model"] = {
         {"image_width_pixels", 1920},

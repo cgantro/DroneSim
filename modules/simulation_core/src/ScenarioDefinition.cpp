@@ -542,6 +542,28 @@ InspectionSurface ReadInspectionSurface(const Json& value)
     return surface;
 }
 
+/** @brief 점검면과 카메라 사이의 시야를 가리는 상자 목록을 읽는다. */
+std::vector<InspectionOccluderBox> ReadInspectionOccluders(const Json& value)
+{
+    if (!value.is_array())
+        throw std::invalid_argument("inspection_occluders는 상자 목록이어야 합니다.");
+
+    std::vector<InspectionOccluderBox> boxes;
+    boxes.reserve(value.size());
+    for (const Json& item : value)
+    {
+        if (!item.is_object())
+            throw std::invalid_argument("가림 상자는 JSON 객체여야 합니다.");
+        InspectionOccluderBox box{
+            ReadVector(Required(item, "center_meters"), "center_meters"),
+            ReadVector(Required(item, "half_extents_meters"), "half_extents_meters")};
+        if (glm::any(glm::lessThanEqual(box.halfExtentsMeters, glm::dvec3{0.0})))
+            throw std::invalid_argument("가림 상자의 반쪽 길이는 모두 양수여야 합니다.");
+        boxes.push_back(box);
+    }
+    return boxes;
+}
+
 /** @brief 임무 하나를 읽고 드론 배정, 경로와 Tick 범위를 확인한다. */
 ScenarioResult::MissionTask ReadMissionTask(
     const Json& taskValue,
@@ -601,6 +623,12 @@ ScenarioResult::MissionTask ReadMissionTask(
     const auto inspectionSurface = taskValue.find("inspection_surface");
     if (inspectionSurface != taskValue.end())
         task.inspectionSurface = ReadInspectionSurface(*inspectionSurface);
+    const auto inspectionOccluders = taskValue.find("inspection_occluders");
+    if (inspectionOccluders != taskValue.end())
+        task.inspectionOccluders = ReadInspectionOccluders(*inspectionOccluders);
+    if (!task.inspectionOccluders.empty() && !task.inspectionSurface)
+        throw std::invalid_argument(
+            "inspection_occluders를 쓰려면 inspection_surface가 필요합니다.");
     const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
         task.waypointsMeters.end(), [](const glm::dvec3& point) { return point.z < 0.0; });
     if (hasNegativeAltitude || task.toleranceMeters < 0.0

@@ -11,6 +11,37 @@ namespace
 {
 constexpr glm::dvec3 cameraMountPositionBodyMeters{0.35, 0.0, 0.12};
 constexpr glm::dvec3 cameraOpticalAxisBody{25.0, 0.0, -2.5};
+
+bool SegmentIntersectsBox(
+    const glm::dvec3& start,
+    const glm::dvec3& end,
+    const InspectionOccluderBox& box) noexcept
+{
+    const glm::dvec3 direction = end - start;
+    double entry = 0.0;
+    double exit = 1.0;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        const double minimum = box.centerMeters[axis] - box.halfExtentsMeters[axis];
+        const double maximum = box.centerMeters[axis] + box.halfExtentsMeters[axis];
+        if (std::abs(direction[axis]) < 1.0e-12)
+        {
+            if (start[axis] < minimum || start[axis] > maximum)
+                return false;
+            continue;
+        }
+
+        double nearDistance = (minimum - start[axis]) / direction[axis];
+        double farDistance = (maximum - start[axis]) / direction[axis];
+        if (nearDistance > farDistance)
+            std::swap(nearDistance, farDistance);
+        entry = std::max(entry, nearDistance);
+        exit = std::min(exit, farDistance);
+        if (entry > exit)
+            return false;
+    }
+    return exit > 0.0 && entry < 1.0 - 1.0e-9;
+}
 }
 
 bool CameraModel::IsValid() const noexcept
@@ -51,7 +82,8 @@ glm::dvec3 EoCameraModel::UpAxis(const CameraState& camera) noexcept
 }
 
 CaptureAssessment EoCameraModel::AssessCapture(
-    const CameraState& camera, const InspectionSurface& surface) noexcept
+    const CameraState& camera, const InspectionSurface& surface,
+    std::span<const InspectionOccluderBox> occluders) noexcept
 {
     if (camera.status != CameraStatus::Active)
         return CaptureAssessment::CameraUnavailable;
@@ -94,6 +126,8 @@ CaptureAssessment EoCameraModel::AssessCapture(
             + heightAxis * (surface.heightMeters * 0.5),
         surface.centerMeters + surface.widthAxis * (surface.widthMeters * 0.5)
             + heightAxis * (surface.heightMeters * 0.5)};
+    std::array<glm::dvec3, 5> visibilitySamples{
+        corners[0], corners[1], corners[2], corners[3], surface.centerMeters};
 
     double leftmostPixel = static_cast<double>(camera.model.imageWidthPixels);
     double rightmostPixel = 0.0;
@@ -129,6 +163,16 @@ CaptureAssessment EoCameraModel::AssessCapture(
         || bottommostPixel - topmostPixel < surface.minimumPixelHeight)
     {
         return CaptureAssessment::ResolutionTooLow;
+    }
+
+    // 점검면의 네 모서리와 가운데를 잇는 시선이 상자에 닿으면 가림으로 처리한다.
+    for (const glm::dvec3& sample : visibilitySamples)
+    {
+        for (const InspectionOccluderBox& box : occluders)
+        {
+            if (SegmentIntersectsBox(camera.positionMeters, sample, box))
+                return CaptureAssessment::Occluded;
+        }
     }
     return CaptureAssessment::Ready;
 }
@@ -181,6 +225,7 @@ std::string_view ToString(CaptureAssessment assessment) noexcept
     case CaptureAssessment::SurfaceFacingAway: return "surface_facing_away";
     case CaptureAssessment::OutsideFrame: return "outside_frame";
     case CaptureAssessment::ResolutionTooLow: return "resolution_too_low";
+    case CaptureAssessment::Occluded: return "occluded";
     }
     return "unknown";
 }

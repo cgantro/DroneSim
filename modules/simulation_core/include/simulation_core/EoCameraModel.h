@@ -4,6 +4,7 @@
 #include <glm/vec3.hpp>
 
 #include <cstdint>
+#include <span>
 #include <string_view>
 
 namespace aerosimlab::simulation
@@ -65,6 +66,13 @@ struct InspectionSurface
     int minimumPixelHeight = 0;
 };
 
+/** @brief 카메라와 점검면 사이를 가리는 장면의 축 정렬 상자다. */
+struct InspectionOccluderBox
+{
+    glm::dvec3 centerMeters{0.0};
+    glm::dvec3 halfExtentsMeters{0.0};
+};
+
 /** @brief 카메라 프레임 한 장이 점검면의 기하 조건을 만족하는지 나타낸다. */
 enum class CaptureAssessment
 {
@@ -75,7 +83,8 @@ enum class CaptureAssessment
     TooFar,
     SurfaceFacingAway,
     OutsideFrame,
-    ResolutionTooLow
+    ResolutionTooLow,
+    Occluded
 };
 
 /** @brief Flecs의 카메라 상태 Component에 적용할 센서 동작을 제공한다. */
@@ -94,9 +103,10 @@ public:
     /** @brief 카메라 영상의 위쪽에 해당하는 월드 기준 단위 방향을 돌려준다. */
     [[nodiscard]] static glm::dvec3 UpAxis(const CameraState& camera) noexcept;
 
-    /** @brief 점검면의 거리·방향·화면 포함 여부·픽셀 크기를 확인한다. */
+    /** @brief 점검면의 거리·방향·화면 크기와 지정한 상자에 의한 가림을 확인한다. */
     [[nodiscard]] static CaptureAssessment AssessCapture(
-        const CameraState& camera, const InspectionSurface& surface) noexcept;
+        const CameraState& camera, const InspectionSurface& surface,
+        std::span<const InspectionOccluderBox> occluders = {}) noexcept;
 
     /** @brief 카메라를 켜거나 끈다. */
     static void SetEnabled(CameraState& state, bool enabled) noexcept;

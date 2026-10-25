@@ -953,7 +953,7 @@ void UpdateMissionResults(
             if (camera.lastFrameTick == simulation.TickCount())
             {
                 task.lastCaptureAssessment = EoCameraModel::AssessCapture(
-                    camera, *task.inspectionSurface);
+                    camera, *task.inspectionSurface, task.inspectionOccluders);
                 if (task.lastCaptureAssessment == CaptureAssessment::Ready)
                 {
                     task.firstGeometryCaptureTick = camera.lastFrameTick;

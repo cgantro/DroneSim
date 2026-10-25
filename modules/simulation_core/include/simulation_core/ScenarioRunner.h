@@ -110,6 +110,7 @@ struct ScenarioResult
         std::uint64_t deadlineTick = 0;
         double toleranceMeters = 0.0;
         std::optional<InspectionSurface> inspectionSurface;
+        std::vector<InspectionOccluderBox> inspectionOccluders;
         CaptureAssessment lastCaptureAssessment = CaptureAssessment::NoNewFrame;
         /** @brief 점검면이 화면과 해상도 조건을 만족한 프레임의 모의 Tick이다. */
         std::optional<std::uint64_t> firstGeometryCaptureTick;
