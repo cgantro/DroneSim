@@ -166,6 +166,26 @@ async function run() {
       `Chromium에서 첫 화면, 비행 조작, 상태 갱신을 확인했습니다. `
       + `${responsiveness.frameCount}프레임, 최대 공백 `
       + `${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms`);
+
+    await page.waitForFunction(
+      () => document.querySelector("#web-gcs-status")?.textContent.includes("비행 상태: grounded"),
+      null,
+      { timeout: 10000 }
+    );
+    await page.getByRole("button", { name: "자동 점검 시작" }).click();
+    await page.waitForFunction(
+      () => {
+        const status = document.querySelector("#web-gcs-status")?.textContent || "";
+        return status.includes("점검 임무: 구도 확인 완료")
+          || status.includes("점검 임무: 실패:");
+      },
+      null,
+      { timeout: 30000 }
+    );
+    const missionStatus = await telemetry.innerText();
+    if (!missionStatus.includes("점검 임무: 구도 확인 완료"))
+      throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${missionStatus}`);
+    console.log("Chromium에서 자동 점검 시작, 촬영 구도 확인과 착륙을 확인했습니다.");
   } catch (error) {
     console.error(`웹 시작 검사 실패: ${error.message}`);
     process.exitCode = 1;

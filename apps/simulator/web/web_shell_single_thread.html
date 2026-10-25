@@ -106,8 +106,8 @@
           + (cameraActive ? "켜짐" : "꺼짐") + "</span>"
           + "<span>가상 시험면 촬영 조건: "
           + (captureLabels[captureAssessment] || captureLabels.unknown)
-          + " · 저장·전송 완료 판정은 아님</span>";
-        document.getElementById("web-gcs-mission").textContent = "점검 임무: " + missionStatus;
+          + " · 저장·전송 완료 판정은 아님</span>"
+          + "<span id=\"web-gcs-mission\">점검 임무: " + missionStatus + "</span>";
       };
 
       (function () {
