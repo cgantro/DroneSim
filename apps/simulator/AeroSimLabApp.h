@@ -116,6 +116,10 @@ private:
     void RecordBenchmarkFrame(double applicationMicroseconds);
     /** @brief 창과 그래픽 자원을 준비한다. */
     void InitializeGraphics();
+#ifdef __EMSCRIPTEN__
+    /** @brief 브라우저가 화면을 갱신할 수 있도록 웹 초기화를 한 단계씩 진행한다. */
+    [[nodiscard]] bool InitializeGraphicsStep();
+#endif
     /** @brief 화면 창과 OpenGL 문맥을 만든다. */
     void InitializeWindow();
     /** @brief 장면과 카메라를 그릴 기본 장치를 만든다. */
@@ -124,9 +128,15 @@ private:
     void InitializeShaderAndHud();
 #ifdef __EMSCRIPTEN__
     bool webFirstFrameRendered_ = false;
+    bool webGraphicsInitialized_ = false;
+    std::uint8_t webStartupStep_ = 0;
 #endif
     /** @brief 지형·지도 형상·드론 모형과 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();
+    void LoadSceneModels();
+    void LoadTerrain();
+    void LoadMapFeatures();
+    void InitializeStartingState();
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */

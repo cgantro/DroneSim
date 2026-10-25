@@ -505,20 +505,51 @@ int AeroSimLabApp::Run()
         udpSocket_ = std::make_unique<aerosimlab::communication::UdpSocket>(udpPort_);
     }
 #endif
+#ifndef __EMSCRIPTEN__
     // 그래픽 자산을 불러오는 동안 도착한 UDP 요청도 소켓 수신 큐에 남긴다.
     InitializeGraphics();
+#endif
     startTime_ = std::chrono::steady_clock::now();
 #ifdef __EMSCRIPTEN__
-    webPreviousFrame_ = startTime_;
     emscripten_set_main_loop_arg([](void* application)
     {
         auto& app = *static_cast<AeroSimLabApp*>(application);
-        if (app.window_->ShouldClose())
+        try
         {
-            emscripten_cancel_main_loop();
-            return;
+            if (!app.webGraphicsInitialized_)
+            {
+                app.webGraphicsInitialized_ = app.InitializeGraphicsStep();
+                if (app.webGraphicsInitialized_)
+                {
+                    app.startTime_ = std::chrono::steady_clock::now();
+                    app.webPreviousFrame_ = app.startTime_;
+                }
+                return;
+            }
+
+            if (app.window_->ShouldClose())
+            {
+                emscripten_cancel_main_loop();
+                return;
+            }
+            app.RunFrame(app.webPreviousFrame_);
         }
-        app.RunFrame(app.webPreviousFrame_);
+        catch (const std::exception& error)
+        {
+            const std::string message = error.what();
+            EM_ASM({
+                window.showSimulatorStartupError(
+                    "시뮬레이터를 시작하지 못했습니다. " + UTF8ToString($0));
+            }, message.c_str());
+            emscripten_cancel_main_loop();
+        }
+        catch (...)
+        {
+            EM_ASM({
+                window.showSimulatorStartupError("시뮬레이터를 시작하지 못했습니다.");
+            });
+            emscripten_cancel_main_loop();
+        }
     }, this, 0, false);
     return 0;
 #else
@@ -692,6 +723,42 @@ void AeroSimLabApp::InitializeGraphics()
     InitializeShaderAndHud();
 }
 
+#ifdef __EMSCRIPTEN__
+bool AeroSimLabApp::InitializeGraphicsStep()
+{
+    switch (webStartupStep_++)
+    {
+    case 0:
+        EM_ASM({ window.setSimulatorStartupStatus("화면을 준비하고 있습니다."); });
+        InitializeWindow();
+        return false;
+    case 1:
+        EM_ASM({ window.setSimulatorStartupStatus("렌더링 장치를 준비하고 있습니다."); });
+        InitializeRendererAndCameras();
+        return false;
+    case 2:
+        EM_ASM({ window.setSimulatorStartupStatus("지형 자료를 읽고 있습니다."); });
+        LoadSceneModels();
+        LoadTerrain();
+        return false;
+    case 3:
+        EM_ASM({ window.setSimulatorStartupStatus("시설물 형상을 만들고 있습니다."); });
+        LoadMapFeatures();
+        return false;
+    case 4:
+        EM_ASM({ window.setSimulatorStartupStatus("비행 시작 위치를 준비하고 있습니다."); });
+        InitializeStartingState();
+        return false;
+    case 5:
+        EM_ASM({ window.setSimulatorStartupStatus("화면 구성을 마무리하고 있습니다."); });
+        InitializeShaderAndHud();
+        return false;
+    default:
+        return true;
+    }
+}
+#endif
+
 void AeroSimLabApp::InitializeWindow()
 {
     window_ = std::make_unique<aerosimlab::graphics::Window>(
@@ -732,6 +799,14 @@ void AeroSimLabApp::InitializeShaderAndHud()
 
 void AeroSimLabApp::LoadScene()
 {
+    LoadSceneModels();
+    LoadTerrain();
+    LoadMapFeatures();
+    InitializeStartingState();
+}
+
+void AeroSimLabApp::LoadSceneModels()
+{
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
 #ifdef __EMSCRIPTEN__
     droneMesh_ = CreateWebDroneMesh();
@@ -743,10 +818,17 @@ void AeroSimLabApp::LoadScene()
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
 #endif
+}
 
+void AeroSimLabApp::LoadTerrain()
+{
     terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load(
         AssetPath("maps/tancheon/terrain.aerotrn"));
     terrainMesh_ = CreateTerrainMesh(terrainGrid_);
+}
+
+void AeroSimLabApp::LoadMapFeatures()
+{
     const auto buildings = aerosimlab::terrain::LoadMapBuildings(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto roads = aerosimlab::terrain::LoadMapRoads(
@@ -784,6 +866,10 @@ void AeroSimLabApp::LoadScene()
                 static_cast<float>((top - bottom) * 0.5)});
     }
 #endif
+}
+
+void AeroSimLabApp::InitializeStartingState()
+{
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
     missionGoalMeters_ = {80.0, 120.0,
         terrainGrid_.HeightAtLocalMeters({80.0, 120.0}) + 12.0};
