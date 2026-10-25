@@ -29,8 +29,8 @@ public:
         const simulation::CameraState& camera, double simulationTimeSeconds,
         std::string& error);
 
-    /** @brief 영상과 메타데이터 파일을 닫고 저장 개수를 돌려준다. */
-    [[nodiscard]] std::uint64_t Stop();
+    /** @brief 파일을 마무리하고 저장 상태·파일 크기를 담은 목록을 만든다. */
+    [[nodiscard]] bool Stop(std::uint64_t& savedFrameCount, std::string& error);
 
     [[nodiscard]] bool IsRecording() const noexcept;
     [[nodiscard]] const std::filesystem::path& VideoPath() const noexcept;
@@ -39,9 +39,12 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
     std::filesystem::path videoPath_;
+    std::filesystem::path metadataPath_;
+    std::filesystem::path metadataTemporaryPath_;
     std::uint64_t savedFrameCount_ = 0;
     int width_ = 0;
     int height_ = 0;
+    double framesPerSecond_ = 0.0;
 };
 
 /** @brief 운영체제의 사용자 데이터 폴더 아래에 새 녹화 파일 경로를 만든다. */

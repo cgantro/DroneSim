@@ -284,8 +284,16 @@ void AeroSimLabApp::ApplyVideoRecordingCommand(
 
     DrainEoReadbacks();
     const auto path = eoVideoRecorder_->VideoPath();
-    const std::uint64_t savedFrames = eoVideoRecorder_->Stop();
+    std::uint64_t savedFrames = 0;
+    std::string error;
+    const bool saved = eoVideoRecorder_->Stop(savedFrames, error);
     eoVideoRecorder_.reset();
+    if (!saved)
+    {
+        window_->SetTitle("DroneSim | EO 녹화 저장 실패: " + error);
+        reply.status = "video_recording_failed:" + error;
+        return;
+    }
     window_->SetTitle("DroneSim | EO 영상 녹화 완료");
     reply.accepted = true;
     reply.status = "video_recording_stopped:" + std::to_string(savedFrames)

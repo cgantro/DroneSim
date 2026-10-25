@@ -171,9 +171,13 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
             if (!eoVideoRecorder_->WriteFrame(eoFrame_, cameraState->second,
                 static_cast<double>(simulationTick) / 60.0, error))
             {
-                const auto savedFrames = eoVideoRecorder_->Stop();
+                std::uint64_t savedFrames = 0;
+                std::string finishError;
+                static_cast<void>(eoVideoRecorder_->Stop(savedFrames, finishError));
                 eoVideoRecorder_.reset();
-                window_->SetTitle("DroneSim | EO 녹화 중단: " + error);
+                const std::string detail = finishError.empty()
+                    ? error : error + " " + finishError;
+                window_->SetTitle("DroneSim | EO 녹화 중단: " + detail);
                 static_cast<void>(savedFrames);
             }
         }

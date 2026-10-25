@@ -46,7 +46,9 @@ std::filesystem::path UserDataDirectory()
 
 EoVideoRecorder::~EoVideoRecorder()
 {
-    static_cast<void>(Stop());
+    std::uint64_t savedFrameCount = 0;
+    std::string error;
+    static_cast<void>(Stop(savedFrameCount, error));
 }
 
 bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
@@ -68,9 +70,11 @@ bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
     try
     {
         std::filesystem::create_directories(videoPath.parent_path());
-        std::filesystem::path metadataPath = videoPath;
-        metadataPath.replace_extension(".jsonl");
-        impl_->metadata.open(metadataPath, std::ios::out | std::ios::trunc);
+        metadataPath_ = videoPath;
+        metadataPath_.replace_extension(".jsonl");
+        metadataTemporaryPath_ = metadataPath_;
+        metadataTemporaryPath_ += ".partial";
+        impl_->metadata.open(metadataTemporaryPath_, std::ios::out | std::ios::trunc);
         if (!impl_->metadata)
         {
             error = "영상 메타데이터 파일을 만들지 못했습니다.";
@@ -79,6 +83,7 @@ bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
         videoPath_ = videoPath;
         width_ = width;
         height_ = height;
+        framesPerSecond_ = framesPerSecond;
         savedFrameCount_ = 0;
 
         const int h264 = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
@@ -92,7 +97,7 @@ bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
         {
             impl_->metadata.close();
             std::error_code ignored;
-            std::filesystem::remove(metadataPath, ignored);
+            std::filesystem::remove(metadataTemporaryPath_, ignored);
             std::filesystem::remove(videoPath_, ignored);
             error = "현재 OpenCV 영상 장치에서 H.264 MP4 인코더를 열지 못했습니다.";
             return false;
@@ -145,7 +150,7 @@ bool EoVideoRecorder::WriteFrame(const sensor::RgbFrame& frame,
         const glm::dvec3& position = camera.positionMeters;
         const glm::dquat& orientation = camera.orientation;
         const Json record{
-            {"capture_state", "SAVED"},
+            {"capture_state", "CAPTURED"},
             {"frame_index", savedFrameCount_},
             {"simulation_tick", frame.simulationTick},
             {"simulation_time_seconds", simulationTimeSeconds},
@@ -172,21 +177,79 @@ bool EoVideoRecorder::WriteFrame(const sensor::RgbFrame& frame,
     return true;
 }
 
-std::uint64_t EoVideoRecorder::Stop()
+bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
 {
-    if (impl_)
+    savedFrameCount = savedFrameCount_;
+    if (!impl_)
     {
-        impl_->writer.release();
-        if (impl_->metadata.is_open())
-        {
-            impl_->metadata.flush();
-            impl_->metadata.close();
-        }
-        impl_.reset();
+        error = "진행 중인 영상 녹화가 없습니다.";
+        return false;
     }
+
+    impl_->writer.release();
+    impl_->metadata.flush();
+    const bool metadataFlushed = static_cast<bool>(impl_->metadata);
+    impl_->metadata.close();
+
+    bool saved = metadataFlushed;
+    std::error_code fileError;
+    const std::uintmax_t videoBytes = std::filesystem::file_size(videoPath_, fileError);
+    if (fileError || videoBytes == 0)
+    {
+        saved = false;
+        error = "녹화 영상을 마무리하지 못했습니다.";
+    }
+    if (saved)
+    {
+        std::filesystem::rename(metadataTemporaryPath_, metadataPath_, fileError);
+        if (fileError)
+        {
+            saved = false;
+            error = "프레임 정보를 저장 파일로 확정하지 못했습니다.";
+        }
+    }
+
+    if (saved)
+    {
+        std::filesystem::path manifestPath = videoPath_;
+        manifestPath.replace_extension(".manifest.json");
+        std::filesystem::path temporaryManifestPath = manifestPath;
+        temporaryManifestPath += ".partial";
+        std::ofstream manifestFile(temporaryManifestPath,
+            std::ios::out | std::ios::trunc);
+        const Json manifest{
+            {"collection_state", "SAVED"},
+            {"video_file", videoPath_.filename().string()},
+            {"metadata_file", metadataPath_.filename().string()},
+            {"saved_frame_count", savedFrameCount_},
+            {"width_pixels", width_},
+            {"height_pixels", height_},
+            {"frames_per_second", framesPerSecond_},
+            {"video_bytes", videoBytes},
+            {"metadata_bytes", std::filesystem::file_size(metadataPath_)}};
+        manifestFile << manifest.dump(2) << '\n';
+        manifestFile.flush();
+        saved = static_cast<bool>(manifestFile);
+        manifestFile.close();
+        if (saved)
+        {
+            std::filesystem::rename(temporaryManifestPath, manifestPath, fileError);
+            saved = !fileError;
+        }
+        if (!saved)
+        {
+            error = "녹화 상태 목록을 저장하지 못했습니다.";
+            std::filesystem::remove(temporaryManifestPath, fileError);
+        }
+    }
+    if (!metadataFlushed && error.empty())
+        error = "프레임 메타데이터를 디스크에 기록하지 못했습니다.";
+
+    impl_.reset();
     width_ = 0;
     height_ = 0;
-    return savedFrameCount_;
+    framesPerSecond_ = 0.0;
+    return saved;
 }
 
 bool EoVideoRecorder::IsRecording() const noexcept

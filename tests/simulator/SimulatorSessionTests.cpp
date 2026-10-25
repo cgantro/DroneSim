@@ -50,7 +50,18 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
         ASSERT_TRUE(recorder.WriteFrame(frame, camera,
             static_cast<double>(tick) / 60.0, error)) << error;
     }
-    EXPECT_EQ(recorder.Stop(), 4U);
+    auto metadataPath = videoPath;
+    metadataPath.replace_extension(".jsonl");
+    EXPECT_FALSE(std::filesystem::exists(metadataPath));
+    auto partialMetadataPath = metadataPath;
+    partialMetadataPath += ".partial";
+    EXPECT_TRUE(std::filesystem::exists(partialMetadataPath));
+
+    std::uint64_t savedFrameCount = 0;
+    ASSERT_TRUE(recorder.Stop(savedFrameCount, error)) << error;
+    EXPECT_EQ(savedFrameCount, 4U);
+    EXPECT_TRUE(std::filesystem::exists(metadataPath));
+    EXPECT_FALSE(std::filesystem::exists(partialMetadataPath));
     ASSERT_TRUE(std::filesystem::exists(videoPath));
     EXPECT_GT(std::filesystem::file_size(videoPath), 0U);
     cv::VideoCapture decodedVideo(videoPath.string());
@@ -61,16 +72,25 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
     EXPECT_EQ(decodedFrame.rows, cameraModel.imageHeightPixels);
     decodedVideo.release();
 
-    auto metadataPath = videoPath;
-    metadataPath.replace_extension(".jsonl");
     std::ifstream metadata(metadataPath);
     ASSERT_TRUE(metadata.good());
     const std::string contents{
         std::istreambuf_iterator<char>{metadata}, std::istreambuf_iterator<char>{}};
     EXPECT_EQ(std::count(contents.begin(), contents.end(), '\n'), 4);
-    EXPECT_NE(contents.find("\"capture_state\":\"SAVED\""), std::string::npos);
+    EXPECT_NE(contents.find("\"capture_state\":\"CAPTURED\""), std::string::npos);
     EXPECT_NE(contents.find("\"simulation_tick\":4"), std::string::npos);
     metadata.close();
+
+    auto manifestPath = videoPath;
+    manifestPath.replace_extension(".manifest.json");
+    std::ifstream manifest(manifestPath);
+    ASSERT_TRUE(manifest.good());
+    const std::string manifestText{
+        std::istreambuf_iterator<char>{manifest}, std::istreambuf_iterator<char>{}};
+    EXPECT_NE(manifestText.find("\"collection_state\": \"SAVED\""),
+        std::string::npos);
+    EXPECT_NE(manifestText.find("\"video_bytes\""), std::string::npos);
+    manifest.close();
     std::filesystem::remove_all(outputDirectory);
 }
 
