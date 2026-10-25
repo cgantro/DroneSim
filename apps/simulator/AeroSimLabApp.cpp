@@ -969,9 +969,13 @@ void AeroSimLabApp::LoadMapFeatures()
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels);
     inspectionOccluders_.reserve(buildings.size());
-    const aerosimlab::terrain::MapBuilding* selectedBuilding = nullptr;
-    aerosimlab::terrain::MapBuildingFacade selectedFacade;
-    double nearestFacadeDistanceSquared = std::numeric_limits<double>::infinity();
+    struct Candidate
+    {
+        const aerosimlab::terrain::MapBuilding* building;
+        aerosimlab::terrain::MapBuildingFacade facade;
+        glm::dvec3 approachPositionMeters;
+    };
+    std::vector<Candidate> candidates;
     for (const auto& building : buildings)
     {
         const auto bounds =
@@ -980,49 +984,65 @@ void AeroSimLabApp::LoadMapFeatures()
         simulation_.AddStaticObstacleBox(
             bounds.centerMeters, glm::vec3{bounds.halfExtentsMeters});
 #endif
+        inspectionOccluders_.push_back({building.outlineMeters,
+            bounds.centerMeters.z - bounds.halfExtentsMeters.z,
+            bounds.centerMeters.z + bounds.halfExtentsMeters.z});
+
+        if (building.heightSource
+            != aerosimlab::terrain::BuildingHeightSource::OsmHeightTag)
+            continue;
         const auto facade = aerosimlab::terrain::GetNearestMapBuildingFacade(
             building, demoDroneStartMeters);
         if (facade.widthMeters < 3.0 || facade.heightMeters < 2.0)
             continue;
 
-        const glm::dvec2 facadePosition{facade.centerMeters.x,
-            facade.centerMeters.y};
-        const glm::dvec2 offset = facadePosition - demoDroneStartMeters;
-        const double distanceSquared = glm::dot(offset, offset);
-        if (distanceSquared < nearestFacadeDistanceSquared)
-        {
-            nearestFacadeDistanceSquared = distanceSquared;
-            selectedBuilding = &building;
-            selectedFacade = facade;
-        }
+        const glm::dvec3 approachPosition = facade.centerMeters
+            + facade.outwardNormal * 8.0;
+        if (!terrainGrid_.ContainsLocalPositionMeters(
+            {approachPosition.x, approachPosition.y}))
+            continue;
+        candidates.push_back({&building, facade, approachPosition});
     }
 
-    if (selectedBuilding == nullptr)
-        throw std::runtime_error("점검 시험면으로 쓸 OSM 건물을 찾지 못했습니다.");
-
-    for (const auto& building : buildings)
+    glm::dvec2 previousPosition = demoDroneStartMeters;
+    while (!candidates.empty() && inspectionTargets_.size() < 3U)
     {
-        const auto bounds =
-            aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-        inspectionOccluders_.push_back({building.outlineMeters,
-            bounds.centerMeters.z - bounds.halfExtentsMeters.z,
-            bounds.centerMeters.z + bounds.halfExtentsMeters.z});
+        const auto nearest = std::min_element(candidates.begin(), candidates.end(),
+            [&](const Candidate& first, const Candidate& second)
+            {
+                const glm::dvec2 firstOffset{
+                    first.approachPositionMeters.x - previousPosition.x,
+                    first.approachPositionMeters.y - previousPosition.y};
+                const glm::dvec2 secondOffset{
+                    second.approachPositionMeters.x - previousPosition.x,
+                    second.approachPositionMeters.y - previousPosition.y};
+                return glm::dot(firstOffset, firstOffset)
+                    < glm::dot(secondOffset, secondOffset);
+            });
+        const Candidate candidate = *nearest;
+        const auto& facade = candidate.facade;
+        aerosimlab::simulation::InspectionSurface surface;
+        surface.centerMeters = facade.centerMeters;
+        surface.normal = facade.outwardNormal;
+        surface.widthAxis = facade.widthAxis;
+        surface.widthMeters = std::min(facade.widthMeters, 4.0);
+        surface.heightMeters = std::min(facade.heightMeters, 3.0);
+        surface.minimumDistanceMeters = 3.0;
+        surface.maximumDistanceMeters = 20.0;
+        surface.maximumIncidenceAngleDegrees = 55.0;
+        surface.minimumPixelWidth = 80;
+        surface.minimumPixelHeight = 80;
+        inspectionTargets_.push_back({candidate.building->osmId,
+            "facade-" + candidate.building->osmId, surface,
+            candidate.approachPositionMeters});
+        previousPosition = {candidate.approachPositionMeters.x,
+            candidate.approachPositionMeters.y};
+        candidates.erase(nearest);
     }
 
-    inspectionFacilityId_ = selectedBuilding->osmId;
-    inspectionZoneId_ = "facade-test-area";
-    inspectionSurface_.centerMeters = selectedFacade.centerMeters;
-    inspectionSurface_.normal = selectedFacade.outwardNormal;
-    inspectionSurface_.widthAxis = selectedFacade.widthAxis;
-    inspectionSurface_.widthMeters = std::min(selectedFacade.widthMeters, 4.0);
-    inspectionSurface_.heightMeters = std::min(selectedFacade.heightMeters, 3.0);
-    inspectionSurface_.minimumDistanceMeters = 3.0;
-    inspectionSurface_.maximumDistanceMeters = 20.0;
-    inspectionSurface_.maximumIncidenceAngleDegrees = 55.0;
-    inspectionSurface_.minimumPixelWidth = 80;
-    inspectionSurface_.minimumPixelHeight = 80;
-    missionGoalMeters_ = inspectionSurface_.centerMeters
-        + inspectionSurface_.normal * 8.0;
+    if (inspectionTargets_.size() != 3U)
+        throw std::runtime_error("높이 정보가 있는 OSM 건물 3곳을 점검 구역으로 만들지 못했습니다.");
+    SetActiveInspectionTarget(0U);
 }
 
 void AeroSimLabApp::InitializeStartingState()
@@ -1041,6 +1061,19 @@ aerosimlab::simulation::CaptureAssessment AeroSimLabApp::AssessInspectionView() 
 {
     return aerosimlab::simulation::EoCameraModel::AssessCapture(
         simulation_.Camera(), inspectionSurface_, {}, inspectionOccluders_);
+}
+
+void AeroSimLabApp::SetActiveInspectionTarget(std::size_t index)
+{
+    if (index >= inspectionTargets_.size())
+        throw std::out_of_range("점검 구역 번호가 임무 범위를 벗어났습니다.");
+
+    activeInspectionTargetIndex_ = index;
+    const InspectionTarget& target = inspectionTargets_[index];
+    inspectionFacilityId_ = target.facilityId;
+    inspectionZoneId_ = target.zoneId;
+    inspectionSurface_ = target.surface;
+    missionGoalMeters_ = target.approachPositionMeters;
 }
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
@@ -1202,6 +1235,8 @@ bool AeroSimLabApp::RequestInspectionMission()
     inspectionMissionStartTick_ = 0;
     inspectionCaptureStartFrame_ = 0;
     inspectionReadyFrameSaved_ = false;
+    completedInspectionTargetCount_ = 0;
+    SetActiveInspectionTarget(0U);
     pendingControllerAction_.reset();
     pendingPilotCommand_.reset();
     inspectionMissionStage_ = InspectionMissionStage::StartRequested;
@@ -1242,7 +1277,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
         && inspectionMissionStage_ != Stage::Saved
         && inspectionMissionStage_ != Stage::GeometryOnly
         && inspectionMissionStage_ != Stage::Failed
-        && elapsedTicks > 60U * 180U)
+        && elapsedTicks > 60U * 180U * inspectionTargets_.size())
     {
         FailInspectionMission("3분 안에 점검 구역 촬영을 마치지 못했습니다.");
         return;
@@ -1320,6 +1355,25 @@ void AeroSimLabApp::AdvanceInspectionMission()
 #endif
         if (inspectionReadyFrameSaved_)
         {
+            ++completedInspectionTargetCount_;
+            if (activeInspectionTargetIndex_ + 1U < inspectionTargets_.size())
+            {
+                SetActiveInspectionTarget(activeInspectionTargetIndex_ + 1U);
+                aerosimlab::simulation::DroneCommand waypoint;
+                waypoint.kind = CommandKind::SetWaypoint;
+                waypoint.vector = missionGoalMeters_;
+                if (ApplyAndRecordCommand(waypoint)
+                    != aerosimlab::simulation::CommandResult::Accepted)
+                {
+                    FailInspectionMission("다음 점검 구역 이동 명령을 적용하지 못했습니다.");
+                    return;
+                }
+                inspectionCaptureStartFrame_ = 0;
+                inspectionReadyFrameSaved_ = false;
+                inspectionMissionStage_ = Stage::Approaching;
+                return;
+            }
+
             const aerosimlab::simulation::DroneCommand land{CommandKind::Land};
             if (ApplyAndRecordCommand(land)
                 != aerosimlab::simulation::CommandResult::Accepted)
@@ -1378,18 +1432,26 @@ void AeroSimLabApp::FailInspectionMission(const std::string& reason)
 
 std::string AeroSimLabApp::InspectionMissionStatus() const
 {
+    const std::string progress = "구역 "
+        + std::to_string(std::min(completedInspectionTargetCount_ + 1U,
+            inspectionTargets_.size()))
+        + "/" + std::to_string(inspectionTargets_.size()) + ": ";
     switch (inspectionMissionStage_)
     {
     case InspectionMissionStage::Ready: return "대기 중";
-    case InspectionMissionStage::StartRequested: return "시작 준비 중";
-    case InspectionMissionStage::TakingOff: return "이륙 중";
-    case InspectionMissionStage::Approaching: return "점검 구역으로 이동 중";
-    case InspectionMissionStage::AligningCamera: return "카메라를 점검면에 맞추는 중";
-    case InspectionMissionStage::Capturing: return "촬영 조건 확인 중";
+    case InspectionMissionStage::StartRequested: return progress + "시작 준비 중";
+    case InspectionMissionStage::TakingOff: return progress + "이륙 중";
+    case InspectionMissionStage::Approaching: return progress + "점검 구역으로 이동 중";
+    case InspectionMissionStage::AligningCamera:
+        return progress + "카메라를 점검면에 맞추는 중";
+    case InspectionMissionStage::Capturing: return progress + "촬영 조건 확인 중";
     case InspectionMissionStage::Landing: return "착륙 중";
-    case InspectionMissionStage::Saved: return "영상 저장 완료";
+    case InspectionMissionStage::Saved:
+        return "영상 저장 완료 (" + std::to_string(completedInspectionTargetCount_)
+            + "개 구역)";
     case InspectionMissionStage::GeometryOnly:
-        return "구도 확인 완료";
+        return "구도 확인 완료 (" + std::to_string(completedInspectionTargetCount_)
+            + "개 구역)";
     case InspectionMissionStage::Failed: return "실패: " + inspectionMissionError_;
     }
     return "상태를 알 수 없습니다.";

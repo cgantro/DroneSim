@@ -150,6 +150,7 @@ private:
     void InitializeStartingState();
     /** @brief 카메라가 가상 점검면을 담을 수 있는지 공통 센서 판정으로 확인한다. */
     [[nodiscard]] aerosimlab::simulation::CaptureAssessment AssessInspectionView() const;
+    void SetActiveInspectionTarget(std::size_t index);
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
@@ -239,6 +240,13 @@ private:
     bool smokeTest_ = false;
     aerosimlab::simulation::FixedTickAccumulator fixedTickAccumulator_;
     bool demoMode_ = false;
+    struct InspectionTarget
+    {
+        std::string facilityId;
+        std::string zoneId;
+        aerosimlab::simulation::InspectionSurface surface;
+        glm::dvec3 approachPositionMeters{0.0};
+    };
     enum class InspectionMissionStage
     {
         Ready,
@@ -257,6 +265,9 @@ private:
     std::uint64_t inspectionCaptureStartFrame_ = 0;
     bool inspectionReadyFrameSaved_ = false;
     std::string inspectionMissionError_;
+    std::vector<InspectionTarget> inspectionTargets_;
+    std::size_t activeInspectionTargetIndex_ = 0;
+    std::size_t completedInspectionTargetCount_ = 0;
     bool externalControl_ = false;
     bool groundControlActive_ = false;
     std::optional<std::chrono::steady_clock::time_point> lastGroundControlMessage_;
