@@ -942,30 +942,62 @@ void UpdateMissionResults(
             || task.droneName.empty() || !IsConnected(observations, task.droneName))
             continue;
 
-        const glm::dvec3 distance = simulation.State(droneIds.at(task.droneName))
-            .positionMeters - CurrentWaypoint(task);
-        if (glm::length(distance) <= task.toleranceMeters)
+        const DroneId droneId = droneIds.at(task.droneName);
+        if (task.inspectionSurface && !task.firstGeometryCaptureTick)
         {
-            if (task.currentWaypointIndex + 1 < task.waypointsMeters.size())
+            const CameraState& camera = simulation.Camera(droneId);
+            if (camera.lastFrameTick == simulation.TickCount())
             {
-                ++task.currentWaypointIndex;
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                    + task.droneName + " 드론이 '" + task.name + "' 경유점 "
-                    + std::to_string(task.currentWaypointIndex + 1) + "/"
-                    + std::to_string(task.waypointsMeters.size()) + "에 도착했습니다.");
+                task.lastCaptureAssessment = EoCameraModel::AssessCapture(
+                    camera, *task.inspectionSurface);
+                if (task.lastCaptureAssessment == CaptureAssessment::Ready)
+                {
+                    task.firstGeometryCaptureTick = camera.lastFrameTick;
+                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                        + task.droneName + " 드론의 '" + task.name
+                        + "' 점검면이 카메라 프레임 조건을 만족했습니다.");
+                }
             }
             else
             {
-                task.completed = true;
-                task.completedTick = tick;
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                    + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
+                task.lastCaptureAssessment = camera.status == CameraStatus::Active
+                    ? CaptureAssessment::NoNewFrame
+                    : CaptureAssessment::CameraUnavailable;
             }
+        }
+
+        const glm::dvec3 distance = simulation.State(droneId).positionMeters
+            - CurrentWaypoint(task);
+        const bool reachedWaypoint = glm::length(distance) <= task.toleranceMeters;
+        if (reachedWaypoint && task.currentWaypointIndex + 1 < task.waypointsMeters.size())
+        {
+            ++task.currentWaypointIndex;
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + task.droneName + " 드론이 '" + task.name + "' 경유점 "
+                + std::to_string(task.currentWaypointIndex + 1) + "/"
+                + std::to_string(task.waypointsMeters.size()) + "에 도착했습니다.");
+        }
+        else if (reachedWaypoint
+            && (!task.inspectionSurface || task.firstGeometryCaptureTick))
+        {
+            task.completed = true;
+            task.completedTick = tick;
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
         }
         else if (tick >= task.deadlineTick)
         {
             task.failed = true;
-            result.issues.push_back(task.droneName + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
+            if (task.inspectionSurface && !task.firstGeometryCaptureTick)
+            {
+                result.issues.push_back(task.droneName
+                    + " 드론이 임무 기한 안에 점검면 촬영 조건을 만족하지 못했습니다.");
+            }
+            else
+            {
+                result.issues.push_back(task.droneName
+                    + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
+            }
         }
     }
 }

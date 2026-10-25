@@ -92,6 +92,25 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
             {
                 waypoints.push_back({waypoint.x, waypoint.y, waypoint.z});
             }
+            nlohmann::json inspectionSurface = nullptr;
+            if (task.inspectionSurface)
+            {
+                const auto& surface = *task.inspectionSurface;
+                inspectionSurface = {
+                    {"center_meters", {surface.centerMeters.x,
+                        surface.centerMeters.y, surface.centerMeters.z}},
+                    {"normal", {surface.normal.x, surface.normal.y, surface.normal.z}},
+                    {"width_axis", {surface.widthAxis.x,
+                        surface.widthAxis.y, surface.widthAxis.z}},
+                    {"width_meters", surface.widthMeters},
+                    {"height_meters", surface.heightMeters},
+                    {"minimum_distance_meters", surface.minimumDistanceMeters},
+                    {"maximum_distance_meters", surface.maximumDistanceMeters},
+                    {"maximum_incidence_angle_degrees",
+                        surface.maximumIncidenceAngleDegrees},
+                    {"minimum_pixel_width", surface.minimumPixelWidth},
+                    {"minimum_pixel_height", surface.minimumPixelHeight}};
+            }
             tasks.push_back({
                 {"name", task.name},
                 {"role", task.role},
@@ -108,7 +127,11 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                 {"started", task.started},
                 {"completed", task.completed},
                 {"failed", task.failed},
-                {"completed_tick", task.completedTick}});
+                {"completed_tick", task.completedTick},
+                {"inspection_surface", std::move(inspectionSurface)},
+                {"capture_assessment",
+                    aerosimlab::simulation::ToString(task.lastCaptureAssessment)},
+                {"first_geometry_capture_tick", task.firstGeometryCaptureTick}});
         }
         mission = {{"name", result.mission->name},
             {"outcome", aerosimlab::simulation::ToString(result.mission->outcome)},

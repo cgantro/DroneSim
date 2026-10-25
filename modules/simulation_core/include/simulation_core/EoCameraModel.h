@@ -34,10 +34,40 @@ struct CameraState
     int imageWidthPixels = 1280;
     /** @brief 탑재 카메라가 한 프레임에 만드는 세로 픽셀 수다. X500 단안 카메라는 960이다. */
     int imageHeightPixels = 960;
+    /** @brief 카메라 영상의 위아래 시야각이다. 렌더링과 점검면 판정이 함께 사용한다. */
+    double verticalFieldOfViewDegrees = 70.0;
     std::uint64_t frameCount = 0;
     std::uint64_t lastFrameTick = 0;
     glm::dvec3 positionMeters{0.0};
     glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
+};
+
+/** @brief 카메라로 확인할 직사각형 점검면과 촬영 조건이다. */
+struct InspectionSurface
+{
+    glm::dvec3 centerMeters{0.0};
+    glm::dvec3 normal{0.0, 0.0, 1.0};
+    glm::dvec3 widthAxis{1.0, 0.0, 0.0};
+    double widthMeters = 0.0;
+    double heightMeters = 0.0;
+    double minimumDistanceMeters = 0.0;
+    double maximumDistanceMeters = 0.0;
+    double maximumIncidenceAngleDegrees = 0.0;
+    int minimumPixelWidth = 0;
+    int minimumPixelHeight = 0;
+};
+
+/** @brief 카메라 프레임 한 장이 점검면의 기하 조건을 만족하는지 나타낸다. */
+enum class CaptureAssessment
+{
+    Ready,
+    CameraUnavailable,
+    NoNewFrame,
+    TooNear,
+    TooFar,
+    SurfaceFacingAway,
+    OutsideFrame,
+    ResolutionTooLow
 };
 
 /** @brief Flecs의 카메라 상태 Component에 적용할 센서 동작을 제공한다. */
@@ -49,6 +79,16 @@ public:
 
     /** @brief 드론의 월드 위치와 자세에서 탑재 카메라의 월드 자세를 갱신한다. */
     static void UpdatePose(CameraState& camera, const DroneState& drone) noexcept;
+
+    /** @brief 현재 카메라가 바라보는 월드 기준 단위 방향을 돌려준다. */
+    [[nodiscard]] static glm::dvec3 OpticalAxis(const CameraState& camera) noexcept;
+
+    /** @brief 카메라 영상의 위쪽에 해당하는 월드 기준 단위 방향을 돌려준다. */
+    [[nodiscard]] static glm::dvec3 UpAxis(const CameraState& camera) noexcept;
+
+    /** @brief 점검면의 거리·방향·화면 포함 여부·픽셀 크기를 확인한다. */
+    [[nodiscard]] static CaptureAssessment AssessCapture(
+        const CameraState& camera, const InspectionSurface& surface) noexcept;
 
     /** @brief 카메라를 켜거나 끈다. */
     static void SetEnabled(CameraState& state, bool enabled) noexcept;
@@ -65,4 +105,6 @@ public:
 
 /** @brief 센서 상태를 시나리오 결과와 사용자 화면에 쓸 짧은 이름으로 바꾼다. */
 [[nodiscard]] std::string_view ToString(CameraStatus status) noexcept;
+/** @brief 카메라가 점검면을 담았는지 판정한 결과를 JSON 등에 쓸 이름으로 바꾼다. */
+[[nodiscard]] std::string_view ToString(CaptureAssessment assessment) noexcept;
 }

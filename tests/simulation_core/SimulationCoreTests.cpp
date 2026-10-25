@@ -214,6 +214,39 @@ void Verify_SimulationCore_TracksEachDroneCameraIndependently()
     EXPECT_EQ(simulation.Camera(second).frameCount, 0U);
 }
 
+void Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels()
+{
+    CameraState camera;
+    camera.positionMeters = {0.0, 0.0, 0.0};
+    InspectionSurface surface;
+    surface.centerMeters = {10.0, 0.0, -1.0};
+    surface.normal = {-1.0, 0.0, 0.0};
+    surface.widthAxis = {0.0, 1.0, 0.0};
+    surface.widthMeters = 2.0;
+    surface.heightMeters = 1.0;
+    surface.minimumDistanceMeters = 5.0;
+    surface.maximumDistanceMeters = 15.0;
+    surface.maximumIncidenceAngleDegrees = 30.0;
+    surface.minimumPixelWidth = 100;
+    surface.minimumPixelHeight = 50;
+
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface), CaptureAssessment::Ready);
+
+    surface.normal = {1.0, 0.0, 0.0};
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface),
+        CaptureAssessment::SurfaceFacingAway);
+    surface.normal = {-1.0, 0.0, 0.0};
+    surface.centerMeters.x = 20.0;
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface), CaptureAssessment::TooFar);
+    surface.centerMeters = {10.0, 0.0, -1.0};
+    surface.minimumPixelWidth = 500;
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface),
+        CaptureAssessment::ResolutionTooLow);
+    camera.status = CameraStatus::Disabled;
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface),
+        CaptureAssessment::CameraUnavailable);
+}
+
 TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
@@ -223,6 +256,8 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsUnsupportedInitialMotorSpeeds());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_TracksEachDroneCameraIndependently());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels());
 }
 
 }

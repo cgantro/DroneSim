@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <stdexcept>
@@ -444,6 +445,67 @@ std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
     return outages;
 }
 
+/** @brief 점검면 방향과 거리·영상 해상도 조건을 읽고 범위를 확인한다. */
+InspectionSurface ReadInspectionSurface(const Json& value)
+{
+    if (!value.is_object())
+        throw std::invalid_argument("inspection_surface는 JSON 객체여야 합니다.");
+
+    InspectionSurface surface;
+    surface.centerMeters = ReadVector(
+        Required(value, "center_meters"), "inspection_surface.center_meters");
+    surface.normal = ReadVector(
+        Required(value, "normal"), "inspection_surface.normal");
+    surface.widthAxis = ReadVector(
+        Required(value, "width_axis"), "inspection_surface.width_axis");
+    const double normalLength = glm::length(surface.normal);
+    if (normalLength < 1.0e-9)
+        throw std::invalid_argument("점검면 normal은 길이가 0일 수 없습니다.");
+    surface.normal /= normalLength;
+
+    surface.widthAxis -= surface.normal * glm::dot(surface.normal, surface.widthAxis);
+    const double widthAxisLength = glm::length(surface.widthAxis);
+    if (widthAxisLength < 1.0e-9)
+        throw std::invalid_argument("점검면 width_axis는 normal과 평행할 수 없습니다.");
+    surface.widthAxis /= widthAxisLength;
+
+    surface.widthMeters = ReadFiniteNumber(
+        Required(value, "width_meters"), "inspection_surface.width_meters");
+    surface.heightMeters = ReadFiniteNumber(
+        Required(value, "height_meters"), "inspection_surface.height_meters");
+    surface.minimumDistanceMeters = ReadFiniteNumber(
+        Required(value, "minimum_distance_meters"),
+        "inspection_surface.minimum_distance_meters");
+    surface.maximumDistanceMeters = ReadFiniteNumber(
+        Required(value, "maximum_distance_meters"),
+        "inspection_surface.maximum_distance_meters");
+    surface.maximumIncidenceAngleDegrees = ReadFiniteNumber(
+        Required(value, "maximum_incidence_angle_degrees"),
+        "inspection_surface.maximum_incidence_angle_degrees");
+    const std::uint64_t minimumPixelWidth = ReadUnsigned(
+        Required(value, "minimum_pixel_width"), "inspection_surface.minimum_pixel_width");
+    const std::uint64_t minimumPixelHeight = ReadUnsigned(
+        Required(value, "minimum_pixel_height"), "inspection_surface.minimum_pixel_height");
+    if (minimumPixelWidth > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
+        || minimumPixelHeight > static_cast<std::uint64_t>(std::numeric_limits<int>::max()))
+    {
+        throw std::invalid_argument("점검면 최소 픽셀 크기가 너무 큽니다.");
+    }
+    surface.minimumPixelWidth = static_cast<int>(minimumPixelWidth);
+    surface.minimumPixelHeight = static_cast<int>(minimumPixelHeight);
+
+    if (surface.widthMeters <= 0.0 || surface.heightMeters <= 0.0
+        || surface.minimumDistanceMeters <= 0.0
+        || surface.maximumDistanceMeters <= surface.minimumDistanceMeters
+        || surface.maximumIncidenceAngleDegrees < 0.0
+        || surface.maximumIncidenceAngleDegrees >= 90.0
+        || surface.minimumPixelWidth == 0 || surface.minimumPixelHeight == 0)
+    {
+        throw std::invalid_argument("점검면 크기·거리·각도·최소 픽셀 조건이 잘못되었습니다.");
+    }
+    return surface;
+}
+
 /** @brief 임무 하나를 읽고 드론 배정, 경로와 Tick 범위를 확인한다. */
 ScenarioResult::MissionTask ReadMissionTask(
     const Json& taskValue,
@@ -500,6 +562,9 @@ ScenarioResult::MissionTask ReadMissionTask(
         Required(taskValue, "deadline_tick"), "deadline_tick");
     task.toleranceMeters = ReadFiniteNumber(
         Required(taskValue, "tolerance_meters"), "tolerance_meters");
+    const auto inspectionSurface = taskValue.find("inspection_surface");
+    if (inspectionSurface != taskValue.end())
+        task.inspectionSurface = ReadInspectionSurface(*inspectionSurface);
     const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
         task.waypointsMeters.end(), [](const glm::dvec3& point) { return point.z < 0.0; });
     if (hasNegativeAltitude || task.toleranceMeters < 0.0

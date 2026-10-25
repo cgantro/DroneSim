@@ -73,6 +73,13 @@ glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
         static_cast<float>(-positionMeters.y)};
 }
 
+glm::vec3 ToRenderDirection(const glm::dvec3& direction)
+{
+    return glm::vec3{
+        static_cast<float>(direction.x), static_cast<float>(direction.z),
+        static_cast<float>(-direction.y)};
+}
+
 glm::quat ToRenderOrientation(const glm::dquat& orientation)
 {
     constexpr float halfPi = 1.57079632679F;
@@ -406,7 +413,9 @@ void AeroSimLabApp::InitializeRendererAndCameras()
         glm::vec3{7.0F, 5.0F, 7.0F}, glm::vec3{0.0F}, 1.0F,
         45.0F, 0.1F, 120.0F);
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
-        glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
+        glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F,
+        static_cast<float>(simulation_.Camera().verticalFieldOfViewDegrees),
+        0.05F, 200.0F);
 }
 
 void AeroSimLabApp::InitializeShaderAndHud()
@@ -711,13 +720,12 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
 {
     const auto& cameraState = simulation_.Camera();
     const glm::vec3 cameraPosition = ToRenderPosition(cameraState.positionMeters);
-    const glm::mat4 cameraOrientation = glm::mat4_cast(
-        ToRenderOrientation(cameraState.orientation));
-
-    const glm::vec3 viewDirection = glm::vec3{
-        cameraOrientation * glm::vec4{25.0F, -2.5F, 0.0F, 0.0F}};
-    const glm::vec3 cameraUp = glm::vec3{
-        cameraOrientation * glm::vec4{0.0F, 1.0F, 0.0F, 0.0F}};
+    const glm::dvec3 opticalAxis =
+        aerosimlab::simulation::EoCameraModel::OpticalAxis(cameraState);
+    const glm::dvec3 cameraUpAxis =
+        aerosimlab::simulation::EoCameraModel::UpAxis(cameraState);
+    const glm::vec3 viewDirection = ToRenderDirection(opticalAxis);
+    const glm::vec3 cameraUp = ToRenderDirection(cameraUpAxis);
     eoCamera_->SetPosition(cameraPosition);
     eoCamera_->SetTarget(cameraPosition + viewDirection);
     eoCamera_->SetUp(cameraUp);

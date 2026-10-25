@@ -161,6 +161,62 @@ void Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone()
     EXPECT_THROW(static_cast<void>(RunScenario(unknownDrone)), std::invalid_argument);
 }
 
+void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
+{
+    constexpr std::string_view source = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":150,
+     "drones":[
+       {"name":"east","initial_position_meters":[0,0,0]},
+       {"name":"north","initial_position_meters":[0,4,0]}],
+     "commands":[
+       {"tick":0,"drone":"east","type":"takeoff"},
+       {"tick":0,"drone":"north","type":"takeoff"}],
+     "mission":{"name":"bridge-inspection","tasks":[
+       {"name":"east-face","role":"inspect","drone":"east",
+        "target_position_meters":[0,0,1.5],"start_tick":110,
+        "deadline_tick":145,"tolerance_meters":0.1,
+        "inspection_surface":{
+          "center_meters":[10,0,0.62],"normal":[-1,0,0],
+          "width_axis":[0,1,0],"width_meters":2,"height_meters":1,
+          "minimum_distance_meters":5,"maximum_distance_meters":15,
+          "maximum_incidence_angle_degrees":30,
+          "minimum_pixel_width":100,"minimum_pixel_height":50}},
+       {"name":"north-face","role":"inspect","drone":"north",
+        "target_position_meters":[0,4,1.5],"start_tick":110,
+        "deadline_tick":145,"tolerance_meters":0.1,
+        "inspection_surface":{
+          "center_meters":[10,4,0.62],"normal":[-1,0,0],
+          "width_axis":[0,1,0],"width_meters":2,"height_meters":1,
+          "minimum_distance_meters":5,"maximum_distance_meters":15,
+          "maximum_incidence_angle_degrees":30,
+          "minimum_pixel_width":100,"minimum_pixel_height":50}}]},
+     "expected":{"drones":[
+       {"name":"east","mode":"hovering","position_meters":[0,0,1.5]},
+       {"name":"north","mode":"hovering","position_meters":[0,4,1.5]}]}}
+    )json";
+
+    const ScenarioResult successful = RunScenario(source);
+    ASSERT_TRUE(successful.passed)
+        << (successful.issues.empty() ? "" : successful.issues.front());
+    ASSERT_TRUE(successful.mission.has_value());
+    ASSERT_EQ(successful.mission->tasks.size(), 2U);
+    EXPECT_TRUE(successful.mission->tasks[0].completed);
+    EXPECT_TRUE(successful.mission->tasks[0].firstGeometryCaptureTick.has_value());
+    EXPECT_EQ(successful.mission->tasks[0].lastCaptureAssessment,
+        CaptureAssessment::Ready);
+
+    nlohmann::json withCameraDisabled = nlohmann::json::parse(source);
+    withCameraDisabled["camera_events"] = nlohmann::json::array({
+        {{"tick", 105}, {"drone", "east"}, {"action", "disable"}}});
+    const ScenarioResult incomplete = RunScenario(withCameraDisabled.dump());
+    ASSERT_FALSE(incomplete.passed);
+    ASSERT_TRUE(incomplete.mission.has_value());
+    ASSERT_TRUE(incomplete.mission->tasks[0].failed);
+    EXPECT_FALSE(incomplete.mission->tasks[0].firstGeometryCaptureTick.has_value());
+    EXPECT_EQ(incomplete.mission->tasks[0].lastCaptureAssessment,
+        CaptureAssessment::CameraUnavailable);
+}
+
 void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
 {
     constexpr std::string_view scenario = R"json(
@@ -1427,6 +1483,8 @@ TEST(ScenarioRunnerTests, CoreScenarios)
         Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust());
     EXPECT_NO_FATAL_FAILURE(
