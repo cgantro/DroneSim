@@ -21,11 +21,17 @@
     <script>
       var simulatorVersion = "__SIMULATOR_VERSION__";
       var simulatorStarted = false;
+      var wasmRequestStarted = false;
+      var wasmResponseReceived = false;
       var startupMessage = document.getElementById("startup-message");
       var startupStatus = document.getElementById("startup-status");
       var startupTimeout = window.setTimeout(function () {
         if (!simulatorStarted) {
-          startupMessage.textContent = "시뮬레이터 준비가 오래 걸리고 있습니다. 새로고침한 뒤에도 계속되면 알려 주세요.";
+          startupMessage.textContent = !wasmRequestStarted
+            ? "시뮬레이터 엔진 파일 요청을 시작하지 못했습니다."
+            : !wasmResponseReceived
+              ? "시뮬레이터 엔진 파일 응답을 기다리고 있습니다."
+              : "시뮬레이터 엔진 파일을 받았습니다. 브라우저에서 실행 준비 중입니다.";
           startupStatus.hidden = false;
         }
       }, 20000);
@@ -35,6 +41,27 @@
         startupStatus.hidden = false;
         startupStatus.setAttribute("role", "alert");
       }
+
+      var originalFetch = window.fetch.bind(window);
+      window.fetch = function (request, options) {
+        var url = typeof request === "string" ? request : request.url;
+        if (!url.includes("aerosimlab_simulator.wasm"))
+          return originalFetch(request, options);
+
+        wasmRequestStarted = true;
+        startupMessage.textContent = "시뮬레이터 엔진 파일을 내려받고 있습니다.";
+        startupStatus.hidden = false;
+        return originalFetch(request, options).then(function (response) {
+          if (response.ok) {
+            wasmResponseReceived = true;
+            startupMessage.textContent = "시뮬레이터 엔진 파일을 받았습니다. 브라우저에서 실행 준비 중입니다.";
+          }
+          return response;
+        }, function (error) {
+          showStartupError("시뮬레이터 엔진 파일을 받지 못했습니다. " + error.message);
+          throw error;
+        });
+      };
 
       var Module = {
         canvas: document.getElementById("canvas"),
