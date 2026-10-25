@@ -572,10 +572,18 @@ void AeroSimLabApp::QueueWebFlightCommand(
         pendingControllerAction_ = aerosimlab::simulation::DroneCommand{kind};
 }
 
-bool AeroSimLabApp::StartWebInspectionMission()
+bool AeroSimLabApp::StartWebInspectionMission(int targetIndex)
 {
     externalControl_ = true;
-    return RequestInspectionMission();
+    if (targetIndex < -1
+        || (targetIndex >= 0
+            && static_cast<std::size_t>(targetIndex) >= inspectionTargets_.size()))
+        return false;
+
+    std::optional<std::size_t> selectedTarget;
+    if (targetIndex >= 0)
+        selectedTarget = static_cast<std::size_t>(targetIndex);
+    return RequestInspectionMission(selectedTarget);
 }
 
 void AeroSimLabApp::SetWebPilotAxes(
@@ -1043,6 +1051,21 @@ void AeroSimLabApp::LoadMapFeatures()
     if (inspectionTargets_.size() != 3U)
         throw std::runtime_error("높이 정보가 있는 OSM 건물 3곳을 점검 구역으로 만들지 못했습니다.");
     SetActiveInspectionTarget(0U);
+#ifdef __EMSCRIPTEN__
+    EM_ASM({
+        if (window.clearDroneSimInspectionTargets)
+            window.clearDroneSimInspectionTargets();
+    });
+    for (std::size_t index = 0; index < inspectionTargets_.size(); ++index)
+    {
+        const InspectionTarget& target = inspectionTargets_[index];
+        EM_ASM({
+            if (window.addDroneSimInspectionTarget)
+                window.addDroneSimInspectionTarget(
+                    $0, UTF8ToString($1));
+        }, static_cast<int>(index), target.facilityId.c_str());
+    }
+#endif
 }
 
 void AeroSimLabApp::InitializeStartingState()
@@ -1211,7 +1234,8 @@ aerosimlab::simulation::CommandResult AeroSimLabApp::ApplyAndRecordCommand(
     return result;
 }
 
-bool AeroSimLabApp::RequestInspectionMission()
+bool AeroSimLabApp::RequestInspectionMission(
+    std::optional<std::size_t> selectedTargetIndex)
 {
     if (inspectionMissionStage_ == InspectionMissionStage::StartRequested
         || inspectionMissionStage_ == InspectionMissionStage::TakingOff
@@ -1236,7 +1260,20 @@ bool AeroSimLabApp::RequestInspectionMission()
     inspectionCaptureStartFrame_ = 0;
     inspectionReadyFrameSaved_ = false;
     completedInspectionTargetCount_ = 0;
-    SetActiveInspectionTarget(0U);
+    if (selectedTargetIndex
+        && *selectedTargetIndex >= inspectionTargets_.size())
+    {
+        inspectionMissionError_ = "선택한 점검 구역을 찾을 수 없습니다.";
+        inspectionMissionStage_ = InspectionMissionStage::Failed;
+        return false;
+    }
+    activeInspectionTargetIndex_ = selectedTargetIndex.value_or(0U);
+    inspectionMissionEndTargetIndex_ = selectedTargetIndex
+        ? *selectedTargetIndex + 1U
+        : inspectionTargets_.size();
+    inspectionMissionTargetCount_ = inspectionMissionEndTargetIndex_
+        - activeInspectionTargetIndex_;
+    SetActiveInspectionTarget(activeInspectionTargetIndex_);
     pendingControllerAction_.reset();
     pendingPilotCommand_.reset();
     inspectionMissionStage_ = InspectionMissionStage::StartRequested;
@@ -1277,9 +1314,9 @@ void AeroSimLabApp::AdvanceInspectionMission()
         && inspectionMissionStage_ != Stage::Saved
         && inspectionMissionStage_ != Stage::GeometryOnly
         && inspectionMissionStage_ != Stage::Failed
-        && elapsedTicks > 60U * 180U * inspectionTargets_.size())
+        && elapsedTicks > 60U * 180U * inspectionMissionTargetCount_)
     {
-        FailInspectionMission("3분 안에 점검 구역 촬영을 마치지 못했습니다.");
+        FailInspectionMission("임무 제한 시간 안에 구역 촬영을 마치지 못했습니다.");
         return;
     }
 
@@ -1356,7 +1393,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
         if (inspectionReadyFrameSaved_)
         {
             ++completedInspectionTargetCount_;
-            if (activeInspectionTargetIndex_ + 1U < inspectionTargets_.size())
+            if (activeInspectionTargetIndex_ + 1U < inspectionMissionEndTargetIndex_)
             {
                 SetActiveInspectionTarget(activeInspectionTargetIndex_ + 1U);
                 aerosimlab::simulation::DroneCommand waypoint;
@@ -1432,10 +1469,13 @@ void AeroSimLabApp::FailInspectionMission(const std::string& reason)
 
 std::string AeroSimLabApp::InspectionMissionStatus() const
 {
+    const std::size_t targetCount = inspectionMissionTargetCount_ == 0U
+        ? inspectionTargets_.size()
+        : inspectionMissionTargetCount_;
     const std::string progress = "구역 "
         + std::to_string(std::min(completedInspectionTargetCount_ + 1U,
-            inspectionTargets_.size()))
-        + "/" + std::to_string(inspectionTargets_.size()) + ": ";
+            targetCount))
+        + "/" + std::to_string(targetCount) + ": ";
     switch (inspectionMissionStage_)
     {
     case InspectionMissionStage::Ready: return "대기 중";
@@ -1666,11 +1706,12 @@ extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebPilotInput(
         .yaw = yaw});
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStartInspectionMission()
+extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStartInspectionMission(int targetIndex)
 {
     if (aerosimlab::simulator::activeWebApplication == nullptr)
         return 0;
-    return aerosimlab::simulator::activeWebApplication->StartWebInspectionMission()
+    return aerosimlab::simulator::activeWebApplication
+        ->StartWebInspectionMission(targetIndex)
         ? 1 : 0;
 }
 #endif

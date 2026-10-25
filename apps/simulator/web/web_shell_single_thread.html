@@ -15,13 +15,14 @@
       #web-gcs-status { min-width: 250px; }
       #web-gcs-status strong { display: block; font-size: 14px; }
       #web-gcs-status span { color: #cbd5d9; }
-      #web-gcs-controls { display: flex; align-items: center; gap: 6px; }
+      #web-gcs-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
       #web-gcs button { min-width: 42px; min-height: 38px; padding: 6px 10px; color: #f8fafc; background: #34434a; border: 1px solid #66777e; border-radius: 6px; font: inherit; touch-action: none; }
       #web-gcs button:hover:not(:disabled) { background: #46616b; }
       #web-gcs button:disabled { opacity: .55; }
       #web-gcs [data-command="0"] { background: #176b50; }
       #web-gcs [data-command="2"] { background: #8c3c3c; }
       #web-gcs [data-start-inspection] { background: #315f87; }
+      #web-gcs [data-inspection-target] { min-height: 38px; padding: 6px 10px; color: #f8fafc; background: #26343a; border: 1px solid #66777e; border-radius: 6px; font: inherit; }
       #web-eo-recording { display: grid; gap: 5px; min-width: 190px; color: #d4dde0; }
       #web-eo-recording-controls { display: flex; flex-wrap: wrap; gap: 6px; }
       #web-eo-recording a { color: #9fd5ff; }
@@ -48,6 +49,10 @@
         </div>
       </div>
       <div id="web-gcs-controls">
+        <label for="inspection-target">점검 대상</label>
+        <select id="inspection-target" data-inspection-target disabled>
+          <option value="-1">모든 시험 구역</option>
+        </select>
         <button type="button" data-start-inspection disabled>자동 점검 시작</button>
         <button type="button" data-command="0" disabled>이륙</button>
         <button type="button" data-command="1" disabled>정지</button>
@@ -105,6 +110,19 @@
         document.querySelectorAll("#web-gcs button").forEach(function (button) {
           button.disabled = false;
         });
+        document.querySelector("#inspection-target").disabled = false;
+      };
+
+      window.clearDroneSimInspectionTargets = function () {
+        var select = document.querySelector("#inspection-target");
+        while (select.options.length > 1)
+          select.remove(1);
+      };
+      window.addDroneSimInspectionTarget = function (index, facilityId) {
+        var option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = "OSM 건물 " + facilityId + " · 외벽 시험 구역";
+        document.querySelector("#inspection-target").add(option);
       };
 
       function setEoRecordingStatus(message) {
@@ -335,7 +353,8 @@
           if (!startEoRecording())
             return;
           if (typeof Module._DroneSimWebStartInspectionMission !== "function"
-              || !Module._DroneSimWebStartInspectionMission())
+              || !Module._DroneSimWebStartInspectionMission(
+                Number(document.querySelector("#inspection-target").value)))
             void finishEoRecording();
         });
         document.querySelectorAll("#web-gcs [data-axis]").forEach(function (button) {

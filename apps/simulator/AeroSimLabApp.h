@@ -86,7 +86,7 @@ public:
     /** @brief 웹 지상통제 버튼에서 비행 명령을 예약한다. */
     void QueueWebFlightCommand(aerosimlab::simulation::DroneCommand::Kind kind);
     /** @brief 웹 지상통제에서 자동 점검 임무를 시작한다. */
-    [[nodiscard]] bool StartWebInspectionMission();
+    [[nodiscard]] bool StartWebInspectionMission(int targetIndex);
     /** @brief 웹 조작 버튼의 입력을 다음 비행 Tick에 적용한다. */
     void SetWebPilotAxes(const aerosimlab::manual_control::GamepadAxes& axes);
 #endif
@@ -161,7 +161,8 @@ private:
     [[nodiscard]] int ValidateSmokeTestOutput() const;
     void AdvanceReplayTick();
     void AdvanceManualControlTick();
-    [[nodiscard]] bool RequestInspectionMission();
+    [[nodiscard]] bool RequestInspectionMission(
+        std::optional<std::size_t> selectedTargetIndex = std::nullopt);
     void AdvanceInspectionMission();
     void FailInspectionMission(const std::string& reason);
     [[nodiscard]] std::string InspectionMissionStatus() const;
@@ -267,6 +268,8 @@ private:
     std::string inspectionMissionError_;
     std::vector<InspectionTarget> inspectionTargets_;
     std::size_t activeInspectionTargetIndex_ = 0;
+    std::size_t inspectionMissionEndTargetIndex_ = 0;
+    std::size_t inspectionMissionTargetCount_ = 0;
     std::size_t completedInspectionTargetCount_ = 0;
     bool externalControl_ = false;
     bool groundControlActive_ = false;

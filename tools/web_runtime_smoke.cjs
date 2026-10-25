@@ -180,6 +180,14 @@ async function run() {
       null,
       { timeout: 10000 }
     );
+    await page.waitForFunction(
+      () => document.querySelector("#inspection-target")?.options.length === 4,
+      null,
+      { timeout: 10000 }
+    );
+    const inspectionTarget = page.locator("#inspection-target");
+    await inspectionTarget.selectOption("1");
+    const selectedFacility = await inspectionTarget.locator("option:checked").innerText();
     await page.getByRole("button", { name: "자동 점검 시작" }).click();
     try {
       await page.waitForFunction(
@@ -195,7 +203,7 @@ async function run() {
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${await telemetry.innerText()}`);
     }
     const missionStatus = await telemetry.innerText();
-    if (!missionStatus.includes("점검 임무: 구도 확인 완료 (3개 구역)"))
+    if (!missionStatus.includes("점검 임무: 구도 확인 완료 (1개 구역)"))
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${missionStatus}`);
     await page.waitForFunction(
       () => document.querySelector("#web-eo-recording")?.textContent.includes("내려받을 수 있습니다"),
@@ -238,8 +246,13 @@ async function run() {
     const inspectedZones = new Set(manifest.samples
       .map((entry) => entry.inspection_zone_id)
       .filter((zoneId) => typeof zoneId === "string" && zoneId.length > 0));
-    if (inspectedZones.size !== 3)
-      throw new Error(`촬영 기록에 점검 구역 3곳이 모두 남지 않았습니다: ${[...inspectedZones]}`);
+    if (inspectedZones.size !== 1)
+      throw new Error(`선택한 점검 구역만 기록되지 않았습니다: ${[...inspectedZones]}`);
+    const capturedFacilities = new Set(manifest.samples
+      .map((entry) => entry.facility_id)
+      .filter((facilityId) => typeof facilityId === "string" && facilityId.length > 0));
+    if (capturedFacilities.size !== 1 || !selectedFacility.includes([...capturedFacilities][0]))
+      throw new Error(`선택한 OSM 건물만 촬영하지 않았습니다: ${selectedFacility}`);
     const sample = manifest.samples.find((entry) => entry.inspection_zone_id);
     if (!sample || !Array.isArray(sample.drone_position_meters)
         || !Array.isArray(sample.camera_position_meters)
@@ -247,7 +260,7 @@ async function run() {
         || !Number.isFinite(sample.simulation_time_seconds)
         || !sample.capture_assessment)
       throw new Error("촬영 기록에 점검 구역·시간·위치·자세·판정 정보가 없습니다.");
-    console.log("Chromium에서 자동 점검, EO 영상 저장, 촬영 기록과 체크섬을 확인했습니다.");
+    console.log("Chromium에서 선택한 점검 구역, EO 영상 저장, 촬영 기록과 체크섬을 확인했습니다.");
   } catch (error) {
     console.error(`웹 시작 검사 실패: ${error.message}`);
     process.exitCode = 1;
