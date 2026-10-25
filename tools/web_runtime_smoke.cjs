@@ -226,8 +226,15 @@ async function run() {
         || manifest.video_bytes !== videoBytes.length
         || manifest.video_checksum !== videoHash
         || manifest.recording_duration_milliseconds <= 0
+        || manifest.sample_interval_milliseconds !== 250
         || !Array.isArray(manifest.samples) || manifest.samples.length < 2)
       throw new Error("촬영 기록의 영상 크기·체크섬·상태 표본이 올바르지 않습니다.");
+    for (let index = 1; index < manifest.samples.length; ++index) {
+      const elapsedDifference = manifest.samples[index].recording_elapsed_milliseconds
+        - manifest.samples[index - 1].recording_elapsed_milliseconds;
+      if (elapsedDifference < 200)
+        throw new Error("촬영 상태 표본이 250ms보다 짧은 간격으로 중복 저장됐습니다.");
+    }
     const sample = manifest.samples.find((entry) => entry.inspection_zone_id);
     if (!sample || !Array.isArray(sample.drone_position_meters)
         || !Array.isArray(sample.camera_position_meters)
