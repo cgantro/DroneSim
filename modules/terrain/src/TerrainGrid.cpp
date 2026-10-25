@@ -111,6 +111,7 @@ float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
         || !std::isfinite(positionMeters.y)
         || !std::isfinite(spacingXMeters) || !(spacingXMeters > 0.0F)
         || !std::isfinite(spacingYMeters) || !(spacingYMeters > 0.0F)
+        || !std::isfinite(referenceElevationMeters)
         || heightOffsetsMeters.size() != static_cast<std::size_t>(sampleCount) * sampleCount)
     {
         throw std::invalid_argument("지형 위치와 격자 자료를 확인해 주세요.");
@@ -139,7 +140,7 @@ float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
         HeightAt(rowBefore, columnBefore), HeightAt(rowBefore, columnAfter), columnFraction);
     const float south = std::lerp(
         HeightAt(rowAfter, columnBefore), HeightAt(rowAfter, columnAfter), columnFraction);
-    return std::lerp(north, south, rowFraction);
+    return referenceElevationMeters + std::lerp(north, south, rowFraction);
 }
 
 glm::dvec2 TerrainGrid::ToLocalMeters(

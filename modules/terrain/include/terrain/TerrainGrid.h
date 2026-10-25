@@ -25,7 +25,7 @@ struct TerrainGrid
     /** @brief 저장된 지형 격자를 읽는다. 파일 형식이 맞지 않으면 원인을 알려준다. */
     [[nodiscard]] static TerrainGrid Load(const std::filesystem::path& path);
 
-    /** @brief 북쪽부터 센 행과 서쪽부터 센 열의 높이를 반환한다. */
+    /** @brief 기준 높이를 더한 절대 고도를 반환한다. 행은 북쪽부터, 열은 서쪽부터 센다. */
     [[nodiscard]] float HeightAt(std::uint32_t row, std::uint32_t column) const;
 
     /** @brief 지도 중심 기준의 동쪽·북쪽 위치에서 격자 높이를 보간해 반환한다. */
