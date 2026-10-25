@@ -1,0 +1,219 @@
+#include "EoVideoRecorder.h"
+
+#include <nlohmann/json.hpp>
+
+#include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
+
+#include <chrono>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <stdexcept>
+#include <system_error>
+
+namespace aerosimlab::simulator
+{
+struct EoVideoRecorder::Impl
+{
+    cv::VideoWriter writer;
+    std::ofstream metadata;
+};
+
+EoVideoRecorder::EoVideoRecorder() = default;
+
+namespace
+{
+using Json = nlohmann::json;
+
+std::filesystem::path UserDataDirectory()
+{
+#ifdef _WIN32
+    if (const char* localAppData = std::getenv("LOCALAPPDATA");
+        localAppData && *localAppData)
+        return std::filesystem::path{localAppData} / "DroneSim";
+#else
+    if (const char* xdgDataHome = std::getenv("XDG_DATA_HOME");
+        xdgDataHome && *xdgDataHome)
+        return std::filesystem::path{xdgDataHome} / "dronesim";
+    if (const char* home = std::getenv("HOME"); home && *home)
+        return std::filesystem::path{home} / ".local" / "share" / "dronesim";
+#endif
+    return std::filesystem::temp_directory_path() / "DroneSim";
+}
+}
+
+EoVideoRecorder::~EoVideoRecorder()
+{
+    static_cast<void>(Stop());
+}
+
+bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
+    int width, int height, double framesPerSecond, std::string& error)
+{
+    if (IsRecording())
+    {
+        error = "이미 영상 녹화 중입니다.";
+        return false;
+    }
+    if (videoPath.empty() || width <= 0 || height <= 0
+        || !(framesPerSecond > 0.0))
+    {
+        error = "영상 경로, 크기 또는 프레임 속도가 올바르지 않습니다.";
+        return false;
+    }
+
+    impl_ = std::make_unique<Impl>();
+    try
+    {
+        std::filesystem::create_directories(videoPath.parent_path());
+        std::filesystem::path metadataPath = videoPath;
+        metadataPath.replace_extension(".jsonl");
+        impl_->metadata.open(metadataPath, std::ios::out | std::ios::trunc);
+        if (!impl_->metadata)
+        {
+            error = "영상 메타데이터 파일을 만들지 못했습니다.";
+            return false;
+        }
+        videoPath_ = videoPath;
+        width_ = width;
+        height_ = height;
+        savedFrameCount_ = 0;
+
+        const int h264 = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
+#ifdef _WIN32
+        constexpr int videoBackend = cv::CAP_MSMF;
+#else
+        constexpr int videoBackend = cv::CAP_FFMPEG;
+#endif
+        if (!impl_->writer.open(videoPath_.string(), videoBackend, h264,
+            framesPerSecond, cv::Size{width_, height_}, true))
+        {
+            impl_->metadata.close();
+            std::error_code ignored;
+            std::filesystem::remove(metadataPath, ignored);
+            std::filesystem::remove(videoPath_, ignored);
+            error = "현재 OpenCV 영상 장치에서 H.264 MP4 인코더를 열지 못했습니다.";
+            return false;
+        }
+    }
+    catch (const std::exception& exception)
+    {
+        if (impl_)
+        {
+            impl_->writer.release();
+            impl_->metadata.close();
+        }
+        impl_.reset();
+        error = exception.what();
+        return false;
+    }
+    return true;
+}
+
+bool EoVideoRecorder::WriteFrame(const sensor::RgbFrame& frame,
+    const simulation::CameraState& camera, double simulationTimeSeconds,
+    std::string& error)
+{
+    if (!IsRecording() || !frame.IsValid()
+        || frame.width != width_ || frame.height != height_)
+    {
+        error = "녹화 중인 영상과 프레임 크기가 맞지 않습니다.";
+        return false;
+    }
+
+    try
+    {
+        cv::Mat rgb(frame.height, frame.width, CV_8UC3,
+            const_cast<std::uint8_t*>(frame.pixels.data()));
+        cv::Mat topToBottom;
+        if (frame.rowOrder == sensor::RgbFrameRowOrder::BottomToTop)
+            cv::flip(rgb, topToBottom, 0);
+        else
+            topToBottom = rgb;
+
+        cv::Mat bgr;
+        cv::cvtColor(topToBottom, bgr, cv::COLOR_RGB2BGR);
+        impl_->writer.write(bgr);
+        if (!impl_->writer.isOpened())
+        {
+            error = "H.264 영상 인코더가 프레임 저장 중 종료됐습니다.";
+            return false;
+        }
+
+        const glm::dvec3& position = camera.positionMeters;
+        const glm::dquat& orientation = camera.orientation;
+        const Json record{
+            {"capture_state", "SAVED"},
+            {"frame_index", savedFrameCount_},
+            {"simulation_tick", frame.simulationTick},
+            {"simulation_time_seconds", simulationTimeSeconds},
+            {"width_pixels", frame.width},
+            {"height_pixels", frame.height},
+            {"position_meters", {position.x, position.y, position.z}},
+            {"orientation_quaternion", {
+                {"w", orientation.w}, {"x", orientation.x},
+                {"y", orientation.y}, {"z", orientation.z}}}};
+        impl_->metadata << record.dump() << '\n';
+        impl_->metadata.flush();
+        if (!impl_->metadata)
+        {
+            error = "영상은 기록했지만 프레임 메타데이터 저장에 실패했습니다.";
+            return false;
+        }
+        ++savedFrameCount_;
+    }
+    catch (const cv::Exception& exception)
+    {
+        error = exception.what();
+        return false;
+    }
+    return true;
+}
+
+std::uint64_t EoVideoRecorder::Stop()
+{
+    if (impl_)
+    {
+        impl_->writer.release();
+        if (impl_->metadata.is_open())
+        {
+            impl_->metadata.flush();
+            impl_->metadata.close();
+        }
+        impl_.reset();
+    }
+    width_ = 0;
+    height_ = 0;
+    return savedFrameCount_;
+}
+
+bool EoVideoRecorder::IsRecording() const noexcept
+{
+    return impl_ && impl_->writer.isOpened() && impl_->metadata.is_open();
+}
+
+const std::filesystem::path& EoVideoRecorder::VideoPath() const noexcept
+{
+    return videoPath_;
+}
+
+std::filesystem::path NewEoRecordingPath()
+{
+    const auto now = std::chrono::system_clock::now();
+    const auto time = std::chrono::system_clock::to_time_t(now);
+    const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()).count() % 1000;
+    std::tm localTime{};
+#ifdef _WIN32
+    localtime_s(&localTime, &time);
+#else
+    localtime_r(&time, &localTime);
+#endif
+    std::ostringstream name;
+    name << "inspection_" << std::put_time(&localTime, "%Y%m%d_%H%M%S")
+         << '_' << std::setw(3) << std::setfill('0') << milliseconds << ".mp4";
+    return UserDataDirectory() / "recordings" / name.str();
+}
+}

@@ -1,4 +1,5 @@
 #include "AeroSimLabApp.h"
+#include "EoVideoRecorder.h"
 #include "FleetDroneSpawn.h"
 
 #include "GroundControlClient.h"
@@ -8,15 +9,70 @@
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
 
+#include <opencv2/videoio.hpp>
+
 #include <chrono>
+#include <algorithm>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
 
 using namespace aerosimlab;
+
+void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
+{
+    const auto outputDirectory = std::filesystem::temp_directory_path()
+        / "dronesim-video-recorder-test";
+    std::filesystem::remove_all(outputDirectory);
+    const auto videoPath = outputDirectory / "inspection.mp4";
+    simulator::EoVideoRecorder recorder;
+    std::string error;
+    const simulation::CameraModel cameraModel{};
+    ASSERT_TRUE(recorder.Start(videoPath, cameraModel.imageWidthPixels,
+        cameraModel.imageHeightPixels, 60.0, error)) << error;
+
+    sensor::RgbFrame frame;
+    frame.width = cameraModel.imageWidthPixels;
+    frame.height = cameraModel.imageHeightPixels;
+    frame.rowOrder = sensor::RgbFrameRowOrder::BottomToTop;
+    frame.pixels.resize(static_cast<std::size_t>(frame.width * frame.height * 3), 128U);
+    simulation::CameraState camera;
+    camera.positionMeters = {1.0, 2.0, 3.0};
+    for (std::uint64_t tick = 1; tick <= 4; ++tick)
+    {
+        frame.simulationTick = tick;
+        ASSERT_TRUE(recorder.WriteFrame(frame, camera,
+            static_cast<double>(tick) / 60.0, error)) << error;
+    }
+    EXPECT_EQ(recorder.Stop(), 4U);
+    ASSERT_TRUE(std::filesystem::exists(videoPath));
+    EXPECT_GT(std::filesystem::file_size(videoPath), 0U);
+    cv::VideoCapture decodedVideo(videoPath.string());
+    ASSERT_TRUE(decodedVideo.isOpened());
+    cv::Mat decodedFrame;
+    ASSERT_TRUE(decodedVideo.read(decodedFrame));
+    EXPECT_EQ(decodedFrame.cols, cameraModel.imageWidthPixels);
+    EXPECT_EQ(decodedFrame.rows, cameraModel.imageHeightPixels);
+    decodedVideo.release();
+
+    auto metadataPath = videoPath;
+    metadataPath.replace_extension(".jsonl");
+    std::ifstream metadata(metadataPath);
+    ASSERT_TRUE(metadata.good());
+    const std::string contents{
+        std::istreambuf_iterator<char>{metadata}, std::istreambuf_iterator<char>{}};
+    EXPECT_EQ(std::count(contents.begin(), contents.end(), '\n'), 4);
+    EXPECT_NE(contents.find("\"capture_state\":\"SAVED\""), std::string::npos);
+    EXPECT_NE(contents.find("\"simulation_tick\":4"), std::string::npos);
+    metadata.close();
+    std::filesystem::remove_all(outputDirectory);
+}
 
 void Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain()
 {
@@ -185,6 +241,7 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
 TEST(SimulatorSessionTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(Verify_EoVideoRecorderStoresH264AndFrameMetadata());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_RecordingReplayOverUdp());
 }

@@ -95,7 +95,7 @@ if(POLICY CMP0169)
 endif()
 
 if(NOT EMSCRIPTEN)
-  find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+  find_package(OpenCV REQUIRED COMPONENTS core imgproc videoio)
 endif()
 
 option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
@@ -285,6 +285,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_simulator_app PRIVATE
       apps/simulator/AeroSimLabAppEoCapture.cpp
+      apps/simulator/EoVideoRecorder.cpp
       apps/simulator/CooperativeMissionBenchmark.cpp
       apps/simulator/DroneScalingBenchmark.cpp
       apps/simulator/SimulatorHud.cpp
@@ -300,7 +301,8 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     nlohmann_json::nlohmann_json
   )
   if(NOT EMSCRIPTEN)
-    target_link_libraries(aerosimlab_simulator_app PRIVATE aerosimlab_vision aerosimlab_imgui)
+    target_link_libraries(aerosimlab_simulator_app PRIVATE
+      aerosimlab_vision aerosimlab_imgui opencv_videoio)
   endif()
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"
@@ -482,6 +484,7 @@ if(BUILD_TESTING)
       target_link_libraries(aerosimlab_simulator_integration_tests PRIVATE
         aerosimlab_simulator_app
         aerosimlab_ground_control_client
+        opencv_videoio
         GTest::gtest_main
       )
       gtest_discover_tests(aerosimlab_simulator_integration_tests

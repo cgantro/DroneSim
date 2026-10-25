@@ -7,6 +7,12 @@
       "name": "opencv4",
       "version>=": "4.14.0",
       "default-features": false
+    },
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": ["msmf"],
+      "platform": "windows"
     }
   ]
 }

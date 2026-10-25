@@ -169,7 +169,11 @@ bool AeroSimLabApp::ApplySessionCommand(
     switch (command)
     {
     case Command::StartRecording:
-        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
+        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying()
+#ifndef __EMSCRIPTEN__
+            || (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
+#endif
+            )
         {
             reply.status = "recording_unavailable";
             return false;
@@ -202,7 +206,11 @@ bool AeroSimLabApp::ApplySessionCommand(
         return false;
 
     case Command::ReplayRecording:
-        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
+        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying()
+#ifndef __EMSCRIPTEN__
+            || (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
+#endif
+            )
         {
             reply.status = "recording_unavailable";
             return false;
@@ -225,6 +233,64 @@ bool AeroSimLabApp::ApplySessionCommand(
     }
 
     return false;
+}
+
+void AeroSimLabApp::ApplyVideoRecordingCommand(
+    aerosimlab::communication::VideoRecordingCommand command,
+    aerosimlab::communication::CommandReply& reply)
+{
+#ifdef __EMSCRIPTEN__
+    static_cast<void>(command);
+    reply.status = "video_recording_requires_native";
+#else
+    using Command = aerosimlab::communication::VideoRecordingCommand;
+    if (command == Command::Start)
+    {
+        if (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
+        {
+            reply.status = "video_recording_already_active";
+            return;
+        }
+        if (simulation_.Camera().status != aerosimlab::simulation::CameraStatus::Active)
+        {
+            reply.status = "video_recording_camera_unavailable";
+            return;
+        }
+
+        DrainEoReadbacks();
+
+        auto recorder = std::make_unique<EoVideoRecorder>();
+        std::string error;
+        const auto& model = simulation_.Camera().model;
+        const auto path = NewEoRecordingPath();
+        if (!recorder->Start(path, model.imageWidthPixels, model.imageHeightPixels,
+            60.0, error))
+        {
+            reply.status = "video_recording_failed:" + error;
+            return;
+        }
+        eoVideoRecorder_ = std::move(recorder);
+        window_->SetTitle("DroneSim | EO 영상 녹화 중");
+        reply.accepted = true;
+        reply.status = "video_recording_started:" + eoVideoRecorder_->VideoPath().string();
+        return;
+    }
+
+    if (!eoVideoRecorder_ || !eoVideoRecorder_->IsRecording())
+    {
+        reply.status = "video_recording_not_active";
+        return;
+    }
+
+    DrainEoReadbacks();
+    const auto path = eoVideoRecorder_->VideoPath();
+    const std::uint64_t savedFrames = eoVideoRecorder_->Stop();
+    eoVideoRecorder_.reset();
+    window_->SetTitle("DroneSim | EO 영상 녹화 완료");
+    reply.accepted = true;
+    reply.status = "video_recording_stopped:" + std::to_string(savedFrames)
+        + ":" + path.string();
+#endif
 }
 
 void AeroSimLabApp::ApplyDroneCommand(
@@ -356,6 +422,10 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
             aerosimlab::communication::SessionCommand command)
         {
             replayTickAdvanced = ApplySessionCommand(command, reply);
+        },
+        [this, &reply](aerosimlab::communication::VideoRecordingCommand command)
+        {
+            ApplyVideoRecordingCommand(command, reply);
         },
         [this, &reply](aerosimlab::communication::FleetCommand command)
         {

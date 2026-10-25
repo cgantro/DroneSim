@@ -48,6 +48,8 @@ enum ControlId : int
     recordingStartButtonId,
     recordingStopButtonId,
     recordingReplayButtonId,
+    videoRecordingStartButtonId,
+    videoRecordingStopButtonId,
     addDroneButtonId,
     droneListId
 };
@@ -159,6 +161,7 @@ void SetControlsEnabled(AppState& state, bool enabled)
     const int buttonIds[]{takeoffButtonId, stopButtonId, landButtonId, waypointButtonId,
         cameraOnButtonId, cameraOffButtonId, cameraFaultButtonId, cameraRecoverButtonId,
         recordingStartButtonId, recordingStopButtonId, recordingReplayButtonId,
+        videoRecordingStartButtonId, videoRecordingStopButtonId,
         addDroneButtonId};
     for (const int id : buttonIds)
         EnableWindow(GetDlgItem(GetParent(state.statusText), id), enabled);
@@ -211,7 +214,7 @@ void StartRequest(HWND window, AppState& state,
 
 std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply& reply)
 {
-    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 10> messages{{
+    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 14> messages{{
         {"recording_started", L"입력 기록을 시작했습니다. 게임패드와 비행 명령을 기록합니다."},
         {"recording_stopped", L"기록을 마쳤습니다. 시뮬레이터를 닫기 전까지 재생할 수 있습니다."},
         {"recording_replay_started", L"입력 기록을 재생합니다."},
@@ -219,6 +222,10 @@ std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply&
         {"recording_not_active", L"진행 중인 입력 기록이 없습니다."},
         {"recording_empty", L"재생할 입력 기록이 없습니다."},
         {"recording_unavailable", L"기록 또는 재생이 이미 진행 중입니다."},
+        {"video_recording_already_active", L"EO 영상 녹화가 이미 진행 중입니다."},
+        {"video_recording_camera_unavailable", L"카메라가 켜져 있을 때 영상 녹화를 시작할 수 있습니다."},
+        {"video_recording_not_active", L"진행 중인 EO 영상 녹화가 없습니다."},
+        {"video_recording_requires_native", L"웹 영상 저장은 아직 연결되지 않았습니다."},
         {"drone_added", L"새 드론을 지면에 추가했습니다."},
         {"fleet_limit_reached", L"드론은 최대 8대까지 추가할 수 있습니다."},
         {"spawn_outside_terrain", L"지도 범위 밖에는 새 드론을 추가할 수 없습니다."}
@@ -229,6 +236,22 @@ std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply&
         if (reply.status == status)
             return std::wstring(message);
     }
+
+    if (reply.status.starts_with("video_recording_started:"))
+        return L"EO 영상 녹화를 시작했습니다. 저장 위치: "
+            + FromUtf8(std::string_view{reply.status}.substr(24));
+    if (reply.status.starts_with("video_recording_stopped:"))
+    {
+        const std::string_view details{reply.status};
+        const auto separator = details.find(':', 24);
+        if (separator != std::string_view::npos)
+            return L"EO 영상 저장 완료. 프레임 "
+                + FromUtf8(details.substr(24, separator - 24))
+                + L"개, 위치: " + FromUtf8(details.substr(separator + 1));
+    }
+    if (reply.status.starts_with("video_recording_failed:"))
+        return L"EO 영상 녹화 실패: "
+            + FromUtf8(std::string_view{reply.status}.substr(23));
 
     if (reply.accepted)
         return L"명령이 적용됐습니다.";
@@ -328,6 +351,12 @@ void CreateControls(HWND window, AppState& state)
     AddControl(window, L"BUTTON", L"마지막 기록 재생", BS_PUSHBUTTON,
         350, 307, 180, 32, recordingReplayButtonId);
 
+    AddLabel(window, L"EO 영상 저장", 20, 350, 140);
+    AddControl(window, L"BUTTON", L"영상 녹화 시작", BS_PUSHBUTTON,
+        20, 375, 155, 32, videoRecordingStartButtonId);
+    AddControl(window, L"BUTTON", L"영상 녹화 종료", BS_PUSHBUTTON,
+        185, 375, 155, 32, videoRecordingStopButtonId);
+
     AddLabel(window, L"편대 상태", 565, 62, 150);
     AddControl(window, L"BUTTON", L"드론 추가", BS_PUSHBUTTON,
         565, 88, 290, 34, addDroneButtonId);
@@ -335,11 +364,11 @@ void CreateControls(HWND window, AppState& state)
         WS_BORDER | WS_VSCROLL | LBS_NOINTEGRALHEIGHT,
         565, 132, 290, 360, droneListId);
 
-    AddLabel(window, L"명령 결과", 20, 352, 100);
+    AddLabel(window, L"명령 결과", 20, 420, 100);
     state.statusText = AddControl(window, L"STATIC", L"시뮬레이터에 연결해 명령을 보냅니다.",
-        SS_LEFT, 20, 378, 510, 34, statusTextId);
+        SS_LEFT, 20, 446, 510, 34, statusTextId);
     state.telemetryText = AddControl(window, L"STATIC", L"드론과 카메라 상태가 여기에 표시됩니다.",
-        SS_LEFT, 20, 415, 510, 72, telemetryTextId);
+        SS_LEFT, 20, 483, 510, 72, telemetryTextId);
 }
 
 LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
@@ -385,6 +414,12 @@ LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
         break;
     case recordingReplayButtonId:
         packet.command = aerosimlab::communication::SessionCommand::ReplayRecording;
+        break;
+    case videoRecordingStartButtonId:
+        packet.command = aerosimlab::communication::VideoRecordingCommand::Start;
+        break;
+    case videoRecordingStopButtonId:
+        packet.command = aerosimlab::communication::VideoRecordingCommand::Stop;
         break;
     case addDroneButtonId:
         packet.command = aerosimlab::communication::FleetCommand::AddDrone;
@@ -495,7 +530,7 @@ int WINAPI wWinMain(
     AppState state;
     HWND window = CreateWindowExW(0, windowClassName, L"AeroSimLab 지상통제",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 900, 550, nullptr, nullptr, instance, &state);
+        CW_USEDEFAULT, CW_USEDEFAULT, 900, 620, nullptr, nullptr, instance, &state);
     if (!window)
         return 1;
 

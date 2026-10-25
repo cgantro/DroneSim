@@ -3,6 +3,7 @@
 #include "graphics/Camera.h"
 #include "graphics/MultisampleFramebuffer.h"
 #include "graphics/Renderer.h"
+#include "graphics/Window.h"
 #include "simulation_core/ScopedDuration.h"
 #include "vision/RgbFrameQuality.h"
 #include "vision/RgbFrameView.h"
@@ -132,6 +133,7 @@ void AeroSimLabApp::QueueEoReadback()
     if (queued)
     {
         lastQueuedEoFrameTick_ = camera.lastFrameTick;
+        queuedEoCameraStates_.insert_or_assign(camera.lastFrameTick, camera);
         if (benchmarkMode_)
         {
             eoReadbackHappenedThisFrame_ = true;
@@ -160,6 +162,23 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
     eoFrame_.simulationTick = simulationTick;
     // 밝기·대비·선명도는 행 방향과 무관하므로 OpenGL 픽셀을 그대로 분석한다.
     eoFrame_.rowOrder = aerosimlab::sensor::RgbFrameRowOrder::BottomToTop;
+    const auto cameraState = queuedEoCameraStates_.find(simulationTick);
+    if (cameraState != queuedEoCameraStates_.end())
+    {
+        if (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
+        {
+            std::string error;
+            if (!eoVideoRecorder_->WriteFrame(eoFrame_, cameraState->second,
+                static_cast<double>(simulationTick) / 60.0, error))
+            {
+                const auto savedFrames = eoVideoRecorder_->Stop();
+                eoVideoRecorder_.reset();
+                window_->SetTitle("DroneSim | EO 녹화 중단: " + error);
+                static_cast<void>(savedFrames);
+            }
+        }
+        queuedEoCameraStates_.erase(cameraState);
+    }
     double analysisDurationMicroseconds = 0.0;
     // 분석기가 프레임 메모리를 빌려 쓰므로 분석이 끝날 때까지 픽셀을 유지한다.
     aerosimlab::vision::RgbFrameQuality quality;

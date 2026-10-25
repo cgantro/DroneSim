@@ -205,6 +205,13 @@ SessionCommand ReadSessionCommand(std::string_view action)
     throw std::invalid_argument("알 수 없는 기록 제어 명령입니다.");
 }
 
+VideoRecordingCommand ReadVideoRecordingCommand(std::string_view action)
+{
+    if (action == "video_start") return VideoRecordingCommand::Start;
+    if (action == "video_stop") return VideoRecordingCommand::Stop;
+    throw std::invalid_argument("알 수 없는 영상 녹화 명령입니다.");
+}
+
 simulation::DroneCommand ReadDroneCommand(const Json& payload, std::string_view action)
 {
     using Kind = simulation::DroneCommand::Kind;
@@ -297,6 +304,13 @@ Json EncodeCommandPayload(SessionCommand command)
     return {{"target", "session"}, {"action", action}};
 }
 
+Json EncodeCommandPayload(VideoRecordingCommand command)
+{
+    const char* action = command == VideoRecordingCommand::Start
+        ? "video_start" : "video_stop";
+    return {{"target", "video_recording"}, {"action", action}};
+}
+
 Json EncodeCommandPayload(FleetCommand command)
 {
     const char* action = command == FleetCommand::AddDrone ? "add_drone" : "status";
@@ -343,6 +357,11 @@ CommandPacket DecodeCommand(std::string_view datagram)
     if (target == "session")
     {
         packet.command = ReadSessionCommand(action);
+        return packet;
+    }
+    if (target == "video_recording")
+    {
+        packet.command = ReadVideoRecordingCommand(action);
         return packet;
     }
     if (target == "fleet")

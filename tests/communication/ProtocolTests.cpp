@@ -50,6 +50,18 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     EXPECT_EQ(std::get<SessionCommand>(DecodeCommand(EncodeCommand(recording)).command),
         SessionCommand::ReplayRecording);
 
+    CommandPacket videoRecording;
+    videoRecording.commandId = 12;
+    videoRecording.sequence = 16;
+    videoRecording.command = VideoRecordingCommand::Start;
+    EXPECT_EQ(std::get<VideoRecordingCommand>(
+        DecodeCommand(EncodeCommand(videoRecording)).command),
+        VideoRecordingCommand::Start);
+    videoRecording.command = VideoRecordingCommand::Stop;
+    EXPECT_EQ(std::get<VideoRecordingCommand>(
+        DecodeCommand(EncodeCommand(videoRecording)).command),
+        VideoRecordingCommand::Stop);
+
     CommandPacket addDrone;
     addDrone.commandId = 10;
     addDrone.sequence = 14;

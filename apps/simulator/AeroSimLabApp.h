@@ -1,6 +1,9 @@
 #pragma once
 
 #include "SimulationBenchmark.h"
+#ifndef __EMSCRIPTEN__
+#include "EoVideoRecorder.h"
+#endif
 #include "communication/Protocol.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
@@ -21,6 +24,9 @@
 #include <optional>
 #include <string>
 #include <vector>
+#ifndef __EMSCRIPTEN__
+#include <unordered_map>
+#endif
 
 namespace aerosimlab::graphics
 {
@@ -161,6 +167,9 @@ private:
     [[nodiscard]] bool ApplySessionCommand(
         aerosimlab::communication::SessionCommand command,
         aerosimlab::communication::CommandReply& reply);
+    void ApplyVideoRecordingCommand(
+        aerosimlab::communication::VideoRecordingCommand command,
+        aerosimlab::communication::CommandReply& reply);
     void ApplyDroneCommand(const aerosimlab::simulation::DroneCommand& command,
         aerosimlab::communication::CommandReply& reply);
     void ApplyCameraCommand(aerosimlab::communication::CameraCommand command,
@@ -269,6 +278,9 @@ private:
 #ifndef __EMSCRIPTEN__
     std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> sceneTarget_;
     std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> cameraTarget_;
+    std::unique_ptr<EoVideoRecorder> eoVideoRecorder_;
+    std::unordered_map<std::uint64_t, aerosimlab::simulation::CameraState>
+        queuedEoCameraStates_;
 #endif
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
