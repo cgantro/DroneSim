@@ -90,7 +90,35 @@ async function run() {
     });
     if (startupError)
       throw new Error(startupError.trim());
-    console.log("Chromium에서 시뮬레이터 첫 화면을 확인했습니다.");
+
+    const responsiveness = await page.evaluate(() => new Promise((resolve) => {
+      const frameTimes = [];
+      const startedAt = performance.now();
+      function recordFrame(now) {
+        frameTimes.push(now);
+        if (now - startedAt >= 5000) {
+          const gaps = frameTimes.slice(1).map((time, index) => time - frameTimes[index]);
+          resolve({
+            frameCount: frameTimes.length,
+            maximumFrameGapMilliseconds: gaps.length ? Math.max(...gaps) : 0,
+          });
+          return;
+        }
+        requestAnimationFrame(recordFrame);
+      }
+      requestAnimationFrame(recordFrame);
+    }));
+    if (responsiveness.frameCount < 30
+        || responsiveness.maximumFrameGapMilliseconds > 1500)
+    {
+      throw new Error(
+        `첫 화면 뒤 갱신이 멈췄습니다. ${responsiveness.frameCount}프레임, `
+        + `최대 공백 ${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms`);
+    }
+    console.log(
+      `Chromium에서 첫 화면과 이후 갱신을 확인했습니다. `
+      + `${responsiveness.frameCount}프레임, 최대 공백 `
+      + `${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms`);
   } catch (error) {
     console.error(`웹 시작 검사 실패: ${error.message}`);
     process.exitCode = 1;
