@@ -273,12 +273,9 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
-    glm::mat4 floorTransform_{1.0F};
-    std::vector<glm::mat4> wallTransforms_;
-    std::vector<glm::mat4> debrisTransforms_;
-    std::vector<glm::mat4> targetTransforms_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     glm::dvec3 missionGoalMeters_{0.0};
@@ -286,13 +283,7 @@ private:
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};
     aerosimlab::graphics::Material groundMaterial_{
-        glm::vec4{0.44F, 0.46F, 0.48F, 1.0F}, 0.0F, 0.92F};
-    aerosimlab::graphics::Material buildingMaterial_{
-        glm::vec4{0.58F, 0.60F, 0.62F, 1.0F}, 0.0F, 0.9F};
-    aerosimlab::graphics::Material facilityMaterial_{
-        glm::vec4{0.45F, 0.30F, 0.17F, 1.0F}, 0.0F, 0.85F};
-    aerosimlab::graphics::Material targetMaterial_{
-        glm::vec4{0.75F, 0.18F, 0.12F, 1.0F}, 0.0F, 0.72F};
+        glm::vec4{0.25F, 0.40F, 0.25F, 1.0F}, 0.0F, 0.92F};
     aerosimlab::graphics::Material missionMarkerMaterial_{
         glm::vec4{1.0F, 0.65F, 0.05F, 1.0F}, 0.0F, 0.55F};
 #ifndef __EMSCRIPTEN__

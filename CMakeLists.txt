@@ -322,6 +322,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "-sALLOW_MEMORY_GROWTH=1"
       "-sSTACK_SIZE=1mb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn@maps/tancheon/terrain.aerotrn"
     )
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
@@ -331,6 +332,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets/models/drones"
         "$<TARGET_FILE_DIR:aerosimlab_simulator>/models/drones"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets/maps"
+        "$<TARGET_FILE_DIR:aerosimlab_simulator>/maps"
       VERBATIM
     )
   endif()
