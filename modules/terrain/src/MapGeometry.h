@@ -56,7 +56,8 @@ inline std::vector<PolygonPoint> ClipPolygonToTerrain(
 
         std::vector<PolygonPoint> clipped;
         clipped.reserve(polygon.size() + 2U);
-        PolygonPoint previous = polygon.at(polygon.size() - 1U);
+        // 세 점 이상을 확인했지만 분석기가 벡터 원소의 초기화를 추적하지 못한다.
+        PolygonPoint previous = polygon.back(); // NOLINT(clang-analyzer-core.NullDereference)
         bool previousInside = inside(previous);
         for (const PolygonPoint& current : polygon)
         {
