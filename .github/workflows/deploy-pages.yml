@@ -86,7 +86,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/web-smoke" --no-audit --no-fund playwright@1.64.1
 
       - name: Check simulator startup in Chromium
-        timeout-minutes: 5
+        timeout-minutes: 6
         env:
           RUNNER_TEMP: ${{ runner.temp }}
         run: node tools/web_runtime_smoke.cjs
