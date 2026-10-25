@@ -21,6 +21,9 @@
 #include "simulation_core/ScopedDuration.h"
 #include "terrain/TerrainGrid.h"
 #include <glm/gtc/quaternion.hpp>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #ifndef __EMSCRIPTEN__
 #include "vision/RgbFrameQuality.h"
 #endif
@@ -195,6 +198,20 @@ int AeroSimLabApp::Run()
     // 그래픽 자산을 불러오는 동안 도착한 UDP 요청도 소켓 수신 큐에 남긴다.
     InitializeGraphics();
     startTime_ = std::chrono::steady_clock::now();
+#ifdef __EMSCRIPTEN__
+    webPreviousFrame_ = startTime_;
+    emscripten_set_main_loop_arg([](void* application)
+    {
+        auto& app = *static_cast<AeroSimLabApp*>(application);
+        if (app.window_->ShouldClose())
+        {
+            emscripten_cancel_main_loop();
+            return;
+        }
+        app.RunFrame(app.webPreviousFrame_);
+    }, this, 0, false);
+    return 0;
+#else
     benchmarkCpuStart_ = std::clock();
     auto previousFrame = startTime_;
 
@@ -246,6 +263,7 @@ int AeroSimLabApp::Run()
         WriteBenchmarkReport(elapsedSeconds);
     }
     return 0;
+#endif
 }
 
 void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)

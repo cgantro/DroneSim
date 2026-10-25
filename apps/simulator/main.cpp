@@ -8,6 +8,9 @@
 #include <exception>
 #include <charconv>
 #include <iostream>
+#ifdef __EMSCRIPTEN__
+#include <memory>
+#endif
 #include <string>
 #include <string_view>
 #include <utility>
@@ -138,8 +141,15 @@ int RunSimulator(int argc, char** argv)
             .benchmarkMode = benchmarkMode,
             .visibleBenchmarkMode = visibleBenchmarkMode
         };
+#ifdef __EMSCRIPTEN__
+        // 브라우저 프레임 함수가 계속 실행되므로 앱을 프로그램이 끝날 때까지 보관한다.
+        static std::unique_ptr<aerosimlab::simulator::AeroSimLabApp> app;
+        app = std::make_unique<aerosimlab::simulator::AeroSimLabApp>(options);
+        return app->Run();
+#else
         aerosimlab::simulator::AeroSimLabApp app(options);
         return app.Run();
+#endif
     }
     catch (const std::exception& error)
     {

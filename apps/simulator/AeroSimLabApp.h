@@ -231,6 +231,9 @@ private:
     std::unique_ptr<aerosimlab::vision::RgbFrameAnalyzer> visionAnalyzer_;
 #endif
     std::chrono::steady_clock::time_point startTime_;
+#ifdef __EMSCRIPTEN__
+    std::chrono::steady_clock::time_point webPreviousFrame_;
+#endif
     std::uint16_t udpPort_ = 0;
     aerosimlab::simulation::CommandRecording commandRecording_;
 #ifndef __EMSCRIPTEN__
