@@ -927,6 +927,7 @@ void AeroSimLabApp::LoadMapFeatures()
         throw std::runtime_error("점검 시험면으로 쓸 OSM 건물을 찾지 못했습니다.");
 
     inspectionFacilityId_ = selectedBuilding->osmId;
+    inspectionZoneId_ = "facade-test-area";
     inspectionSurface_.centerMeters = selectedFacade.centerMeters;
     inspectionSurface_.normal = selectedFacade.outwardNormal;
     inspectionSurface_.widthAxis = selectedFacade.widthAxis;

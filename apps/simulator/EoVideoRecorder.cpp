@@ -90,7 +90,9 @@ EoVideoRecorder::~EoVideoRecorder()
 }
 
 bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
-    int width, int height, double framesPerSecond, std::string& error)
+    int width, int height, double framesPerSecond,
+    const std::string& facilityId, const std::string& inspectionZoneId,
+    std::string& error)
 {
     if (IsRecording())
     {
@@ -98,9 +100,10 @@ bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
         return false;
     }
     if (videoPath.empty() || width <= 0 || height <= 0
+        || facilityId.empty() || inspectionZoneId.empty()
         || !(framesPerSecond > 0.0))
     {
-        error = "영상 경로, 크기 또는 프레임 속도가 올바르지 않습니다.";
+        error = "영상 설정과 시설물·점검 구역 식별값이 필요합니다.";
         return false;
     }
 
@@ -123,6 +126,9 @@ bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
         height_ = height;
         framesPerSecond_ = framesPerSecond;
         savedFrameCount_ = 0;
+        geometryReadyFrameCount_ = 0;
+        facilityId_ = facilityId;
+        inspectionZoneId_ = inspectionZoneId;
 
         const int h264 = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
 #ifdef _WIN32
@@ -157,6 +163,7 @@ bool EoVideoRecorder::Start(const std::filesystem::path& videoPath,
 
 bool EoVideoRecorder::WriteFrame(const sensor::RgbFrame& frame,
     const simulation::CameraState& camera, double simulationTimeSeconds,
+    simulation::CaptureAssessment captureAssessment,
     std::string& error)
 {
     if (!IsRecording() || !frame.IsValid()
@@ -189,6 +196,9 @@ bool EoVideoRecorder::WriteFrame(const sensor::RgbFrame& frame,
         const glm::dquat& orientation = camera.orientation;
         const Json record{
             {"capture_state", "CAPTURED"},
+            {"facility_id", facilityId_},
+            {"inspection_zone_id", inspectionZoneId_},
+            {"capture_assessment", simulation::ToString(captureAssessment)},
             {"frame_index", savedFrameCount_},
             {"simulation_tick", frame.simulationTick},
             {"simulation_time_seconds", simulationTimeSeconds},
@@ -205,6 +215,8 @@ bool EoVideoRecorder::WriteFrame(const sensor::RgbFrame& frame,
             error = "영상은 기록했지만 프레임 메타데이터 저장에 실패했습니다.";
             return false;
         }
+        if (captureAssessment == simulation::CaptureAssessment::Ready)
+            ++geometryReadyFrameCount_;
         ++savedFrameCount_;
     }
     catch (const cv::Exception& exception)
@@ -273,9 +285,12 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
             std::ios::out | std::ios::trunc);
         const Json manifest{
             {"collection_state", "SAVED"},
+            {"facility_id", facilityId_},
+            {"inspection_zone_id", inspectionZoneId_},
             {"video_file", videoPath_.filename().string()},
             {"metadata_file", metadataPath_.filename().string()},
             {"saved_frame_count", savedFrameCount_},
+            {"geometry_ready_frame_count", geometryReadyFrameCount_},
             {"width_pixels", width_},
             {"height_pixels", height_},
             {"frames_per_second", framesPerSecond_},

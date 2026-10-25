@@ -36,7 +36,8 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
     std::string error;
     const simulation::CameraModel cameraModel{};
     ASSERT_TRUE(recorder.Start(videoPath, cameraModel.imageWidthPixels,
-        cameraModel.imageHeightPixels, 60.0, error)) << error;
+        cameraModel.imageHeightPixels, 60.0, "osm-building-1", "facade-test-area",
+        error)) << error;
 
     sensor::RgbFrame frame;
     frame.width = cameraModel.imageWidthPixels;
@@ -49,7 +50,10 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
     {
         frame.simulationTick = tick;
         ASSERT_TRUE(recorder.WriteFrame(frame, camera,
-            static_cast<double>(tick) / 60.0, error)) << error;
+            static_cast<double>(tick) / 60.0,
+            tick == 2 ? simulation::CaptureAssessment::Occluded
+                : simulation::CaptureAssessment::Ready,
+            error)) << error;
     }
     auto metadataPath = videoPath;
     metadataPath.replace_extension(".jsonl");
@@ -79,6 +83,11 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
         std::istreambuf_iterator<char>{metadata}, std::istreambuf_iterator<char>{}};
     EXPECT_EQ(std::count(contents.begin(), contents.end(), '\n'), 4);
     EXPECT_NE(contents.find("\"capture_state\":\"CAPTURED\""), std::string::npos);
+    EXPECT_NE(contents.find("\"facility_id\":\"osm-building-1\""), std::string::npos);
+    EXPECT_NE(contents.find("\"inspection_zone_id\":\"facade-test-area\""),
+        std::string::npos);
+    EXPECT_NE(contents.find("\"capture_assessment\":\"occluded\""),
+        std::string::npos);
     EXPECT_NE(contents.find("\"simulation_tick\":4"), std::string::npos);
     metadata.close();
 
@@ -95,6 +104,10 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
     const auto manifestData = nlohmann::json::parse(manifestText);
     EXPECT_EQ(manifestData.at("checksum_algorithm").get<std::string>(),
         "CRC-32/ISO-HDLC");
+    EXPECT_EQ(manifestData.at("facility_id").get<std::string>(), "osm-building-1");
+    EXPECT_EQ(manifestData.at("inspection_zone_id").get<std::string>(),
+        "facade-test-area");
+    EXPECT_EQ(manifestData.at("geometry_ready_frame_count").get<std::uint64_t>(), 3U);
     std::string calculatedChecksum;
     ASSERT_TRUE(simulator::EoVideoRecorder::CalculateFileChecksum(
         videoPath, calculatedChecksum, error)) << error;

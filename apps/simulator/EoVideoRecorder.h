@@ -22,11 +22,14 @@ public:
 
     /** @brief H.264 MP4와 프레임별 JSON 기록을 시작한다. */
     [[nodiscard]] bool Start(const std::filesystem::path& videoPath,
-        int width, int height, double framesPerSecond, std::string& error);
+        int width, int height, double framesPerSecond,
+        const std::string& facilityId, const std::string& inspectionZoneId,
+        std::string& error);
 
-    /** @brief RGB 프레임과 카메라 자세를 함께 저장한다. */
+    /** @brief RGB 프레임, 카메라 자세, 점검 구역 판정을 함께 저장한다. */
     [[nodiscard]] bool WriteFrame(const sensor::RgbFrame& frame,
         const simulation::CameraState& camera, double simulationTimeSeconds,
+        simulation::CaptureAssessment captureAssessment,
         std::string& error);
 
     /** @brief 파일을 마무리하고 저장 상태·파일 크기를 담은 목록을 만든다. */
@@ -50,6 +53,9 @@ private:
     int width_ = 0;
     int height_ = 0;
     double framesPerSecond_ = 0.0;
+    std::string facilityId_;
+    std::string inspectionZoneId_;
+    std::uint64_t geometryReadyFrameCount_ = 0;
 };
 
 /** @brief 운영체제의 사용자 데이터 폴더 아래에 새 녹화 파일 경로를 만든다. */
