@@ -52,7 +52,9 @@ async function run() {
       if (message.type() === "error")
         console.error(`브라우저 오류: ${message.text()}`);
     });
-    page.on("pageerror", (error) => console.error(`페이지 오류: ${error.message}`));
+    page.on("pageerror", (error) => {
+      console.error(`페이지 오류: ${error.stack || error.message}`);
+    });
     page.on("requestfailed", (request) => {
       console.error(`요청 실패: ${request.url()} (${request.failure()?.errorText || "원인 없음"})`);
     });
