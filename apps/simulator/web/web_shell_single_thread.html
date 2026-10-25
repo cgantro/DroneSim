@@ -38,25 +38,36 @@
         startupStatus.setAttribute("role", "alert");
       }
 
+      function reportStartupSignal(message) {
+        if (location.hostname === "127.0.0.1" || location.hostname === "localhost")
+          navigator.sendBeacon("/__startup_stage", message);
+      }
+
       window.setSimulatorStartupStatus = function (message) {
         startupPhase = message;
         startupMessage.textContent = message;
         startupStatus.hidden = false;
         console.info("[웹 시작] " + message);
-        if (location.hostname === "127.0.0.1" || location.hostname === "localhost")
-          navigator.sendBeacon("/__startup_stage", message);
+        reportStartupSignal(message);
       };
       window.showSimulatorStartupError = showStartupError;
       window.completeSimulatorStartup = function () {
         simulatorStarted = true;
         window.clearTimeout(startupTimeout);
         startupStatus.hidden = true;
-        if (location.hostname === "127.0.0.1" || location.hostname === "localhost")
-          navigator.sendBeacon("/__startup_stage", "첫 화면 표시 완료");
+        reportStartupSignal("첫 화면 표시 완료");
       };
 
       var Module = {
         canvas: document.getElementById("canvas"),
+        print: function (message) {
+          console.log(message);
+          reportStartupSignal("표준 출력: " + message);
+        },
+        printErr: function (message) {
+          console.error(message);
+          reportStartupSignal("오류 출력: " + message);
+        },
         locateFile: function (path) {
           if (!path.endsWith(".wasm"))
             window.setSimulatorStartupStatus("화면 자료를 불러오고 있습니다.");
