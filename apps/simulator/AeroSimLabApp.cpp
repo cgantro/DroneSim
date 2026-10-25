@@ -65,6 +65,21 @@ std::filesystem::path AssetPath(std::string_view relativePath)
     return detail::ExecutableDirectory() / relativePath;
 }
 
+#ifdef __EMSCRIPTEN__
+void SetWebStartupStage(const char* message)
+{
+    EM_ASM({
+        const stage = UTF8ToString($0);
+        window.setSimulatorStartupStatus(stage);
+        console.info("[시뮬레이터 시작] " + stage);
+    }, message);
+}
+#else
+void SetWebStartupStage(const char*)
+{
+}
+#endif
+
 glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
 {
     // 모의는 Z축을 위로 쓰고 화면은 Y축을 위로 쓴다. Y축 방향은 화면의 -Z로 옮겨 오른손 좌표계를 유지한다.
@@ -203,6 +218,12 @@ int AeroSimLabApp::Run()
     emscripten_set_main_loop_arg([](void* application)
     {
         auto& app = *static_cast<AeroSimLabApp*>(application);
+        static bool firstFrame = true;
+        if (firstFrame)
+        {
+            SetWebStartupStage("첫 화면을 그리기 시작합니다.");
+            firstFrame = false;
+        }
         if (app.window_->ShouldClose())
         {
             emscripten_cancel_main_loop();
@@ -376,9 +397,13 @@ int AeroSimLabApp::ValidateSmokeTestOutput() const
 
 void AeroSimLabApp::InitializeGraphics()
 {
+    SetWebStartupStage("시뮬레이터 창을 준비하고 있습니다.");
     InitializeWindow();
+    SetWebStartupStage("렌더러와 카메라를 준비하고 있습니다.");
     InitializeRendererAndCameras();
+    SetWebStartupStage("장면과 드론을 준비하고 있습니다.");
     LoadScene();
+    SetWebStartupStage("화면 셰이더를 준비하고 있습니다.");
     InitializeShaderAndHud();
 }
 
