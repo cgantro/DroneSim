@@ -195,7 +195,7 @@ async function run() {
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${await telemetry.innerText()}`);
     }
     const missionStatus = await telemetry.innerText();
-    if (!missionStatus.includes("점검 임무: 구도 확인 완료"))
+    if (!missionStatus.includes("점검 임무: 구도 확인 완료 (3개 구역)"))
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${missionStatus}`);
     await page.waitForFunction(
       () => document.querySelector("#web-eo-recording")?.textContent.includes("내려받을 수 있습니다"),
@@ -235,6 +235,11 @@ async function run() {
       if (elapsedDifference < 200)
         throw new Error("촬영 상태 표본이 250ms보다 짧은 간격으로 중복 저장됐습니다.");
     }
+    const inspectedZones = new Set(manifest.samples
+      .map((entry) => entry.inspection_zone_id)
+      .filter((zoneId) => typeof zoneId === "string" && zoneId.length > 0));
+    if (inspectedZones.size !== 3)
+      throw new Error(`촬영 기록에 점검 구역 3곳이 모두 남지 않았습니다: ${[...inspectedZones]}`);
     const sample = manifest.samples.find((entry) => entry.inspection_zone_id);
     if (!sample || !Array.isArray(sample.drone_position_meters)
         || !Array.isArray(sample.camera_position_meters)
