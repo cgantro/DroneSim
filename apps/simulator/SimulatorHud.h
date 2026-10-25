@@ -3,6 +3,7 @@
 #include "communication/Protocol.h"
 #include "SimulationBenchmark.h"
 #include "simulation_core/SimulationCore.h"
+#include "simulation_core/EoCameraModel.h"
 
 #include <array>
 #include <cstddef>
@@ -44,6 +45,7 @@ public:
         bool gamepadConnected, bool groundControlConnected, bool cameraActive,
         int cameraImageWidth, int cameraImageHeight,
         double missionDistanceMeters, bool missionComplete,
+        simulation::CaptureAssessment captureAssessment,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t()>& renderCamera,
         HudRenderTimings* timings = nullptr);

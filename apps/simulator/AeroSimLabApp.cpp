@@ -705,13 +705,16 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         const double speedMetersPerSecond = glm::length(state.velocityMetersPerSecond);
         const bool cameraActive = simulation_.Camera().status
             == aerosimlab::simulation::CameraStatus::Active;
+        const std::string captureAssessment{
+            aerosimlab::simulation::ToString(AssessInspectionView())};
         EM_ASM({
             if (window.updateDroneSimGroundControl) {
                 window.updateDroneSimGroundControl(
-                    UTF8ToString($0), $1, $2, $3, $4, $5);
+                    UTF8ToString($0), $1, $2, $3, $4, $5, UTF8ToString($6));
             }
         }, mode.c_str(), state.positionMeters.x, state.positionMeters.y,
-            state.positionMeters.z, speedMetersPerSecond, cameraActive);
+            state.positionMeters.z, speedMetersPerSecond, cameraActive,
+            captureAssessment.c_str());
         lastWebTelemetryUpdate_ = telemetryTime;
     }
     if (!webFirstFrameRendered_)
@@ -918,8 +921,21 @@ void AeroSimLabApp::LoadMapFeatures()
 void AeroSimLabApp::InitializeStartingState()
 {
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
-    missionGoalMeters_ = {80.0, 120.0,
-        terrainGrid_.HeightAtLocalMeters({80.0, 120.0}) + 12.0};
+    const glm::dvec2 inspectionPosition{80.0, 120.0};
+    const double inspectionGround = terrainGrid_.HeightAtLocalMeters(inspectionPosition);
+    missionGoalMeters_ = {inspectionPosition.x, inspectionPosition.y,
+        inspectionGround + 12.0};
+    inspectionSurface_.centerMeters = {
+        inspectionPosition.x, inspectionPosition.y, inspectionGround + 6.0};
+    inspectionSurface_.normal = {-1.0, 0.0, 0.0};
+    inspectionSurface_.widthAxis = {0.0, 1.0, 0.0};
+    inspectionSurface_.widthMeters = 3.0;
+    inspectionSurface_.heightMeters = 3.0;
+    inspectionSurface_.minimumDistanceMeters = 3.0;
+    inspectionSurface_.maximumDistanceMeters = 35.0;
+    inspectionSurface_.maximumIncidenceAngleDegrees = 55.0;
+    inspectionSurface_.minimumPixelWidth = 150;
+    inspectionSurface_.minimumPixelHeight = 150;
     simulation_.SetInitialPose({demoDroneStartMeters.x, demoDroneStartMeters.y,
         startElevation +
             aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
@@ -927,6 +943,12 @@ void AeroSimLabApp::InitializeStartingState()
 #ifndef __EMSCRIPTEN__
     simulation_.SetTerrain(terrainGrid_);
 #endif
+}
+
+aerosimlab::simulation::CaptureAssessment AeroSimLabApp::AssessInspectionView() const
+{
+    return aerosimlab::simulation::EoCameraModel::AssessCapture(
+        simulation_.Camera(), inspectionSurface_);
 }
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
@@ -1121,12 +1143,13 @@ void AeroSimLabApp::RenderFrame()
         const bool missionComplete = simulation_.State().mode
                 == aerosimlab::simulation::FlightMode::Grounded
             && missionDistanceMeters <= 1.5;
+        const auto captureAssessment = AssessInspectionView();
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
             camera.model.imageWidthPixels, camera.model.imageHeightPixels,
-            missionDistanceMeters, missionComplete,
+            missionDistanceMeters, missionComplete, captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this] { return RenderCameraPanel(); },
             benchmarkMode_ ? &hudTimings : nullptr);
@@ -1196,6 +1219,9 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
             estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition);
 
+    const glm::vec3 inspectionCenter = ToRenderPosition(inspectionSurface_.centerMeters);
+    DrawCube(CubeTransform(inspectionCenter, glm::vec3{0.12F, 3.0F, 3.0F}),
+        cameraPosition, missionMarkerMaterial_, view, projection);
     const glm::vec3 goal = ToRenderPosition(missionGoalMeters_);
     DrawCube(CubeTransform(goal + glm::vec3{0.0F, 0.09F, 0.0F},
         glm::vec3{2.4F, 0.18F, 2.4F}), cameraPosition,

@@ -9,6 +9,7 @@
 #include "manual_control/GamepadCommandMapper.h"
 #include "sensor/RgbFrame.h"
 #include "simulation_core/CommandRecording.h"
+#include "simulation_core/EoCameraModel.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
 #endif
@@ -145,6 +146,8 @@ private:
     void LoadTerrain();
     void LoadMapFeatures();
     void InitializeStartingState();
+    /** @brief 카메라가 가상 점검면을 담을 수 있는지 공통 센서 판정으로 확인한다. */
+    [[nodiscard]] aerosimlab::simulation::CaptureAssessment AssessInspectionView() const;
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
@@ -315,6 +318,7 @@ private:
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     glm::dvec3 missionGoalMeters_{0.0};
+    aerosimlab::simulation::InspectionSurface inspectionSurface_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};

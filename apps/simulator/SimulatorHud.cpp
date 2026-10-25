@@ -40,6 +40,23 @@ std::string DroneName(simulation::DroneId id)
     return "드론 " + std::to_string(id);
 }
 
+const char* CaptureStatusLabel(simulation::CaptureAssessment assessment)
+{
+    switch (assessment)
+    {
+    case simulation::CaptureAssessment::Ready: return "촬영 구도 조건 충족";
+    case simulation::CaptureAssessment::CameraUnavailable: return "카메라 꺼짐 또는 장애";
+    case simulation::CaptureAssessment::NoNewFrame: return "새 영상 프레임 없음";
+    case simulation::CaptureAssessment::TooNear: return "점검면에 너무 가까움";
+    case simulation::CaptureAssessment::TooFar: return "점검면에 너무 멂";
+    case simulation::CaptureAssessment::SurfaceFacingAway: return "점검면을 비스듬히 바라봄";
+    case simulation::CaptureAssessment::OutsideFrame: return "카메라 화면 밖";
+    case simulation::CaptureAssessment::ResolutionTooLow: return "화면에 담긴 크기가 부족함";
+    case simulation::CaptureAssessment::Occluded: return "점검면이 가려짐";
+    }
+    return "판정할 수 없음";
+}
+
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
     const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspaceV2");
@@ -135,7 +152,8 @@ void DrawFlightStatusPanel(
     bool gamepadConnected,
     bool groundControlConnected,
     double missionDistanceMeters,
-    bool missionComplete)
+    bool missionComplete,
+    simulation::CaptureAssessment captureAssessment)
 {
     ImGui::SetNextWindowPos(ImVec2{14.0F, 14.0F}, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.86F);
@@ -152,16 +170,16 @@ void DrawFlightStatusPanel(
             simulation.SimulationTimeSeconds(),
             static_cast<unsigned long long>(simulation.TickCount()));
         ImGui::Separator();
-        ImGui::Text("연습 미션: 노란 표식에 착륙하기");
+        ImGui::Text("가상 점검면: %s", CaptureStatusLabel(captureAssessment));
+        ImGui::TextDisabled("카메라 거리·방향·화면 크기 판정입니다. 실제 시설물 촬영 완료를 뜻하지 않습니다.");
         if (missionComplete)
-            ImGui::Text("미션 완료! 표식 안에 착륙했습니다.");
+            ImGui::Text("연습 비행 완료: 노란 표식에 착륙했습니다.");
         else if (primary.mode == simulation::FlightMode::Grounded)
-            ImGui::Text("A로 이륙한 뒤, 노란 표식까지 이동하세요.");
+            ImGui::Text("연습 비행: 이륙 후 노란 표식까지 이동하세요.");
         else if (missionDistanceMeters <= 1.5)
-            ImGui::Text("도착했습니다. B를 눌러 착륙하세요.");
+            ImGui::Text("표식에 도착했습니다. B를 눌러 착륙하세요.");
         else
-            ImGui::Text("목표까지 %.1f m 남았습니다. 노란 표식 방향으로 이동하세요.",
-                missionDistanceMeters);
+            ImGui::Text("노란 표식까지 %.1f m 남았습니다.", missionDistanceMeters);
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();
         ImGui::Text("게임패드: %s   지상통제: %s",
@@ -271,6 +289,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     bool gamepadConnected, bool groundControlConnected, bool cameraActive,
     int cameraImageWidth, int cameraImageHeight,
     double missionDistanceMeters, bool missionComplete,
+    simulation::CaptureAssessment captureAssessment,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t()>& renderCamera,
     HudRenderTimings* timings)
@@ -290,7 +309,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     DrawScenePanel(renderScene);
     DrawCameraPanel(viewport, cameraActive, cameraImageWidth, cameraImageHeight, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
-        missionDistanceMeters, missionComplete);
+        missionDistanceMeters, missionComplete, captureAssessment);
 
     if (timings != nullptr)
     {

@@ -93,7 +93,11 @@ async function run() {
 
     const telemetry = page.locator("#web-gcs-status");
     await page.waitForFunction(
-      () => document.querySelector("#web-gcs-status")?.textContent.includes("비행 상태:"),
+      () => {
+        const status = document.querySelector("#web-gcs-status")?.textContent || "";
+        return status.includes("비행 상태:")
+          && status.includes("가상 시험면 촬영 조건:");
+      },
       null,
       { timeout: 5000 }
     );
