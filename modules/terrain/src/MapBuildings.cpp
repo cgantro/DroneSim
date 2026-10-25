@@ -107,4 +107,27 @@ std::vector<MapBuilding> LoadMapBuildings(
     }
     return buildings;
 }
+
+MapBuildingBoundsMeters GetMapBuildingBoundsMeters(const MapBuilding& building)
+{
+    glm::dvec2 minimum = building.outlineMeters.front();
+    glm::dvec2 maximum = minimum;
+    double groundMinimum = building.groundElevationsMeters.front();
+    double groundMaximum = groundMinimum;
+    for (std::size_t index = 1; index < building.outlineMeters.size(); ++index)
+    {
+        minimum = glm::min(minimum, building.outlineMeters[index]);
+        maximum = glm::max(maximum, building.outlineMeters[index]);
+        groundMinimum = std::min(groundMinimum, building.groundElevationsMeters[index]);
+        groundMaximum = std::max(groundMaximum, building.groundElevationsMeters[index]);
+    }
+
+    const glm::dvec2 horizontalCenter = (minimum + maximum) * 0.5;
+    const double topElevation = groundMaximum + building.heightMeters;
+    return {
+        {horizontalCenter.x, horizontalCenter.y, (groundMinimum + topElevation) * 0.5},
+        {(maximum.x - minimum.x) * 0.5,
+            (maximum.y - minimum.y) * 0.5,
+            (topElevation - groundMinimum) * 0.5}};
+}
 }

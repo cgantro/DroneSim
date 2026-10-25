@@ -2,6 +2,7 @@
 #include "terrain/MapBuildings.h"
 #include "terrain/MapRoads.h"
 #include "terrain/TerrainGrid.h"
+#include "simulation_core/EoCameraModel.h"
 
 #include <algorithm>
 #include <gtest/gtest.h>
@@ -65,6 +66,10 @@ void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
         EXPECT_GE(building.outlineMeters.size(), 3U);
         EXPECT_EQ(building.outlineMeters.size(), building.groundElevationsMeters.size());
         EXPECT_GT(building.heightMeters, 0.0);
+        const MapBuildingBoundsMeters bounds = GetMapBuildingBoundsMeters(building);
+        EXPECT_GT(bounds.halfExtentsMeters.x, 0.0);
+        EXPECT_GT(bounds.halfExtentsMeters.y, 0.0);
+        EXPECT_GT(bounds.halfExtentsMeters.z, 0.0);
         if (building.heightSource == BuildingHeightSource::EstimatedFromLevels)
             ++estimatedHeightCount;
         else
@@ -72,6 +77,46 @@ void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
     }
     EXPECT_GE(taggedHeightCount, 50U);
     EXPECT_GE(estimatedHeightCount, 10U);
+}
+
+void Verify_TancheonBuildingBoundsBlockCameraViewThroughTheMappedBuilding()
+{
+    using namespace aerosimlab::simulation;
+
+    const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/tancheon/terrain.aerotrn");
+    const std::vector<MapBuilding> buildings = LoadMapBuildings(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+    ASSERT_FALSE(buildings.empty());
+
+    const MapBuildingBoundsMeters bounds = GetMapBuildingBoundsMeters(buildings.front());
+    const double cameraOffsetMeters = bounds.halfExtentsMeters.x + 10.0;
+    CameraState camera;
+    camera.positionMeters = {
+        bounds.centerMeters.x - cameraOffsetMeters,
+        bounds.centerMeters.y, bounds.centerMeters.z};
+    camera.frameCount = 1;
+    InspectionSurface surface;
+    surface.centerMeters = {
+        bounds.centerMeters.x + cameraOffsetMeters,
+        bounds.centerMeters.y, bounds.centerMeters.z};
+    surface.normal = {-1.0, 0.0, 0.0};
+    surface.widthAxis = {0.0, 1.0, 0.0};
+    surface.widthMeters = 2.0;
+    surface.heightMeters = 2.0;
+    surface.minimumDistanceMeters = 1.0;
+    surface.maximumDistanceMeters = 1000.0;
+    surface.maximumIncidenceAngleDegrees = 90.0;
+    surface.minimumPixelWidth = 1;
+    surface.minimumPixelHeight = 1;
+    const InspectionOccluderBox buildingBox{
+        bounds.centerMeters, bounds.halfExtentsMeters};
+
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface), CaptureAssessment::Ready);
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface,
+        std::span<const InspectionOccluderBox>{&buildingBox, 1}),
+        CaptureAssessment::Occluded);
 }
 
 void Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths()
@@ -165,6 +210,8 @@ TEST(TerrainGridTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_TancheonBuildingBoundsBlockCameraViewThroughTheMappedBuilding());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths());
     EXPECT_NO_FATAL_FAILURE(

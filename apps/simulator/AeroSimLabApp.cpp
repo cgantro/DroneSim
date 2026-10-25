@@ -895,30 +895,12 @@ void AeroSimLabApp::LoadMapFeatures()
     inspectionOccluders_.reserve(buildings.size());
     for (const auto& building : buildings)
     {
-        glm::dvec2 minimum = building.outlineMeters.front();
-        glm::dvec2 maximum = minimum;
-        double groundMinimum = building.groundElevationsMeters.front();
-        double groundMaximum = groundMinimum;
-        for (std::size_t i = 1; i < building.outlineMeters.size(); ++i)
-        {
-            minimum = glm::min(minimum, building.outlineMeters[i]);
-            maximum = glm::max(maximum, building.outlineMeters[i]);
-            groundMinimum = std::min(groundMinimum, building.groundElevationsMeters[i]);
-            groundMaximum = std::max(groundMaximum, building.groundElevationsMeters[i]);
-        }
-        const glm::dvec2 center = (minimum + maximum) * 0.5;
-        const double bottom = groundMinimum;
-        const double top = groundMaximum + building.heightMeters;
-        const glm::dvec3 obstacleCenter{
-            center.x, center.y, (bottom + top) * 0.5};
-        const glm::dvec3 obstacleHalfExtents{
-            (maximum.x - minimum.x) * 0.5,
-            (maximum.y - minimum.y) * 0.5,
-            (top - bottom) * 0.5};
-        inspectionOccluders_.push_back({obstacleCenter, obstacleHalfExtents});
+        const auto bounds =
+            aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
+        inspectionOccluders_.push_back({bounds.centerMeters, bounds.halfExtentsMeters});
 #ifndef __EMSCRIPTEN__
         simulation_.AddStaticObstacleBox(
-            obstacleCenter, glm::vec3{obstacleHalfExtents});
+            bounds.centerMeters, glm::vec3{bounds.halfExtentsMeters});
 #endif
     }
 }
