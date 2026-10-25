@@ -173,15 +173,19 @@ async function run() {
       { timeout: 10000 }
     );
     await page.getByRole("button", { name: "자동 점검 시작" }).click();
-    await page.waitForFunction(
-      () => {
-        const status = document.querySelector("#web-gcs-status")?.textContent || "";
-        return status.includes("점검 임무: 구도 확인 완료")
-          || status.includes("점검 임무: 실패:");
-      },
-      null,
-      { timeout: 30000 }
-    );
+    try {
+      await page.waitForFunction(
+        () => {
+          const status = document.querySelector("#web-gcs-status")?.textContent || "";
+          return status.includes("점검 임무: 구도 확인 완료")
+            || status.includes("점검 임무: 실패:");
+        },
+        null,
+        { timeout: 30000 }
+      );
+    } catch {
+      throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${await telemetry.innerText()}`);
+    }
     const missionStatus = await telemetry.innerText();
     if (!missionStatus.includes("점검 임무: 구도 확인 완료"))
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${missionStatus}`);
