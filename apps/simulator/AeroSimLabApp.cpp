@@ -194,15 +194,24 @@ int AeroSimLabApp::Run()
     {
         udpSocket_ = std::make_unique<aerosimlab::communication::UdpSocket>(udpPort_);
     }
+#endif
     // 그래픽 자산을 불러오는 동안 도착한 UDP 요청도 소켓 수신 큐에 남긴다.
     InitializeGraphics();
     startTime_ = std::chrono::steady_clock::now();
-#else
-    webStartupStep_ = 0;
-    emscripten_async_call(&AeroSimLabApp::RunWebStartupStep, this, 16);
+#ifdef __EMSCRIPTEN__
+    webPreviousFrame_ = startTime_;
+    emscripten_set_main_loop_arg([](void* application)
+    {
+        auto& app = *static_cast<AeroSimLabApp*>(application);
+        if (app.window_->ShouldClose())
+        {
+            emscripten_cancel_main_loop();
+            return;
+        }
+        app.RunFrame(app.webPreviousFrame_);
+    }, this, 0, false);
     return 0;
-#endif
-#ifndef __EMSCRIPTEN__
+#else
     benchmarkCpuStart_ = std::clock();
     auto previousFrame = startTime_;
 
@@ -256,71 +265,6 @@ int AeroSimLabApp::Run()
     return 0;
 #endif
 }
-
-#ifdef __EMSCRIPTEN__
-void AeroSimLabApp::RunWebStartupStep(void* application)
-{
-    static_cast<AeroSimLabApp*>(application)->ContinueWebStartup();
-}
-
-void AeroSimLabApp::ContinueWebStartup()
-{
-    try
-    {
-        switch (webStartupStep_)
-        {
-        case 0:
-            EM_ASM({ window.setSimulatorStartupStatus("그래픽 창을 준비하고 있습니다."); });
-            break;
-        case 1:
-            InitializeWindow();
-            break;
-        case 2:
-            EM_ASM({ window.setSimulatorStartupStatus("화면 그리기 장치를 준비하고 있습니다."); });
-            break;
-        case 3:
-            InitializeRendererAndCameras();
-            break;
-        case 4:
-            EM_ASM({ window.setSimulatorStartupStatus("실내 장면과 드론 모형을 준비하고 있습니다."); });
-            break;
-        case 5:
-            LoadScene();
-            break;
-        case 6:
-            EM_ASM({ window.setSimulatorStartupStatus("화면 셰이더를 준비하고 있습니다."); });
-            break;
-        case 7:
-            InitializeShaderAndHud();
-            break;
-        case 8:
-            EM_ASM({ window.setSimulatorStartupStatus("첫 화면을 그리는 중입니다."); });
-            break;
-        default:
-            startTime_ = std::chrono::steady_clock::now();
-            webPreviousFrame_ = startTime_;
-            emscripten_set_main_loop_arg([](void* application)
-            {
-                auto& app = *static_cast<AeroSimLabApp*>(application);
-                if (app.window_->ShouldClose())
-                {
-                    emscripten_cancel_main_loop();
-                    return;
-                }
-                app.RunFrame(app.webPreviousFrame_);
-            }, this, 0, false);
-            return;
-        }
-        ++webStartupStep_;
-        emscripten_async_call(&AeroSimLabApp::RunWebStartupStep, this, 16);
-    }
-    catch (const std::exception& error)
-    {
-        const std::string message = error.what();
-        EM_ASM({ window.showSimulatorStartupError(UTF8ToString($0)); }, message.c_str());
-    }
-}
-#endif
 
 void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
 {

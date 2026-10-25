@@ -117,10 +117,6 @@ private:
     /** @brief 화면 셰이더와 데스크톱 HUD를 준비한다. */
     void InitializeShaderAndHud();
 #ifdef __EMSCRIPTEN__
-    /** @brief 웹 화면을 멈추지 않도록 초기화 단계를 나눠 실행한다. */
-    static void RunWebStartupStep(void* application);
-    void ContinueWebStartup();
-    unsigned int webStartupStep_ = 0;
     bool webFirstFrameRendered_ = false;
 #endif
     /** @brief 실내 수색 장면과 강체 월드의 충돌 모양을 준비한다. */
