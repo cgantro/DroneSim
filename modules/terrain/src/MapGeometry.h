@@ -28,6 +28,9 @@ inline std::vector<glm::dvec2> ClipPolygonToTerrain(
 
     for (const auto& [edge, bound] : bounds)
     {
+        if (polygon.empty())
+            break;
+
         const auto coordinate = [edge](const glm::dvec2& point)
         {
             return edge < 2 ? point.x : point.y;
@@ -67,8 +70,6 @@ inline std::vector<glm::dvec2> ClipPolygonToTerrain(
             previousInside = currentInside;
         }
         polygon = std::move(clipped);
-        if (polygon.empty())
-            break;
     }
     return polygon;
 }
