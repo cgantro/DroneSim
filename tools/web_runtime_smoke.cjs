@@ -1,5 +1,6 @@
+const fs = require("node:fs");
+const http = require("node:http");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
 const { chromium } = require(path.join(
   process.env.RUNNER_TEMP,
   "web-smoke",
@@ -8,42 +9,66 @@ const { chromium } = require(path.join(
 ));
 
 const port = 4173;
-const server = spawn("python3", [
-  "-m",
-  "http.server",
-  String(port),
-  "--bind",
-  "127.0.0.1",
-  "--directory",
-  path.resolve("_site"),
-], { stdio: "ignore" });
+const siteRoot = path.resolve("_site");
+const mimeTypes = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".wasm": "application/wasm",
+};
+const startupStages = [];
+let finishStartup;
+const startupFinished = new Promise((resolve) => {
+  finishStartup = resolve;
+});
 
-const diagnostics = [];
-let lastStartupStage = "브라우저 페이지를 여는 중";
-
-function record(message) {
-  diagnostics.push(message);
+function log(message) {
   console.log(message);
 }
 
-async function waitForServer() {
-  for (let attempt = 0; attempt < 50; ++attempt) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/`);
-      if (response.ok)
-        return;
-    } catch {
+function createServer() {
+  return http.createServer((request, response) => {
+    const requestPath = new URL(request.url, `http://127.0.0.1:${port}`).pathname;
+    if (request.method === "POST" && requestPath === "/__startup_stage") {
+      let stage = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => { stage += chunk; });
+      request.on("end", () => {
+        startupStages.push(stage);
+        log(`시작 단계: ${stage}`);
+        if (stage === "첫 화면 표시 완료")
+          finishStartup();
+        response.writeHead(204).end();
+      });
+      return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error("시험용 웹 서버가 시작되지 않았습니다.");
+
+    const relativePath = decodeURIComponent(requestPath).replace(/^\/+/, "");
+    const filePath = path.resolve(siteRoot, relativePath || "index.html");
+    if (filePath !== siteRoot && !filePath.startsWith(`${siteRoot}${path.sep}`)) {
+      response.writeHead(403).end();
+      return;
+    }
+
+    fs.createReadStream(filePath)
+      .on("error", () => response.writeHead(404).end())
+      .on("open", () => {
+        const contentType = mimeTypes[path.extname(filePath)] || "application/octet-stream";
+        response.writeHead(200, { "Content-Type": contentType });
+      })
+      .pipe(response);
+  });
 }
 
 async function run() {
+  const server = createServer();
   let browser;
-  let page;
+  let timedOut = false;
   try {
-    await waitForServer();
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(port, "127.0.0.1", resolve);
+    });
+
     browser = await chromium.launch({
       headless: true,
       args: [
@@ -53,63 +78,49 @@ async function run() {
         "--enable-unsafe-swiftshader",
       ],
     });
-    page = await browser.newPage();
+    const page = await browser.newPage();
     page.on("console", (message) => {
-      const text = message.text();
-      if (text.startsWith("[시뮬레이터 시작] "))
-        lastStartupStage = text.slice("[시뮬레이터 시작] ".length);
-      else if (text.startsWith("[웹 시작] "))
-        lastStartupStage = text.slice("[웹 시작] ".length);
-      if (message.type() === "error" || text.startsWith("[시뮬레이터 시작] ")
-        || text.startsWith("[웹 시작] "))
-        record(`브라우저 ${message.type()}: ${text}`);
+      if (message.type() === "error")
+        log(`브라우저 오류: ${message.text()}`);
     });
-    page.on("pageerror", (error) => record(`페이지 오류: ${error.stack || error.message}`));
+    page.on("pageerror", (error) => log(`페이지 오류: ${error.stack || error.message}`));
     page.on("requestfailed", (request) => {
-      record(`요청 실패: ${request.url()} (${request.failure()?.errorText || "원인 없음"})`);
-    });
-    page.on("response", (response) => {
-      if (response.status() >= 400)
-        record(`HTTP ${response.status()}: ${response.url()}`);
-      else if (/aerosimlab_simulator\.(js|wasm)/.test(response.url()))
-        record(`HTTP ${response.status()}: ${response.url()}`);
+      log(`요청 실패: ${request.url()} (${request.failure()?.errorText || "원인 없음"})`);
     });
 
     await page.goto(`http://127.0.0.1:${port}/`, {
-      waitUntil: "domcontentloaded",
+      waitUntil: "commit",
       timeout: 15000,
     });
-    await page.waitForFunction(
-      () => document.querySelector("#startup-status")?.hidden === true,
-      null,
-      { timeout: 45000 }
-    );
-    record("브라우저에서 첫 화면 표시를 확인했습니다.");
-  } catch (error) {
-    record(`브라우저 검사 실패: ${error.stack || error.message}`);
-    record(`마지막 시작 단계: ${lastStartupStage}`);
-    if (page) {
-      try {
-        const state = await page.evaluate(() => ({
-          readyState: document.readyState,
-          startupText: document.querySelector("#startup-message")?.textContent,
-          startupHidden: document.querySelector("#startup-status")?.hidden,
-          canvasSize: [document.querySelector("#canvas")?.width, document.querySelector("#canvas")?.height],
-          runtimeInitialized: window.Module?.calledRun ?? "확인할 수 없음",
-          pendingDependencies: window.Module?.runDependencies ?? "확인할 수 없음",
-        }));
-        record(`브라우저 현재 상태: ${JSON.stringify(state)}`);
-      } catch (snapshotError) {
-        record(`브라우저 현재 상태를 읽지 못했습니다: ${snapshotError.message}`);
-      }
+
+    let startupTimeout;
+    timedOut = await Promise.race([
+      startupFinished.then(() => false),
+      new Promise((resolve) => {
+        startupTimeout = setTimeout(() => resolve(true), 30000);
+      }),
+    ]);
+    clearTimeout(startupTimeout);
+    if (timedOut) {
+      log(`첫 화면이 나오지 않았습니다. 마지막 시작 단계: ${startupStages.at(-1) || "시작 단계 신호가 없음"}`);
+      process.exitCode = 1;
+    } else {
+      log("Chromium에서 첫 화면 표시를 확인했습니다.");
     }
-    if (diagnostics.length === 0)
-      record("브라우저 오류·실패한 요청·C++ 시작 단계가 기록되지 않았습니다.");
+  } catch (error) {
+    log(`웹 실행 검사 오류: ${error.stack || error.message}`);
+    log(`마지막 시작 단계: ${startupStages.at(-1) || "시작 단계 신호가 없음"}`);
     process.exitCode = 1;
   } finally {
-    if (browser)
-      await browser.close().catch((error) => record(`브라우저 종료 오류: ${error.message}`));
-    server.kill();
+    if (browser) {
+      const browserProcess = browser.process();
+      await Promise.race([
+        browser.close(),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+      browserProcess?.kill("SIGKILL");
+    }
+    await new Promise((resolve) => server.close(resolve));
   }
 }
 
