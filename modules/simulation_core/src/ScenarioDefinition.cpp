@@ -61,6 +61,39 @@ double ReadFiniteNumber(const Json& value, const char* name)
     return number;
 }
 
+CameraModel ReadCameraModel(const Json& value)
+{
+    if (!value.is_object())
+        throw std::invalid_argument("camera_model은 객체여야 합니다.");
+
+    CameraModel model;
+    if (const auto width = value.find("image_width_pixels"); width != value.end())
+    {
+        const std::uint64_t parsed = ReadUnsigned(*width, "image_width_pixels");
+        if (parsed == 0 || parsed > static_cast<std::uint64_t>(
+                CameraModel::maximumImageDimensionPixels))
+            throw std::invalid_argument("image_width_pixels는 1부터 8192 사이여야 합니다.");
+        model.imageWidthPixels = static_cast<int>(parsed);
+    }
+    if (const auto height = value.find("image_height_pixels"); height != value.end())
+    {
+        const std::uint64_t parsed = ReadUnsigned(*height, "image_height_pixels");
+        if (parsed == 0 || parsed > static_cast<std::uint64_t>(
+                CameraModel::maximumImageDimensionPixels))
+            throw std::invalid_argument("image_height_pixels는 1부터 8192 사이여야 합니다.");
+        model.imageHeightPixels = static_cast<int>(parsed);
+    }
+    if (const auto fov = value.find("vertical_field_of_view_degrees");
+        fov != value.end())
+        model.verticalFieldOfViewDegrees = ReadFiniteNumber(
+            *fov, "vertical_field_of_view_degrees");
+
+    if (!model.IsValid())
+        throw std::invalid_argument(
+            "카메라 해상도는 양수이고 세로 시야각은 0도보다 크고 180도보다 작아야 합니다.");
+    return model;
+}
+
 glm::dvec3 ReadVector(const Json& value, const char* name)
 {
     if (!value.is_array() || value.size() != 3)
@@ -291,11 +324,14 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
             ? 100.0 : ReadFiniteNumber(*initialBattery, "initial_battery_percent");
         if (initialBatteryPercent < 0.0 || initialBatteryPercent > 100.0)
             throw std::invalid_argument("initial_battery_percent는 0부터 100 사이여야 합니다.");
+        std::optional<CameraModel> cameraModel;
+        if (const auto camera = item.find("camera_model"); camera != item.end())
+            cameraModel = ReadCameraModel(*camera);
         drones.push_back({std::move(name), ReadVector(
             Required(item, "initial_position_meters"), "initial_position_meters"),
             initialYawRadians, initialVelocity, initialOrientation,
             initialAngularVelocity, initialMotorSpeeds, initialMode, hasFullInitialState,
-            batteryCapacity, initialBatteryPercent});
+            batteryCapacity, initialBatteryPercent, cameraModel});
     }
     return drones;
 }
@@ -1232,6 +1268,8 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
         throw std::invalid_argument("ticks는 1부터 5,184,000 사이여야 합니다.");
 
     definition.drones = ReadDrones(document);
+    if (const auto camera = document.find("camera_model"); camera != document.end())
+        definition.defaultCameraModel = ReadCameraModel(*camera);
     definition.primaryDroneName = definition.drones.empty()
         ? "drone" : definition.drones.front().name;
     std::unordered_set<std::string> droneNames;

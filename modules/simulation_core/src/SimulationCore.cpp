@@ -698,6 +698,13 @@ const CameraState& SimulationCore::Camera(DroneId droneId) const
     return ecs_->FindDrone(droneId).get<CameraState>();
 }
 
+void SimulationCore::SetCameraModel(DroneId droneId, const CameraModel& model)
+{
+    if (!model.IsValid())
+        throw std::invalid_argument("카메라 해상도는 양수이고 시야각은 0도보다 크고 180도보다 작아야 합니다.");
+    ecs_->FindDrone(droneId).get_mut<CameraState>().model = model;
+}
+
 void SimulationCore::SetCameraEnabled(bool enabled) noexcept
 {
     EoCameraModel::SetEnabled(

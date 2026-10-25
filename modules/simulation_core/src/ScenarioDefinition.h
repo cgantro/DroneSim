@@ -47,6 +47,7 @@ struct ScenarioDrone
     bool hasFullInitialState = false;
     std::optional<double> batteryCapacityWattHours;
     double initialBatteryPercent = 100.0;
+    std::optional<CameraModel> cameraModel;
 };
 
 struct FormationOutage
@@ -116,6 +117,7 @@ struct ScenarioDefinition
     std::uint64_t tickCount = 0;
     std::vector<ScenarioDrone> drones;
     std::string primaryDroneName;
+    CameraModel defaultCameraModel;
     std::vector<ScheduledCommand> commands;
     std::vector<FormationLink> formationLinks;
     std::vector<DroneCommunicationOutage> communicationOutages;

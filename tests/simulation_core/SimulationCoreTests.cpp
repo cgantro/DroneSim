@@ -192,6 +192,9 @@ void Verify_SimulationCore_TracksEachDroneCameraIndependently()
     const DroneId primary = simulation.PrimaryDroneId();
     const DroneId second = simulation.AddDrone({4.0, 2.0, 3.0}, 0.5);
 
+    const CameraModel highResolutionCamera{1920, 1080, 60.0};
+    simulation.SetCameraModel(second, highResolutionCamera);
+
     simulation.SetCameraEnabled(primary, false);
     simulation.SetCameraFault(second, true);
     simulation.AdvanceOneTick();
@@ -212,6 +215,12 @@ void Verify_SimulationCore_TracksEachDroneCameraIndependently()
     simulation.Reset();
     EXPECT_EQ(simulation.Camera(primary).frameCount, 0U);
     EXPECT_EQ(simulation.Camera(second).frameCount, 0U);
+    EXPECT_EQ(simulation.Camera(second).model.imageWidthPixels, 1920);
+    EXPECT_EQ(simulation.Camera(second).model.imageHeightPixels, 1080);
+    EXPECT_DOUBLE_EQ(
+        simulation.Camera(second).model.verticalFieldOfViewDegrees, 60.0);
+    EXPECT_THROW(simulation.SetCameraModel(second, CameraModel{0, 1080, 60.0}),
+        std::invalid_argument);
 }
 
 void Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels()

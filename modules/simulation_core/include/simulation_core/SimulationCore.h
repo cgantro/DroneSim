@@ -142,6 +142,9 @@ public:
     /** @brief 지정한 드론에 탑재된 카메라 상태를 반환한다. */
     [[nodiscard]] const CameraState& Camera(DroneId droneId) const;
 
+    /** @brief 지정한 드론에 탑재할 카메라 해상도와 시야각을 설정한다. */
+    void SetCameraModel(DroneId droneId, const CameraModel& model);
+
     /** @brief 카메라를 켜거나 끈다. 고장 상태는 복구 명령으로만 해제된다. */
     void SetCameraEnabled(bool enabled) noexcept;
 

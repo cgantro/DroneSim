@@ -204,6 +204,31 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
     EXPECT_TRUE(successful.mission->tasks[0].firstGeometryCaptureTick.has_value());
     EXPECT_EQ(successful.mission->tasks[0].lastCaptureAssessment,
         CaptureAssessment::Ready);
+    EXPECT_EQ(successful.drones[0].finalCamera.model.imageWidthPixels, 1280);
+
+    nlohmann::json differentCameraModels = nlohmann::json::parse(source);
+    differentCameraModels["camera_model"] = {
+        {"image_width_pixels", 1920},
+        {"image_height_pixels", 1080},
+        {"vertical_field_of_view_degrees", 60.0}};
+    differentCameraModels["drones"][0]["camera_model"] = {
+        {"image_width_pixels", 160},
+        {"image_height_pixels", 120},
+        {"vertical_field_of_view_degrees", 70.0}};
+    const ScenarioResult differentCameras = RunScenario(differentCameraModels.dump());
+    EXPECT_EQ(differentCameras.drones[0].finalCamera.model.imageWidthPixels, 160);
+    EXPECT_EQ(differentCameras.drones[0].finalCamera.model.imageHeightPixels, 120);
+    EXPECT_EQ(differentCameras.drones[1].finalCamera.model.imageWidthPixels, 1920);
+    EXPECT_EQ(differentCameras.drones[1].finalCamera.model.imageHeightPixels, 1080);
+    ASSERT_TRUE(differentCameras.mission.has_value());
+    EXPECT_FALSE(differentCameras.mission->tasks[0].completed);
+    EXPECT_EQ(differentCameras.mission->tasks[0].lastCaptureAssessment,
+        CaptureAssessment::ResolutionTooLow);
+    EXPECT_TRUE(differentCameras.mission->tasks[1].completed);
+
+    nlohmann::json invalidCamera = nlohmann::json::parse(source);
+    invalidCamera["drones"][0]["camera_model"]["vertical_field_of_view_degrees"] = 180;
+    EXPECT_THROW(static_cast<void>(RunScenario(invalidCamera.dump())), std::invalid_argument);
 
     nlohmann::json withCameraDisabled = nlohmann::json::parse(source);
     withCameraDisabled["camera_events"] = nlohmann::json::array({

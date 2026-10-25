@@ -13,6 +13,17 @@ constexpr glm::dvec3 cameraMountPositionBodyMeters{0.35, 0.0, 0.12};
 constexpr glm::dvec3 cameraOpticalAxisBody{25.0, 0.0, -2.5};
 }
 
+bool CameraModel::IsValid() const noexcept
+{
+    return imageWidthPixels > 0
+        && imageWidthPixels <= maximumImageDimensionPixels
+        && imageHeightPixels > 0
+        && imageHeightPixels <= maximumImageDimensionPixels
+        && std::isfinite(verticalFieldOfViewDegrees)
+        && verticalFieldOfViewDegrees > 0.0
+        && verticalFieldOfViewDegrees < 180.0;
+}
+
 void EoCameraModel::AdvanceOneTick(CameraState& state, std::uint64_t tick) noexcept
 {
     if (state.status != CameraStatus::Active)
@@ -65,11 +76,12 @@ CaptureAssessment EoCameraModel::AssessCapture(
     const glm::dvec3 cameraUp = UpAxis(camera);
     const glm::dvec3 right = glm::normalize(glm::cross(forward, cameraUp));
     const glm::dvec3 up = glm::normalize(glm::cross(right, forward));
-    const double verticalFovRadians = glm::radians(camera.verticalFieldOfViewDegrees);
+    const double verticalFovRadians = glm::radians(
+        camera.model.verticalFieldOfViewDegrees);
     const double tangentHalfVerticalFov = std::tan(verticalFovRadians * 0.5);
     const double tangentHalfHorizontalFov = tangentHalfVerticalFov
-        * static_cast<double>(camera.imageWidthPixels)
-        / static_cast<double>(camera.imageHeightPixels);
+        * static_cast<double>(camera.model.imageWidthPixels)
+        / static_cast<double>(camera.model.imageHeightPixels);
     const glm::dvec3 heightAxis = glm::normalize(
         glm::cross(surface.normal, surface.widthAxis));
 
@@ -83,9 +95,9 @@ CaptureAssessment EoCameraModel::AssessCapture(
         surface.centerMeters + surface.widthAxis * (surface.widthMeters * 0.5)
             + heightAxis * (surface.heightMeters * 0.5)};
 
-    double leftmostPixel = static_cast<double>(camera.imageWidthPixels);
+    double leftmostPixel = static_cast<double>(camera.model.imageWidthPixels);
     double rightmostPixel = 0.0;
-    double topmostPixel = static_cast<double>(camera.imageHeightPixels);
+    double topmostPixel = static_cast<double>(camera.model.imageHeightPixels);
     double bottommostPixel = 0.0;
     for (const glm::dvec3& corner : corners)
     {
@@ -104,9 +116,9 @@ CaptureAssessment EoCameraModel::AssessCapture(
             return CaptureAssessment::OutsideFrame;
 
         const double pixelX = (normalizedX * 0.5 + 0.5)
-            * static_cast<double>(camera.imageWidthPixels);
+            * static_cast<double>(camera.model.imageWidthPixels);
         const double pixelY = (0.5 - normalizedY * 0.5)
-            * static_cast<double>(camera.imageHeightPixels);
+            * static_cast<double>(camera.model.imageHeightPixels);
         leftmostPixel = std::min(leftmostPixel, pixelX);
         rightmostPixel = std::max(rightmostPixel, pixelX);
         topmostPixel = std::min(topmostPixel, pixelY);
@@ -141,7 +153,9 @@ void EoCameraModel::Recover(CameraState& state) noexcept
 
 void EoCameraModel::Reset(CameraState& state) noexcept
 {
+    const CameraModel model = state.model;
     state = {};
+    state.model = model;
 }
 
 std::string_view ToString(CameraStatus status) noexcept

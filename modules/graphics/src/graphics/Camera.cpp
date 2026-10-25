@@ -2,6 +2,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <cmath>
 #include <stdexcept>
 
 namespace aerosimlab::graphics
@@ -51,6 +52,13 @@ void Camera::SetAspectRatio(float aspectRatio)
 {
     if (aspectRatio <= 0.0F) return;
     m_AspectRatio = aspectRatio;
+}
+
+void Camera::SetFieldOfViewDegrees(float fovDegrees)
+{
+    if (!std::isfinite(fovDegrees) || fovDegrees <= 0.0F || fovDegrees >= 180.0F)
+        return;
+    m_Fov = fovDegrees;
 }
 
 void Camera::SetPosition(const glm::vec3& position)

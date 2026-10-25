@@ -74,6 +74,10 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
             {"state", ToJson(drone.finalState)},
             {"camera", {
                 {"status", aerosimlab::simulation::ToString(drone.finalCamera.status)},
+                {"image_width_pixels", drone.finalCamera.model.imageWidthPixels},
+                {"image_height_pixels", drone.finalCamera.model.imageHeightPixels},
+                {"vertical_field_of_view_degrees",
+                    drone.finalCamera.model.verticalFieldOfViewDegrees},
                 {"frame_count", drone.finalCamera.frameCount},
                 {"last_frame_tick", drone.finalCamera.lastFrameTick}}},
             {"communication_status", communicationStatusName(drone.communicationStatus)},
@@ -219,6 +223,10 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
         {"collision_avoidance_events", result.collisionAvoidanceEvents},
         {"camera", {
             {"status", aerosimlab::simulation::ToString(result.finalCamera.status)},
+            {"image_width_pixels", result.finalCamera.model.imageWidthPixels},
+            {"image_height_pixels", result.finalCamera.model.imageHeightPixels},
+            {"vertical_field_of_view_degrees",
+                result.finalCamera.model.verticalFieldOfViewDegrees},
             {"frame_count", result.finalCamera.frameCount},
             {"last_frame_tick", result.finalCamera.lastFrameTick}
         }},

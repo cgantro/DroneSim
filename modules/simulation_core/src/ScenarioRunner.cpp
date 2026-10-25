@@ -294,7 +294,9 @@ DroneIds CreateScenarioDrones(
     DroneIds droneIds;
     if (definition.drones.empty())
     {
-        droneIds.emplace(definition.primaryDroneName, simulation.PrimaryDroneId());
+        const DroneId id = simulation.PrimaryDroneId();
+        simulation.SetCameraModel(id, definition.defaultCameraModel);
+        droneIds.emplace(definition.primaryDroneName, id);
         return droneIds;
     }
 
@@ -303,6 +305,8 @@ DroneIds CreateScenarioDrones(
     {
         const DroneId id = simulation.AddDrone(
             drone.initialPositionMeters, drone.initialYawRadians);
+        simulation.SetCameraModel(
+            id, drone.cameraModel.value_or(definition.defaultCameraModel));
         droneIds.emplace(drone.name, id);
         if (drone.hasFullInitialState)
         {

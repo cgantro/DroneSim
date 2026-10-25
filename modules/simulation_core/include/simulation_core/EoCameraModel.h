@@ -22,6 +22,19 @@ enum class CameraStatus
     Fault
 };
 
+/** @brief 카메라 모델이 만드는 영상의 크기와 시야각이다. */
+struct CameraModel
+{
+    static constexpr int maximumImageDimensionPixels = 8192;
+
+    int imageWidthPixels = 1280;
+    int imageHeightPixels = 960;
+    double verticalFieldOfViewDegrees = 70.0;
+
+    /** @brief 영상 크기와 시야각이 사용할 수 있는 값인지 확인한다. */
+    [[nodiscard]] bool IsValid() const noexcept;
+};
+
 /**
  * @brief 카메라 동작 상태와 드론에 고정된 위치·자세를 보관한다.
  * @details 위치는 월드 좌표계의 미터 단위다. 카메라 중심은 기체 기준 앞쪽 0.35m, 위쪽 0.12m에 두며,
@@ -30,12 +43,7 @@ enum class CameraStatus
 struct CameraState
 {
     CameraStatus status = CameraStatus::Active;
-    /** @brief 탑재 카메라가 한 프레임에 만드는 가로 픽셀 수다. X500 단안 카메라는 1280이다. */
-    int imageWidthPixels = 1280;
-    /** @brief 탑재 카메라가 한 프레임에 만드는 세로 픽셀 수다. X500 단안 카메라는 960이다. */
-    int imageHeightPixels = 960;
-    /** @brief 카메라 영상의 위아래 시야각이다. 렌더링과 점검면 판정이 함께 사용한다. */
-    double verticalFieldOfViewDegrees = 70.0;
+    CameraModel model;
     std::uint64_t frameCount = 0;
     std::uint64_t lastFrameTick = 0;
     glm::dvec3 positionMeters{0.0};

@@ -63,6 +63,9 @@ public:
     /** @brief 화면 너비/높이 비율을 갱신한다. @param aspectRatio 화면 너비를 높이로 나눈 값. 양수만 반영한다. */
     void SetAspectRatio(float aspectRatio);
 
+    /** @brief 카메라 위아래 시야각을 갱신한다. @param fovDegrees 세로 시야각 [deg] */
+    void SetFieldOfViewDegrees(float fovDegrees);
+
     /** @brief 장면 좌표에서 카메라 위치 [m]를 갱신한다. @param position 새 위치 */
     void SetPosition(const glm::vec3& position);
 

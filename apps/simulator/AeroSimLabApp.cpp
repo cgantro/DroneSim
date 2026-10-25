@@ -414,7 +414,7 @@ void AeroSimLabApp::InitializeRendererAndCameras()
         45.0F, 0.1F, 120.0F);
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F,
-        static_cast<float>(simulation_.Camera().verticalFieldOfViewDegrees),
+        static_cast<float>(simulation_.Camera().model.verticalFieldOfViewDegrees),
         0.05F, 200.0F);
 }
 
@@ -684,7 +684,7 @@ void AeroSimLabApp::RenderFrame()
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
-            camera.imageWidthPixels, camera.imageHeightPixels,
+            camera.model.imageWidthPixels, camera.model.imageHeightPixels,
             missionDistanceMeters, missionComplete,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this] { return RenderCameraPanel(); },
@@ -730,6 +730,8 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
     eoCamera_->SetTarget(cameraPosition + viewDirection);
     eoCamera_->SetUp(cameraUp);
     eoCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
+    eoCamera_->SetFieldOfViewDegrees(
+        static_cast<float>(cameraState.model.verticalFieldOfViewDegrees));
 }
 
 void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,

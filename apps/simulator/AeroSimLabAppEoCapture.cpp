@@ -23,8 +23,8 @@ std::uint32_t AeroSimLabApp::RenderScenePanel(int width, int height)
 std::uint32_t AeroSimLabApp::RenderCameraPanel()
 {
     const auto& camera = simulation_.Camera();
-    const int imageWidth = camera.imageWidthPixels;
-    const int imageHeight = camera.imageHeightPixels;
+    const int imageWidth = camera.model.imageWidthPixels;
+    const int imageHeight = camera.model.imageHeightPixels;
     const bool targetSizeChanged = cameraTarget_->GetWidth() != imageWidth
         || cameraTarget_->GetHeight() != imageHeight;
     cameraTarget_->Resize(imageWidth, imageHeight);
