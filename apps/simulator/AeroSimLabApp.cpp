@@ -20,7 +20,9 @@
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
 #include "terrain/MapBuildings.h"
+#include "terrain/MapRoads.h"
 #include "terrain/TerrainGrid.h"
+#include <glm/geometric.hpp>
 #include <glm/gtc/quaternion.hpp>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -243,6 +245,62 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
                 {topFirst, normal, {0.0F, 1.0F}}});
             indices.insert(indices.end(), {wallStart, wallStart + 1U, wallStart + 2U,
                 wallStart, wallStart + 2U, wallStart + 3U});
+        }
+    }
+
+    if (indices.empty())
+        return {};
+    return std::make_unique<aerosimlab::graphics::Mesh>(
+        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
+        indices.data(), static_cast<std::uint32_t>(indices.size()));
+}
+
+std::unique_ptr<aerosimlab::graphics::Mesh> CreateRoadMesh(
+    const std::vector<aerosimlab::terrain::MapRoad>& roads,
+    bool bridgeOnly)
+{
+    std::vector<aerosimlab::graphics::Vertex> vertices;
+    std::vector<std::uint32_t> indices;
+    for (const auto& road : roads)
+    {
+        if (road.bridge != bridgeOnly || road.centerlineMeters.size() < 2U)
+            continue;
+
+        for (std::size_t pointIndex = 1;
+            pointIndex < road.centerlineMeters.size(); ++pointIndex)
+        {
+            const glm::dvec3& first = road.centerlineMeters[pointIndex - 1U];
+            const glm::dvec3& second = road.centerlineMeters[pointIndex];
+            const glm::dvec2 direction{second.x - first.x, second.y - first.y};
+            const double length = glm::length(direction);
+            if (!(length > 1.0e-6))
+                continue;
+
+            const glm::dvec2 halfWidth{-direction.y, direction.x};
+            const glm::dvec2 lateralOffset = halfWidth
+                * (road.widthMeters / (2.0 * length));
+            constexpr double surfaceOffsetMeters = 0.15;
+            const auto toSurface = [surfaceOffsetMeters](
+                const glm::dvec3& center, const glm::dvec2& offset)
+            {
+                return ToRenderPosition({center.x + offset.x,
+                    center.y + offset.y, center.z + surfaceOffsetMeters});
+            };
+            const glm::vec3 firstLeft = toSurface(first, lateralOffset);
+            const glm::vec3 firstRight = toSurface(first, -lateralOffset);
+            const glm::vec3 secondLeft = toSurface(second, lateralOffset);
+            const glm::vec3 secondRight = toSurface(second, -lateralOffset);
+            const glm::vec3 normal = glm::normalize(glm::cross(
+                firstRight - firstLeft, secondRight - firstLeft));
+            const auto firstVertex = static_cast<std::uint32_t>(vertices.size());
+            vertices.insert(vertices.end(), {
+                {firstLeft, normal, {0.0F, 0.0F}},
+                {firstRight, normal, {0.0F, 1.0F}},
+                {secondRight, normal, {1.0F, 1.0F}},
+                {secondLeft, normal, {1.0F, 0.0F}}});
+            indices.insert(indices.end(), {firstVertex, firstVertex + 1U,
+                firstVertex + 2U, firstVertex, firstVertex + 2U,
+                firstVertex + 3U});
         }
     }
 
@@ -634,6 +692,10 @@ void AeroSimLabApp::LoadScene()
     terrainMesh_ = CreateTerrainMesh(terrainGrid_);
     const auto buildings = aerosimlab::terrain::LoadMapBuildings(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+    const auto roads = aerosimlab::terrain::LoadMapRoads(
+        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+    roadMesh_ = CreateRoadMesh(roads, false);
+    bridgeMesh_ = CreateRoadMesh(roads, true);
     taggedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::OsmHeightTag);
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
@@ -909,6 +971,12 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 {
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
         view, projection, cameraPosition);
+    if (roadMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *roadMesh_, roadMaterial_, *shader_,
+            view, projection, cameraPosition);
+    if (bridgeMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *bridgeMesh_, bridgeMaterial_, *shader_,
+            view, projection, cameraPosition);
     if (taggedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, buildingMaterial_,
             *shader_, view, projection, cameraPosition);

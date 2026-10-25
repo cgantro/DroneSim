@@ -45,7 +45,7 @@ namespace aerosimlab::simulator
 class SimulatorHud;
 
 /**
- * @brief 드론 모의를 진행하고 실내 수색 장면과 탑재 카메라 영상을 그린다.
+ * @brief 드론 모의를 진행하고 탄천 지형·건물·도로·교량 선형과 카메라 영상을 그린다.
  * @details 드론 위치는 미터, 모의 간격은 1/60초다. 장면과 카메라 영상은 크기와 위치를 바꿀 수 있는 별도 패널에 표시한다.
  * 화면 갱신 속도와 모의 속도를 분리해, 렌더링이 느려져도 같은 고정 간격으로 드론 상태를 계산한다.
  */
@@ -119,7 +119,7 @@ private:
 #ifdef __EMSCRIPTEN__
     bool webFirstFrameRendered_ = false;
 #endif
-    /** @brief 실내 수색 장면과 강체 월드의 충돌 모양을 준비한다. */
+    /** @brief 지형·지도 형상·드론 모형과 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
@@ -274,6 +274,8 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> roadMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> bridgeMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
@@ -286,6 +288,10 @@ private:
         glm::vec4{1.0F}, 0.16F, 0.40F};
     aerosimlab::graphics::Material groundMaterial_{
         glm::vec4{0.25F, 0.40F, 0.25F, 1.0F}, 0.0F, 0.92F};
+    aerosimlab::graphics::Material roadMaterial_{
+        glm::vec4{0.22F, 0.25F, 0.27F, 1.0F}, 0.0F, 0.95F};
+    aerosimlab::graphics::Material bridgeMaterial_{
+        glm::vec4{0.55F, 0.37F, 0.22F, 1.0F}, 0.0F, 0.88F};
     aerosimlab::graphics::Material buildingMaterial_{
         glm::vec4{0.57F, 0.61F, 0.65F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material estimatedBuildingMaterial_{

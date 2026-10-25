@@ -1,6 +1,8 @@
 #include "terrain/MapBuildings.h"
+#include "terrain/MapRoads.h"
 #include "terrain/TerrainGrid.h"
 
+#include <algorithm>
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -68,6 +70,36 @@ void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
     EXPECT_GE(estimatedHeightCount, 10U);
 }
 
+void Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths()
+{
+    const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/tancheon/terrain.aerotrn");
+    const std::vector<MapRoad> roads = LoadMapRoads(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+
+    std::size_t bridgeCount = 0U;
+    bool foundTancheonBridge = false;
+    for (const MapRoad& road : roads)
+    {
+        EXPECT_FALSE(road.osmId.empty());
+        EXPECT_GE(road.centerlineMeters.size(), 2U);
+        EXPECT_GT(road.widthMeters, 0.0);
+        if (road.bridge)
+        {
+            ++bridgeCount;
+            foundTancheonBridge = foundTancheonBridge || road.name == "탄천교";
+        }
+    }
+
+    EXPECT_GT(roads.size(), 100U);
+    EXPECT_GT(bridgeCount, 0U);
+    EXPECT_TRUE(foundTancheonBridge);
+    EXPECT_NE(std::find_if(roads.begin(), roads.end(), [](const MapRoad& road)
+        { return road.widthSource == RoadWidthSource::EstimatedFromRoadType; }),
+        roads.end());
+}
+
 TEST(TerrainGridTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
@@ -75,6 +107,8 @@ TEST(TerrainGridTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths());
 }
 
 }
