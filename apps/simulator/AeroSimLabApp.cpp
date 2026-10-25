@@ -19,8 +19,6 @@
 #endif
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
-#include "terrain/BuildingFootprint.h"
-#include "terrain/StaticFacility.h"
 #include "terrain/TerrainGrid.h"
 #include <glm/gtc/quaternion.hpp>
 #ifndef __EMSCRIPTEN__
@@ -51,18 +49,13 @@ namespace
 {
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
-// 산의 높낮이가 화면에서 보이도록 지형과 그 위의 물체를 세로로 두 배 그린다.
-constexpr float terrainReliefScale = 2.0F;
 // 창이 멈춘 뒤 밀린 시간을 전부 따라잡느라 다음 화면까지 늦어지지 않게 한다.
 constexpr std::size_t smokeTestFrameLimit = 8;
 // 소프트웨어 렌더러에서도 네트워크 스모크의 모의가 화면 속도에 묶이지 않게 한다.
 constexpr std::size_t networkSmokeSimulationBatchesPerFrame = 5;
 constexpr std::size_t demoLengthTicks = 900;
-// 지도 원점은 경사가 급해 이륙이 막히므로 주변에서 고른 완만한 지점을 쓴다.
-constexpr glm::dvec2 demoDroneStartMeters{171.3545, -92.7667};
+constexpr glm::dvec2 demoDroneStartMeters{0.0, -9.0};
 constexpr double benchmarkDurationSeconds = 5.0;
-// OSM에 높이가 없어서 시연 상자에만 쓰는 명시적 가정이다. 실측값이 아니다.
-constexpr float missingBuildingHeightProxyMeters = 3.0F;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -74,8 +67,7 @@ glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
     // 모의는 Z축을 위로 쓰고 화면은 Y축을 위로 쓴다. Y축 방향은 화면의 -Z로 옮겨 오른손 좌표계를 유지한다.
     return glm::vec3{
         static_cast<float>(positionMeters.x), static_cast<float>(positionMeters.z),
-        static_cast<float>(-positionMeters.y)}
-        * glm::vec3{1.0F, terrainReliefScale, 1.0F};
+        static_cast<float>(-positionMeters.y)};
 }
 
 glm::quat ToRenderOrientation(const glm::dquat& orientation)
@@ -97,90 +89,79 @@ glm::mat4 CubeTransform(const glm::vec3& position, const glm::vec3& size)
     return glm::translate(glm::mat4{1.0F}, position) * glm::scale(glm::mat4{1.0F}, size);
 }
 
+#ifdef __EMSCRIPTEN__
 /**
- * @brief 높이 격자의 각 칸을 화면에 그릴 정점으로 바꾼다.
- * @details 높이 차이로 지표면의 법선을 구하고, 격자 위치를 텍스처 좌표로 정규화한다.
+ * @brief 웹 화면에서 빠르게 그릴 간단한 쿼드콥터 모형을 만든다.
+ * @details 상세한 기체 GLB 대신 몸체·팔·모터·프로펠러를 상자 13개로 묶어 그린다.
  */
-std::vector<aerosimlab::graphics::Vertex> BuildTerrainVertices(
-    const aerosimlab::terrain::TerrainGrid& terrain)
+std::unique_ptr<aerosimlab::graphics::Mesh> CreateWebDroneMesh()
 {
-    const std::size_t sampleCount = terrain.sampleCount;
-    const std::size_t vertexCount = sampleCount * sampleCount;
-    std::vector<aerosimlab::graphics::Vertex> vertices(vertexCount);
-    const auto heightAt = [&terrain, sampleCount](std::size_t row, std::size_t column)
+    std::vector<aerosimlab::graphics::Vertex> vertices;
+    std::vector<std::uint32_t> indices;
+    constexpr std::array<std::array<std::uint32_t, 4>, 6> faces{{
+        {{0U, 1U, 2U, 3U}}, {{5U, 4U, 7U, 6U}},
+        {{4U, 0U, 3U, 7U}}, {{1U, 5U, 6U, 2U}},
+        {{3U, 2U, 6U, 7U}}, {{4U, 5U, 1U, 0U}}
+    }};
+    const std::array<glm::vec3, 8> corners{{
+        {-0.5F, -0.5F, -0.5F}, {0.5F, -0.5F, -0.5F},
+        {0.5F, 0.5F, -0.5F}, {-0.5F, 0.5F, -0.5F},
+        {-0.5F, -0.5F, 0.5F}, {0.5F, -0.5F, 0.5F},
+        {0.5F, 0.5F, 0.5F}, {-0.5F, 0.5F, 0.5F}
+    }};
+    const auto addBox = [&](const glm::vec3& center, const glm::vec3& size, float angle)
     {
-        return terrain.heightOffsetsMeters[row * sampleCount + column];
+        const glm::mat4 rotation = glm::rotate(
+            glm::mat4{1.0F}, angle, glm::vec3{0.0F, 1.0F, 0.0F});
+        const std::uint32_t first = static_cast<std::uint32_t>(vertices.size());
+        for (const auto& face : faces)
+        {
+            const glm::vec3 a = corners[face[0]] * size;
+            const glm::vec3 b = corners[face[1]] * size;
+            const glm::vec3 c = corners[face[2]] * size;
+            const glm::vec3 normal = glm::normalize(glm::cross(c - a, b - a));
+            for (const std::uint32_t corner : face)
+            {
+                const glm::vec3 local = corners[corner] * size;
+                vertices.push_back({
+                    center + glm::vec3(rotation * glm::vec4{local, 0.0F}),
+                    glm::normalize(glm::vec3(rotation * glm::vec4{normal, 0.0F})),
+                    {0.0F, 0.0F}});
+            }
+        }
+        for (std::uint32_t face = 0; face < 6U; ++face)
+        {
+            const std::uint32_t start = first + face * 4U;
+            indices.insert(indices.end(), {start, start + 2U, start + 1U,
+                start, start + 3U, start + 2U});
+        }
     };
 
-    const float center = static_cast<float>(sampleCount - 1U) * 0.5F;
-    for (std::size_t row = 0; row < sampleCount; ++row)
+    addBox({}, {0.42F, 0.12F, 0.28F}, 0.0F);
+    constexpr std::array<float, 2> sides{-1.0F, 1.0F};
+    for (const float xSide : sides)
     {
-        const std::size_t beforeRow = row == 0U ? row : row - 1U;
-        const std::size_t afterRow = std::min(row + 1U, sampleCount - 1U);
-        for (std::size_t column = 0; column < sampleCount; ++column)
+        for (const float zSide : sides)
         {
-            const std::size_t beforeColumn = column == 0U ? column : column - 1U;
-            const std::size_t afterColumn = std::min(column + 1U, sampleCount - 1U);
-            const float eastWestDistance = static_cast<float>(afterColumn - beforeColumn)
-                * terrain.spacingXMeters;
-            const float northSouthDistance = static_cast<float>(afterRow - beforeRow)
-                * terrain.spacingYMeters;
-            const float slopeEast = eastWestDistance > 0.0F
-                ? (heightAt(row, afterColumn) - heightAt(row, beforeColumn)) / eastWestDistance
-                : 0.0F;
-            const float slopeSouth = northSouthDistance > 0.0F
-                ? (heightAt(afterRow, column) - heightAt(beforeRow, column)) / northSouthDistance
-                : 0.0F;
-            const glm::vec3 normal = glm::normalize(glm::vec3{
-                -slopeEast * terrainReliefScale, 1.0F,
-                -slopeSouth * terrainReliefScale});
-            vertices[row * sampleCount + column] = {
-                glm::vec3{
-                    (static_cast<float>(column) - center) * terrain.spacingXMeters,
-                    heightAt(row, column) * terrainReliefScale,
-                    (static_cast<float>(row) - center) * terrain.spacingYMeters},
-                normal,
-                glm::vec2{
-                    static_cast<float>(column) / static_cast<float>(sampleCount - 1U),
-                    static_cast<float>(row) / static_cast<float>(sampleCount - 1U)}};
+            const float angle = std::atan2(zSide, xSide);
+            addBox({xSide * 0.20F, 0.0F, zSide * 0.20F}, {0.52F, 0.035F, 0.035F}, angle);
+            addBox({xSide * 0.38F, 0.0F, zSide * 0.38F}, {0.14F, 0.055F, 0.14F}, 0.0F);
+            addBox({xSide * 0.38F, 0.04F, zSide * 0.38F}, {0.30F, 0.012F, 0.025F}, 0.0F);
         }
     }
-
-    return vertices;
-}
-
-std::vector<std::uint32_t> BuildTerrainIndices(std::size_t sampleCount)
-{
-    std::vector<std::uint32_t> indices;
-    indices.reserve((sampleCount - 1U) * (sampleCount - 1U) * 6U);
-    for (std::size_t row = 0; row + 1U < sampleCount; ++row)
-    {
-        for (std::size_t column = 0; column + 1U < sampleCount; ++column)
-        {
-            const auto northWest = static_cast<std::uint32_t>(row * sampleCount + column);
-            const auto northEast = northWest + 1U;
-            const auto southWest = northWest + static_cast<std::uint32_t>(sampleCount);
-            const auto southEast = southWest + 1U;
-            indices.insert(indices.end(), {
-                northWest, southWest, northEast,
-                northEast, southWest, southEast});
-        }
-    }
-    return indices;
-}
-
-/**
- * @brief 정점과 삼각형 연결 정보를 그래픽 메시로 묶는다.
- * @details 화면은 Y축을 위로 쓰므로 높이를 Y에 둔다. 북쪽은 화면의 -Z 방향이다.
- */
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
-    const aerosimlab::terrain::TerrainGrid& terrain)
-{
-    const auto vertices = BuildTerrainVertices(terrain);
-    const auto indices = BuildTerrainIndices(terrain.sampleCount);
     return std::make_unique<aerosimlab::graphics::Mesh>(
         vertices.data(), static_cast<std::uint32_t>(vertices.size()),
         indices.data(), static_cast<std::uint32_t>(indices.size()));
+}
+#endif
+
+glm::mat4 IndoorBoxTransform(const glm::dvec3& centerMeters,
+    const glm::dvec3& sizeMeters)
+{
+    return CubeTransform(ToRenderPosition(centerMeters),
+        glm::vec3{static_cast<float>(sizeMeters.x),
+            static_cast<float>(sizeMeters.z),
+            static_cast<float>(sizeMeters.y)});
 }
 }
 
@@ -390,7 +371,7 @@ void AeroSimLabApp::InitializeGraphics()
 #endif
     observerCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{7.0F, 5.0F, 7.0F}, glm::vec3{0.0F}, 1.0F,
-        45.0F, 0.5F, 25000.0F);
+        45.0F, 0.1F, 120.0F);
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
 
@@ -405,55 +386,76 @@ void AeroSimLabApp::InitializeGraphics()
 void AeroSimLabApp::LoadScene()
 {
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
+#ifdef __EMSCRIPTEN__
+    droneMesh_ = CreateWebDroneMesh();
+#else
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
         AssetPath("models/drones/x500/visual.glb").string());
-    terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load(
-        AssetPath("maps/bukhansan-demo/terrain.grid"));
-    missionGoalMeters_ = {
-        demoDroneStartMeters.x + 10.0,
-        demoDroneStartMeters.y,
-        terrainGrid_.HeightAtLocalMeters({demoDroneStartMeters.x + 10.0,
-            demoDroneStartMeters.y})};
-    terrainMesh_ = CreateTerrainMesh(terrainGrid_);
-    terrainTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
-        AssetPath("maps/bukhansan-demo/terrain-satellite.ppm"));
+#endif
+#ifndef __EMSCRIPTEN__
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
-    facilityMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
-        AssetPath("maps/bukhansan-demo/facilities.glb").string());
-    const auto buildings = aerosimlab::terrain::LoadBuildingFootprints(
-        AssetPath("maps/bukhansan-demo/buildings.geojson"), terrainGrid_);
-    const auto facilities = aerosimlab::terrain::LoadStaticFacilities(
-        AssetPath("maps/bukhansan-demo/facilities.json"));
-#ifndef __EMSCRIPTEN__
-    simulation_.SetInitialPose({demoDroneStartMeters,
-        terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters)
-            + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
-    for (const auto& facility : facilities)
-        simulation_.AddStaticObstacleBox(
-            facility.centerMeters, facility.halfExtentsMeters);
 #endif
-    fleetDroneIds_ = simulation_.DroneIds();
-    buildingTransforms_.reserve(buildings.size());
-    for (const auto& building : buildings)
-    {
-        const auto bounds = aerosimlab::terrain::MakeBuildingBoundsMeters(
-            building, terrainGrid_, missingBuildingHeightProxyMeters);
-        const glm::vec3 displaySizeMeters{
-            static_cast<float>(bounds.halfExtentsMeters.x * 2.0),
-            static_cast<float>(bounds.halfExtentsMeters.z * 2.0) * terrainReliefScale,
-            static_cast<float>(bounds.halfExtentsMeters.y * 2.0)};
 
+    // 실내 장면의 바닥은 높이 차가 없는 작은 격자로 표현해 강체 충돌과 맞춘다.
+    terrainGrid_.sampleCount = 3;
+    terrainGrid_.spacingXMeters = 20.0F;
+    terrainGrid_.spacingYMeters = 15.0F;
+    terrainGrid_.referenceElevationMeters = 0.0F;
+    terrainGrid_.heightOffsetsMeters.assign(9U, 0.0F);
+    const glm::dvec3 floorSizeMeters{40.0, 30.0, 0.3};
+    floorTransform_ = IndoorBoxTransform({0.0, 0.0, -0.15}, floorSizeMeters);
+
+    const auto addWall = [this](const glm::dvec3& center, const glm::dvec3& halfExtents)
+    {
+        wallTransforms_.push_back(IndoorBoxTransform(center, halfExtents * 2.0));
 #ifndef __EMSCRIPTEN__
-        // 화면에서 키운 높이는 보기 편의를 위한 값이므로 실제 크기의 충돌 상자를 사용한다.
-        simulation_.AddStaticObstacleBox(
-            bounds.centerMeters, glm::vec3{bounds.halfExtentsMeters});
+        simulation_.AddStaticObstacleBox(center, glm::vec3{halfExtents});
 #endif
-        buildingTransforms_.push_back(CubeTransform(
-            ToRenderPosition(bounds.centerMeters), displaySizeMeters));
-    }
+    };
+    const auto addDebris = [this](const glm::dvec3& center, const glm::dvec3& size)
+    {
+        debrisTransforms_.push_back(IndoorBoxTransform(center, size));
 #ifndef __EMSCRIPTEN__
-    // 웹 빌드는 운동학 모드라 충돌 물리 월드에만 필요한 지형 설정을 건너뛴다.
+        simulation_.AddStaticObstacleBox(center, glm::vec3{size * 0.5});
+#endif
+    };
+    const auto addPerson = [this](const glm::dvec2& position)
+    {
+        const glm::dvec3 torsoCenter{position.x, position.y, 0.8};
+        targetTransforms_.push_back(IndoorBoxTransform(torsoCenter, {0.45, 0.3, 0.8}));
+        targetTransforms_.push_back(IndoorBoxTransform(
+            {position.x, position.y, 1.35}, {0.34, 0.34, 0.34}));
+#ifndef __EMSCRIPTEN__
+        simulation_.AddStaticObstacleBox(torsoCenter, {0.225F, 0.15F, 0.4F});
+#endif
+    };
+
+    // 외벽과 칸막이에 문틈을 남겨 드론이 방 사이를 오갈 수 있게 한다.
+    addWall({-15.0, 0.0, 2.0}, {0.2, 11.0, 2.0});
+    addWall({15.0, 0.0, 2.0}, {0.2, 11.0, 2.0});
+    addWall({0.0, -11.0, 2.0}, {15.0, 0.2, 2.0});
+    addWall({0.0, 11.0, 2.0}, {15.0, 0.2, 2.0});
+    addWall({-5.0, -6.5, 2.0}, {0.2, 4.5, 2.0});
+    addWall({-5.0, 6.0, 2.0}, {0.2, 5.0, 2.0});
+    addWall({5.0, -7.0, 2.0}, {0.2, 4.0, 2.0});
+    addWall({5.0, 5.5, 2.0}, {0.2, 5.5, 2.0});
+    addWall({-11.5, 0.0, 2.0}, {3.5, 0.2, 2.0});
+    addWall({0.0, 0.0, 2.0}, {2.0, 0.2, 2.0});
+    addWall({11.5, 0.0, 2.0}, {3.5, 0.2, 2.0});
+
+    // 서로 다른 크기의 상자로 잔해를 만들고, 두 인명 표식을 각 방에 둔다.
+    addDebris({-10.0, 6.5, 0.45}, {1.4, 0.9, 0.9});
+    addDebris({2.5, -7.0, 0.55}, {1.0, 1.2, 1.1});
+    addDebris({11.0, 5.5, 0.35}, {1.7, 0.8, 0.7});
+    addPerson({-10.0, 7.5});
+    addPerson({10.0, -6.5});
+
+    missionGoalMeters_ = {-10.0, 7.5, 2.0};
+    simulation_.SetInitialPose({demoDroneStartMeters.x, demoDroneStartMeters.y,
+        aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
+    fleetDroneIds_ = simulation_.DroneIds();
+#ifndef __EMSCRIPTEN__
     simulation_.SetTerrain(terrainGrid_);
 #endif
 }
@@ -574,7 +576,7 @@ void AeroSimLabApp::ApplyDemoCommands()
     case 120:
     {
         command.kind = Kind::SetWaypoint;
-        command.vector = {8.0, 0.0, 2.0};
+        command.vector = missionGoalMeters_;
         break;
     }
     case 300:
@@ -690,16 +692,13 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
 void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition)
 {
-    renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
-        view, projection, cameraPosition, terrainTexture_.get(), false, true);
-    for (const glm::mat4& transform : buildingTransforms_)
+    DrawCube(floorTransform_, cameraPosition, groundMaterial_, view, projection);
+    for (const glm::mat4& transform : wallTransforms_)
         DrawCube(transform, cameraPosition, buildingMaterial_, view, projection);
-
-    const glm::mat4 simulationToRender = glm::rotate(
-        glm::mat4{1.0F}, -1.57079632679F, glm::vec3{1.0F, 0.0F, 0.0F})
-        * glm::scale(glm::mat4{1.0F}, glm::vec3{1.0F, 1.0F, terrainReliefScale});
-    renderer_->Draw(simulationToRender, *facilityMesh_, facilityMaterial_, *shader_,
-        view, projection, cameraPosition);
+    for (const glm::mat4& transform : debrisTransforms_)
+        DrawCube(transform, cameraPosition, facilityMaterial_, view, projection);
+    for (const glm::mat4& transform : targetTransforms_)
+        DrawCube(transform, cameraPosition, targetMaterial_, view, projection);
 
     const glm::vec3 goal = ToRenderPosition(missionGoalMeters_);
     DrawCube(CubeTransform(goal + glm::vec3{0.0F, 0.09F, 0.0F},
@@ -716,7 +715,13 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
             glm::mat4_cast(ToRenderOrientation(drone.orientation));
         renderer_->Draw(heading, *droneMesh_, droneMaterial_, *shader_,
-            view, projection, cameraPosition, droneSurfaceTexture_.get(), true);
+            view, projection, cameraPosition,
+#ifndef __EMSCRIPTEN__
+            droneSurfaceTexture_.get(),
+#else
+            nullptr,
+#endif
+            true);
     }
 }
 

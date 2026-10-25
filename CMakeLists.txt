@@ -107,12 +107,10 @@ if(NOT EMSCRIPTEN)
 endif()
 
 add_library(aerosimlab_terrain STATIC
-  modules/terrain/src/BuildingFootprint.cpp
-  modules/terrain/src/StaticFacility.cpp
   modules/terrain/src/TerrainGrid.cpp
 )
 target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
-target_link_libraries(aerosimlab_terrain PUBLIC glm::glm PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(aerosimlab_terrain PUBLIC glm::glm)
 
 add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/DroneModel.cpp
@@ -321,17 +319,12 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--shell-file=${CMAKE_SOURCE_DIR}/apps/simulator/web/web_shell_single_thread.html"
       "-sALLOW_MEMORY_GROWTH=1"
       "--preload-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
-      "--preload-file=${CMAKE_SOURCE_DIR}/assets/maps@maps"
-      "--preload-file=${CMAKE_SOURCE_DIR}/assets/models/drones@models/drones"
     )
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets/shaders"
         "$<TARGET_FILE_DIR:aerosimlab_simulator>/shaders"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/assets/maps"
-        "$<TARGET_FILE_DIR:aerosimlab_simulator>/maps"
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets/models/drones"
         "$<TARGET_FILE_DIR:aerosimlab_simulator>/models/drones"

@@ -45,7 +45,7 @@ namespace aerosimlab::simulator
 class SimulatorHud;
 
 /**
- * @brief 드론 모의를 진행하고 장면과 탑재 카메라 영상을 시뮬레이터 창에 그린다.
+ * @brief 드론 모의를 진행하고 실내 수색 장면과 탑재 카메라 영상을 그린다.
  * @details 드론 위치는 미터, 모의 간격은 1/60초다. 장면과 카메라 영상은 크기와 위치를 바꿀 수 있는 별도 패널에 표시한다.
  * 화면 갱신 속도와 모의 속도를 분리해, 렌더링이 느려져도 같은 고정 간격으로 드론 상태를 계산한다.
  */
@@ -109,7 +109,7 @@ private:
     /** @brief 이번 프레임 측정값을 요약 목록과 긴 프레임 기록에 추가한다. */
     void RecordBenchmarkFrame(double applicationMicroseconds);
     void InitializeGraphics();
-    /** @brief 지도·기체 화면 자산을 불러오고 강체 월드의 충돌 모양을 준비한다. */
+    /** @brief 실내 수색 장면과 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
@@ -259,11 +259,11 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
-    std::unique_ptr<aerosimlab::graphics::Texture2D> terrainTexture_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> facilityMesh_;
-    std::vector<glm::mat4> buildingTransforms_;
+    glm::mat4 floorTransform_{1.0F};
+    std::vector<glm::mat4> wallTransforms_;
+    std::vector<glm::mat4> debrisTransforms_;
+    std::vector<glm::mat4> targetTransforms_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     glm::dvec3 missionGoalMeters_{0.0};
@@ -271,11 +271,13 @@ private:
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};
     aerosimlab::graphics::Material groundMaterial_{
-        glm::vec4{1.0F}, 0.0F, 0.92F};
+        glm::vec4{0.44F, 0.46F, 0.48F, 1.0F}, 0.0F, 0.92F};
     aerosimlab::graphics::Material buildingMaterial_{
-        glm::vec4{0.63F, 0.59F, 0.48F, 1.0F}, 0.0F, 0.9F};
+        glm::vec4{0.58F, 0.60F, 0.62F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material facilityMaterial_{
-        glm::vec4{0.48F, 0.52F, 0.38F, 1.0F}, 0.0F, 0.85F};
+        glm::vec4{0.45F, 0.30F, 0.17F, 1.0F}, 0.0F, 0.85F};
+    aerosimlab::graphics::Material targetMaterial_{
+        glm::vec4{0.75F, 0.18F, 0.12F, 1.0F}, 0.0F, 0.72F};
     aerosimlab::graphics::Material missionMarkerMaterial_{
         glm::vec4{1.0F, 0.65F, 0.05F, 1.0F}, 0.0F, 0.55F};
 #ifndef __EMSCRIPTEN__

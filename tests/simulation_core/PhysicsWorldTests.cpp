@@ -2,7 +2,6 @@
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "CollisionGeometry.h"
-#include "terrain/BuildingFootprint.h"
 #include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
@@ -10,7 +9,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <filesystem>
 #include <limits>
 #include <random>
 #include <stdexcept>
@@ -511,33 +509,14 @@ void Verify_AirSimPhysicsKeepsContactAcrossMicroscopicGroundGaps()
     EXPECT_NEAR(state.linearVelocityMetersPerSecond.z, 0.0, 1.0e-4);
 }
 
-void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
+void Verify_AirSimPhysics_IndoorWallContactStopsHorizontalMotion()
 {
-    const std::filesystem::path mapPath = std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-        / "assets/maps/bukhansan-demo";
-    auto terrain = terrain::TerrainGrid::Load(mapPath / "terrain.grid");
-    const auto buildings = terrain::LoadBuildingFootprints(
-        mapPath / "buildings.geojson", terrain);
-    const auto building = std::find_if(buildings.begin(), buildings.end(),
-        [](const terrain::BuildingFootprint& footprint)
-        {
-            return footprint.buildingType == "temple";
-        });
-    ASSERT_NE(building, buildings.end());
-
-    constexpr float assumedBuildingHeightMeters = 3.0F;
-    const auto bounds = terrain::MakeBuildingBoundsMeters(
-        *building, terrain, assumedBuildingHeightMeters);
-
     PhysicsWorld world;
-    world.AddStaticObstacleBox(bounds.centerMeters,
-        glm::vec3{bounds.halfExtentsMeters});
+    world.AddStaticObstacleBox({0.0, 0.0, 10.0}, {0.15F, 5.0F, 5.0F});
 
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
     RigidBodyDefinition droneDefinition;
-    droneDefinition.positionMeters = {
-        bounds.centerMeters.x - bounds.halfExtentsMeters.x - 0.8,
-        bounds.centerMeters.y, bounds.centerMeters.z};
+    droneDefinition.positionMeters = {-1.0, 0.0, 10.0};
     const RigidBodyHandle drone = world.CreateQuadrotor(droneDefinition, parameters);
     const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
         / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
@@ -553,8 +532,7 @@ void Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion()
         world.Step(1.0 / 60.0);
 
     state = world.State(drone);
-    EXPECT_LT(state.positionMeters.x,
-        bounds.centerMeters.x - bounds.halfExtentsMeters.x);
+    EXPECT_LT(state.positionMeters.x, -0.15);
     EXPECT_LT(state.linearVelocityMetersPerSecond.x, 0.5);
 }
 
@@ -778,7 +756,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysicsKeepsContactAcrossMicroscopicGroundGaps());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_OpenStreetMapBuildingContactStopsHorizontalMotion());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_IndoorWallContactStopsHorizontalMotion());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
     EXPECT_NO_FATAL_FAILURE(Verify_CollisionBroadphase_KeepsTouchingBoxesForPreciseTest());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_SeparatesOverlappingDrones());
