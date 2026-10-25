@@ -72,7 +72,6 @@ void ShowStartupMessage(std::string_view message, MessageKind kind)
 
 int RunSimulator(int argc, char** argv)
 {
-    aerosimlab::simulator::SetWebStartupStage("C++ 실행 함수에 들어왔습니다.");
     bool smokeTest = false;
     try
     {
@@ -151,11 +150,8 @@ int RunSimulator(int argc, char** argv)
         };
 #ifdef __EMSCRIPTEN__
         // 브라우저 프레임 함수가 계속 실행되므로 앱을 프로그램이 끝날 때까지 보관한다.
-        aerosimlab::simulator::SetWebStartupStage("시뮬레이터 객체를 만들고 있습니다.");
         static std::unique_ptr<aerosimlab::simulator::AeroSimLabApp> app;
         app = std::make_unique<aerosimlab::simulator::AeroSimLabApp>(options);
-        aerosimlab::simulator::SetWebStartupStage("시뮬레이터 객체를 만들었습니다.");
-        aerosimlab::simulator::SetWebStartupStage("그래픽 초기화를 시작합니다.");
         return app->Run();
 #else
         aerosimlab::simulator::AeroSimLabApp app(options);

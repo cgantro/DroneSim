@@ -168,19 +168,6 @@ glm::mat4 IndoorBoxTransform(const glm::dvec3& centerMeters,
 }
 }
 
-void SetWebStartupStage(const char* message)
-{
-#ifdef __EMSCRIPTEN__
-    EM_ASM({
-        const stage = UTF8ToString($0);
-        window.setSimulatorStartupStatus(stage);
-        console.info("[시뮬레이터 시작] " + stage);
-    }, message);
-#else
-    (void)message;
-#endif
-}
-
 AeroSimLabApp::AeroSimLabApp(Options options)
     : smokeTest_(options.smokeTest), demoMode_(options.demoMode),
       networkEnabled_(options.networkEnabled),
@@ -216,12 +203,6 @@ int AeroSimLabApp::Run()
     emscripten_set_main_loop_arg([](void* application)
     {
         auto& app = *static_cast<AeroSimLabApp*>(application);
-        static bool firstFrame = true;
-        if (firstFrame)
-        {
-            SetWebStartupStage("첫 화면을 그리기 시작합니다.");
-            firstFrame = false;
-        }
         if (app.window_->ShouldClose())
         {
             emscripten_cancel_main_loop();
@@ -395,13 +376,9 @@ int AeroSimLabApp::ValidateSmokeTestOutput() const
 
 void AeroSimLabApp::InitializeGraphics()
 {
-    SetWebStartupStage("시뮬레이터 창을 준비하고 있습니다.");
     InitializeWindow();
-    SetWebStartupStage("렌더러와 카메라를 준비하고 있습니다.");
     InitializeRendererAndCameras();
-    SetWebStartupStage("장면과 드론을 준비하고 있습니다.");
     LoadScene();
-    SetWebStartupStage("화면 셰이더를 준비하고 있습니다.");
     InitializeShaderAndHud();
 }
 

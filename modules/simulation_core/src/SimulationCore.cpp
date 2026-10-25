@@ -16,7 +16,6 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
-#include <iostream>
 
 namespace aerosimlab::simulation
 {
@@ -30,14 +29,6 @@ bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
         && std::isfinite(yawRadians);
 }
 
-void LogWebStartupStage(const char* message)
-{
-#ifdef __EMSCRIPTEN__
-    std::cerr << "[모의 코어] " << message << std::endl;
-#else
-    (void)message;
-#endif
-}
 }
 
 struct SimulationCore::EcsStorage
@@ -102,13 +93,9 @@ struct SimulationCore::EcsStorage
 #if defined(__EMSCRIPTEN__)
         static_cast<void>(selectedQuadrotorParameters);
 #endif
-        LogWebStartupStage("Flecs 월드 생성 완료, 시스템을 등록합니다.");
         RegisterDroneSystem();
-        LogWebStartupStage("드론 시스템 등록 완료, 카메라 시스템을 등록합니다.");
         RegisterCameraSystem();
-        LogWebStartupStage("카메라 시스템 등록 완료, 카메라 위치를 맞춥니다.");
         SynchronizeCameraPose();
-        LogWebStartupStage("시뮬레이션 코어 생성을 마쳤습니다.");
     }
 
     void RegisterDroneSystem()
@@ -460,14 +447,8 @@ SimulationCore::SimulationCore(
 SimulationCore::SimulationCore(SimulationDynamics dynamics,
     QuadrotorParameters quadrotorParameters,
     const QuadrotorControllerParameters& controllerParameters)
-    : ecs_([&dynamics, &quadrotorParameters, &controllerParameters]
-    {
-        LogWebStartupStage("ECS 저장소와 Flecs 월드를 생성합니다.");
-        auto storage = std::make_unique<EcsStorage>(
-            dynamics, std::move(quadrotorParameters), controllerParameters);
-        LogWebStartupStage("ECS 저장소 생성을 마쳤습니다.");
-        return storage;
-    }())
+    : ecs_(std::make_unique<EcsStorage>(
+        dynamics, std::move(quadrotorParameters), controllerParameters))
 {
 }
 

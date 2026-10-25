@@ -38,36 +38,20 @@
         startupStatus.setAttribute("role", "alert");
       }
 
-      function reportStartupSignal(message) {
-        if (location.hostname === "127.0.0.1" || location.hostname === "localhost")
-          navigator.sendBeacon("/__startup_stage", message);
-      }
-
       window.setSimulatorStartupStatus = function (message) {
         startupPhase = message;
         startupMessage.textContent = message;
         startupStatus.hidden = false;
-        console.info("[웹 시작] " + message);
-        reportStartupSignal(message);
       };
       window.showSimulatorStartupError = showStartupError;
       window.completeSimulatorStartup = function () {
         simulatorStarted = true;
         window.clearTimeout(startupTimeout);
         startupStatus.hidden = true;
-        reportStartupSignal("첫 화면 표시 완료");
       };
 
       var Module = {
         canvas: document.getElementById("canvas"),
-        print: function (message) {
-          console.log(message);
-          reportStartupSignal("표준 출력: " + message);
-        },
-        printErr: function (message) {
-          console.error(message);
-          reportStartupSignal("오류 출력: " + message);
-        },
         locateFile: function (path) {
           if (!path.endsWith(".wasm"))
             window.setSimulatorStartupStatus("화면 자료를 불러오고 있습니다.");
@@ -82,12 +66,10 @@
             window.setSimulatorStartupStatus("시뮬레이터 실행에 필요한 자료를 준비하고 있습니다.");
         },
         onRuntimeInitialized: function () {
-          console.info("[웹 시작] WASM 런타임 초기화 완료");
           window.setSimulatorStartupStatus("시뮬레이터를 시작하고 있습니다.");
         },
         onAbort: function (reason) {
           window.clearTimeout(startupTimeout);
-          console.error("[웹 시작] WASM 실행 중단", reason);
           showStartupError("시뮬레이터를 시작하지 못했습니다. " + (reason || "새로고침해 주세요."));
         }
       };
@@ -116,14 +98,12 @@
           showStartupError("시뮬레이터 실행 파일을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요.");
         });
         window.addEventListener("error", function (event) {
-          console.error("[웹 시작] 실행 오류", event.message || "브라우저 오류");
           showStartupError("시뮬레이터 실행 중 오류가 발생했습니다. " + (event.message || "브라우저 콘솔을 확인해 주세요."));
         });
         window.addEventListener("unhandledrejection", function (event) {
           const reason = event.reason && event.reason.message
             ? event.reason.message
             : String(event.reason || "알 수 없는 오류");
-          console.error("[웹 시작] 비동기 오류", reason);
           showStartupError("시뮬레이터 자료를 준비하지 못했습니다. " + reason);
         });
         document.body.appendChild(script);
