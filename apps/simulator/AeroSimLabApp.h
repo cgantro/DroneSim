@@ -319,6 +319,7 @@ private:
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     glm::dvec3 missionGoalMeters_{0.0};
     aerosimlab::simulation::InspectionSurface inspectionSurface_;
+    std::vector<aerosimlab::simulation::InspectionOccluderBox> inspectionOccluders_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};

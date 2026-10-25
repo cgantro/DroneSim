@@ -892,7 +892,7 @@ void AeroSimLabApp::LoadMapFeatures()
         aerosimlab::terrain::BuildingHeightSource::OsmHeightTag);
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels);
-#ifndef __EMSCRIPTEN__
+    inspectionOccluders_.reserve(buildings.size());
     for (const auto& building : buildings)
     {
         glm::dvec2 minimum = building.outlineMeters.front();
@@ -909,13 +909,18 @@ void AeroSimLabApp::LoadMapFeatures()
         const glm::dvec2 center = (minimum + maximum) * 0.5;
         const double bottom = groundMinimum;
         const double top = groundMaximum + building.heightMeters;
+        const glm::dvec3 obstacleCenter{
+            center.x, center.y, (bottom + top) * 0.5};
+        const glm::dvec3 obstacleHalfExtents{
+            (maximum.x - minimum.x) * 0.5,
+            (maximum.y - minimum.y) * 0.5,
+            (top - bottom) * 0.5};
+        inspectionOccluders_.push_back({obstacleCenter, obstacleHalfExtents});
+#ifndef __EMSCRIPTEN__
         simulation_.AddStaticObstacleBox(
-            {center.x, center.y, (bottom + top) * 0.5},
-            {static_cast<float>((maximum.x - minimum.x) * 0.5),
-                static_cast<float>((maximum.y - minimum.y) * 0.5),
-                static_cast<float>((top - bottom) * 0.5)});
-    }
+            obstacleCenter, glm::vec3{obstacleHalfExtents});
 #endif
+    }
 }
 
 void AeroSimLabApp::InitializeStartingState()
@@ -948,7 +953,7 @@ void AeroSimLabApp::InitializeStartingState()
 aerosimlab::simulation::CaptureAssessment AeroSimLabApp::AssessInspectionView() const
 {
     return aerosimlab::simulation::EoCameraModel::AssessCapture(
-        simulation_.Camera(), inspectionSurface_);
+        simulation_.Camera(), inspectionSurface_, inspectionOccluders_);
 }
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
