@@ -97,14 +97,17 @@
             window.setSimulatorStartupStatus("시뮬레이터 실행에 필요한 자료를 준비하고 있습니다.");
         },
         onRuntimeInitialized: function () {
-          window.setSimulatorStartupStatus("시뮬레이터 실행 환경을 마쳤습니다. 화면을 시작하고 있습니다.");
-          window.setTimeout(function () {
-            try {
-              Module.callMain([]);
-            } catch (error) {
-              showStartupError("시뮬레이터 화면을 시작하지 못했습니다. " + error.message);
-            }
-          }, 0);
+          window.setSimulatorStartupStatus("실행 환경을 준비했습니다. 브라우저가 첫 화면을 그리면 시뮬레이터를 시작합니다.");
+          window.requestAnimationFrame(function () {
+            window.requestAnimationFrame(function () {
+              window.setSimulatorStartupStatus("시뮬레이터 시작 함수를 호출하고 있습니다.");
+              try {
+                Module.callMain([]);
+              } catch (error) {
+                showStartupError("시뮬레이터 화면을 시작하지 못했습니다. " + error.message);
+              }
+            });
+          });
         },
         onAbort: function (reason) {
           window.clearTimeout(startupTimeout);

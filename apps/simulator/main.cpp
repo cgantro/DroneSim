@@ -179,7 +179,7 @@ int RunSimulator(int argc, char** argv)
 #ifdef __EMSCRIPTEN__
 void StartWebSimulator(void*)
 {
-    EM_ASM({ window.setSimulatorStartupStatus("시뮬레이터 구성 요소를 준비하고 있습니다."); });
+    EM_ASM({ window.setSimulatorStartupStatus("시뮬레이터 초기화 작업을 시작했습니다."); });
     static_cast<void>(RunSimulator(0, nullptr));
 }
 #endif
@@ -219,6 +219,7 @@ int main(int argc, char** argv)
 #ifdef __EMSCRIPTEN__
     (void)argc;
     (void)argv;
+    EM_ASM({ window.setSimulatorStartupStatus("C++ 시작 함수에 진입했습니다. 초기화를 예약합니다."); });
     emscripten_async_call(&StartWebSimulator, nullptr, 16);
     return 0;
 #else
