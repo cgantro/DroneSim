@@ -69,6 +69,8 @@ inline std::vector<glm::dvec2> ClipPolygonToTerrain(
             previous = current;
             previousInside = currentInside;
         }
+        if (clipped.empty())
+            return {};
         polygon = std::move(clipped);
     }
     return polygon;

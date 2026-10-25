@@ -116,13 +116,9 @@ void AddInBoundsSegments(
     {
         if (segment.size() >= 2U)
         {
-            MapRoad& road = roads.emplace_back();
-            road.osmId = osmId;
-            road.name = name;
-            road.widthMeters = widthMeters;
-            road.widthSource = widthSource;
-            road.bridge = isBridge;
+            MapRoad road{osmId, name, {}, widthMeters, widthSource, isBridge};
             road.centerlineMeters.swap(segment);
+            roads.push_back(std::move(road));
             segment.reserve(coordinates.size());
         }
         else
