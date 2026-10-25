@@ -14,6 +14,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
+#include <utility>
 
 namespace aerosimlab::simulator
 {
@@ -63,6 +64,16 @@ std::string FormatCrc32(std::uint32_t checksum)
     formatted << std::uppercase << std::hex << std::setw(8)
         << std::setfill('0') << checksum;
     return formatted.str();
+}
+
+const char* MissionOutcomeName(EoVideoRecorder::MissionOutcome outcome)
+{
+    switch (outcome)
+    {
+    case EoVideoRecorder::MissionOutcome::Completed: return "COMPLETED";
+    case EoVideoRecorder::MissionOutcome::Failed: return "FAILED";
+    }
+    return "UNKNOWN";
 }
 
 std::filesystem::path UserDataDirectory()
@@ -227,6 +238,14 @@ bool EoVideoRecorder::WriteFrame(const sensor::RgbFrame& frame,
     return true;
 }
 
+void EoVideoRecorder::SetMissionOutcome(
+    MissionOutcome outcome, std::string failureReason)
+{
+    missionOutcome_ = outcome;
+    missionFailureReason_ = outcome == MissionOutcome::Failed
+        ? std::move(failureReason) : std::string{};
+}
+
 bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
 {
     savedFrameCount = savedFrameCount_;
@@ -283,7 +302,7 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
         temporaryManifestPath += ".partial";
         std::ofstream manifestFile(temporaryManifestPath,
             std::ios::out | std::ios::trunc);
-        const Json manifest{
+        Json manifest{
             {"collection_state", "SAVED"},
             {"facility_id", facilityId_},
             {"inspection_zone_id", inspectionZoneId_},
@@ -299,6 +318,12 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
             {"checksum_algorithm", "CRC-32/ISO-HDLC"},
             {"video_checksum", videoChecksum},
             {"metadata_checksum", metadataChecksum}};
+        if (missionOutcome_)
+        {
+            manifest["mission_outcome"] = MissionOutcomeName(*missionOutcome_);
+            if (*missionOutcome_ == MissionOutcome::Failed)
+                manifest["mission_failure_reason"] = missionFailureReason_;
+        }
         manifestFile << manifest.dump(2) << '\n';
         manifestFile.flush();
         saved = static_cast<bool>(manifestFile);

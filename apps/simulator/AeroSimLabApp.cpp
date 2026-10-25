@@ -1259,6 +1259,9 @@ void AeroSimLabApp::AdvanceInspectionMission()
         && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
     {
 #ifndef __EMSCRIPTEN__
+        if (eoVideoRecorder_)
+            eoVideoRecorder_->SetMissionOutcome(
+                EoVideoRecorder::MissionOutcome::Completed);
         aerosimlab::communication::CommandReply recordingReply;
         ApplyVideoRecordingCommand(
             aerosimlab::communication::VideoRecordingCommand::Stop, recordingReply);
@@ -1287,6 +1290,8 @@ void AeroSimLabApp::FailInspectionMission(const std::string& reason)
 #ifndef __EMSCRIPTEN__
     if (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
     {
+        eoVideoRecorder_->SetMissionOutcome(
+            EoVideoRecorder::MissionOutcome::Failed, reason);
         aerosimlab::communication::CommandReply recordingReply;
         ApplyVideoRecordingCommand(
             aerosimlab::communication::VideoRecordingCommand::Stop, recordingReply);

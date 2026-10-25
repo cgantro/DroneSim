@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace aerosimlab::simulator
@@ -14,6 +15,12 @@ namespace aerosimlab::simulator
 class EoVideoRecorder final
 {
 public:
+    enum class MissionOutcome
+    {
+        Completed,
+        Failed
+    };
+
     EoVideoRecorder();
     ~EoVideoRecorder();
 
@@ -31,6 +38,9 @@ public:
         const simulation::CameraState& camera, double simulationTimeSeconds,
         simulation::CaptureAssessment captureAssessment,
         std::string& error);
+
+    /** @brief 자동 점검 결과를 저장 목록에 붙인다. 수동 녹화에는 설정하지 않는다. */
+    void SetMissionOutcome(MissionOutcome outcome, std::string failureReason = {});
 
     /** @brief 파일을 마무리하고 저장 상태·파일 크기를 담은 목록을 만든다. */
     [[nodiscard]] bool Stop(std::uint64_t& savedFrameCount, std::string& error);
@@ -56,6 +66,8 @@ private:
     std::string facilityId_;
     std::string inspectionZoneId_;
     std::uint64_t geometryReadyFrameCount_ = 0;
+    std::optional<MissionOutcome> missionOutcome_;
+    std::string missionFailureReason_;
 };
 
 /** @brief 운영체제의 사용자 데이터 폴더 아래에 새 녹화 파일 경로를 만든다. */

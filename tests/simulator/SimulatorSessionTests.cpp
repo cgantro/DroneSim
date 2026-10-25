@@ -38,6 +38,7 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
     ASSERT_TRUE(recorder.Start(videoPath, cameraModel.imageWidthPixels,
         cameraModel.imageHeightPixels, 60.0, "osm-building-1", "facade-test-area",
         error)) << error;
+    recorder.SetMissionOutcome(simulator::EoVideoRecorder::MissionOutcome::Completed);
 
     sensor::RgbFrame frame;
     frame.width = cameraModel.imageWidthPixels;
@@ -107,6 +108,7 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
     EXPECT_EQ(manifestData.at("facility_id").get<std::string>(), "osm-building-1");
     EXPECT_EQ(manifestData.at("inspection_zone_id").get<std::string>(),
         "facade-test-area");
+    EXPECT_EQ(manifestData.at("mission_outcome").get<std::string>(), "COMPLETED");
     EXPECT_EQ(manifestData.at("geometry_ready_frame_count").get<std::uint64_t>(), 3U);
     std::string calculatedChecksum;
     ASSERT_TRUE(simulator::EoVideoRecorder::CalculateFileChecksum(
@@ -117,6 +119,31 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
         metadataPath, calculatedChecksum, error)) << error;
     EXPECT_EQ(calculatedChecksum,
         manifestData.at("metadata_checksum").get<std::string>());
+
+    const auto failedVideoPath = outputDirectory / "failed-inspection.mp4";
+    simulator::EoVideoRecorder failedRecorder;
+    ASSERT_TRUE(failedRecorder.Start(failedVideoPath,
+        cameraModel.imageWidthPixels, cameraModel.imageHeightPixels, 60.0,
+        "osm-building-1", "facade-test-area", error)) << error;
+    failedRecorder.SetMissionOutcome(
+        simulator::EoVideoRecorder::MissionOutcome::Failed,
+        "촬영 조건을 만족하지 못했습니다.");
+    frame.simulationTick = 5;
+    ASSERT_TRUE(failedRecorder.WriteFrame(frame, camera, 5.0 / 60.0,
+        simulation::CaptureAssessment::TooFar, error)) << error;
+    ASSERT_TRUE(failedRecorder.Stop(savedFrameCount, error)) << error;
+    auto failedManifestPath = failedVideoPath;
+    failedManifestPath.replace_extension(".manifest.json");
+    std::ifstream failedManifestFile(failedManifestPath);
+    ASSERT_TRUE(failedManifestFile.good());
+    const auto failedManifest = nlohmann::json::parse(
+        std::istreambuf_iterator<char>{failedManifestFile},
+        std::istreambuf_iterator<char>{});
+    EXPECT_EQ(failedManifest.at("collection_state").get<std::string>(), "SAVED");
+    EXPECT_EQ(failedManifest.at("mission_outcome").get<std::string>(), "FAILED");
+    EXPECT_EQ(failedManifest.at("mission_failure_reason").get<std::string>(),
+        "촬영 조건을 만족하지 못했습니다.");
+    failedManifestFile.close();
     std::filesystem::remove_all(outputDirectory);
 }
 

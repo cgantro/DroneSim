@@ -175,16 +175,26 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
                 static_cast<double>(simulationTick) / 60.0,
                 captureAssessment, error))
             {
-                std::uint64_t savedFrames = 0;
-                std::string finishError;
-                static_cast<void>(eoVideoRecorder_->Stop(savedFrames, finishError));
-                eoVideoRecorder_.reset();
-                const std::string detail = finishError.empty()
-                    ? error : error + " " + finishError;
-                window_->SetTitle("DroneSim | EO 녹화 중단: " + detail);
-                if (inspectionMissionStage_ == InspectionMissionStage::Capturing)
-                    FailInspectionMission("점검 영상을 저장하지 못했습니다. " + detail);
-                static_cast<void>(savedFrames);
+                const bool missionIsActive =
+                    inspectionMissionStage_ != InspectionMissionStage::Ready
+                    && inspectionMissionStage_ != InspectionMissionStage::Saved
+                    && inspectionMissionStage_ != InspectionMissionStage::GeometryOnly
+                    && inspectionMissionStage_ != InspectionMissionStage::Failed;
+                if (missionIsActive)
+                {
+                    FailInspectionMission("점검 영상을 저장하지 못했습니다. " + error);
+                }
+                else
+                {
+                    std::uint64_t savedFrames = 0;
+                    std::string finishError;
+                    static_cast<void>(eoVideoRecorder_->Stop(savedFrames, finishError));
+                    eoVideoRecorder_.reset();
+                    const std::string detail = finishError.empty()
+                        ? error : error + " " + finishError;
+                    window_->SetTitle("DroneSim | EO 녹화 중단: " + detail);
+                    static_cast<void>(savedFrames);
+                }
             }
             else if (inspectionMissionStage_ == InspectionMissionStage::Capturing
                 && captureAssessment
