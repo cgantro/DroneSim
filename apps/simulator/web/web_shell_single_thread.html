@@ -254,7 +254,7 @@
         latestGroundControlState = {
           mode: mode, x: x, y: y, z: z, speed: speed,
           cameraActive: cameraActive, captureAssessment: captureAssessment,
-          missionStatus: missionStatus, simulationTick: simulationTick
+          missionStatus: missionStatus, simulationTick: Number(simulationTick)
         };
         var status = document.getElementById("web-gcs-status");
         var captureLabels = {
