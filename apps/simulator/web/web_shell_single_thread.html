@@ -81,7 +81,9 @@
       var eoRecorderChunks = [];
       var eoTelemetrySamples = [];
       var eoRecordingStartedAt = 0;
+      var eoLastTelemetrySampleAt = 0;
       var eoRecordingFinalizing = false;
+      var latestGroundControlState = null;
 
       function showStartupError(message) {
         window.clearTimeout(startupTimeout);
@@ -140,9 +142,9 @@
         var recorder = eoRecorder;
         eoRecorder = null;
         window.cancelAnimationFrame(eoRecorderFrame);
-        recorder.stop();
         await new Promise(function (resolve) {
           recorder.addEventListener("stop", resolve, { once: true });
+          recorder.stop();
         });
         recorder.stream.getTracks().forEach(function (track) { track.stop(); });
 
@@ -221,6 +223,7 @@
         eoTelemetrySamples = [];
         eoRecorderChunks = [];
         eoRecordingStartedAt = performance.now();
+        eoLastTelemetrySampleAt = 0;
         var stream = null;
         try {
           stream = eoRecorderCanvas.captureStream(20);
@@ -247,8 +250,12 @@
       }
 
       window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive,
-          captureAssessment, missionStatus, simulationTick, cameraX, cameraY, cameraZ,
-          quaternionX, quaternionY, quaternionZ, quaternionW, facilityId, zoneId) {
+          captureAssessment, missionStatus, simulationTick) {
+        latestGroundControlState = {
+          mode: mode, x: x, y: y, z: z, speed: speed,
+          cameraActive: cameraActive, captureAssessment: captureAssessment,
+          missionStatus: missionStatus, simulationTick: simulationTick
+        };
         var status = document.getElementById("web-gcs-status");
         var captureLabels = {
           ready: "구도 조건 충족",
@@ -271,24 +278,35 @@
           + " · 저장·전송 완료 판정은 아님</span>"
           + "<span id=\"web-gcs-mission\">점검 임무: " + missionStatus + "</span>";
 
-        if (eoRecorder) {
-          eoTelemetrySamples.push({
-            recording_elapsed_milliseconds: Math.round(performance.now() - eoRecordingStartedAt),
-            simulation_tick: simulationTick,
-            simulation_time_seconds: simulationTick / 60,
-            facility_id: facilityId,
-            inspection_zone_id: zoneId,
-            drone_position_meters: [x, y, z],
-            camera_position_meters: [cameraX, cameraY, cameraZ],
-            camera_orientation_xyzw: [quaternionX, quaternionY, quaternionZ, quaternionW],
-            speed_meters_per_second: speed,
-            camera_active: cameraActive,
-            capture_assessment: captureAssessment,
-            mission_status: missionStatus
-          });
+      };
+
+      window.updateDroneSimInspectionMetadata = function (cameraX, cameraY, cameraZ,
+          quaternionX, quaternionY, quaternionZ, quaternionW, facilityId, zoneId) {
+        if (eoRecorder && latestGroundControlState) {
+          var elapsedMilliseconds = performance.now() - eoRecordingStartedAt;
+          if (eoTelemetrySamples.length === 0
+              || elapsedMilliseconds - eoLastTelemetrySampleAt >= 250) {
+            eoLastTelemetrySampleAt = elapsedMilliseconds;
+            var state = latestGroundControlState;
+            eoTelemetrySamples.push({
+              recording_elapsed_milliseconds: Math.round(elapsedMilliseconds),
+              simulation_tick: state.simulationTick,
+              simulation_time_seconds: state.simulationTick / 60,
+              facility_id: facilityId,
+              inspection_zone_id: zoneId,
+              drone_position_meters: [state.x, state.y, state.z],
+              camera_position_meters: [cameraX, cameraY, cameraZ],
+              camera_orientation_xyzw: [quaternionX, quaternionY, quaternionZ, quaternionW],
+              speed_meters_per_second: state.speed,
+              camera_active: state.cameraActive,
+              capture_assessment: state.captureAssessment,
+              mission_status: state.missionStatus
+            });
+          }
         }
-        if (eoRecorder && (missionStatus.indexOf("구도 확인 완료") >= 0
-            || missionStatus.indexOf("실패:") >= 0))
+        if (eoRecorder && latestGroundControlState
+            && (latestGroundControlState.missionStatus.indexOf("구도 확인 완료") >= 0
+              || latestGroundControlState.missionStatus.indexOf("실패:") >= 0))
           void finishEoRecording();
       };
 

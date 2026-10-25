@@ -719,12 +719,17 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
             if (window.updateDroneSimGroundControl) {
                 window.updateDroneSimGroundControl(
                     UTF8ToString($0), $1, $2, $3, $4, $5, UTF8ToString($6),
-                    UTF8ToString($7), $8, $9, $10, $11, $12, $13, $14, $15,
-                    UTF8ToString($16), UTF8ToString($17));
+                    UTF8ToString($7), $8);
             }
         }, mode.c_str(), state.positionMeters.x, state.positionMeters.y,
             state.positionMeters.z, speedMetersPerSecond, cameraActive,
-            captureAssessment.c_str(), InspectionMissionStatus().c_str(), simulationTick,
+            captureAssessment.c_str(), InspectionMissionStatus().c_str(), simulationTick);
+        EM_ASM({
+            if (window.updateDroneSimInspectionMetadata) {
+                window.updateDroneSimInspectionMetadata(
+                    $0, $1, $2, $3, $4, $5, $6, UTF8ToString($7), UTF8ToString($8));
+            }
+        },
             camera.positionMeters.x, camera.positionMeters.y, camera.positionMeters.z,
             camera.orientation.x, camera.orientation.y, camera.orientation.z,
             camera.orientation.w, inspectionFacilityId_.c_str(), inspectionZoneId_.c_str());
