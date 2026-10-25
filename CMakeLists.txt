@@ -107,10 +107,11 @@ if(NOT EMSCRIPTEN)
 endif()
 
 add_library(aerosimlab_terrain STATIC
+  modules/terrain/src/MapBuildings.cpp
   modules/terrain/src/TerrainGrid.cpp
 )
 target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
-target_link_libraries(aerosimlab_terrain PUBLIC glm::glm)
+target_link_libraries(aerosimlab_terrain PUBLIC glm::glm PRIVATE nlohmann_json::nlohmann_json)
 
 add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/DroneModel.cpp
@@ -323,6 +324,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "-sSTACK_SIZE=1mb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn@maps/tancheon/terrain.aerotrn"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson@maps/tancheon/site.geojson"
     )
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD

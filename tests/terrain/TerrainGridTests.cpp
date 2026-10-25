@@ -1,3 +1,4 @@
+#include "terrain/MapBuildings.h"
 #include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
@@ -40,11 +41,38 @@ void Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin()
     EXPECT_NEAR(terrain.HeightAtLocalMeters({0.0, 0.0}), 18.0F, 0.01F);
 }
 
+void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
+{
+    const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/tancheon/terrain.aerotrn");
+    const std::vector<MapBuilding> buildings = LoadMapBuildings(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+
+    std::size_t measuredHeightCount = 0U;
+    std::size_t estimatedHeightCount = 0U;
+    for (const MapBuilding& building : buildings)
+    {
+        EXPECT_FALSE(building.osmId.empty());
+        EXPECT_GE(building.outlineMeters.size(), 3U);
+        EXPECT_EQ(building.outlineMeters.size(), building.groundElevationsMeters.size());
+        EXPECT_GT(building.heightMeters, 0.0);
+        if (building.heightEstimatedFromLevels)
+            ++estimatedHeightCount;
+        else
+            ++measuredHeightCount;
+    }
+    EXPECT_GE(measuredHeightCount, 50U);
+    EXPECT_GE(estimatedHeightCount, 10U);
+}
+
 TEST(TerrainGridTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
         Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight());
     EXPECT_NO_FATAL_FAILURE(Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates());
 }
 
 }

@@ -19,6 +19,7 @@
 #endif
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
+#include "terrain/MapBuildings.h"
 #include "terrain/TerrainGrid.h"
 #include <glm/gtc/quaternion.hpp>
 #ifdef __EMSCRIPTEN__
@@ -30,6 +31,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -97,6 +99,158 @@ glm::quat ToRenderOrientation(const glm::dquat& orientation)
 glm::mat4 CubeTransform(const glm::vec3& position, const glm::vec3& size)
 {
     return glm::translate(glm::mat4{1.0F}, position) * glm::scale(glm::mat4{1.0F}, size);
+}
+
+double Cross2D(const glm::dvec2& a, const glm::dvec2& b, const glm::dvec2& c)
+{
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+double PolygonArea(const std::vector<glm::dvec2>& outline)
+{
+    double twiceArea = 0.0;
+    for (std::size_t i = 0; i < outline.size(); ++i)
+    {
+        const glm::dvec2& current = outline[i];
+        const glm::dvec2& next = outline[(i + 1U) % outline.size()];
+        twiceArea += current.x * next.y - next.x * current.y;
+    }
+    return twiceArea * 0.5;
+}
+
+bool IsInsideTriangle(const glm::dvec2& point,
+    const glm::dvec2& a, const glm::dvec2& b, const glm::dvec2& c,
+    double winding)
+{
+    constexpr double tolerance = 1.0e-9;
+    return winding * Cross2D(a, b, point) >= -tolerance
+        && winding * Cross2D(b, c, point) >= -tolerance
+        && winding * Cross2D(c, a, point) >= -tolerance;
+}
+
+std::vector<std::array<std::uint32_t, 3>> TriangulateFootprint(
+    const std::vector<glm::dvec2>& outline)
+{
+    const double area = PolygonArea(outline);
+    if (std::abs(area) < 1.0e-8)
+        return {};
+
+    const double winding = area > 0.0 ? 1.0 : -1.0;
+    std::vector<std::uint32_t> remaining;
+    std::vector<std::array<std::uint32_t, 3>> triangles;
+    remaining.reserve(outline.size());
+    triangles.reserve(outline.size() - 2U);
+    for (std::uint32_t i = 0; i < outline.size(); ++i)
+        remaining.push_back(i);
+
+    while (remaining.size() > 3U)
+    {
+        bool removedEar = false;
+        for (std::size_t i = 0; i < remaining.size(); ++i)
+        {
+            const std::uint32_t previous = remaining[(i + remaining.size() - 1U)
+                % remaining.size()];
+            const std::uint32_t current = remaining[i];
+            const std::uint32_t next = remaining[(i + 1U) % remaining.size()];
+            if (winding * Cross2D(outline[previous], outline[current], outline[next])
+                <= 1.0e-9)
+                continue;
+
+            bool containsVertex = false;
+            for (const std::uint32_t candidate : remaining)
+            {
+                if (candidate == previous || candidate == current || candidate == next)
+                    continue;
+                if (IsInsideTriangle(outline[candidate], outline[previous],
+                    outline[current], outline[next], winding))
+                {
+                    containsVertex = true;
+                    break;
+                }
+            }
+            if (containsVertex)
+                continue;
+
+            triangles.push_back({previous, current, next});
+            remaining.erase(remaining.begin() + static_cast<std::ptrdiff_t>(i));
+            removedEar = true;
+            break;
+        }
+        if (!removedEar)
+            return {};
+    }
+    triangles.push_back({remaining[0], remaining[1], remaining[2]});
+    return triangles;
+}
+
+std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
+    const std::vector<aerosimlab::terrain::MapBuilding>& buildings,
+    bool useEstimatedHeights)
+{
+    std::vector<aerosimlab::graphics::Vertex> vertices;
+    std::vector<std::uint32_t> indices;
+    for (const auto& building : buildings)
+    {
+        if (building.heightEstimatedFromLevels != useEstimatedHeights)
+            continue;
+        const auto triangles = TriangulateFootprint(building.outlineMeters);
+        if (triangles.empty())
+            continue;
+
+        const std::uint32_t roofStart = static_cast<std::uint32_t>(vertices.size());
+        const double winding = PolygonArea(building.outlineMeters) > 0.0 ? 1.0 : -1.0;
+        for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
+        {
+            const auto& point = building.outlineMeters[i];
+            const double roofHeight = building.groundElevationsMeters[i]
+                + building.heightMeters;
+            vertices.push_back({
+                ToRenderPosition({point.x, point.y, roofHeight}),
+                {0.0F, 1.0F, 0.0F}, {0.0F, 0.0F}});
+        }
+        for (const auto& triangle : triangles)
+        {
+            if (winding > 0.0)
+                indices.insert(indices.end(), {roofStart + triangle[0],
+                    roofStart + triangle[2], roofStart + triangle[1]});
+            else
+                indices.insert(indices.end(), {roofStart + triangle[0],
+                    roofStart + triangle[1], roofStart + triangle[2]});
+        }
+
+        for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
+        {
+            const std::size_t next = (i + 1U) % building.outlineMeters.size();
+            const auto& firstPoint = building.outlineMeters[i];
+            const auto& secondPoint = building.outlineMeters[next];
+            const glm::dvec2 edge = secondPoint - firstPoint;
+            glm::dvec3 outward{edge.y, 0.0, edge.x};
+            outward *= winding;
+            const glm::vec3 normal = glm::normalize(ToRenderDirection(outward));
+            const auto bottomFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
+                building.groundElevationsMeters[i]});
+            const auto bottomSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
+                building.groundElevationsMeters[next]});
+            const auto topFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
+                building.groundElevationsMeters[i] + building.heightMeters});
+            const auto topSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
+                building.groundElevationsMeters[next] + building.heightMeters});
+            const std::uint32_t wallStart = static_cast<std::uint32_t>(vertices.size());
+            vertices.insert(vertices.end(), {
+                {bottomFirst, normal, {0.0F, 0.0F}},
+                {bottomSecond, normal, {0.0F, 0.0F}},
+                {topSecond, normal, {0.0F, 1.0F}},
+                {topFirst, normal, {0.0F, 1.0F}}});
+            indices.insert(indices.end(), {wallStart, wallStart + 1U, wallStart + 2U,
+                wallStart, wallStart + 2U, wallStart + 3U});
+        }
+    }
+
+    if (indices.empty())
+        return {};
+    return std::make_unique<aerosimlab::graphics::Mesh>(
+        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
+        indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
 
 #ifdef __EMSCRIPTEN__
@@ -478,6 +632,34 @@ void AeroSimLabApp::LoadScene()
     terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load(
         AssetPath("maps/tancheon/terrain.aerotrn"));
     terrainMesh_ = CreateTerrainMesh(terrainGrid_);
+    const auto buildings = aerosimlab::terrain::LoadMapBuildings(
+        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+    measuredBuildingMesh_ = CreateBuildingMesh(buildings, false);
+    estimatedBuildingMesh_ = CreateBuildingMesh(buildings, true);
+#ifndef __EMSCRIPTEN__
+    for (const auto& building : buildings)
+    {
+        glm::dvec2 minimum = building.outlineMeters.front();
+        glm::dvec2 maximum = minimum;
+        double groundMinimum = building.groundElevationsMeters.front();
+        double groundMaximum = groundMinimum;
+        for (std::size_t i = 1; i < building.outlineMeters.size(); ++i)
+        {
+            minimum = glm::min(minimum, building.outlineMeters[i]);
+            maximum = glm::max(maximum, building.outlineMeters[i]);
+            groundMinimum = std::min(groundMinimum, building.groundElevationsMeters[i]);
+            groundMaximum = std::max(groundMaximum, building.groundElevationsMeters[i]);
+        }
+        const glm::dvec2 center = (minimum + maximum) * 0.5;
+        const double bottom = groundMinimum;
+        const double top = groundMaximum + building.heightMeters;
+        simulation_.AddStaticObstacleBox(
+            {center.x, center.y, (bottom + top) * 0.5},
+            {static_cast<float>((maximum.x - minimum.x) * 0.5),
+                static_cast<float>((maximum.y - minimum.y) * 0.5),
+                static_cast<float>((top - bottom) * 0.5)});
+    }
+#endif
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
     missionGoalMeters_ = {80.0, 120.0,
         terrainGrid_.HeightAtLocalMeters({80.0, 120.0}) + 12.0};
@@ -725,6 +907,12 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 {
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
         view, projection, cameraPosition);
+    if (measuredBuildingMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *measuredBuildingMesh_, buildingMaterial_,
+            *shader_, view, projection, cameraPosition);
+    if (estimatedBuildingMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
+            estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition);
 
     const glm::vec3 goal = ToRenderPosition(missionGoalMeters_);
     DrawCube(CubeTransform(goal + glm::vec3{0.0F, 0.09F, 0.0F},
