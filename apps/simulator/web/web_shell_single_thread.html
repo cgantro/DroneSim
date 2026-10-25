@@ -22,7 +22,6 @@
       var simulatorVersion = "__SIMULATOR_VERSION__";
       var simulatorStarted = false;
       var wasmRequestStarted = false;
-      var wasmResponseReceived = false;
       var startupMessage = document.getElementById("startup-message");
       var startupStatus = document.getElementById("startup-status");
       var startupPhase = startupMessage.textContent;
@@ -30,14 +29,13 @@
         if (!simulatorStarted) {
           startupMessage.textContent = !wasmRequestStarted
             ? "시뮬레이터 엔진 파일 요청을 시작하지 못했습니다."
-            : !wasmResponseReceived
-              ? "시뮬레이터 엔진 파일 응답을 기다리고 있습니다."
-              : "첫 화면을 아직 그리지 못했습니다. 현재 단계: " + startupPhase;
+            : "시뮬레이터가 시작되지 않았습니다. 현재 단계: " + startupPhase;
           startupStatus.hidden = false;
         }
       }, 20000);
 
       function showStartupError(message) {
+        window.clearTimeout(startupTimeout);
         startupMessage.textContent = message;
         startupStatus.hidden = false;
         startupStatus.setAttribute("role", "alert");
@@ -55,48 +53,50 @@
         startupStatus.hidden = true;
       };
 
-      var originalFetch = window.fetch.bind(window);
-      window.fetch = function (request, options) {
-        var url = typeof request === "string" ? request : request.url;
-        if (!url.includes("aerosimlab_simulator.wasm"))
-          return originalFetch(request, options);
-
+      function instantiateSimulatorWasm(imports, onReady) {
         wasmRequestStarted = true;
         window.setSimulatorStartupStatus("시뮬레이터 엔진 파일을 내려받고 있습니다.");
-        return originalFetch(request, options).then(function (response) {
-          if (response.ok) {
-            wasmResponseReceived = true;
-            window.setSimulatorStartupStatus("시뮬레이터 엔진 파일을 받았습니다. 브라우저에서 실행 준비 중입니다.");
-          }
-          return response;
-        }, function (error) {
-          showStartupError("시뮬레이터 엔진 파일을 받지 못했습니다. " + error.message);
-          throw error;
-        });
-      };
+        fetch(Module.locateFile("aerosimlab_simulator.wasm"), { credentials: "same-origin" })
+          .then(function (response) {
+            if (!response.ok)
+              throw new Error("파일 요청이 " + response.status + " 상태로 끝났습니다.");
+
+            window.setSimulatorStartupStatus("브라우저가 시뮬레이터 엔진을 컴파일하고 있습니다.");
+            return WebAssembly.instantiateStreaming(response.clone(), imports)
+              .catch(function () {
+                return response.arrayBuffer().then(function (bytes) {
+                  return WebAssembly.instantiate(bytes, imports);
+                });
+              });
+          })
+          .then(function (result) {
+            window.setSimulatorStartupStatus("시뮬레이터 실행 환경을 준비하고 있습니다.");
+            onReady(result.instance, result.module);
+          })
+          .catch(function (error) {
+            showStartupError("시뮬레이터 엔진을 실행하지 못했습니다. " + error.message);
+          });
+        return {};
+      }
 
       var Module = {
         canvas: document.getElementById("canvas"),
+        instantiateWasm: instantiateSimulatorWasm,
         locateFile: function (path) {
-          startupMessage.textContent = path.endsWith(".wasm")
-            ? "시뮬레이터 엔진을 준비하고 있습니다."
-            : "화면 자료를 불러오고 있습니다.";
+          if (!path.endsWith(".wasm"))
+            window.setSimulatorStartupStatus("화면 자료를 불러오고 있습니다.");
           return path + "?rev=" + encodeURIComponent(simulatorVersion);
         },
         setStatus: function (text) {
-          if (text && text !== "Running...") {
-            startupMessage.textContent = "시뮬레이터를 시작하고 있습니다.";
-            startupStatus.hidden = false;
-          }
+          if (text && text !== "Running...")
+            window.setSimulatorStartupStatus("시뮬레이터를 시작하고 있습니다.");
         },
         monitorRunDependencies: function (remaining) {
-          if (remaining > 0) {
-            startupMessage.textContent = "시뮬레이터 실행에 필요한 자료를 준비하고 있습니다.";
-            startupStatus.hidden = false;
-          }
+          if (remaining > 0)
+            window.setSimulatorStartupStatus("시뮬레이터 실행에 필요한 자료를 준비하고 있습니다.");
         },
         onRuntimeInitialized: function () {
-          window.setSimulatorStartupStatus("시뮬레이터를 시작하고 있습니다.");
+          window.setSimulatorStartupStatus("시뮬레이터 실행 환경을 마쳤습니다. 화면을 시작하고 있습니다.");
         },
         onAbort: function (reason) {
           window.clearTimeout(startupTimeout);
