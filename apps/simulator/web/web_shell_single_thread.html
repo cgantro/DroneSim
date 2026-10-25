@@ -22,11 +22,25 @@
       var simulatorVersion = "__SIMULATOR_VERSION__";
       var simulatorStarted = false;
       var pendingStartupItems = new Set();
+      var dataPackageRequestStarted = false;
       var startupMessage = document.getElementById("startup-message");
       var startupStatus = document.getElementById("startup-status");
       var startupTimeout = window.setTimeout(function () {
         if (!simulatorStarted) {
-          startupMessage.textContent = "시뮬레이터 준비가 오래 걸리고 있습니다. 파일을 불러오지 못했는지 확인 중입니다.";
+          var dataDownload = Module && Module.dataFileDownloads
+            ? Object.values(Module.dataFileDownloads)[0]
+            : null;
+          if (dataDownload && dataDownload.loaded >= dataDownload.total) {
+            startupMessage.textContent = "화면 자료를 모두 받았습니다. 프로그램에 등록하는 중입니다.";
+          } else if (dataDownload) {
+            startupMessage.textContent = "화면 자료를 내려받고 있습니다. (" + dataDownload.loaded + "/" + dataDownload.total + "바이트)";
+          } else if (pendingStartupItems.has("datafile_aerosimlab_simulator.data")) {
+            startupMessage.textContent = dataPackageRequestStarted
+              ? "화면 자료 응답을 기다리고 있습니다."
+              : "화면 자료 요청을 시작하지 못했습니다.";
+          } else {
+            startupMessage.textContent = "시뮬레이터 준비가 오래 걸리고 있습니다. 파일을 불러오지 못했는지 확인 중입니다.";
+          }
           startupStatus.hidden = false;
         }
       }, 20000);
@@ -66,14 +80,36 @@
         },
         setStatus: function (text) {
           if (text && text !== "Running...") {
-            startupMessage.textContent = text.startsWith("Downloading data...")
-              ? "화면 자료를 내려받고 있습니다."
-              : "시뮬레이터를 시작하고 있습니다.";
+            if (text.startsWith("Downloading data...")) {
+              dataPackageRequestStarted = true;
+              var progress = text.match(/\((\d+)\/(\d+)\)/);
+              startupMessage.textContent = progress
+                ? "화면 자료를 내려받고 있습니다. (" + progress[1] + "/" + progress[2] + "바이트)"
+                : "화면 자료를 내려받고 있습니다.";
+            } else {
+              startupMessage.textContent = "시뮬레이터를 시작하고 있습니다.";
+            }
             startupStatus.hidden = false;
           }
         },
         monitorRunDependencies: function (remaining) {
           if (remaining > 0) {
+            var dataDownload = this.dataFileDownloads
+              ? Object.values(this.dataFileDownloads)[0]
+              : null;
+            if (pendingStartupItems.has("datafile_aerosimlab_simulator.data")) {
+              if (dataDownload && dataDownload.loaded >= dataDownload.total) {
+                startupMessage.textContent = "화면 자료를 모두 받았습니다. 프로그램에 등록하는 중입니다.";
+              } else if (dataDownload) {
+                startupMessage.textContent = "화면 자료를 내려받고 있습니다. (" + dataDownload.loaded + "/" + dataDownload.total + "바이트)";
+              } else if (dataPackageRequestStarted) {
+                startupMessage.textContent = "화면 자료 응답을 기다리고 있습니다.";
+              } else {
+                startupMessage.textContent = "화면 자료 요청을 시작하지 못했습니다.";
+              }
+              startupStatus.hidden = false;
+              return;
+            }
             var waitingFor = Array.from(pendingStartupItems).map(function (item) {
               if (item === "wasm-instantiate") return "시뮬레이터 엔진";
               if (item === "datafile_aerosimlab_simulator.data") return "화면 자료 파일";
