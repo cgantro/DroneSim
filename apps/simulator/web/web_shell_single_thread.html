@@ -35,6 +35,11 @@
         },
         onRuntimeInitialized: function () {
           document.getElementById("startup-status").hidden = true;
+        },
+        onAbort: function () {
+          document.getElementById("startup-message").textContent = "시뮬레이터를 시작하지 못했습니다. 새로고침해 주세요.";
+          document.getElementById("startup-status").hidden = false;
+          document.getElementById("startup-status").setAttribute("role", "alert");
         }
       };
     </script>
