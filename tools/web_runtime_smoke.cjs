@@ -41,6 +41,7 @@ async function waitForServer() {
 
 async function run() {
   let browser;
+  let page;
   try {
     await waitForServer();
     browser = await chromium.launch({
@@ -52,12 +53,15 @@ async function run() {
         "--enable-unsafe-swiftshader",
       ],
     });
-    const page = await browser.newPage();
+    page = await browser.newPage();
     page.on("console", (message) => {
       const text = message.text();
       if (text.startsWith("[시뮬레이터 시작] "))
         lastStartupStage = text.slice("[시뮬레이터 시작] ".length);
-      if (message.type() === "error" || text.startsWith("[시뮬레이터 시작] "))
+      else if (text.startsWith("[웹 시작] "))
+        lastStartupStage = text.slice("[웹 시작] ".length);
+      if (message.type() === "error" || text.startsWith("[시뮬레이터 시작] ")
+        || text.startsWith("[웹 시작] "))
         record(`브라우저 ${message.type()}: ${text}`);
     });
     page.on("pageerror", (error) => record(`페이지 오류: ${error.stack || error.message}`));
@@ -66,6 +70,8 @@ async function run() {
     });
     page.on("response", (response) => {
       if (response.status() >= 400)
+        record(`HTTP ${response.status()}: ${response.url()}`);
+      else if (/aerosimlab_simulator\.(js|wasm)/.test(response.url()))
         record(`HTTP ${response.status()}: ${response.url()}`);
     });
 
@@ -82,6 +88,21 @@ async function run() {
   } catch (error) {
     record(`브라우저 검사 실패: ${error.stack || error.message}`);
     record(`마지막 시작 단계: ${lastStartupStage}`);
+    if (page) {
+      try {
+        const state = await page.evaluate(() => ({
+          readyState: document.readyState,
+          startupText: document.querySelector("#startup-message")?.textContent,
+          startupHidden: document.querySelector("#startup-status")?.hidden,
+          canvasSize: [document.querySelector("#canvas")?.width, document.querySelector("#canvas")?.height],
+          runtimeInitialized: window.Module?.calledRun ?? "확인할 수 없음",
+          pendingDependencies: window.Module?.runDependencies ?? "확인할 수 없음",
+        }));
+        record(`브라우저 현재 상태: ${JSON.stringify(state)}`);
+      } catch (snapshotError) {
+        record(`브라우저 현재 상태를 읽지 못했습니다: ${snapshotError.message}`);
+      }
+    }
     if (diagnostics.length === 0)
       record("브라우저 오류·실패한 요청·C++ 시작 단계가 기록되지 않았습니다.");
     process.exitCode = 1;
