@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <charconv>
 #include <cmath>
 #include <fstream>
 #include <stdexcept>
@@ -27,21 +28,23 @@ double ReadPositiveNumber(const Json& value)
         return 0.0;
 
     const std::string text = value.get<std::string>();
-    std::size_t consumed = 0;
+    const char* begin = text.data();
     double number = 0.0;
-    try
-    {
-        number = std::stod(text, &consumed);
-    }
-    catch (const std::exception&)
-    {
+    while (begin != text.data() + text.size()
+        && (*begin == ' ' || *begin == '\t'))
+        ++begin;
+
+    const auto [end, error] = std::from_chars(
+        begin, text.data() + text.size(), number, std::chars_format::general);
+    if (error != std::errc{} || end == begin)
         return 0.0;
-    }
-    while (consumed < text.size()
-        && (text[consumed] == ' ' || text[consumed] == '\t'
-            || text[consumed] == 'm'))
-        ++consumed;
-    return consumed == text.size() && std::isfinite(number) && number > 0.0
+
+    const char* remaining = end;
+    const char* textEnd = text.data() + text.size();
+    while (remaining != textEnd
+        && (*remaining == ' ' || *remaining == '\t' || *remaining == 'm'))
+        ++remaining;
+    return remaining == textEnd && std::isfinite(number) && number > 0.0
         ? number : 0.0;
 }
 
@@ -65,15 +68,10 @@ bool ReadFootprint(
 
         const glm::dvec2 local = terrain.ToLocalMeters(
             point[1].get<double>(), point[0].get<double>());
-        try
-        {
-            building.groundElevationsMeters.push_back(
-                terrain.HeightAtLocalMeters(local));
-        }
-        catch (const std::out_of_range&)
-        {
+        if (!terrain.ContainsLocalPositionMeters(local))
             return false;
-        }
+        building.groundElevationsMeters.push_back(
+            terrain.HeightAtLocalMeters(local));
         building.outlineMeters.push_back(local);
     }
 

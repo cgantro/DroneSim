@@ -24,6 +24,8 @@ void Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight()
     EXPECT_DOUBLE_EQ(terrain.ToLocalMeters(37.0, -122.0).x, 0.0);
     EXPECT_NEAR(terrain.ToLocalMeters(37.0 + 20.0 / 111320.0, -122.0).y,
         20.0, 0.02);
+    EXPECT_TRUE(terrain.ContainsLocalPositionMeters({10.0, 20.0}));
+    EXPECT_FALSE(terrain.ContainsLocalPositionMeters({10.01, 0.0}));
     EXPECT_FLOAT_EQ(terrain.HeightAtLocalMeters({0.0, 0.0}), 120.0F);
 }
 

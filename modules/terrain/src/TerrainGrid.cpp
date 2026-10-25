@@ -105,6 +105,25 @@ float TerrainGrid::HeightAt(std::uint32_t row, std::uint32_t column) const
     return heightOffsetsMeters[static_cast<std::size_t>(row) * sampleCount + column];
 }
 
+bool TerrainGrid::ContainsLocalPositionMeters(
+    const glm::dvec2& positionMeters) const noexcept
+{
+    if (sampleCount < 2U || !std::isfinite(positionMeters.x)
+        || !std::isfinite(positionMeters.y)
+        || !std::isfinite(spacingXMeters) || !(spacingXMeters > 0.0F)
+        || !std::isfinite(spacingYMeters) || !(spacingYMeters > 0.0F))
+    {
+        return false;
+    }
+
+    const double halfWidth = static_cast<double>(sampleCount - 1U)
+        * spacingXMeters * 0.5;
+    const double halfDepth = static_cast<double>(sampleCount - 1U)
+        * spacingYMeters * 0.5;
+    return positionMeters.x >= -halfWidth && positionMeters.x <= halfWidth
+        && positionMeters.y >= -halfDepth && positionMeters.y <= halfDepth;
+}
+
 float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
 {
     if (sampleCount < 2U || !std::isfinite(positionMeters.x)
@@ -117,19 +136,15 @@ float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
         throw std::invalid_argument("지형 위치와 격자 자료를 확인해 주세요.");
     }
 
+    if (!ContainsLocalPositionMeters(positionMeters))
+        throw std::out_of_range("요청한 위치가 지형 격자 범위를 벗어났습니다.");
+
     const double halfWidth = static_cast<double>(sampleCount - 1U)
         * spacingXMeters * 0.5;
     const double halfDepth = static_cast<double>(sampleCount - 1U)
         * spacingYMeters * 0.5;
     const double column = (positionMeters.x + halfWidth) / spacingXMeters;
     const double row = (halfDepth - positionMeters.y) / spacingYMeters;
-    if (column < 0.0 || row < 0.0
-        || column > static_cast<double>(sampleCount - 1U)
-        || row > static_cast<double>(sampleCount - 1U))
-    {
-        throw std::out_of_range("요청한 위치가 지형 격자 범위를 벗어났습니다.");
-    }
-
     const auto columnBefore = static_cast<std::uint32_t>(std::floor(column));
     const auto rowBefore = static_cast<std::uint32_t>(std::floor(row));
     const std::uint32_t columnAfter = std::min(columnBefore + 1U, sampleCount - 1U);
