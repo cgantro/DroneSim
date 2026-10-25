@@ -17,6 +17,10 @@ const mimeTypes = {
 const server = http.createServer((request, response) => {
   const requestPath = new URL(request.url, "http://127.0.0.1").pathname;
   const relativePath = decodeURIComponent(requestPath).replace(/^\/+/, "");
+  if (relativePath === "favicon.ico") {
+    response.writeHead(204).end();
+    return;
+  }
   const filePath = path.resolve(siteRoot, relativePath || "index.html");
   if (filePath !== siteRoot && !filePath.startsWith(`${siteRoot}${path.sep}`)) {
     response.writeHead(403).end();
@@ -80,7 +84,10 @@ async function run() {
       null,
       { timeout: 45000 }
     );
-    const startupError = await page.locator("#startup-status[role='alert']").textContent();
+    const startupError = await page.evaluate(() => {
+      const status = document.querySelector("#startup-status[role='alert']");
+      return status?.textContent?.trim() || null;
+    });
     if (startupError)
       throw new Error(startupError.trim());
     console.log("Chromium에서 시뮬레이터 첫 화면을 확인했습니다.");
