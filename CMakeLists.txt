@@ -202,6 +202,7 @@ target_link_libraries(aerosimlab_headless PRIVATE
 if(EMSCRIPTEN)
   target_link_options(aerosimlab_headless PRIVATE
     "--preload-file" "${CMAKE_SOURCE_DIR}/scenarios@scenarios"
+    "-sSTACK_SIZE=1mb"
   )
 endif()
 
@@ -315,9 +316,11 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   endif()
   if(EMSCRIPTEN)
     set_target_properties(aerosimlab_simulator PROPERTIES SUFFIX ".html")
+    # Flecs 월드 초기화에 필요한 스택을 확보한다. Emscripten 기본 64KB로는 부족하다.
     target_link_options(aerosimlab_simulator PRIVATE
       "--shell-file=${CMAKE_SOURCE_DIR}/apps/simulator/web/web_shell_single_thread.html"
       "-sALLOW_MEMORY_GROWTH=1"
+      "-sSTACK_SIZE=1mb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
     )
   else()
