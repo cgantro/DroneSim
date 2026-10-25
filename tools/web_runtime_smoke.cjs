@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const http = require("node:http");
 const path = require("node:path");
 const { chromium } = require(path.join(
@@ -52,7 +53,8 @@ async function run() {
         "--enable-unsafe-swiftshader",
       ],
     });
-    const page = await browser.newPage();
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
     page.on("console", (message) => {
       if (message.type() === "error")
         console.error(`브라우저 오류: ${message.text()} (${JSON.stringify(message.location())})`);
@@ -195,7 +197,45 @@ async function run() {
     const missionStatus = await telemetry.innerText();
     if (!missionStatus.includes("점검 임무: 구도 확인 완료"))
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${missionStatus}`);
-    console.log("Chromium에서 자동 점검 시작, 촬영 구도 확인과 착륙을 확인했습니다.");
+    await page.waitForFunction(
+      () => document.querySelector("#web-eo-recording")?.textContent.includes("내려받을 수 있습니다"),
+      null,
+      { timeout: 10000 }
+    );
+
+    const videoDownloadPromise = page.waitForEvent("download");
+    await page.getByRole("link", { name: "영상 내려받기" }).click();
+    const videoDownload = await videoDownloadPromise;
+    if (!videoDownload.suggestedFilename().endsWith(".webm"))
+      throw new Error(`영상 파일 형식이 WebM이 아닙니다: ${videoDownload.suggestedFilename()}`);
+    const videoPath = await videoDownload.path();
+    if (!videoPath || fs.statSync(videoPath).size === 0)
+      throw new Error("EO 영상 파일이 비어 있습니다.");
+
+    const manifestDownloadPromise = page.waitForEvent("download");
+    await page.getByRole("link", { name: "촬영 기록 내려받기" }).click();
+    const manifestDownload = await manifestDownloadPromise;
+    const manifestPath = await manifestDownload.path();
+    if (!manifestPath)
+      throw new Error("촬영 기록 파일을 내려받지 못했습니다.");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const videoBytes = fs.readFileSync(videoPath);
+    const videoHash = crypto.createHash("sha256").update(videoBytes).digest("hex");
+    if (manifest.collection_state !== "CAPTURED"
+        || manifest.mission_outcome !== "COMPLETED"
+        || manifest.video_bytes !== videoBytes.length
+        || manifest.video_checksum !== videoHash
+        || manifest.recording_duration_milliseconds <= 0
+        || !Array.isArray(manifest.samples) || manifest.samples.length < 2)
+      throw new Error("촬영 기록의 영상 크기·체크섬·상태 표본이 올바르지 않습니다.");
+    const sample = manifest.samples.find((entry) => entry.inspection_zone_id);
+    if (!sample || !Array.isArray(sample.drone_position_meters)
+        || !Array.isArray(sample.camera_position_meters)
+        || !Array.isArray(sample.camera_orientation_xyzw)
+        || !Number.isFinite(sample.simulation_time_seconds)
+        || !sample.capture_assessment)
+      throw new Error("촬영 기록에 점검 구역·시간·위치·자세·판정 정보가 없습니다.");
+    console.log("Chromium에서 자동 점검, EO 영상 저장, 촬영 기록과 체크섬을 확인했습니다.");
   } catch (error) {
     console.error(`웹 시작 검사 실패: ${error.message}`);
     process.exitCode = 1;

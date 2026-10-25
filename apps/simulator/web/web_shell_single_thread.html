@@ -22,6 +22,10 @@
       #web-gcs [data-command="0"] { background: #176b50; }
       #web-gcs [data-command="2"] { background: #8c3c3c; }
       #web-gcs [data-start-inspection] { background: #315f87; }
+      #web-eo-recording { display: grid; gap: 5px; min-width: 190px; color: #d4dde0; }
+      #web-eo-recording-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+      #web-eo-recording a { color: #9fd5ff; }
+      #web-eo-recording a[hidden] { display: none; }
       @media (max-width: 720px) { #web-gcs { align-items: flex-start; flex-direction: column; } #web-gcs-status { min-width: 0; } #web-gcs-controls { flex-wrap: wrap; } }
     </style>
   </head>
@@ -35,6 +39,13 @@
         <strong>지상통제 · 준비 중</strong>
         <span>가상 시험면 촬영 조건: 준비 중</span>
         <span id="web-gcs-mission">점검 임무: 대기 중</span>
+      </div>
+      <div id="web-eo-recording" aria-live="polite">
+        <strong>EO 기록: 대기 중</strong>
+        <div id="web-eo-recording-controls">
+          <a id="web-eo-video-download" hidden>영상 내려받기</a>
+          <a id="web-eo-manifest-download" hidden>촬영 기록 내려받기</a>
+        </div>
       </div>
       <div id="web-gcs-controls">
         <button type="button" data-start-inspection disabled>자동 점검 시작</button>
@@ -63,6 +74,14 @@
           startupStatus.hidden = false;
         }
       }, 20000);
+      var eoRecorder = null;
+      var eoRecorderCanvas = null;
+      var eoRecorderContext = null;
+      var eoRecorderFrame = 0;
+      var eoRecorderChunks = [];
+      var eoTelemetrySamples = [];
+      var eoRecordingStartedAt = 0;
+      var eoRecordingFinalizing = false;
 
       function showStartupError(message) {
         window.clearTimeout(startupTimeout);
@@ -86,7 +105,150 @@
         });
       };
 
-      window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive, captureAssessment, missionStatus) {
+      function setEoRecordingStatus(message) {
+        document.querySelector("#web-eo-recording strong").textContent = "EO 기록: " + message;
+      }
+
+      function eoRecordingMimeType() {
+        if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream)
+          return "";
+        return ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]
+          .find(function (type) { return MediaRecorder.isTypeSupported(type); }) || "";
+      }
+
+      function copyEoViewport() {
+        if (!eoRecorder || !Module.canvas || !eoRecorderContext)
+          return;
+        var source = Module.canvas;
+        var sourceX = Math.floor(source.width * 2 / 3);
+        var sourceWidth = source.width - sourceX;
+        if (sourceWidth > 0 && source.height > 0) {
+          if (eoRecorderCanvas.width !== sourceWidth || eoRecorderCanvas.height !== source.height) {
+            eoRecorderCanvas.width = sourceWidth;
+            eoRecorderCanvas.height = source.height;
+          }
+          eoRecorderContext.drawImage(source, sourceX, 0, sourceWidth, source.height,
+            0, 0, sourceWidth, source.height);
+        }
+        eoRecorderFrame = window.requestAnimationFrame(copyEoViewport);
+      }
+
+      async function finishEoRecording() {
+        if (!eoRecorder || eoRecordingFinalizing)
+          return;
+        eoRecordingFinalizing = true;
+        var recorder = eoRecorder;
+        eoRecorder = null;
+        window.cancelAnimationFrame(eoRecorderFrame);
+        recorder.stop();
+        await new Promise(function (resolve) {
+          recorder.addEventListener("stop", resolve, { once: true });
+        });
+        recorder.stream.getTracks().forEach(function (track) { track.stop(); });
+
+        var videoBlob = new Blob(eoRecorderChunks, { type: recorder.mimeType || "video/webm" });
+        eoRecorderChunks = [];
+        if (videoBlob.size === 0) {
+          setEoRecordingStatus("영상 프레임이 없어 저장하지 못했습니다.");
+          eoRecordingFinalizing = false;
+          return;
+        }
+
+        var timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        var videoName = "dronesim-eo-" + timestamp + ".webm";
+        var finalSample = eoTelemetrySamples[eoTelemetrySamples.length - 1];
+        var videoUrl = URL.createObjectURL(videoBlob);
+        var videoLink = document.getElementById("web-eo-video-download");
+        videoLink.href = videoUrl;
+        videoLink.download = videoName;
+        videoLink.hidden = false;
+
+        var sha256 = "계산할 수 없음";
+        if (window.crypto && crypto.subtle) {
+          try {
+            var digest = await crypto.subtle.digest("SHA-256", await videoBlob.arrayBuffer());
+            sha256 = Array.from(new Uint8Array(digest), function (value) {
+              return value.toString(16).padStart(2, "0");
+            }).join("");
+          } catch (_) {
+            sha256 = "계산할 수 없음";
+          }
+        }
+        var manifest = {
+          format_version: 1,
+          collection_state: "CAPTURED",
+          recording_source: "시뮬레이터 화면의 EO 시점 영역",
+          video_file: videoName,
+          video_mime_type: videoBlob.type,
+          video_bytes: videoBlob.size,
+          recording_duration_milliseconds: Math.round(performance.now() - eoRecordingStartedAt),
+          mission_outcome: finalSample && finalSample.mission_status.indexOf("구도 확인 완료") >= 0
+            ? "COMPLETED" : "FAILED",
+          mission_status: finalSample ? finalSample.mission_status : "기록 없음",
+          video_checksum_algorithm: sha256 === "계산할 수 없음" ? null : "SHA-256",
+          video_checksum: sha256,
+          simulation_tick_rate_hz: 60,
+          coordinate_frame: "시뮬레이터 로컬 좌표, m",
+          sample_interval_milliseconds: 250,
+          samples: eoTelemetrySamples
+        };
+        var manifestBlob = new Blob([JSON.stringify(manifest, null, 2) + "\n"],
+          { type: "application/json" });
+        var manifestLink = document.getElementById("web-eo-manifest-download");
+        manifestLink.href = URL.createObjectURL(manifestBlob);
+        manifestLink.download = videoName.replace(/\.webm$/i, ".manifest.json");
+        manifestLink.hidden = false;
+        setEoRecordingStatus("영상과 촬영 기록을 내려받을 수 있습니다. "
+          + (eoTelemetrySamples.length ? eoTelemetrySamples.length + "개 상태 표본" : "상태 표본 없음"));
+        eoRecordingFinalizing = false;
+      }
+
+      function startEoRecording() {
+        var mimeType = eoRecordingMimeType();
+        if (!mimeType) {
+          setEoRecordingStatus("이 브라우저는 화면 녹화를 지원하지 않습니다.");
+          return false;
+        }
+        if (eoRecorder)
+          return true;
+
+        eoRecorderCanvas = document.createElement("canvas");
+        eoRecorderContext = eoRecorderCanvas.getContext("2d");
+        if (!eoRecorderContext) {
+          setEoRecordingStatus("EO 화면을 준비하지 못했습니다.");
+          return false;
+        }
+        eoTelemetrySamples = [];
+        eoRecorderChunks = [];
+        eoRecordingStartedAt = performance.now();
+        var stream = null;
+        try {
+          stream = eoRecorderCanvas.captureStream(20);
+          eoRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+          eoRecorder.addEventListener("dataavailable", function (event) {
+            if (event.data && event.data.size > 0)
+              eoRecorderChunks.push(event.data);
+          });
+          eoRecorder.addEventListener("error", function (event) {
+            setEoRecordingStatus("브라우저 녹화 오류: "
+              + (event.error?.message || "원인을 확인할 수 없습니다."));
+          });
+          eoRecorder.start(1000);
+          copyEoViewport();
+          setEoRecordingStatus("녹화 중");
+          return true;
+        } catch (error) {
+          eoRecorder = null;
+          if (stream)
+            stream.getTracks().forEach(function (track) { track.stop(); });
+          setEoRecordingStatus("녹화를 시작하지 못했습니다: " + error.message);
+          return false;
+        }
+      }
+
+      window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive,
+          captureAssessment, missionStatus, simulationTick, cameraX, cameraY, cameraZ,
+          quaternionX, quaternionY, quaternionZ, quaternionW, facilityId, zoneId) {
         var status = document.getElementById("web-gcs-status");
         var captureLabels = {
           ready: "구도 조건 충족",
@@ -108,6 +270,26 @@
           + (captureLabels[captureAssessment] || captureLabels.unknown)
           + " · 저장·전송 완료 판정은 아님</span>"
           + "<span id=\"web-gcs-mission\">점검 임무: " + missionStatus + "</span>";
+
+        if (eoRecorder) {
+          eoTelemetrySamples.push({
+            recording_elapsed_milliseconds: Math.round(performance.now() - eoRecordingStartedAt),
+            simulation_tick: simulationTick,
+            simulation_time_seconds: simulationTick / 60,
+            facility_id: facilityId,
+            inspection_zone_id: zoneId,
+            drone_position_meters: [x, y, z],
+            camera_position_meters: [cameraX, cameraY, cameraZ],
+            camera_orientation_xyzw: [quaternionX, quaternionY, quaternionZ, quaternionW],
+            speed_meters_per_second: speed,
+            camera_active: cameraActive,
+            capture_assessment: captureAssessment,
+            mission_status: missionStatus
+          });
+        }
+        if (eoRecorder && (missionStatus.indexOf("구도 확인 완료") >= 0
+            || missionStatus.indexOf("실패:") >= 0))
+          void finishEoRecording();
       };
 
       (function () {
@@ -128,8 +310,15 @@
           });
         });
         document.querySelector("#web-gcs [data-start-inspection]").addEventListener("click", function () {
-          if (typeof Module._DroneSimWebStartInspectionMission === "function")
-            Module._DroneSimWebStartInspectionMission();
+          if (eoRecorder || eoRecordingFinalizing) {
+            setEoRecordingStatus("현재 점검 임무의 녹화가 진행 중입니다.");
+            return;
+          }
+          if (!startEoRecording())
+            return;
+          if (typeof Module._DroneSimWebStartInspectionMission !== "function"
+              || !Module._DroneSimWebStartInspectionMission())
+            void finishEoRecording();
         });
         document.querySelectorAll("#web-gcs [data-axis]").forEach(function (button) {
           var parts = button.dataset.axis.split(":");

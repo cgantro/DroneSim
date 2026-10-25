@@ -711,17 +711,23 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         const double speedMetersPerSecond = glm::length(state.velocityMetersPerSecond);
         const bool cameraActive = simulation_.Camera().status
             == aerosimlab::simulation::CameraStatus::Active;
+        const auto& camera = simulation_.Camera();
         const std::string captureAssessment{
             aerosimlab::simulation::ToString(AssessInspectionView())};
+        const std::uint64_t simulationTick = simulation_.TickCount();
         EM_ASM({
             if (window.updateDroneSimGroundControl) {
                 window.updateDroneSimGroundControl(
                     UTF8ToString($0), $1, $2, $3, $4, $5, UTF8ToString($6),
-                    UTF8ToString($7));
+                    UTF8ToString($7), $8, $9, $10, $11, $12, $13, $14, $15,
+                    UTF8ToString($16), UTF8ToString($17));
             }
         }, mode.c_str(), state.positionMeters.x, state.positionMeters.y,
             state.positionMeters.z, speedMetersPerSecond, cameraActive,
-            captureAssessment.c_str(), InspectionMissionStatus().c_str());
+            captureAssessment.c_str(), InspectionMissionStatus().c_str(), simulationTick,
+            camera.positionMeters.x, camera.positionMeters.y, camera.positionMeters.z,
+            camera.orientation.x, camera.orientation.y, camera.orientation.z,
+            camera.orientation.w, inspectionFacilityId_.c_str(), inspectionZoneId_.c_str());
         lastWebTelemetryUpdate_ = telemetryTime;
     }
     if (!webFirstFrameRendered_)
@@ -1320,7 +1326,7 @@ std::string AeroSimLabApp::InspectionMissionStatus() const
     case InspectionMissionStage::Landing: return "착륙 중";
     case InspectionMissionStage::Saved: return "영상 저장 완료";
     case InspectionMissionStage::GeometryOnly:
-        return "구도 확인 완료 (웹 영상 저장 미지원)";
+        return "구도 확인 완료";
     case InspectionMissionStage::Failed: return "실패: " + inspectionMissionError_;
     }
     return "상태를 알 수 없습니다.";
