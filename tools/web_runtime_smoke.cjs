@@ -40,6 +40,7 @@ async function run() {
     });
     browser = await chromium.launch({
       headless: true,
+      channel: "chrome",
       args: [
         "--use-gl=angle",
         "--use-angle=swiftshader",

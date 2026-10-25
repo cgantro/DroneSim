@@ -79,10 +79,9 @@ jobs:
           sed -i "s/__SIMULATOR_VERSION__/${GITHUB_SHA}/g" _site/index.html
           touch _site/.nojekyll
 
-      - name: Install headless browser for web startup check
+      - name: Install web startup test tool
         run: |
           npm install --prefix "$RUNNER_TEMP/web-smoke" --no-audit --no-fund playwright@1.64.1
-          "$RUNNER_TEMP/web-smoke/node_modules/.bin/playwright" install --with-deps chromium
 
       - name: Check simulator startup in Chromium
         timeout-minutes: 5
