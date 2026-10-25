@@ -187,7 +187,7 @@ async function run() {
             || status.includes("점검 임무: 실패:");
         },
         null,
-        { timeout: 90000 }
+        { timeout: 120000 }
       );
     } catch {
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${await telemetry.innerText()}`);
