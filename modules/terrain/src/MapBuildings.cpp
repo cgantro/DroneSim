@@ -4,9 +4,11 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -134,38 +136,77 @@ MapBuildingBoundsMeters GetMapBuildingBoundsMeters(const MapBuilding& building)
 MapBuildingFacade GetNearestMapBuildingFacade(
     const MapBuilding& building, const glm::dvec2& approachPositionMeters)
 {
-    glm::dvec2 minimum = building.outlineMeters.front();
-    glm::dvec2 maximum = minimum;
-    double groundMinimum = building.groundElevationsMeters.front();
-    double groundMaximum = groundMinimum;
-    for (std::size_t index = 1; index < building.outlineMeters.size(); ++index)
+    if (building.outlineMeters.size() < 3U
+        || building.outlineMeters.size() != building.groundElevationsMeters.size()
+        || !std::isfinite(building.heightMeters) || !(building.heightMeters > 0.0)
+        || !std::isfinite(approachPositionMeters.x)
+        || !std::isfinite(approachPositionMeters.y))
     {
-        minimum = glm::min(minimum, building.outlineMeters[index]);
-        maximum = glm::max(maximum, building.outlineMeters[index]);
-        groundMinimum = std::min(groundMinimum, building.groundElevationsMeters[index]);
-        groundMaximum = std::max(groundMaximum, building.groundElevationsMeters[index]);
+        throw std::invalid_argument("건물 외곽선과 접근 위치를 확인해 주세요.");
     }
 
-    const glm::dvec2 center = (minimum + maximum) * 0.5;
-    const double height = building.heightMeters + groundMaximum - groundMinimum;
-    const double centerHeight = groundMinimum + height * 0.5;
-    const double distanceToWest = std::abs(approachPositionMeters.x - minimum.x);
-    const double distanceToEast = std::abs(approachPositionMeters.x - maximum.x);
-    const double distanceToSouth = std::abs(approachPositionMeters.y - minimum.y);
-    const double distanceToNorth = std::abs(approachPositionMeters.y - maximum.y);
+    for (std::size_t index = 0; index < building.outlineMeters.size(); ++index)
+    {
+        const glm::dvec2& point = building.outlineMeters[index];
+        if (!std::isfinite(point.x) || !std::isfinite(point.y)
+            || !std::isfinite(building.groundElevationsMeters[index]))
+            throw std::invalid_argument("건물 외곽선의 좌표와 높이를 확인해 주세요.");
+    }
 
-    const double nearestDistance = std::min({
-        distanceToWest, distanceToEast, distanceToSouth, distanceToNorth});
-    if (nearestDistance == distanceToWest)
-        return {{minimum.x, center.y, centerHeight}, {-1.0, 0.0, 0.0},
-            {0.0, 1.0, 0.0}, maximum.y - minimum.y, height};
-    if (nearestDistance == distanceToEast)
-        return {{maximum.x, center.y, centerHeight}, {1.0, 0.0, 0.0},
-            {0.0, 1.0, 0.0}, maximum.y - minimum.y, height};
-    if (nearestDistance == distanceToSouth)
-        return {{center.x, minimum.y, centerHeight}, {0.0, -1.0, 0.0},
-            {1.0, 0.0, 0.0}, maximum.x - minimum.x, height};
-    return {{center.x, maximum.y, centerHeight}, {0.0, 1.0, 0.0},
-        {1.0, 0.0, 0.0}, maximum.x - minimum.x, height};
+    double twiceSignedArea = 0.0;
+    for (std::size_t index = 0; index < building.outlineMeters.size(); ++index)
+    {
+        const glm::dvec2& current = building.outlineMeters[index];
+        const glm::dvec2& next = building.outlineMeters[
+            (index + 1U) % building.outlineMeters.size()];
+        twiceSignedArea += current.x * next.y - next.x * current.y;
+    }
+    if (!std::isfinite(twiceSignedArea) || std::abs(twiceSignedArea) < 1.0e-9)
+        throw std::invalid_argument("건물 외곽선의 면적이 없습니다.");
+
+    const bool counterClockwise = twiceSignedArea > 0.0;
+    double nearestDistanceSquared = std::numeric_limits<double>::infinity();
+    MapBuildingFacade nearestFacade;
+    for (std::size_t index = 0; index < building.outlineMeters.size(); ++index)
+    {
+        const std::size_t nextIndex =
+            (index + 1U) % building.outlineMeters.size();
+        const glm::dvec2& start = building.outlineMeters[index];
+        const glm::dvec2 edge = building.outlineMeters[nextIndex] - start;
+        const double edgeLengthSquared = glm::dot(edge, edge);
+        if (!(edgeLengthSquared > 1.0e-12))
+            continue;
+
+        const double fraction = std::clamp(glm::dot(
+            approachPositionMeters - start, edge) / edgeLengthSquared, 0.0, 1.0);
+        const glm::dvec2 closestPoint = start + edge * fraction;
+        const glm::dvec2 offset = approachPositionMeters - closestPoint;
+        const double distanceSquared = glm::dot(offset, offset);
+        if (distanceSquared >= nearestDistanceSquared)
+            continue;
+
+        const double edgeLength = std::sqrt(edgeLengthSquared);
+        const glm::dvec2 widthAxis = edge / edgeLength;
+        const glm::dvec2 outwardNormal = counterClockwise
+            ? glm::dvec2{widthAxis.y, -widthAxis.x}
+            : glm::dvec2{-widthAxis.y, widthAxis.x};
+        const glm::dvec2 edgeCenter = (start + building.outlineMeters[nextIndex]) * 0.5;
+        const double groundElevation = std::lerp(
+            building.groundElevationsMeters[index],
+            building.groundElevationsMeters[nextIndex], 0.5);
+
+        nearestDistanceSquared = distanceSquared;
+        nearestFacade = {
+            {edgeCenter.x, edgeCenter.y,
+                groundElevation + building.heightMeters * 0.5},
+            {outwardNormal.x, outwardNormal.y, 0.0},
+            {widthAxis.x, widthAxis.y, 0.0},
+            edgeLength,
+            building.heightMeters};
+    }
+
+    if (!std::isfinite(nearestDistanceSquared))
+        throw std::invalid_argument("건물 외곽선에 유효한 변이 없습니다.");
+    return nearestFacade;
 }
 }

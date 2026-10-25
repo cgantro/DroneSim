@@ -130,16 +130,54 @@ void Verify_TancheonBuildingFacadeFacesTheNearestApproachSide()
 
     const MapBuilding& building = buildings.front();
     const MapBuildingBoundsMeters bounds = GetMapBuildingBoundsMeters(building);
+    const glm::dvec2 approachPosition{
+        bounds.centerMeters.x - bounds.halfExtentsMeters.x - 5.0,
+        bounds.centerMeters.y};
     const MapBuildingFacade facade = GetNearestMapBuildingFacade(building,
-        {bounds.centerMeters.x - bounds.halfExtentsMeters.x - 5.0,
-            bounds.centerMeters.y});
+        approachPosition);
 
-    EXPECT_DOUBLE_EQ(facade.centerMeters.x,
-        bounds.centerMeters.x - bounds.halfExtentsMeters.x);
-    EXPECT_EQ(facade.outwardNormal, (glm::dvec3{-1.0, 0.0, 0.0}));
-    EXPECT_EQ(facade.widthAxis, (glm::dvec3{0.0, 1.0, 0.0}));
+    bool liesOnFootprintEdge = false;
+    for (std::size_t index = 0; index < building.outlineMeters.size(); ++index)
+    {
+        const glm::dvec2& start = building.outlineMeters[index];
+        const glm::dvec2 edge = building.outlineMeters[
+            (index + 1U) % building.outlineMeters.size()] - start;
+        const double edgeLengthSquared = glm::dot(edge, edge);
+        if (edgeLengthSquared <= 1.0e-12)
+            continue;
+        const glm::dvec2 point = glm::dvec2{
+            facade.centerMeters.x, facade.centerMeters.y} - start;
+        const double fraction = glm::dot(point, edge) / edgeLengthSquared;
+        const glm::dvec2 closestPoint = start + edge * std::clamp(fraction, 0.0, 1.0);
+        if (glm::length(closestPoint - glm::dvec2{
+            facade.centerMeters.x, facade.centerMeters.y}) < 1.0e-6)
+            liesOnFootprintEdge = true;
+    }
+    EXPECT_TRUE(liesOnFootprintEdge);
+    EXPECT_GT(glm::dot(facade.outwardNormal,
+        glm::dvec3{approachPosition.x - facade.centerMeters.x,
+            approachPosition.y - facade.centerMeters.y, 0.0}), 0.0);
     EXPECT_GT(facade.widthMeters, 0.0);
     EXPECT_GT(facade.heightMeters, 0.0);
+}
+
+void Verify_MapBuildingFacadeFollowsASlopedFootprintEdge()
+{
+    const MapBuilding building{
+        .outlineMeters = {{0.0, 0.0}, {4.0, 0.0}, {1.0, 3.0}},
+        .groundElevationsMeters = {10.0, 20.0, 30.0},
+        .heightMeters = 6.0};
+
+    const MapBuildingFacade facade = GetNearestMapBuildingFacade(
+        building, {3.0, 5.0});
+
+    EXPECT_NEAR(facade.centerMeters.x, 2.5, 1.0e-9);
+    EXPECT_NEAR(facade.centerMeters.y, 1.5, 1.0e-9);
+    EXPECT_NEAR(facade.centerMeters.z, 28.0, 1.0e-9);
+    EXPECT_NEAR(facade.widthMeters, std::sqrt(18.0), 1.0e-9);
+    EXPECT_NEAR(facade.heightMeters, 6.0, 1.0e-9);
+    EXPECT_GT(glm::dot(facade.outwardNormal,
+        glm::dvec3{2.0, 2.0, 0.0}), 0.0);
 }
 
 void Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths()
@@ -237,6 +275,7 @@ TEST(TerrainGridTests, CoreScenarios)
         Verify_TancheonBuildingBoundsBlockCameraViewThroughTheMappedBuilding());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonBuildingFacadeFacesTheNearestApproachSide());
+    EXPECT_NO_FATAL_FAILURE(Verify_MapBuildingFacadeFollowsASlopedFootprintEdge());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths());
     EXPECT_NO_FATAL_FAILURE(

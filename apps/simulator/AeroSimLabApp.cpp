@@ -1437,14 +1437,23 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition);
 
     const glm::vec3 inspectionCenter = ToRenderPosition(inspectionSurface_.centerMeters);
-    const bool facadeFacesEastOrWest = std::abs(inspectionSurface_.normal.x) > 0.5;
-    const glm::vec3 inspectionSize = facadeFacesEastOrWest
-        ? glm::vec3{0.12F, static_cast<float>(inspectionSurface_.heightMeters),
-            static_cast<float>(inspectionSurface_.widthMeters)}
-        : glm::vec3{static_cast<float>(inspectionSurface_.widthMeters),
-            static_cast<float>(inspectionSurface_.heightMeters), 0.12F};
-    DrawCube(CubeTransform(inspectionCenter, inspectionSize),
-        cameraPosition, missionMarkerMaterial_, view, projection);
+    const glm::vec3 vertical{0.0F, 1.0F, 0.0F};
+    const glm::vec3 surfaceNormal = glm::normalize(
+        ToRenderDirection(inspectionSurface_.normal));
+    const glm::vec3 surfaceWidth = glm::normalize(
+        glm::cross(vertical, surfaceNormal));
+    glm::mat4 surfaceOrientation{1.0F};
+    surfaceOrientation[0] = glm::vec4{surfaceWidth, 0.0F};
+    surfaceOrientation[1] = glm::vec4{vertical, 0.0F};
+    surfaceOrientation[2] = glm::vec4{surfaceNormal, 0.0F};
+    const glm::mat4 inspectionTransform =
+        glm::translate(glm::mat4{1.0F}, inspectionCenter)
+        * surfaceOrientation
+        * glm::scale(glm::mat4{1.0F}, glm::vec3{
+            static_cast<float>(inspectionSurface_.widthMeters),
+            static_cast<float>(inspectionSurface_.heightMeters), 0.12F});
+    renderer_->Draw(inspectionTransform, *cube_, missionMarkerMaterial_, *shader_,
+        view, projection, cameraPosition);
     const glm::vec3 goal = ToRenderPosition(missionGoalMeters_);
     DrawCube(CubeTransform(goal + glm::vec3{0.0F, 0.09F, 0.0F},
         glm::vec3{2.4F, 0.18F, 2.4F}), cameraPosition,

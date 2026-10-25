@@ -35,7 +35,7 @@ struct MapBuildingBoundsMeters
     glm::dvec3 halfExtentsMeters{0.0};
 };
 
-/** @brief OSM 건물의 단순 상자에서 만든 수직 외벽 시험면이다. */
+/** @brief OSM 건물 외곽선의 한 변에서 만든 수직 외벽 시험면이다. */
 struct MapBuildingFacade
 {
     glm::dvec3 centerMeters{0.0};
@@ -57,7 +57,7 @@ struct MapBuildingFacade
 [[nodiscard]] MapBuildingBoundsMeters GetMapBuildingBoundsMeters(
     const MapBuilding& building);
 
-/** @brief 접근 위치에서 가장 가까운 쪽의 외벽을 시험면으로 만든다. */
+/** @brief 접근 위치에서 가장 가까운 실제 외곽선 변을 외벽 시험면으로 만든다. */
 [[nodiscard]] MapBuildingFacade GetNearestMapBuildingFacade(
     const MapBuilding& building, const glm::dvec2& approachPositionMeters);
 }
