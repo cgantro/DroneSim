@@ -186,6 +186,34 @@ void Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether()
 #endif
 }
 
+void Verify_SimulationCore_TracksEachDroneCameraIndependently()
+{
+    SimulationCore simulation{SimulationDynamics::Kinematic};
+    const DroneId primary = simulation.PrimaryDroneId();
+    const DroneId second = simulation.AddDrone({4.0, 2.0, 3.0}, 0.5);
+
+    simulation.SetCameraEnabled(primary, false);
+    simulation.SetCameraFault(second, true);
+    simulation.AdvanceOneTick();
+
+    EXPECT_EQ(simulation.Camera(primary).status, CameraStatus::Disabled);
+    EXPECT_EQ(simulation.Camera(second).status, CameraStatus::Fault);
+    EXPECT_EQ(simulation.Camera(primary).frameCount, 0U);
+    EXPECT_EQ(simulation.Camera(second).frameCount, 0U);
+    EXPECT_NEAR(simulation.Camera(second).positionMeters.x,
+        simulation.State(second).positionMeters.x + 0.35 * std::cos(0.5), 1.0e-9);
+
+    simulation.SetCameraEnabled(primary, true);
+    simulation.SetCameraFault(second, false);
+    simulation.AdvanceOneTick();
+    EXPECT_EQ(simulation.Camera(primary).frameCount, 1U);
+    EXPECT_EQ(simulation.Camera(second).frameCount, 1U);
+
+    simulation.Reset();
+    EXPECT_EQ(simulation.Camera(primary).frameCount, 0U);
+    EXPECT_EQ(simulation.Camera(second).frameCount, 0U);
+}
+
 TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
@@ -194,6 +222,7 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_UsesInitialMotorSpeedsInRigidBodyMode());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsUnsupportedInitialMotorSpeeds());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether());
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_TracksEachDroneCameraIndependently());
 }
 
 }

@@ -78,6 +78,7 @@ struct ScenarioResult
             CommunicationStatus::Connected;
         /** @brief finalState가 실제 현재 위치인지, 마지막으로 전달된 위치인지 나타낸다. */
         std::uint64_t lastHeartbeatTick = 0;
+        CameraState finalCamera;
         /** @brief 에너지 모형을 켠 시나리오에서 설정한 배터리 용량과 사용·잔량이다. */
         std::optional<double> batteryCapacityWattHours;
         /** @brief 시작 잔량에서 시나리오 동안 실제로 소비한 에너지다. */

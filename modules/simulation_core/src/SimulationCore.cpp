@@ -59,7 +59,6 @@ struct SimulationCore::EcsStorage
     std::unordered_map<DroneId, flecs::entity> drones;
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
-    flecs::entity camera;
     bool measureEcsSystemDuration = false;
     EcsSystemDurations lastEcsSystemDurations;
     double lastFlecsProgressDurationMicroseconds = 0.0;
@@ -165,7 +164,6 @@ struct SimulationCore::EcsStorage
 
     void RegisterCameraSystem()
     {
-        camera = world.entity("EoCamera").set<CameraState>({});
         world.system<CameraState>("AdvanceCamera")
             .kind(flecs::OnUpdate)
             .run([this](flecs::iter& iterator)
@@ -199,7 +197,10 @@ struct SimulationCore::EcsStorage
         {
             drone.set<DroneState>(initialState)
                 .set<DroneControlState>(initialControl)
-                .set<InitialPose>(initialPose);
+                .set<InitialPose>(initialPose)
+                .set<CameraState>({});
+            EoCameraModel::UpdatePose(
+                drone.get_mut<CameraState>(), drone.get<DroneState>());
 #if !defined(__EMSCRIPTEN__)
             if (dynamics == SimulationDynamics::RigidBody)
             {
@@ -245,9 +246,12 @@ struct SimulationCore::EcsStorage
 
     void SynchronizeCameraPose()
     {
-        EoCameraModel::UpdatePose(
-            camera.get_mut<CameraState>(),
-            FindDrone(primaryDroneId).get<DroneState>());
+        for (auto& [id, drone] : drones)
+        {
+            (void)id;
+            EoCameraModel::UpdatePose(
+                drone.get_mut<CameraState>(), drone.get<DroneState>());
+        }
     }
 
     bool RemoveDrone(DroneId id)
@@ -664,7 +668,11 @@ void SimulationCore::Reset()
         (void)id;
         ecs_->ResetDrone(drone);
     }
-    EoCameraModel::Reset(ecs_->camera.get_mut<CameraState>());
+    for (auto& [id, drone] : ecs_->drones)
+    {
+        (void)id;
+        EoCameraModel::Reset(drone.get_mut<CameraState>());
+    }
     ecs_->tickCount = 0;
     paused_ = false;
     ecs_->SynchronizeCameraPose();
@@ -682,20 +690,37 @@ const DroneState& SimulationCore::State(DroneId droneId) const
 
 const CameraState& SimulationCore::Camera() const noexcept
 {
-    return ecs_->camera.get<CameraState>();
+    return ecs_->drones.at(ecs_->primaryDroneId).get<CameraState>();
+}
+
+const CameraState& SimulationCore::Camera(DroneId droneId) const
+{
+    return ecs_->FindDrone(droneId).get<CameraState>();
 }
 
 void SimulationCore::SetCameraEnabled(bool enabled) noexcept
 {
-    EoCameraModel::SetEnabled(ecs_->camera.get_mut<CameraState>(), enabled);
+    EoCameraModel::SetEnabled(
+        ecs_->drones.at(ecs_->primaryDroneId).get_mut<CameraState>(), enabled);
+}
+
+void SimulationCore::SetCameraEnabled(DroneId droneId, bool enabled)
+{
+    EoCameraModel::SetEnabled(ecs_->FindDrone(droneId).get_mut<CameraState>(), enabled);
 }
 
 void SimulationCore::SetCameraFault(bool faulted) noexcept
 {
+    SetCameraFault(ecs_->primaryDroneId, faulted);
+}
+
+void SimulationCore::SetCameraFault(DroneId droneId, bool faulted)
+{
+    CameraState& camera = ecs_->FindDrone(droneId).get_mut<CameraState>();
     if (faulted)
-        EoCameraModel::InjectFault(ecs_->camera.get_mut<CameraState>());
+        EoCameraModel::InjectFault(camera);
     else
-        EoCameraModel::Recover(ecs_->camera.get_mut<CameraState>());
+        EoCameraModel::Recover(camera);
 }
 
 void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)

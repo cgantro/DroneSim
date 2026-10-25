@@ -72,6 +72,10 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
         drones.push_back({
             {"name", drone.name},
             {"state", ToJson(drone.finalState)},
+            {"camera", {
+                {"status", aerosimlab::simulation::ToString(drone.finalCamera.status)},
+                {"frame_count", drone.finalCamera.frameCount},
+                {"last_frame_tick", drone.finalCamera.lastFrameTick}}},
             {"communication_status", communicationStatusName(drone.communicationStatus)},
             {"last_heartbeat_tick", drone.lastHeartbeatTick},
             {"battery", std::move(battery)}});

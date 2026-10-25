@@ -968,6 +968,7 @@ void UpdateMissionResults(
 void PopulateFinalSnapshot(
     const ScenarioDefinition& definition,
     const SimulationCore& simulation,
+    const DroneIds& droneIds,
     const DroneObservations& observations,
     const DroneEnergies& energies,
     ScenarioResult& result)
@@ -1001,6 +1002,7 @@ void PopulateFinalSnapshot(
         ScenarioResult::Drone drone{
             droneName, observation.lastKnownState,
             observation.status, observation.lastHeartbeatTick};
+        drone.finalCamera = simulation.Camera(droneIds.at(droneName));
         drone.reportedBatteryPercent = observation.lastKnownBatteryPercent;
         const auto energy = energies.find(droneName);
         if (energy != energies.end())
@@ -1299,7 +1301,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 observation.lastKnownBatteryPercent = BatteryPercent(energy->second);
         }
     }
-    PopulateFinalSnapshot(definition, simulation, observations, energies, result);
+    PopulateFinalSnapshot(definition, simulation, droneIds, observations, energies, result);
     CheckExpectedResults(definition, result);
     return result;
 }

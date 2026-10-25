@@ -139,11 +139,20 @@ public:
     /** @brief 모의 카메라의 상태와 프레임 생성 정보를 반환한다. */
     [[nodiscard]] const CameraState& Camera() const noexcept;
 
+    /** @brief 지정한 드론에 탑재된 카메라 상태를 반환한다. */
+    [[nodiscard]] const CameraState& Camera(DroneId droneId) const;
+
     /** @brief 카메라를 켜거나 끈다. 고장 상태는 복구 명령으로만 해제된다. */
     void SetCameraEnabled(bool enabled) noexcept;
 
+    /** @brief 지정한 드론의 카메라를 켜거나 끈다. */
+    void SetCameraEnabled(DroneId droneId, bool enabled);
+
     /** @brief 카메라 장애를 주입하거나 해제한다. */
     void SetCameraFault(bool faulted) noexcept;
+
+    /** @brief 지정한 드론의 카메라 장애를 주입하거나 해제한다. */
+    void SetCameraFault(DroneId droneId, bool faulted);
 
     /** @brief 강체 모드에서 사용할 월드 기준 바람 속도를 설정한다. */
     void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity);
