@@ -28,7 +28,7 @@ inline std::vector<glm::dvec2> ClipPolygonToTerrain(
 
     for (const auto& [edge, bound] : bounds)
     {
-        const auto coordinate = [edge](const glm::dvec2& point)
+        const auto coordinate = [edge](glm::dvec2 point)
         {
             return edge < 2 ? point.x : point.y;
         };

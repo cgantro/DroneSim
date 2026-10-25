@@ -112,7 +112,8 @@ void AddInBoundsSegments(
     std::vector<glm::dvec3> segment;
     segment.reserve(coordinates.size());
 
-    const auto finishSegment = [&]
+    const auto finishSegment = [&segment, &roads, osmId, name, widthMeters,
+        widthSource, isBridge, pointCount = coordinates.size()]
     {
         if (segment.size() >= 2U)
         {
@@ -124,7 +125,7 @@ void AddInBoundsSegments(
             road.bridge = isBridge;
             road.centerlineMeters.swap(segment);
             roads.push_back(std::move(road));
-            segment.reserve(coordinates.size());
+            segment.reserve(pointCount);
         }
         else
         {
