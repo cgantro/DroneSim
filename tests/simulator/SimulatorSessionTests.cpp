@@ -8,6 +8,7 @@
 
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <opencv2/videoio.hpp>
 
@@ -91,6 +92,18 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
         std::string::npos);
     EXPECT_NE(manifestText.find("\"video_bytes\""), std::string::npos);
     manifest.close();
+    const auto manifestData = nlohmann::json::parse(manifestText);
+    EXPECT_EQ(manifestData.at("checksum_algorithm").get<std::string>(),
+        "CRC-32/ISO-HDLC");
+    std::string calculatedChecksum;
+    ASSERT_TRUE(simulator::EoVideoRecorder::CalculateFileChecksum(
+        videoPath, calculatedChecksum, error)) << error;
+    EXPECT_EQ(calculatedChecksum,
+        manifestData.at("video_checksum").get<std::string>());
+    ASSERT_TRUE(simulator::EoVideoRecorder::CalculateFileChecksum(
+        metadataPath, calculatedChecksum, error)) << error;
+    EXPECT_EQ(calculatedChecksum,
+        manifestData.at("metadata_checksum").get<std::string>());
     std::filesystem::remove_all(outputDirectory);
 }
 

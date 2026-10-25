@@ -6,9 +6,11 @@
 #include <opencv2/videoio.hpp>
 
 #include <chrono>
+#include <array>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
@@ -26,6 +28,42 @@ EoVideoRecorder::EoVideoRecorder() = default;
 namespace
 {
 using Json = nlohmann::json;
+
+std::optional<std::uint32_t> CalculateCrc32(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        return std::nullopt;
+
+    std::array<unsigned char, 64U * 1024U> buffer{};
+    std::uint32_t checksum = 0xFFFFFFFFU;
+    while (input)
+    {
+        input.read(reinterpret_cast<char*>(buffer.data()),
+            static_cast<std::streamsize>(buffer.size()));
+        const std::streamsize bytesRead = input.gcount();
+        for (std::streamsize index = 0; index < bytesRead; ++index)
+        {
+            checksum ^= buffer[static_cast<std::size_t>(index)];
+            for (int bit = 0; bit < 8; ++bit)
+            {
+                const std::uint32_t lowBitMask = 0U - (checksum & 1U);
+                checksum = (checksum >> 1U) ^ (0xEDB88320U & lowBitMask);
+            }
+        }
+    }
+    if (!input.eof())
+        return std::nullopt;
+    return checksum ^ 0xFFFFFFFFU;
+}
+
+std::string FormatCrc32(std::uint32_t checksum)
+{
+    std::ostringstream formatted;
+    formatted << std::uppercase << std::hex << std::setw(8)
+        << std::setfill('0') << checksum;
+    return formatted.str();
+}
 
 std::filesystem::path UserDataDirectory()
 {
@@ -211,6 +249,22 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
 
     if (saved)
     {
+        std::string videoChecksum;
+        std::string metadataChecksum;
+        if (!CalculateFileChecksum(videoPath_, videoChecksum, error)
+            || !CalculateFileChecksum(metadataPath_, metadataChecksum, error))
+        {
+            saved = false;
+        }
+        if (!saved)
+        {
+            impl_.reset();
+            width_ = 0;
+            height_ = 0;
+            framesPerSecond_ = 0.0;
+            return false;
+        }
+
         std::filesystem::path manifestPath = videoPath_;
         manifestPath.replace_extension(".manifest.json");
         std::filesystem::path temporaryManifestPath = manifestPath;
@@ -226,7 +280,10 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
             {"height_pixels", height_},
             {"frames_per_second", framesPerSecond_},
             {"video_bytes", videoBytes},
-            {"metadata_bytes", std::filesystem::file_size(metadataPath_)}};
+            {"metadata_bytes", std::filesystem::file_size(metadataPath_)},
+            {"checksum_algorithm", "CRC-32/ISO-HDLC"},
+            {"video_checksum", videoChecksum},
+            {"metadata_checksum", metadataChecksum}};
         manifestFile << manifest.dump(2) << '\n';
         manifestFile.flush();
         saved = static_cast<bool>(manifestFile);
@@ -260,6 +317,19 @@ bool EoVideoRecorder::IsRecording() const noexcept
 const std::filesystem::path& EoVideoRecorder::VideoPath() const noexcept
 {
     return videoPath_;
+}
+
+bool EoVideoRecorder::CalculateFileChecksum(
+    const std::filesystem::path& path, std::string& checksum, std::string& error)
+{
+    const auto value = CalculateCrc32(path);
+    if (!value)
+    {
+        error = "파일 체크섬을 계산하지 못했습니다.";
+        return false;
+    }
+    checksum = FormatCrc32(*value);
+    return true;
 }
 
 std::filesystem::path NewEoRecordingPath()

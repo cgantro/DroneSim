@@ -35,6 +35,11 @@ public:
     [[nodiscard]] bool IsRecording() const noexcept;
     [[nodiscard]] const std::filesystem::path& VideoPath() const noexcept;
 
+    /** @brief 녹화 파일을 전송한 뒤 받을 쪽에서 대조할 CRC-32 값을 계산한다. */
+    [[nodiscard]] static bool CalculateFileChecksum(
+        const std::filesystem::path& path, std::string& checksum,
+        std::string& error);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
