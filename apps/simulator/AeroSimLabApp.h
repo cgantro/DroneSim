@@ -108,7 +108,21 @@ private:
     void RunFrame(std::chrono::steady_clock::time_point& previousFrame);
     /** @brief 이번 프레임 측정값을 요약 목록과 긴 프레임 기록에 추가한다. */
     void RecordBenchmarkFrame(double applicationMicroseconds);
+    /** @brief 창과 그래픽 자원을 준비한다. */
     void InitializeGraphics();
+    /** @brief 화면 창과 OpenGL 문맥을 만든다. */
+    void InitializeWindow();
+    /** @brief 장면과 카메라를 그릴 기본 장치를 만든다. */
+    void InitializeRendererAndCameras();
+    /** @brief 화면 셰이더와 데스크톱 HUD를 준비한다. */
+    void InitializeShaderAndHud();
+#ifdef __EMSCRIPTEN__
+    /** @brief 웹 화면을 멈추지 않도록 초기화 단계를 나눠 실행한다. */
+    static void RunWebStartupStep(void* application);
+    void ContinueWebStartup();
+    unsigned int webStartupStep_ = 0;
+    bool webFirstFrameRendered_ = false;
+#endif
     /** @brief 실내 수색 장면과 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
@@ -224,6 +238,8 @@ private:
     CurrentFrameMeasurements frameMeasurements_;
     std::array<HudGpuTiming, 4> completedHudGpuTimings_{};
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
+    int framebufferWidth_ = 0;
+    int framebufferHeight_ = 0;
 #ifndef __EMSCRIPTEN__
     double totalMeanBrightness_ = 0.0;
     double totalMeanContrast_ = 0.0;

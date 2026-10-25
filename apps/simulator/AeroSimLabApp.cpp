@@ -194,24 +194,15 @@ int AeroSimLabApp::Run()
     {
         udpSocket_ = std::make_unique<aerosimlab::communication::UdpSocket>(udpPort_);
     }
-#endif
     // 그래픽 자산을 불러오는 동안 도착한 UDP 요청도 소켓 수신 큐에 남긴다.
     InitializeGraphics();
     startTime_ = std::chrono::steady_clock::now();
-#ifdef __EMSCRIPTEN__
-    webPreviousFrame_ = startTime_;
-    emscripten_set_main_loop_arg([](void* application)
-    {
-        auto& app = *static_cast<AeroSimLabApp*>(application);
-        if (app.window_->ShouldClose())
-        {
-            emscripten_cancel_main_loop();
-            return;
-        }
-        app.RunFrame(app.webPreviousFrame_);
-    }, this, 0, false);
-    return 0;
 #else
+    webStartupStep_ = 0;
+    emscripten_async_call(&AeroSimLabApp::RunWebStartupStep, this, 16);
+    return 0;
+#endif
+#ifndef __EMSCRIPTEN__
     benchmarkCpuStart_ = std::clock();
     auto previousFrame = startTime_;
 
@@ -265,6 +256,71 @@ int AeroSimLabApp::Run()
     return 0;
 #endif
 }
+
+#ifdef __EMSCRIPTEN__
+void AeroSimLabApp::RunWebStartupStep(void* application)
+{
+    static_cast<AeroSimLabApp*>(application)->ContinueWebStartup();
+}
+
+void AeroSimLabApp::ContinueWebStartup()
+{
+    try
+    {
+        switch (webStartupStep_)
+        {
+        case 0:
+            EM_ASM({ window.setSimulatorStartupStatus("그래픽 창을 준비하고 있습니다."); });
+            break;
+        case 1:
+            InitializeWindow();
+            break;
+        case 2:
+            EM_ASM({ window.setSimulatorStartupStatus("화면 그리기 장치를 준비하고 있습니다."); });
+            break;
+        case 3:
+            InitializeRendererAndCameras();
+            break;
+        case 4:
+            EM_ASM({ window.setSimulatorStartupStatus("실내 장면과 드론 모형을 준비하고 있습니다."); });
+            break;
+        case 5:
+            LoadScene();
+            break;
+        case 6:
+            EM_ASM({ window.setSimulatorStartupStatus("화면 셰이더를 준비하고 있습니다."); });
+            break;
+        case 7:
+            InitializeShaderAndHud();
+            break;
+        case 8:
+            EM_ASM({ window.setSimulatorStartupStatus("첫 화면을 그리는 중입니다."); });
+            break;
+        default:
+            startTime_ = std::chrono::steady_clock::now();
+            webPreviousFrame_ = startTime_;
+            emscripten_set_main_loop_arg([](void* application)
+            {
+                auto& app = *static_cast<AeroSimLabApp*>(application);
+                if (app.window_->ShouldClose())
+                {
+                    emscripten_cancel_main_loop();
+                    return;
+                }
+                app.RunFrame(app.webPreviousFrame_);
+            }, this, 0, false);
+            return;
+        }
+        ++webStartupStep_;
+        emscripten_async_call(&AeroSimLabApp::RunWebStartupStep, this, 16);
+    }
+    catch (const std::exception& error)
+    {
+        const std::string message = error.what();
+        EM_ASM({ window.showSimulatorStartupError(UTF8ToString($0)); }, message.c_str());
+    }
+}
+#endif
 
 void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
 {
@@ -325,6 +381,13 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         }
     }
     ++renderedFrames_;
+#ifdef __EMSCRIPTEN__
+    if (!webFirstFrameRendered_)
+    {
+        webFirstFrameRendered_ = true;
+        EM_ASM({ window.completeSimulatorStartup(); });
+    }
+#endif
     if (benchmarkMode_)
     {
         const double applicationMicroseconds = std::chrono::duration<double, std::micro>(
@@ -369,31 +432,41 @@ int AeroSimLabApp::ValidateSmokeTestOutput() const
 
 void AeroSimLabApp::InitializeGraphics()
 {
+    InitializeWindow();
+    InitializeRendererAndCameras();
+    LoadScene();
+    InitializeShaderAndHud();
+}
+
+void AeroSimLabApp::InitializeWindow()
+{
     window_ = std::make_unique<aerosimlab::graphics::Window>(
         aerosimlab::graphics::Window::Properties{windowWidth, windowHeight,
             "AeroSimLab | 드론 관찰 · EO 영상 | © OpenStreetMap contributors",
             !smokeTest_ && !benchmarkMode_,
             !smokeTest_ && (!benchmarkMode_ || visibleBenchmarkMode_)});
+    window_->GetFramebufferSize(framebufferWidth_, framebufferHeight_);
+}
 
-    int framebufferWidth = 0;
-    int framebufferHeight = 0;
-    window_->GetFramebufferSize(framebufferWidth, framebufferHeight);
-
+void AeroSimLabApp::InitializeRendererAndCameras()
+{
     renderer_ = std::make_unique<aerosimlab::graphics::Renderer>();
-    renderer_->Init(framebufferWidth, framebufferHeight);
+    renderer_->Init(framebufferWidth_, framebufferHeight_);
 #ifndef __EMSCRIPTEN__
     sceneTarget_ = std::make_unique<aerosimlab::graphics::MultisampleFramebuffer>(
-        framebufferWidth, framebufferHeight);
+        framebufferWidth_, framebufferHeight_);
     cameraTarget_ = std::make_unique<aerosimlab::graphics::MultisampleFramebuffer>(
-        framebufferWidth, framebufferHeight);
+        framebufferWidth_, framebufferHeight_);
 #endif
     observerCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{7.0F, 5.0F, 7.0F}, glm::vec3{0.0F}, 1.0F,
         45.0F, 0.1F, 120.0F);
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F, 70.0F, 0.05F, 200.0F);
+}
 
-    LoadScene();
+void AeroSimLabApp::InitializeShaderAndHud()
+{
     shader_ = std::make_unique<aerosimlab::graphics::Shader>(
         AssetPath("shaders/Scene.glsl").string());
 #ifndef __EMSCRIPTEN__

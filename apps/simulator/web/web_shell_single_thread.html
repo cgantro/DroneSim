@@ -25,13 +25,14 @@
       var wasmResponseReceived = false;
       var startupMessage = document.getElementById("startup-message");
       var startupStatus = document.getElementById("startup-status");
+      var startupPhase = startupMessage.textContent;
       var startupTimeout = window.setTimeout(function () {
         if (!simulatorStarted) {
           startupMessage.textContent = !wasmRequestStarted
             ? "시뮬레이터 엔진 파일 요청을 시작하지 못했습니다."
             : !wasmResponseReceived
               ? "시뮬레이터 엔진 파일 응답을 기다리고 있습니다."
-              : "시뮬레이터 엔진 파일을 받았습니다. 브라우저에서 실행 준비 중입니다.";
+              : "첫 화면을 아직 그리지 못했습니다. 현재 단계: " + startupPhase;
           startupStatus.hidden = false;
         }
       }, 20000);
@@ -42,6 +43,18 @@
         startupStatus.setAttribute("role", "alert");
       }
 
+      window.setSimulatorStartupStatus = function (message) {
+        startupPhase = message;
+        startupMessage.textContent = message;
+        startupStatus.hidden = false;
+      };
+      window.showSimulatorStartupError = showStartupError;
+      window.completeSimulatorStartup = function () {
+        simulatorStarted = true;
+        window.clearTimeout(startupTimeout);
+        startupStatus.hidden = true;
+      };
+
       var originalFetch = window.fetch.bind(window);
       window.fetch = function (request, options) {
         var url = typeof request === "string" ? request : request.url;
@@ -49,12 +62,11 @@
           return originalFetch(request, options);
 
         wasmRequestStarted = true;
-        startupMessage.textContent = "시뮬레이터 엔진 파일을 내려받고 있습니다.";
-        startupStatus.hidden = false;
+        window.setSimulatorStartupStatus("시뮬레이터 엔진 파일을 내려받고 있습니다.");
         return originalFetch(request, options).then(function (response) {
           if (response.ok) {
             wasmResponseReceived = true;
-            startupMessage.textContent = "시뮬레이터 엔진 파일을 받았습니다. 브라우저에서 실행 준비 중입니다.";
+            window.setSimulatorStartupStatus("시뮬레이터 엔진 파일을 받았습니다. 브라우저에서 실행 준비 중입니다.");
           }
           return response;
         }, function (error) {
@@ -84,9 +96,7 @@
           }
         },
         onRuntimeInitialized: function () {
-          simulatorStarted = true;
-          window.clearTimeout(startupTimeout);
-          startupStatus.hidden = true;
+          window.setSimulatorStartupStatus("시뮬레이터를 시작하고 있습니다.");
         },
         onAbort: function (reason) {
           window.clearTimeout(startupTimeout);
