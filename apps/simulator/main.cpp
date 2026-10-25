@@ -10,6 +10,7 @@
 #include <iostream>
 #ifdef __EMSCRIPTEN__
 #include <memory>
+#include <emscripten.h>
 #endif
 #include <string>
 #include <string_view>
@@ -168,6 +169,14 @@ int RunSimulator(int argc, char** argv)
         return -1;
     }
 }
+
+#ifdef __EMSCRIPTEN__
+void StartWebSimulator(void*)
+{
+    EM_ASM({ window.setSimulatorStartupStatus("시뮬레이터 구성 요소를 준비하고 있습니다."); });
+    static_cast<void>(RunSimulator(0, nullptr));
+}
+#endif
 }
 
 #ifdef _WIN32
@@ -201,6 +210,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 #else
 int main(int argc, char** argv)
 {
+#ifdef __EMSCRIPTEN__
+    (void)argc;
+    (void)argv;
+    emscripten_async_call(&StartWebSimulator, nullptr, 16);
+    return 0;
+#else
     return RunSimulator(argc, argv);
+#endif
 }
 #endif
