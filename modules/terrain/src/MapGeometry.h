@@ -56,7 +56,7 @@ inline std::vector<PolygonPoint> ClipPolygonToTerrain(
 
         std::vector<PolygonPoint> clipped;
         clipped.reserve(polygon.size() + 2U);
-        PolygonPoint previous = polygon.back();
+        PolygonPoint previous = polygon.at(polygon.size() - 1U);
         bool previousInside = inside(previous);
         for (const PolygonPoint& current : polygon)
         {
