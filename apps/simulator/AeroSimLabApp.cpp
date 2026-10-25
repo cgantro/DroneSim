@@ -933,11 +933,11 @@ void AeroSimLabApp::LoadMapFeatures()
 
     for (const auto& building : buildings)
     {
-        if (&building == selectedBuilding)
-            continue;
         const auto bounds =
             aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-        inspectionOccluders_.push_back({bounds.centerMeters, bounds.halfExtentsMeters});
+        inspectionOccluders_.push_back({building.outlineMeters,
+            bounds.centerMeters.z - bounds.halfExtentsMeters.z,
+            bounds.centerMeters.z + bounds.halfExtentsMeters.z});
     }
 
     inspectionFacilityId_ = selectedBuilding->osmId;
@@ -971,7 +971,7 @@ void AeroSimLabApp::InitializeStartingState()
 aerosimlab::simulation::CaptureAssessment AeroSimLabApp::AssessInspectionView() const
 {
     return aerosimlab::simulation::EoCameraModel::AssessCapture(
-        simulation_.Camera(), inspectionSurface_, inspectionOccluders_);
+        simulation_.Camera(), inspectionSurface_, {}, inspectionOccluders_);
 }
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)

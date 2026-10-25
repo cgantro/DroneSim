@@ -256,6 +256,49 @@ void Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels()
         CaptureAssessment::CameraUnavailable);
 }
 
+void Verify_EoCameraModelUsesBuildingFootprintsForOcclusion()
+{
+    constexpr double diagonal = 0.7071067811865476;
+    CameraState camera;
+    camera.positionMeters = {6.0 - 8.0 * diagonal,
+        2.0 + 8.0 * diagonal, 1.0};
+    camera.orientation = glm::angleAxis(-0.7853981633974483,
+        glm::dvec3{0.0, 0.0, 1.0});
+
+    InspectionSurface surface;
+    surface.centerMeters = {6.0, 2.0, 1.0};
+    surface.normal = {-diagonal, diagonal, 0.0};
+    surface.widthAxis = {-diagonal, -diagonal, 0.0};
+    surface.widthMeters = 1.0;
+    surface.heightMeters = 1.0;
+    surface.minimumDistanceMeters = 3.0;
+    surface.maximumDistanceMeters = 20.0;
+    surface.maximumIncidenceAngleDegrees = 20.0;
+    surface.minimumPixelWidth = 1;
+    surface.minimumPixelHeight = 1;
+
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface), CaptureAssessment::Ready);
+
+    // 삼각형 건물의 대각선 외벽을 향하면 외접 상자는 시선을 막지만 실제 건물 안은 지나지 않는다.
+    const InspectionOccluderBox boundingBox{
+        {6.0, 2.0, 5.0}, {2.0, 2.0, 5.0}};
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface,
+        std::span<const InspectionOccluderBox>{&boundingBox, 1U}),
+        CaptureAssessment::Occluded);
+
+    const InspectionOccluderPolygon triangle{
+        {{4.0, 0.0}, {8.0, 0.0}, {8.0, 4.0}}, 0.0, 10.0};
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface, {},
+        std::span<const InspectionOccluderPolygon>{&triangle, 1U}),
+        CaptureAssessment::Ready);
+
+    const InspectionOccluderPolygon blockingBuilding{
+        {{3.0, 4.0}, {4.0, 4.0}, {4.0, 5.0}, {3.0, 5.0}}, 0.0, 10.0};
+    EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface, {},
+        std::span<const InspectionOccluderPolygon>{&blockingBuilding, 1U}),
+        CaptureAssessment::Occluded);
+}
+
 TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
@@ -267,6 +310,8 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_TracksEachDroneCameraIndependently());
     EXPECT_NO_FATAL_FAILURE(
         Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_EoCameraModelUsesBuildingFootprintsForOcclusion());
 }
 
 }

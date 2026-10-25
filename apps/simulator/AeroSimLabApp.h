@@ -344,7 +344,7 @@ private:
     std::string inspectionFacilityId_;
     std::string inspectionZoneId_;
     aerosimlab::simulation::InspectionSurface inspectionSurface_;
-    std::vector<aerosimlab::simulation::InspectionOccluderBox> inspectionOccluders_;
+    std::vector<aerosimlab::simulation::InspectionOccluderPolygon> inspectionOccluders_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};

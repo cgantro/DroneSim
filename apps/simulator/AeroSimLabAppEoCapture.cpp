@@ -170,7 +170,7 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
             std::string error;
             const auto captureAssessment =
                 aerosimlab::simulation::EoCameraModel::AssessCapture(
-                    cameraState->second, inspectionSurface_, inspectionOccluders_);
+                    cameraState->second, inspectionSurface_, {}, inspectionOccluders_);
             if (!eoVideoRecorder_->WriteFrame(eoFrame_, cameraState->second,
                 static_cast<double>(simulationTick) / 60.0,
                 captureAssessment, error))

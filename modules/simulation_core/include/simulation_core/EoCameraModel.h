@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace aerosimlab::simulation
 {
@@ -73,6 +74,14 @@ struct InspectionOccluderBox
     glm::dvec3 halfExtentsMeters{0.0};
 };
 
+/** @brief 건물 발자국과 바닥·지붕 높이로 만든 카메라 가림 형상이다. */
+struct InspectionOccluderPolygon
+{
+    std::vector<glm::dvec2> footprintMeters;
+    double bottomElevationMeters = 0.0;
+    double topElevationMeters = 0.0;
+};
+
 /** @brief 카메라 프레임 한 장이 점검면의 기하 조건을 만족하는지 나타낸다. */
 enum class CaptureAssessment
 {
@@ -103,10 +112,11 @@ public:
     /** @brief 카메라 영상의 위쪽에 해당하는 월드 기준 단위 방향을 돌려준다. */
     [[nodiscard]] static glm::dvec3 UpAxis(const CameraState& camera) noexcept;
 
-    /** @brief 점검면의 거리·방향·화면 크기와 지정한 상자에 의한 가림을 확인한다. */
+    /** @brief 점검면의 촬영 조건과 상자·건물 외곽선에 의한 가림을 확인한다. */
     [[nodiscard]] static CaptureAssessment AssessCapture(
         const CameraState& camera, const InspectionSurface& surface,
-        std::span<const InspectionOccluderBox> occluders = {}) noexcept;
+        std::span<const InspectionOccluderBox> occluderBoxes = {},
+        std::span<const InspectionOccluderPolygon> occluderPolygons = {}) noexcept;
 
     /** @brief 카메라를 켜거나 끈다. */
     static void SetEnabled(CameraState& state, bool enabled) noexcept;
