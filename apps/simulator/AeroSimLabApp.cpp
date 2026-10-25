@@ -403,7 +403,30 @@ int AeroSimLabApp::Run()
             emscripten_cancel_main_loop();
             return;
         }
-        app.RunFrame(app.webPreviousFrame_);
+        try
+        {
+            app.RunFrame(app.webPreviousFrame_);
+        }
+        catch (const std::exception& error)
+        {
+            const std::string message = std::string("시뮬레이터 프레임 실행 실패: ")
+                + error.what();
+            EM_ASM({
+                const message = UTF8ToString($0);
+                console.error(message);
+                window.showSimulatorStartupError(message);
+            }, message.c_str());
+            emscripten_cancel_main_loop();
+        }
+        catch (...)
+        {
+            EM_ASM({
+                const message = "시뮬레이터 프레임에서 알 수 없는 C++ 오류가 발생했습니다.";
+                console.error(message);
+                window.showSimulatorStartupError(message);
+            });
+            emscripten_cancel_main_loop();
+        }
     }, this, 0, false);
     return 0;
 #else

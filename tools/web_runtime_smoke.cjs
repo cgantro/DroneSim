@@ -72,10 +72,16 @@ async function run() {
       timeout: 15000,
     });
     await page.waitForFunction(
-      () => document.querySelector("#startup-status")?.hidden === true,
+      () => {
+        const status = document.querySelector("#startup-status");
+        return status?.hidden === true || status?.getAttribute("role") === "alert";
+      },
       null,
       { timeout: 45000 }
     );
+    const startupError = await page.locator("#startup-status[role='alert']").textContent();
+    if (startupError)
+      throw new Error(startupError.trim());
     console.log("Chromium에서 시뮬레이터 첫 화면을 확인했습니다.");
   } catch (error) {
     console.error(`웹 시작 검사 실패: ${error.message}`);
