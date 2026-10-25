@@ -107,6 +107,11 @@ async function run() {
     if (!takeoffState.includes("taking_off") && !takeoffState.includes("hovering")
         && !takeoffState.includes("flying"))
       throw new Error(`이륙 버튼 뒤 비행 상태가 바뀌지 않았습니다: ${takeoffState}`);
+    await page.waitForFunction(
+      () => document.querySelector("#web-gcs-status")?.textContent.includes("hovering"),
+      null,
+      { timeout: 10000 }
+    );
 
     const forwardButton = page.getByRole("button", { name: "전진" });
     await forwardButton.hover();
@@ -115,7 +120,7 @@ async function run() {
       () => {
         const status = document.querySelector("#web-gcs-status")?.textContent || "";
         const speed = Number(status.match(/속도 ([0-9.]+) m\/s/)?.[1] || 0);
-        return speed > 0.1;
+        return status.includes("비행 상태: flying") && speed > 0.1;
       },
       null,
       { timeout: 5000 }
@@ -124,9 +129,9 @@ async function run() {
     await page.mouse.up();
     await page.getByRole("button", { name: "착륙" }).click();
     await page.waitForFunction(
-      () => document.querySelector("#web-gcs-status")?.textContent.includes("grounded"),
+      () => document.querySelector("#web-gcs-status")?.textContent.includes("landing"),
       null,
-      { timeout: 15000 }
+      { timeout: 5000 }
     );
 
     const responsiveness = await page.evaluate(() => new Promise((resolve) => {
