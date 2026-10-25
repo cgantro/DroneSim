@@ -19,8 +19,12 @@
     </div>
     <canvas id="canvas" tabindex="0"></canvas>
     <script>
+      var simulatorVersion = "__SIMULATOR_VERSION__";
       var Module = {
         canvas: document.getElementById("canvas"),
+        locateFile: function (path) {
+          return path + "?rev=" + encodeURIComponent(simulatorVersion);
+        },
         setStatus: function (text) {
           if (text) {
             document.getElementById("startup-message").textContent = "시뮬레이터를 불러오고 있습니다.";
@@ -61,6 +65,7 @@
         Array.from(source.attributes).forEach(function (attribute) {
           script.setAttribute(attribute.name, attribute.value);
         });
+        script.src = source.getAttribute("src") + "?rev=" + encodeURIComponent(simulatorVersion);
         script.textContent = source.textContent;
         script.addEventListener("error", function () {
           status.hidden = false;
