@@ -8,9 +8,20 @@
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #141719; }
       body { display: grid; place-items: center; }
       canvas { display: block; width: 100%; height: 100%; outline: none; }
-      #startup-status { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; color: #e5e7eb; background: #141719; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
+      #startup-status { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 24px; color: #e5e7eb; background: #141719; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
       #startup-status[hidden] { display: none; }
       #startup-message { max-width: 560px; }
+      #web-gcs { position: fixed; z-index: 2; left: 12px; right: 12px; bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; color: #f3f4f6; background: rgb(17 24 28 / 92%); border: 1px solid rgb(255 255 255 / 18%); border-radius: 10px; font: 13px/1.4 system-ui, sans-serif; }
+      #web-gcs-status { min-width: 250px; }
+      #web-gcs-status strong { display: block; font-size: 14px; }
+      #web-gcs-status span { color: #cbd5d9; }
+      #web-gcs-controls { display: flex; align-items: center; gap: 6px; }
+      #web-gcs button { min-width: 42px; min-height: 38px; padding: 6px 10px; color: #f8fafc; background: #34434a; border: 1px solid #66777e; border-radius: 6px; font: inherit; touch-action: none; }
+      #web-gcs button:hover:not(:disabled) { background: #46616b; }
+      #web-gcs button:disabled { opacity: .55; }
+      #web-gcs [data-command="0"] { background: #176b50; }
+      #web-gcs [data-command="2"] { background: #8c3c3c; }
+      @media (max-width: 720px) { #web-gcs { align-items: flex-start; flex-direction: column; } #web-gcs-status { min-width: 0; } #web-gcs-controls { flex-wrap: wrap; } }
     </style>
   </head>
   <body>
@@ -18,6 +29,25 @@
       <div id="startup-message">시뮬레이터를 불러오고 있습니다.</div>
     </div>
     <canvas id="canvas" tabindex="0"></canvas>
+    <section id="web-gcs" aria-label="웹 지상통제">
+      <div id="web-gcs-status" aria-live="polite">
+        <strong>지상통제 · 준비 중</strong>
+        <span>시설물 점검 임무는 아직 연결되지 않았습니다.</span>
+      </div>
+      <div id="web-gcs-controls">
+        <button type="button" data-command="0" disabled>이륙</button>
+        <button type="button" data-command="1" disabled>정지</button>
+        <button type="button" data-axis="forward:1" disabled>전진</button>
+        <button type="button" data-axis="forward:-1" disabled>후진</button>
+        <button type="button" data-axis="right:-1" disabled>좌측</button>
+        <button type="button" data-axis="right:1" disabled>우측</button>
+        <button type="button" data-axis="vertical:1" disabled>상승</button>
+        <button type="button" data-axis="vertical:-1" disabled>하강</button>
+        <button type="button" data-axis="yaw:-1" disabled>좌회전</button>
+        <button type="button" data-axis="yaw:1" disabled>우회전</button>
+        <button type="button" data-command="2" disabled>착륙</button>
+      </div>
+    </section>
     <script>
       var simulatorVersion = "__SIMULATOR_VERSION__";
       var simulatorStarted = false;
@@ -48,7 +78,60 @@
         simulatorStarted = true;
         window.clearTimeout(startupTimeout);
         startupStatus.hidden = true;
+        document.querySelectorAll("#web-gcs button").forEach(function (button) {
+          button.disabled = false;
+        });
       };
+
+      window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive) {
+        var status = document.getElementById("web-gcs-status");
+        status.innerHTML = "<strong>비행 상태: " + mode + "</strong>"
+          + "<span>위치 " + x.toFixed(1) + ", " + y.toFixed(1) + ", " + z.toFixed(1)
+          + " m · 속도 " + speed.toFixed(1) + " m/s · EO "
+          + (cameraActive ? "켜짐" : "꺼짐") + "</span>";
+      };
+
+      (function () {
+        var axes = { forward: 0, right: 0, vertical: 0, yaw: 0 };
+        function sendAxes() {
+          if (typeof Module._DroneSimWebPilotInput === "function")
+            Module._DroneSimWebPilotInput(axes.forward, axes.right, axes.vertical, axes.yaw);
+        }
+        function releaseAll() {
+          Object.keys(axes).forEach(function (axis) { axes[axis] = 0; });
+          sendAxes();
+        }
+
+        document.querySelectorAll("#web-gcs [data-command]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            if (typeof Module._DroneSimWebFlightCommand === "function")
+              Module._DroneSimWebFlightCommand(Number(button.dataset.command));
+          });
+        });
+        document.querySelectorAll("#web-gcs [data-axis]").forEach(function (button) {
+          var parts = button.dataset.axis.split(":");
+          var axis = parts[0];
+          var value = Number(parts[1]);
+          function release() {
+            axes[axis] = 0;
+            sendAxes();
+          }
+          button.addEventListener("pointerdown", function (event) {
+            event.preventDefault();
+            axes[axis] = value;
+            button.setPointerCapture(event.pointerId);
+            sendAxes();
+          });
+          button.addEventListener("pointerup", release);
+          button.addEventListener("pointercancel", release);
+          button.addEventListener("lostpointercapture", release);
+        });
+        window.addEventListener("blur", releaseAll);
+        document.addEventListener("visibilitychange", function () {
+          if (document.hidden)
+            releaseAll();
+        });
+      })();
 
       var Module = {
         canvas: document.getElementById("canvas"),

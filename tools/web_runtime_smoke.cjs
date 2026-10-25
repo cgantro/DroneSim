@@ -91,6 +91,44 @@ async function run() {
     if (startupError)
       throw new Error(startupError.trim());
 
+    const telemetry = page.locator("#web-gcs-status");
+    await page.waitForFunction(
+      () => document.querySelector("#web-gcs-status")?.textContent.includes("비행 상태:"),
+      null,
+      { timeout: 5000 }
+    );
+    await page.getByRole("button", { name: "이륙" }).click();
+    await page.waitForFunction(
+      () => !document.querySelector("#web-gcs-status")?.textContent.includes("grounded"),
+      null,
+      { timeout: 10000 }
+    );
+    const takeoffState = await telemetry.innerText();
+    if (!takeoffState.includes("taking_off") && !takeoffState.includes("hovering")
+        && !takeoffState.includes("flying"))
+      throw new Error(`이륙 버튼 뒤 비행 상태가 바뀌지 않았습니다: ${takeoffState}`);
+
+    const forwardButton = page.getByRole("button", { name: "전진" });
+    await forwardButton.hover();
+    await page.mouse.down();
+    await page.waitForFunction(
+      () => {
+        const status = document.querySelector("#web-gcs-status")?.textContent || "";
+        const speed = Number(status.match(/속도 ([0-9.]+) m\/s/)?.[1] || 0);
+        return speed > 0.1;
+      },
+      null,
+      { timeout: 5000 }
+    );
+    await page.waitForTimeout(250);
+    await page.mouse.up();
+    await page.getByRole("button", { name: "착륙" }).click();
+    await page.waitForFunction(
+      () => document.querySelector("#web-gcs-status")?.textContent.includes("grounded"),
+      null,
+      { timeout: 15000 }
+    );
+
     const responsiveness = await page.evaluate(() => new Promise((resolve) => {
       const frameTimes = [];
       const startedAt = performance.now();
@@ -116,7 +154,7 @@ async function run() {
         + `최대 공백 ${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms`);
     }
     console.log(
-      `Chromium에서 첫 화면과 이후 갱신을 확인했습니다. `
+      `Chromium에서 첫 화면, 비행 조작, 상태 갱신을 확인했습니다. `
       + `${responsiveness.frameCount}프레임, 최대 공백 `
       + `${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms`);
   } catch (error) {

@@ -55,6 +55,9 @@ namespace aerosimlab::simulator
 {
 namespace
 {
+#ifdef __EMSCRIPTEN__
+AeroSimLabApp* activeWebApplication = nullptr;
+#endif
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 창이 멈춘 뒤 밀린 시간을 전부 따라잡느라 다음 화면까지 늦어지지 않게 한다.
@@ -492,10 +495,36 @@ AeroSimLabApp::AeroSimLabApp(Options options)
         simulation_.SetPhysicsStepTimingEnabled(true);
 #ifndef __EMSCRIPTEN__
     visionAnalyzer_ = std::make_unique<aerosimlab::vision::RgbFrameAnalyzer>();
+#else
+    activeWebApplication = this;
 #endif
 }
 
-AeroSimLabApp::~AeroSimLabApp() = default;
+AeroSimLabApp::~AeroSimLabApp()
+{
+#ifdef __EMSCRIPTEN__
+    if (activeWebApplication == this)
+        activeWebApplication = nullptr;
+#endif
+}
+
+#ifdef __EMSCRIPTEN__
+void AeroSimLabApp::QueueWebFlightCommand(
+    aerosimlab::simulation::DroneCommand::Kind kind)
+{
+    externalControl_ = true;
+    if (!commandRecording_.IsReplaying())
+        pendingControllerAction_ = aerosimlab::simulation::DroneCommand{kind};
+}
+
+void AeroSimLabApp::SetWebPilotAxes(
+    const aerosimlab::manual_control::GamepadAxes& axes)
+{
+    externalControl_ = true;
+    if (!commandRecording_.IsReplaying())
+        webPilotAxes_ = axes;
+}
+#endif
 
 int AeroSimLabApp::Run()
 {
@@ -523,6 +552,7 @@ int AeroSimLabApp::Run()
                 {
                     app.startTime_ = std::chrono::steady_clock::now();
                     app.webPreviousFrame_ = app.startTime_;
+                    app.lastWebTelemetryUpdate_ = app.startTime_;
                 }
                 return;
             }
@@ -667,6 +697,23 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     }
     ++renderedFrames_;
 #ifdef __EMSCRIPTEN__
+    const auto telemetryTime = std::chrono::steady_clock::now();
+    if (telemetryTime - lastWebTelemetryUpdate_ >= std::chrono::milliseconds(250))
+    {
+        const auto& state = simulation_.State();
+        const std::string mode{aerosimlab::simulation::ToString(state.mode)};
+        const double speedMetersPerSecond = glm::length(state.velocityMetersPerSecond);
+        const bool cameraActive = simulation_.Camera().status
+            == aerosimlab::simulation::CameraStatus::Active;
+        EM_ASM({
+            if (window.updateDroneSimGroundControl) {
+                window.updateDroneSimGroundControl(
+                    UTF8ToString($0), $1, $2, $3, $4, $5);
+            }
+        }, mode.c_str(), state.positionMeters.x, state.positionMeters.y,
+            state.positionMeters.z, speedMetersPerSecond, cameraActive);
+        lastWebTelemetryUpdate_ = telemetryTime;
+    }
     if (!webFirstFrameRendered_)
     {
         webFirstFrameRendered_ = true;
@@ -949,6 +996,22 @@ void AeroSimLabApp::AdvanceReplayTick()
 
 void AeroSimLabApp::AdvanceManualControlTick()
 {
+#ifdef __EMSCRIPTEN__
+    if (webPilotAxes_)
+    {
+        const auto mode = simulation_.State().mode;
+        if (mode == aerosimlab::simulation::FlightMode::Hovering
+            || mode == aerosimlab::simulation::FlightMode::Flying)
+        {
+            pendingPilotCommand_ = aerosimlab::manual_control::MapAxes(
+                *webPilotAxes_, simulation_.State().yawRadians);
+        }
+        else
+        {
+            pendingPilotCommand_.reset();
+        }
+    }
+#endif
     if (!groundControlActive_ && pendingControllerAction_)
     {
         static_cast<void>(ApplyAndRecordCommand(*pendingControllerAction_));
@@ -1166,3 +1229,40 @@ void AeroSimLabApp::DrawCube(const glm::mat4& transform, const glm::vec3& camera
 }
 
 }
+
+#ifdef __EMSCRIPTEN__
+extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebFlightCommand(int command)
+{
+    if (aerosimlab::simulator::activeWebApplication == nullptr)
+        return;
+
+    using Kind = aerosimlab::simulation::DroneCommand::Kind;
+    switch (command)
+    {
+    case 0:
+        aerosimlab::simulator::activeWebApplication->QueueWebFlightCommand(Kind::TakeOff);
+        break;
+    case 1:
+        aerosimlab::simulator::activeWebApplication->QueueWebFlightCommand(Kind::Stop);
+        break;
+    case 2:
+        aerosimlab::simulator::activeWebApplication->QueueWebFlightCommand(Kind::Land);
+        break;
+    default:
+        break;
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebPilotInput(
+    double forward, double right, double vertical, double yaw)
+{
+    if (aerosimlab::simulator::activeWebApplication == nullptr)
+        return;
+
+    aerosimlab::simulator::activeWebApplication->SetWebPilotAxes({
+        .forward = forward,
+        .right = right,
+        .vertical = vertical,
+        .yaw = yaw});
+}
+#endif

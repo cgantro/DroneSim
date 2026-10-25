@@ -81,6 +81,13 @@ public:
     /** @brief 그래픽 자원을 준비하고 창이 닫힐 때까지 모의를 실행한다. */
     int Run();
 
+#ifdef __EMSCRIPTEN__
+    /** @brief 웹 지상통제 버튼에서 비행 명령을 예약한다. */
+    void QueueWebFlightCommand(aerosimlab::simulation::DroneCommand::Kind kind);
+    /** @brief 웹 조작 버튼의 입력을 다음 비행 Tick에 적용한다. */
+    void SetWebPilotAxes(const aerosimlab::manual_control::GamepadAxes& axes);
+#endif
+
 private:
     static constexpr double benchmarkWarmupDurationSeconds = 1.0;
 
@@ -130,6 +137,7 @@ private:
     bool webFirstFrameRendered_ = false;
     bool webGraphicsInitialized_ = false;
     std::uint8_t webStartupStep_ = 0;
+    std::optional<aerosimlab::manual_control::GamepadAxes> webPilotAxes_;
 #endif
     /** @brief 지형·지도 형상·드론 모형과 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();
@@ -264,6 +272,7 @@ private:
     std::chrono::steady_clock::time_point startTime_;
 #ifdef __EMSCRIPTEN__
     std::chrono::steady_clock::time_point webPreviousFrame_;
+    std::chrono::steady_clock::time_point lastWebTelemetryUpdate_;
 #endif
     std::uint16_t udpPort_ = 0;
     aerosimlab::simulation::CommandRecording commandRecording_;

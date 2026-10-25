@@ -76,7 +76,7 @@ int RunSimulator(int argc, char** argv)
     try
     {
 #ifdef __EMSCRIPTEN__
-        bool demoMode = true;
+        bool demoMode = false;
         bool networkEnabled = false;
 #else
         bool demoMode = false;
