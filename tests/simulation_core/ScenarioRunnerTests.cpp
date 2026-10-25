@@ -746,6 +746,14 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     EXPECT_EQ(result.mission->completedTaskCount, 4U);
     ASSERT_TRUE(result.mission->startedTick.has_value());
     EXPECT_EQ(*result.mission->startedTick, 90U);
+    for (const ScenarioResult::MissionTask& task : result.mission->tasks)
+    {
+        EXPECT_TRUE(task.completed) << task.inspectionZoneId;
+        EXPECT_FALSE(task.inspectionZoneId.empty());
+        ASSERT_TRUE(task.firstGeometryCaptureTick.has_value()) << task.inspectionZoneId;
+        EXPECT_EQ(task.lastCaptureAssessment, CaptureAssessment::Ready)
+            << task.inspectionZoneId;
+    }
 
     const auto disconnectedDrone = std::find_if(result.drones.begin(), result.drones.end(),
         [](const ScenarioResult::Drone& drone) { return drone.name == "scout-2"; });
@@ -799,6 +807,13 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     EXPECT_GT(physicalResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(physicalResult.mission.has_value());
     EXPECT_EQ(physicalResult.mission->outcome, ScenarioResult::Outcome::Passed);
+    for (const ScenarioResult::MissionTask& task : physicalResult.mission->tasks)
+    {
+        EXPECT_TRUE(task.completed) << task.inspectionZoneId;
+        ASSERT_TRUE(task.firstGeometryCaptureTick.has_value()) << task.inspectionZoneId;
+        EXPECT_EQ(task.lastCaptureAssessment, CaptureAssessment::Ready)
+            << task.inspectionZoneId;
+    }
     ASSERT_TRUE(physicalResult.mission->startedTick.has_value());
     EXPECT_GT(*physicalResult.mission->startedTick, 90U);
     EXPECT_EQ(physicalResult.mission->completedTaskCount, 4U);
