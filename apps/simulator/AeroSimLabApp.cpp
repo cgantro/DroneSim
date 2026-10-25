@@ -65,21 +65,6 @@ std::filesystem::path AssetPath(std::string_view relativePath)
     return detail::ExecutableDirectory() / relativePath;
 }
 
-#ifdef __EMSCRIPTEN__
-void SetWebStartupStage(const char* message)
-{
-    EM_ASM({
-        const stage = UTF8ToString($0);
-        window.setSimulatorStartupStatus(stage);
-        console.info("[시뮬레이터 시작] " + stage);
-    }, message);
-}
-#else
-void SetWebStartupStage(const char*)
-{
-}
-#endif
-
 glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
 {
     // 모의는 Z축을 위로 쓰고 화면은 Y축을 위로 쓴다. Y축 방향은 화면의 -Z로 옮겨 오른손 좌표계를 유지한다.
@@ -181,6 +166,19 @@ glm::mat4 IndoorBoxTransform(const glm::dvec3& centerMeters,
             static_cast<float>(sizeMeters.z),
             static_cast<float>(sizeMeters.y)});
 }
+}
+
+void SetWebStartupStage(const char* message)
+{
+#ifdef __EMSCRIPTEN__
+    EM_ASM({
+        const stage = UTF8ToString($0);
+        window.setSimulatorStartupStatus(stage);
+        console.info("[시뮬레이터 시작] " + stage);
+    }, message);
+#else
+    (void)message;
+#endif
 }
 
 AeroSimLabApp::AeroSimLabApp(Options options)

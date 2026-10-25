@@ -44,6 +44,9 @@ namespace aerosimlab::simulator
 {
 class SimulatorHud;
 
+/** @brief 웹 자동 검사에 C++ 시작 단계를 전달한다. */
+void SetWebStartupStage(const char* message);
+
 /**
  * @brief 드론 모의를 진행하고 실내 수색 장면과 탑재 카메라 영상을 그린다.
  * @details 드론 위치는 미터, 모의 간격은 1/60초다. 장면과 카메라 영상은 크기와 위치를 바꿀 수 있는 별도 패널에 표시한다.
