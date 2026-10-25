@@ -16,6 +16,9 @@ namespace aerosimlab::terrain::detail
 inline std::vector<glm::dvec2> ClipPolygonToTerrain(
     std::vector<glm::dvec2> polygon, const TerrainGrid& terrain)
 {
+    if (polygon.empty())
+        return polygon;
+
     const double halfX = (static_cast<double>(terrain.sampleCount) - 1.0)
         * static_cast<double>(terrain.spacingXMeters) * 0.5;
     const double halfY = (static_cast<double>(terrain.sampleCount) - 1.0)
@@ -25,9 +28,6 @@ inline std::vector<glm::dvec2> ClipPolygonToTerrain(
 
     for (const auto& [edge, bound] : bounds)
     {
-        if (polygon.empty())
-            break;
-
         const auto coordinate = [edge](const glm::dvec2& point)
         {
             return edge < 2 ? point.x : point.y;
@@ -67,6 +67,8 @@ inline std::vector<glm::dvec2> ClipPolygonToTerrain(
             previousInside = currentInside;
         }
         polygon = std::move(clipped);
+        if (polygon.empty())
+            break;
     }
     return polygon;
 }

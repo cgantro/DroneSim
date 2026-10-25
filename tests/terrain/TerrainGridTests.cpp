@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 
 #include <glm/geometric.hpp>
 
@@ -131,6 +132,32 @@ void Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection()
     EXPECT_NE(std::find(names.begin(), names.end(), "광평교"), names.end());
 }
 
+void Verify_BridgeOutsideTerrainIsSkipped()
+{
+    TerrainGrid terrain;
+    terrain.sampleCount = 3;
+    terrain.spacingXMeters = 10.0F;
+    terrain.spacingYMeters = 10.0F;
+    terrain.centerLatitudeDegrees = 37.0;
+    terrain.centerLongitudeDegrees = 127.0;
+    terrain.referenceElevationMeters = 0.0F;
+    terrain.heightOffsetsMeters.assign(9U, 0.0F);
+
+    const auto path = std::filesystem::temp_directory_path()
+        / "dronesim-bridge-outside-terrain-test.geojson";
+    {
+        std::ofstream output(path);
+        ASSERT_TRUE(output);
+        output << R"json({"features":[{"geometry":{"type":"Polygon","coordinates":[[[128.0,38.0],[128.001,38.0],[128.001,38.001],[128.0,38.0]]]},"properties":{"osm_id":"outside","tags":{"man_made":"bridge","name":"시험 교량"}}}]})json";
+    }
+
+    const std::vector<MapBridgeFootprint> bridges =
+        LoadMapBridgeFootprints(path, terrain);
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+    EXPECT_TRUE(bridges.empty());
+}
+
 TEST(TerrainGridTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
@@ -142,6 +169,7 @@ TEST(TerrainGridTests, CoreScenarios)
         Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection());
+    EXPECT_NO_FATAL_FAILURE(Verify_BridgeOutsideTerrainIsSkipped());
 }
 
 }
