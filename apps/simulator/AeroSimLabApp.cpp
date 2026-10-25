@@ -907,7 +907,6 @@ void AeroSimLabApp::LoadMapFeatures()
     {
         const auto bounds =
             aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-        inspectionOccluders_.push_back({bounds.centerMeters, bounds.halfExtentsMeters});
 #ifndef __EMSCRIPTEN__
         simulation_.AddStaticObstacleBox(
             bounds.centerMeters, glm::vec3{bounds.halfExtentsMeters});
@@ -931,6 +930,15 @@ void AeroSimLabApp::LoadMapFeatures()
 
     if (selectedBuilding == nullptr)
         throw std::runtime_error("점검 시험면으로 쓸 OSM 건물을 찾지 못했습니다.");
+
+    for (const auto& building : buildings)
+    {
+        if (&building == selectedBuilding)
+            continue;
+        const auto bounds =
+            aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
+        inspectionOccluders_.push_back({bounds.centerMeters, bounds.halfExtentsMeters});
+    }
 
     inspectionFacilityId_ = selectedBuilding->osmId;
     inspectionZoneId_ = "facade-test-area";
