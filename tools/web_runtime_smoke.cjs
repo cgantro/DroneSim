@@ -50,13 +50,22 @@ async function run() {
     const page = await browser.newPage();
     page.on("console", (message) => {
       if (message.type() === "error")
-        console.error(`브라우저 오류: ${message.text()}`);
+        console.error(`브라우저 오류: ${message.text()} (${JSON.stringify(message.location())})`);
     });
     page.on("pageerror", (error) => {
-      console.error(`페이지 오류: ${error.stack || error.message}`);
+      console.error(`페이지 오류: ${error.stack || error.message} [${error.name || typeof error}]`);
     });
     page.on("requestfailed", (request) => {
       console.error(`요청 실패: ${request.url()} (${request.failure()?.errorText || "원인 없음"})`);
+    });
+    await page.addInitScript(() => {
+      window.addEventListener("error", (event) => {
+        console.error("window 오류 위치:", event.message, event.filename,
+          event.lineno, event.colno, event.error?.stack || String(event.error));
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        console.error("처리되지 않은 비동기 오류:", event.reason?.stack || String(event.reason));
+      });
     });
     await page.goto("http://127.0.0.1:4173/", {
       waitUntil: "commit",
