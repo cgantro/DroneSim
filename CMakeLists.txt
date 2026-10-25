@@ -318,6 +318,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     target_link_options(aerosimlab_simulator PRIVATE
       "--shell-file=${CMAKE_SOURCE_DIR}/apps/simulator/web/web_shell_single_thread.html"
       "-sALLOW_MEMORY_GROWTH=1"
+      "-sEXPORTED_RUNTIME_METHODS=callMain"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
     )
   else()

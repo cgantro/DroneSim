@@ -46,7 +46,13 @@ enum class MessageKind
 
 void ShowStartupMessage(std::string_view message, MessageKind kind)
 {
-#ifdef _WIN32
+#ifdef __EMSCRIPTEN__
+    if (kind == MessageKind::Error)
+    {
+        const std::string text(message);
+        EM_ASM({ window.showSimulatorStartupError(UTF8ToString($0)); }, text.c_str());
+    }
+#elif defined(_WIN32)
     const std::string utf8(message);
     const int wideLength = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
     if (wideLength <= 0)
