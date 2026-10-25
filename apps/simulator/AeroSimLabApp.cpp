@@ -65,7 +65,6 @@ constexpr int windowHeight = 720;
 constexpr std::size_t smokeTestFrameLimit = 8;
 // 소프트웨어 렌더러에서도 네트워크 스모크의 모의가 화면 속도에 묶이지 않게 한다.
 constexpr std::size_t networkSmokeSimulationBatchesPerFrame = 5;
-constexpr std::size_t demoLengthTicks = 900;
 constexpr glm::dvec2 demoDroneStartMeters{0.0, -9.0};
 constexpr double benchmarkDurationSeconds = 5.0;
 
@@ -518,6 +517,12 @@ void AeroSimLabApp::QueueWebFlightCommand(
         pendingControllerAction_ = aerosimlab::simulation::DroneCommand{kind};
 }
 
+bool AeroSimLabApp::StartWebInspectionMission()
+{
+    externalControl_ = true;
+    return RequestInspectionMission();
+}
+
 void AeroSimLabApp::SetWebPilotAxes(
     const aerosimlab::manual_control::GamepadAxes& axes)
 {
@@ -711,11 +716,12 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         EM_ASM({
             if (window.updateDroneSimGroundControl) {
                 window.updateDroneSimGroundControl(
-                    UTF8ToString($0), $1, $2, $3, $4, $5, UTF8ToString($6));
+                    UTF8ToString($0), $1, $2, $3, $4, $5, UTF8ToString($6),
+                    UTF8ToString($7));
             }
         }, mode.c_str(), state.positionMeters.x, state.positionMeters.y,
             state.positionMeters.z, speedMetersPerSecond, cameraActive,
-            captureAssessment.c_str());
+            captureAssessment.c_str(), InspectionMissionStatus().c_str());
         lastWebTelemetryUpdate_ = telemetryTime;
     }
     if (!webFirstFrameRendered_)
@@ -987,8 +993,10 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
 
 void AeroSimLabApp::AdvanceSimulationTick()
 {
-    if (demoMode_ && !externalControl_)
-        ApplyDemoCommands();
+    if (demoMode_ && !externalControl_
+        && inspectionMissionStage_ == InspectionMissionStage::Ready)
+        static_cast<void>(RequestInspectionMission());
+    AdvanceInspectionMission();
     ExpireGroundControlCommand();
     const bool groundControlTickAdvanced = ProcessPendingGroundCommand();
     if (!groundControlTickAdvanced
@@ -1027,6 +1035,19 @@ void AeroSimLabApp::AdvanceReplayTick()
 
 void AeroSimLabApp::AdvanceManualControlTick()
 {
+    const bool inspectionMissionActive =
+        inspectionMissionStage_ == InspectionMissionStage::StartRequested
+        || inspectionMissionStage_ == InspectionMissionStage::TakingOff
+        || inspectionMissionStage_ == InspectionMissionStage::Approaching
+        || inspectionMissionStage_ == InspectionMissionStage::Capturing
+        || inspectionMissionStage_ == InspectionMissionStage::Landing;
+    if (inspectionMissionActive)
+    {
+        simulation_.AdvanceOneTick();
+        commandRecording_.FinishTick();
+        return;
+    }
+
 #ifdef __EMSCRIPTEN__
     if (webPilotAxes_)
     {
@@ -1079,39 +1100,186 @@ aerosimlab::simulation::CommandResult AeroSimLabApp::ApplyAndRecordCommand(
     return result;
 }
 
-void AeroSimLabApp::ApplyDemoCommands()
+bool AeroSimLabApp::RequestInspectionMission()
 {
-    using Kind = aerosimlab::simulation::DroneCommand::Kind;
-    const std::size_t tick = static_cast<std::size_t>(simulation_.TickCount()) % demoLengthTicks;
-    aerosimlab::simulation::DroneCommand command;
-    switch (tick)
+    if (inspectionMissionStage_ == InspectionMissionStage::StartRequested
+        || inspectionMissionStage_ == InspectionMissionStage::TakingOff
+        || inspectionMissionStage_ == InspectionMissionStage::Approaching
+        || inspectionMissionStage_ == InspectionMissionStage::Capturing
+        || inspectionMissionStage_ == InspectionMissionStage::Landing)
     {
-    case 0:
-        command.kind = Kind::TakeOff;
-        break;
-    case 120:
-    {
-        command.kind = Kind::SetWaypoint;
-        command.vector = missionGoalMeters_;
-        break;
+        inspectionMissionError_ = "점검 임무가 이미 진행 중입니다.";
+        return false;
     }
-    case 300:
+
+    if (simulation_.State().mode != aerosimlab::simulation::FlightMode::Grounded)
     {
-        command.kind = Kind::SetYawRate;
-        command.yawRateRadiansPerSecond = 0.35;
-        break;
+        inspectionMissionError_ = "기체가 지상에 있을 때 임무를 시작할 수 있습니다.";
+        inspectionMissionStage_ = InspectionMissionStage::Failed;
+        return false;
     }
-    case 360:
-        command.kind = Kind::Stop;
-        break;
-    case 600:
-        command.kind = Kind::Land;
-        break;
-    default:
+
+    inspectionMissionError_.clear();
+    inspectionMissionStartTick_ = 0;
+    inspectionCaptureStartFrame_ = 0;
+    inspectionReadyFrameSaved_ = false;
+    pendingControllerAction_.reset();
+    pendingPilotCommand_.reset();
+    inspectionMissionStage_ = InspectionMissionStage::StartRequested;
+    return true;
+}
+
+void AeroSimLabApp::AdvanceInspectionMission()
+{
+    using Stage = InspectionMissionStage;
+    using CommandKind = aerosimlab::simulation::DroneCommand::Kind;
+
+    if (inspectionMissionStage_ == Stage::StartRequested)
+    {
+#ifndef __EMSCRIPTEN__
+        aerosimlab::communication::CommandReply recordingReply;
+        ApplyVideoRecordingCommand(
+            aerosimlab::communication::VideoRecordingCommand::Start, recordingReply);
+        if (!recordingReply.accepted)
+        {
+            FailInspectionMission(recordingReply.status);
+            return;
+        }
+#endif
+        const aerosimlab::simulation::DroneCommand takeoff{CommandKind::TakeOff};
+        if (ApplyAndRecordCommand(takeoff)
+            != aerosimlab::simulation::CommandResult::Accepted)
+        {
+            FailInspectionMission("이륙 명령을 적용하지 못했습니다.");
+            return;
+        }
+        inspectionMissionStartTick_ = simulation_.TickCount();
+        inspectionMissionStage_ = Stage::TakingOff;
+    }
+
+    const std::uint64_t elapsedTicks = simulation_.TickCount()
+        - inspectionMissionStartTick_;
+    if (inspectionMissionStage_ != Stage::Ready
+        && inspectionMissionStage_ != Stage::Saved
+        && inspectionMissionStage_ != Stage::GeometryOnly
+        && inspectionMissionStage_ != Stage::Failed
+        && elapsedTicks > 60U * 180U)
+    {
+        FailInspectionMission("3분 안에 점검 구역 촬영을 마치지 못했습니다.");
         return;
     }
 
-    (void)simulation_.Apply(command);
+    if (inspectionMissionStage_ == Stage::TakingOff)
+    {
+        const auto mode = simulation_.State().mode;
+        if (mode == aerosimlab::simulation::FlightMode::Hovering
+            || mode == aerosimlab::simulation::FlightMode::Flying)
+        {
+            aerosimlab::simulation::DroneCommand waypoint;
+            waypoint.kind = CommandKind::SetWaypoint;
+            waypoint.vector = missionGoalMeters_;
+            if (ApplyAndRecordCommand(waypoint)
+                != aerosimlab::simulation::CommandResult::Accepted)
+            {
+                FailInspectionMission("점검 구역 이동 명령을 적용하지 못했습니다.");
+                return;
+            }
+            inspectionMissionStage_ = Stage::Approaching;
+        }
+        return;
+    }
+
+    if (inspectionMissionStage_ == Stage::Approaching)
+    {
+        const double distanceMeters = glm::length(
+            missionGoalMeters_ - simulation_.State().positionMeters);
+        if (distanceMeters <= 2.0
+            && AssessInspectionView()
+                == aerosimlab::simulation::CaptureAssessment::Ready)
+        {
+            inspectionCaptureStartFrame_ = simulation_.Camera().lastFrameTick;
+            inspectionMissionStage_ = Stage::Capturing;
+        }
+        return;
+    }
+
+    if (inspectionMissionStage_ == Stage::Capturing)
+    {
+#ifdef __EMSCRIPTEN__
+        const auto& camera = simulation_.Camera();
+        inspectionReadyFrameSaved_ = camera.lastFrameTick > inspectionCaptureStartFrame_
+            && AssessInspectionView()
+                == aerosimlab::simulation::CaptureAssessment::Ready;
+#endif
+        if (inspectionReadyFrameSaved_)
+        {
+            const aerosimlab::simulation::DroneCommand land{CommandKind::Land};
+            if (ApplyAndRecordCommand(land)
+                != aerosimlab::simulation::CommandResult::Accepted)
+            {
+                FailInspectionMission("촬영 후 착륙 명령을 적용하지 못했습니다.");
+                return;
+            }
+            inspectionMissionStage_ = Stage::Landing;
+        }
+        return;
+    }
+
+    if (inspectionMissionStage_ == Stage::Landing
+        && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
+    {
+#ifndef __EMSCRIPTEN__
+        aerosimlab::communication::CommandReply recordingReply;
+        ApplyVideoRecordingCommand(
+            aerosimlab::communication::VideoRecordingCommand::Stop, recordingReply);
+        if (!recordingReply.accepted)
+        {
+            FailInspectionMission(recordingReply.status);
+            return;
+        }
+        inspectionMissionStage_ = Stage::Saved;
+#else
+        inspectionMissionStage_ = Stage::GeometryOnly;
+#endif
+    }
+}
+
+void AeroSimLabApp::FailInspectionMission(const std::string& reason)
+{
+    inspectionMissionError_ = reason;
+    inspectionMissionStage_ = InspectionMissionStage::Failed;
+    if (simulation_.State().mode != aerosimlab::simulation::FlightMode::Grounded)
+    {
+        const aerosimlab::simulation::DroneCommand land{
+            aerosimlab::simulation::DroneCommand::Kind::Land};
+        static_cast<void>(ApplyAndRecordCommand(land));
+    }
+#ifndef __EMSCRIPTEN__
+    if (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
+    {
+        aerosimlab::communication::CommandReply recordingReply;
+        ApplyVideoRecordingCommand(
+            aerosimlab::communication::VideoRecordingCommand::Stop, recordingReply);
+    }
+#endif
+}
+
+std::string AeroSimLabApp::InspectionMissionStatus() const
+{
+    switch (inspectionMissionStage_)
+    {
+    case InspectionMissionStage::Ready: return "대기 중";
+    case InspectionMissionStage::StartRequested: return "시작 준비 중";
+    case InspectionMissionStage::TakingOff: return "이륙 중";
+    case InspectionMissionStage::Approaching: return "점검 구역으로 이동 중";
+    case InspectionMissionStage::Capturing: return "촬영 조건 확인 중";
+    case InspectionMissionStage::Landing: return "착륙 중";
+    case InspectionMissionStage::Saved: return "영상 저장 완료";
+    case InspectionMissionStage::GeometryOnly:
+        return "구도 확인 완료 (웹 영상 저장 미지원)";
+    case InspectionMissionStage::Failed: return "실패: " + inspectionMissionError_;
+    }
+    return "상태를 알 수 없습니다.";
 }
 
 void AeroSimLabApp::RenderFrame()
@@ -1149,17 +1317,20 @@ void AeroSimLabApp::RenderFrame()
         const double missionDistanceMeters = std::hypot(
             missionGoalMeters_.x - dronePosition.x,
             missionGoalMeters_.y - dronePosition.y);
-        const bool missionComplete = simulation_.State().mode
-                == aerosimlab::simulation::FlightMode::Grounded
-            && missionDistanceMeters <= 1.5;
+        const bool missionCanStart = inspectionMissionStage_
+                == InspectionMissionStage::Ready
+            || inspectionMissionStage_ == InspectionMissionStage::Saved
+            || inspectionMissionStage_ == InspectionMissionStage::GeometryOnly
+            || inspectionMissionStage_ == InspectionMissionStage::Failed;
         const auto captureAssessment = AssessInspectionView();
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
             camera.model.imageWidthPixels, camera.model.imageHeightPixels,
-            missionDistanceMeters, missionComplete, inspectionFacilityId_,
-            captureAssessment,
+            missionDistanceMeters, inspectionFacilityId_, InspectionMissionStatus(),
+            missionCanStart,
+            [this] { static_cast<void>(RequestInspectionMission()); }, captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this] { return RenderCameraPanel(); },
             benchmarkMode_ ? &hudTimings : nullptr);
@@ -1306,5 +1477,13 @@ extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebPilotInput(
         .right = right,
         .vertical = vertical,
         .yaw = yaw});
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStartInspectionMission()
+{
+    if (aerosimlab::simulator::activeWebApplication == nullptr)
+        return 0;
+    return aerosimlab::simulator::activeWebApplication->StartWebInspectionMission()
+        ? 1 : 0;
 }
 #endif

@@ -182,7 +182,15 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
                 const std::string detail = finishError.empty()
                     ? error : error + " " + finishError;
                 window_->SetTitle("DroneSim | EO 녹화 중단: " + detail);
+                if (inspectionMissionStage_ == InspectionMissionStage::Capturing)
+                    FailInspectionMission("점검 영상을 저장하지 못했습니다. " + detail);
                 static_cast<void>(savedFrames);
+            }
+            else if (inspectionMissionStage_ == InspectionMissionStage::Capturing
+                && captureAssessment
+                    == aerosimlab::simulation::CaptureAssessment::Ready)
+            {
+                inspectionReadyFrameSaved_ = true;
             }
         }
         queuedEoCameraStates_.erase(cameraState);

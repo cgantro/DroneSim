@@ -21,6 +21,7 @@
       #web-gcs button:disabled { opacity: .55; }
       #web-gcs [data-command="0"] { background: #176b50; }
       #web-gcs [data-command="2"] { background: #8c3c3c; }
+      #web-gcs [data-start-inspection] { background: #315f87; }
       @media (max-width: 720px) { #web-gcs { align-items: flex-start; flex-direction: column; } #web-gcs-status { min-width: 0; } #web-gcs-controls { flex-wrap: wrap; } }
     </style>
   </head>
@@ -33,8 +34,10 @@
       <div id="web-gcs-status" aria-live="polite">
         <strong>지상통제 · 준비 중</strong>
         <span>가상 시험면 촬영 조건: 준비 중</span>
+        <span id="web-gcs-mission">점검 임무: 대기 중</span>
       </div>
       <div id="web-gcs-controls">
+        <button type="button" data-start-inspection disabled>자동 점검 시작</button>
         <button type="button" data-command="0" disabled>이륙</button>
         <button type="button" data-command="1" disabled>정지</button>
         <button type="button" data-axis="forward:1" disabled>전진</button>
@@ -83,7 +86,7 @@
         });
       };
 
-      window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive, captureAssessment) {
+      window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive, captureAssessment, missionStatus) {
         var status = document.getElementById("web-gcs-status");
         var captureLabels = {
           ready: "구도 조건 충족",
@@ -104,6 +107,7 @@
           + "<span>가상 시험면 촬영 조건: "
           + (captureLabels[captureAssessment] || captureLabels.unknown)
           + " · 저장·전송 완료 판정은 아님</span>";
+        document.getElementById("web-gcs-mission").textContent = "점검 임무: " + missionStatus;
       };
 
       (function () {
@@ -122,6 +126,10 @@
             if (typeof Module._DroneSimWebFlightCommand === "function")
               Module._DroneSimWebFlightCommand(Number(button.dataset.command));
           });
+        });
+        document.querySelector("#web-gcs [data-start-inspection]").addEventListener("click", function () {
+          if (typeof Module._DroneSimWebStartInspectionMission === "function")
+            Module._DroneSimWebStartInspectionMission();
         });
         document.querySelectorAll("#web-gcs [data-axis]").forEach(function (button) {
           var parts = button.dataset.axis.split(":");

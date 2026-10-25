@@ -152,8 +152,10 @@ void DrawFlightStatusPanel(
     bool gamepadConnected,
     bool groundControlConnected,
     double missionDistanceMeters,
-    bool missionComplete,
     const std::string& inspectionFacilityId,
+    const std::string& inspectionMissionStatus,
+    bool missionCanStart,
+    const std::function<void()>& startInspectionMission,
     simulation::CaptureAssessment captureAssessment)
 {
     ImGui::SetNextWindowPos(ImVec2{14.0F, 14.0F}, ImGuiCond_FirstUseEver);
@@ -174,14 +176,10 @@ void DrawFlightStatusPanel(
         ImGui::Text("OSM 건물 %s 외벽 시험 구역: %s",
             inspectionFacilityId.c_str(), CaptureStatusLabel(captureAssessment));
         ImGui::TextDisabled("건물 외곽 상자로 만든 면입니다. 실제 구조물 형상이나 촬영 완료를 뜻하지 않습니다.");
-        if (missionComplete)
-            ImGui::Text("연습 비행 완료: 노란 표식에 착륙했습니다.");
-        else if (primary.mode == simulation::FlightMode::Grounded)
-            ImGui::Text("연습 비행: 이륙 후 노란 표식까지 이동하세요.");
-        else if (missionDistanceMeters <= 1.5)
-            ImGui::Text("표식에 도착했습니다. B를 눌러 착륙하세요.");
-        else
-            ImGui::Text("노란 표식까지 %.1f m 남았습니다.", missionDistanceMeters);
+        ImGui::Text("점검 임무: %s", inspectionMissionStatus.c_str());
+        ImGui::Text("시험 구역 접근 지점까지 %.1f m", missionDistanceMeters);
+        if (missionCanStart && ImGui::Button("점검 임무 시작"))
+            startInspectionMission();
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();
         ImGui::Text("게임패드: %s   지상통제: %s",
@@ -290,8 +288,10 @@ void SimulatorHud::CollectCompletedGpuTimings(HudRenderTimings* timings)
 void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     bool gamepadConnected, bool groundControlConnected, bool cameraActive,
     int cameraImageWidth, int cameraImageHeight,
-    double missionDistanceMeters, bool missionComplete,
+    double missionDistanceMeters,
     const std::string& inspectionFacilityId,
+    const std::string& inspectionMissionStatus, bool missionCanStart,
+    const std::function<void()>& startInspectionMission,
     simulation::CaptureAssessment captureAssessment,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t()>& renderCamera,
@@ -312,7 +312,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     DrawScenePanel(renderScene);
     DrawCameraPanel(viewport, cameraActive, cameraImageWidth, cameraImageHeight, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
-        missionDistanceMeters, missionComplete, inspectionFacilityId, captureAssessment);
+        missionDistanceMeters, inspectionFacilityId, inspectionMissionStatus,
+        missionCanStart, startInspectionMission, captureAssessment);
 
     if (timings != nullptr)
     {

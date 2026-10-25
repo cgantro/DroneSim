@@ -85,6 +85,8 @@ public:
 #ifdef __EMSCRIPTEN__
     /** @brief 웹 지상통제 버튼에서 비행 명령을 예약한다. */
     void QueueWebFlightCommand(aerosimlab::simulation::DroneCommand::Kind kind);
+    /** @brief 웹 지상통제에서 자동 점검 임무를 시작한다. */
+    [[nodiscard]] bool StartWebInspectionMission();
     /** @brief 웹 조작 버튼의 입력을 다음 비행 Tick에 적용한다. */
     void SetWebPilotAxes(const aerosimlab::manual_control::GamepadAxes& axes);
 #endif
@@ -158,7 +160,10 @@ private:
     [[nodiscard]] int ValidateSmokeTestOutput() const;
     void AdvanceReplayTick();
     void AdvanceManualControlTick();
-    void ApplyDemoCommands();
+    [[nodiscard]] bool RequestInspectionMission();
+    void AdvanceInspectionMission();
+    void FailInspectionMission(const std::string& reason);
+    [[nodiscard]] std::string InspectionMissionStatus() const;
     /** @brief 명령을 적용하고 성공한 명령만 입력 기록에 남긴다. */
     [[nodiscard]] aerosimlab::simulation::CommandResult ApplyAndRecordCommand(
         const aerosimlab::simulation::DroneCommand& command);
@@ -234,6 +239,23 @@ private:
     bool smokeTest_ = false;
     aerosimlab::simulation::FixedTickAccumulator fixedTickAccumulator_;
     bool demoMode_ = false;
+    enum class InspectionMissionStage
+    {
+        Ready,
+        StartRequested,
+        TakingOff,
+        Approaching,
+        Capturing,
+        Landing,
+        Saved,
+        GeometryOnly,
+        Failed
+    };
+    InspectionMissionStage inspectionMissionStage_ = InspectionMissionStage::Ready;
+    std::uint64_t inspectionMissionStartTick_ = 0;
+    std::uint64_t inspectionCaptureStartFrame_ = 0;
+    bool inspectionReadyFrameSaved_ = false;
+    std::string inspectionMissionError_;
     bool externalControl_ = false;
     bool groundControlActive_ = false;
     std::optional<std::chrono::steady_clock::time_point> lastGroundControlMessage_;
