@@ -94,6 +94,33 @@ std::string FeatureName(const Json& tags)
     return {};
 }
 
+void FinishRoadSegment(
+    std::vector<glm::dvec3>& segment,
+    std::vector<MapRoad>& roads,
+    const std::string& osmId,
+    const std::string& name,
+    double widthMeters,
+    RoadWidthSource widthSource,
+    bool isBridge,
+    std::size_t pointCount)
+{
+    if (segment.size() < 2U)
+    {
+        segment.clear();
+        return;
+    }
+
+    MapRoad road;
+    road.osmId = osmId;
+    road.name = name;
+    road.widthMeters = widthMeters;
+    road.widthSource = widthSource;
+    road.bridge = isBridge;
+    road.centerlineMeters.swap(segment);
+    roads.push_back(std::move(road));
+    segment.reserve(pointCount);
+}
+
 void AddInBoundsSegments(
     const Json& coordinates,
     const Json& properties,
@@ -104,7 +131,9 @@ void AddInBoundsSegments(
     if (!coordinates.is_array() || coordinates.size() < 2U)
         return;
 
-    const auto [widthMeters, widthSource] = RoadWidth(tags);
+    const std::pair<double, RoadWidthSource> width = RoadWidth(tags);
+    const double widthMeters = width.first;
+    const RoadWidthSource widthSource = width.second;
     const bool isBridge = tags.contains("bridge")
         && tags.at("bridge") != "no" && tags.at("bridge") != false;
     const std::string osmId = properties.value("osm_id", std::string{});
@@ -112,33 +141,13 @@ void AddInBoundsSegments(
     std::vector<glm::dvec3> segment;
     segment.reserve(coordinates.size());
 
-    const auto finishSegment = [&segment, &roads, osmId, name, widthMeters,
-        widthSource, isBridge, pointCount = coordinates.size()]
-    {
-        if (segment.size() >= 2U)
-        {
-            MapRoad road;
-            road.osmId = osmId;
-            road.name = name;
-            road.widthMeters = widthMeters;
-            road.widthSource = widthSource;
-            road.bridge = isBridge;
-            road.centerlineMeters.swap(segment);
-            roads.push_back(std::move(road));
-            segment.reserve(pointCount);
-        }
-        else
-        {
-            segment.clear();
-        }
-    };
-
     for (const Json& point : coordinates)
     {
         if (!point.is_array() || point.size() < 2U
             || !point[0].is_number() || !point[1].is_number())
         {
-            finishSegment();
+            FinishRoadSegment(segment, roads, osmId, name, widthMeters,
+                widthSource, isBridge, coordinates.size());
             continue;
         }
 
@@ -146,14 +155,16 @@ void AddInBoundsSegments(
             point[1].get<double>(), point[0].get<double>());
         if (!terrain.ContainsLocalPositionMeters(local))
         {
-            finishSegment();
+            FinishRoadSegment(segment, roads, osmId, name, widthMeters,
+                widthSource, isBridge, coordinates.size());
             continue;
         }
 
         segment.emplace_back(local.x, local.y,
             terrain.HeightAtLocalMeters(local));
     }
-    finishSegment();
+    FinishRoadSegment(segment, roads, osmId, name, widthMeters,
+        widthSource, isBridge, coordinates.size());
 }
 }
 

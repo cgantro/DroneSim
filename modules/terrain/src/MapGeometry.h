@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <cmath>
 #include <utility>
 #include <vector>
 
@@ -13,8 +14,15 @@
 
 namespace aerosimlab::terrain::detail
 {
-inline std::vector<glm::dvec2> ClipPolygonToTerrain(
-    std::vector<glm::dvec2> polygon, const TerrainGrid& terrain)
+using PolygonPoint = std::array<double, 2>;
+
+inline double Coordinate(const PolygonPoint& point, int edge) noexcept
+{
+    return edge < 2 ? point[0] : point[1];
+}
+
+inline std::vector<PolygonPoint> ClipPolygonToTerrain(
+    std::vector<PolygonPoint> polygon, const TerrainGrid& terrain)
 {
     if (polygon.size() < 3U)
         return {};
@@ -28,29 +36,29 @@ inline std::vector<glm::dvec2> ClipPolygonToTerrain(
 
     for (const auto& [edge, bound] : bounds)
     {
-        const auto coordinate = [edge](glm::dvec2 point)
-        {
-            return edge < 2 ? point.x : point.y;
-        };
         const bool keepGreater = edge == 0 || edge == 2;
-        const auto inside = [&](const glm::dvec2& point)
+        const auto inside = [&](const PolygonPoint& point)
         {
-            return keepGreater ? coordinate(point) >= bound
-                : coordinate(point) <= bound;
+            const double coordinate = Coordinate(point, edge);
+            return keepGreater ? coordinate >= bound : coordinate <= bound;
         };
-        const auto intersection = [&](const glm::dvec2& first,
-            const glm::dvec2& second)
+        const auto intersection = [&](const PolygonPoint& first,
+            const PolygonPoint& second)
         {
-            const double amount = (bound - coordinate(first))
-                / (coordinate(second) - coordinate(first));
-            return first + (second - first) * amount;
+            const double firstCoordinate = Coordinate(first, edge);
+            const double secondCoordinate = Coordinate(second, edge);
+            const double amount = (bound - firstCoordinate)
+                / (secondCoordinate - firstCoordinate);
+            return PolygonPoint{
+                first[0] + (second[0] - first[0]) * amount,
+                first[1] + (second[1] - first[1]) * amount};
         };
 
-        std::vector<glm::dvec2> clipped;
+        std::vector<PolygonPoint> clipped;
         clipped.reserve(polygon.size() + 2U);
-        glm::dvec2 previous = polygon.back();
+        PolygonPoint previous = polygon.back();
         bool previousInside = inside(previous);
-        for (const glm::dvec2& current : polygon)
+        for (const PolygonPoint& current : polygon)
         {
             const bool currentInside = inside(current);
             if (currentInside)
@@ -88,6 +96,8 @@ inline bool ReadTerrainFootprint(
     if (!ring.is_array() || ring.size() < 4U)
         return false;
 
+    std::vector<PolygonPoint> polygon;
+    polygon.reserve(ring.size());
     for (const auto& point : ring)
     {
         if (!point.is_array() || point.size() < 2U
@@ -98,26 +108,32 @@ inline bool ReadTerrainFootprint(
             point[1].get<double>(), point[0].get<double>());
         if (!clipToTerrain && !terrain.ContainsLocalPositionMeters(local))
             return false;
-        outlineMeters.push_back(local);
+        polygon.push_back({local.x, local.y});
     }
 
-    if (outlineMeters.size() >= 2U
-        && glm::length(outlineMeters.front() - outlineMeters.back()) < 0.01)
+    if (polygon.size() >= 2U)
     {
-        outlineMeters.pop_back();
+        const double deltaX = polygon.front()[0] - polygon.back()[0];
+        const double deltaY = polygon.front()[1] - polygon.back()[1];
+        if (std::hypot(deltaX, deltaY) < 0.01)
+            polygon.pop_back();
     }
 
     if (clipToTerrain)
-        outlineMeters = ClipPolygonToTerrain(std::move(outlineMeters), terrain);
-    if (outlineMeters.size() < 3U)
+        polygon = ClipPolygonToTerrain(std::move(polygon), terrain);
+    if (polygon.size() < 3U)
         return false;
 
+    outlineMeters.clear();
+    outlineMeters.reserve(polygon.size());
     groundElevationsMeters.clear();
-    groundElevationsMeters.reserve(outlineMeters.size());
-    for (const glm::dvec2& point : outlineMeters)
+    groundElevationsMeters.reserve(polygon.size());
+    for (const PolygonPoint& coordinate : polygon)
     {
+        const glm::dvec2 point{coordinate[0], coordinate[1]};
         if (!terrain.ContainsLocalPositionMeters(point))
             return false;
+        outlineMeters.push_back(point);
         groundElevationsMeters.push_back(terrain.HeightAtLocalMeters(point));
     }
     return true;
