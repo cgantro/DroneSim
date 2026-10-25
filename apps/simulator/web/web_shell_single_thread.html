@@ -21,6 +21,7 @@
     <script>
       var simulatorVersion = "__SIMULATOR_VERSION__";
       var simulatorStarted = false;
+      var pendingStartupItems = new Set();
       var startupMessage = document.getElementById("startup-message");
       var startupStatus = document.getElementById("startup-status");
       var startupTimeout = window.setTimeout(function () {
@@ -38,6 +39,25 @@
 
       var Module = {
         canvas: document.getElementById("canvas"),
+        // Emscripten은 남은 수만 알려 주므로, 어떤 준비 작업이 끝나지 않았는지 직접 기록합니다.
+        get addRunDependency() {
+          return this._addRunDependency;
+        },
+        set addRunDependency(add) {
+          this._addRunDependency = function (name) {
+            pendingStartupItems.add(name);
+            return add(name);
+          };
+        },
+        get removeRunDependency() {
+          return this._removeRunDependency;
+        },
+        set removeRunDependency(remove) {
+          this._removeRunDependency = function (name) {
+            pendingStartupItems.delete(name);
+            return remove(name);
+          };
+        },
         locateFile: function (path) {
           startupMessage.textContent = path.endsWith(".wasm")
             ? "시뮬레이터 엔진을 준비하고 있습니다."
@@ -54,7 +74,15 @@
         },
         monitorRunDependencies: function (remaining) {
           if (remaining > 0) {
-            startupMessage.textContent = "실행에 필요한 자료를 준비하고 있습니다. (남은 항목 " + remaining + ")";
+            var waitingFor = Array.from(pendingStartupItems).map(function (item) {
+              if (item === "wasm-instantiate") return "시뮬레이터 엔진";
+              if (item === "datafile_aerosimlab_simulator.data") return "화면 자료 파일";
+              if (item.startsWith("fp ")) return "셰이더 파일";
+              return item;
+            });
+            startupMessage.textContent = waitingFor.length > 0
+              ? "준비가 끝나지 않은 항목: " + waitingFor.join(", ") + " (" + remaining + "개)"
+              : "실행에 필요한 자료를 준비하고 있습니다. (남은 항목 " + remaining + ")";
             startupStatus.hidden = false;
           }
         },
