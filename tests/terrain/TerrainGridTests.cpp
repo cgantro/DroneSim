@@ -119,6 +119,29 @@ void Verify_TancheonBuildingBoundsBlockCameraViewThroughTheMappedBuilding()
         CaptureAssessment::Occluded);
 }
 
+void Verify_TancheonBuildingFacadeFacesTheNearestApproachSide()
+{
+    const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/tancheon/terrain.aerotrn");
+    const std::vector<MapBuilding> buildings = LoadMapBuildings(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+    ASSERT_FALSE(buildings.empty());
+
+    const MapBuilding& building = buildings.front();
+    const MapBuildingBoundsMeters bounds = GetMapBuildingBoundsMeters(building);
+    const MapBuildingFacade facade = GetNearestMapBuildingFacade(building,
+        {bounds.centerMeters.x - bounds.halfExtentsMeters.x - 5.0,
+            bounds.centerMeters.y});
+
+    EXPECT_DOUBLE_EQ(facade.centerMeters.x,
+        bounds.centerMeters.x - bounds.halfExtentsMeters.x);
+    EXPECT_EQ(facade.outwardNormal, (glm::dvec3{-1.0, 0.0, 0.0}));
+    EXPECT_EQ(facade.widthAxis, (glm::dvec3{0.0, 1.0, 0.0}));
+    EXPECT_GT(facade.widthMeters, 0.0);
+    EXPECT_GT(facade.heightMeters, 0.0);
+}
+
 void Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
@@ -212,6 +235,8 @@ TEST(TerrainGridTests, CoreScenarios)
         Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonBuildingBoundsBlockCameraViewThroughTheMappedBuilding());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_TancheonBuildingFacadeFacesTheNearestApproachSide());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths());
     EXPECT_NO_FATAL_FAILURE(

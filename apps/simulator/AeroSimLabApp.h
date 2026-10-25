@@ -318,6 +318,7 @@ private:
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     glm::dvec3 missionGoalMeters_{0.0};
+    std::string inspectionFacilityId_;
     aerosimlab::simulation::InspectionSurface inspectionSurface_;
     std::vector<aerosimlab::simulation::InspectionOccluderBox> inspectionOccluders_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;

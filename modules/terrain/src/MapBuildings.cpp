@@ -130,4 +130,42 @@ MapBuildingBoundsMeters GetMapBuildingBoundsMeters(const MapBuilding& building)
             (maximum.y - minimum.y) * 0.5,
             (topElevation - groundMinimum) * 0.5}};
 }
+
+MapBuildingFacade GetNearestMapBuildingFacade(
+    const MapBuilding& building, const glm::dvec2& approachPositionMeters)
+{
+    glm::dvec2 minimum = building.outlineMeters.front();
+    glm::dvec2 maximum = minimum;
+    double groundMinimum = building.groundElevationsMeters.front();
+    double groundMaximum = groundMinimum;
+    for (std::size_t index = 1; index < building.outlineMeters.size(); ++index)
+    {
+        minimum = glm::min(minimum, building.outlineMeters[index]);
+        maximum = glm::max(maximum, building.outlineMeters[index]);
+        groundMinimum = std::min(groundMinimum, building.groundElevationsMeters[index]);
+        groundMaximum = std::max(groundMaximum, building.groundElevationsMeters[index]);
+    }
+
+    const glm::dvec2 center = (minimum + maximum) * 0.5;
+    const double height = building.heightMeters + groundMaximum - groundMinimum;
+    const double centerHeight = groundMinimum + height * 0.5;
+    const double distanceToWest = std::abs(approachPositionMeters.x - minimum.x);
+    const double distanceToEast = std::abs(approachPositionMeters.x - maximum.x);
+    const double distanceToSouth = std::abs(approachPositionMeters.y - minimum.y);
+    const double distanceToNorth = std::abs(approachPositionMeters.y - maximum.y);
+
+    const double nearestDistance = std::min({
+        distanceToWest, distanceToEast, distanceToSouth, distanceToNorth});
+    if (nearestDistance == distanceToWest)
+        return {{minimum.x, center.y, centerHeight}, {-1.0, 0.0, 0.0},
+            {0.0, 1.0, 0.0}, maximum.y - minimum.y, height};
+    if (nearestDistance == distanceToEast)
+        return {{maximum.x, center.y, centerHeight}, {1.0, 0.0, 0.0},
+            {0.0, 1.0, 0.0}, maximum.y - minimum.y, height};
+    if (nearestDistance == distanceToSouth)
+        return {{center.x, minimum.y, centerHeight}, {0.0, -1.0, 0.0},
+            {1.0, 0.0, 0.0}, maximum.x - minimum.x, height};
+    return {{center.x, maximum.y, centerHeight}, {0.0, 1.0, 0.0},
+        {1.0, 0.0, 0.0}, maximum.x - minimum.x, height};
+}
 }

@@ -153,6 +153,7 @@ void DrawFlightStatusPanel(
     bool groundControlConnected,
     double missionDistanceMeters,
     bool missionComplete,
+    const std::string& inspectionFacilityId,
     simulation::CaptureAssessment captureAssessment)
 {
     ImGui::SetNextWindowPos(ImVec2{14.0F, 14.0F}, ImGuiCond_FirstUseEver);
@@ -170,8 +171,9 @@ void DrawFlightStatusPanel(
             simulation.SimulationTimeSeconds(),
             static_cast<unsigned long long>(simulation.TickCount()));
         ImGui::Separator();
-        ImGui::Text("가상 점검면: %s", CaptureStatusLabel(captureAssessment));
-        ImGui::TextDisabled("카메라 거리·방향·화면 크기 판정입니다. 실제 시설물 촬영 완료를 뜻하지 않습니다.");
+        ImGui::Text("OSM 건물 %s 외벽 시험 구역: %s",
+            inspectionFacilityId.c_str(), CaptureStatusLabel(captureAssessment));
+        ImGui::TextDisabled("건물 외곽 상자로 만든 면입니다. 실제 구조물 형상이나 촬영 완료를 뜻하지 않습니다.");
         if (missionComplete)
             ImGui::Text("연습 비행 완료: 노란 표식에 착륙했습니다.");
         else if (primary.mode == simulation::FlightMode::Grounded)
@@ -289,6 +291,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     bool gamepadConnected, bool groundControlConnected, bool cameraActive,
     int cameraImageWidth, int cameraImageHeight,
     double missionDistanceMeters, bool missionComplete,
+    const std::string& inspectionFacilityId,
     simulation::CaptureAssessment captureAssessment,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t()>& renderCamera,
@@ -309,7 +312,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     DrawScenePanel(renderScene);
     DrawCameraPanel(viewport, cameraActive, cameraImageWidth, cameraImageHeight, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
-        missionDistanceMeters, missionComplete, captureAssessment);
+        missionDistanceMeters, missionComplete, inspectionFacilityId, captureAssessment);
 
     if (timings != nullptr)
     {

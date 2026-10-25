@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -893,6 +894,9 @@ void AeroSimLabApp::LoadMapFeatures()
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels);
     inspectionOccluders_.reserve(buildings.size());
+    const aerosimlab::terrain::MapBuilding* selectedBuilding = nullptr;
+    aerosimlab::terrain::MapBuildingFacade selectedFacade;
+    double nearestFacadeDistanceSquared = std::numeric_limits<double>::infinity();
     for (const auto& building : buildings)
     {
         const auto bounds =
@@ -902,27 +906,44 @@ void AeroSimLabApp::LoadMapFeatures()
         simulation_.AddStaticObstacleBox(
             bounds.centerMeters, glm::vec3{bounds.halfExtentsMeters});
 #endif
+        const auto facade = aerosimlab::terrain::GetNearestMapBuildingFacade(
+            building, demoDroneStartMeters);
+        if (facade.widthMeters < 3.0 || facade.heightMeters < 2.0)
+            continue;
+
+        const glm::dvec2 facadePosition{facade.centerMeters.x,
+            facade.centerMeters.y};
+        const glm::dvec2 offset = facadePosition - demoDroneStartMeters;
+        const double distanceSquared = glm::dot(offset, offset);
+        if (distanceSquared < nearestFacadeDistanceSquared)
+        {
+            nearestFacadeDistanceSquared = distanceSquared;
+            selectedBuilding = &building;
+            selectedFacade = facade;
+        }
     }
+
+    if (selectedBuilding == nullptr)
+        throw std::runtime_error("점검 시험면으로 쓸 OSM 건물을 찾지 못했습니다.");
+
+    inspectionFacilityId_ = selectedBuilding->osmId;
+    inspectionSurface_.centerMeters = selectedFacade.centerMeters;
+    inspectionSurface_.normal = selectedFacade.outwardNormal;
+    inspectionSurface_.widthAxis = selectedFacade.widthAxis;
+    inspectionSurface_.widthMeters = std::min(selectedFacade.widthMeters, 4.0);
+    inspectionSurface_.heightMeters = std::min(selectedFacade.heightMeters, 3.0);
+    inspectionSurface_.minimumDistanceMeters = 3.0;
+    inspectionSurface_.maximumDistanceMeters = 20.0;
+    inspectionSurface_.maximumIncidenceAngleDegrees = 55.0;
+    inspectionSurface_.minimumPixelWidth = 80;
+    inspectionSurface_.minimumPixelHeight = 80;
+    missionGoalMeters_ = inspectionSurface_.centerMeters
+        + inspectionSurface_.normal * 8.0;
 }
 
 void AeroSimLabApp::InitializeStartingState()
 {
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
-    const glm::dvec2 inspectionPosition{80.0, 120.0};
-    const double inspectionGround = terrainGrid_.HeightAtLocalMeters(inspectionPosition);
-    missionGoalMeters_ = {inspectionPosition.x, inspectionPosition.y,
-        inspectionGround + 12.0};
-    inspectionSurface_.centerMeters = {
-        inspectionPosition.x, inspectionPosition.y, inspectionGround + 6.0};
-    inspectionSurface_.normal = {-1.0, 0.0, 0.0};
-    inspectionSurface_.widthAxis = {0.0, 1.0, 0.0};
-    inspectionSurface_.widthMeters = 3.0;
-    inspectionSurface_.heightMeters = 3.0;
-    inspectionSurface_.minimumDistanceMeters = 3.0;
-    inspectionSurface_.maximumDistanceMeters = 35.0;
-    inspectionSurface_.maximumIncidenceAngleDegrees = 55.0;
-    inspectionSurface_.minimumPixelWidth = 150;
-    inspectionSurface_.minimumPixelHeight = 150;
     simulation_.SetInitialPose({demoDroneStartMeters.x, demoDroneStartMeters.y,
         startElevation +
             aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
@@ -1136,7 +1157,8 @@ void AeroSimLabApp::RenderFrame()
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
             camera.model.imageWidthPixels, camera.model.imageHeightPixels,
-            missionDistanceMeters, missionComplete, captureAssessment,
+            missionDistanceMeters, missionComplete, inspectionFacilityId_,
+            captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this] { return RenderCameraPanel(); },
             benchmarkMode_ ? &hudTimings : nullptr);
@@ -1207,7 +1229,13 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition);
 
     const glm::vec3 inspectionCenter = ToRenderPosition(inspectionSurface_.centerMeters);
-    DrawCube(CubeTransform(inspectionCenter, glm::vec3{0.12F, 3.0F, 3.0F}),
+    const bool facadeFacesEastOrWest = std::abs(inspectionSurface_.normal.x) > 0.5;
+    const glm::vec3 inspectionSize = facadeFacesEastOrWest
+        ? glm::vec3{0.12F, static_cast<float>(inspectionSurface_.heightMeters),
+            static_cast<float>(inspectionSurface_.widthMeters)}
+        : glm::vec3{static_cast<float>(inspectionSurface_.widthMeters),
+            static_cast<float>(inspectionSurface_.heightMeters), 0.12F};
+    DrawCube(CubeTransform(inspectionCenter, inspectionSize),
         cameraPosition, missionMarkerMaterial_, view, projection);
     const glm::vec3 goal = ToRenderPosition(missionGoalMeters_);
     DrawCube(CubeTransform(goal + glm::vec3{0.0F, 0.09F, 0.0F},

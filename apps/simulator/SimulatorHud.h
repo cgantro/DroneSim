@@ -45,6 +45,7 @@ public:
         bool gamepadConnected, bool groundControlConnected, bool cameraActive,
         int cameraImageWidth, int cameraImageHeight,
         double missionDistanceMeters, bool missionComplete,
+        const std::string& inspectionFacilityId,
         simulation::CaptureAssessment captureAssessment,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t()>& renderCamera,
