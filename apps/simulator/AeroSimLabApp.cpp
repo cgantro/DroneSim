@@ -185,13 +185,13 @@ std::vector<std::array<std::uint32_t, 3>> TriangulateFootprint(
 
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
     const std::vector<aerosimlab::terrain::MapBuilding>& buildings,
-    bool useEstimatedHeights)
+    aerosimlab::terrain::BuildingHeightSource heightSource)
 {
     std::vector<aerosimlab::graphics::Vertex> vertices;
     std::vector<std::uint32_t> indices;
     for (const auto& building : buildings)
     {
-        if (building.heightEstimatedFromLevels != useEstimatedHeights)
+        if (building.heightSource != heightSource)
             continue;
         const auto triangles = TriangulateFootprint(building.outlineMeters);
         if (triangles.empty())
@@ -634,8 +634,10 @@ void AeroSimLabApp::LoadScene()
     terrainMesh_ = CreateTerrainMesh(terrainGrid_);
     const auto buildings = aerosimlab::terrain::LoadMapBuildings(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
-    measuredBuildingMesh_ = CreateBuildingMesh(buildings, false);
-    estimatedBuildingMesh_ = CreateBuildingMesh(buildings, true);
+    measuredBuildingMesh_ = CreateBuildingMesh(buildings,
+        aerosimlab::terrain::BuildingHeightSource::Measured);
+    estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
+        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels);
 #ifndef __EMSCRIPTEN__
     for (const auto& building : buildings)
     {

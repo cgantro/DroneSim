@@ -57,7 +57,7 @@ void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
         EXPECT_GE(building.outlineMeters.size(), 3U);
         EXPECT_EQ(building.outlineMeters.size(), building.groundElevationsMeters.size());
         EXPECT_GT(building.heightMeters, 0.0);
-        if (building.heightEstimatedFromLevels)
+        if (building.heightSource == BuildingHeightSource::EstimatedFromLevels)
             ++estimatedHeightCount;
         else
             ++measuredHeightCount;

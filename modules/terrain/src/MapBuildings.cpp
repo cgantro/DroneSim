@@ -133,7 +133,8 @@ std::vector<MapBuilding> LoadMapBuildings(
         {
             building.heightMeters = ReadPositiveNumber(tags->at("building:levels"))
                 * metersPerBuildingLevel;
-            building.heightEstimatedFromLevels = building.heightMeters > 0.0;
+            if (building.heightMeters > 0.0)
+                building.heightSource = BuildingHeightSource::EstimatedFromLevels;
         }
         if (building.heightMeters > 0.0)
             buildings.push_back(std::move(building));
