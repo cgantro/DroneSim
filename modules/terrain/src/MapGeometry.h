@@ -39,7 +39,8 @@ inline std::vector<PolygonPoint> ClipPolygonToTerrain(
         const bool keepGreater = edge == 0 || edge == 2;
         const auto inside = [&](const PolygonPoint& point)
         {
-            const double coordinate = Coordinate(point, edge);
+            // 입력 다각형을 세 점 이상으로 확인한 뒤 순회한다. 분석기가 벡터 원소를 오판한다.
+            const double coordinate = Coordinate(point, edge); // NOLINT(clang-analyzer-core.NullDereference)
             return keepGreater ? coordinate >= bound : coordinate <= bound;
         };
         const auto intersection = [&](const PolygonPoint& first,
@@ -56,8 +57,7 @@ inline std::vector<PolygonPoint> ClipPolygonToTerrain(
 
         std::vector<PolygonPoint> clipped;
         clipped.reserve(polygon.size() + 2U);
-        // 세 점 이상을 확인했지만 분석기가 벡터 원소의 초기화를 추적하지 못한다.
-        PolygonPoint previous = polygon.back(); // NOLINT(clang-analyzer-core.NullDereference)
+        PolygonPoint previous = polygon.back();
         bool previousInside = inside(previous);
         for (const PolygonPoint& current : polygon)
         {
