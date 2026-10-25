@@ -19,6 +19,7 @@
 #endif
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
+#include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
 #include "terrain/MapRoads.h"
 #include "terrain/TerrainGrid.h"
@@ -301,6 +302,62 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateRoadMesh(
             indices.insert(indices.end(), {firstVertex, firstVertex + 1U,
                 firstVertex + 2U, firstVertex, firstVertex + 2U,
                 firstVertex + 3U});
+        }
+    }
+
+    if (indices.empty())
+        return {};
+    return std::make_unique<aerosimlab::graphics::Mesh>(
+        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
+        indices.data(), static_cast<std::uint32_t>(indices.size()));
+}
+
+/** @brief OSM 교량 외곽선을 DEM 지면 위에 얇은 선으로 표시한다. */
+std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgeFootprintMesh(
+    const std::vector<aerosimlab::terrain::MapBridgeFootprint>& bridges)
+{
+    constexpr double halfWidthMeters = 0.6;
+    constexpr double surfaceOffsetMeters = 0.35;
+    std::vector<aerosimlab::graphics::Vertex> vertices;
+    std::vector<std::uint32_t> indices;
+
+    for (const auto& bridge : bridges)
+    {
+        if (bridge.outlineMeters.size() < 3U
+            || bridge.outlineMeters.size() != bridge.groundElevationsMeters.size())
+            continue;
+
+        for (std::size_t index = 0; index < bridge.outlineMeters.size(); ++index)
+        {
+            const std::size_t next = (index + 1U) % bridge.outlineMeters.size();
+            const glm::dvec2& first = bridge.outlineMeters[index];
+            const glm::dvec2& second = bridge.outlineMeters[next];
+            const glm::dvec2 direction = second - first;
+            const double length = glm::length(direction);
+            if (!(length > 1.0e-6))
+                continue;
+
+            const glm::dvec2 side = glm::dvec2{-direction.y, direction.x}
+                * (halfWidthMeters / length);
+            const auto toBoundary = [&](const glm::dvec2& point,
+                const glm::dvec2& offset, double groundElevation)
+            {
+                return ToRenderPosition({point.x + offset.x, point.y + offset.y,
+                    groundElevation + surfaceOffsetMeters});
+            };
+
+            const std::uint32_t start = static_cast<std::uint32_t>(vertices.size());
+            vertices.insert(vertices.end(), {
+                {toBoundary(first, side, bridge.groundElevationsMeters[index]),
+                    {0.0F, 1.0F, 0.0F}, {0.0F, 0.0F}},
+                {toBoundary(first, -side, bridge.groundElevationsMeters[index]),
+                    {0.0F, 1.0F, 0.0F}, {0.0F, 1.0F}},
+                {toBoundary(second, -side, bridge.groundElevationsMeters[next]),
+                    {0.0F, 1.0F, 0.0F}, {1.0F, 1.0F}},
+                {toBoundary(second, side, bridge.groundElevationsMeters[next]),
+                    {0.0F, 1.0F, 0.0F}, {1.0F, 0.0F}}});
+            indices.insert(indices.end(), {start, start + 1U, start + 2U,
+                start, start + 2U, start + 3U});
         }
     }
 
@@ -694,8 +751,11 @@ void AeroSimLabApp::LoadScene()
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto roads = aerosimlab::terrain::LoadMapRoads(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+    const auto bridges = aerosimlab::terrain::LoadMapBridgeFootprints(
+        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     roadMesh_ = CreateRoadMesh(roads, false);
     bridgeMesh_ = CreateRoadMesh(roads, true);
+    bridgeFootprintMesh_ = CreateBridgeFootprintMesh(bridges);
     taggedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::OsmHeightTag);
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
@@ -977,6 +1037,9 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     if (bridgeMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *bridgeMesh_, bridgeMaterial_, *shader_,
             view, projection, cameraPosition);
+    if (bridgeFootprintMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *bridgeFootprintMesh_,
+            bridgeFootprintMaterial_, *shader_, view, projection, cameraPosition);
     if (taggedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, buildingMaterial_,
             *shader_, view, projection, cameraPosition);

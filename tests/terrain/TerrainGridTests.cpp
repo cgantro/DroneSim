@@ -1,3 +1,4 @@
+#include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
 #include "terrain/MapRoads.h"
 #include "terrain/TerrainGrid.h"
@@ -7,6 +8,8 @@
 
 #include <cmath>
 #include <filesystem>
+
+#include <glm/geometric.hpp>
 
 namespace aerosimlab::terrain
 {
@@ -100,6 +103,34 @@ void Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths()
         roads.end());
 }
 
+void Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection()
+{
+    const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/tancheon/terrain.aerotrn");
+    const std::vector<MapBridgeFootprint> bridges = LoadMapBridgeFootprints(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+
+    std::vector<std::string> names;
+    for (const MapBridgeFootprint& bridge : bridges)
+    {
+        EXPECT_FALSE(bridge.osmId.empty());
+        EXPECT_FALSE(bridge.name.empty());
+        EXPECT_GE(bridge.outlineMeters.size(), 3U);
+        EXPECT_EQ(bridge.outlineMeters.size(), bridge.groundElevationsMeters.size());
+        EXPECT_GT(glm::length(bridge.outlineMeters.front()
+            - bridge.outlineMeters.back()), 0.01);
+        for (const glm::dvec2& point : bridge.outlineMeters)
+            EXPECT_TRUE(terrain.ContainsLocalPositionMeters(point));
+        names.push_back(bridge.name);
+    }
+
+    EXPECT_EQ(bridges.size(), 3U);
+    EXPECT_NE(std::find(names.begin(), names.end(), "탄천교"), names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "수서IC교"), names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "광평교"), names.end());
+}
+
 TEST(TerrainGridTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
@@ -109,6 +140,8 @@ TEST(TerrainGridTests, CoreScenarios)
         Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection());
 }
 
 }

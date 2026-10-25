@@ -1,5 +1,7 @@
 #include "terrain/MapBuildings.h"
 
+#include "MapGeometry.h"
+
 #include <nlohmann/json.hpp>
 
 #include <charconv>
@@ -7,8 +9,6 @@
 #include <fstream>
 #include <stdexcept>
 #include <utility>
-
-#include <glm/geometric.hpp>
 
 namespace aerosimlab::terrain
 {
@@ -48,40 +48,6 @@ double ReadPositiveNumber(const Json& value)
         ? number : 0.0;
 }
 
-bool ReadFootprint(
-    const Json& coordinates,
-    const TerrainGrid& terrain,
-    MapBuilding& building)
-{
-    if (!coordinates.is_array() || coordinates.empty())
-        return false;
-
-    const Json& ring = coordinates.front();
-    if (!ring.is_array() || ring.size() < 4U)
-        return false;
-
-    for (const Json& point : ring)
-    {
-        if (!point.is_array() || point.size() < 2U
-            || !point[0].is_number() || !point[1].is_number())
-            return false;
-
-        const glm::dvec2 local = terrain.ToLocalMeters(
-            point[1].get<double>(), point[0].get<double>());
-        if (!terrain.ContainsLocalPositionMeters(local))
-            return false;
-        building.groundElevationsMeters.push_back(
-            terrain.HeightAtLocalMeters(local));
-        building.outlineMeters.push_back(local);
-    }
-
-    if (glm::length(building.outlineMeters.front() - building.outlineMeters.back()) < 0.01)
-    {
-        building.outlineMeters.pop_back();
-        building.groundElevationsMeters.pop_back();
-    }
-    return building.outlineMeters.size() >= 3U;
-}
 }
 
 std::vector<MapBuilding> LoadMapBuildings(
@@ -122,7 +88,9 @@ std::vector<MapBuilding> LoadMapBuildings(
 
         MapBuilding building;
         building.osmId = properties->value("osm_id", std::string{});
-        if (!ReadFootprint(geometry->value("coordinates", Json{}), terrain, building))
+        if (!detail::ReadTerrainFootprint(
+            geometry->value("coordinates", Json{}), terrain,
+            building.outlineMeters, building.groundElevationsMeters))
             continue;
 
         if (tags->contains("height"))

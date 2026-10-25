@@ -276,6 +276,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> roadMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> bridgeFootprintMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
@@ -292,6 +293,8 @@ private:
         glm::vec4{0.22F, 0.25F, 0.27F, 1.0F}, 0.0F, 0.95F};
     aerosimlab::graphics::Material bridgeMaterial_{
         glm::vec4{0.55F, 0.37F, 0.22F, 1.0F}, 0.0F, 0.88F};
+    aerosimlab::graphics::Material bridgeFootprintMaterial_{
+        glm::vec4{0.95F, 0.58F, 0.12F, 1.0F}, 0.0F, 0.72F};
     aerosimlab::graphics::Material buildingMaterial_{
         glm::vec4{0.57F, 0.61F, 0.65F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material estimatedBuildingMaterial_{
