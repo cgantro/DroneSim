@@ -167,6 +167,12 @@ async function run() {
       + `${responsiveness.frameCount}프레임, 최대 공백 `
       + `${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms`);
 
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForFunction(
+      () => document.querySelector("#startup-status")?.hidden === true,
+      null,
+      { timeout: 45000 }
+    );
     await page.waitForFunction(
       () => document.querySelector("#web-gcs-status")?.textContent.includes("비행 상태: grounded"),
       null,

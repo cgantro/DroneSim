@@ -245,6 +245,7 @@ private:
         StartRequested,
         TakingOff,
         Approaching,
+        AligningCamera,
         Capturing,
         Landing,
         Saved,

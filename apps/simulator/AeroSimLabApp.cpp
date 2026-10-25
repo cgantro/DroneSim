@@ -1039,6 +1039,7 @@ void AeroSimLabApp::AdvanceManualControlTick()
         inspectionMissionStage_ == InspectionMissionStage::StartRequested
         || inspectionMissionStage_ == InspectionMissionStage::TakingOff
         || inspectionMissionStage_ == InspectionMissionStage::Approaching
+        || inspectionMissionStage_ == InspectionMissionStage::AligningCamera
         || inspectionMissionStage_ == InspectionMissionStage::Capturing
         || inspectionMissionStage_ == InspectionMissionStage::Landing;
     if (inspectionMissionActive)
@@ -1105,6 +1106,7 @@ bool AeroSimLabApp::RequestInspectionMission()
     if (inspectionMissionStage_ == InspectionMissionStage::StartRequested
         || inspectionMissionStage_ == InspectionMissionStage::TakingOff
         || inspectionMissionStage_ == InspectionMissionStage::Approaching
+        || inspectionMissionStage_ == InspectionMissionStage::AligningCamera
         || inspectionMissionStage_ == InspectionMissionStage::Capturing
         || inspectionMissionStage_ == InspectionMissionStage::Landing)
     {
@@ -1193,12 +1195,40 @@ void AeroSimLabApp::AdvanceInspectionMission()
     {
         const double distanceMeters = glm::length(
             missionGoalMeters_ - simulation_.State().positionMeters);
-        if (distanceMeters <= 2.0
-            && AssessInspectionView()
-                == aerosimlab::simulation::CaptureAssessment::Ready)
+        if (distanceMeters <= 2.0)
+            inspectionMissionStage_ = Stage::AligningCamera;
+        return;
+    }
+
+    if (inspectionMissionStage_ == Stage::AligningCamera)
+    {
+        const auto& state = simulation_.State();
+        const glm::dvec2 direction{
+            inspectionSurface_.centerMeters.x - state.positionMeters.x,
+            inspectionSurface_.centerMeters.y - state.positionMeters.y};
+        const double targetYawRadians = std::atan2(direction.y, direction.x);
+        constexpr double twoPi = 6.28318530717958647692;
+        const double yawErrorRadians = std::remainder(
+            targetYawRadians - state.yawRadians, twoPi);
+        if (std::abs(yawErrorRadians) <= 0.04)
         {
+            const aerosimlab::simulation::DroneCommand stopYaw{
+                CommandKind::SetYawRate, glm::dvec3{0.0}, 0.0};
+            static_cast<void>(ApplyAndRecordCommand(stopYaw));
             inspectionCaptureStartFrame_ = simulation_.Camera().lastFrameTick;
             inspectionMissionStage_ = Stage::Capturing;
+        }
+        else
+        {
+            const aerosimlab::simulation::DroneCommand alignYaw{
+                CommandKind::SetYawRate, glm::dvec3{0.0},
+                std::clamp(yawErrorRadians * 2.0, -1.0, 1.0)};
+            if (ApplyAndRecordCommand(alignYaw)
+                != aerosimlab::simulation::CommandResult::Accepted)
+            {
+                FailInspectionMission("점검면을 향해 카메라 방향을 맞추지 못했습니다.");
+                return;
+            }
         }
         return;
     }
@@ -1272,6 +1302,7 @@ std::string AeroSimLabApp::InspectionMissionStatus() const
     case InspectionMissionStage::StartRequested: return "시작 준비 중";
     case InspectionMissionStage::TakingOff: return "이륙 중";
     case InspectionMissionStage::Approaching: return "점검 구역으로 이동 중";
+    case InspectionMissionStage::AligningCamera: return "카메라를 점검면에 맞추는 중";
     case InspectionMissionStage::Capturing: return "촬영 조건 확인 중";
     case InspectionMissionStage::Landing: return "착륙 중";
     case InspectionMissionStage::Saved: return "영상 저장 완료";
