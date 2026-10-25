@@ -327,22 +327,22 @@ DroneIds CreateScenarioDrones(
 
 /** @brief 카메라 동작을 적용하고 실행 기록에 쓸 이름을 돌려준다. */
 std::string_view ApplyCameraEvent(
-    SimulationCore& simulation, detail::CameraEventAction action)
+    SimulationCore& simulation, DroneId droneId, detail::CameraEventAction action)
 {
     using Action = detail::CameraEventAction;
     switch (action)
     {
     case Action::Enable:
-        simulation.SetCameraEnabled(true);
+        simulation.SetCameraEnabled(droneId, true);
         return "enable";
     case Action::Disable:
-        simulation.SetCameraEnabled(false);
+        simulation.SetCameraEnabled(droneId, false);
         return "disable";
     case Action::Fault:
-        simulation.SetCameraFault(true);
+        simulation.SetCameraFault(droneId, true);
         return "fault";
     case Action::Recover:
-        simulation.SetCameraFault(false);
+        simulation.SetCameraFault(droneId, false);
         return "recover";
     }
     return "unknown";
@@ -907,6 +907,8 @@ void ApplyCameraEvents(
     std::uint64_t tick,
     const std::vector<ScheduledCameraEvent>& cameraEvents,
     SimulationCore& simulation,
+    const DroneIds& droneIds,
+    std::string_view primaryDroneName,
     std::size_t& nextCameraEvent,
     ScenarioResult& result)
 {
@@ -914,9 +916,12 @@ void ApplyCameraEvents(
         && cameraEvents[nextCameraEvent].tick == tick)
     {
         const ScheduledCameraEvent& event = cameraEvents[nextCameraEvent++];
-        const std::string_view actionName = ApplyCameraEvent(simulation, event.action);
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": 카메라 "
-            + std::string(actionName));
+        const std::string droneName = event.droneName.empty()
+            ? std::string(primaryDroneName) : event.droneName;
+        const std::string_view actionName = ApplyCameraEvent(
+            simulation, droneIds.at(droneName), event.action);
+        result.eventLog.push_back("tick " + std::to_string(tick) + ": " + droneName
+            + " 카메라 " + std::string(actionName));
     }
 }
 
@@ -1271,7 +1276,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
             droneIds, observations, dronesAvoiding, activeAvoidanceDirections,
             activeAvoidanceTargets, result);
-        ApplyCameraEvents(tick, definition.cameraEvents, simulation, nextCameraEvent, result);
+        ApplyCameraEvents(tick, definition.cameraEvents, simulation, droneIds,
+            definition.primaryDroneName, nextCameraEvent, result);
         simulation.AdvanceOneTick();
         if (definition.energyModel)
             AdvanceEnergy(*definition.energyModel, droneIds, simulation, energies);

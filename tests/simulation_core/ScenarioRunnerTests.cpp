@@ -123,6 +123,44 @@ void Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories()
     EXPECT_THROW(static_cast<void>(RunScenario(oversizedTrace)), std::invalid_argument);
 }
 
+void Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone()
+{
+    constexpr std::string_view scenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":4,
+     "drones":[
+       {"name":"east","initial_position_meters":[0,0,0]},
+       {"name":"north","initial_position_meters":[0,1,0]}],
+     "commands":[],
+     "camera_events":[
+       {"tick":0,"drone":"east","action":"disable"},
+       {"tick":0,"drone":"north","action":"fault"},
+       {"tick":2,"drone":"north","action":"recover"}],
+     "expected":{"camera_status":"disabled","camera_frame_count":0,
+       "drones":[
+         {"name":"east","mode":"grounded","position_meters":[0,0,0]},
+         {"name":"north","mode":"grounded","position_meters":[0,1,0]}]}}
+    )json";
+
+    const ScenarioResult result = RunScenario(scenario);
+    ASSERT_TRUE(result.passed)
+        << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_EQ(result.drones.size(), 2U);
+    EXPECT_EQ(result.drones[0].name, "east");
+    EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Disabled);
+    EXPECT_EQ(result.drones[0].finalCamera.frameCount, 0U);
+    EXPECT_EQ(result.drones[1].name, "north");
+    EXPECT_EQ(result.drones[1].finalCamera.status, CameraStatus::Active);
+    EXPECT_EQ(result.drones[1].finalCamera.frameCount, 2U);
+    EXPECT_EQ(result.finalCamera.status, result.drones[0].finalCamera.status);
+    EXPECT_EQ(result.eventLog.size(), 3U);
+
+    constexpr std::string_view unknownDrone = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":1,"commands":[],
+     "camera_events":[{"tick":0,"drone":"missing","action":"fault"}]}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(unknownDrone)), std::invalid_argument);
+}
+
 void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
 {
     constexpr std::string_view scenario = R"json(
@@ -1387,6 +1425,8 @@ TEST(ScenarioRunnerTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust());
     EXPECT_NO_FATAL_FAILURE(

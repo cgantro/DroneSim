@@ -106,6 +106,8 @@ struct ScheduledCameraEvent
 {
     std::uint64_t tick;
     CameraEventAction action;
+    /** @brief 비우면 기본 드론의 카메라에 적용한다. */
+    std::string droneName;
 };
 
 /** @brief JSON 시나리오를 실행하기 전에 읽고 검증한 값이다. */
