@@ -620,10 +620,20 @@ void UpdateMissionCommands(
             + " 드론에 배정했습니다.");
     }
 
-    for (ScenarioResult::MissionTask& task : mission->tasks)
+    for (auto taskIterator = mission->tasks.begin();
+         taskIterator != mission->tasks.end(); ++taskIterator)
     {
+        ScenarioResult::MissionTask& task = *taskIterator;
         if (task.completed || task.failed || tick < task.startTick
             || task.droneName.empty() || !IsConnected(observations, task.droneName))
+            continue;
+        const bool earlierTaskIsActive = std::any_of(mission->tasks.begin(),
+            taskIterator, [&task](const ScenarioResult::MissionTask& previous)
+            {
+                return previous.droneName == task.droneName
+                    && !previous.completed && !previous.failed;
+            });
+        if (earlierTaskIsActive)
             continue;
         const DroneId droneId = droneIds.at(task.droneName);
         const FlightMode mode = simulation.State(droneId).mode;

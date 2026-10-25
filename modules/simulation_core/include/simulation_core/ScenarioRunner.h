@@ -98,6 +98,9 @@ struct ScenarioResult
     {
         std::string name;
         std::string role;
+        /** @brief 실제 시설물과 점검 구역을 결과에서 다시 찾을 때 쓰는 식별값이다. */
+        std::string facilityId;
+        std::string inspectionZoneId;
         std::string droneName;
         std::string initialDroneName;
         std::vector<std::string> assignmentHistory;

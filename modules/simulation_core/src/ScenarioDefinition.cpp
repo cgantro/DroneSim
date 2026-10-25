@@ -570,7 +570,7 @@ ScenarioResult::MissionTask ReadMissionTask(
     std::uint64_t tickCount,
     const std::unordered_set<std::string>& droneNames,
     std::unordered_set<std::string>& taskNames,
-    std::unordered_set<std::string>& assignedDrones)
+    std::unordered_set<std::string>& inspectionZoneIds)
 {
     if (!taskValue.is_object())
         throw std::invalid_argument("각 mission task는 JSON 객체여야 합니다.");
@@ -592,11 +592,9 @@ ScenarioResult::MissionTask ReadMissionTask(
     task.droneName = droneValue.get<std::string>();
     task.initialDroneName = task.droneName;
     task.assignmentHistory.push_back(task.droneName);
-    if (!taskNames.insert(task.name).second
-        || !droneNames.contains(task.droneName)
-        || !assignedDrones.insert(task.droneName).second)
+    if (!taskNames.insert(task.name).second || !droneNames.contains(task.droneName))
     {
-        throw std::invalid_argument("임무 이름은 고유해야 하며, 등록된 드론을 한 번만 배정할 수 있습니다.");
+        throw std::invalid_argument("임무 이름은 고유해야 하며 등록된 드론을 지정해야 합니다.");
     }
 
     const auto waypoints = taskValue.find("waypoints_meters");
@@ -622,7 +620,21 @@ ScenarioResult::MissionTask ReadMissionTask(
         Required(taskValue, "tolerance_meters"), "tolerance_meters");
     const auto inspectionSurface = taskValue.find("inspection_surface");
     if (inspectionSurface != taskValue.end())
+    {
         task.inspectionSurface = ReadInspectionSurface(*inspectionSurface);
+        const Json& facilityId = Required(taskValue, "facility_id");
+        const Json& zoneId = Required(taskValue, "inspection_zone_id");
+        if (!facilityId.is_string() || facilityId.get<std::string>().empty()
+            || !zoneId.is_string() || zoneId.get<std::string>().empty())
+        {
+            throw std::invalid_argument(
+                "점검면에는 비어 있지 않은 facility_id와 inspection_zone_id가 필요합니다.");
+        }
+        task.facilityId = facilityId.get<std::string>();
+        task.inspectionZoneId = zoneId.get<std::string>();
+        if (!inspectionZoneIds.insert(task.inspectionZoneId).second)
+            throw std::invalid_argument("inspection_zone_id는 임무 안에서 고유해야 합니다.");
+    }
     const auto inspectionOccluders = taskValue.find("inspection_occluders");
     if (inspectionOccluders != taskValue.end())
         task.inspectionOccluders = ReadInspectionOccluders(*inspectionOccluders);
@@ -753,15 +765,15 @@ std::optional<ScenarioResult::Mission> ReadMission(
         return mission;
     }
 
-    if (!tasksValue->is_array() || tasksValue->size() < 2)
-        throw std::invalid_argument("공동 임무에는 두 대 이상을 배정해야 합니다.");
+    if (!tasksValue->is_array() || tasksValue->empty())
+        throw std::invalid_argument("mission.tasks에는 한 개 이상의 작업이 필요합니다.");
     std::unordered_set<std::string> taskNames;
-    std::unordered_set<std::string> assignedDrones;
+    std::unordered_set<std::string> inspectionZoneIds;
     mission.tasks.reserve(tasksValue->size());
     for (const Json& taskValue : *tasksValue)
     {
         mission.tasks.push_back(ReadMissionTask(
-            taskValue, tickCount, droneNames, taskNames, assignedDrones));
+            taskValue, tickCount, droneNames, taskNames, inspectionZoneIds));
     }
     return mission;
 }

@@ -115,9 +115,22 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                     {"minimum_pixel_width", surface.minimumPixelWidth},
                     {"minimum_pixel_height", surface.minimumPixelHeight}};
             }
+            nlohmann::json inspectionOccluders = nlohmann::json::array();
+            for (const auto& box : task.inspectionOccluders)
+            {
+                inspectionOccluders.push_back({
+                    {"center_meters", {box.centerMeters.x,
+                        box.centerMeters.y, box.centerMeters.z}},
+                    {"half_extents_meters", {box.halfExtentsMeters.x,
+                        box.halfExtentsMeters.y, box.halfExtentsMeters.z}}});
+            }
             tasks.push_back({
                 {"name", task.name},
                 {"role", task.role},
+                {"facility_id", task.facilityId.empty()
+                        ? nlohmann::json(nullptr) : nlohmann::json(task.facilityId)},
+                {"inspection_zone_id", task.inspectionZoneId.empty()
+                        ? nlohmann::json(nullptr) : nlohmann::json(task.inspectionZoneId)},
                 {"drone", task.droneName},
                 {"initial_drone", task.initialDroneName},
                 {"assignment_history", task.assignmentHistory},
@@ -133,6 +146,7 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                 {"failed", task.failed},
                 {"completed_tick", task.completedTick},
                 {"inspection_surface", std::move(inspectionSurface)},
+                {"inspection_occluders", std::move(inspectionOccluders)},
                 {"capture_assessment",
                     aerosimlab::simulation::ToString(task.lastCaptureAssessment)},
                 {"first_geometry_capture_tick", task.firstGeometryCaptureTick}});

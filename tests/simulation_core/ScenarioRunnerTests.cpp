@@ -173,6 +173,7 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
        {"tick":0,"drone":"north","type":"takeoff"}],
      "mission":{"name":"bridge-inspection","tasks":[
        {"name":"east-face","role":"inspect","drone":"east",
+        "facility_id":"tancheon-bridge","inspection_zone_id":"deck-east",
         "target_position_meters":[0,0,1.5],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1,
         "inspection_surface":{
@@ -182,6 +183,7 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
           "maximum_incidence_angle_degrees":30,
           "minimum_pixel_width":100,"minimum_pixel_height":50}},
        {"name":"north-face","role":"inspect","drone":"north",
+        "facility_id":"tancheon-bridge","inspection_zone_id":"deck-north",
         "target_position_meters":[0,4,1.5],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1,
         "inspection_surface":{
@@ -204,7 +206,42 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
     EXPECT_TRUE(successful.mission->tasks[0].firstGeometryCaptureTick.has_value());
     EXPECT_EQ(successful.mission->tasks[0].lastCaptureAssessment,
         CaptureAssessment::Ready);
+    EXPECT_EQ(successful.mission->tasks[0].facilityId, "tancheon-bridge");
+    EXPECT_EQ(successful.mission->tasks[0].inspectionZoneId, "deck-east");
     EXPECT_EQ(successful.drones[0].finalCamera.model.imageWidthPixels, 1280);
+
+    nlohmann::json singleDroneMission = nlohmann::json::parse(source);
+    singleDroneMission["mission"]["tasks"].erase(1);
+    singleDroneMission["drones"].erase(1);
+    singleDroneMission["commands"].erase(1);
+    singleDroneMission["expected"]["drones"].erase(1);
+    const ScenarioResult singleDrone = RunScenario(singleDroneMission.dump());
+    ASSERT_TRUE(singleDrone.passed)
+        << (singleDrone.issues.empty() ? "" : singleDrone.issues.front());
+    ASSERT_TRUE(singleDrone.mission.has_value());
+    ASSERT_EQ(singleDrone.mission->tasks.size(), 1U);
+    EXPECT_TRUE(singleDrone.mission->tasks[0].completed);
+
+    nlohmann::json sequentialZones = nlohmann::json::parse(source);
+    sequentialZones["mission"]["tasks"][1]["drone"] = "east";
+    sequentialZones["mission"]["tasks"][1]["target_position_meters"] = {0.0, 0.0, 1.5};
+    sequentialZones["mission"]["tasks"][1]["inspection_surface"]["center_meters"] =
+        {10.0, 0.7, 0.62};
+    const ScenarioResult oneDroneTwoZones = RunScenario(sequentialZones.dump());
+    ASSERT_TRUE(oneDroneTwoZones.passed)
+        << (oneDroneTwoZones.issues.empty() ? "" : oneDroneTwoZones.issues.front());
+    ASSERT_TRUE(oneDroneTwoZones.mission.has_value());
+    EXPECT_TRUE(oneDroneTwoZones.mission->tasks[0].completed);
+    EXPECT_TRUE(oneDroneTwoZones.mission->tasks[1].completed);
+    ASSERT_TRUE(oneDroneTwoZones.mission->tasks[0].completedTick.has_value());
+    ASSERT_TRUE(oneDroneTwoZones.mission->tasks[1].completedTick.has_value());
+    EXPECT_GT(*oneDroneTwoZones.mission->tasks[1].completedTick,
+        *oneDroneTwoZones.mission->tasks[0].completedTick);
+
+    nlohmann::json missingFacilityId = nlohmann::json::parse(source);
+    missingFacilityId["mission"]["tasks"][0].erase("facility_id");
+    EXPECT_THROW(static_cast<void>(RunScenario(missingFacilityId.dump())),
+        std::invalid_argument);
 
     nlohmann::json obstructedSurface = nlohmann::json::parse(source);
     obstructedSurface["mission"]["tasks"][0]["inspection_occluders"] =
@@ -232,6 +269,11 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
         nlohmann::json::array({{{"center_meters", {5.0, 0.0, 1.0}},
             {"half_extents_meters", {0.5, 0.0, 2.0}}}});
     EXPECT_THROW(static_cast<void>(RunScenario(invalidOccluder.dump())),
+        std::invalid_argument);
+
+    nlohmann::json duplicateZone = nlohmann::json::parse(source);
+    duplicateZone["mission"]["tasks"][1]["inspection_zone_id"] = "deck-east";
+    EXPECT_THROW(static_cast<void>(RunScenario(duplicateZone.dump())),
         std::invalid_argument);
 
     nlohmann::json differentCameraModels = nlohmann::json::parse(source);
