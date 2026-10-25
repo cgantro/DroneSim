@@ -13,7 +13,7 @@ namespace aerosimlab::terrain
 /** @brief 건물 높이가 어디서 왔는지 구분한다. */
 enum class BuildingHeightSource
 {
-    Measured,
+    OsmHeightTag,
     EstimatedFromLevels
 };
 
@@ -24,7 +24,7 @@ struct MapBuilding
     std::vector<glm::dvec2> outlineMeters;
     std::vector<double> groundElevationsMeters;
     double heightMeters = 0.0;
-    BuildingHeightSource heightSource = BuildingHeightSource::Measured;
+    BuildingHeightSource heightSource = BuildingHeightSource::OsmHeightTag;
 };
 
 /**

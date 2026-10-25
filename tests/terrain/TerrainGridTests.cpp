@@ -49,7 +49,7 @@ void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
     const std::vector<MapBuilding> buildings = LoadMapBuildings(
         root / "assets/maps/tancheon/site.geojson", terrain);
 
-    std::size_t measuredHeightCount = 0U;
+    std::size_t taggedHeightCount = 0U;
     std::size_t estimatedHeightCount = 0U;
     for (const MapBuilding& building : buildings)
     {
@@ -60,9 +60,9 @@ void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
         if (building.heightSource == BuildingHeightSource::EstimatedFromLevels)
             ++estimatedHeightCount;
         else
-            ++measuredHeightCount;
+            ++taggedHeightCount;
     }
-    EXPECT_GE(measuredHeightCount, 50U);
+    EXPECT_GE(taggedHeightCount, 50U);
     EXPECT_GE(estimatedHeightCount, 10U);
 }
 

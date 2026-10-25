@@ -634,8 +634,8 @@ void AeroSimLabApp::LoadScene()
     terrainMesh_ = CreateTerrainMesh(terrainGrid_);
     const auto buildings = aerosimlab::terrain::LoadMapBuildings(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
-    measuredBuildingMesh_ = CreateBuildingMesh(buildings,
-        aerosimlab::terrain::BuildingHeightSource::Measured);
+    taggedBuildingMesh_ = CreateBuildingMesh(buildings,
+        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag);
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels);
 #ifndef __EMSCRIPTEN__
@@ -909,8 +909,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 {
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
         view, projection, cameraPosition);
-    if (measuredBuildingMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *measuredBuildingMesh_, buildingMaterial_,
+    if (taggedBuildingMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, buildingMaterial_,
             *shader_, view, projection, cameraPosition);
     if (estimatedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
