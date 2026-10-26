@@ -106,11 +106,20 @@ std::optional<PrismContact> FindPrismContact(
         || !(verticalRadiusMeters > 0.0))
         return std::nullopt;
 
-    const double verticalOverlap = std::min(
-        centerMeters.z + verticalRadiusMeters, topMeters)
-        - std::max(centerMeters.z - verticalRadiusMeters, bottomMeters);
+    const double bodyBottom = centerMeters.z - verticalRadiusMeters;
+    const double bodyTop = centerMeters.z + verticalRadiusMeters;
+    const double verticalOverlap = std::min(bodyTop, topMeters)
+        - std::max(bodyBottom, bottomMeters);
     if (verticalOverlap <= 0.0)
         return std::nullopt;
+
+    const double distanceToMoveDown = bodyTop - bottomMeters;
+    const double distanceToMoveUp = topMeters - bodyBottom;
+    const bool moveUp = distanceToMoveUp < distanceToMoveDown;
+    const double verticalPenetration = centerMeters.z < bottomMeters
+        || centerMeters.z > topMeters
+        ? verticalOverlap
+        : std::min(distanceToMoveDown, distanceToMoveUp);
 
     const glm::dvec2 center{centerMeters.x, centerMeters.y};
     bool inside = false;
@@ -166,12 +175,10 @@ std::optional<PrismContact> FindPrismContact(
         return std::nullopt;
 
     PrismContact result;
-    if (verticalOverlap < horizontalPenetration)
+    if (verticalPenetration < horizontalPenetration)
     {
-        const double below = centerMeters.z - bottomMeters;
-        const double above = topMeters - centerMeters.z;
-        result.normal = {0.0, 0.0, below < above ? -1.0 : 1.0};
-        result.penetrationMeters = verticalOverlap;
+        result.normal = {0.0, 0.0, moveUp ? 1.0 : -1.0};
+        result.penetrationMeters = verticalPenetration;
         result.impactPointMeters = {center.x, center.y,
             result.normal.z > 0.0 ? topMeters : bottomMeters};
     }

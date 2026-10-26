@@ -6,6 +6,8 @@
 #include <gtest/gtest.h>
 #include <glm/geometric.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <stdexcept>
 
@@ -176,6 +178,18 @@ void Verify_KinematicDroneStopsAtStaticBuildings()
     courtyard.AdvanceOneTick();
     EXPECT_GT(courtyard.State().positionMeters.x, 1.5);
     EXPECT_GT(courtyard.State().velocityMetersPerSecond.x, 0.1);
+
+    SimulationCore enclosed{SimulationDynamics::Kinematic};
+    DroneState enclosedStart;
+    enclosedStart.positionMeters = {0.0, 0.0, 5.0};
+    enclosedStart.mode = FlightMode::Flying;
+    enclosed.SetInitialState(enclosed.PrimaryDroneId(), enclosedStart);
+    enclosed.AddStaticObstaclePrism(
+        {{-2.0, -2.0}, {2.0, -2.0}, {2.0, 2.0}, {-2.0, 2.0}},
+        0.0, 10.0);
+    enclosed.AdvanceOneTick();
+    const glm::dvec3 escaped = enclosed.State().positionMeters;
+    EXPECT_GT(std::max(std::abs(escaped.x), std::abs(escaped.y)), 2.4);
 }
 
 void Verify_KinematicDroneKeepsItsBodyAboveTerrain()
