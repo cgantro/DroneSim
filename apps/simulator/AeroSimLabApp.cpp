@@ -474,9 +474,24 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
                 static_cast<float>(count - 1U) * 0.5F) * terrain.spacingXMeters;
             const float south = (static_cast<float>(row) -
                 static_cast<float>(count - 1U) * 0.5F) * terrain.spacingYMeters;
+            // 높이 변화량으로 경사를 구해야 지형의 조명이 실제 굴곡을 따라간다.
+            const std::uint32_t westColumn = column > 0U ? column - 1U : column;
+            const std::uint32_t eastColumn = std::min(column + 1U, count - 1U);
+            const std::uint32_t northRow = row > 0U ? row - 1U : row;
+            const std::uint32_t southRow = std::min(row + 1U, count - 1U);
+            const float eastDistance = static_cast<float>(eastColumn - westColumn)
+                * terrain.spacingXMeters;
+            const float southDistance = static_cast<float>(southRow - northRow)
+                * terrain.spacingYMeters;
+            const float eastSlope = (terrain.HeightAt(row, eastColumn)
+                - terrain.HeightAt(row, westColumn)) / eastDistance;
+            const float southSlope = (terrain.HeightAt(southRow, column)
+                - terrain.HeightAt(northRow, column)) / southDistance;
+            const glm::vec3 surfaceNormal = glm::normalize(
+                glm::vec3{-eastSlope, 1.0F, -southSlope});
             vertices.push_back({
                 {east, terrain.referenceElevationMeters + terrain.HeightAt(row, column), south},
-                {0.0F, 1.0F, 0.0F},
+                surfaceNormal,
                 {static_cast<float>(column) / static_cast<float>(count - 1U),
                     static_cast<float>(row) / static_cast<float>(count - 1U)}});
         }
