@@ -1259,6 +1259,7 @@ bool AeroSimLabApp::RequestInspectionMission(
     inspectionMissionError_.clear();
     inspectionMissionStartTick_ = 0;
     inspectionCaptureStartFrame_ = 0;
+    inspectionCaptureReadyTick_ = 0;
     inspectionReadyFrameSaved_ = false;
     completedInspectionTargetCount_ = 0;
     if (selectedTargetIndex
@@ -1395,11 +1396,30 @@ void AeroSimLabApp::AdvanceInspectionMission()
     {
 #ifdef __EMSCRIPTEN__
         const auto& camera = simulation_.Camera();
-        inspectionReadyFrameSaved_ = camera.lastFrameTick > inspectionCaptureStartFrame_
-            && AssessInspectionView()
-                == aerosimlab::simulation::CaptureAssessment::Ready;
+        if (camera.lastFrameTick > inspectionCaptureStartFrame_)
+        {
+            if (AssessInspectionView()
+                == aerosimlab::simulation::CaptureAssessment::Ready)
+            {
+                if (!inspectionReadyFrameSaved_)
+                    inspectionCaptureReadyTick_ = simulation_.TickCount();
+                inspectionReadyFrameSaved_ = true;
+            }
+            else
+            {
+                inspectionReadyFrameSaved_ = false;
+                inspectionCaptureReadyTick_ = 0;
+            }
+        }
+        constexpr std::uint64_t captureHoldTicks = 60U;
+        const bool captureHoldComplete = inspectionReadyFrameSaved_
+            && simulation_.TickCount() - inspectionCaptureReadyTick_ >= captureHoldTicks;
 #endif
+#ifdef __EMSCRIPTEN__
+        if (captureHoldComplete)
+#else
         if (inspectionReadyFrameSaved_)
+#endif
         {
 #ifdef __EMSCRIPTEN__
             EM_ASM({
@@ -1424,6 +1444,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
                     return;
                 }
                 inspectionCaptureStartFrame_ = 0;
+                inspectionCaptureReadyTick_ = 0;
                 inspectionReadyFrameSaved_ = false;
                 inspectionMissionStage_ = Stage::Approaching;
                 return;

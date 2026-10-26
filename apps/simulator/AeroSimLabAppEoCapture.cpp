@@ -196,12 +196,14 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
                     static_cast<void>(savedFrames);
                 }
             }
+#ifndef __EMSCRIPTEN__
             else if (inspectionMissionStage_ == InspectionMissionStage::Capturing
                 && captureAssessment
                     == aerosimlab::simulation::CaptureAssessment::Ready)
             {
                 inspectionReadyFrameSaved_ = true;
             }
+#endif
         }
         queuedEoCameraStates_.erase(cameraState);
     }

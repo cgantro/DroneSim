@@ -264,6 +264,7 @@ private:
     InspectionMissionStage inspectionMissionStage_ = InspectionMissionStage::Ready;
     std::uint64_t inspectionMissionStartTick_ = 0;
     std::uint64_t inspectionCaptureStartFrame_ = 0;
+    std::uint64_t inspectionCaptureReadyTick_ = 0;
     bool inspectionReadyFrameSaved_ = false;
     std::string inspectionMissionError_;
     std::vector<InspectionTarget> inspectionTargets_;

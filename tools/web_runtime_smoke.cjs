@@ -288,7 +288,10 @@ async function run() {
     if (zoneVideoBytes.length !== savedZoneVideo.video_bytes
         || zoneVideoHash !== savedZoneVideo.video_checksum
         || savedZoneVideo.video_file !== capturedZone.video_file
-        || savedZoneVideo.inspection_zone_id !== capturedZone.inspection_zone_id)
+        || savedZoneVideo.inspection_zone_id !== capturedZone.inspection_zone_id
+        || !Number.isFinite(savedZoneVideo.start_simulation_tick)
+        || savedZoneVideo.capture_simulation_tick
+          - savedZoneVideo.start_simulation_tick < 60)
       throw new Error("구역별 영상과 촬영 기록의 크기·체크섬·구역 ID가 맞지 않습니다.");
     for (let index = 1; index < manifest.samples.length; ++index) {
       const elapsedDifference = manifest.samples[index].recording_elapsed_milliseconds
