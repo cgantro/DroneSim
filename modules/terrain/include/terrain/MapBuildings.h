@@ -53,6 +53,10 @@ struct MapBuildingFacade
 [[nodiscard]] std::vector<MapBuilding> LoadMapBuildings(
     const std::filesystem::path& path, const TerrainGrid& terrain);
 
+/** @brief 높이 정보가 없는 건물도 포함해 경로 장애물용 외곽선을 읽는다. */
+[[nodiscard]] std::vector<MapBuilding> LoadMapBuildingFootprints(
+    const std::filesystem::path& path, const TerrainGrid& terrain);
+
 /** @brief 건물 외곽의 동·북 범위와 지면·높이 범위에서 충돌용 상자를 만든다. */
 [[nodiscard]] MapBuildingBoundsMeters GetMapBuildingBoundsMeters(
     const MapBuilding& building);

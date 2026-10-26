@@ -10,6 +10,7 @@
 #include "sensor/RgbFrame.h"
 #include "simulation_core/CommandRecording.h"
 #include "simulation_core/EoCameraModel.h"
+#include "terrain/MapBuildings.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
 #endif
@@ -269,6 +270,7 @@ private:
         aerosimlab::simulation::InspectionSurface surface;
         std::vector<glm::dvec3> routeWaypointsMeters;
         glm::dvec3 approachPositionMeters{0.0};
+        bool routeAutomaticallyPlanned = false;
     };
     /** @brief 점검 임무의 진행 단계와 현재 구역을 함께 보관한다. */
     struct InspectionMissionState
@@ -309,6 +311,7 @@ private:
     InspectionMissionState inspectionMission_;
     std::vector<InspectionTarget> inspectionTargets_;
     std::vector<aerosimlab::simulation::InspectionOccluderPolygon> inspectionOccluders_;
+    std::vector<aerosimlab::terrain::MapBuilding> routeBuildings_;
     bool externalControl_ = false;
     bool groundControlActive_ = false;
     std::optional<std::chrono::steady_clock::time_point> lastGroundControlMessage_;

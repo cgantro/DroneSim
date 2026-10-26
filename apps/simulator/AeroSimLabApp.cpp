@@ -23,6 +23,7 @@
 #include "simulation_core/ScopedDuration.h"
 #include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
+#include "terrain/MapFlightRoute.h"
 #include "terrain/MapRoads.h"
 #include "terrain/MapWaterBodies.h"
 #include "terrain/TerrainGrid.h"
@@ -1007,8 +1008,9 @@ void AeroSimLabApp::LoadTerrain()
 
 void AeroSimLabApp::LoadMapFeatures()
 {
-    const auto buildings = aerosimlab::terrain::LoadMapBuildings(
+    routeBuildings_ = aerosimlab::terrain::LoadMapBuildingFootprints(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+    const auto& buildings = routeBuildings_;
     const auto roads = aerosimlab::terrain::LoadMapRoads(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto bridges = aerosimlab::terrain::LoadMapBridgeFootprints(
@@ -1146,8 +1148,29 @@ void AeroSimLabApp::LoadMapFeatures()
             {approachPosition.x, approachPosition.y}))
             throw std::runtime_error("점검 구역 접근 위치가 지형 범위를 벗어났습니다: "
                 + zoneId);
+        const bool routeAutomaticallyPlanned = routeWaypoints.empty();
         inspectionTargets_.push_back({facilityId, zoneId, surface,
-            std::move(routeWaypoints), approachPosition});
+            std::move(routeWaypoints), approachPosition, routeAutomaticallyPlanned});
+    }
+
+    glm::dvec3 routeStart{
+        demoDroneStartMeters.x,
+        demoDroneStartMeters.y,
+        terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters)
+            + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters};
+    for (InspectionTarget& target : inspectionTargets_)
+    {
+        if (target.routeAutomaticallyPlanned)
+        {
+            const auto route = aerosimlab::terrain::PlanMapFlightRoute(
+                terrainGrid_, routeBuildings_, routeStart,
+                target.approachPositionMeters);
+            if (!route)
+                throw std::runtime_error("점검 구역까지 건물을 피하는 경로를 찾지 못했습니다: "
+                    + target.zoneId);
+            target.routeWaypointsMeters.assign(route->begin(), route->end() - 1);
+        }
+        routeStart = target.approachPositionMeters;
     }
 
     SetActiveInspectionTarget(0U);
@@ -1390,6 +1413,20 @@ bool AeroSimLabApp::RequestInspectionMission(
         : inspectionTargets_.size();
     inspectionMission_.targetCount = inspectionMission_.endTargetIndex
         - inspectionMission_.activeTargetIndex;
+    InspectionTarget& firstTarget = inspectionTargets_[inspectionMission_.activeTargetIndex];
+    if (firstTarget.routeAutomaticallyPlanned)
+    {
+        const auto route = aerosimlab::terrain::PlanMapFlightRoute(
+            terrainGrid_, routeBuildings_, simulation_.State().positionMeters,
+            firstTarget.approachPositionMeters);
+        if (!route)
+        {
+            inspectionMission_.error = "현재 위치에서 첫 점검 구역까지 건물 우회 경로를 찾지 못했습니다.";
+            inspectionMission_.stage = InspectionMissionStage::Failed;
+            return false;
+        }
+        firstTarget.routeWaypointsMeters.assign(route->begin(), route->end() - 1);
+    }
     SetActiveInspectionTarget(inspectionMission_.activeTargetIndex);
     pendingControllerAction_.reset();
     pendingPilotCommand_.reset();

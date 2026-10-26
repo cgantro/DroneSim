@@ -52,8 +52,12 @@ double ReadPositiveNumber(const Json& value)
 
 }
 
+namespace
+{
 std::vector<MapBuilding> LoadMapBuildings(
-    const std::filesystem::path& path, const TerrainGrid& terrain)
+    const std::filesystem::path& path,
+    const TerrainGrid& terrain,
+    bool keepFootprintsWithoutHeight)
 {
     std::ifstream input(path);
     if (!input)
@@ -104,10 +108,24 @@ std::vector<MapBuilding> LoadMapBuildings(
             if (building.heightMeters > 0.0)
                 building.heightSource = BuildingHeightSource::EstimatedFromLevels;
         }
-        if (building.heightMeters > 0.0)
+        if (building.heightMeters > 0.0 || keepFootprintsWithoutHeight)
             buildings.push_back(std::move(building));
     }
     return buildings;
+}
+}
+
+std::vector<MapBuilding> LoadMapBuildings(
+    const std::filesystem::path& path, const TerrainGrid& terrain)
+{
+    return LoadMapBuildings(path, terrain, false);
+}
+
+std::vector<MapBuilding> LoadMapBuildingFootprints(
+    const std::filesystem::path& path, const TerrainGrid& terrain)
+{
+    // 높이는 모르는 상태로 두고, 경로를 막는 평면 외곽선만 사용한다.
+    return LoadMapBuildings(path, terrain, true);
 }
 
 MapBuildingBoundsMeters GetMapBuildingBoundsMeters(const MapBuilding& building)

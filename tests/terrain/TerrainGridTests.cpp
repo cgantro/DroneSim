@@ -1,5 +1,6 @@
 #include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
+#include "terrain/MapFlightRoute.h"
 #include "terrain/MapRoads.h"
 #include "terrain/MapWaterBodies.h"
 #include "terrain/TerrainGrid.h"
@@ -8,10 +9,12 @@
 #include <algorithm>
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <numbers>
+#include <string>
 
 #include <glm/geometric.hpp>
 
@@ -44,6 +47,92 @@ void Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight()
     EXPECT_FLOAT_EQ(terrain.HeightAtLocalMeters({0.0, 0.0}), 120.0F);
     EXPECT_EQ(terrain.ToSimulationPositionMeters({5.0, -2.0, 3.0}),
         glm::dvec3(5.0, -2.0, 123.0));
+}
+
+void Verify_MapFlightRouteGoesAroundBuildingFootprints()
+{
+    TerrainGrid terrain;
+    terrain.sampleCount = 41;
+    terrain.spacingXMeters = 5.0F;
+    terrain.spacingYMeters = 5.0F;
+    terrain.referenceElevationMeters = 0.0F;
+    terrain.heightOffsetsMeters.assign(41U * 41U, 0.0F);
+    const std::vector<MapBuilding> buildings{{
+        .osmId = "test-building",
+        .outlineMeters = {{-5.0, -20.0}, {5.0, -20.0},
+            {5.0, 20.0}, {-5.0, 20.0}},
+        .groundElevationsMeters = {0.0, 0.0, 0.0, 0.0},
+        .heightMeters = 0.0}};
+
+    const auto route = PlanMapFlightRoute(
+        terrain, buildings, {-40.0, 0.0, 5.0}, {40.0, 0.0, 5.0});
+
+    ASSERT_TRUE(route.has_value());
+    ASSERT_GT(route->size(), 1U);
+    EXPECT_EQ(route->back(), glm::dvec3(40.0, 0.0, 5.0));
+    EXPECT_TRUE(std::any_of(route->begin(), route->end(), [](const glm::dvec3& point)
+    {
+        return std::abs(point.y) > 22.0;
+    }));
+}
+
+void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
+{
+    const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/tancheon/terrain.aerotrn");
+    const auto buildings = LoadMapBuildingFootprints(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+    const auto visibleBuildings = LoadMapBuildings(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+    ASSERT_GT(buildings.size(), visibleBuildings.size());
+    EXPECT_NE(std::find_if(buildings.begin(), buildings.end(),
+        [](const MapBuilding& building) { return building.heightMeters == 0.0; }),
+        buildings.end());
+
+    const std::array<std::string, 3> targetBuildingIds{
+        "692770099", "692770087", "692770092"};
+    const glm::dvec2 demoStart{0.0, -9.0};
+    glm::dvec3 routeStart{demoStart,
+        terrain.HeightAtLocalMeters(demoStart) + 0.35};
+    for (const std::string& targetId : targetBuildingIds)
+    {
+        const auto target = std::find_if(visibleBuildings.begin(), visibleBuildings.end(),
+            [&targetId](const MapBuilding& building)
+            { return building.osmId == targetId; });
+        ASSERT_NE(target, visibleBuildings.end());
+        const MapBuildingFacade facade = GetNearestMapBuildingFacade(
+            *target, demoStart);
+        const glm::dvec3 goal = facade.centerMeters
+            + facade.outwardNormal * 8.0;
+
+        const auto route = PlanMapFlightRoute(terrain, buildings, routeStart, goal);
+        ASSERT_TRUE(route.has_value()) << targetId;
+        ASSERT_FALSE(route->empty()) << targetId;
+        EXPECT_EQ(route->back(), goal);
+        routeStart = goal;
+    }
+}
+
+void Verify_MapFlightRouteReportsABuildingWallWithoutAnOpening()
+{
+    TerrainGrid terrain;
+    terrain.sampleCount = 41;
+    terrain.spacingXMeters = 5.0F;
+    terrain.spacingYMeters = 5.0F;
+    terrain.referenceElevationMeters = 0.0F;
+    terrain.heightOffsetsMeters.assign(41U * 41U, 0.0F);
+    const std::vector<MapBuilding> buildings{{
+        .osmId = "blocking-wall",
+        .outlineMeters = {{-5.0, -110.0}, {5.0, -110.0},
+            {5.0, 110.0}, {-5.0, 110.0}},
+        .groundElevationsMeters = {0.0, 0.0, 0.0, 0.0},
+        .heightMeters = 12.0}};
+
+    const auto route = PlanMapFlightRoute(
+        terrain, buildings, {-40.0, 0.0, 5.0}, {40.0, 0.0, 5.0});
+
+    EXPECT_FALSE(route.has_value());
 }
 
 void Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin()
@@ -293,6 +382,10 @@ TEST(TerrainGridTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
         Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight());
+    EXPECT_NO_FATAL_FAILURE(Verify_MapFlightRouteGoesAroundBuildingFootprints());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints());
+    EXPECT_NO_FATAL_FAILURE(Verify_MapFlightRouteReportsABuildingWallWithoutAnOpening());
     EXPECT_NO_FATAL_FAILURE(Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates());
