@@ -211,7 +211,9 @@ std::vector<std::array<std::uint32_t, 3>> TriangulateFootprint(
 
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
     const std::vector<aerosimlab::terrain::MapBuilding>& buildings,
-    aerosimlab::terrain::BuildingHeightSource heightSource)
+    aerosimlab::terrain::BuildingHeightSource heightSource,
+    const aerosimlab::terrain::TerrainGrid& terrain,
+    bool createWalls)
 {
     std::vector<aerosimlab::graphics::Vertex> vertices;
     std::vector<std::uint32_t> indices;
@@ -223,27 +225,36 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
         if (triangles.empty())
             continue;
 
-        const std::uint32_t roofStart = static_cast<std::uint32_t>(vertices.size());
         const double winding = PolygonArea(building.outlineMeters) > 0.0 ? 1.0 : -1.0;
-        for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
+        if (!createWalls)
         {
-            const auto& point = building.outlineMeters[i];
-            const double roofHeight = building.groundElevationsMeters[i]
-                + building.heightMeters;
-            vertices.push_back({
-                ToRenderPosition({point.x, point.y, roofHeight}),
-                {0.0F, 1.0F, 0.0F}, {0.0F, 0.0F}});
-        }
-        for (const auto& triangle : triangles)
-        {
-            if (winding > 0.0)
-                indices.insert(indices.end(), {roofStart + triangle[0],
-                    roofStart + triangle[2], roofStart + triangle[1]});
-            else
-                indices.insert(indices.end(), {roofStart + triangle[0],
-                    roofStart + triangle[1], roofStart + triangle[2]});
+            const std::uint32_t roofStart = static_cast<std::uint32_t>(vertices.size());
+            const float halfX = static_cast<float>(terrain.HalfWidthMeters());
+            const float halfY = static_cast<float>(terrain.HalfDepthMeters());
+            for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
+            {
+                const auto& point = building.outlineMeters[i];
+                const double roofHeight = building.groundElevationsMeters[i]
+                    + building.heightMeters;
+                const glm::vec2 uv{
+                    static_cast<float>((point.x + halfX) / (2.0F * halfX)),
+                    static_cast<float>((halfY - point.y) / (2.0F * halfY))};
+                vertices.push_back({ToRenderPosition({point.x, point.y, roofHeight}),
+                    {0.0F, 1.0F, 0.0F}, uv});
+            }
+            for (const auto& triangle : triangles)
+            {
+                if (winding > 0.0)
+                    indices.insert(indices.end(), {roofStart + triangle[0],
+                        roofStart + triangle[2], roofStart + triangle[1]});
+                else
+                    indices.insert(indices.end(), {roofStart + triangle[0],
+                        roofStart + triangle[1], roofStart + triangle[2]});
+            }
         }
 
+        if (!createWalls)
+            continue;
         for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
         {
             const std::size_t next = (i + 1U) % building.outlineMeters.size();
@@ -253,6 +264,10 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
             glm::dvec3 outward{edge.y, 0.0, edge.x};
             outward *= winding;
             const glm::vec3 normal = glm::normalize(ToRenderDirection(outward));
+            const float edgeLength = static_cast<float>(glm::length(edge));
+            const float wallHeight = static_cast<float>(building.heightMeters);
+            constexpr float facadeTileWidthMeters = 5.0F;
+            constexpr float facadeTileHeightMeters = 3.0F;
             const auto bottomFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
                 building.groundElevationsMeters[i]});
             const auto bottomSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
@@ -263,10 +278,11 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
                 building.groundElevationsMeters[next] + building.heightMeters});
             const std::uint32_t wallStart = static_cast<std::uint32_t>(vertices.size());
             vertices.insert(vertices.end(), {
-                {bottomFirst, normal, {0.0F, 0.0F}},
-                {bottomSecond, normal, {0.0F, 0.0F}},
-                {topSecond, normal, {0.0F, 1.0F}},
-                {topFirst, normal, {0.0F, 1.0F}}});
+                {bottomFirst, normal, {0.0F, wallHeight / facadeTileHeightMeters}},
+                {bottomSecond, normal, {edgeLength / facadeTileWidthMeters,
+                    wallHeight / facadeTileHeightMeters}},
+                {topSecond, normal, {edgeLength / facadeTileWidthMeters, 0.0F}},
+                {topFirst, normal, {0.0F, 0.0F}}});
             indices.insert(indices.end(), {wallStart, wallStart + 1U, wallStart + 2U,
                 wallStart, wallStart + 2U, wallStart + 3U});
         }
@@ -406,8 +422,9 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
         {
             const float east = (static_cast<float>(column) -
                 static_cast<float>(count - 1U) * 0.5F) * terrain.spacingXMeters;
-            const float south = (static_cast<float>(row) -
-                static_cast<float>(count - 1U) * 0.5F) * terrain.spacingYMeters;
+            // 격자 0행은 북쪽 끝이므로, 지도와 지형의 남북 방향을 맞춘다.
+            const float north = (static_cast<float>(count - 1U) * 0.5F -
+                static_cast<float>(row)) * terrain.spacingYMeters;
             // 높이 변화량으로 경사를 구해야 지형의 조명이 실제 굴곡을 따라간다.
             const std::uint32_t westColumn = column > 0U ? column - 1U : column;
             const std::uint32_t eastColumn = std::min(column + 1U, count - 1U);
@@ -424,7 +441,7 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
             const glm::vec3 surfaceNormal = glm::normalize(
                 glm::vec3{-eastSlope, 1.0F, -southSlope});
             vertices.push_back({
-                {east, terrain.referenceElevationMeters + terrain.HeightAt(row, column), south},
+                {east, terrain.referenceElevationMeters + terrain.HeightAt(row, column), -north},
                 surfaceNormal,
                 {static_cast<float>(column) / static_cast<float>(count - 1U),
                     static_cast<float>(row) / static_cast<float>(count - 1U)}});
@@ -692,6 +709,8 @@ void AeroSimLabApp::LoadSceneModels()
         AssetPath("models/drones/x500/visual.glb").string());
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
+    buildingFacadeTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
+        AssetPath("maps/tancheon/apartment-facade.png"), true);
     constexpr std::array<const char*, 4> terrainTextureExtensions{
         "png", "jpg", "jpeg", "ppm"};
     for (const char* extension : terrainTextureExtensions)
@@ -737,9 +756,13 @@ void AeroSimLabApp::LoadMapFeatures()
     bridgeFootprintMesh_ = CreateBridgeFootprintMesh(bridges);
     waterMesh_ = CreateWaterMesh(waterBodies, terrainGrid_);
     taggedBuildingMesh_ = CreateBuildingMesh(buildings,
-        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag);
+        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, terrainGrid_, false);
+    taggedBuildingWallMesh_ = CreateBuildingMesh(buildings,
+        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, terrainGrid_, true);
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
-        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels);
+        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, terrainGrid_, false);
+    estimatedBuildingWallMesh_ = CreateBuildingMesh(buildings,
+        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, terrainGrid_, true);
     inspectionOccluders_.reserve(buildings.size());
     std::unordered_map<std::string, const aerosimlab::terrain::MapBuilding*> buildingsById;
     for (const auto& building : buildings)
@@ -800,6 +823,7 @@ void AeroSimLabApp::LoadMapFeatures()
     {
         const std::string facilityId = target.at("facility_id").get<std::string>();
         const std::string zoneId = target.at("zone_id").get<std::string>();
+        std::string displayName = target.value("name", std::string{});
         if (!zoneIds.insert(zoneId).second)
             throw std::runtime_error("점검 계획에 같은 구역 ID가 두 번 있습니다: " + zoneId);
 
@@ -836,6 +860,9 @@ void AeroSimLabApp::LoadMapFeatures()
             if (building == buildingsById.end())
                 throw std::runtime_error("점검 계획에서 지정한 건물 자료를 찾지 못했습니다: "
                     + buildingId);
+            displayName = building->second->name;
+            if (displayName.empty())
+                displayName = "이름 없는 건물";
 
             const Json& capture = target.at("capture");
             const double approachDistance =
@@ -873,6 +900,7 @@ void AeroSimLabApp::LoadMapFeatures()
         const bool routeAutomaticallyPlanned = routeWaypoints.empty();
         inspectionTargets_.push_back({
             .facilityId = facilityId,
+            .displayName = displayName.empty() ? "점검 대상" : displayName,
             .zoneId = zoneId,
             .surface = surface,
             .routeWaypointsMeters = std::move(routeWaypoints),
@@ -913,9 +941,9 @@ void AeroSimLabApp::LoadMapFeatures()
         EM_ASM({
             if (window.addDroneSimInspectionTarget)
                 window.addDroneSimInspectionTarget(
-                    $0, UTF8ToString($1), UTF8ToString($2));
+                    $0, UTF8ToString($1), UTF8ToString($2), UTF8ToString($3));
         }, static_cast<int>(index), target.facilityId.c_str(),
-            target.zoneId.c_str());
+            target.zoneId.c_str(), target.displayName.c_str());
     }
 #endif
 }
@@ -948,6 +976,7 @@ void AeroSimLabApp::SetActiveInspectionTarget(std::size_t index)
     inspectionMission_.activeTargetIndex = index;
     const InspectionTarget& target = inspectionTargets_[index];
     inspectionMission_.facilityId = target.facilityId;
+    inspectionMission_.targetDisplayName = target.displayName;
     inspectionMission_.zoneId = target.zoneId;
     inspectionMission_.surface = target.surface;
     inspectionMission_.routeWaypointIndex = 0;
@@ -983,6 +1012,7 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
 
 void AeroSimLabApp::AdvanceSimulationTick()
 {
+    AdvanceAmbientWind();
     if (demoMode_ && !externalControl_
         && inspectionMission_.stage == InspectionMissionStage::Ready)
         static_cast<void>(RequestInspectionMission());
@@ -1009,6 +1039,25 @@ void AeroSimLabApp::AdvanceSimulationTick()
     }
 
     AdvanceManualControlTick();
+}
+
+void AeroSimLabApp::AdvanceAmbientWind()
+{
+    constexpr std::uint32_t gustChangeIntervalTicks = 240U;
+    constexpr double maximumWindMetersPerSecond = 0.5;
+    constexpr double smoothingPerTick = 0.01;
+    if (windGustTicksRemaining_ == 0U)
+    {
+        std::uniform_real_distribution<double> chooseWind(
+            -maximumWindMetersPerSecond, maximumWindMetersPerSecond);
+        windTargetMetersPerSecond_ = {
+            chooseWind(windGenerator_), chooseWind(windGenerator_), 0.0};
+        windGustTicksRemaining_ = gustChangeIntervalTicks;
+    }
+    --windGustTicksRemaining_;
+    windVelocityMetersPerSecond_ += (windTargetMetersPerSecond_
+        - windVelocityMetersPerSecond_) * smoothingPerTick;
+    simulation_.SetWindVelocityMetersPerSecond(windVelocityMetersPerSecond_);
 }
 
 void AeroSimLabApp::AdvanceReplayTick()
@@ -1159,7 +1208,8 @@ void AeroSimLabApp::RenderFrame()
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
             camera.model.imageWidthPixels, camera.model.imageHeightPixels,
-            missionDistanceMeters, inspectionMission_.facilityId, InspectionMissionStatus(),
+            missionDistanceMeters, inspectionMission_.facilityId,
+            inspectionMission_.targetDisplayName, InspectionMissionStatus(),
             missionCanStart,
             [this] { static_cast<void>(RequestInspectionMission()); }, captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },
@@ -1234,10 +1284,18 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             bridgeFootprintMaterial_, *shader_, view, projection, cameraPosition);
     if (taggedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, buildingMaterial_,
-            *shader_, view, projection, cameraPosition);
+            *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
+    if (taggedBuildingWallMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingWallMesh_, buildingMaterial_,
+            *shader_, view, projection, cameraPosition, buildingFacadeTexture_.get());
     if (estimatedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
-            estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition);
+            estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,
+            terrainSurfaceTexture_.get());
+    if (estimatedBuildingWallMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingWallMesh_,
+            estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,
+            buildingFacadeTexture_.get());
 
     if (showMissionGuides && InspectionMissionIsActive()
         && inspectionMission_.activeTargetIndex < inspectionTargets_.size())

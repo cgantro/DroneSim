@@ -25,6 +25,7 @@
 #include <ctime>
 #include <memory>
 #include <optional>
+#include <random>
 #include <string>
 #include <thread>
 #include <vector>
@@ -169,6 +170,7 @@ private:
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
     void AdvanceSimulationTick();
+    void AdvanceAmbientWind();
     /** @brief 현재 실행 경로에서 스모크 검사를 끝낼 조건이 충족됐는지 확인한다. */
     [[nodiscard]] bool SmokeTestIsComplete() const;
     /** @brief 스모크 검사에서 마지막으로 읽은 EO 영상과 카메라 Tick을 확인한다. */
@@ -268,6 +270,7 @@ private:
     struct InspectionTarget
     {
         std::string facilityId;
+        std::string displayName;
         std::string zoneId;
         aerosimlab::simulation::InspectionSurface surface;
         glm::dvec3 routeStartMeters{0.0};
@@ -307,6 +310,7 @@ private:
         std::size_t completedTargetCount = 0;
         glm::dvec3 goalMeters{0.0};
         std::string facilityId;
+        std::string targetDisplayName;
         std::string zoneId;
         aerosimlab::simulation::InspectionSurface surface;
     };
@@ -405,7 +409,9 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeFootprintMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingWallMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingWallMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> terrainSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
@@ -428,8 +434,13 @@ private:
         glm::vec4{0.57F, 0.61F, 0.65F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material estimatedBuildingMaterial_{
         glm::vec4{0.66F, 0.54F, 0.36F, 1.0F}, 0.0F, 0.9F};
+    std::unique_ptr<aerosimlab::graphics::Texture2D> buildingFacadeTexture_;
     aerosimlab::graphics::Material missionRouteMaterial_{
         glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
+    std::mt19937 windGenerator_{0x44524F4EU};
+    glm::dvec3 windVelocityMetersPerSecond_{0.0};
+    glm::dvec3 windTargetMetersPerSecond_{0.0};
+    std::uint32_t windGustTicksRemaining_ = 0U;
 #ifndef __EMSCRIPTEN__
     aerosimlab::simulation::SimulationCore simulation_{
         aerosimlab::simulation::SimulationDynamics::RigidBody};

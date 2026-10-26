@@ -58,7 +58,7 @@ void SetAnisotropicFilteringIfAvailable()
 
 /** @brief RGB 픽셀 자료를 검사하고 OpenGL 텍스처로 올린다. */
 GLuint UploadRgbImage(std::uint32_t width, std::uint32_t height,
-    const std::uint8_t* pixels, std::size_t pixelByteCount)
+    const std::uint8_t* pixels, std::size_t pixelByteCount, bool repeat)
 {
     constexpr std::size_t bytesPerPixel = 3U;
     const std::size_t widthSize = width;
@@ -79,8 +79,9 @@ GLuint UploadRgbImage(std::uint32_t width, std::uint32_t height,
     GLuint rendererId = 0U;
     glGenTextures(1, &rendererId);
     glBindTexture(GL_TEXTURE_2D, rendererId);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    const GLint wrapMode = repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     SetAnisotropicFilteringIfAvailable();
@@ -117,7 +118,8 @@ GLuint UploadRgbImage(std::uint32_t width, std::uint32_t height,
 
 } // namespace
 
-std::unique_ptr<Texture2D> Texture2D::LoadPpm(const std::filesystem::path& path)
+std::unique_ptr<Texture2D> Texture2D::LoadPpm(
+    const std::filesystem::path& path, bool repeat)
 {
     std::ifstream image(path, std::ios::binary);
     std::string format;
@@ -149,17 +151,18 @@ std::unique_ptr<Texture2D> Texture2D::LoadPpm(const std::filesystem::path& path)
         throw std::runtime_error("PPM 이미지 픽셀 자료가 중간에 끝났습니다: " + path.string());
 
     return std::unique_ptr<Texture2D>(
-        new Texture2D(width, height, pixels.data(), pixels.size()));
+        new Texture2D(width, height, pixels.data(), pixels.size(), repeat));
 }
 
-std::unique_ptr<Texture2D> Texture2D::LoadFromFile(const std::filesystem::path& path)
+std::unique_ptr<Texture2D> Texture2D::LoadFromFile(
+    const std::filesystem::path& path, bool repeat)
 {
     std::string extension = path.extension().string();
     std::transform(extension.begin(), extension.end(), extension.begin(),
         [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
 
     if (extension == ".ppm")
-        return LoadPpm(path);
+        return LoadPpm(path, repeat);
     if (extension != ".png" && extension != ".jpg" && extension != ".jpeg")
         throw std::runtime_error("지원하는 이미지 형식은 PNG, JPEG, PPM입니다: "
             + path.string());
@@ -188,7 +191,7 @@ std::unique_ptr<Texture2D> Texture2D::LoadFromFile(const std::filesystem::path& 
 
     const std::size_t pixelByteCount = widthSize * heightSize * bytesPerPixel;
     return std::unique_ptr<Texture2D>(new Texture2D(
-        imageWidth, imageHeight, pixels.get(), pixelByteCount));
+        imageWidth, imageHeight, pixels.get(), pixelByteCount, repeat));
 }
 
 Texture2D::Texture2D(std::uint32_t width, std::uint32_t height,
@@ -198,8 +201,8 @@ Texture2D::Texture2D(std::uint32_t width, std::uint32_t height,
 }
 
 Texture2D::Texture2D(std::uint32_t width, std::uint32_t height,
-    const std::uint8_t* pixels, std::size_t pixelByteCount)
-    : rendererId_(UploadRgbImage(width, height, pixels, pixelByteCount))
+    const std::uint8_t* pixels, std::size_t pixelByteCount, bool repeat)
+    : rendererId_(UploadRgbImage(width, height, pixels, pixelByteCount, repeat))
 {
 }
 

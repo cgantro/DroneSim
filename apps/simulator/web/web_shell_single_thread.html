@@ -282,11 +282,11 @@
           select.remove(1);
         eoInspectionTargets = [];
       };
-      window.addDroneSimInspectionTarget = function (index, facilityId, zoneId) {
+      window.addDroneSimInspectionTarget = function (index, facilityId, zoneId, displayName) {
         var option = document.createElement("option");
         option.value = String(index);
         option.dataset.facilityId = facilityId;
-        option.textContent = "촬영 위치 " + (eoInspectionTargets.length + 1);
+        option.textContent = displayName || "이름 없는 점검 대상";
         document.querySelector("#inspection-target").add(option);
         eoInspectionTargets.push({
           index: Number(index), facility_id: facilityId, inspection_zone_id: zoneId

@@ -22,6 +22,7 @@ enum class BuildingHeightSource
 struct MapBuilding
 {
     std::string osmId;
+    std::string name;
     std::vector<glm::dvec2> outlineMeters;
     std::vector<double> groundElevationsMeters;
     double heightMeters = 0.0;

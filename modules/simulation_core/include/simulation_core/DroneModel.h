@@ -51,6 +51,8 @@ struct DroneControlState
 {
     glm::dvec3 waypointMeters{0.0};
     glm::dvec3 targetVelocityMetersPerSecond{0.0};
+    /** @brief 운동학 비행에서 바람이 만드는 작은 수평 편류다. 단위는 m/s다. */
+    glm::dvec3 windVelocityMetersPerSecond{0.0};
     double commandedYawRateRadiansPerSecond = 0.0;
     double desiredYawRadians = 0.0;
     double groundElevationMeters = 0.0;

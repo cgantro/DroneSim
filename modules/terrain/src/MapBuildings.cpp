@@ -94,6 +94,7 @@ std::vector<MapBuilding> LoadMapBuildings(
 
         MapBuilding building;
         building.osmId = properties->value("osm_id", std::string{});
+        building.name = tags->value("name", std::string{});
         if (!detail::ReadTerrainFootprint(
             geometry->value("coordinates", Json{}), terrain,
             building.outlineMeters, building.groundElevationsMeters))

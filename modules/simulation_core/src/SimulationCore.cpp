@@ -85,6 +85,7 @@ struct SimulationCore::EcsStorage
     std::vector<StaticObstaclePrism> kinematicPrisms;
     std::vector<StaticObstacleFootprint> kinematicFootprints;
     std::optional<terrain::TerrainGrid> terrainGrid;
+    glm::dvec3 windVelocityMetersPerSecond{0.0};
     bool measureEcsSystemDuration = false;
     EcsSystemDurations lastEcsSystemDurations;
     double lastFlecsProgressDurationMicroseconds = 0.0;
@@ -410,6 +411,7 @@ struct SimulationCore::EcsStorage
         const InitialPose initialPose{positionMeters, yawRadians, groundElevationMeters};
         DroneState initialState;
         DroneControlState initialControl;
+        initialControl.windVelocityMetersPerSecond = windVelocityMetersPerSecond;
         ApplyInitialPose(initialState, initialControl, initialPose);
         flecs::entity drone = world.entity();
 #if !defined(__EMSCRIPTEN__)
@@ -529,6 +531,8 @@ struct SimulationCore::EcsStorage
             drone.get_mut<DroneState>(),
             drone.get_mut<DroneControlState>(),
             initialPose);
+        drone.get_mut<DroneControlState>().windVelocityMetersPerSecond =
+            windVelocityMetersPerSecond;
 #if !defined(__EMSCRIPTEN__)
         if (dynamics == SimulationDynamics::RigidBody)
             ResetPhysicsBody(drone);
@@ -999,6 +1003,12 @@ void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->physics->SetWindVelocityMetersPerSecond(velocity);
 #endif
+    ecs_->windVelocityMetersPerSecond = velocity;
+    for (auto& [id, drone] : ecs_->drones)
+    {
+        (void)id;
+        drone.get_mut<DroneControlState>().windVelocityMetersPerSecond = velocity;
+    }
 }
 
 void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept

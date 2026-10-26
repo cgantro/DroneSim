@@ -18,11 +18,11 @@ public:
 
     /** @brief 프로젝트의 간단한 PPM 이미지 하나를 GPU 텍스처로 읽는다. */
     [[nodiscard]] static std::unique_ptr<Texture2D> LoadPpm(
-        const std::filesystem::path& path);
+        const std::filesystem::path& path, bool repeat = false);
 
     /** @brief PPM, PNG, JPEG 이미지를 읽어 GPU 텍스처로 올린다. */
     [[nodiscard]] static std::unique_ptr<Texture2D> LoadFromFile(
-        const std::filesystem::path& path);
+        const std::filesystem::path& path, bool repeat = false);
 
     ~Texture2D();
 
@@ -36,7 +36,7 @@ public:
 
 private:
     Texture2D(std::uint32_t width, std::uint32_t height,
-        const std::uint8_t* pixels, std::size_t pixelByteCount);
+        const std::uint8_t* pixels, std::size_t pixelByteCount, bool repeat = false);
 
     std::uint32_t rendererId_ = 0U;
 };

@@ -46,6 +46,7 @@ public:
         int cameraImageWidth, int cameraImageHeight,
         double missionDistanceMeters,
         const std::string& inspectionFacilityId,
+        const std::string& inspectionTargetName,
         const std::string& inspectionMissionStatus, bool missionCanStart,
         const std::function<void()>& startInspectionMission,
         simulation::CaptureAssessment captureAssessment,

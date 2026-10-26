@@ -168,6 +168,9 @@ CommandResult DroneModel::Apply(
 void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) noexcept
 {
     constexpr double step = fixedStepSeconds;
+    constexpr double windInfluence = 0.18;
+    const glm::dvec3 windDrift = control.windVelocityMetersPerSecond * windInfluence;
+    const bool wasAirborne = state.mode != FlightMode::Grounded;
     const double groundElevation = control.groundElevationMeters;
     const double takeoffTarget = groundElevation + takeoffHeightMeters;
     state.yawRadians += control.commandedYawRateRadiansPerSecond * step;
@@ -183,7 +186,7 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
 
     case FlightMode::Hovering:
         state.velocityMetersPerSecond = ApproachVelocity(
-            state.velocityMetersPerSecond, glm::dvec3{0.0},
+            state.velocityMetersPerSecond, windDrift,
             maximumAccelerationMetersPerSecondSquared * step);
         state.positionMeters += state.velocityMetersPerSecond * step;
         break;
@@ -204,7 +207,8 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
 
     case FlightMode::Flying:
         state.velocityMetersPerSecond = ApproachVelocity(
-            state.velocityMetersPerSecond, control.targetVelocityMetersPerSecond,
+            state.velocityMetersPerSecond,
+            control.targetVelocityMetersPerSecond + windDrift,
             maximumAccelerationMetersPerSecondSquared * step);
         state.positionMeters += state.velocityMetersPerSecond * step;
         if (glm::length(state.velocityMetersPerSecond) < 0.05
@@ -228,7 +232,8 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
             break;
         }
 
-        state.velocityMetersPerSecond = offset * (maximumSpeedMetersPerSecond / distance);
+        state.velocityMetersPerSecond = offset * (maximumSpeedMetersPerSecond / distance)
+            + windDrift;
         state.positionMeters += state.velocityMetersPerSecond * step;
         break;
     }
@@ -256,6 +261,14 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
         state.mode = FlightMode::Grounded;
         control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
         control.commandedYawRateRadiansPerSecond = 0.0;
+    }
+
+    // 운동학 모델에는 공기역학이 없으므로, 상승·하강 중에도 같은 바람 편류를 더한다.
+    if (wasAirborne && (state.mode == FlightMode::TakingOff
+        || state.mode == FlightMode::Landing))
+    {
+        state.positionMeters.x += windDrift.x * step;
+        state.positionMeters.y += windDrift.y * step;
     }
 }
 
