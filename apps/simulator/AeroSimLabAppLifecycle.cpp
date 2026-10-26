@@ -202,6 +202,9 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         const auto& state = simulation_.State();
         const std::string mode{aerosimlab::simulation::ToString(state.mode)};
         const double speedMetersPerSecond = glm::length(state.velocityMetersPerSecond);
+        const double heightAboveGroundMeters = state.positionMeters.z
+            - terrainGrid_.HeightAtLocalMeters(
+                {state.positionMeters.x, state.positionMeters.y});
         const bool cameraActive = simulation_.Camera().status
             == aerosimlab::simulation::CameraStatus::Active;
         const auto& camera = simulation_.Camera();
@@ -215,7 +218,7 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
                     UTF8ToString($7), $8);
             }
         }, mode.c_str(), state.positionMeters.x, state.positionMeters.y,
-            state.positionMeters.z, speedMetersPerSecond, cameraActive,
+            heightAboveGroundMeters, speedMetersPerSecond, cameraActive,
             captureAssessment.c_str(), InspectionMissionStatus().c_str(), simulationTick);
         EM_ASM({
             if (window.updateDroneSimInspectionMetadata) {

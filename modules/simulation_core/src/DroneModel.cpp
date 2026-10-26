@@ -27,6 +27,12 @@ glm::dvec3 ClampLength(const glm::dvec3& value, double maximumLength) noexcept
     return value * (maximumLength / length);
 }
 
+glm::dvec3 ApproachVelocity(
+    const glm::dvec3& current, const glm::dvec3& target, double maximumChange) noexcept
+{
+    return current + ClampLength(target - current, maximumChange);
+}
+
 struct FlightModeName
 {
     std::string_view name;
@@ -97,9 +103,10 @@ CommandResult DroneModel::Apply(
         {
             return CommandResult::InvalidValue;
         }
-        state.velocityMetersPerSecond = ClampLength(command.vector, maximumSpeedMetersPerSecond);
-        control.targetVelocityMetersPerSecond = state.velocityMetersPerSecond;
-        state.mode = glm::length(state.velocityMetersPerSecond) == 0.0
+        control.targetVelocityMetersPerSecond = ClampLength(
+            command.vector, maximumSpeedMetersPerSecond);
+        state.mode = glm::length(control.targetVelocityMetersPerSecond) == 0.0
+                && glm::length(state.velocityMetersPerSecond) < 0.05
             ? FlightMode::Hovering
             : FlightMode::Flying;
         return CommandResult::Accepted;
@@ -147,9 +154,10 @@ CommandResult DroneModel::Apply(
         {
             return CommandResult::InvalidFlightMode;
         }
-        state.velocityMetersPerSecond = glm::dvec3{0.0};
         control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
-        state.mode = FlightMode::Hovering;
+        state.mode = glm::length(state.velocityMetersPerSecond) < 0.05
+            ? FlightMode::Hovering
+            : FlightMode::Flying;
         control.commandedYawRateRadiansPerSecond = 0.0;
         return CommandResult::Accepted;
     }
@@ -170,8 +178,14 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
     switch (state.mode)
     {
     case FlightMode::Grounded:
-    case FlightMode::Hovering:
         state.velocityMetersPerSecond = glm::dvec3{0.0};
+        break;
+
+    case FlightMode::Hovering:
+        state.velocityMetersPerSecond = ApproachVelocity(
+            state.velocityMetersPerSecond, glm::dvec3{0.0},
+            maximumAccelerationMetersPerSecondSquared * step);
+        state.positionMeters += state.velocityMetersPerSecond * step;
         break;
 
     case FlightMode::TakingOff:
@@ -189,7 +203,16 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
         break;
 
     case FlightMode::Flying:
+        state.velocityMetersPerSecond = ApproachVelocity(
+            state.velocityMetersPerSecond, control.targetVelocityMetersPerSecond,
+            maximumAccelerationMetersPerSecondSquared * step);
         state.positionMeters += state.velocityMetersPerSecond * step;
+        if (glm::length(state.velocityMetersPerSecond) < 0.05
+            && glm::length(control.targetVelocityMetersPerSecond) < 0.05)
+        {
+            state.velocityMetersPerSecond = glm::dvec3{0.0};
+            state.mode = FlightMode::Hovering;
+        }
         break;
 
     case FlightMode::FollowingWaypoint:

@@ -106,6 +106,8 @@ public:
     /** @brief 운동학 기준 모델의 수직 상승·하강 속도다. */
     static constexpr double climbSpeedMetersPerSecond = 1.0;
     static constexpr double maximumSpeedMetersPerSecond = 5.0;
+    /** @brief 운동학 모델의 한 단계당 속도 변화 한계다. 단위는 m/s²다. */
+    static constexpr double maximumAccelerationMetersPerSecondSquared = 2.0;
     static constexpr double maximumYawRateRadiansPerSecond = 1.5;
 
     /** @brief 허용되는 비행 상태와 입력 값인지 확인한 뒤 명령을 적용한다. */

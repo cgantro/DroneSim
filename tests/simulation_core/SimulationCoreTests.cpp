@@ -4,6 +4,7 @@
 #include "simulation_core/InspectionSurfaceJson.h"
 
 #include <gtest/gtest.h>
+#include <glm/geometric.hpp>
 
 #include <limits>
 #include <stdexcept>
@@ -68,6 +69,7 @@ void Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick()
     const DroneId droneId = simulation.PrimaryDroneId();
     DroneState start;
     start.mode = FlightMode::Flying;
+    start.velocityMetersPerSecond = {1.0, 0.0, 0.0};
     simulation.SetInitialState(droneId, start);
     simulation.ConfigureBattery(droneId, {10.0, 0.0, 3600.0, 20.0});
 
@@ -95,11 +97,24 @@ void Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks()
 
     ASSERT_EQ(simulation.Apply(Command(
         DroneCommand::Kind::SetVelocity, glm::dvec3{2.0, 0.0, 0.0})), CommandResult::Accepted);
-    for (int tick = 0; tick < 60; ++tick)
+    for (int tick = 0; tick < 6; ++tick)
+        simulation.AdvanceOneTick();
+    EXPECT_NEAR(simulation.State().velocityMetersPerSecond.x, 0.2, 1.0e-9);
+    EXPECT_GT(simulation.State().positionMeters.x, 0.0);
+    EXPECT_LT(simulation.State().positionMeters.x, 0.02);
+    for (int tick = 6; tick < 60; ++tick)
     {
         simulation.AdvanceOneTick();
     }
-    EXPECT_NEAR(simulation.State().positionMeters.x, 2.0, 1.0e-9);
+    EXPECT_GT(simulation.State().positionMeters.x, 0.9);
+    EXPECT_LT(simulation.State().positionMeters.x, 1.1);
+
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::Stop)), CommandResult::Accepted);
+    for (int tick = 0; tick < 60; ++tick)
+        simulation.AdvanceOneTick();
+    EXPECT_NEAR(glm::length(simulation.State().velocityMetersPerSecond), 0.0, 1.0e-9);
+    EXPECT_GT(simulation.State().positionMeters.x, 1.8);
+    EXPECT_LT(simulation.State().positionMeters.x, 2.1);
 
     ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::Land)), CommandResult::Accepted);
     EXPECT_EQ(simulation.Apply(Command(DroneCommand::Kind::Land)), CommandResult::InvalidFlightMode);

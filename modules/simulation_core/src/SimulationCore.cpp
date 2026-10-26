@@ -643,6 +643,7 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
         1.0 - 2.0 * (q.y * q.y + q.z * q.z));
     DroneControlState& control = drone.get_mut<DroneControlState>();
     control.desiredYawRadians = normalized.yawRadians;
+    control.targetVelocityMetersPerSecond = normalized.velocityMetersPerSecond;
     control.groundElevationMeters = normalized.positionMeters.z
         - QuadrotorFlightController::groundedModelOriginHeightMeters;
 #if !defined(__EMSCRIPTEN__)

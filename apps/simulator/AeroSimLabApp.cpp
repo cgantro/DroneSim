@@ -69,7 +69,8 @@ AeroSimLabApp* activeWebApplication = nullptr;
 #endif
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
-constexpr glm::dvec2 demoDroneStartMeters{0.0, -9.0};
+// 하천 안에서 시작하지 않고 111동 외벽을 볼 수 있는 지상 지점이다.
+constexpr glm::dvec2 demoDroneStartMeters{114.0, 100.0};
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -943,9 +944,14 @@ void AeroSimLabApp::LoadMapFeatures()
 void AeroSimLabApp::InitializeStartingState()
 {
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
+    const glm::dvec2 toFirstTarget = glm::dvec2{
+        inspectionTargets_.front().surface.centerMeters.x,
+        inspectionTargets_.front().surface.centerMeters.y} - demoDroneStartMeters;
+    const double initialYawRadians = std::atan2(toFirstTarget.y, toFirstTarget.x);
     simulation_.SetInitialPose({demoDroneStartMeters.x, demoDroneStartMeters.y,
         startElevation +
-            aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
+            aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
+        initialYawRadians);
     fleetDroneIds_ = simulation_.DroneIds();
 }
 
