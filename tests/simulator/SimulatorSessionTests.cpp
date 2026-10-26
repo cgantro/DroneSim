@@ -107,6 +107,8 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
     const auto manifestData = nlohmann::json::parse(manifestText);
     EXPECT_EQ(manifestData.at("checksum_algorithm").get<std::string>(),
         "CRC-32/ISO-HDLC");
+    EXPECT_EQ(manifestData.at("accepted_frame_count").get<std::uint64_t>(), 4U);
+    EXPECT_EQ(manifestData.at("unwritten_frame_count").get<std::uint64_t>(), 0U);
     EXPECT_EQ(manifestData.at("facility_id").get<std::string>(), "osm-building-1");
     EXPECT_EQ(manifestData.at("inspection_zone_id").get<std::string>(),
         "facade-test-area");

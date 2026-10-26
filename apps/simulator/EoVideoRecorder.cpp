@@ -347,8 +347,9 @@ void EoVideoRecorder::SetMissionOutcome(
 bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
 {
     savedFrameCount = savedFrameCount_;
-    if (!impl_)
+    if (!impl_ || !impl_->sessionOpen.load())
     {
+        impl_.reset();
         error = "진행 중인 영상 녹화가 없습니다.";
         return false;
     }
@@ -370,12 +371,14 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
     savedFrameCount = savedFrameCount_;
 
     bool saved = metadataFlushed;
+    std::string workerError;
     {
         std::lock_guard lock(impl_->queueMutex);
         if (!impl_->workerError.empty())
         {
             saved = false;
-            error = impl_->workerError;
+            workerError = impl_->workerError;
+            error = workerError;
         }
     }
     std::error_code fileError;
@@ -407,35 +410,116 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
         }
         if (!saved)
         {
-            impl_.reset();
-            width_ = 0;
-            height_ = 0;
-            framesPerSecond_ = 0.0;
-            return false;
+            if (error.empty())
+                error = "녹화 파일 체크섬을 확인하지 못했습니다.";
         }
 
+        if (saved)
+        {
+            std::filesystem::path manifestPath = videoPath_;
+            manifestPath.replace_extension(".manifest.json");
+            std::filesystem::path temporaryManifestPath = manifestPath;
+            temporaryManifestPath += ".partial";
+            std::ofstream manifestFile(temporaryManifestPath,
+                                       std::ios::out | std::ios::trunc);
+            Json manifest{
+                {"collection_state", "SAVED"},
+                {"facility_id", facilityId_},
+                {"inspection_zone_id", inspectionZoneId_},
+                {"video_file", videoPath_.filename().string()},
+                {"metadata_file", metadataPath_.filename().string()},
+                {"accepted_frame_count", queuedFrameCount_},
+                {"saved_frame_count", savedFrameCount_},
+                {"unwritten_frame_count", queuedFrameCount_ - savedFrameCount_},
+                {"geometry_ready_frame_count", geometryReadyFrameCount_},
+                {"width_pixels", width_},
+                {"height_pixels", height_},
+                {"frames_per_second", framesPerSecond_},
+                {"video_bytes", videoBytes},
+                {"metadata_bytes", std::filesystem::file_size(metadataPath_)},
+                {"checksum_algorithm", "CRC-32/ISO-HDLC"}};
+            if (!videoChecksum.empty())
+                manifest["video_checksum"] = videoChecksum;
+            if (!metadataChecksum.empty())
+                manifest["metadata_checksum"] = metadataChecksum;
+            if (missionOutcome_)
+            {
+                manifest["mission_outcome"] =
+                    MissionOutcomeName(*missionOutcome_);
+                if (*missionOutcome_ == MissionOutcome::Failed)
+                    manifest["mission_failure_reason"] = missionFailureReason_;
+            }
+            manifestFile << manifest.dump(2) << '\n';
+            manifestFile.flush();
+            const bool manifestWritten = static_cast<bool>(manifestFile);
+            manifestFile.close();
+            if (manifestWritten)
+            {
+                std::filesystem::rename(temporaryManifestPath, manifestPath,
+                                        fileError);
+                saved = !fileError;
+            }
+            if (!saved)
+            {
+                if (error.empty())
+                    error = "녹화 상태 목록을 저장하지 못했습니다.";
+                std::filesystem::remove(temporaryManifestPath, fileError);
+            }
+        }
+    }
+
+    if (!metadataFlushed && error.empty())
+        error = "프레임 메타데이터를 디스크에 기록하지 못했습니다.";
+
+    if (!saved)
+    {
         std::filesystem::path manifestPath = videoPath_;
         manifestPath.replace_extension(".manifest.json");
         std::filesystem::path temporaryManifestPath = manifestPath;
         temporaryManifestPath += ".partial";
+        std::filesystem::path incompleteMetadataPath = metadataTemporaryPath_;
+        std::error_code sizeError;
+        if (!std::filesystem::exists(incompleteMetadataPath, sizeError))
+            incompleteMetadataPath = metadataPath_;
         std::ofstream manifestFile(temporaryManifestPath,
-            std::ios::out | std::ios::trunc);
+                                   std::ios::out | std::ios::trunc);
         Json manifest{
-            {"collection_state", "SAVED"},
+            {"collection_state", "FAILED"},
             {"facility_id", facilityId_},
             {"inspection_zone_id", inspectionZoneId_},
             {"video_file", videoPath_.filename().string()},
-            {"metadata_file", metadataPath_.filename().string()},
+            {"metadata_file", incompleteMetadataPath.filename().string()},
+            {"accepted_frame_count", queuedFrameCount_},
             {"saved_frame_count", savedFrameCount_},
+            {"unwritten_frame_count", queuedFrameCount_ - savedFrameCount_},
             {"geometry_ready_frame_count", geometryReadyFrameCount_},
             {"width_pixels", width_},
             {"height_pixels", height_},
             {"frames_per_second", framesPerSecond_},
-            {"video_bytes", videoBytes},
-            {"metadata_bytes", std::filesystem::file_size(metadataPath_)},
-            {"checksum_algorithm", "CRC-32/ISO-HDLC"},
-            {"video_checksum", videoChecksum},
-            {"metadata_checksum", metadataChecksum}};
+            {"failure_reason", error},
+            {"checksum_algorithm", "CRC-32/ISO-HDLC"}};
+        sizeError.clear();
+        const std::uintmax_t failedVideoBytes =
+            std::filesystem::file_size(videoPath_, sizeError);
+        const bool failedVideoExists = !sizeError && failedVideoBytes > 0U;
+        if (!sizeError)
+            manifest["video_bytes"] = failedVideoBytes;
+        sizeError.clear();
+        const std::uintmax_t failedMetadataBytes =
+            std::filesystem::file_size(incompleteMetadataPath, sizeError);
+        if (!sizeError)
+            manifest["metadata_bytes"] = failedMetadataBytes;
+
+        std::string checksum;
+        std::string checksumError;
+        if (!sizeError && CalculateFileChecksum(incompleteMetadataPath,
+                                                checksum, checksumError))
+            manifest["metadata_checksum"] = checksum;
+        if (failedVideoExists &&
+            CalculateFileChecksum(videoPath_, checksum, checksumError))
+            manifest["video_checksum"] = checksum;
+        if (!workerError.empty())
+            manifest["encoder_error"] = workerError;
         if (missionOutcome_)
         {
             manifest["mission_outcome"] = MissionOutcomeName(*missionOutcome_);
@@ -444,22 +528,20 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
         }
         manifestFile << manifest.dump(2) << '\n';
         manifestFile.flush();
-        saved = static_cast<bool>(manifestFile);
+        const bool failedManifestWritten = static_cast<bool>(manifestFile);
         manifestFile.close();
-        if (saved)
+        if (failedManifestWritten)
         {
-            std::filesystem::rename(temporaryManifestPath, manifestPath, fileError);
-            saved = !fileError;
+            std::filesystem::rename(temporaryManifestPath, manifestPath,
+                                    fileError);
+            if (fileError && error.empty())
+                error = "실패한 녹화 상태 목록을 저장하지 못했습니다.";
         }
-        if (!saved)
+        else if (error.empty())
         {
-            error = "녹화 상태 목록을 저장하지 못했습니다.";
-            std::filesystem::remove(temporaryManifestPath, fileError);
+            error = "실패한 녹화 상태 목록을 저장하지 못했습니다.";
         }
     }
-    if (!metadataFlushed && error.empty())
-        error = "프레임 메타데이터를 디스크에 기록하지 못했습니다.";
-
     impl_.reset();
     width_ = 0;
     height_ = 0;
