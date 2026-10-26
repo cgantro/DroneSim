@@ -36,9 +36,9 @@
 
 ## 2. 상세 건물·교량 자료 받기
 
-서울의 3D 공간정보는 [S-Map](https://smap.seoul.go.kr/)에서 확인할 수 있지만, 웹 화면에 보이는 모델을 바로 내려받아 GLB로 쓸 수 있다는 뜻은 아닙니다. 자료 형식과 수정·공개 허용 여부를 확인한 뒤 사용합니다.
+서울시는 [S-Map](https://smap.seoul.go.kr/)에 서울 전역의 건물 약 60만 동과 교량·고가·육교를 포함한 시설물, 지형 정보를 갖고 있습니다. 다만 웹 화면에서 보이는 모델이 내려받을 수 있는 원본 파일이라는 뜻은 아닙니다. 서울시는 주요 변화 지역의 드론 촬영 3D 모델과 정사영상도 만들어 S-Map을 갱신하고 있으므로, 탄천교 주변 자료가 있는지 먼저 문의할 가치가 있습니다.
 
-[S-Map 오픈랩 자료 제공 FAQ](https://openlab.eseoul.go.kr/mobile/qna.do)와 [공개제한 공간정보 안내](https://openlab.eseoul.go.kr/mobile/notice.do)를 확인하고, 탄천교 주변의 지형·건물·교량 3D 자료를 요청합니다. 서울시 안내에 따르면 공개제한 공간정보 신청에는 법인 또는 사업자 등록과 보안 심사가 필요할 수 있습니다. 개인 프로젝트가 신청 대상인지, GLB로 변환할 수 있는지, 웹 공개가 허용되는지는 서울시 공간정보과(02-2133-2852)에 문의해 확인합니다.
+[S-Map 오픈랩 자료 제공 FAQ](https://openlab.eseoul.go.kr/mobile/qna.do)와 [공개제한 공간정보 안내](https://openlab.eseoul.go.kr/mobile/notice.do)를 확인하고, 탄천교 주변의 지형·건물·교량 3D 자료를 요청합니다. 공개제한 자료는 법인 또는 사업자 등록과 보안 심사가 필요할 수 있어 개인 포트폴리오가 신청할 수 있는지 먼저 물어봐야 합니다. 서울시 공간정보과(02-2133-2835)에 데이터 범위·파일 형식·수정 및 웹 공개 허용 여부를 문의합니다. 드론으로 만든 교량 3D 모델이나 정사영상이 있는지는 [서울시 드론공간정보 담당 부서](https://news.seoul.go.kr/gov/archives/528178)(02-2133-2843)에도 확인할 수 있습니다.
 
 자료를 받을 수 없다면 정사영상과 건물 외곽선은 장면의 주변 표현에 활용하고, 점검 대상 교량은 치수를 확인해 별도 모델로 만듭니다. 추정한 형상은 실제 교량 자료와 구분해 표시해야 합니다.
 
@@ -87,6 +87,8 @@ QGIS에서 같은 DEM과 같은 범위로 ESRI ASCII Grid를 내보내고, 저�
 - [국토정보플랫폼](https://map.ngii.go.kr/ms/map/NlipMap.do?tabGb=total): 공개 DEM과 정사영상 검색·신청
 - [국토지리정보원 정사영상 자료 설명](https://www.data.go.kr/data/15059919/fileData.do): 제공 형식, 해상도, 로그인과 이용 조건
 - [국토지리정보원 안내 자료](https://www.ngii.go.kr/lib/file/pr_01.pdf): DEM 구축 해상도와 공개 범위 안내
-- [S-Map](https://smap.seoul.go.kr/) 및 [S-Map 오픈랩 자료 FAQ](https://openlab.eseoul.go.kr/mobile/qna.do): 서울 3D 자료 확인·신청
+- [서울시 S-Map 자료 소개](https://news.seoul.go.kr/gov/archives/528155): 서울 3D 건물·시설물·지형 범위
+- [서울시 드론공간정보 구축 안내](https://news.seoul.go.kr/gov/archives/528178): 드론 3D 모델·정사영상 구축과 담당 부서
+- [S-Map 오픈랩 자료 FAQ](https://openlab.eseoul.go.kr/mobile/qna.do): 자료 신청 절차와 공개 범위
 - [QGIS 내려받기](https://qgis.org/download/), [Qgis2threejs 버전과 호환성](https://plugins.qgis.org/plugins/Qgis2threejs/)
 - [Qgis2threejs 내보내기 안내](https://minorua.github.io/Qgis2threejs/docs/3.1/Exporter.html), [GDAL PNM 형식 안내](https://gdal.org/en/stable/drivers/raster/pnm.html)
