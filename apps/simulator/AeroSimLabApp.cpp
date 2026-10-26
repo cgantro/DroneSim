@@ -746,10 +746,9 @@ void AeroSimLabApp::LoadMapFeatures()
     {
         const auto bounds =
             aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-        if (building.heightSource
-                == aerosimlab::terrain::BuildingHeightSource::OsmHeightTag
-            && building.heightMeters > 0.0)
+        if (building.heightMeters > 0.0)
         {
+            // 층수에서 추정한 높이도 유한한 충돌 범위로 사용한다.
             simulation_.AddStaticObstaclePrism(building.outlineMeters,
                 bounds.centerMeters.z - bounds.halfExtentsMeters.z,
                 bounds.centerMeters.z + bounds.halfExtentsMeters.z);
