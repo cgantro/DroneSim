@@ -291,15 +291,81 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   set(_aerosimlab_generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
   set(_aerosimlab_build_revision_header
     "${_aerosimlab_generated_dir}/AeroSimLabBuildRevision.h")
-  add_custom_target(aerosimlab_build_revision
+  set(_aerosimlab_build_revision_dependencies
+    "${CMAKE_SOURCE_DIR}/cmake/GenerateBuildRevision.cmake")
+  if(GIT_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(
+      COMMAND "${GIT_EXECUTABLE}" rev-parse --git-path HEAD
+      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      OUTPUT_VARIABLE _aerosimlab_git_head
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    get_filename_component(_aerosimlab_git_head "${_aerosimlab_git_head}"
+      ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+    if(_aerosimlab_git_head AND EXISTS "${_aerosimlab_git_head}")
+      list(APPEND _aerosimlab_build_revision_dependencies "${_aerosimlab_git_head}")
+      file(READ "${_aerosimlab_git_head}" _aerosimlab_git_head_contents)
+      string(REGEX MATCH "^ref: (.+)$" _aerosimlab_git_ref_match
+        "${_aerosimlab_git_head_contents}")
+      if(CMAKE_MATCH_1)
+        execute_process(
+          COMMAND "${GIT_EXECUTABLE}" rev-parse --git-path "${CMAKE_MATCH_1}"
+          WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+          OUTPUT_VARIABLE _aerosimlab_git_ref
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+          ERROR_QUIET
+        )
+        get_filename_component(_aerosimlab_git_ref "${_aerosimlab_git_ref}"
+          ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+        if(_aerosimlab_git_ref AND EXISTS "${_aerosimlab_git_ref}")
+          list(APPEND _aerosimlab_build_revision_dependencies "${_aerosimlab_git_ref}")
+        endif()
+      endif()
+    endif()
+    # dirty 표시는 측정 결과의 코드 상태를 구분한다. 매 빌드 git status를
+    # 실행하는 대신, 현재 Git 작업 폴더의 파일과 부모 폴더를 의존성으로 둔다.
+    execute_process(
+      COMMAND "${GIT_EXECUTABLE}" ls-files --cached --others --exclude-standard
+      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      OUTPUT_VARIABLE _aerosimlab_worktree_files
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    string(REPLACE "\r\n" "\n" _aerosimlab_worktree_files
+      "${_aerosimlab_worktree_files}")
+    string(REPLACE "\n" ";" _aerosimlab_worktree_files
+      "${_aerosimlab_worktree_files}")
+    foreach(_aerosimlab_worktree_file IN LISTS _aerosimlab_worktree_files)
+      if(EXISTS "${CMAKE_SOURCE_DIR}/${_aerosimlab_worktree_file}")
+        list(APPEND _aerosimlab_build_revision_dependencies
+          "${CMAKE_SOURCE_DIR}/${_aerosimlab_worktree_file}")
+        get_filename_component(_aerosimlab_worktree_directory
+          "${_aerosimlab_worktree_file}" DIRECTORY)
+        while(_aerosimlab_worktree_directory)
+          list(APPEND _aerosimlab_build_revision_dependencies
+            "${CMAKE_SOURCE_DIR}/${_aerosimlab_worktree_directory}")
+          get_filename_component(_aerosimlab_worktree_directory
+            "${_aerosimlab_worktree_directory}" DIRECTORY)
+        endwhile()
+      endif()
+    endforeach()
+    # 새 최상위 미추적 파일도 감지한다. 하위 파일은 위에서 부모 폴더를 추적한다.
+    list(APPEND _aerosimlab_build_revision_dependencies "${CMAKE_SOURCE_DIR}")
+    list(REMOVE_DUPLICATES _aerosimlab_build_revision_dependencies)
+  endif()
+  add_custom_command(
+    OUTPUT "${_aerosimlab_build_revision_header}"
     COMMAND "${CMAKE_COMMAND}"
       "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
       "-DOUTPUT=${_aerosimlab_build_revision_header}"
       "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
       -P "${CMAKE_SOURCE_DIR}/cmake/GenerateBuildRevision.cmake"
-    BYPRODUCTS "${_aerosimlab_build_revision_header}"
+    DEPENDS ${_aerosimlab_build_revision_dependencies}
     VERBATIM
   )
+  add_custom_target(aerosimlab_build_revision
+    DEPENDS "${_aerosimlab_build_revision_header}")
   add_dependencies(aerosimlab_simulator_app aerosimlab_build_revision)
   target_include_directories(aerosimlab_simulator_app PRIVATE "${_aerosimlab_generated_dir}")
   target_link_libraries(aerosimlab_simulator_app PUBLIC
@@ -517,6 +583,9 @@ if(BUILD_TESTING)
       add_executable(aerosimlab_simulator_integration_tests
         tests/simulator/SimulatorSessionTests.cpp
         tests/graphics/CameraTests.cpp
+      )
+      target_include_directories(aerosimlab_simulator_integration_tests PRIVATE
+        modules/graphics/src/graphics
       )
       target_link_libraries(aerosimlab_simulator_integration_tests PRIVATE
         aerosimlab_simulator_app
