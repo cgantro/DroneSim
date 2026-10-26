@@ -15,6 +15,28 @@ const mimeTypes = {
   ".js": "text/javascript; charset=utf-8",
   ".wasm": "application/wasm",
 };
+
+function summarizeCpuProfile(profile) {
+  const frames = new Map(profile.nodes.map((node) => [node.id, node.callFrame]));
+  const totals = new Map();
+  for (let index = 0; index < profile.samples.length; index += 1) {
+    const frame = frames.get(profile.samples[index]);
+    if (!frame)
+      continue;
+    const name = frame.functionName || "(anonymous)";
+    const source = frame.url ? path.basename(frame.url) : "browser runtime";
+    const key = `${source}:${frame.lineNumber + 1} ${name}`;
+    totals.set(key, (totals.get(key) || 0) + (profile.timeDeltas[index] || 0));
+  }
+  return [...totals.entries()]
+    .sort((first, second) => second[1] - first[1])
+    .slice(0, 12)
+    .map(([frame, microseconds]) => ({
+      frame,
+      sampledMilliseconds: Math.round(microseconds / 100) / 10,
+    }));
+}
+
 const server = http.createServer((request, response) => {
   const requestPath = new URL(request.url, "http://127.0.0.1").pathname;
   const relativePath = decodeURIComponent(requestPath).replace(/^\/+/, "");
@@ -156,16 +178,42 @@ async function run() {
       { timeout: 5000 }
     );
 
+    const responsivenessSession = process.env.WEB_SMOKE_CPU_PROFILE === "1"
+      ? await context.newCDPSession(page)
+      : null;
+    if (responsivenessSession) {
+      await responsivenessSession.send("Profiler.enable");
+      await responsivenessSession.send("Profiler.setSamplingInterval", { interval: 1000 });
+      await responsivenessSession.send("Profiler.start");
+    }
     const responsiveness = await page.evaluate(() => new Promise((resolve) => {
       const frameTimes = [];
+      const longTasks = [];
+      const longTaskObserver = PerformanceObserver.supportedEntryTypes.includes("longtask")
+        ? new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            longTasks.push({
+              durationMilliseconds: Math.round(entry.duration * 10) / 10,
+              startMilliseconds: Math.round(entry.startTime),
+              source: entry.attribution?.[0]?.containerName || entry.name,
+            });
+          }
+        })
+        : null;
+      longTaskObserver?.observe({ type: "longtask", buffered: true });
       const startedAt = performance.now();
       function recordFrame(now) {
         frameTimes.push(now);
         if (now - startedAt >= 5000) {
           const gaps = frameTimes.slice(1).map((time, index) => time - frameTimes[index]);
+          longTaskObserver?.disconnect();
           resolve({
             frameCount: frameTimes.length,
             maximumFrameGapMilliseconds: gaps.length ? Math.max(...gaps) : 0,
+            longestTasks: longTasks
+              .sort((first, second) => second.durationMilliseconds
+                - first.durationMilliseconds)
+              .slice(0, 8),
           });
           return;
         }
@@ -173,6 +221,13 @@ async function run() {
       }
       requestAnimationFrame(recordFrame);
     }));
+    const cpuProfileSummary = responsivenessSession
+      ? summarizeCpuProfile((await responsivenessSession.send("Profiler.stop")).profile)
+      : [];
+    if (responsivenessSession) {
+      await responsivenessSession.send("Profiler.disable");
+      await responsivenessSession.detach();
+    }
     const frameTimings = await page.evaluate(() => {
       const samples = window.__droneSimFrameTimings || [];
       const summarize = (key) => {
@@ -201,6 +256,8 @@ async function run() {
       throw new Error(
         `첫 화면 뒤 갱신이 멈췄습니다. ${responsiveness.frameCount}프레임, `
         + `최대 공백 ${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms, `
+        + `브라우저 긴 작업 ${JSON.stringify(responsiveness.longestTasks)}, `
+        + `CPU 표본 상위 함수 ${JSON.stringify(cpuProfileSummary)}, `
         + `시뮬레이터 프레임 구간 ${JSON.stringify(frameTimings)}`);
     }
     console.log(

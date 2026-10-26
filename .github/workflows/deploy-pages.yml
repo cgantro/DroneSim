@@ -89,6 +89,7 @@ jobs:
         timeout-minutes: 6
         env:
           RUNNER_TEMP: ${{ runner.temp }}
+          WEB_SMOKE_CPU_PROFILE: "1"
         run: node tools/web_runtime_smoke.cjs
 
       - name: Configure GitHub Pages
