@@ -1131,8 +1131,8 @@ void AeroSimLabApp::RenderFrame()
         eoCamera_->GetPosition(), false);
     renderer_->EndFrame();
     EM_ASM({
-        if (window.setDroneSimEoViewport) {
-            window.setDroneSimEoViewport($0, $1, $2, $3);
+        if (window.copyDroneSimEoViewport) {
+            window.copyDroneSimEoViewport($0, $1, $2, $3);
         }
     }, observerWidth, cameraTop, cameraWidth, cameraHeight);
 #else

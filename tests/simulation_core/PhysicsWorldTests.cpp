@@ -229,10 +229,10 @@ void Verify_AirSimPhysics_MassChangesMotionUnderTheSameRotorInput()
         heavierSample.linearAccelerationMetersPerSecondSquared.z + 1.0);
 }
 
-void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
+void Verify_AirSimFlightController_LimitsWaypointSpeedAndStopsAtTarget()
 {
     constexpr double stepSeconds = 1.0 / 60.0;
-    constexpr int simulationTicks = 600;
+    constexpr int simulationTicks = 1800;
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
 
     PhysicsWorld world;
@@ -240,11 +240,15 @@ void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
     definition.positionMeters.z = 10.0;
     const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
     DroneControlState control;
-    control.waypointMeters = definition.positionMeters;
+    control.waypointMeters = {20.0, 0.0, 10.0};
+    double maximumSpeedMetersPerSecond = 0.0;
 
     for (int tick = 0; tick < simulationTicks; ++tick)
     {
         const RigidBodyState physicsState = world.State(drone);
+        maximumSpeedMetersPerSecond = std::max(
+            maximumSpeedMetersPerSecond,
+            glm::length(physicsState.linearVelocityMetersPerSecond));
         DroneState controllerState;
         controllerState.positionMeters = physicsState.positionMeters;
         controllerState.velocityMetersPerSecond = physicsState.linearVelocityMetersPerSecond;
@@ -258,8 +262,9 @@ void Verify_AirSimFlightController_HoldsAStationaryWaypoint()
     }
 
     const RigidBodyState state = world.State(drone);
-    EXPECT_NEAR(state.positionMeters.z, control.waypointMeters.z, 0.1);
-    EXPECT_NEAR(state.linearVelocityMetersPerSecond.z, 0.0, 0.05);
+    EXPECT_LE(maximumSpeedMetersPerSecond, 2.6);
+    EXPECT_NEAR(glm::length(state.positionMeters - control.waypointMeters), 0.0, 0.2);
+    EXPECT_NEAR(glm::length(state.linearVelocityMetersPerSecond), 0.0, 0.2);
 }
 
 void Verify_AirSimFlightController_GainsChangeYawMotorTargets()
@@ -790,7 +795,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
         Verify_AirSimPhysics_GravityAndCollectiveThrustChangeVerticalMotion());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_MassChangesMotionUnderTheSameRotorInput());
-    EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_HoldsAStationaryWaypoint());
+    EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_LimitsWaypointSpeedAndStopsAtTarget());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimFlightController_HoverTargetsFollowMassAndThrustCoefficient());

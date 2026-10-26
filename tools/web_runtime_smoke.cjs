@@ -146,6 +146,28 @@ async function run() {
       null,
       { timeout: 20000 }
     );
+    const cameraPixels = await page.evaluate(() => {
+      const video = document.querySelector("#web-eo-live-video");
+      const canvas = document.createElement("canvas");
+      canvas.width = 32;
+      canvas.height = 24;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      const colors = new Set();
+      let visiblePixels = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        if (red > 20 || green > 20 || blue > 20)
+          visiblePixels += 1;
+        colors.add(`${red >> 4},${green >> 4},${blue >> 4}`);
+      }
+      return { visiblePixels, colorCount: colors.size };
+    });
+    if (cameraPixels.visiblePixels < 24 || cameraPixels.colorCount < 8)
+      throw new Error(`EO 영상 연결은 됐지만 화면 픽셀이 비어 있습니다: ${JSON.stringify(cameraPixels)}`);
     console.log("Chromium에서 EO 영상의 WebRTC 송수신과 수신 화면을 확인했습니다.");
     await page.getByRole("button", { name: "이륙" }).click();
     await page.waitForFunction(

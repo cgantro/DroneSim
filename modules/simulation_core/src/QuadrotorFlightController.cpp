@@ -15,6 +15,7 @@ namespace
 constexpr double gravityMetersPerSecondSquared = 9.81;
 constexpr double maximumAccelerationMetersPerSecondSquared = 4.0;
 constexpr double maximumTorqueNewtonMeters = 0.5;
+constexpr double maximumWaypointSpeedMetersPerSecond = 2.0;
 
 struct DesiredWrench
 {
@@ -41,8 +42,21 @@ glm::dvec3 PositionControlAcceleration(
     const glm::dvec3& targetPosition,
     const QuadrotorControllerParameters& controller)
 {
-    return controller.positionGain * (targetPosition - state.positionMeters)
-        - controller.velocityGain * state.velocityMetersPerSecond;
+    const glm::dvec3 offset = targetPosition - state.positionMeters;
+    const double distance = glm::length(offset);
+    if (distance <= 1.0e-9)
+        return -controller.velocityGain * state.velocityMetersPerSecond;
+
+    // 정찰 경유점은 촬영에 맞춰 초속 2m를 넘지 않도록 천천히 접근한다.
+    const double brakingSpeed = std::sqrt(
+        2.0 * maximumAccelerationMetersPerSecondSquared * distance);
+    const double approachSpeed = controller.positionGain * 0.2 * distance;
+    const double targetSpeed = std::min(
+        maximumWaypointSpeedMetersPerSecond,
+        std::min(brakingSpeed, approachSpeed));
+    const glm::dvec3 targetVelocity = offset * (targetSpeed / distance);
+    return controller.velocityGain
+        * (targetVelocity - state.velocityMetersPerSecond);
 }
 
 /** @brief 로터 추력 방향을 기체 위쪽 축에 맞추고 yaw 방향을 유지한다. */

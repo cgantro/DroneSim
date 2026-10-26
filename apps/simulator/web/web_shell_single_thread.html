@@ -203,7 +203,6 @@
       var eoStreamCanvas = document.createElement("canvas");
       var eoStreamContext = eoStreamCanvas.getContext("2d");
       var eoViewport = null;
-      var eoCanvasFrame = 0;
       var eoCanvasCopyActive = false;
       var eoLastCanvasCopyAt = -Infinity;
       var eoCanvasCopyIntervalMilliseconds = 1000 / 24;
@@ -271,8 +270,10 @@
         });
       };
 
-      window.setDroneSimEoViewport = function (x, y, width, height) {
+      window.copyDroneSimEoViewport = function (x, y, width, height) {
         eoViewport = { x: x, y: y, width: width, height: height };
+        if (eoCanvasCopyActive)
+          copyEoViewport(performance.now());
       };
 
       window.clearDroneSimInspectionTargets = function () {
@@ -837,7 +838,6 @@
       window.addEventListener("beforeunload", function () {
         closeEoWebRtc();
         eoCanvasCopyActive = false;
-        window.cancelAnimationFrame(eoCanvasFrame);
         eoDownloadUrls.forEach(function (url) { URL.revokeObjectURL(url); });
       });
 
@@ -849,16 +849,10 @@
       }
 
       function startEoViewportCopy() {
-        if (eoCanvasCopyActive)
-          return;
         eoCanvasCopyActive = true;
-        eoCanvasFrame = window.requestAnimationFrame(copyEoViewport);
       }
 
       function copyEoViewport(timestamp) {
-        if (!eoCanvasCopyActive)
-          return;
-
         if (timestamp - eoLastCanvasCopyAt >= eoCanvasCopyIntervalMilliseconds) {
           eoLastCanvasCopyAt = timestamp;
           if (Module.canvas && eoStreamContext && eoViewport
@@ -877,7 +871,6 @@
             }
           }
         }
-        eoCanvasFrame = window.requestAnimationFrame(copyEoViewport);
       }
 
       async function finishEoRecording() {
