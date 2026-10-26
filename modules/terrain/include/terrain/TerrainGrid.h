@@ -26,6 +26,12 @@ struct TerrainGrid
     /** @brief 저장된 지형 격자를 읽는다. 파일 형식이 맞지 않으면 원인을 알려준다. */
     [[nodiscard]] static TerrainGrid Load(const std::filesystem::path& path);
 
+    /** @brief 지도 중심에서 서쪽·동쪽 경계까지의 거리를 미터로 반환한다. */
+    [[nodiscard]] double HalfWidthMeters() const noexcept;
+
+    /** @brief 지도 중심에서 남쪽·북쪽 경계까지의 거리를 미터로 반환한다. */
+    [[nodiscard]] double HalfDepthMeters() const noexcept;
+
     /** @brief 기준 높이를 더한 절대 고도를 반환한다. 행은 북쪽부터, 열은 서쪽부터 센다. */
     [[nodiscard]] float HeightAt(std::uint32_t row, std::uint32_t column) const;
 

@@ -125,6 +125,20 @@ float TerrainGrid::HeightAt(std::uint32_t row, std::uint32_t column) const
     return heightOffsetsMeters[static_cast<std::size_t>(row) * sampleCount + column];
 }
 
+double TerrainGrid::HalfWidthMeters() const noexcept
+{
+    return sampleCount > 1U
+        ? static_cast<double>(sampleCount - 1U) * spacingXMeters * 0.5
+        : 0.0;
+}
+
+double TerrainGrid::HalfDepthMeters() const noexcept
+{
+    return sampleCount > 1U
+        ? static_cast<double>(sampleCount - 1U) * spacingYMeters * 0.5
+        : 0.0;
+}
+
 bool TerrainGrid::ContainsLocalPositionMeters(
     const glm::dvec2& positionMeters) const noexcept
 {
@@ -136,10 +150,8 @@ bool TerrainGrid::ContainsLocalPositionMeters(
         return false;
     }
 
-    const double halfWidth = static_cast<double>(sampleCount - 1U)
-        * spacingXMeters * 0.5;
-    const double halfDepth = static_cast<double>(sampleCount - 1U)
-        * spacingYMeters * 0.5;
+    const double halfWidth = HalfWidthMeters();
+    const double halfDepth = HalfDepthMeters();
     return positionMeters.x >= -halfWidth && positionMeters.x <= halfWidth
         && positionMeters.y >= -halfDepth && positionMeters.y <= halfDepth;
 }
@@ -159,10 +171,8 @@ float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
     if (!ContainsLocalPositionMeters(positionMeters))
         throw std::out_of_range("요청한 위치가 지형 격자 범위를 벗어났습니다.");
 
-    const double halfWidth = static_cast<double>(sampleCount - 1U)
-        * spacingXMeters * 0.5;
-    const double halfDepth = static_cast<double>(sampleCount - 1U)
-        * spacingYMeters * 0.5;
+    const double halfWidth = HalfWidthMeters();
+    const double halfDepth = HalfDepthMeters();
     const double column = (positionMeters.x + halfWidth) / spacingXMeters;
     const double row = (halfDepth - positionMeters.y) / spacingYMeters;
     const auto columnBefore = static_cast<std::uint32_t>(std::floor(column));

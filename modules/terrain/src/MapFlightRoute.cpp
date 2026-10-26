@@ -274,10 +274,8 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
         || !(buildingClearanceMeters > 0.0))
         throw std::invalid_argument("경로 시작점, 목표점과 건물 간격을 확인해 주세요.");
 
-    const double halfWidth = static_cast<double>(terrain.sampleCount - 1U)
-        * terrain.spacingXMeters * 0.5;
-    const double halfDepth = static_cast<double>(terrain.sampleCount - 1U)
-        * terrain.spacingYMeters * 0.5;
+    const double halfWidth = terrain.HalfWidthMeters();
+    const double halfDepth = terrain.HalfDepthMeters();
     Grid grid;
     grid.columns = static_cast<std::size_t>(std::ceil(
         2.0 * halfWidth / routeCellSizeMeters)) + 1U;

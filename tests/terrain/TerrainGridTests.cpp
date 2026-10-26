@@ -33,6 +33,8 @@ void Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight()
         10.0F, 20.0F, 30.0F,
         20.0F, 30.0F, 40.0F};
 
+    EXPECT_DOUBLE_EQ(terrain.HalfWidthMeters(), 10.0);
+    EXPECT_DOUBLE_EQ(terrain.HalfDepthMeters(), 20.0);
     EXPECT_DOUBLE_EQ(terrain.ToLocalMeters(37.0, -122.0).x, 0.0);
     const glm::dvec2 northOffset = terrain.ToLocalMeters(
         37.0 + 20.0 / 111320.0, -122.0);

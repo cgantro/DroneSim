@@ -617,16 +617,6 @@ struct PhysicsWorld::Impl
     {
         if (!terrain)
             return 0.0;
-        const double halfWidth = static_cast<double>(terrain->sampleCount - 1U)
-            * terrain->spacingXMeters * 0.5;
-        const double halfDepth = static_cast<double>(terrain->sampleCount - 1U)
-            * terrain->spacingYMeters * 0.5;
-        if (position.x < -halfWidth || position.x > halfWidth
-            || position.y < -halfDepth || position.y > halfDepth)
-        {
-            // 지도 바깥은 높이 자료가 없는 평지로 취급한다. 정상적인 경계 이탈을 예외로 처리하지 않는다.
-            return 0.0;
-        }
         return terrain->HeightAtLocalMeters(position);
     }
 
@@ -636,10 +626,8 @@ struct PhysicsWorld::Impl
         if (!terrain)
             return {0.0, 0.0, 1.0};
 
-        const double halfWidth = static_cast<double>(terrain->sampleCount - 1U)
-            * terrain->spacingXMeters * 0.5;
-        const double halfDepth = static_cast<double>(terrain->sampleCount - 1U)
-            * terrain->spacingYMeters * 0.5;
+        const double halfWidth = terrain->HalfWidthMeters();
+        const double halfDepth = terrain->HalfDepthMeters();
         const double west = std::max(position.x - terrain->spacingXMeters, -halfWidth);
         const double east = std::min(position.x + terrain->spacingXMeters, halfWidth);
         const double south = std::max(position.y - terrain->spacingYMeters, -halfDepth);
@@ -674,8 +662,11 @@ struct PhysicsWorld::Impl
             {
                 const glm::dvec3 corner = GroundSampleCorner(
                     worldBox, cornerIndex, terrain.has_value());
+                const glm::dvec2 samplePosition{corner.x, corner.y};
+                if (terrain && !terrain->ContainsLocalPositionMeters(samplePosition))
+                    continue;
 
-                const double ground = GroundHeight({corner.x, corner.y});
+                const double ground = GroundHeight(samplePosition);
                 const double penetration = ground - corner.z;
                 const double roundingTolerance = 2.0
                     * std::numeric_limits<float>::epsilon()
@@ -698,6 +689,77 @@ struct PhysicsWorld::Impl
             }
         }
         return contactInfo;
+    }
+
+    /** @brief DEM 바깥으로 기체가 나가지 않도록 충돌 상자 전체를 경계 안에 둔다. */
+    void ConstrainBodyToTerrain(Body& body)
+    {
+        if (!terrain)
+            return;
+
+        RigidBodyState state = ToProjectState(body.kinematics.getState());
+        double minimumRelativeX = 0.0;
+        double maximumRelativeX = 0.0;
+        double minimumRelativeY = 0.0;
+        double maximumRelativeY = 0.0;
+        for (const RigidBodyBox& collisionBox : body.collisionBoxes)
+        {
+            const OrientedBox box = ToWorldBox(
+                state.positionMeters, state.orientation, collisionBox);
+            const double radiusX = box.halfExtentsMeters.x
+                    * std::abs(box.axes[0].x)
+                + box.halfExtentsMeters.y
+                    * std::abs(box.axes[1].x)
+                + box.halfExtentsMeters.z
+                    * std::abs(box.axes[2].x);
+            const double radiusY = box.halfExtentsMeters.x
+                    * std::abs(box.axes[0].y)
+                + box.halfExtentsMeters.y
+                    * std::abs(box.axes[1].y)
+                + box.halfExtentsMeters.z
+                    * std::abs(box.axes[2].y);
+            const glm::dvec3 relativeCenter = box.centerMeters - state.positionMeters;
+            minimumRelativeX = std::min(minimumRelativeX, relativeCenter.x - radiusX);
+            maximumRelativeX = std::max(maximumRelativeX, relativeCenter.x + radiusX);
+            minimumRelativeY = std::min(minimumRelativeY, relativeCenter.y - radiusY);
+            maximumRelativeY = std::max(maximumRelativeY, relativeCenter.y + radiusY);
+        }
+
+        const double halfWidth = terrain->HalfWidthMeters();
+        const double halfDepth = terrain->HalfDepthMeters();
+        double minimumX = -halfWidth - minimumRelativeX;
+        double maximumX = halfWidth - maximumRelativeX;
+        double minimumY = -halfDepth - minimumRelativeY;
+        double maximumY = halfDepth - maximumRelativeY;
+        if (minimumX > maximumX)
+            minimumX = maximumX = (minimumX + maximumX) * 0.5;
+        if (minimumY > maximumY)
+            minimumY = maximumY = (minimumY + maximumY) * 0.5;
+        const glm::dvec3 previousPosition = state.positionMeters;
+        state.positionMeters.x = std::clamp(state.positionMeters.x, minimumX, maximumX);
+        state.positionMeters.y = std::clamp(state.positionMeters.y, minimumY, maximumY);
+
+        if (state.positionMeters.x != previousPosition.x
+            && (previousPosition.x > maximumX
+                ? state.linearVelocityMetersPerSecond.x > 0.0
+                : state.linearVelocityMetersPerSecond.x < 0.0))
+        {
+            state.linearVelocityMetersPerSecond.x = 0.0;
+        }
+        if (state.positionMeters.y != previousPosition.y
+            && (previousPosition.y > maximumY
+                ? state.linearVelocityMetersPerSecond.y > 0.0
+                : state.linearVelocityMetersPerSecond.y < 0.0))
+        {
+            state.linearVelocityMetersPerSecond.y = 0.0;
+        }
+        if (state.positionMeters == previousPosition)
+            return;
+
+        const msr::airlib::Kinematics::State constrainedState = ToAirSimState(state);
+        body.kinematics.setState(constrainedState);
+        body.model->setPose(constrainedState.pose);
+        body.model->setTwist(constrainedState.twist);
     }
 
     /**
@@ -1029,6 +1091,8 @@ void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
         ScopedDuration measureBodyOrdering(measurements != nullptr
                 ? &measurements->contactGenerationMicroseconds : nullptr,
             ScopedDuration::Mode::Accumulate);
+        for (auto& body : impl_->bodies)
+            impl_->ConstrainBodyToTerrain(*body);
         largestCollisionRadius = impl_->PrepareCollisionData();
         impl_->PrepareDroneContacts(largestCollisionRadius);
     }
@@ -1054,6 +1118,7 @@ void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
     impl_->physicsEngine.update();
     for (auto& body : impl_->bodies)
     {
+        impl_->ConstrainBodyToTerrain(*body);
         const bool isGrounded = body->model->isGrounded();
         if (isGrounded && !body->wasGrounded)
             impl_->CorrectGroundPenetration(*body);

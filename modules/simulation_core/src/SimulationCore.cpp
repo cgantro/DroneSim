@@ -164,6 +164,42 @@ struct SimulationCore::EcsStorage
         constexpr double droneHalfWidthMeters = 0.30;
         constexpr glm::dvec3 droneHalfExtentsMeters{
             droneHalfWidthMeters, droneHalfWidthMeters, 0.12};
+        if (terrainGrid)
+        {
+            const double halfWidth = terrainGrid->HalfWidthMeters();
+            const double halfDepth = terrainGrid->HalfDepthMeters();
+            const double maximumCenterX = std::max(
+                0.0, halfWidth - droneHalfWidthMeters);
+            const double maximumCenterY = std::max(
+                0.0, halfDepth - droneHalfWidthMeters);
+            const auto keepInsideTerrain = [](
+                double& position, double maximum, double& velocity, double& targetVelocity)
+            {
+                if (position > maximum)
+                {
+                    position = maximum;
+                    if (velocity > 0.0)
+                        velocity = 0.0;
+                    if (targetVelocity > 0.0)
+                        targetVelocity = 0.0;
+                }
+                else if (position < -maximum)
+                {
+                    position = -maximum;
+                    if (velocity < 0.0)
+                        velocity = 0.0;
+                    if (targetVelocity < 0.0)
+                        targetVelocity = 0.0;
+                }
+            };
+            keepInsideTerrain(state.positionMeters.x, maximumCenterX,
+                state.velocityMetersPerSecond.x,
+                control.targetVelocityMetersPerSecond.x);
+            keepInsideTerrain(state.positionMeters.y, maximumCenterY,
+                state.velocityMetersPerSecond.y,
+                control.targetVelocityMetersPerSecond.y);
+        }
+
         if (terrainGrid
             && terrainGrid->ContainsLocalPositionMeters(
                 {state.positionMeters.x, state.positionMeters.y}))

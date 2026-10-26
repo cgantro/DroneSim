@@ -252,6 +252,26 @@ void Verify_KinematicDroneKeepsItsBodyAboveTerrain()
 
     EXPECT_EQ(landing.State().mode, FlightMode::Grounded);
     EXPECT_NEAR(landing.State().positionMeters.z, 0.12, 1.0e-9);
+
+    terrain::TerrainGrid boundedTerrain;
+    boundedTerrain.sampleCount = 3U;
+    boundedTerrain.spacingXMeters = 1.0F;
+    boundedTerrain.spacingYMeters = 1.0F;
+    boundedTerrain.heightOffsetsMeters.assign(9U, 0.0F);
+
+    SimulationCore boundary{SimulationDynamics::Kinematic};
+    DroneState approachingBoundary;
+    approachingBoundary.positionMeters = {0.9, 0.0, 2.0};
+    approachingBoundary.mode = FlightMode::Flying;
+    boundary.SetInitialState(boundary.PrimaryDroneId(), approachingBoundary);
+    boundary.SetTerrain(std::move(boundedTerrain));
+    ASSERT_EQ(boundary.Apply(Command(DroneCommand::Kind::SetVelocity,
+        {5.0, 0.0, 0.0})), CommandResult::Accepted);
+
+    boundary.AdvanceOneTick();
+
+    EXPECT_LE(boundary.State().positionMeters.x, 0.7);
+    EXPECT_DOUBLE_EQ(boundary.State().velocityMetersPerSecond.x, 0.0);
 }
 
 void Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers()
