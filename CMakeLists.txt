@@ -405,6 +405,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn@maps/tancheon/terrain.aerotrn"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson@maps/tancheon/site.geojson"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json@maps/tancheon/demo-inspection-plan.json"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/apartment-facade.png@maps/tancheon/apartment-facade.png"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb@models/drones/x500/visual.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE@models/drones/x500/LICENSE"
