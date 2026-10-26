@@ -220,7 +220,7 @@ async function run() {
     );
     for (const label of ["이륙", "정지", "전진", "후진", "좌측", "우측",
       "상승", "하강", "좌회전", "우회전", "착륙"]) {
-      if (!await page.getByRole("button", { name: label }).isDisabled())
+      if (!await page.getByRole("button", { name: label, exact: true }).isDisabled())
         throw new Error(`정찰 임무 중 ${label} 수동 조작이 활성화되어 있습니다.`);
     }
     if (!await page.locator("#inspection-target").isDisabled()
@@ -261,7 +261,7 @@ async function run() {
       throw new Error(`정찰 임무가 끝나지 않았습니다: ${missionStatus}`);
     for (const label of ["이륙", "정지", "전진", "후진", "좌측", "우측",
       "상승", "하강", "좌회전", "우회전", "착륙"]) {
-      if (await page.getByRole("button", { name: label }).isDisabled())
+      if (await page.getByRole("button", { name: label, exact: true }).isDisabled())
         throw new Error(`정찰 임무 종료 뒤 ${label} 수동 조작이 다시 활성화되지 않았습니다.`);
     }
     if (await page.locator("#inspection-target").isDisabled()
