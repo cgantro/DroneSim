@@ -391,72 +391,6 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgeFootprintMesh(
         indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
 
-#ifdef __EMSCRIPTEN__
-/**
- * @brief 웹 화면에서 빠르게 그릴 간단한 쿼드콥터 모형을 만든다.
- * @details 상세한 기체 GLB 대신 몸체·팔·모터·프로펠러를 상자 13개로 묶어 그린다.
- */
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateWebDroneMesh()
-{
-    std::vector<aerosimlab::graphics::Vertex> vertices;
-    std::vector<std::uint32_t> indices;
-    constexpr std::array<std::array<std::uint32_t, 4>, 6> faces{{
-        {{0U, 1U, 2U, 3U}}, {{5U, 4U, 7U, 6U}},
-        {{4U, 0U, 3U, 7U}}, {{1U, 5U, 6U, 2U}},
-        {{3U, 2U, 6U, 7U}}, {{4U, 5U, 1U, 0U}}
-    }};
-    const std::array<glm::vec3, 8> corners{{
-        {-0.5F, -0.5F, -0.5F}, {0.5F, -0.5F, -0.5F},
-        {0.5F, 0.5F, -0.5F}, {-0.5F, 0.5F, -0.5F},
-        {-0.5F, -0.5F, 0.5F}, {0.5F, -0.5F, 0.5F},
-        {0.5F, 0.5F, 0.5F}, {-0.5F, 0.5F, 0.5F}
-    }};
-    const auto addBox = [&](const glm::vec3& center, const glm::vec3& size, float angle)
-    {
-        const glm::mat4 rotation = glm::rotate(
-            glm::mat4{1.0F}, angle, glm::vec3{0.0F, 1.0F, 0.0F});
-        const std::uint32_t first = static_cast<std::uint32_t>(vertices.size());
-        for (const auto& face : faces)
-        {
-            const glm::vec3 a = corners[face[0]] * size;
-            const glm::vec3 b = corners[face[1]] * size;
-            const glm::vec3 c = corners[face[2]] * size;
-            const glm::vec3 normal = glm::normalize(glm::cross(c - a, b - a));
-            for (const std::uint32_t corner : face)
-            {
-                const glm::vec3 local = corners[corner] * size;
-                vertices.push_back({
-                    center + glm::vec3(rotation * glm::vec4{local, 0.0F}),
-                    glm::normalize(glm::vec3(rotation * glm::vec4{normal, 0.0F})),
-                    {0.0F, 0.0F}});
-            }
-        }
-        for (std::uint32_t face = 0; face < 6U; ++face)
-        {
-            const std::uint32_t start = first + face * 4U;
-            indices.insert(indices.end(), {start, start + 2U, start + 1U,
-                start, start + 3U, start + 2U});
-        }
-    };
-
-    addBox({}, {0.42F, 0.12F, 0.28F}, 0.0F);
-    constexpr std::array<float, 2> sides{-1.0F, 1.0F};
-    for (const float xSide : sides)
-    {
-        for (const float zSide : sides)
-        {
-            const float angle = std::atan2(zSide, xSide);
-            addBox({xSide * 0.20F, 0.0F, zSide * 0.20F}, {0.52F, 0.035F, 0.035F}, angle);
-            addBox({xSide * 0.38F, 0.0F, zSide * 0.38F}, {0.14F, 0.055F, 0.14F}, 0.0F);
-            addBox({xSide * 0.38F, 0.04F, zSide * 0.38F}, {0.30F, 0.012F, 0.025F}, 0.0F);
-        }
-    }
-    return std::make_unique<aerosimlab::graphics::Mesh>(
-        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
-        indices.data(), static_cast<std::uint32_t>(indices.size()));
-}
-#endif
-
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
     const aerosimlab::terrain::TerrainGrid& terrain)
 {
@@ -754,16 +688,10 @@ void AeroSimLabApp::LoadScene()
 void AeroSimLabApp::LoadSceneModels()
 {
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
-#ifdef __EMSCRIPTEN__
-    droneMesh_ = CreateWebDroneMesh();
-#else
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
         AssetPath("models/drones/x500/visual.glb").string());
-#endif
-#ifndef __EMSCRIPTEN__
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
-#endif
     const auto terrainTexturePath = AssetPath("maps/tancheon/terrain.ppm");
     if (std::filesystem::exists(terrainTexturePath))
         terrainSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
@@ -1346,13 +1274,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
             glm::mat4_cast(ToRenderOrientation(drone.orientation));
         renderer_->Draw(heading, *droneMesh_, droneMaterial_, *shader_,
-            view, projection, cameraPosition,
-#ifndef __EMSCRIPTEN__
-            droneSurfaceTexture_.get(),
-#else
-            nullptr,
-#endif
-            true);
+            view, projection, cameraPosition, droneSurfaceTexture_.get(), true);
     }
 }
 
