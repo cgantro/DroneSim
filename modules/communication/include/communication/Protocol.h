@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -65,6 +66,8 @@ struct CommandPacket
 
     std::uint32_t commandId = 0;
     std::uint32_t sequence = 0;
+    /** @brief 지정되어 있으면 해당 드론에 명령하고, 없으면 주 드론을 대상으로 한다. */
+    std::optional<std::uint64_t> droneId;
     Command command;
 };
 
@@ -82,6 +85,7 @@ struct Telemetry
 {
     std::uint64_t tick = 0;
     double simulationTimeSeconds = 0.0;
+    std::uint64_t primaryDroneId = 0;
     simulation::DroneState drone;
     simulation::CameraState camera;
     std::vector<DroneTelemetry> drones;

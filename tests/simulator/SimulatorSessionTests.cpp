@@ -231,6 +231,9 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
             require(beforeStatus.accepted, "초기 상태 조회가 거부되었습니다.");
             require(beforeStatus.telemetry.drones.size() == 1U,
                 "초기 상태 응답에 드론 한 대가 있어야 합니다.");
+            require(beforeStatus.telemetry.primaryDroneId
+                    == beforeStatus.telemetry.drones.front().id,
+                "주 드론 식별값이 편대 목록과 일치해야 합니다.");
             require(beforeStatus.appliedTick == beforeStatus.telemetry.tick,
                 "초기 상태 응답의 Tick 값이 서로 다릅니다.");
 
@@ -272,6 +275,16 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
             require(added.telemetry.drones[1].positionMeters.x
                     > added.telemetry.drones[0].positionMeters.x,
                 "추가된 드론이 기존 드론과 겹친 위치에 있습니다.");
+            const auto unrecordedSecondaryTakeoff = send("기록 중 두 번째 드론 이륙",
+                [&](communication::CommandPacket& packet)
+            {
+                packet.droneId = added.telemetry.drones[1].id;
+                packet.command = simulation::DroneCommand{
+                    simulation::DroneCommand::Kind::TakeOff};
+            });
+            require(!unrecordedSecondaryTakeoff.accepted
+                    && unrecordedSecondaryTakeoff.status == "recording_secondary_unsupported",
+                "기록에 남지 않는 추가 드론 명령을 허용했습니다.");
 
             const auto stop = send("기록 종료", [](communication::CommandPacket& packet)
             {
@@ -279,6 +292,22 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
             });
             require(stop.accepted && stop.status == "recording_stopped",
                 "기록을 종료하지 못했습니다.");
+
+            const auto secondaryTakeoff = send("두 번째 드론 이륙",
+                [&](communication::CommandPacket& packet)
+            {
+                packet.droneId = added.telemetry.drones[1].id;
+                packet.command = simulation::DroneCommand{
+                    simulation::DroneCommand::Kind::TakeOff};
+            });
+            require(secondaryTakeoff.accepted,
+                "선택한 두 번째 드론에 이륙 명령을 보내지 못했습니다.");
+            require(secondaryTakeoff.telemetry.drones[1].mode
+                    != simulation::FlightMode::Grounded,
+                "이륙 명령 뒤 두 번째 드론 상태가 바뀌지 않았습니다.");
+            require(secondaryTakeoff.telemetry.drone.mode
+                    == simulation::FlightMode::Grounded,
+                "두 번째 드론 명령이 주 드론 상태를 바꿨습니다.");
 
             const auto replay = send("기록 재생", [](communication::CommandPacket& packet)
             {

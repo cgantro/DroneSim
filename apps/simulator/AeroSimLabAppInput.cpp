@@ -260,7 +260,7 @@ bool AeroSimLabApp::ApplySessionCommand(
 #endif
         simulation_.Reset();
         eoFrame_ = {};
-        groundControlCommandExpiresAtTick_.reset();
+        groundControlCommandExpiresAtTick_.clear();
     };
 
     switch (command)
@@ -399,6 +399,7 @@ void AeroSimLabApp::ApplyVideoRecordingCommand(
 }
 
 void AeroSimLabApp::ApplyDroneCommand(
+    aerosimlab::simulation::DroneId droneId,
     const aerosimlab::simulation::DroneCommand& command,
     aerosimlab::communication::CommandReply& reply)
 {
@@ -408,7 +409,13 @@ void AeroSimLabApp::ApplyDroneCommand(
         window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
     }
 
-    const auto result = ApplyAndRecordCommand(command);
+    if (droneId != simulation_.PrimaryDroneId() && commandRecording_.IsRecording())
+    {
+        reply.status = "recording_secondary_unsupported";
+        return;
+    }
+
+    const auto result = ApplyAndRecordCommand(droneId, command);
     reply.accepted = result == aerosimlab::simulation::CommandResult::Accepted;
     if (reply.accepted)
     {
@@ -420,12 +427,12 @@ void AeroSimLabApp::ApplyDroneCommand(
             && command.yawRateRadiansPerSecond != 0.0;
         if (hasActiveVelocityCommand || hasActiveYawRateCommand)
         {
-            groundControlCommandExpiresAtTick_ = simulation_.TickCount()
+            groundControlCommandExpiresAtTick_[droneId] = simulation_.TickCount()
                 + groundControlCommandTimeoutTicks_;
         }
         else
         {
-            groundControlCommandExpiresAtTick_.reset();
+            groundControlCommandExpiresAtTick_.erase(droneId);
         }
     }
 
@@ -487,14 +494,21 @@ void AeroSimLabApp::ApplyAddDroneCommand(
 
 void AeroSimLabApp::ExpireGroundControlCommand()
 {
-    if (!groundControlCommandExpiresAtTick_
-        || simulation_.TickCount() < *groundControlCommandExpiresAtTick_)
-        return;
+    const auto now = simulation_.TickCount();
+    for (auto command = groundControlCommandExpiresAtTick_.begin();
+         command != groundControlCommandExpiresAtTick_.end();)
+    {
+        if (now < command->second)
+        {
+            ++command;
+            continue;
+        }
 
-    const aerosimlab::simulation::DroneCommand stop{
-        aerosimlab::simulation::DroneCommand::Kind::Stop};
-    static_cast<void>(ApplyAndRecordCommand(stop));
-    groundControlCommandExpiresAtTick_.reset();
+        const aerosimlab::simulation::DroneCommand stop{
+            aerosimlab::simulation::DroneCommand::Kind::Stop};
+        static_cast<void>(ApplyAndRecordCommand(command->first, stop));
+        command = groundControlCommandExpiresAtTick_.erase(command);
+    }
 }
 
 bool AeroSimLabApp::ProcessPendingGroundCommand()
@@ -517,7 +531,9 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         [](std::monostate) {},
         [this, &reply](const aerosimlab::simulation::DroneCommand& command)
         {
-            ApplyDroneCommand(command, reply);
+            const auto droneId = pendingCommand_->packet.droneId
+                .value_or(simulation_.PrimaryDroneId());
+            ApplyDroneCommand(droneId, command, reply);
         },
         [this, &reply](aerosimlab::communication::CameraCommand command)
         {
@@ -607,6 +623,7 @@ aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
     aerosimlab::communication::Telemetry telemetry;
     telemetry.tick = simulation_.TickCount();
     telemetry.simulationTimeSeconds = simulation_.SimulationTimeSeconds();
+    telemetry.primaryDroneId = simulation_.PrimaryDroneId();
     telemetry.drone = simulation_.State();
     telemetry.camera = simulation_.Camera();
     telemetry.inspectionMissionStatus = InspectionMissionStatus();

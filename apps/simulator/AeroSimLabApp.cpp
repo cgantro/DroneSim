@@ -1236,7 +1236,7 @@ void AeroSimLabApp::AdvanceSimulationTick()
     ExpireGroundControlCommand();
     const bool groundControlTickAdvanced = ProcessPendingGroundCommand();
     if (!groundControlTickAdvanced
-        && !groundControlCommandExpiresAtTick_
+        && groundControlCommandExpiresAtTick_.empty()
         && groundControlActive_)
     {
         groundControlActive_ = false;
@@ -1332,9 +1332,19 @@ void AeroSimLabApp::AdvanceManualControlTick()
 aerosimlab::simulation::CommandResult AeroSimLabApp::ApplyAndRecordCommand(
     const aerosimlab::simulation::DroneCommand& command)
 {
-    const auto result = simulation_.Apply(command);
+    return ApplyAndRecordCommand(simulation_.PrimaryDroneId(), command);
+}
+
+aerosimlab::simulation::CommandResult AeroSimLabApp::ApplyAndRecordCommand(
+    aerosimlab::simulation::DroneId droneId,
+    const aerosimlab::simulation::DroneCommand& command)
+{
+    const auto result = simulation_.Apply(droneId, command);
     if (result == aerosimlab::simulation::CommandResult::Accepted)
-        commandRecording_.Record(command);
+    {
+        if (droneId == simulation_.PrimaryDroneId())
+            commandRecording_.Record(command);
+    }
     return result;
 }
 

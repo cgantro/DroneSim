@@ -340,7 +340,7 @@ void StartRequest(HWND window, AppState& state,
 
 std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply& reply)
 {
-    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 14> messages{{
+    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 15> messages{{
         {"recording_started", L"입력 기록을 시작했습니다. 게임패드와 비행 명령을 기록합니다."},
         {"recording_stopped", L"기록을 마쳤습니다. 시뮬레이터를 닫기 전까지 재생할 수 있습니다."},
         {"recording_replay_started", L"입력 기록을 재생합니다."},
@@ -354,7 +354,8 @@ std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply&
         {"video_recording_requires_native", L"웹 영상 저장은 아직 연결되지 않았습니다."},
         {"drone_added", L"새 드론을 지면에 추가했습니다."},
         {"fleet_limit_reached", L"드론은 최대 8대까지 추가할 수 있습니다."},
-        {"spawn_outside_terrain", L"지도 범위 밖에는 새 드론을 추가할 수 없습니다."}
+        {"spawn_outside_terrain", L"지도 범위 밖에는 새 드론을 추가할 수 없습니다."},
+        {"recording_secondary_unsupported", L"입력 기록 중에는 주 드론만 조종할 수 있습니다."}
     }};
 
     for (const auto& [status, message] : messages)
@@ -407,7 +408,21 @@ void ShowResult(AppState& state)
                   << L"   생성 프레임: " << reply.telemetry.camera.frameCount
                   << L"\r\n점검 임무: " << FromUtf8(reply.telemetry.inspectionMissionStatus);
         SetWindowTextW(state.telemetryText, telemetry.str().c_str());
+        std::uint64_t selectedDroneId = 0;
+        const LRESULT selectedRow = SendMessageW(state.droneList, LB_GETCURSEL, 0, 0);
+        if (selectedRow != LB_ERR)
+        {
+            const LRESULT itemData = SendMessageW(
+                state.droneList, LB_GETITEMDATA, selectedRow, 0);
+            if (itemData != LB_ERR)
+                selectedDroneId = static_cast<std::uint64_t>(itemData);
+        }
+        std::uint64_t primaryDroneId = reply.telemetry.primaryDroneId;
+        if (primaryDroneId == 0 && !reply.telemetry.drones.empty())
+            primaryDroneId = reply.telemetry.drones.front().id;
         SendMessageW(state.droneList, LB_RESETCONTENT, 0, 0);
+        LRESULT primaryRow = LB_ERR;
+        LRESULT selectedDroneRow = LB_ERR;
         for (const auto& droneTelemetry : reply.telemetry.drones)
         {
             std::wostringstream row;
@@ -415,10 +430,22 @@ void ShowResult(AppState& state)
                 << WidenAscii(aerosimlab::simulation::ToString(droneTelemetry.mode))
                 << L"  |  (" << droneTelemetry.positionMeters.x << L", "
                 << droneTelemetry.positionMeters.y << L", " << droneTelemetry.positionMeters.z << L") m";
+            if (droneTelemetry.id == primaryDroneId)
+                row << L"  |  주 드론";
             const std::wstring text = row.str();
-            SendMessageW(state.droneList, LB_ADDSTRING, 0,
+            const LRESULT rowIndex = SendMessageW(state.droneList, LB_ADDSTRING, 0,
                 reinterpret_cast<LPARAM>(text.c_str()));
+            SendMessageW(state.droneList, LB_SETITEMDATA, rowIndex,
+                static_cast<LPARAM>(droneTelemetry.id));
+            if (droneTelemetry.id == primaryDroneId)
+                primaryRow = rowIndex;
+            if (droneTelemetry.id == selectedDroneId)
+                selectedDroneRow = rowIndex;
         }
+        const LRESULT rowToSelect = selectedDroneRow != LB_ERR
+            ? selectedDroneRow : primaryRow;
+        if (rowToSelect != LB_ERR)
+            SendMessageW(state.droneList, LB_SETCURSEL, rowToSelect, 0);
     }
     catch (const std::exception& error)
     {
@@ -596,6 +623,18 @@ LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
         packet.command = aerosimlab::communication::FleetCommand::AddDrone;
         break;
     default: return 0;
+    }
+
+    if (std::holds_alternative<aerosimlab::simulation::DroneCommand>(packet.command))
+    {
+        const LRESULT selectedRow = SendMessageW(state.droneList, LB_GETCURSEL, 0, 0);
+        if (selectedRow != LB_ERR)
+        {
+            const LRESULT itemData = SendMessageW(
+                state.droneList, LB_GETITEMDATA, selectedRow, 0);
+            if (itemData != LB_ERR)
+                packet.droneId = static_cast<std::uint64_t>(itemData);
+        }
     }
 
     if (state.requestPending && state.statusRequest)

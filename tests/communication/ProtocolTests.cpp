@@ -23,12 +23,14 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
         CommandPacket packet;
         packet.commandId = commandId;
         packet.sequence = commandId;
+        packet.droneId = 42;
         packet.command = expected;
         const auto decoded = DecodeCommand(EncodeCommand(packet));
         const auto* decodedDrone = std::get_if<simulation::DroneCommand>(&decoded.command);
         ASSERT_NE(decodedDrone, nullptr);
         EXPECT_EQ(decoded.commandId, commandId);
         EXPECT_EQ(decoded.sequence, commandId);
+        EXPECT_EQ(decoded.droneId, 42U);
         EXPECT_EQ(decodedDrone->kind, expected.kind);
         EXPECT_EQ(decodedDrone->vector, expected.vector);
         EXPECT_DOUBLE_EQ(decodedDrone->yawRateRadiansPerSecond,
@@ -101,6 +103,7 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     reply.appliedTick = 9;
     reply.telemetry.tick = 9;
     reply.telemetry.simulationTimeSeconds = 0.15;
+    reply.telemetry.primaryDroneId = 1;
     reply.telemetry.drone.mode = simulation::FlightMode::Hovering;
     reply.telemetry.drone.positionMeters = {1.0, 2.0, 3.0};
     reply.telemetry.drone.orientation = {0.9238795325, 0.0, 0.0, 0.3826834324};
@@ -130,6 +133,7 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     ASSERT_EQ(decoded.telemetry.drones.size(), 1U);
     EXPECT_EQ(decoded.telemetry.drones[0].id, 1U);
     EXPECT_EQ(decoded.telemetry.drones[0].name, "드론 1");
+    EXPECT_EQ(decoded.telemetry.primaryDroneId, 1U);
 
     CommandReply fleetReply = reply;
     fleetReply.status = "fleet_status";

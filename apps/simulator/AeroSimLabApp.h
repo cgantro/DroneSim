@@ -185,6 +185,9 @@ private:
     /** @brief 명령을 적용하고 성공한 명령만 입력 기록에 남긴다. */
     [[nodiscard]] aerosimlab::simulation::CommandResult ApplyAndRecordCommand(
         const aerosimlab::simulation::DroneCommand& command);
+    [[nodiscard]] aerosimlab::simulation::CommandResult ApplyAndRecordCommand(
+        aerosimlab::simulation::DroneId droneId,
+        const aerosimlab::simulation::DroneCommand& command);
     void PollGroundControl();
 #ifndef __EMSCRIPTEN__
     void ProcessGroundDatagram(const std::string& datagram,
@@ -215,7 +218,8 @@ private:
     void ApplyVideoRecordingCommand(
         aerosimlab::communication::VideoRecordingCommand command,
         aerosimlab::communication::CommandReply& reply);
-    void ApplyDroneCommand(const aerosimlab::simulation::DroneCommand& command,
+    void ApplyDroneCommand(aerosimlab::simulation::DroneId droneId,
+        const aerosimlab::simulation::DroneCommand& command,
         aerosimlab::communication::CommandReply& reply);
     void ApplyCameraCommand(aerosimlab::communication::CameraCommand command,
         aerosimlab::communication::CommandReply& reply);
@@ -311,7 +315,8 @@ private:
     bool benchmarkMode_ = false;
     bool visibleBenchmarkMode_ = false;
     std::uint64_t groundControlCommandTimeoutTicks_ = 60;
-    std::optional<std::uint64_t> groundControlCommandExpiresAtTick_;
+    std::unordered_map<aerosimlab::simulation::DroneId, std::uint64_t>
+        groundControlCommandExpiresAtTick_;
     std::size_t renderedFrames_ = 0;
     std::size_t benchmarkStartRenderedFrames_ = 0;
     std::uint64_t benchmarkStartSimulationTicks_ = 0;

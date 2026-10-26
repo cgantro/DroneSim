@@ -174,6 +174,8 @@ Telemetry ReadTelemetry(const Json& value)
     telemetry.tick = ReadUnsigned(Required(value, "tick"), "tick");
     telemetry.simulationTimeSeconds = ReadFinite(
         Required(value, "simulation_time_seconds"), "simulation_time_seconds");
+    if (value.contains("primary_drone_id"))
+        telemetry.primaryDroneId = ReadUnsigned(value["primary_drone_id"], "primary_drone_id");
 
     auto& drone = telemetry.drone;
     drone.mode = ReadFlightMode(Required(value, "flight_mode"));
@@ -356,12 +358,18 @@ Json EncodeCommandPayload(std::monostate)
 
 std::string EncodeCommand(const CommandPacket& packet)
 {
+    if (packet.droneId
+        && !std::holds_alternative<simulation::DroneCommand>(packet.command))
+        throw std::invalid_argument("드론 식별값은 비행 명령에만 지정할 수 있습니다.");
+
     Json payload = std::visit([](const auto& command)
     {
         return EncodeCommandPayload(command);
     }, packet.command);
     payload["command_id"] = packet.commandId;
     payload["sequence"] = packet.sequence;
+    if (packet.droneId)
+        payload["drone_id"] = *packet.droneId;
     return Wrap("command", std::move(payload)).dump();
 }
 
@@ -371,6 +379,12 @@ CommandPacket DecodeCommand(std::string_view datagram)
     CommandPacket packet;
     packet.commandId = Read32(Required(payload, "command_id"), "command_id");
     packet.sequence = Read32(Required(payload, "sequence"), "sequence");
+    if (payload.contains("drone_id"))
+    {
+        packet.droneId = ReadUnsigned(payload["drone_id"], "drone_id");
+        if (*packet.droneId == 0)
+            throw std::invalid_argument("드론 식별값은 1부터 시작해야 합니다.");
+    }
     if (packet.commandId == 0 || packet.sequence == 0)
         throw std::invalid_argument("명령 ID와 순번은 1부터 시작해야 합니다.");
     const Json& targetValue = Required(payload, "target");
@@ -379,6 +393,8 @@ CommandPacket DecodeCommand(std::string_view datagram)
         throw std::invalid_argument("명령 대상과 동작은 문자열이어야 합니다.");
     const std::string target = targetValue.get<std::string>();
     const std::string action = actionValue.get<std::string>();
+    if (packet.droneId && target != "drone")
+        throw std::invalid_argument("드론 식별값은 비행 명령에만 지정할 수 있습니다.");
 
     if (target == "camera")
     {
@@ -421,6 +437,7 @@ std::string EncodeReply(const CommandReply& reply)
     Json telemetry{
         {"tick", reply.telemetry.tick},
         {"simulation_time_seconds", reply.telemetry.simulationTimeSeconds},
+        {"primary_drone_id", reply.telemetry.primaryDroneId},
         {"flight_mode", simulation::ToString(state.mode)},
         {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
         {"camera_status", aerosimlab::communication::ToString(camera.status)},
