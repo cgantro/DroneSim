@@ -1237,9 +1237,13 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
 {
     const auto& state = simulation_.State();
     const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
-    observerCamera_->SetPosition(dronePosition + glm::vec3{8.0F, 6.0F, 8.0F});
-    observerCamera_->SetTarget(dronePosition + glm::vec3{0.0F, 0.4F, 0.0F});
+    const float yaw = static_cast<float>(state.yawRadians);
+    const glm::vec3 forward{std::cos(yaw), 0.0F, -std::sin(yaw)};
+    const glm::vec3 up{0.0F, 1.0F, 0.0F};
+    observerCamera_->SetPosition(dronePosition - forward * 18.0F + up * 10.0F);
+    observerCamera_->SetTarget(dronePosition + forward * 3.0F + up * 1.5F);
     observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
+    observerCamera_->SetFieldOfViewDegrees(50.0F);
 }
 
 void AeroSimLabApp::UpdateEoCamera(int width, int height)
@@ -1285,7 +1289,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
             estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition);
 
-    if (showMissionGuides)
+    if (showMissionGuides && InspectionMissionIsActive()
+        && inspectionMission_.activeTargetIndex < inspectionTargets_.size())
     {
         const auto drawRouteSegment = [this, &view, &projection, &cameraPosition](
             const glm::dvec3& startMeters, const glm::dvec3& endMeters)
@@ -1315,16 +1320,15 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             DrawCube(transform, cameraPosition, missionRouteMaterial_, view, projection);
         };
 
-        for (const InspectionTarget& target : inspectionTargets_)
+        const InspectionTarget& target =
+            inspectionTargets_[inspectionMission_.activeTargetIndex];
+        glm::dvec3 previous = target.routeStartMeters;
+        for (const glm::dvec3& waypoint : target.routeWaypointsMeters)
         {
-            glm::dvec3 previous = target.routeStartMeters;
-            for (const glm::dvec3& waypoint : target.routeWaypointsMeters)
-            {
-                drawRouteSegment(previous, waypoint);
-                previous = waypoint;
-            }
-            drawRouteSegment(previous, target.approachPositionMeters);
+            drawRouteSegment(previous, waypoint);
+            previous = waypoint;
         }
+        drawRouteSegment(previous, target.approachPositionMeters);
     }
 
     for (const aerosimlab::simulation::DroneId id : fleetDroneIds_)

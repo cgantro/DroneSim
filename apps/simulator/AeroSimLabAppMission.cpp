@@ -9,16 +9,28 @@
 
 namespace aerosimlab::simulator
 {
+bool AeroSimLabApp::InspectionMissionIsActive() const
+{
+    using Stage = InspectionMissionStage;
+    switch (inspectionMission_.stage)
+    {
+    case Stage::StartRequested:
+    case Stage::Paused:
+    case Stage::TakingOff:
+    case Stage::Approaching:
+    case Stage::AligningCamera:
+    case Stage::Capturing:
+    case Stage::Landing:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool AeroSimLabApp::RequestInspectionMission(
     std::optional<std::size_t> selectedTargetIndex)
 {
-    if (inspectionMission_.stage == InspectionMissionStage::StartRequested
-        || inspectionMission_.stage == InspectionMissionStage::Paused
-        || inspectionMission_.stage == InspectionMissionStage::TakingOff
-        || inspectionMission_.stage == InspectionMissionStage::Approaching
-        || inspectionMission_.stage == InspectionMissionStage::AligningCamera
-        || inspectionMission_.stage == InspectionMissionStage::Capturing
-        || inspectionMission_.stage == InspectionMissionStage::Landing)
+    if (InspectionMissionIsActive())
     {
         inspectionMission_.error = "정찰 임무가 이미 진행 중입니다.";
         return false;
@@ -74,15 +86,7 @@ bool AeroSimLabApp::RequestInspectionMission(
 
 bool AeroSimLabApp::CancelInspectionMission()
 {
-    using Stage = InspectionMissionStage;
-    const bool missionIsActive = inspectionMission_.stage == Stage::StartRequested
-        || inspectionMission_.stage == Stage::TakingOff
-        || inspectionMission_.stage == Stage::Approaching
-        || inspectionMission_.stage == Stage::AligningCamera
-        || inspectionMission_.stage == Stage::Capturing
-        || inspectionMission_.stage == Stage::Landing
-        || inspectionMission_.stage == Stage::Paused;
-    if (!missionIsActive)
+    if (!InspectionMissionIsActive())
         return false;
 
     FailInspectionMission("지상통제소에서 임무를 중단했습니다.");

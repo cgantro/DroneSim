@@ -177,6 +177,7 @@ private:
     void AdvanceManualControlTick();
     [[nodiscard]] bool RequestInspectionMission(
         std::optional<std::size_t> selectedTargetIndex = std::nullopt);
+    [[nodiscard]] bool InspectionMissionIsActive() const;
     [[nodiscard]] bool PauseInspectionMission();
     [[nodiscard]] bool ResumeInspectionMission();
     [[nodiscard]] bool CancelInspectionMission();
