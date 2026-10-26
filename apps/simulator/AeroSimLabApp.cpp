@@ -18,6 +18,7 @@
 #include "SimulatorHud.h"
 #endif
 #include "simulation_core/QuadrotorFlightController.h"
+#include "simulation_core/InspectionSurfaceJson.h"
 #include "simulation_core/ScopedDuration.h"
 #include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
@@ -91,6 +92,22 @@ glm::vec3 ToRenderDirection(const glm::dvec3& direction)
     return glm::vec3{
         static_cast<float>(direction.x), static_cast<float>(direction.z),
         static_cast<float>(-direction.y)};
+}
+
+glm::dvec3 ReadPlanVector(const nlohmann::json& value, std::string_view field)
+{
+    if (!value.is_array() || value.size() != 3)
+        throw std::runtime_error(std::string(field) + "은 숫자 세 개가 필요합니다.");
+    glm::dvec3 result;
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+        if (!value[axis].is_number())
+            throw std::runtime_error(std::string(field) + "에 숫자가 아닌 값이 있습니다.");
+        result[axis] = value[axis].get<double>();
+        if (!std::isfinite(result[axis]))
+            throw std::runtime_error(std::string(field) + "에 유효하지 않은 값이 있습니다.");
+    }
+    return result;
 }
 
 glm::quat ToRenderOrientation(const glm::dquat& orientation)
@@ -1016,50 +1033,74 @@ void AeroSimLabApp::LoadMapFeatures()
         || plan.at("targets").empty())
         throw std::runtime_error("시험용 점검 계획에 구역이 없습니다.");
 
+    const bool hasExplicitSurface = std::any_of(
+        plan.at("targets").begin(), plan.at("targets").end(),
+        [](const Json& target) { return target.contains("inspection_surface"); });
+    if (hasExplicitSurface
+        && (!plan.contains("coordinate_frame")
+            || plan.at("coordinate_frame") != "tancheon_local_enu"))
+        throw std::runtime_error(
+            "직접 지정한 점검면에는 tancheon_local_enu 좌표 기준을 적어야 합니다.");
+
     std::unordered_set<std::string> zoneIds;
     for (const Json& target : plan.at("targets"))
     {
-        const std::string buildingId = target.at("building_osm_id").get<std::string>();
-        const auto building = buildingsById.find(buildingId);
-        if (building == buildingsById.end())
-            throw std::runtime_error("점검 계획에서 지정한 건물 자료를 찾지 못했습니다: "
-                + buildingId);
-
         const std::string facilityId = target.at("facility_id").get<std::string>();
         const std::string zoneId = target.at("zone_id").get<std::string>();
         if (!zoneIds.insert(zoneId).second)
             throw std::runtime_error("점검 계획에 같은 구역 ID가 두 번 있습니다: " + zoneId);
 
-        const Json& capture = target.at("capture");
-        const double approachDistance = target.at("approach_distance_meters").get<double>();
-        const auto facade = aerosimlab::terrain::GetNearestMapBuildingFacade(
-            *building->second, demoDroneStartMeters);
-        if (facade.widthMeters < 3.0 || facade.heightMeters < 2.0
-            || approachDistance <= 0.0)
-            throw std::runtime_error("점검 계획의 외벽 시험면이나 접근 거리를 확인해 주세요: "
-                + zoneId);
+        aerosimlab::simulation::InspectionSurface surface;
+        glm::dvec3 approachPosition{0.0};
+        if (target.contains("inspection_surface"))
+        {
+            surface = aerosimlab::simulation::ParseInspectionSurfaceJson(
+                target.at("inspection_surface").dump());
+            approachPosition = ReadPlanVector(
+                target.at("approach_position_meters"), "approach_position_meters");
+        }
+        else
+        {
+            const std::string buildingId =
+                target.at("building_osm_id").get<std::string>();
+            const auto building = buildingsById.find(buildingId);
+            if (building == buildingsById.end())
+                throw std::runtime_error("점검 계획에서 지정한 건물 자료를 찾지 못했습니다: "
+                    + buildingId);
 
-        const glm::dvec3 approachPosition = facade.centerMeters
-            + facade.outwardNormal * approachDistance;
+            const Json& capture = target.at("capture");
+            const double approachDistance =
+                target.at("approach_distance_meters").get<double>();
+            const auto facade = aerosimlab::terrain::GetNearestMapBuildingFacade(
+                *building->second, demoDroneStartMeters);
+            if (facade.widthMeters < 3.0 || facade.heightMeters < 2.0
+                || approachDistance <= 0.0)
+                throw std::runtime_error(
+                    "점검 계획의 외벽 시험면이나 접근 거리를 확인해 주세요: " + zoneId);
+
+            approachPosition = facade.centerMeters
+                + facade.outwardNormal * approachDistance;
+            surface.centerMeters = facade.centerMeters;
+            surface.normal = facade.outwardNormal;
+            surface.widthAxis = facade.widthAxis;
+            surface.widthMeters = std::min(facade.widthMeters,
+                capture.at("width_meters").get<double>());
+            surface.heightMeters = std::min(facade.heightMeters,
+                capture.at("height_meters").get<double>());
+            surface.minimumDistanceMeters =
+                capture.at("minimum_distance_meters").get<double>();
+            surface.maximumDistanceMeters =
+                capture.at("maximum_distance_meters").get<double>();
+            surface.maximumIncidenceAngleDegrees =
+                capture.at("maximum_incidence_angle_degrees").get<double>();
+            surface.minimumPixelWidth = capture.at("minimum_pixel_width").get<int>();
+            surface.minimumPixelHeight = capture.at("minimum_pixel_height").get<int>();
+        }
+
         if (!terrainGrid_.ContainsLocalPositionMeters(
             {approachPosition.x, approachPosition.y}))
             throw std::runtime_error("점검 구역 접근 위치가 지형 범위를 벗어났습니다: "
                 + zoneId);
-
-        aerosimlab::simulation::InspectionSurface surface;
-        surface.centerMeters = facade.centerMeters;
-        surface.normal = facade.outwardNormal;
-        surface.widthAxis = facade.widthAxis;
-        surface.widthMeters = std::min(facade.widthMeters,
-            capture.at("width_meters").get<double>());
-        surface.heightMeters = std::min(facade.heightMeters,
-            capture.at("height_meters").get<double>());
-        surface.minimumDistanceMeters = capture.at("minimum_distance_meters").get<double>();
-        surface.maximumDistanceMeters = capture.at("maximum_distance_meters").get<double>();
-        surface.maximumIncidenceAngleDegrees =
-            capture.at("maximum_incidence_angle_degrees").get<double>();
-        surface.minimumPixelWidth = capture.at("minimum_pixel_width").get<int>();
-        surface.minimumPixelHeight = capture.at("minimum_pixel_height").get<int>();
         inspectionTargets_.push_back({facilityId, zoneId, surface, approachPosition});
     }
 
