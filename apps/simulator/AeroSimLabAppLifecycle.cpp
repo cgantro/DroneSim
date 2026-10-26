@@ -138,6 +138,14 @@ int AeroSimLabApp::Run()
 
 void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
 {
+#ifdef __EMSCRIPTEN__
+    static const bool collectWebFrameTimings = EM_ASM_INT({
+        return new URLSearchParams(window.location.search).get("frame-probe") === "1";
+    }) != 0;
+    const auto frameStart = collectWebFrameTimings
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+#endif
     const auto applicationFrameStart = benchmarkMode_
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -157,6 +165,11 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
             benchmarkMode_ ? &frameMeasurements_.gamepadPollingMicroseconds : nullptr);
         PollGamepad();
     }
+#ifdef __EMSCRIPTEN__
+    const auto inputComplete = collectWebFrameTimings
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+#endif
     const auto now = std::chrono::steady_clock::now();
     const double elapsedSeconds = std::chrono::duration<double>(now - previousFrame).count();
     // 화면 스모크는 프레임마다 한 Tick, 네트워크 스모크는 프레임마다 최대 따라잡기만큼 진행한다.
@@ -179,6 +192,12 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         for (std::size_t batch = 0; batch < simulationBatches; ++batch)
             AdvanceSimulation(frameSeconds);
     }
+#ifdef __EMSCRIPTEN__
+    const auto simulationComplete = collectWebFrameTimings
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+    auto renderComplete = std::chrono::steady_clock::time_point{};
+#endif
     eoReadbackHappenedThisFrame_ = false;
     {
         aerosimlab::simulation::ScopedDuration measureRenderFrame(
@@ -188,12 +207,44 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
                 benchmarkMode_ ? &frameMeasurements_.renderMicroseconds : nullptr);
             RenderFrame();
         }
+#ifdef __EMSCRIPTEN__
+        renderComplete = collectWebFrameTimings
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+#endif
         {
             aerosimlab::simulation::ScopedDuration measureBufferSwap(
                 benchmarkMode_ ? &frameMeasurements_.bufferSwapMicroseconds : nullptr);
             window_->SwapBuffers();
         }
     }
+#ifdef __EMSCRIPTEN__
+    if (collectWebFrameTimings)
+    {
+        const auto frameComplete = std::chrono::steady_clock::now();
+        const auto elapsedMilliseconds = [](auto start, auto end)
+        {
+            return std::chrono::duration<double, std::milli>(end - start).count();
+        };
+        EM_ASM({
+            const samples = window.__droneSimFrameTimings;
+            if (Array.isArray(samples)) {
+                samples.push({
+                    input: $0,
+                    simulation: $1,
+                    render: $2,
+                    bufferSwap: $3,
+                    total: $4
+                });
+            }
+        },
+            elapsedMilliseconds(frameStart, inputComplete),
+            elapsedMilliseconds(inputComplete, simulationComplete),
+            elapsedMilliseconds(simulationComplete, renderComplete),
+            elapsedMilliseconds(renderComplete, frameComplete),
+            elapsedMilliseconds(frameStart, frameComplete));
+    }
+#endif
     ++renderedFrames_;
 #ifdef __EMSCRIPTEN__
     const auto telemetryTime = std::chrono::steady_clock::now();

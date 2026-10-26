@@ -66,6 +66,7 @@ async function run() {
       console.error(`요청 실패: ${request.url()} (${request.failure()?.errorText || "원인 없음"})`);
     });
     await page.addInitScript(() => {
+      window.__droneSimFrameTimings = [];
       window.addEventListener("error", (event) => {
         console.error("window 오류 위치:", event.message, event.filename,
           event.lineno, event.colno, event.error?.stack || String(event.error));
@@ -74,7 +75,7 @@ async function run() {
         console.error("처리되지 않은 비동기 오류:", event.reason?.stack || String(event.reason));
       });
     });
-    await page.goto("http://127.0.0.1:4173/", {
+    await page.goto("http://127.0.0.1:4173/?frame-probe=1", {
       waitUntil: "commit",
       timeout: 15000,
     });
@@ -172,17 +173,41 @@ async function run() {
       }
       requestAnimationFrame(recordFrame);
     }));
+    const frameTimings = await page.evaluate(() => {
+      const samples = window.__droneSimFrameTimings || [];
+      const summarize = (key) => {
+        const values = samples.map((sample) => sample[key]).sort((a, b) => a - b);
+        const percentile = (fraction) => values.length
+          ? values[Math.ceil(values.length * fraction) - 1]
+          : 0;
+        return {
+          p50: percentile(0.50),
+          p95: percentile(0.95),
+          maximum: values.length ? values[values.length - 1] : 0,
+        };
+      };
+      return {
+        sampleCount: samples.length,
+        input: summarize("input"),
+        simulation: summarize("simulation"),
+        render: summarize("render"),
+        bufferSwap: summarize("bufferSwap"),
+        total: summarize("total"),
+      };
+    });
     if (responsiveness.frameCount < 30
         || responsiveness.maximumFrameGapMilliseconds > 1500)
     {
       throw new Error(
         `첫 화면 뒤 갱신이 멈췄습니다. ${responsiveness.frameCount}프레임, `
-        + `최대 공백 ${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms`);
+        + `최대 공백 ${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms, `
+        + `시뮬레이터 프레임 구간 ${JSON.stringify(frameTimings)}`);
     }
     console.log(
       `Chromium에서 첫 화면, 비행 조작, 상태 갱신을 확인했습니다. `
       + `${responsiveness.frameCount}프레임, 최대 공백 `
-      + `${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms`);
+      + `${Math.round(responsiveness.maximumFrameGapMilliseconds)}ms, `
+      + `시뮬레이터 프레임 구간 ${JSON.stringify(frameTimings)}`);
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForFunction(
