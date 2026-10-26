@@ -5,55 +5,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DroneSim | 비행과 카메라</title>
     <style>
-      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #111820; color: #e8eef2; font: 14px/1.45 system-ui, sans-serif; }
-      body { display: grid; grid-template-rows: minmax(0, 1fr) 224px; gap: 8px; padding: 8px; box-sizing: border-box; }
-      #sim-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); min-height: 0; gap: 8px; }
-      #right-rail { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; gap: 8px; }
-      .view-panel { min-width: 0; min-height: 0; overflow: hidden; background: #19232c; border: 1px solid #34434d; border-radius: 8px; }
-      #scene-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr); }
+      :root {
+        color-scheme: dark;
+        --page: #0b1218;
+        --panel: #121d25;
+        --panel-raised: #182630;
+        --border: #2b3c47;
+        --muted: #93a5ae;
+        --text: #edf4f7;
+        --accent: #62c7bd;
+        --blue: #3b82b2;
+      }
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--page); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+      body { display: grid; grid-template-rows: 46px minmax(0, 1fr) 224px; gap: 10px; padding: 10px; }
+      #app-header { display: flex; align-items: center; justify-content: space-between; min-width: 0; padding: 0 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; }
+      #app-brand { display: flex; align-items: baseline; gap: 10px; }
+      #app-brand strong { font-size: 15px; letter-spacing: .04em; }
+      #app-brand span, #runtime-badge { color: var(--muted); font-size: 12px; }
+      #runtime-badge { padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; }
+      #runtime-badge[data-state="ready"] { color: #9be2d6; border-color: #287b6c; }
+      #runtime-badge[data-state="error"] { color: #ffc0b8; border-color: #a94e48; }
+      #sim-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); min-height: 0; gap: 10px; }
+      #right-rail { display: grid; grid-template-rows: minmax(0, .8fr) minmax(0, 1.2fr); min-height: 0; gap: 10px; }
+      .view-panel, #web-gcs { min-width: 0; min-height: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+      #scene-panel { display: grid; grid-template-rows: 40px minmax(0, 1fr); }
       #scene-panel canvas { display: block; width: 150%; max-width: none; height: 100%; outline: none; }
-      #camera-panel { display: grid; width: 100%; height: auto; aspect-ratio: 4 / 3; align-self: end; grid-template-rows: 38px minmax(0, 1fr); }
-      .panel-title { display: flex; align-items: center; padding: 0 12px; color: #dce6eb; border-bottom: 1px solid #34434d; font-weight: 650; }
-      #web-eo-live { display: grid; grid-template-rows: 30px minmax(0, 1fr); min-height: 0; padding: 8px; gap: 4px; }
-      #web-eo-live-status { color: #cbd5d9; }
-      #web-eo-live video { display: block; width: 100%; height: 100%; min-height: 0; background: #080a0b; object-fit: contain; }
-      #startup-status { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 24px; color: #e5e7eb; background: #141719; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
+      #camera-panel { display: grid; width: auto; max-width: 100%; height: 100%; aspect-ratio: 4 / 3; justify-self: end; align-self: stretch; grid-template-rows: 40px minmax(0, 1fr); }
+      .panel-title { display: flex; align-items: center; padding: 0 13px; color: #dce8ed; border-bottom: 1px solid var(--border); font-weight: 650; letter-spacing: .01em; }
+      #web-eo-live { display: grid; grid-template-rows: 28px minmax(0, 1fr); min-height: 0; padding: 9px; gap: 5px; }
+      #web-eo-live-status { color: var(--muted); font-size: 12px; }
+      #web-eo-live video { display: block; width: 100%; height: 100%; min-height: 0; background: #05090c; object-fit: contain; border-radius: 5px; }
+      #startup-status { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 24px; color: var(--text); background: #0a1015f2; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
       #startup-status[hidden] { display: none; }
       #startup-message { max-width: 560px; }
-      #flight-status-panel { display: grid; min-height: 0; grid-template-rows: 38px minmax(0, 1fr); }
-      #web-gcs-status { display: grid; align-content: center; gap: 7px; min-width: 0; padding: 12px 14px; overflow: auto; }
-      #web-gcs-status strong { display: block; font-size: 14px; }
-      #web-gcs-status span { color: #cbd5d9; }
-      #web-gcs { min-height: 0; display: grid; grid-template-columns: minmax(240px, 0.8fr) minmax(0, 2fr); align-items: stretch; gap: 14px; padding: 10px 12px; color: #f3f4f6; background: #19232c; border: 1px solid #34434d; border-radius: 8px; overflow: hidden; font: 13px/1.4 system-ui, sans-serif; }
-      #web-gcs-controls { display: grid; grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1.7fr); align-content: center; gap: 12px; }
-      .control-group { display: grid; align-content: center; gap: 6px; min-width: 0; }
-      .control-group h3 { margin: 0; color: #cbd5d9; font-size: 12px; font-weight: 650; }
-      #inspection-target-label { color: #cbd5d9; font-size: 12px; }
-      #mission-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-      #flight-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-      #web-gcs button { min-width: 0; min-height: 34px; padding: 4px 6px; color: #f8fafc; background: #34434a; border: 1px solid #66777e; border-radius: 6px; font: inherit; font-size: 12px; white-space: nowrap; touch-action: none; }
-      #web-gcs button:hover:not(:disabled) { background: #46616b; }
-      #web-gcs button:disabled { opacity: .55; }
-      #web-gcs [data-command="0"] { background: #176b50; }
-      #web-gcs [data-command="2"] { background: #8c3c3c; }
-      #web-gcs [data-start-inspection] { background: #315f87; }
-      #web-gcs [data-inspection-target] { min-width: 0; min-height: 34px; padding: 4px 6px; color: #f8fafc; background: #26343a; border: 1px solid #66777e; border-radius: 6px; font: inherit; }
-      #web-eo-recording { display: grid; gap: 5px; min-width: 0; color: #d4dde0; }
-      #web-eo-recording-controls { display: flex; flex-wrap: wrap; gap: 6px; }
-      #web-eo-zone-downloads { display: grid; gap: 4px; }
-      #web-eo-saved-files { display: grid; gap: 6px; max-height: 96px; overflow: auto; }
-      #web-eo-saved-files .recording-links { display: grid; gap: 4px; }
-      #web-eo-saved-files details > summary { color: #cbd5d9; cursor: pointer; }
+      #flight-status-panel { display: grid; min-height: 0; grid-template-rows: 40px minmax(0, 1fr); }
+      #web-gcs-status { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 8px; overflow: auto; }
+      .status-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .status-heading strong { font-size: 15px; }
+      #web-gcs-clock { color: var(--muted); font: 11px/1.4 ui-monospace, monospace; white-space: nowrap; }
+      .telemetry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+      .telemetry-card { display: grid; gap: 2px; min-width: 0; padding: 5px 7px; background: var(--panel-raised); border: 1px solid #243641; border-radius: 7px; }
+      .telemetry-card span { color: var(--muted); font-size: 11px; }
+      .telemetry-card strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+      #web-gcs-mission-card { grid-column: 1 / -1; }
+      #web-gcs-capture { margin: 0; color: #d3e0e5; font-size: 11px; }
+      #web-gcs { display: grid; grid-template-columns: minmax(230px, .75fr) minmax(0, 2fr); align-items: stretch; gap: 12px; padding: 11px; font: 13px/1.4 system-ui, sans-serif; }
+      #web-eo-recording, .control-group { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 10px; background: var(--panel-raised); border: 1px solid #243641; border-radius: 8px; }
+      #web-eo-recording { color: #d4dde0; }
+      #web-eo-recording > strong, .control-group h3 { margin: 0; color: var(--text); font-size: 13px; font-weight: 650; }
+      #web-eo-recording-controls { display: grid; align-content: start; gap: 8px; min-height: 0; overflow: auto; }
+      #web-eo-zone-downloads, #web-eo-saved-files { display: grid; gap: 5px; max-height: 70px; overflow: auto; }
+      #web-eo-saved-files details > summary { color: var(--muted); cursor: pointer; }
       #web-eo-recording a { color: #9fd5ff; }
       #web-eo-recording a[hidden] { display: none; }
-      @media (max-width: 850px) { body { grid-template-rows: minmax(0, 1fr) minmax(240px, 38vh); } #sim-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); } #web-gcs { grid-template-columns: minmax(0, 1fr); } #web-gcs-controls { grid-template-columns: minmax(0, 1fr); gap: 8px; } #web-eo-recording { display: none; } }
-      @media (max-width: 560px) { body { grid-template-rows: minmax(0, 1fr) minmax(270px, 45vh); } #sim-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); } #right-rail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } #flight-status-panel .panel-title { writing-mode: horizontal-tb; } #camera-panel { width: auto; height: auto; aspect-ratio: auto; align-self: stretch; grid-template-columns: 74px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } #camera-panel .panel-title { writing-mode: vertical-rl; justify-content: center; padding: 6px; } #web-eo-live { grid-template-rows: minmax(0, 1fr); } #web-eo-live-status { display: none; } #web-gcs { grid-template-columns: minmax(0, 1fr); gap: 6px; } #mission-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); } #flight-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+      #web-gcs-controls { display: grid; grid-template-columns: minmax(190px, .9fr) minmax(0, 1.5fr); align-content: stretch; gap: 10px; min-height: 0; }
+      .control-group { align-content: center; }
+      .control-group h3 { color: #b8c8cf; }
+      #inspection-target-label { color: var(--muted); font-size: 12px; }
+      #mission-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+      #flight-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+      #web-gcs button { min-width: 0; min-height: 36px; padding: 6px 8px; color: var(--text); background: #263741; border: 1px solid #3a505c; border-radius: 6px; font: inherit; font-size: 12px; white-space: nowrap; touch-action: none; transition: background-color .12s ease, border-color .12s ease; }
+      #web-gcs button:hover:not(:disabled) { background: #36505d; border-color: #5b7a87; }
+      #web-gcs button:focus-visible, #web-gcs select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      #web-gcs button:disabled { opacity: .48; }
+      #web-gcs [data-command="0"] { background: #176b50; border-color: #2f9471; }
+      #web-gcs [data-command="2"], #web-gcs [data-cancel-inspection] { background: #713b3b; border-color: #99504a; }
+      #web-gcs [data-start-inspection] { background: #245d79; border-color: #3980a2; }
+      #web-gcs [data-inspection-target] { min-width: 0; min-height: 36px; padding: 6px 8px; color: var(--text); background: #101a21; border: 1px solid #3a505c; border-radius: 6px; font: inherit; }
+      @media (min-width: 1001px) {
+        .telemetry-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        #web-gcs-mission-card { grid-column: span 2; }
+      }
+      @media (max-width: 1000px) {
+        body { grid-template-rows: 42px minmax(0, 1fr) minmax(240px, 32vh); gap: 8px; padding: 8px; }
+        #sim-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 8px; }
+        #right-rail { gap: 8px; }
+        #right-rail { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+        #web-gcs { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+        #web-eo-recording { max-height: 110px; }
+      }
+      @media (max-width: 650px) {
+        body { grid-template-rows: 40px minmax(0, 1fr) minmax(260px, 42vh); gap: 7px; padding: 7px; }
+        #app-brand span { display: none; }
+        #sim-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.3fr) minmax(170px, .8fr); gap: 7px; }
+        #right-rail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 7px; }
+        #flight-status-panel .panel-title { writing-mode: horizontal-tb; }
+        #camera-panel { width: auto; height: auto; aspect-ratio: auto; align-self: stretch; grid-template-columns: 34px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+        #camera-panel .panel-title { writing-mode: vertical-rl; justify-content: center; padding: 6px; }
+        #web-eo-live { grid-template-rows: minmax(0, 1fr); }
+        #web-eo-live-status { display: none; }
+        #web-gcs { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+        #web-gcs-controls { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+        #mission-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        #flight-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      }
     </style>
   </head>
   <body>
     <div id="startup-status" role="status" aria-live="polite">
       <div id="startup-message">시뮬레이터를 불러오고 있습니다.</div>
     </div>
+    <header id="app-header">
+      <div id="app-brand"><strong>DRONESIM</strong><span>영상 정찰 · 지상통제</span></div>
+      <span id="runtime-badge" data-state="loading" title="웹 실행은 운동학 비행 모델을 사용합니다. 네이티브 AirSim 강체 물리와 결과가 다를 수 있습니다.">시뮬레이터 준비 중</span>
+    </header>
     <main id="sim-workspace">
       <section id="scene-panel" class="view-panel" aria-label="드론을 보는 장면">
         <div class="panel-title">비행 장면</div>
@@ -63,9 +119,18 @@
         <section id="flight-status-panel" class="view-panel" aria-label="비행 상태">
           <div class="panel-title">비행 상태</div>
           <div id="web-gcs-status" aria-live="polite">
-            <strong>지상통제 · 준비 중</strong>
-            <span>카메라 목표 화면 확인: 준비 중</span>
-            <span id="web-gcs-mission">정찰 임무: 대기 중</span>
+            <div class="status-heading">
+              <strong id="web-gcs-mode">상태 대기 중</strong>
+              <span id="web-gcs-clock">T+0.0 s</span>
+            </div>
+            <div class="telemetry-grid">
+              <div class="telemetry-card"><span>위치 · 동 / 북</span><strong id="web-gcs-position">0.0 / 0.0 m</strong></div>
+              <div class="telemetry-card"><span>지면 위 고도</span><strong id="web-gcs-altitude">0.0 m</strong></div>
+              <div class="telemetry-card"><span>이동 속도</span><strong id="web-gcs-speed">0.0 m/s</strong></div>
+              <div class="telemetry-card"><span>EO 카메라</span><strong id="web-gcs-camera">준비 중</strong></div>
+              <div class="telemetry-card" id="web-gcs-mission-card"><span>영상 정찰</span><strong id="web-gcs-mission">대기 중</strong></div>
+            </div>
+            <p id="web-gcs-capture">영상 구도 상태: 시뮬레이터 준비 중</p>
           </div>
         </section>
         <section id="camera-panel" class="view-panel" aria-label="드론 카메라 영상">
@@ -90,17 +155,17 @@
       </div>
       <div id="web-gcs-controls">
         <section class="control-group" aria-label="영상 정찰 임무">
-          <h3>영상 정찰 임무</h3>
-          <label id="inspection-target-label" for="inspection-target">촬영 위치</label>
+          <h3>사람이 지정한 영상 수집 지점</h3>
+          <label id="inspection-target-label" for="inspection-target">수집할 지점</label>
           <select id="inspection-target" data-inspection-target disabled>
             <option value="-1">모든 촬영 위치</option>
           </select>
           <div id="mission-actions">
-            <button type="button" data-start-inspection disabled>정찰 임무 시작</button>
+            <button type="button" data-start-inspection disabled>수집 시작</button>
             <button type="button" data-pause-inspection disabled
                 title="이동·카메라 정렬 중에만 가능하며, 영상 기록은 계속됩니다.">일시 정지</button>
             <button type="button" data-resume-inspection disabled>재개</button>
-            <button type="button" data-cancel-inspection disabled>임무 중단</button>
+            <button type="button" data-cancel-inspection disabled>수집 중단</button>
           </div>
         </section>
         <section class="control-group" aria-label="수동 비행 조작">
@@ -166,18 +231,27 @@
         startupMessage.textContent = message;
         startupStatus.hidden = false;
         startupStatus.setAttribute("role", "alert");
+        var badge = document.getElementById("runtime-badge");
+        badge.textContent = "시작 오류";
+        badge.dataset.state = "error";
       }
 
       window.setSimulatorStartupStatus = function (message) {
         startupPhase = message;
         startupMessage.textContent = message;
         startupStatus.hidden = false;
+        var badge = document.getElementById("runtime-badge");
+        badge.textContent = "시뮬레이터 준비 중";
+        badge.dataset.state = "loading";
       };
       window.showSimulatorStartupError = showStartupError;
       window.completeSimulatorStartup = function () {
         simulatorStarted = true;
         window.clearTimeout(startupTimeout);
         startupStatus.hidden = true;
+        var badge = document.getElementById("runtime-badge");
+        badge.textContent = "웹 운동학 · 실행 중";
+        badge.dataset.state = "ready";
         document.querySelectorAll("#web-gcs button").forEach(function (button) {
           button.disabled = false;
         });
@@ -911,7 +985,6 @@
           missionStatus: missionStatus, simulationTick: Number(simulationTick),
           missionActive: Boolean(missionActive)
         };
-        var status = document.getElementById("web-gcs-status");
         var captureLabels = {
           ready: "목표가 화면에 보임",
           camera_unavailable: "카메라 꺼짐 또는 장애",
@@ -924,16 +997,19 @@
           occluded: "목표가 구조물에 가려짐",
           unknown: "상태를 확인할 수 없음"
         };
-        status.innerHTML = "<strong>비행 상태: " + mode + "</strong>"
-          + "<span>동·북 위치 " + x.toFixed(1) + ", " + y.toFixed(1)
-          + " m · 지면 위 " + z.toFixed(1) + " m</span>"
-          + "<span>속도 " + speed.toFixed(1) + " m/s · EO "
-          + (cameraActive ? "켜짐" : "꺼짐") + "</span>"
-          + "<span>웹 비행: 가속·제동 운동학 · 지형·건물 접촉 적용. AirSim 강체 물리는 미적용</span>"
-          + "<span>카메라 목표 화면 확인: "
+        document.getElementById("web-gcs-mode").textContent = mode;
+        document.getElementById("web-gcs-clock").textContent = "T+"
+          + (Number(simulationTick) / 60).toFixed(1) + " s · "
+          + simulationTick + " Tick";
+        document.getElementById("web-gcs-position").textContent = x.toFixed(1)
+          + " / " + y.toFixed(1) + " m";
+        document.getElementById("web-gcs-altitude").textContent = z.toFixed(1) + " m";
+        document.getElementById("web-gcs-speed").textContent = speed.toFixed(1) + " m/s";
+        document.getElementById("web-gcs-camera").textContent = cameraActive ? "켜짐" : "꺼짐";
+        document.getElementById("web-gcs-capture").textContent = "영상 구도 상태: "
           + (captureLabels[captureAssessment] || captureLabels.unknown)
-          + " · 파손 여부는 사람이 영상으로 확인</span>"
-          + "<span id=\"web-gcs-mission\">정찰 임무: " + missionStatus + "</span>";
+          + " · 파손 여부는 사람이 영상으로 판단합니다.";
+        document.getElementById("web-gcs-mission").textContent = missionStatus;
 
         var missionCanStart = !missionActive && Boolean(grounded);
         var missionIsPaused = missionStatus.includes("일시 정지");
