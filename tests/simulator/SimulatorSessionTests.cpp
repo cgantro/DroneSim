@@ -303,10 +303,10 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
             require(secondaryTakeoff.accepted,
                 "선택한 두 번째 드론에 이륙 명령을 보내지 못했습니다.");
             require(secondaryTakeoff.telemetry.drones[1].mode
-                    != simulation::FlightMode::Grounded,
-                "이륙 명령 뒤 두 번째 드론 상태가 바뀌지 않았습니다.");
+                    == simulation::FlightMode::TakingOff,
+                "선택한 드론이 이륙 상태로 바뀌지 않았습니다.");
             require(secondaryTakeoff.telemetry.drone.mode
-                    == simulation::FlightMode::Grounded,
+                    != simulation::FlightMode::TakingOff,
                 "두 번째 드론 명령이 주 드론 상태를 바꿨습니다.");
 
             const auto replay = send("기록 재생", [](communication::CommandPacket& packet)
