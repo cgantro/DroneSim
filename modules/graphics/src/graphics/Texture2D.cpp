@@ -71,6 +71,10 @@ GLuint UploadRgbImage(std::uint32_t width, std::uint32_t height,
         || widthSize * heightSize > maximumSize / bytesPerPixel
         || widthSize * heightSize * bytesPerPixel != pixelByteCount)
         throw std::invalid_argument("GPU 이미지 크기와 RGB 자료가 맞지 않습니다.");
+#ifdef __EMSCRIPTEN__
+    if (widthSize * heightSize > maximumSize / 4U)
+        throw std::invalid_argument("GPU 이미지 크기가 너무 큽니다.");
+#endif
 
     GLuint rendererId = 0U;
     glGenTextures(1, &rendererId);
@@ -81,12 +85,30 @@ GLuint UploadRgbImage(std::uint32_t width, std::uint32_t height,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     SetAnisotropicFilteringIfAvailable();
 
+    // WebGL에서 밉맵을 지원하는 sRGB RGBA 형식에 맞춰 알파를 덧붙인다.
+#ifdef __EMSCRIPTEN__
+    const std::size_t pixelCount = widthSize * heightSize;
+    std::vector<std::uint8_t> rgbaPixels(pixelCount * 4U);
+    for (std::size_t index = 0; index < pixelCount; ++index)
+    {
+        std::copy_n(pixels + index * bytesPerPixel, bytesPerPixel,
+            rgbaPixels.data() + index * 4U);
+        rgbaPixels[index * 4U + 3U] = 255U;
+    }
+#endif
+
     GLint previousUnpackAlignment = 4;
     glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+#ifdef __EMSCRIPTEN__
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8,
+        static_cast<GLsizei>(width), static_cast<GLsizei>(height),
+        0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaPixels.data());
+#else
     glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8,
         static_cast<GLsizei>(width), static_cast<GLsizei>(height),
         0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+#endif
     glGenerateMipmap(GL_TEXTURE_2D);
     glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
     glBindTexture(GL_TEXTURE_2D, 0);

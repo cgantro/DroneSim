@@ -77,9 +77,13 @@ async function run() {
     });
     const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();
+    const webGlErrors = [];
     page.on("console", (message) => {
-      if (message.type() === "error")
+      if (message.type() === "error") {
         console.error(`브라우저 오류: ${message.text()} (${JSON.stringify(message.location())})`);
+        if (message.text().includes("GL_INVALID_OPERATION"))
+          webGlErrors.push(message.text());
+      }
     });
     page.on("pageerror", (error) => {
       console.error(`페이지 오류: ${error.stack || error.message} [${error.name || typeof error}]`);
@@ -115,6 +119,9 @@ async function run() {
     });
     if (startupError)
       throw new Error(startupError.trim());
+    await page.waitForTimeout(100);
+    if (webGlErrors.length > 0)
+      throw new Error(`WebGL 초기화 중 그래픽 오류가 발생했습니다: ${webGlErrors.join(" | ")}`);
 
     const telemetry = page.locator("#web-gcs-status");
     await page.waitForFunction(
@@ -277,6 +284,9 @@ async function run() {
       null,
       { timeout: 10000 }
     );
+    await page.waitForTimeout(100);
+    if (webGlErrors.length > 0)
+      throw new Error(`화면을 다시 띄우는 동안 WebGL 오류가 발생했습니다: ${webGlErrors.join(" | ")}`);
     await page.waitForFunction(
       () => document.querySelector("#inspection-target")?.options.length === 4,
       null,
