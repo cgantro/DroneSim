@@ -1149,8 +1149,13 @@ void AeroSimLabApp::LoadMapFeatures()
             throw std::runtime_error("점검 구역 접근 위치가 지형 범위를 벗어났습니다: "
                 + zoneId);
         const bool routeAutomaticallyPlanned = routeWaypoints.empty();
-        inspectionTargets_.push_back({facilityId, zoneId, surface,
-            std::move(routeWaypoints), approachPosition, routeAutomaticallyPlanned});
+        inspectionTargets_.push_back({
+            .facilityId = facilityId,
+            .zoneId = zoneId,
+            .surface = surface,
+            .routeWaypointsMeters = std::move(routeWaypoints),
+            .approachPositionMeters = approachPosition,
+            .routeAutomaticallyPlanned = routeAutomaticallyPlanned});
     }
 
     glm::dvec3 routeStart{
@@ -1160,6 +1165,7 @@ void AeroSimLabApp::LoadMapFeatures()
             + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters};
     for (InspectionTarget& target : inspectionTargets_)
     {
+        target.routeStartMeters = routeStart;
         if (target.routeAutomaticallyPlanned)
         {
             const auto route = aerosimlab::terrain::PlanMapFlightRoute(
@@ -1414,6 +1420,7 @@ bool AeroSimLabApp::RequestInspectionMission(
     inspectionMission_.targetCount = inspectionMission_.endTargetIndex
         - inspectionMission_.activeTargetIndex;
     InspectionTarget& firstTarget = inspectionTargets_[inspectionMission_.activeTargetIndex];
+    firstTarget.routeStartMeters = simulation_.State().positionMeters;
     if (firstTarget.routeAutomaticallyPlanned)
     {
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
@@ -1749,7 +1756,7 @@ std::string AeroSimLabApp::InspectionMissionStatus() const
     const std::size_t targetCount = inspectionMission_.targetCount == 0U
         ? inspectionTargets_.size()
         : inspectionMission_.targetCount;
-    const std::string progress = "구역 "
+    const std::string progress = "목표 "
         + std::to_string(std::min(inspectionMission_.completedTargetCount + 1U,
             targetCount))
         + "/" + std::to_string(targetCount) + ": ";
@@ -1759,17 +1766,17 @@ std::string AeroSimLabApp::InspectionMissionStatus() const
     case InspectionMissionStage::StartRequested: return progress + "시작 준비 중";
     case InspectionMissionStage::Paused: return progress + "일시 정지";
     case InspectionMissionStage::TakingOff: return progress + "이륙 중";
-    case InspectionMissionStage::Approaching: return progress + "점검 구역으로 이동 중";
+    case InspectionMissionStage::Approaching: return progress + "촬영 위치로 이동 중";
     case InspectionMissionStage::AligningCamera:
-        return progress + "카메라를 점검면에 맞추는 중";
-    case InspectionMissionStage::Capturing: return progress + "촬영 조건 확인 중";
+        return progress + "카메라 방향을 맞추는 중";
+    case InspectionMissionStage::Capturing: return progress + "영상 수집 중";
     case InspectionMissionStage::Landing: return "착륙 중";
     case InspectionMissionStage::Saved:
         return "영상 저장 완료 (" + std::to_string(inspectionMission_.completedTargetCount)
-            + "개 구역)";
+            + "개 위치)";
     case InspectionMissionStage::GeometryOnly:
         return "구도 확인 완료 (" + std::to_string(inspectionMission_.completedTargetCount)
-            + "개 구역)";
+            + "개 위치)";
     case InspectionMissionStage::Failed: return "실패: " + inspectionMission_.error;
     }
     return "상태를 알 수 없습니다.";
@@ -1792,10 +1799,10 @@ void AeroSimLabApp::RenderFrame()
     renderer_->BeginFrame();
     renderer_->SetSceneViewport(0, 0, observerWidth, height);
     DrawWorld(observerCamera_->GetViewMatrix(), observerCamera_->GetProjectionMatrix(),
-        observerCamera_->GetPosition());
+        observerCamera_->GetPosition(), true);
     renderer_->SetSceneViewport(observerWidth, 0, cameraWidth, height);
     DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
-        eoCamera_->GetPosition());
+        eoCamera_->GetPosition(), false);
     renderer_->EndFrame();
 #else
     if (hud_)
@@ -1873,7 +1880,7 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
 }
 
 void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
-    const glm::vec3& cameraPosition)
+    const glm::vec3& cameraPosition, bool showMissionGuides)
 {
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
         view, projection, cameraPosition);
@@ -1896,31 +1903,47 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
             estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition);
 
-    const glm::vec3 inspectionCenter = ToRenderPosition(inspectionMission_.surface.centerMeters);
-    const glm::vec3 vertical{0.0F, 1.0F, 0.0F};
-    const glm::vec3 surfaceNormal = glm::normalize(
-        ToRenderDirection(inspectionMission_.surface.normal));
-    const glm::vec3 surfaceWidth = glm::normalize(
-        glm::cross(vertical, surfaceNormal));
-    glm::mat4 surfaceOrientation{1.0F};
-    surfaceOrientation[0] = glm::vec4{surfaceWidth, 0.0F};
-    surfaceOrientation[1] = glm::vec4{vertical, 0.0F};
-    surfaceOrientation[2] = glm::vec4{surfaceNormal, 0.0F};
-    const glm::mat4 inspectionTransform =
-        glm::translate(glm::mat4{1.0F}, inspectionCenter)
-        * surfaceOrientation
-        * glm::scale(glm::mat4{1.0F}, glm::vec3{
-            static_cast<float>(inspectionMission_.surface.widthMeters),
-            static_cast<float>(inspectionMission_.surface.heightMeters), 0.12F});
-    renderer_->Draw(inspectionTransform, *cube_, missionMarkerMaterial_, *shader_,
-        view, projection, cameraPosition);
-    const glm::vec3 goal = ToRenderPosition(inspectionMission_.goalMeters);
-    DrawCube(CubeTransform(goal + glm::vec3{0.0F, 0.09F, 0.0F},
-        glm::vec3{2.4F, 0.18F, 2.4F}), cameraPosition,
-        missionMarkerMaterial_, view, projection);
-    DrawCube(CubeTransform(goal + glm::vec3{0.0F, 1.6F, 0.0F},
-        glm::vec3{0.18F, 3.0F, 0.18F}), cameraPosition,
-        missionMarkerMaterial_, view, projection);
+    if (showMissionGuides)
+    {
+        const auto drawRouteSegment = [this, &view, &projection, &cameraPosition](
+            const glm::dvec3& startMeters, const glm::dvec3& endMeters)
+        {
+            const glm::vec3 start = ToRenderPosition(startMeters);
+            const glm::vec3 end = ToRenderPosition(endMeters);
+            const glm::vec3 direction = end - start;
+            const float length = glm::length(direction);
+            if (length < 0.1F)
+                return;
+
+            const glm::vec3 localY = direction / length;
+            const glm::vec3 referenceAxis = std::abs(localY.y) < 0.99F
+                ? glm::vec3{0.0F, 1.0F, 0.0F}
+                : glm::vec3{1.0F, 0.0F, 0.0F};
+            const glm::vec3 localX = glm::normalize(
+                glm::cross(referenceAxis, localY));
+            const glm::vec3 localZ = glm::cross(localX, localY);
+            glm::mat4 orientation{1.0F};
+            orientation[0] = glm::vec4{localX, 0.0F};
+            orientation[1] = glm::vec4{localY, 0.0F};
+            orientation[2] = glm::vec4{localZ, 0.0F};
+            const glm::mat4 transform = glm::translate(
+                glm::mat4{1.0F}, (start + end) * 0.5F)
+                * orientation
+                * glm::scale(glm::mat4{1.0F}, glm::vec3{0.10F, length, 0.10F});
+            DrawCube(transform, cameraPosition, missionRouteMaterial_, view, projection);
+        };
+
+        for (const InspectionTarget& target : inspectionTargets_)
+        {
+            glm::dvec3 previous = target.routeStartMeters;
+            for (const glm::dvec3& waypoint : target.routeWaypointsMeters)
+            {
+                drawRouteSegment(previous, waypoint);
+                previous = waypoint;
+            }
+            drawRouteSegment(previous, target.approachPositionMeters);
+        }
+    }
 
     for (const aerosimlab::simulation::DroneId id : fleetDroneIds_)
     {

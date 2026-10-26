@@ -44,15 +44,15 @@ const char* CaptureStatusLabel(simulation::CaptureAssessment assessment)
 {
     switch (assessment)
     {
-    case simulation::CaptureAssessment::Ready: return "촬영 구도 조건 충족";
+    case simulation::CaptureAssessment::Ready: return "목표가 카메라 화면에 보임";
     case simulation::CaptureAssessment::CameraUnavailable: return "카메라 꺼짐 또는 장애";
     case simulation::CaptureAssessment::NoNewFrame: return "새 영상 프레임 없음";
-    case simulation::CaptureAssessment::TooNear: return "점검면에 너무 가까움";
-    case simulation::CaptureAssessment::TooFar: return "점검면에 너무 멂";
-    case simulation::CaptureAssessment::SurfaceFacingAway: return "점검면을 비스듬히 바라봄";
+    case simulation::CaptureAssessment::TooNear: return "목표에 너무 가까움";
+    case simulation::CaptureAssessment::TooFar: return "목표에서 너무 멂";
+    case simulation::CaptureAssessment::SurfaceFacingAway: return "카메라가 목표를 향하지 않음";
     case simulation::CaptureAssessment::OutsideFrame: return "카메라 화면 밖";
-    case simulation::CaptureAssessment::ResolutionTooLow: return "화면에 담긴 크기가 부족함";
-    case simulation::CaptureAssessment::Occluded: return "점검면이 가려짐";
+    case simulation::CaptureAssessment::ResolutionTooLow: return "화면에서 목표가 너무 작음";
+    case simulation::CaptureAssessment::Occluded: return "목표가 구조물에 가려짐";
     }
     return "판정할 수 없음";
 }
@@ -173,12 +173,12 @@ void DrawFlightStatusPanel(
             simulation.SimulationTimeSeconds(),
             static_cast<unsigned long long>(simulation.TickCount()));
         ImGui::Separator();
-        ImGui::Text("OSM 건물 %s 외벽 시험 구역: %s",
+        ImGui::Text("OSM 건물 %s 영상 수집 목표: %s",
             inspectionFacilityId.c_str(), CaptureStatusLabel(captureAssessment));
-        ImGui::TextDisabled("건물 외곽 상자로 만든 면입니다. 실제 구조물 형상이나 촬영 완료를 뜻하지 않습니다.");
-        ImGui::Text("점검 임무: %s", inspectionMissionStatus.c_str());
-        ImGui::Text("시험 구역 접근 지점까지 %.1f m", missionDistanceMeters);
-        if (missionCanStart && ImGui::Button("점검 임무 시작"))
+        ImGui::TextDisabled("목표가 카메라 화면에 잡히는지 보여 줍니다. 파손 여부는 사람이 영상으로 확인합니다.");
+        ImGui::Text("영상 수집 임무: %s", inspectionMissionStatus.c_str());
+        ImGui::Text("촬영 위치까지 %.1f m", missionDistanceMeters);
+        if (missionCanStart && ImGui::Button("영상 수집 시작"))
             startInspectionMission();
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();

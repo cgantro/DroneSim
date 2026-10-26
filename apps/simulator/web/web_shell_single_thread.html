@@ -42,8 +42,8 @@
     <section id="web-gcs" aria-label="웹 지상통제">
       <div id="web-gcs-status" aria-live="polite">
         <strong>지상통제 · 준비 중</strong>
-        <span>가상 시험면 촬영 조건: 준비 중</span>
-        <span id="web-gcs-mission">점검 임무: 대기 중</span>
+        <span>카메라 목표 화면 확인: 준비 중</span>
+        <span id="web-gcs-mission">영상 수집 임무: 대기 중</span>
       </div>
       <div id="web-eo-live" aria-live="polite">
         <strong id="web-eo-live-status">EO 영상 · 연결 준비 중</strong>
@@ -60,11 +60,11 @@
         </div>
       </div>
       <div id="web-gcs-controls">
-        <label for="inspection-target">점검 대상</label>
+        <label for="inspection-target">영상 촬영 위치</label>
         <select id="inspection-target" data-inspection-target disabled>
           <option value="-1">모든 시험 구역</option>
         </select>
-        <button type="button" data-start-inspection disabled>자동 점검 시작</button>
+        <button type="button" data-start-inspection disabled>영상 수집 시작</button>
         <button type="button" data-pause-inspection disabled
             title="이동·카메라 정렬 중에만 가능하며, 영상 기록은 계속됩니다.">일시 정지</button>
         <button type="button" data-resume-inspection disabled>재개</button>
@@ -795,33 +795,33 @@
         };
         var status = document.getElementById("web-gcs-status");
         var captureLabels = {
-          ready: "구도 조건 충족",
+          ready: "목표가 화면에 보임",
           camera_unavailable: "카메라 꺼짐 또는 장애",
           no_new_frame: "새 영상 프레임 없음",
-          too_near: "점검면에 너무 가까움",
-          too_far: "점검면에 너무 멂",
-          surface_facing_away: "점검면을 비스듬히 바라봄",
+          too_near: "목표에 너무 가까움",
+          too_far: "목표에서 너무 멂",
+          surface_facing_away: "카메라가 목표를 향하지 않음",
           outside_frame: "카메라 화면 밖",
-          resolution_too_low: "화면에 담긴 크기가 부족함",
-          occluded: "점검면이 가려짐",
-          unknown: "판정할 수 없음"
+          resolution_too_low: "화면에서 목표가 너무 작음",
+          occluded: "목표가 구조물에 가려짐",
+          unknown: "상태를 확인할 수 없음"
         };
         status.innerHTML = "<strong>비행 상태: " + mode + "</strong>"
           + "<span>위치 " + x.toFixed(1) + ", " + y.toFixed(1) + ", " + z.toFixed(1)
           + " m · 속도 " + speed.toFixed(1) + " m/s · EO "
           + (cameraActive ? "켜짐" : "꺼짐") + "</span>"
-          + "<span>가상 시험면 촬영 조건: "
+          + "<span>카메라 목표 화면 확인: "
           + (captureLabels[captureAssessment] || captureLabels.unknown)
-          + " · 저장·전송 완료 판정은 아님</span>"
-          + "<span id=\"web-gcs-mission\">점검 임무: " + missionStatus + "</span>";
+          + " · 파손 여부는 사람이 영상으로 확인</span>"
+          + "<span id=\"web-gcs-mission\">영상 수집 임무: " + missionStatus + "</span>";
 
         var missionCanStart = missionStatus.includes("대기 중")
           || missionStatus.includes("저장 완료")
           || missionStatus.includes("확인 완료")
           || missionStatus.includes("실패:");
         var missionIsPaused = missionStatus.includes("일시 정지");
-        var missionCanPause = missionStatus.includes("점검 구역으로 이동 중")
-          || missionStatus.includes("카메라를 점검면에 맞추는 중");
+        var missionCanPause = missionStatus.includes("촬영 위치로 이동 중")
+          || missionStatus.includes("카메라 방향을 맞추는 중");
         document.querySelector("[data-start-inspection]").disabled = !missionCanStart;
         document.querySelector("[data-pause-inspection]").disabled = !missionCanPause;
         document.querySelector("[data-resume-inspection]").disabled = !missionIsPaused;
@@ -879,7 +879,7 @@
         document.querySelector("#web-gcs [data-start-inspection]").addEventListener(
             "click", async function () {
           if (eoRecorder || eoRecordingFinalizing) {
-            setEoRecordingStatus("현재 점검 임무의 녹화가 진행 중입니다.");
+            setEoRecordingStatus("현재 영상 수집 임무의 녹화가 진행 중입니다.");
             return;
           }
           if (!await startEoRecording())
