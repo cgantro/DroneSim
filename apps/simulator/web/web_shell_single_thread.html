@@ -3,15 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AeroSimLab 시뮬레이터</title>
+    <title>DroneSim | 비행과 카메라</title>
     <style>
-      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #141719; }
-      body { display: grid; place-items: center; }
-      canvas { display: block; width: 100%; height: 100%; outline: none; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #111820; color: #e8eef2; font: 14px/1.45 system-ui, sans-serif; }
+      body { display: grid; grid-template-rows: minmax(0, 1fr) 224px; gap: 8px; padding: 8px; box-sizing: border-box; }
+      #sim-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); min-height: 0; gap: 8px; }
+      .view-panel { min-width: 0; min-height: 0; overflow: hidden; background: #19232c; border: 1px solid #34434d; border-radius: 8px; }
+      #scene-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr); }
+      #scene-panel canvas { display: block; width: 100%; height: 100%; outline: none; }
+      #camera-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr); }
+      .panel-title { display: flex; align-items: center; padding: 0 12px; color: #dce6eb; border-bottom: 1px solid #34434d; font-weight: 650; }
+      #web-eo-live { display: grid; grid-template-rows: 30px minmax(0, 1fr); min-height: 0; padding: 8px; gap: 4px; }
+      #web-eo-live-status { color: #cbd5d9; }
+      #web-eo-live video { display: block; width: 100%; height: 100%; min-height: 0; background: #080a0b; object-fit: contain; }
       #startup-status { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 24px; color: #e5e7eb; background: #141719; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
       #startup-status[hidden] { display: none; }
       #startup-message { max-width: 560px; }
-      #web-gcs { position: fixed; z-index: 2; left: 12px; right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 14px; color: #f3f4f6; background: rgb(17 24 28 / 92%); border: 1px solid rgb(255 255 255 / 18%); border-radius: 10px; font: 13px/1.4 system-ui, sans-serif; }
+      #web-gcs { min-height: 0; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr) minmax(190px, 1fr); align-items: center; gap: 12px; padding: 10px 12px; color: #f3f4f6; background: #19232c; border: 1px solid #34434d; border-radius: 8px; overflow: auto; font: 13px/1.4 system-ui, sans-serif; }
       #web-gcs-status { min-width: 250px; }
       #web-gcs-status strong { display: block; font-size: 14px; }
       #web-gcs-status span { color: #cbd5d9; }
@@ -23,31 +31,38 @@
       #web-gcs [data-command="2"] { background: #8c3c3c; }
       #web-gcs [data-start-inspection] { background: #315f87; }
       #web-gcs [data-inspection-target] { min-height: 38px; padding: 6px 10px; color: #f8fafc; background: #26343a; border: 1px solid #66777e; border-radius: 6px; font: inherit; }
-      #web-eo-recording { display: grid; gap: 5px; min-width: 190px; color: #d4dde0; }
-      #web-eo-live { display: grid; gap: 5px; min-width: 190px; color: #d4dde0; }
-      #web-eo-live video { display: block; width: min(22vw, 220px); height: 124px; background: #080a0b; object-fit: contain; }
+      #web-eo-recording { display: grid; gap: 5px; min-width: 0; color: #d4dde0; }
       #web-eo-recording-controls { display: flex; flex-wrap: wrap; gap: 6px; }
       #web-eo-zone-downloads { display: grid; gap: 4px; }
       #web-eo-saved-files { display: grid; gap: 4px; max-height: 96px; overflow: auto; }
       #web-eo-recording a { color: #9fd5ff; }
       #web-eo-recording a[hidden] { display: none; }
-      @media (max-width: 720px) { #web-gcs { align-items: flex-start; flex-direction: column; } #web-gcs-status { min-width: 0; } #web-gcs-controls { flex-wrap: wrap; } }
+      @media (max-width: 850px) { body { grid-template-rows: minmax(0, 1fr) minmax(210px, 34vh); } #sim-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(190px, 1fr); } #web-gcs { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); } #web-eo-recording { display: none; } }
+      @media (max-width: 560px) { body { grid-template-rows: minmax(0, 1fr) 240px; } #sim-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); } #camera-panel { grid-template-columns: 74px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } .panel-title { writing-mode: vertical-rl; justify-content: center; padding: 6px; } #web-eo-live { grid-template-rows: minmax(0, 1fr); } #web-eo-live-status { display: none; } #web-gcs { grid-template-columns: minmax(0, 1fr); gap: 6px; } #web-gcs-status { min-width: 0; } }
     </style>
   </head>
   <body>
     <div id="startup-status" role="status" aria-live="polite">
       <div id="startup-message">시뮬레이터를 불러오고 있습니다.</div>
     </div>
-    <canvas id="canvas" tabindex="0"></canvas>
+    <main id="sim-workspace">
+      <section id="scene-panel" class="view-panel" aria-label="드론을 보는 장면">
+        <div class="panel-title">비행 장면</div>
+        <canvas id="canvas" tabindex="0"></canvas>
+      </section>
+      <section id="camera-panel" class="view-panel" aria-label="드론 카메라 영상">
+        <div class="panel-title">드론 카메라</div>
+        <div id="web-eo-live" aria-live="polite">
+          <strong id="web-eo-live-status">영상 연결 준비 중</strong>
+          <video id="web-eo-live-video" autoplay muted playsinline></video>
+        </div>
+      </section>
+    </main>
     <section id="web-gcs" aria-label="웹 지상통제">
       <div id="web-gcs-status" aria-live="polite">
         <strong>지상통제 · 준비 중</strong>
         <span>카메라 목표 화면 확인: 준비 중</span>
         <span id="web-gcs-mission">정찰 임무: 대기 중</span>
-      </div>
-      <div id="web-eo-live" aria-live="polite">
-        <strong id="web-eo-live-status">EO 영상 · 연결 준비 중</strong>
-        <video id="web-eo-live-video" autoplay muted playsinline></video>
       </div>
       <div id="web-eo-recording" aria-live="polite">
         <strong>EO 기록: 대기 중</strong>
