@@ -366,9 +366,12 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       aerosimlab_vision aerosimlab_media aerosimlab_imgui opencv_videoio Threads::Threads)
   endif()
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
-    AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"
     AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   )
+  # 커밋 표시는 벤치마크 결과를 만드는 파일에서만 사용한다.
+  # 대상 전체에 넣으면 커밋할 때마다 시뮬레이터 파일을 전부 다시 컴파일한다.
+  set_source_files_properties(apps/simulator/AeroSimLabAppBenchmark.cpp PROPERTIES
+    COMPILE_DEFINITIONS "AEROSIMLAB_SOURCE_REVISION=\"${AEROSIMLAB_SOURCE_REVISION}\"")
   if(WIN32)
     target_link_libraries(aerosimlab_simulator_app PRIVATE Psapi)
   endif()
