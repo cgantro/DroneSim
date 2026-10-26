@@ -67,9 +67,9 @@
     ]
   },
   "expected": {
-    "tolerance_meters": 0.01,
+    "tolerance_meters": 0.2,
     "drones": [
-      {"name": "low-charge", "mode": "grounded", "position_meters": [10.58333333333334, 0, 0]},
+      {"name": "low-charge", "mode": "grounded", "position_meters": [0, 0, 0]},
       {"name": "lost-link", "mode": "following_waypoint", "position_meters": [10.333333333333336, 0, 1.5]},
       {"name": "reserve-1", "mode": "hovering", "position_meters": [15, 0, 1.5]},
       {"name": "reserve-2", "mode": "hovering", "position_meters": [30, 0, 1.5]}

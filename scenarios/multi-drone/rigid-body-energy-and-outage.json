@@ -75,7 +75,7 @@
     "minimum_drone_separation_meters": 2.0,
     "tolerance_meters": 0.5,
     "drones": [
-      {"name": "low-charge", "mode": "grounded", "position_meters": [1.46278, 0, 0.2271]},
+      {"name": "low-charge", "mode": "grounded", "position_meters": [0, 0, 0.2]},
       {"name": "lost-link", "mode": "following_waypoint", "position_meters": [10.79582, 0, 1.75003]},
       {"name": "reserve-1", "mode": "hovering", "position_meters": [15, 0, 1.5]},
       {"name": "reserve-2", "mode": "hovering", "position_meters": [21, 0, 1.5]}

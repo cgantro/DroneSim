@@ -33,6 +33,7 @@ using detail::ScheduledCameraEvent;
 using detail::ScheduledCommand;
 using detail::DroneCommunicationOutage;
 using DroneIds = std::unordered_map<std::string, DroneId>;
+using DroneHomePositions = std::unordered_map<std::string, glm::dvec3>;
 using DroneCommunicationStatus = ScenarioResult::Drone::CommunicationStatus;
 
 void RecordTrajectorySample(const ScenarioDefinition& definition,
@@ -81,41 +82,56 @@ void UpdateEnergyPolicy(
     std::optional<ScenarioResult::Mission>& mission,
     SimulationCore& simulation,
     const DroneIds& droneIds,
+    const DroneHomePositions& homePositions,
     const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
     const auto handleDrone = [&](const std::string& droneName)
     {
-        BatteryModel& energy = simulation.Battery(droneIds.at(droneName));
-        if (energy.IsReturningForLowBattery()
-            || !energy.ShouldReturnForLowBattery())
-            return;
-
-        energy.MarkReturningForLowBattery();
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-            + droneName + " 드론이 배터리 예비량에 도달해 임무를 넘기고 착륙합니다.");
-
-        if (mission)
+        const DroneId droneId = droneIds.at(droneName);
+        BatteryModel& energy = simulation.Battery(droneId);
+        if (!energy.IsReturningForLowBattery())
         {
-            for (ScenarioResult::MissionTask& task : mission->tasks)
+            if (!energy.ShouldReturnForLowBattery())
+                return;
+
+            energy.MarkReturningForLowBattery();
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + droneName + " 드론이 배터리 예비량에 도달해 임무를 넘기고 출발 지점으로 돌아갑니다.");
+
+            if (mission)
             {
-                if (task.droneName != droneName || task.completed || task.failed)
-                    continue;
-                task.droneName.clear();
-                task.started = false;
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-                    + task.name + "' 임무를 대기열에 돌려놓았습니다.");
+                for (ScenarioResult::MissionTask& task : mission->tasks)
+                {
+                    if (task.droneName != droneName || task.completed || task.failed)
+                        continue;
+                    task.droneName.clear();
+                    task.started = false;
+                    result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
+                        + task.name + "' 임무를 대기열에 돌려놓았습니다.");
+                }
             }
         }
 
-        const FlightMode mode = simulation.State(droneIds.at(droneName)).mode;
-        if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
+        const DroneState& state = simulation.State(droneId);
+        if (!CanReceiveWaypoint(state.mode))
+            return;
+
+        const glm::dvec3& returnPosition = homePositions.at(droneName);
+        if (glm::distance(state.positionMeters, returnPosition) <= 0.2)
         {
-            const CommandResult landResult = simulation.Apply(droneIds.at(droneName),
+            const CommandResult landResult = simulation.Apply(droneId,
                 {DroneCommand::Kind::Land});
             if (landResult != CommandResult::Accepted)
-                result.issues.push_back(droneName + " 드론을 낮은 배터리로 착륙시키지 못했습니다.");
+                result.issues.push_back(droneName
+                    + " 드론이 귀환 지점에서 착륙하지 못했습니다.");
+            return;
         }
+
+        const CommandResult returnResult = simulation.Apply(droneId,
+            {DroneCommand::Kind::SetWaypoint, returnPosition});
+        if (returnResult != CommandResult::Accepted)
+            result.issues.push_back(droneName + " 드론이 배터리 귀환 경로를 받지 못했습니다.");
     };
 
     if (definition.drones.empty())
@@ -1206,12 +1222,17 @@ ScenarioResult RunScenario(std::string_view jsonText)
         simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
 
     DroneIds droneIds = CreateScenarioDrones(definition, simulation);
+    DroneHomePositions homePositions;
     DroneObservations observations;
     std::unordered_map<std::string, glm::dvec3> previousPositions;
     std::unordered_map<std::string, double> flightDistancesMeters;
     std::unordered_map<std::string, double> flightTimesSeconds;
     for (const auto& [droneName, droneId] : droneIds)
     {
+        glm::dvec3 homePosition = simulation.State(droneId).positionMeters;
+        if (simulation.State(droneId).mode == FlightMode::Grounded)
+            homePosition.z += DroneModel::takeoffHeightMeters;
+        homePositions.emplace(droneName, homePosition);
         observations.emplace(droneName, DroneObservation{
             DroneCommunicationStatus::Connected, 0, simulation.State(droneId)});
         previousPositions.emplace(droneName, simulation.State(droneId).positionMeters);
@@ -1277,7 +1298,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         if (definition.energyModel)
         {
             UpdateEnergyPolicy(tick, result.mission,
-                simulation, droneIds, definition, result);
+                simulation, droneIds, homePositions, definition, result);
         }
         UpdateMissionCommands(tick, result.mission, simulation, droneIds,
             observations, definition, result);

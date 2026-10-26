@@ -50,7 +50,7 @@
   "expected": {
     "tolerance_meters": 0.2,
     "drones": [
-      {"name": "low-charge", "mode": "grounded", "position_meters": [10.58333333333334, 0, 0]},
+      {"name": "low-charge", "mode": "grounded", "position_meters": [0, 0, 0]},
       {"name": "reserve", "mode": "hovering", "position_meters": [30, 0, 1.5]}
     ]
   }
