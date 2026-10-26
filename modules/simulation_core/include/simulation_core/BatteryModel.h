@@ -25,6 +25,9 @@ public:
     /** @brief 현재 비행 상태에 해당하는 에너지를 고정 Tick만큼 사용한다. */
     void Advance(FlightMode mode) noexcept;
 
+    /** @brief 배터리를 처음 설정한 충전량으로 되돌린다. */
+    void Reset() noexcept;
+
     [[nodiscard]] double CapacityWattHours() const noexcept;
     [[nodiscard]] double InitialWattHours() const noexcept;
     [[nodiscard]] double RemainingWattHours() const noexcept;

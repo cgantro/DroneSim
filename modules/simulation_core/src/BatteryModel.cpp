@@ -43,6 +43,12 @@ void BatteryModel::Advance(FlightMode mode) noexcept
     remainingWattHours_ = std::max(0.0, remainingWattHours_ - usedWattHours);
 }
 
+void BatteryModel::Reset() noexcept
+{
+    remainingWattHours_ = initialWattHours_;
+    returningForLowBattery_ = false;
+}
+
 double BatteryModel::CapacityWattHours() const noexcept
 {
     return parameters_.capacityWattHours;

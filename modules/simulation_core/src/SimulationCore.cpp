@@ -57,6 +57,7 @@ struct SimulationCore::EcsStorage
 #endif
     flecs::world world;
     std::unordered_map<DroneId, flecs::entity> drones;
+    std::unordered_map<DroneId, BatteryModel> batteries;
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
     bool measureEcsSystemDuration = false;
@@ -271,6 +272,7 @@ struct SimulationCore::EcsStorage
         found->second.destruct();
         const bool removedPrimary = id == primaryDroneId;
         drones.erase(found);
+        batteries.erase(id);
         if (removedPrimary)
         {
             const auto nextPrimary = std::min_element(
@@ -628,6 +630,35 @@ std::vector<DroneId> SimulationCore::DroneIds() const
     return ids;
 }
 
+void SimulationCore::ConfigureBattery(
+    DroneId droneId, BatteryModelParameters parameters, double initialPercent)
+{
+    static_cast<void>(ecs_->FindDrone(droneId));
+    ecs_->batteries.insert_or_assign(
+        droneId, BatteryModel{parameters, initialPercent});
+}
+
+bool SimulationCore::HasBattery(DroneId droneId) const noexcept
+{
+    return ecs_->batteries.contains(droneId);
+}
+
+BatteryModel& SimulationCore::Battery(DroneId droneId)
+{
+    const auto found = ecs_->batteries.find(droneId);
+    if (found == ecs_->batteries.end())
+        throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
+    return found->second;
+}
+
+const BatteryModel& SimulationCore::Battery(DroneId droneId) const
+{
+    const auto found = ecs_->batteries.find(droneId);
+    if (found == ecs_->batteries.end())
+        throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
+    return found->second;
+}
+
 void SimulationCore::AdvanceOneTick()
 {
     if (paused_)
@@ -647,6 +678,8 @@ void SimulationCore::AdvanceOneTick()
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->AdvancePhysicsWorld();
 #endif
+    for (auto& [droneId, battery] : ecs_->batteries)
+        battery.Advance(State(droneId).mode);
     ++ecs_->tickCount;
     ecs_->SynchronizeCameraPose();
 }
@@ -672,6 +705,11 @@ void SimulationCore::Reset()
     {
         (void)id;
         EoCameraModel::Reset(drone.get_mut<CameraState>());
+    }
+    for (auto& [id, battery] : ecs_->batteries)
+    {
+        (void)id;
+        battery.Reset();
     }
     ecs_->tickCount = 0;
     paused_ = false;

@@ -62,6 +62,29 @@ void Verify_BatteryModel_RejectsInvalidSettings()
     EXPECT_THROW((BatteryModel{{10.0, 40.0, 120.0, 20.0}, 101.0}), std::invalid_argument);
 }
 
+void Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick()
+{
+    SimulationCore simulation{SimulationDynamics::Kinematic};
+    const DroneId droneId = simulation.PrimaryDroneId();
+    DroneState start;
+    start.mode = FlightMode::Flying;
+    simulation.SetInitialState(droneId, start);
+    simulation.ConfigureBattery(droneId, {10.0, 0.0, 3600.0, 20.0});
+
+    simulation.AdvanceOneTick();
+    EXPECT_NEAR(simulation.Battery(droneId).ConsumedWattHours(),
+        DroneModel::fixedStepSeconds, 1.0e-12);
+
+    simulation.Pause();
+    simulation.AdvanceOneTick();
+    EXPECT_NEAR(simulation.Battery(droneId).ConsumedWattHours(),
+        DroneModel::fixedStepSeconds, 1.0e-12);
+
+    simulation.Reset();
+    EXPECT_DOUBLE_EQ(simulation.Battery(droneId).RemainingWattHours(), 10.0);
+    EXPECT_FALSE(simulation.Battery(droneId).IsReturningForLowBattery());
+}
+
 }
 
 void Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks()
@@ -380,6 +403,7 @@ TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_ConsumesOnlyWhileFlyingAndClampsAtZero());
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_RejectsInvalidSettings());
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose());

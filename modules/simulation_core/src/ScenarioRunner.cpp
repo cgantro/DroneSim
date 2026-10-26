@@ -69,8 +69,6 @@ struct DroneObservation
 using DroneObservations = std::unordered_map<std::string, DroneObservation>;
 using DroneNameSet = std::unordered_set<std::string>;
 
-using DroneEnergies = std::unordered_map<std::string, BatteryModel>;
-
 bool CanReceiveWaypoint(FlightMode mode) noexcept
 {
     return mode == FlightMode::Hovering
@@ -84,12 +82,11 @@ void UpdateEnergyPolicy(
     SimulationCore& simulation,
     const DroneIds& droneIds,
     const ScenarioDefinition& definition,
-    DroneEnergies& energies,
     ScenarioResult& result)
 {
     const auto handleDrone = [&](const std::string& droneName)
     {
-        BatteryModel& energy = energies.at(droneName);
+        BatteryModel& energy = simulation.Battery(droneIds.at(droneName));
         if (energy.IsReturningForLowBattery()
             || !energy.ShouldReturnForLowBattery())
             return;
@@ -130,18 +127,6 @@ void UpdateEnergyPolicy(
         handleDrone(drone.name);
 }
 
-void AdvanceEnergy(
-    const DroneIds& droneIds,
-    const SimulationCore& simulation,
-    DroneEnergies& energies)
-{
-    for (auto& [droneName, energy] : energies)
-    {
-        const FlightMode mode = simulation.State(droneIds.at(droneName)).mode;
-        energy.Advance(mode);
-    }
-}
-
 bool IsConnected(const DroneObservations& observations, const std::string& droneName)
 {
     return observations.at(droneName).status == DroneCommunicationStatus::Connected;
@@ -176,7 +161,6 @@ void UpdateDroneObservations(
     const ScenarioDefinition& definition,
     SimulationCore& simulation,
     const DroneIds& droneIds,
-    const DroneEnergies& energies,
     DroneObservations& observations,
     ScenarioResult& result)
 {
@@ -197,9 +181,9 @@ void UpdateDroneObservations(
             observation.lastHeartbeatTick = tick;
             observation.lastKnownState = simulation.State(droneId);
             observation.holdPositionApplied = false;
-            const auto energy = energies.find(droneName);
-            observation.lastKnownBatteryPercent = energy == energies.end()
-                ? std::nullopt : std::optional<double>{energy->second.RemainingPercent()};
+            observation.lastKnownBatteryPercent = simulation.HasBattery(droneId)
+                ? std::optional<double>{simulation.Battery(droneId).RemainingPercent()}
+                : std::nullopt;
             return;
         }
 
@@ -477,7 +461,6 @@ void UpdateMissionCommands(
     SimulationCore& simulation,
     const DroneIds& droneIds,
     const DroneObservations& observations,
-    const DroneEnergies& energies,
     const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
@@ -493,9 +476,8 @@ void UpdateMissionCommands(
         {
             if (!IsConnected(observations, droneName))
                 return;
-            const auto energy = energies.find(droneName);
-            if (energy != energies.end()
-                && energy->second.IsReturningForLowBattery())
+            if (simulation.HasBattery(droneIds.at(droneName))
+                && simulation.Battery(droneIds.at(droneName)).IsReturningForLowBattery())
                 return;
             const bool isFormationFollower = std::any_of(
                 definition.formationLinks.begin(), definition.formationLinks.end(),
@@ -995,7 +977,6 @@ void PopulateFinalSnapshot(
     const SimulationCore& simulation,
     const DroneIds& droneIds,
     const DroneObservations& observations,
-    const DroneEnergies& energies,
     const std::unordered_map<std::string, double>& flightDistancesMeters,
     const std::unordered_map<std::string, double>& flightTimesSeconds,
     ScenarioResult& result)
@@ -1033,14 +1014,14 @@ void PopulateFinalSnapshot(
         drone.flightDistanceMeters = flightDistancesMeters.at(droneName);
         drone.flightTimeSeconds = flightTimesSeconds.at(droneName);
         drone.reportedBatteryPercent = observation.lastKnownBatteryPercent;
-        const auto energy = energies.find(droneName);
-        if (energy != energies.end())
+        if (simulation.HasBattery(droneIds.at(droneName)))
         {
-            drone.batteryCapacityWattHours = energy->second.CapacityWattHours();
-            drone.energyConsumedWattHours = energy->second.ConsumedWattHours();
-            drone.batteryRemainingWattHours = energy->second.RemainingWattHours();
-            drone.batteryPercent = energy->second.RemainingPercent();
-            drone.returnedForLowBattery = energy->second.IsReturningForLowBattery();
+            const BatteryModel& battery = simulation.Battery(droneIds.at(droneName));
+            drone.batteryCapacityWattHours = battery.CapacityWattHours();
+            drone.energyConsumedWattHours = battery.ConsumedWattHours();
+            drone.batteryRemainingWattHours = battery.RemainingWattHours();
+            drone.batteryPercent = battery.RemainingPercent();
+            drone.returnedForLowBattery = battery.IsReturningForLowBattery();
         }
         result.drones.push_back(std::move(drone));
     };
@@ -1237,7 +1218,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
         flightDistancesMeters.emplace(droneName, 0.0);
         flightTimesSeconds.emplace(droneName, 0.0);
     }
-    DroneEnergies energies;
     if (definition.energyModel)
     {
         const auto addEnergy = [&](const std::string& droneName,
@@ -1248,9 +1228,10 @@ ScenarioResult RunScenario(std::string_view jsonText)
             BatteryModelParameters parameters = *definition.energyModel;
             if (scenarioDrone && scenarioDrone->batteryCapacityWattHours)
                 parameters.capacityWattHours = *scenarioDrone->batteryCapacityWattHours;
-            BatteryModel energy{parameters, initialPercent};
-            observations.at(droneName).lastKnownBatteryPercent = energy.RemainingPercent();
-            energies.emplace(droneName, energy);
+            const DroneId droneId = droneIds.at(droneName);
+            simulation.ConfigureBattery(droneId, parameters, initialPercent);
+            observations.at(droneName).lastKnownBatteryPercent =
+                simulation.Battery(droneId).RemainingPercent();
         };
         if (definition.drones.empty())
         {
@@ -1289,17 +1270,17 @@ ScenarioResult RunScenario(std::string_view jsonText)
         RecordTrajectorySample(definition, simulation, droneIds, 0, result);
     for (std::uint64_t tick = 0; tick < tickCount; ++tick)
     {
-        UpdateDroneObservations(tick, definition, simulation, droneIds, energies,
+        UpdateDroneObservations(tick, definition, simulation, droneIds,
             observations, result);
         ApplyScheduledCommands(tick, definition.commands, simulation, droneIds,
             observations, nextCommand, lastDeliveredSequence, result);
         if (definition.energyModel)
         {
             UpdateEnergyPolicy(tick, result.mission,
-                simulation, droneIds, definition, energies, result);
+                simulation, droneIds, definition, result);
         }
         UpdateMissionCommands(tick, result.mission, simulation, droneIds,
-            observations, energies, definition, result);
+            observations, definition, result);
         UpdateFormationLinks(tick, definition.formationLinks, simulation, droneIds,
             observations, result);
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
@@ -1321,8 +1302,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 previousPositions.at(droneName), currentPosition);
             previousPositions.at(droneName) = currentPosition;
         }
-        if (definition.energyModel)
-            AdvanceEnergy(droneIds, simulation, energies);
         RecordMinimumDroneSeparation(
             definition, simulation, droneIds, dronePositionsMeters, result);
         UpdateMissionResults(tick, result.mission, simulation, droneIds,
@@ -1344,12 +1323,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
         {
             observation.lastKnownState = simulation.State(droneId);
             observation.lastHeartbeatTick = tickCount;
-            const auto energy = energies.find(droneName);
-            if (energy != energies.end())
-                observation.lastKnownBatteryPercent = energy->second.RemainingPercent();
+            if (simulation.HasBattery(droneId))
+                observation.lastKnownBatteryPercent =
+                    simulation.Battery(droneId).RemainingPercent();
         }
     }
-    PopulateFinalSnapshot(definition, simulation, droneIds, observations, energies,
+    PopulateFinalSnapshot(definition, simulation, droneIds, observations,
         flightDistancesMeters, flightTimesSeconds, result);
     CheckExpectedResults(definition, result);
     return result;

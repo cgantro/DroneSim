@@ -2,6 +2,7 @@
 
 #include "simulation_core/DroneModel.h"
 #include "simulation_core/EoCameraModel.h"
+#include "simulation_core/BatteryModel.h"
 #include "terrain/TerrainGrid.h"
 
 #include <glm/vec3.hpp>
@@ -117,6 +118,19 @@ public:
 
     /** @brief 현재 드론 식별값을 오름차순으로 돌려준다. */
     [[nodiscard]] std::vector<DroneId> DroneIds() const;
+
+    /** @brief 드론별 배터리 계산을 설정한다. 초기 충전량은 용량의 백분율이다. */
+    void ConfigureBattery(DroneId droneId, BatteryModelParameters parameters,
+        double initialPercent = 100.0);
+
+    /** @brief 지정한 드론에 배터리 계산이 설정되어 있는지 확인한다. */
+    [[nodiscard]] bool HasBattery(DroneId droneId) const noexcept;
+
+    /** @brief 지정한 드론의 배터리 상태를 돌려준다. 설정되지 않았다면 예외를 던진다. */
+    [[nodiscard]] BatteryModel& Battery(DroneId droneId);
+
+    /** @brief 지정한 드론의 배터리 상태를 읽기 전용으로 돌려준다. */
+    [[nodiscard]] const BatteryModel& Battery(DroneId droneId) const;
 
     /** @brief 실행 중이면 고정 간격 한 단계만 진행하고, 일시정지 중이면 아무것도 바꾸지 않는다. */
     void AdvanceOneTick();
