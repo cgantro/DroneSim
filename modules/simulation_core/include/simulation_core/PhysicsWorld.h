@@ -36,7 +36,7 @@ struct RigidBodyDefinition
     glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
 };
 
-/** @brief 한 Tick 뒤 강체의 월드 자세와 속도다. */
+/** @brief 한 Tick 뒤 강체의 상태다. 위치·선속도는 월드 기준, 각속도는 기체 축 기준이다. */
 struct RigidBodyState
 {
     glm::dvec3 positionMeters{0.0};

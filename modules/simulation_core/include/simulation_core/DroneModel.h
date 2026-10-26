@@ -32,7 +32,7 @@ enum class FlightMode
 
 /**
  * @brief 한 번의 모의 단계가 끝난 뒤 드론의 위치와 움직임을 보관한다.
- * @details 위치는 미터, 속도는 초당 미터, 자세는 Quaternion, 각속도는 라디안/초 단위다. 위치와 속도는 장면의 월드 좌표를 쓴다.
+ * @details 위치와 선속도는 장면 좌표(ENU) 기준이다. 자세는 Quaternion, 각속도는 기체 축(FLU) 기준이며 단위는 각각 라디안과 라디안/초다.
  */
 struct DroneState
 {

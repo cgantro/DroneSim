@@ -93,8 +93,8 @@ glm::dvec3 AttitudeTorque(
         angleError = vectorPart * (angle / vectorLength);
     }
 
-    const glm::dvec3 angularVelocityBody =
-        glm::inverse(currentOrientation) * state.angularVelocityRadiansPerSecond;
+    // 상태의 각속도는 AirSim에서 기체 축 기준으로 전달되므로 다시 돌리지 않는다.
+    const glm::dvec3& angularVelocityBody = state.angularVelocityRadiansPerSecond;
     const glm::dvec3 angularAcceleration =
         controller.attitudeGain * angleError - controller.angularRateGain * angularVelocityBody;
     return LimitMagnitude(

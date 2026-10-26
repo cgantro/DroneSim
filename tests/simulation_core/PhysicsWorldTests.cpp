@@ -298,6 +298,30 @@ void Verify_AirSimFlightController_GainsChangeYawMotorTargets()
     EXPECT_NE(weakDampingTargets, strongDampingTargets);
 }
 
+void Verify_AirSimFlightController_UsesBodyAngularVelocityAtEveryYaw()
+{
+    const QuadrotorParameters model = QuadrotorParameters::X500Gazebo();
+    DroneState facingEast;
+    facingEast.positionMeters.z = 10.0;
+    facingEast.mode = FlightMode::Hovering;
+    facingEast.angularVelocityRadiansPerSecond = {0.4, 0.0, 0.0};
+    DroneControlState eastControl;
+    eastControl.desiredYawRadians = 0.0;
+
+    DroneState facingNorth = facingEast;
+    facingNorth.orientation = glm::angleAxis(
+        glm::half_pi<double>(), glm::dvec3{0.0, 0.0, 1.0});
+    DroneControlState northControl = eastControl;
+    northControl.desiredYawRadians = glm::half_pi<double>();
+
+    const auto eastTargets = QuadrotorFlightController::MotorTargets(
+        facingEast, eastControl, model);
+    const auto northTargets = QuadrotorFlightController::MotorTargets(
+        facingNorth, northControl, model);
+    for (std::size_t rotor = 0; rotor < eastTargets.size(); ++rotor)
+        EXPECT_NEAR(eastTargets[rotor], northTargets[rotor], 1.0e-9);
+}
+
 void Verify_AirSimFlightController_HoverTargetsFollowMassAndThrustCoefficient()
 {
     DroneState state;
@@ -797,6 +821,8 @@ TEST(PhysicsWorldTests, CoreScenarios)
         Verify_AirSimPhysics_MassChangesMotionUnderTheSameRotorInput());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_LimitsWaypointSpeedAndStopsAtTarget());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimFlightController_GainsChangeYawMotorTargets());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimFlightController_UsesBodyAngularVelocityAtEveryYaw());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimFlightController_HoverTargetsFollowMassAndThrustCoefficient());
     EXPECT_NO_FATAL_FAILURE(
