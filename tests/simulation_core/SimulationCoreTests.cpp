@@ -92,6 +92,17 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
     EXPECT_TRUE(isInsideFootprint(observerPosition(previousStartMeters), gym->outlineMeters));
     EXPECT_FALSE(isInsideFootprint(observerPosition(startMeters), gym->outlineMeters));
 
+    const double previousGroundHeight = terrainGrid.HeightAtLocalMeters(previousStartMeters);
+    SimulationCore previousStart{SimulationDynamics::RigidBody};
+    previousStart.SetTerrain(terrainGrid);
+    previousStart.SetInitialPose({previousStartMeters.x, previousStartMeters.y,
+        previousGroundHeight + 0.24}, 0.0);
+    ASSERT_EQ(previousStart.Apply(Command(DroneCommand::Kind::TakeOff)),
+        CommandResult::Accepted);
+    for (int tick = 0; tick < 600; ++tick)
+        previousStart.AdvanceOneTick();
+    EXPECT_NE(previousStart.State().mode, FlightMode::TakingOff);
+
     const double groundHeight = terrainGrid.HeightAtLocalMeters(startMeters);
 
     SimulationCore simulation{SimulationDynamics::RigidBody};
