@@ -16,6 +16,7 @@
 #include "graphics/Window.h"
 #ifndef __EMSCRIPTEN__
 #include "SimulatorHud.h"
+#include "media/RtpVideoStream.h"
 #endif
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/InspectionSurfaceJson.h"
@@ -578,6 +579,12 @@ AeroSimLabApp::AeroSimLabApp(Options options)
 
 AeroSimLabApp::~AeroSimLabApp()
 {
+#ifndef __EMSCRIPTEN__
+    if (eoVideoStartWorker_.joinable())
+        eoVideoStartWorker_.join();
+    if (eoVideoSender_)
+        eoVideoSender_->Stop();
+#endif
 #ifdef __EMSCRIPTEN__
     if (activeWebApplication == this)
         activeWebApplication = nullptr;

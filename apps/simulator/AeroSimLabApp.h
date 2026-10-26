@@ -18,12 +18,14 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <ctime>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 #ifndef __EMSCRIPTEN__
 #include <unordered_map>
@@ -44,6 +46,11 @@ class Window;
 namespace aerosimlab::vision
 {
 class RgbFrameAnalyzer;
+}
+
+namespace aerosimlab::media
+{
+class RtpVideoSender;
 }
 #endif
 
@@ -173,6 +180,7 @@ private:
 #ifndef __EMSCRIPTEN__
     void ProcessGroundDatagram(const std::string& datagram,
         const aerosimlab::communication::UdpPeer& peer);
+    void StartEoVideoStream(const aerosimlab::communication::UdpPeer& peer);
     /** @brief 중복·역순·처리 중인 명령에 응답하고 새 명령 접수 여부를 돌려준다. */
     [[nodiscard]] bool ReplyToUnqueueableGroundCommand(
         const aerosimlab::communication::CommandPacket& packet,
@@ -341,6 +349,13 @@ private:
     std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> sceneTarget_;
     std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> cameraTarget_;
     std::unique_ptr<EoVideoRecorder> eoVideoRecorder_;
+    std::unique_ptr<aerosimlab::media::RtpVideoSender> eoVideoSender_;
+    std::jthread eoVideoStartWorker_;
+    std::atomic_bool eoVideoStartPending_ = false;
+    std::string eoVideoDestinationAddress_;
+    std::string eoVideoAttemptedAddress_;
+    std::string eoVideoStartError_;
+    bool eoVideoStartErrorReported_ = false;
     std::unordered_map<std::uint64_t, aerosimlab::simulation::CameraState>
         queuedEoCameraStates_;
 #endif

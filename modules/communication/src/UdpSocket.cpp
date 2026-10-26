@@ -20,6 +20,20 @@
 
 namespace aerosimlab::communication
 {
+std::string UdpPeer::AddressIpv4() const
+{
+    std::array<char, INET_ADDRSTRLEN> text{};
+    in_addr address{};
+    address.s_addr = addressNetworkOrder;
+#ifdef _WIN32
+    if (!inet_ntop(AF_INET, &address, text.data(), text.size()))
+#else
+    if (!inet_ntop(AF_INET, &address, text.data(), static_cast<socklen_t>(text.size())))
+#endif
+        throw std::runtime_error("UDP 상대방 IPv4 주소를 문자열로 바꾸지 못했습니다.");
+    return text.data();
+}
+
 namespace
 {
 #ifdef _WIN32

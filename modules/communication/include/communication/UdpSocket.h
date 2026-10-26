@@ -12,6 +12,9 @@ struct UdpPeer
 {
     std::uint32_t addressNetworkOrder = 0;
     std::uint16_t portNetworkOrder = 0;
+
+    /** @brief IPv4 주소를 영상 전송처럼 별도 연결에 쓸 문자열로 돌려준다. */
+    [[nodiscard]] std::string AddressIpv4() const;
 };
 
 /**

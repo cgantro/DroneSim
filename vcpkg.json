@@ -13,6 +13,12 @@
       "default-features": false,
       "features": ["msmf"],
       "platform": "windows"
+    },
+    {
+      "name": "gstreamer",
+      "default-features": false,
+      "features": ["openh264", "plugins-good"],
+      "platform": "windows"
     }
   ]
 }

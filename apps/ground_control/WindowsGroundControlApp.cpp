@@ -3,6 +3,7 @@
 
 #include "GroundControlClient.h"
 #include "communication/UdpSocket.h"
+#include "media/RtpVideoStream.h"
 #include "simulation_core/ScenarioRunner.h"
 
 #include <array>
@@ -27,6 +28,8 @@ constexpr UINT requestPollMilliseconds = 40;
 constexpr auto telemetryRefreshInterval = std::chrono::milliseconds(250);
 constexpr auto telemetryTimeout = std::chrono::milliseconds(350);
 constexpr WORD standardWindowResourceId = 32512;
+constexpr int videoWidth = 290;
+constexpr int videoHeight = 163;
 
 enum ControlId : int
 {
@@ -62,6 +65,13 @@ struct AppState
     HWND statusText = nullptr;
     HWND telemetryText = nullptr;
     HWND droneList = nullptr;
+    HWND videoView = nullptr;
+    HWND videoStatus = nullptr;
+    HBITMAP videoBitmap = nullptr;
+    std::uint32_t* videoPixels = nullptr;
+    aerosimlab::media::RtpVideoReceiver videoReceiver;
+    std::string videoSenderHost;
+    std::optional<std::chrono::steady_clock::time_point> lastVideoFrameAt;
     bool requestPending = false;
     bool statusRequest = false;
     std::uint32_t nextCommandId = 1;
@@ -154,6 +164,73 @@ double ReadNumber(HWND control)
 void SetStatus(AppState& state, const std::wstring& text)
 {
     SetWindowTextW(state.statusText, text.c_str());
+}
+
+void StartVideoReceiver(AppState& state)
+{
+    const std::string host = ToUtf8(ReadText(state.hostInput));
+    if (state.videoReceiver.IsRunning() && state.videoSenderHost == host)
+        return;
+
+    state.videoReceiver.Stop();
+    state.lastVideoFrameAt.reset();
+    std::string error;
+    if (state.videoReceiver.Start(host,
+        aerosimlab::media::EoVideoStreamPorts::receiverRtp,
+        aerosimlab::media::EoVideoStreamPorts::receiverRtcp,
+        aerosimlab::media::EoVideoStreamPorts::senderRtcp, error))
+    {
+        state.videoSenderHost = host;
+        SetWindowTextW(state.videoStatus, L"EO 영상 수신 대기 중");
+        return;
+    }
+
+    state.videoSenderHost.clear();
+    SetWindowTextW(state.videoStatus, (L"EO 영상 수신을 시작하지 못했습니다: "
+        + FromUtf8(error)).c_str());
+}
+
+void DisplayVideoFrame(AppState& state, const aerosimlab::sensor::RgbFrame& frame)
+{
+    if (!frame.IsValid() || !state.videoPixels)
+        return;
+
+    for (int y = 0; y < videoHeight; ++y)
+    {
+        const int sourceY = y * frame.height / videoHeight;
+        const int row = frame.rowOrder == aerosimlab::sensor::RgbFrameRowOrder::TopToBottom
+            ? sourceY : frame.height - 1 - sourceY;
+        for (int x = 0; x < videoWidth; ++x)
+        {
+            const int sourceX = x * frame.width / videoWidth;
+            const auto sourceIndex = (static_cast<std::size_t>(row) * frame.width + sourceX) * 3U;
+            const auto blue = frame.pixels[sourceIndex + 2];
+            const auto green = frame.pixels[sourceIndex + 1];
+            const auto red = frame.pixels[sourceIndex];
+            state.videoPixels[static_cast<std::size_t>(y) * videoWidth + x]
+                = (static_cast<std::uint32_t>(red) << 16U)
+                | (static_cast<std::uint32_t>(green) << 8U)
+                | static_cast<std::uint32_t>(blue);
+        }
+    }
+    InvalidateRect(state.videoView, nullptr, FALSE);
+    state.lastVideoFrameAt = std::chrono::steady_clock::now();
+    SetWindowTextW(state.videoStatus, L"EO 영상 수신 중");
+}
+
+void UpdateVideo(AppState& state)
+{
+    if (auto frame = state.videoReceiver.TakeLatestFrame())
+        DisplayVideoFrame(state, *frame);
+
+    const std::string error = state.videoReceiver.LastError();
+    if (!error.empty())
+        SetWindowTextW(state.videoStatus, (L"EO 영상 수신 오류: "
+            + FromUtf8(error)).c_str());
+    else if (state.lastVideoFrameAt
+        && std::chrono::steady_clock::now() - *state.lastVideoFrameAt
+            > std::chrono::seconds(2))
+        SetWindowTextW(state.videoStatus, L"EO 영상 신호가 끊겼습니다.");
 }
 
 void SetControlsEnabled(AppState& state, bool enabled)
@@ -264,6 +341,8 @@ void ShowResult(AppState& state)
     {
         const auto result = state.request.get();
         const auto& reply = result.reply;
+        if (state.statusRequest && reply.accepted)
+            StartVideoReceiver(state);
         SetStatus(state, state.statusRequest
             ? L"시뮬레이터 연결됨" : CommandStatusMessage(reply));
 
@@ -362,7 +441,27 @@ void CreateControls(HWND window, AppState& state)
         565, 88, 290, 34, addDroneButtonId);
     state.droneList = AddControl(window, L"LISTBOX", L"",
         WS_BORDER | WS_VSCROLL | LBS_NOINTEGRALHEIGHT,
-        565, 132, 290, 360, droneListId);
+        565, 132, 290, 290, droneListId);
+
+    AddLabel(window, L"EO 실시간 영상", 565, 438, 180);
+    state.videoStatus = AddControl(window, L"STATIC", L"시뮬레이터에 연결하면 영상 수신을 시작합니다.",
+        SS_LEFT, 565, 460, 320, 22, 0);
+    state.videoView = AddControl(window, L"STATIC", L"", SS_BITMAP,
+        565, 484, videoWidth, videoHeight, 0);
+    BITMAPINFO bitmapInfo{};
+    bitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bitmapInfo.bmiHeader.biWidth = videoWidth;
+    bitmapInfo.bmiHeader.biHeight = -videoHeight;
+    bitmapInfo.bmiHeader.biPlanes = 1;
+    bitmapInfo.bmiHeader.biBitCount = 32;
+    bitmapInfo.bmiHeader.biCompression = BI_RGB;
+    void* pixels = nullptr;
+    state.videoBitmap = CreateDIBSection(nullptr, &bitmapInfo, DIB_RGB_COLORS,
+        &pixels, nullptr, 0);
+    state.videoPixels = static_cast<std::uint32_t*>(pixels);
+    if (state.videoBitmap)
+        SendMessageW(state.videoView, STM_SETIMAGE, IMAGE_BITMAP,
+            reinterpret_cast<LPARAM>(state.videoBitmap));
 
     AddLabel(window, L"명령 결과", 20, 420, 100);
     state.statusText = AddControl(window, L"STATIC", L"시뮬레이터에 연결해 명령을 보냅니다.",
@@ -441,6 +540,8 @@ LRESULT HandleTimer(HWND window, AppState& state, WPARAM wParam)
     if (wParam != requestTimerId)
         return 0;
 
+    UpdateVideo(state);
+
     if (state.requestPending
         && state.request.wait_for(std::chrono::milliseconds::zero()) == std::future_status::ready)
     {
@@ -497,6 +598,10 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
         DestroyWindow(window);
         return 0;
     case WM_DESTROY:
+        if (state->videoView)
+            SendMessageW(state->videoView, STM_SETIMAGE, IMAGE_BITMAP, 0);
+        if (state->videoBitmap)
+            DeleteObject(state->videoBitmap);
         PostQuitMessage(0);
         return 0;
     default:
@@ -530,7 +635,7 @@ int WINAPI wWinMain(
     AppState state;
     HWND window = CreateWindowExW(0, windowClassName, L"AeroSimLab 지상통제",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 900, 620, nullptr, nullptr, instance, &state);
+        CW_USEDEFAULT, CW_USEDEFAULT, 900, 700, nullptr, nullptr, instance, &state);
     if (!window)
         return 1;
 

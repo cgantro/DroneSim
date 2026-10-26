@@ -1,4 +1,7 @@
 #include "AeroSimLabApp.h"
+
+#include "graphics/MultisampleFramebuffer.h"
+#include "media/RtpVideoStream.h"
 #include "FleetDroneSpawn.h"
 #include "graphics/Window.h"
 
@@ -93,6 +96,7 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     if (fleetCommand
         && *fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
     {
+        StartEoVideoStream(peer);
         auto reply = makeReply();
         reply.accepted = true;
         reply.status = "fleet_status";
@@ -115,6 +119,56 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     const auto receivedAtMs = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
     pendingCommand_ = PendingGroundCommand{packet, peer, receivedAtMs};
+}
+
+void AeroSimLabApp::StartEoVideoStream(
+    const aerosimlab::communication::UdpPeer& peer)
+{
+    const std::string destination = peer.AddressIpv4();
+    if (eoVideoStartPending_.load())
+        return;
+    if (eoVideoSender_ && eoVideoSender_->IsRunning()
+        && eoVideoDestinationAddress_ == destination)
+        return;
+
+    if (eoVideoStartWorker_.joinable())
+        eoVideoStartWorker_.join();
+    if (!eoVideoStartError_.empty() && eoVideoAttemptedAddress_ == destination)
+    {
+        if (!eoVideoStartErrorReported_)
+        {
+            window_->SetTitle("DroneSim | EO 영상 전송을 시작하지 못했습니다: "
+                + eoVideoStartError_);
+            eoVideoStartErrorReported_ = true;
+        }
+        return;
+    }
+
+    if (!eoVideoSender_)
+        eoVideoSender_ = std::make_unique<aerosimlab::media::RtpVideoSender>();
+    const int width = cameraTarget_->GetWidth();
+    const int height = cameraTarget_->GetHeight();
+    eoVideoStartPending_ = true;
+    eoVideoAttemptedAddress_ = destination;
+    eoVideoStartError_.clear();
+    eoVideoStartErrorReported_ = false;
+    eoVideoStartWorker_ = std::jthread([this, destination, width, height]
+    {
+        eoVideoSender_->Stop();
+        std::string error;
+        if (eoVideoSender_->Start(width, height, 30, destination,
+            aerosimlab::media::EoVideoStreamPorts::receiverRtp,
+            aerosimlab::media::EoVideoStreamPorts::receiverRtcp,
+            aerosimlab::media::EoVideoStreamPorts::senderRtcp, error))
+        {
+            eoVideoDestinationAddress_ = destination;
+        }
+        else
+        {
+            eoVideoStartError_ = std::move(error);
+        }
+        eoVideoStartPending_ = false;
+    });
 }
 
 bool AeroSimLabApp::ReplyToUnqueueableGroundCommand(

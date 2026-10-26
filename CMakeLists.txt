@@ -97,6 +97,38 @@ endif()
 if(NOT EMSCRIPTEN)
   find_package(OpenCV REQUIRED COMPONENTS core imgproc videoio)
   find_package(Threads REQUIRED)
+  if(WIN32 AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
+    set(_gstreamer_root "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+    add_library(aerosimlab_gstreamer INTERFACE)
+    target_include_directories(aerosimlab_gstreamer INTERFACE
+      "${_gstreamer_root}/include"
+      "${_gstreamer_root}/include/gstreamer-1.0"
+      "${_gstreamer_root}/include/glib-2.0"
+      "$<$<CONFIG:Debug>:${_gstreamer_root}/debug/lib/glib-2.0/include>"
+      "$<$<NOT:$<CONFIG:Debug>>:${_gstreamer_root}/lib/glib-2.0/include>"
+    )
+    foreach(_library IN ITEMS gstapp-1.0 gstvideo-1.0 gstbase-1.0
+        gstreamer-1.0 gobject-2.0 glib-2.0)
+      find_library(_gstreamer_release_library_${_library} NAMES "${_library}"
+        PATHS "${_gstreamer_root}/lib" NO_DEFAULT_PATH REQUIRED)
+      find_library(_gstreamer_debug_library_${_library} NAMES "${_library}"
+        PATHS "${_gstreamer_root}/debug/lib" NO_DEFAULT_PATH REQUIRED)
+      target_link_libraries(aerosimlab_gstreamer INTERFACE
+        "$<$<CONFIG:Debug>:${_gstreamer_debug_library_${_library}}>"
+        "$<$<NOT:$<CONFIG:Debug>>:${_gstreamer_release_library_${_library}}>")
+    endforeach()
+    set(AEROSIMLAB_GSTREAMER_PLUGIN_DIR
+      "$<$<CONFIG:Debug>:${_gstreamer_root}/debug/plugins/gstreamer>$<$<NOT:$<CONFIG:Debug>>:${_gstreamer_root}/plugins/gstreamer>")
+    set(AEROSIMLAB_GSTREAMER_BIN_DIR
+      "$<$<CONFIG:Debug>:${_gstreamer_root}/debug/bin>$<$<NOT:$<CONFIG:Debug>>:${_gstreamer_root}/bin>")
+  else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GSTREAMER REQUIRED IMPORTED_TARGET
+      gstreamer-1.0
+      gstreamer-app-1.0
+      gstreamer-video-1.0
+    )
+  endif()
 endif()
 
 option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
@@ -167,6 +199,17 @@ target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_cor
 add_library(aerosimlab_sensor STATIC modules/sensor/src/RgbFrame.cpp)
 target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
 if(NOT EMSCRIPTEN)
+  add_library(aerosimlab_media STATIC modules/media/src/RtpVideoStream.cpp)
+  target_include_directories(aerosimlab_media PUBLIC modules/media/include)
+  if(WIN32 AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
+    target_compile_definitions(aerosimlab_media PRIVATE
+      "AEROSIMLAB_GSTREAMER_PLUGIN_DIR=\"${AEROSIMLAB_GSTREAMER_PLUGIN_DIR}\""
+      "AEROSIMLAB_GSTREAMER_BIN_DIR=\"${AEROSIMLAB_GSTREAMER_BIN_DIR}\"")
+    target_link_libraries(aerosimlab_media PUBLIC aerosimlab_sensor aerosimlab_gstreamer)
+  else()
+    target_link_libraries(aerosimlab_media PUBLIC aerosimlab_sensor PkgConfig::GSTREAMER)
+  endif()
+
   add_library(aerosimlab_vision STATIC
     modules/vision/src/RgbFrameView.cpp
     modules/vision/src/RgbFrameQuality.cpp
@@ -188,6 +231,7 @@ if(NOT EMSCRIPTEN)
     )
     target_link_libraries(aerosimlab_ground_control PRIVATE
       aerosimlab_ground_control_client
+      aerosimlab_media
       user32
       gdi32
     )
@@ -305,7 +349,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   )
   if(NOT EMSCRIPTEN)
     target_link_libraries(aerosimlab_simulator_app PRIVATE
-      aerosimlab_vision aerosimlab_imgui opencv_videoio Threads::Threads)
+      aerosimlab_vision aerosimlab_media aerosimlab_imgui opencv_videoio Threads::Threads)
   endif()
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"
@@ -441,6 +485,15 @@ if(BUILD_TESTING)
       TEST_PREFIX "Vision."
       DISCOVERY_TIMEOUT 60
       PROPERTIES LABELS "UNIT;vision"
+    )
+
+    add_executable(aerosimlab_media_tests tests/media/RtpVideoStreamTests.cpp)
+    target_link_libraries(aerosimlab_media_tests PRIVATE
+      aerosimlab_media aerosimlab_communication GTest::gtest_main)
+    gtest_discover_tests(aerosimlab_media_tests
+      TEST_PREFIX "Media."
+      DISCOVERY_TIMEOUT 60
+      PROPERTIES LABELS "INTEGRATION;media" TIMEOUT 15 RUN_SERIAL TRUE
     )
   endif()
 

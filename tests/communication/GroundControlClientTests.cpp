@@ -59,6 +59,8 @@ void Verify_GroundControlClient_SendsCommandAndReadsMatchingUdpReply()
 
 TEST(GroundControlClientTests, CoreScenarios)
 {
+    EXPECT_EQ(communication::UdpSocket::Resolve("127.0.0.1", 1).AddressIpv4(),
+        "127.0.0.1");
     EXPECT_NO_FATAL_FAILURE(Verify_GroundControlClient_SendsCommandAndReadsMatchingUdpReply());
 }
 
