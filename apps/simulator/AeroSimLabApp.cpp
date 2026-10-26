@@ -6,6 +6,7 @@
 #endif
 
 #include "graphics/Camera.h"
+#include "graphics/GlbModel.h"
 #include "graphics/Mesh.h"
 #ifndef __EMSCRIPTEN__
 #include "graphics/MultisampleFramebuffer.h"
@@ -734,7 +735,7 @@ void AeroSimLabApp::LoadScene()
 void AeroSimLabApp::LoadSceneModels()
 {
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
-    droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
+    droneModel_ = aerosimlab::graphics::GlbModel::Load(
         AssetPath("models/drones/x500/visual.glb").string());
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
@@ -1038,9 +1039,25 @@ void AeroSimLabApp::LoadMapFeatures()
         target.routeStartMeters = routeStart;
         if (target.routeAutomaticallyPlanned)
         {
-            const auto route = aerosimlab::terrain::PlanMapFlightRoute(
+            auto route = aerosimlab::terrain::PlanMapFlightRoute(
                 terrainGrid_, routeBuildings_, routeStart,
                 target.approachPositionMeters);
+            // 외곽선이 겹친 곳에서는 선택한 벽 앞이 이웃 건물 안일 수 있다.
+            // 촬영 허용 거리 안에서 벽 바깥으로 옮겨 경로가 열리는 지점을 찾는다.
+            const double currentDistance = glm::length(
+                target.approachPositionMeters - target.surface.centerMeters);
+            constexpr double approachStepMeters = 2.0;
+            for (double distance = currentDistance + approachStepMeters;
+                 !route && distance <= target.surface.maximumDistanceMeters;
+                 distance += approachStepMeters)
+            {
+                const glm::dvec3 candidate = target.surface.centerMeters
+                    + target.surface.normal * distance;
+                route = aerosimlab::terrain::PlanMapFlightRoute(
+                    terrainGrid_, routeBuildings_, routeStart, candidate);
+                if (route)
+                    target.approachPositionMeters = candidate;
+            }
             if (!route)
                 throw std::runtime_error("점검 구역까지 건물을 피하는 경로를 찾지 못했습니다: "
                     + target.zoneId);
@@ -1496,8 +1513,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         const glm::vec3 position = ToRenderPosition(drone.positionMeters);
         const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
             glm::mat4_cast(ToRenderOrientation(drone.orientation));
-        renderer_->Draw(heading, *droneMesh_, droneMaterial_, *shader_,
-            view, projection, cameraPosition, droneSurfaceTexture_.get(), true);
+        droneModel_->Draw(heading, *renderer_, *shader_, view, projection,
+            cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true);
     }
 }
 

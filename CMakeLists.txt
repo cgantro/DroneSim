@@ -303,6 +303,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   set(AEROSIMLAB_GRAPHICS_SOURCES
     modules/graphics/src/graphics/Camera.cpp
     modules/graphics/src/graphics/IndexBuffer.cpp
+    modules/graphics/src/graphics/GlbModel.cpp
     modules/graphics/src/graphics/Material.cpp
     modules/graphics/src/graphics/Mesh.cpp
     modules/graphics/src/graphics/Renderer.cpp

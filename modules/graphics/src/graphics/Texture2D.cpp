@@ -194,6 +194,40 @@ std::unique_ptr<Texture2D> Texture2D::LoadFromFile(
         imageWidth, imageHeight, pixels.get(), pixelByteCount, repeat));
 }
 
+std::unique_ptr<Texture2D> Texture2D::LoadFromMemory(
+    std::span<const std::uint8_t> encodedImage, bool repeat)
+{
+    if (encodedImage.empty()
+        || encodedImage.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        throw std::runtime_error("이미지 자료 크기가 올바르지 않습니다.");
+
+    int width = 0;
+    int height = 0;
+    using StbiImage = std::unique_ptr<stbi_uc, decltype(&stbi_image_free)>;
+    StbiImage pixels(stbi_load_from_memory(encodedImage.data(),
+        static_cast<int>(encodedImage.size()), &width, &height, nullptr, STBI_rgb),
+        &stbi_image_free);
+    if (!pixels || width <= 0 || height <= 0)
+    {
+        const char* reason = stbi_failure_reason();
+        throw std::runtime_error("메모리의 PNG 또는 JPEG를 읽지 못했습니다."
+            + (reason == nullptr ? std::string{} : " (" + std::string(reason) + ")"));
+    }
+
+    const auto imageWidth = static_cast<std::uint32_t>(width);
+    const auto imageHeight = static_cast<std::uint32_t>(height);
+    constexpr std::size_t bytesPerPixel = 3U;
+    const std::size_t widthSize = imageWidth;
+    const std::size_t heightSize = imageHeight;
+    const std::size_t maximumSize = std::numeric_limits<std::size_t>::max();
+    if (widthSize > maximumSize / heightSize
+        || widthSize * heightSize > maximumSize / bytesPerPixel)
+        throw std::runtime_error("이미지 크기가 너무 큽니다.");
+
+    return std::unique_ptr<Texture2D>(new Texture2D(imageWidth, imageHeight,
+        pixels.get(), widthSize * heightSize * bytesPerPixel, repeat));
+}
+
 Texture2D::Texture2D(std::uint32_t width, std::uint32_t height,
     const std::vector<std::uint8_t>& pixels)
     : Texture2D(width, height, pixels.data(), pixels.size())

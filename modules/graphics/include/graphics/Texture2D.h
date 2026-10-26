@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace aerosimlab::graphics
@@ -23,6 +24,10 @@ public:
     /** @brief PPM, PNG, JPEG 이미지를 읽어 GPU 텍스처로 올린다. */
     [[nodiscard]] static std::unique_ptr<Texture2D> LoadFromFile(
         const std::filesystem::path& path, bool repeat = false);
+
+    /** @brief 메모리에 담긴 PNG 또는 JPEG를 GPU 텍스처로 읽는다. */
+    [[nodiscard]] static std::unique_ptr<Texture2D> LoadFromMemory(
+        std::span<const std::uint8_t> encodedImage, bool repeat = false);
 
     ~Texture2D();
 

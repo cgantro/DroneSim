@@ -37,6 +37,7 @@ namespace aerosimlab::graphics
 {
 class Camera;
 class Mesh;
+class GlbModel;
 class MultisampleFramebuffer;
 class Renderer;
 class Shader;
@@ -414,7 +415,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingWallMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingWallMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
+    std::unique_ptr<aerosimlab::graphics::GlbModel> droneModel_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> terrainSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
