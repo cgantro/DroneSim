@@ -390,6 +390,11 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
         "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.ppm@maps/tancheon/terrain.ppm"
       )
     endif()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb")
+      target_link_options(aerosimlab_simulator PRIVATE
+        "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb@maps/tancheon/terrain.glb"
+      )
+    endif()
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory

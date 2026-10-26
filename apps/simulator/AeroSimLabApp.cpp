@@ -767,7 +767,13 @@ void AeroSimLabApp::LoadTerrain()
     terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load(
         AssetPath("maps/tancheon/terrain.aerotrn"));
     simulation_.SetTerrain(terrainGrid_);
-    terrainMesh_ = CreateTerrainMesh(terrainGrid_);
+
+    const auto terrainModelPath = AssetPath("maps/tancheon/terrain.glb");
+    if (std::filesystem::exists(terrainModelPath))
+        terrainMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
+            terrainModelPath.string());
+    else
+        terrainMesh_ = CreateTerrainMesh(terrainGrid_);
 }
 
 void AeroSimLabApp::LoadMapFeatures()
