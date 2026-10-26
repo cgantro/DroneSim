@@ -3,6 +3,7 @@
 #include "simulation_core/EoCameraModel.h"
 
 #include <string_view>
+#include <vector>
 
 namespace aerosimlab::simulation
 {
@@ -11,4 +12,8 @@ namespace aerosimlab::simulation
  * @details 법선과 가로 방향은 서로 직각인 단위 벡터로 정리한다. 크기, 거리, 각도와 영상 크기가 잘못되면 예외를 던진다.
  */
 [[nodiscard]] InspectionSurface ParseInspectionSurfaceJson(std::string_view jsonText);
+
+/** @brief 시설물 점검 경로의 ENU 미터 좌표 목록을 읽는다. */
+[[nodiscard]] std::vector<glm::dvec3> ParseInspectionWaypointsJson(
+    std::string_view jsonText);
 }

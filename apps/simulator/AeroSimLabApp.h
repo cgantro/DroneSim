@@ -246,6 +246,7 @@ private:
         std::string facilityId;
         std::string zoneId;
         aerosimlab::simulation::InspectionSurface surface;
+        std::vector<glm::dvec3> routeWaypointsMeters;
         glm::dvec3 approachPositionMeters{0.0};
     };
     enum class InspectionMissionStage
@@ -269,6 +270,7 @@ private:
     std::string inspectionMissionError_;
     std::vector<InspectionTarget> inspectionTargets_;
     std::size_t activeInspectionTargetIndex_ = 0;
+    std::size_t currentInspectionRouteWaypointIndex_ = 0;
     std::size_t inspectionMissionEndTargetIndex_ = 0;
     std::size_t inspectionMissionTargetCount_ = 0;
     std::size_t completedInspectionTargetCount_ = 0;

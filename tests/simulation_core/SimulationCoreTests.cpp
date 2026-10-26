@@ -287,6 +287,19 @@ void Verify_InspectionSurfaceJsonNormalizesAxesAndRejectsInvalidCaptureRules()
     })")), std::invalid_argument);
 }
 
+void Verify_InspectionWaypointsJsonReadsOrderedEnuCoordinates()
+{
+    const auto waypoints = ParseInspectionWaypointsJson(
+        R"([[1, 2, 3], [4, 5, 6]])");
+    ASSERT_EQ(waypoints.size(), 2U);
+    EXPECT_DOUBLE_EQ(waypoints[0].x, 1.0);
+    EXPECT_DOUBLE_EQ(waypoints[1].z, 6.0);
+    EXPECT_THROW(static_cast<void>(ParseInspectionWaypointsJson("[]")),
+        std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(ParseInspectionWaypointsJson(R"([[1, 2]])")),
+        std::invalid_argument);
+}
+
 void Verify_EoCameraModelUsesBuildingFootprintsForOcclusion()
 {
     constexpr double diagonal = 0.7071067811865476;
@@ -343,6 +356,8 @@ TEST(SimulationCoreTests, CoreScenarios)
         Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels());
     EXPECT_NO_FATAL_FAILURE(
         Verify_InspectionSurfaceJsonNormalizesAxesAndRejectsInvalidCaptureRules());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_InspectionWaypointsJsonReadsOrderedEnuCoordinates());
     EXPECT_NO_FATAL_FAILURE(
         Verify_EoCameraModelUsesBuildingFootprintsForOcclusion());
 }

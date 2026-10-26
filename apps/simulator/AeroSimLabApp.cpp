@@ -1033,14 +1033,17 @@ void AeroSimLabApp::LoadMapFeatures()
         || plan.at("targets").empty())
         throw std::runtime_error("시험용 점검 계획에 구역이 없습니다.");
 
-    const bool hasExplicitSurface = std::any_of(
+    const bool hasExplicitGeometry = std::any_of(
         plan.at("targets").begin(), plan.at("targets").end(),
-        [](const Json& target) { return target.contains("inspection_surface"); });
-    if (hasExplicitSurface
+        [](const Json& target) {
+            return target.contains("inspection_surface")
+                || target.contains("waypoints_meters");
+        });
+    if (hasExplicitGeometry
         && (!plan.contains("coordinate_frame")
             || plan.at("coordinate_frame") != "tancheon_local_enu"))
         throw std::runtime_error(
-            "직접 지정한 점검면에는 tancheon_local_enu 좌표 기준을 적어야 합니다.");
+            "좌표로 지정한 점검면과 경유점에는 tancheon_local_enu 기준을 적어야 합니다.");
 
     std::unordered_set<std::string> zoneIds;
     for (const Json& target : plan.at("targets"))
@@ -1051,7 +1054,19 @@ void AeroSimLabApp::LoadMapFeatures()
             throw std::runtime_error("점검 계획에 같은 구역 ID가 두 번 있습니다: " + zoneId);
 
         aerosimlab::simulation::InspectionSurface surface;
+        std::vector<glm::dvec3> routeWaypoints;
         glm::dvec3 approachPosition{0.0};
+        if (target.contains("waypoints_meters"))
+        {
+            routeWaypoints = aerosimlab::simulation::ParseInspectionWaypointsJson(
+                target.at("waypoints_meters").dump());
+            for (const glm::dvec3& waypoint : routeWaypoints)
+            {
+                if (!terrainGrid_.ContainsLocalPositionMeters({waypoint.x, waypoint.y}))
+                    throw std::runtime_error("점검 경유점이 지형 범위를 벗어났습니다: "
+                        + zoneId);
+            }
+        }
         if (target.contains("inspection_surface"))
         {
             surface = aerosimlab::simulation::ParseInspectionSurfaceJson(
@@ -1101,7 +1116,8 @@ void AeroSimLabApp::LoadMapFeatures()
             {approachPosition.x, approachPosition.y}))
             throw std::runtime_error("점검 구역 접근 위치가 지형 범위를 벗어났습니다: "
                 + zoneId);
-        inspectionTargets_.push_back({facilityId, zoneId, surface, approachPosition});
+        inspectionTargets_.push_back({facilityId, zoneId, surface,
+            std::move(routeWaypoints), approachPosition});
     }
 
     SetActiveInspectionTarget(0U);
@@ -1151,7 +1167,10 @@ void AeroSimLabApp::SetActiveInspectionTarget(std::size_t index)
     inspectionFacilityId_ = target.facilityId;
     inspectionZoneId_ = target.zoneId;
     inspectionSurface_ = target.surface;
-    missionGoalMeters_ = target.approachPositionMeters;
+    currentInspectionRouteWaypointIndex_ = 0;
+    missionGoalMeters_ = target.routeWaypointsMeters.empty()
+        ? target.approachPositionMeters
+        : target.routeWaypointsMeters.front();
 }
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
@@ -1401,7 +1420,31 @@ void AeroSimLabApp::AdvanceInspectionMission()
         const double distanceMeters = glm::length(
             missionGoalMeters_ - simulation_.State().positionMeters);
         if (distanceMeters <= 2.0)
-            inspectionMissionStage_ = Stage::AligningCamera;
+        {
+            const InspectionTarget& target =
+                inspectionTargets_[activeInspectionTargetIndex_];
+            if (currentInspectionRouteWaypointIndex_ < target.routeWaypointsMeters.size())
+            {
+                ++currentInspectionRouteWaypointIndex_;
+                missionGoalMeters_ = currentInspectionRouteWaypointIndex_
+                        < target.routeWaypointsMeters.size()
+                    ? target.routeWaypointsMeters[currentInspectionRouteWaypointIndex_]
+                    : target.approachPositionMeters;
+                aerosimlab::simulation::DroneCommand waypoint;
+                waypoint.kind = CommandKind::SetWaypoint;
+                waypoint.vector = missionGoalMeters_;
+                if (ApplyAndRecordCommand(waypoint)
+                    != aerosimlab::simulation::CommandResult::Accepted)
+                {
+                    FailInspectionMission("다음 점검 경유점 이동 명령을 적용하지 못했습니다.");
+                    return;
+                }
+            }
+            else
+            {
+                inspectionMissionStage_ = Stage::AligningCamera;
+            }
+        }
         return;
     }
 

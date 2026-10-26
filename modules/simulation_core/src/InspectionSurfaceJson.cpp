@@ -108,4 +108,17 @@ InspectionSurface ParseInspectionSurfaceJson(std::string_view jsonText)
         throw std::invalid_argument("점검면 크기·거리·각도 조건이 잘못되었습니다.");
     return surface;
 }
+
+std::vector<glm::dvec3> ParseInspectionWaypointsJson(std::string_view jsonText)
+{
+    const Json values = Json::parse(jsonText);
+    if (!values.is_array() || values.empty())
+        throw std::invalid_argument("점검 경유점은 비어 있지 않은 좌표 목록이어야 합니다.");
+
+    std::vector<glm::dvec3> waypoints;
+    waypoints.reserve(values.size());
+    for (const Json& value : values)
+        waypoints.push_back(ReadVector(value, "waypoints_meters"));
+    return waypoints;
+}
 }
