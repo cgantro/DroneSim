@@ -204,6 +204,9 @@
       var eoStreamContext = eoStreamCanvas.getContext("2d");
       var eoViewport = null;
       var eoCanvasFrame = 0;
+      var eoCanvasCopyActive = false;
+      var eoLastCanvasCopyAt = -Infinity;
+      var eoCanvasCopyIntervalMilliseconds = 1000 / 24;
       var eoWebRtcStream = null;
       var eoWebRtcSender = null;
       var eoWebRtcReceiver = null;
@@ -801,7 +804,7 @@
           throw new Error("EO 영상 캔버스를 만들지 못했습니다.");
 
         setEoLiveStatus("EO 영상 · 전송 경로 연결 중");
-        copyEoViewport();
+        startEoViewportCopy();
         eoWebRtcStream = eoStreamCanvas.captureStream(24);
         eoWebRtcSender = new RTCPeerConnection({ iceServers: [] });
         eoWebRtcReceiver = new RTCPeerConnection({ iceServers: [] });
@@ -833,6 +836,7 @@
 
       window.addEventListener("beforeunload", function () {
         closeEoWebRtc();
+        eoCanvasCopyActive = false;
         window.cancelAnimationFrame(eoCanvasFrame);
         eoDownloadUrls.forEach(function (url) { URL.revokeObjectURL(url); });
       });
@@ -844,20 +848,33 @@
           .find(function (type) { return MediaRecorder.isTypeSupported(type); }) || "";
       }
 
-      function copyEoViewport() {
-        if (Module.canvas && eoStreamContext && eoViewport
-            && eoViewport.width > 0 && eoViewport.height > 0) {
-          var source = Module.canvas;
-          if (eoStreamCanvas.width !== eoViewport.width
-              || eoStreamCanvas.height !== eoViewport.height) {
-            eoStreamCanvas.width = eoViewport.width;
-            eoStreamCanvas.height = eoViewport.height;
-          }
-          if (eoViewport.x + eoViewport.width <= source.width
-              && eoViewport.y + eoViewport.height <= source.height) {
-            eoStreamContext.drawImage(source,
-              eoViewport.x, eoViewport.y, eoViewport.width, eoViewport.height,
-              0, 0, eoViewport.width, eoViewport.height);
+      function startEoViewportCopy() {
+        if (eoCanvasCopyActive)
+          return;
+        eoCanvasCopyActive = true;
+        eoCanvasFrame = window.requestAnimationFrame(copyEoViewport);
+      }
+
+      function copyEoViewport(timestamp) {
+        if (!eoCanvasCopyActive)
+          return;
+
+        if (timestamp - eoLastCanvasCopyAt >= eoCanvasCopyIntervalMilliseconds) {
+          eoLastCanvasCopyAt = timestamp;
+          if (Module.canvas && eoStreamContext && eoViewport
+              && eoViewport.width > 0 && eoViewport.height > 0) {
+            var source = Module.canvas;
+            if (eoStreamCanvas.width !== eoViewport.width
+                || eoStreamCanvas.height !== eoViewport.height) {
+              eoStreamCanvas.width = eoViewport.width;
+              eoStreamCanvas.height = eoViewport.height;
+            }
+            if (eoViewport.x + eoViewport.width <= source.width
+                && eoViewport.y + eoViewport.height <= source.height) {
+              eoStreamContext.drawImage(source,
+                eoViewport.x, eoViewport.y, eoViewport.width, eoViewport.height,
+                0, 0, eoViewport.width, eoViewport.height);
+            }
           }
         }
         eoCanvasFrame = window.requestAnimationFrame(copyEoViewport);
@@ -1085,7 +1102,7 @@
               + (event.error?.message || "원인을 확인할 수 없습니다."));
           });
           eoRecorder.start(1000);
-          copyEoViewport();
+          startEoViewportCopy();
           setEoRecordingStatus(eoRecorderSink
             ? "녹화 중 · 브라우저 저장 공간에 조각별 기록"
             : "녹화 중 · 종료 후 브라우저에 저장");
