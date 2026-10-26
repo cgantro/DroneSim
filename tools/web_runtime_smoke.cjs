@@ -243,7 +243,8 @@ async function run() {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     const videoBytes = fs.readFileSync(videoPath);
     const videoHash = crypto.createHash("sha256").update(videoBytes).digest("hex");
-    if (manifest.collection_state !== "CAPTURED"
+    if (manifest.format_version !== 2
+        || manifest.collection_state !== "CAPTURED"
         || manifest.mission_outcome !== "COMPLETED"
         || manifest.video_bytes !== videoBytes.length
         || manifest.video_checksum !== videoHash
