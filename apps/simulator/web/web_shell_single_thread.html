@@ -43,7 +43,7 @@
       <div id="web-gcs-status" aria-live="polite">
         <strong>지상통제 · 준비 중</strong>
         <span>카메라 목표 화면 확인: 준비 중</span>
-        <span id="web-gcs-mission">영상 수집 임무: 대기 중</span>
+        <span id="web-gcs-mission">정찰 임무: 대기 중</span>
       </div>
       <div id="web-eo-live" aria-live="polite">
         <strong id="web-eo-live-status">EO 영상 · 연결 준비 중</strong>
@@ -813,7 +813,7 @@
           + "<span>카메라 목표 화면 확인: "
           + (captureLabels[captureAssessment] || captureLabels.unknown)
           + " · 파손 여부는 사람이 영상으로 확인</span>"
-          + "<span id=\"web-gcs-mission\">영상 수집 임무: " + missionStatus + "</span>";
+          + "<span id=\"web-gcs-mission\">정찰 임무: " + missionStatus + "</span>";
 
         var missionCanStart = missionStatus.includes("대기 중")
           || missionStatus.includes("저장 완료")
@@ -879,7 +879,7 @@
         document.querySelector("#web-gcs [data-start-inspection]").addEventListener(
             "click", async function () {
           if (eoRecorder || eoRecordingFinalizing) {
-            setEoRecordingStatus("현재 영상 수집 임무의 녹화가 진행 중입니다.");
+            setEoRecordingStatus("현재 정찰 임무의 녹화가 진행 중입니다.");
             return;
           }
           if (!await startEoRecording())

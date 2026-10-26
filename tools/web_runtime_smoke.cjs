@@ -202,7 +202,7 @@ async function run() {
     const inspectionTarget = page.locator("#inspection-target");
     await inspectionTarget.selectOption("1");
     const selectedFacility = await inspectionTarget.locator("option:checked").innerText();
-    await page.getByRole("button", { name: "영상 수집 시작" }).click();
+    await page.getByRole("button", { name: "정찰 임무 시작" }).click();
     await page.waitForFunction(
       () => document.querySelector("#web-eo-recording")?.textContent
         .includes("브라우저 저장 공간에 조각별 기록"),
@@ -221,7 +221,7 @@ async function run() {
     await page.getByRole("button", { name: "일시 정지" }).click();
     await page.waitForFunction(
       () => document.querySelector("#web-gcs-status")?.textContent
-        .includes("영상 수집 임무: 목표 1/1: 일시 정지"),
+        .includes("정찰 임무: 목표 1/1: 일시 정지"),
       null,
       { timeout: 5000 }
     );
@@ -239,18 +239,18 @@ async function run() {
       await page.waitForFunction(
         () => {
           const status = document.querySelector("#web-gcs-status")?.textContent || "";
-          return status.includes("영상 수집 임무: 구도 확인 완료")
-            || status.includes("영상 수집 임무: 실패:");
+          return status.includes("정찰 임무: 영상 수집 완료")
+            || status.includes("정찰 임무: 실패:");
         },
         null,
         { timeout: 240000 }
       );
     } catch {
-      throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${await telemetry.innerText()}`);
+      throw new Error(`정찰 임무가 끝나지 않았습니다: ${await telemetry.innerText()}`);
     }
     const missionStatus = await telemetry.innerText();
-    if (!missionStatus.includes("영상 수집 임무: 구도 확인 완료 (1개 위치)"))
-      throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${missionStatus}`);
+    if (!missionStatus.includes("정찰 임무: 영상 수집 완료 (1개 위치)"))
+      throw new Error(`정찰 임무가 끝나지 않았습니다: ${missionStatus}`);
     await page.waitForFunction(
       () => {
         const text = document.querySelector("#web-eo-recording")?.textContent || "";
