@@ -330,6 +330,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn@maps/tancheon/terrain.aerotrn"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson@maps/tancheon/site.geojson"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json@maps/tancheon/demo-inspection-plan.json"
     )
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD

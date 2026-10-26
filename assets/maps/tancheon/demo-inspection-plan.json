@@ -1,0 +1,50 @@
+{
+  "plan_type": "osm_building_facade_demo",
+  "targets": [
+    {
+      "facility_id": "osm-building-692770099",
+      "zone_id": "facade-111-dong",
+      "building_osm_id": "692770099",
+      "approach_distance_meters": 8.0,
+      "capture": {
+        "width_meters": 4.0,
+        "height_meters": 3.0,
+        "minimum_distance_meters": 3.0,
+        "maximum_distance_meters": 20.0,
+        "maximum_incidence_angle_degrees": 55.0,
+        "minimum_pixel_width": 80,
+        "minimum_pixel_height": 80
+      }
+    },
+    {
+      "facility_id": "osm-building-692770087",
+      "zone_id": "facade-108-dong",
+      "building_osm_id": "692770087",
+      "approach_distance_meters": 8.0,
+      "capture": {
+        "width_meters": 4.0,
+        "height_meters": 3.0,
+        "minimum_distance_meters": 3.0,
+        "maximum_distance_meters": 20.0,
+        "maximum_incidence_angle_degrees": 55.0,
+        "minimum_pixel_width": 80,
+        "minimum_pixel_height": 80
+      }
+    },
+    {
+      "facility_id": "osm-building-692770092",
+      "zone_id": "facade-110-dong",
+      "building_osm_id": "692770092",
+      "approach_distance_meters": 8.0,
+      "capture": {
+        "width_meters": 4.0,
+        "height_meters": 3.0,
+        "minimum_distance_meters": 3.0,
+        "maximum_distance_meters": 20.0,
+        "maximum_incidence_angle_degrees": 55.0,
+        "minimum_pixel_width": 80,
+        "minimum_pixel_height": 80
+      }
+    }
+  ]
+}

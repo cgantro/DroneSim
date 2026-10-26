@@ -33,6 +33,7 @@
 #include "vision/RgbFrameQuality.h"
 #endif
 #include <glm/gtc/matrix_transform.hpp>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <array>
@@ -40,6 +41,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -50,6 +52,8 @@
 #include <system_error>
 #include <ctime>
 #include <cmath>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -977,13 +981,7 @@ void AeroSimLabApp::LoadMapFeatures()
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels);
     inspectionOccluders_.reserve(buildings.size());
-    struct Candidate
-    {
-        const aerosimlab::terrain::MapBuilding* building;
-        aerosimlab::terrain::MapBuildingFacade facade;
-        glm::dvec3 approachPositionMeters;
-    };
-    std::vector<Candidate> candidates;
+    std::unordered_map<std::string, const aerosimlab::terrain::MapBuilding*> buildingsById;
     for (const auto& building : buildings)
     {
         const auto bounds =
@@ -995,61 +993,76 @@ void AeroSimLabApp::LoadMapFeatures()
         inspectionOccluders_.push_back({building.outlineMeters,
             bounds.centerMeters.z - bounds.halfExtentsMeters.z,
             bounds.centerMeters.z + bounds.halfExtentsMeters.z});
-
         if (building.heightSource
-            != aerosimlab::terrain::BuildingHeightSource::OsmHeightTag)
-            continue;
-        const auto facade = aerosimlab::terrain::GetNearestMapBuildingFacade(
-            building, demoDroneStartMeters);
-        if (facade.widthMeters < 3.0 || facade.heightMeters < 2.0)
-            continue;
-
-        const glm::dvec3 approachPosition = facade.centerMeters
-            + facade.outwardNormal * 8.0;
-        if (!terrainGrid_.ContainsLocalPositionMeters(
-            {approachPosition.x, approachPosition.y}))
-            continue;
-        candidates.push_back({&building, facade, approachPosition});
+            == aerosimlab::terrain::BuildingHeightSource::OsmHeightTag)
+            buildingsById.emplace(building.osmId, &building);
     }
 
-    glm::dvec2 previousPosition = demoDroneStartMeters;
-    while (!candidates.empty() && inspectionTargets_.size() < 3U)
+    std::ifstream planFile(AssetPath("maps/tancheon/demo-inspection-plan.json"));
+    if (!planFile)
+        throw std::runtime_error("시험용 시설물 점검 계획을 열지 못했습니다.");
+
+    using Json = nlohmann::json;
+    Json plan;
+    try
     {
-        const auto nearest = std::min_element(candidates.begin(), candidates.end(),
-            [&](const Candidate& first, const Candidate& second)
-            {
-                const glm::dvec2 firstOffset{
-                    first.approachPositionMeters.x - previousPosition.x,
-                    first.approachPositionMeters.y - previousPosition.y};
-                const glm::dvec2 secondOffset{
-                    second.approachPositionMeters.x - previousPosition.x,
-                    second.approachPositionMeters.y - previousPosition.y};
-                return glm::dot(firstOffset, firstOffset)
-                    < glm::dot(secondOffset, secondOffset);
-            });
-        const Candidate candidate = *nearest;
-        const auto& facade = candidate.facade;
+        planFile >> plan;
+    }
+    catch (const Json::exception&)
+    {
+        throw std::runtime_error("시험용 시설물 점검 계획의 JSON을 읽지 못했습니다.");
+    }
+    if (!plan.contains("targets") || !plan.at("targets").is_array()
+        || plan.at("targets").empty())
+        throw std::runtime_error("시험용 점검 계획에 구역이 없습니다.");
+
+    std::unordered_set<std::string> zoneIds;
+    for (const Json& target : plan.at("targets"))
+    {
+        const std::string buildingId = target.at("building_osm_id").get<std::string>();
+        const auto building = buildingsById.find(buildingId);
+        if (building == buildingsById.end())
+            throw std::runtime_error("점검 계획에서 지정한 건물 자료를 찾지 못했습니다: "
+                + buildingId);
+
+        const std::string facilityId = target.at("facility_id").get<std::string>();
+        const std::string zoneId = target.at("zone_id").get<std::string>();
+        if (!zoneIds.insert(zoneId).second)
+            throw std::runtime_error("점검 계획에 같은 구역 ID가 두 번 있습니다: " + zoneId);
+
+        const Json& capture = target.at("capture");
+        const double approachDistance = target.at("approach_distance_meters").get<double>();
+        const auto facade = aerosimlab::terrain::GetNearestMapBuildingFacade(
+            *building->second, demoDroneStartMeters);
+        if (facade.widthMeters < 3.0 || facade.heightMeters < 2.0
+            || approachDistance <= 0.0)
+            throw std::runtime_error("점검 계획의 외벽 시험면이나 접근 거리를 확인해 주세요: "
+                + zoneId);
+
+        const glm::dvec3 approachPosition = facade.centerMeters
+            + facade.outwardNormal * approachDistance;
+        if (!terrainGrid_.ContainsLocalPositionMeters(
+            {approachPosition.x, approachPosition.y}))
+            throw std::runtime_error("점검 구역 접근 위치가 지형 범위를 벗어났습니다: "
+                + zoneId);
+
         aerosimlab::simulation::InspectionSurface surface;
         surface.centerMeters = facade.centerMeters;
         surface.normal = facade.outwardNormal;
         surface.widthAxis = facade.widthAxis;
-        surface.widthMeters = std::min(facade.widthMeters, 4.0);
-        surface.heightMeters = std::min(facade.heightMeters, 3.0);
-        surface.minimumDistanceMeters = 3.0;
-        surface.maximumDistanceMeters = 20.0;
-        surface.maximumIncidenceAngleDegrees = 55.0;
-        surface.minimumPixelWidth = 80;
-        surface.minimumPixelHeight = 80;
-        inspectionTargets_.push_back({candidate.building->osmId,
-            "facade-" + candidate.building->osmId, surface,
-            candidate.approachPositionMeters});
-        previousPosition = {candidate.approachPositionMeters.x,
-            candidate.approachPositionMeters.y};
-        candidates.erase(nearest);
+        surface.widthMeters = std::min(facade.widthMeters,
+            capture.at("width_meters").get<double>());
+        surface.heightMeters = std::min(facade.heightMeters,
+            capture.at("height_meters").get<double>());
+        surface.minimumDistanceMeters = capture.at("minimum_distance_meters").get<double>();
+        surface.maximumDistanceMeters = capture.at("maximum_distance_meters").get<double>();
+        surface.maximumIncidenceAngleDegrees =
+            capture.at("maximum_incidence_angle_degrees").get<double>();
+        surface.minimumPixelWidth = capture.at("minimum_pixel_width").get<int>();
+        surface.minimumPixelHeight = capture.at("minimum_pixel_height").get<int>();
+        inspectionTargets_.push_back({facilityId, zoneId, surface, approachPosition});
     }
 
-    if (inspectionTargets_.size() != 3U)
-        throw std::runtime_error("높이 정보가 있는 OSM 건물 3곳을 점검 구역으로 만들지 못했습니다.");
     SetActiveInspectionTarget(0U);
 #ifdef __EMSCRIPTEN__
     EM_ASM({
