@@ -152,20 +152,44 @@ struct SimulationCore::EcsStorage
         DroneState& state, DroneControlState& control,
         const glm::dvec3& previousPosition) const
     {
+        constexpr double droneHalfWidthMeters = 0.30;
+        constexpr glm::dvec3 droneHalfExtentsMeters{
+            droneHalfWidthMeters, droneHalfWidthMeters, 0.12};
         if (terrainGrid
             && terrainGrid->ContainsLocalPositionMeters(
                 {state.positionMeters.x, state.positionMeters.y}))
         {
-            control.groundElevationMeters = terrainGrid->HeightAtLocalMeters(
-                {state.positionMeters.x, state.positionMeters.y});
-            if (state.positionMeters.z < control.groundElevationMeters)
+            const glm::dvec2 dronePosition{state.positionMeters.x, state.positionMeters.y};
+            control.groundElevationMeters = terrainGrid->HeightAtLocalMeters(dronePosition);
+
+            double highestGroundMeters = control.groundElevationMeters;
+            // 기체 네 모서리의 지면도 확인해 경사면이 동체를 뚫고 지나가지 않게 한다.
+            constexpr glm::dvec2 footprintOffsets[] = {
+                {-droneHalfWidthMeters, -droneHalfWidthMeters},
+                {-droneHalfWidthMeters, droneHalfWidthMeters},
+                {droneHalfWidthMeters, -droneHalfWidthMeters},
+                {droneHalfWidthMeters, droneHalfWidthMeters}};
+            for (const glm::dvec2& offset : footprintOffsets)
             {
-                state.positionMeters.z = control.groundElevationMeters;
-                state.velocityMetersPerSecond.z = 0.0;
+                const glm::dvec2 sample = dronePosition + offset;
+                if (terrainGrid->ContainsLocalPositionMeters(sample))
+                    highestGroundMeters = std::max(
+                        highestGroundMeters,
+                        static_cast<double>(terrainGrid->HeightAtLocalMeters(sample)));
+            }
+
+            const double minimumCenterHeightMeters =
+                highestGroundMeters + droneHalfExtentsMeters.z;
+            if (state.positionMeters.z < minimumCenterHeightMeters)
+            {
+                state.positionMeters.z = minimumCenterHeightMeters;
+                if (state.velocityMetersPerSecond.z < 0.0)
+                    state.velocityMetersPerSecond.z = 0.0;
+                if (control.targetVelocityMetersPerSecond.z < 0.0)
+                    control.targetVelocityMetersPerSecond.z = 0.0;
             }
         }
 
-        constexpr glm::dvec3 droneHalfExtentsMeters{0.30, 0.30, 0.12};
         for (const StaticObstacleBox& obstacle : kinematicObstacles)
         {
             const glm::dvec3 offset = state.positionMeters - obstacle.centerMeters;

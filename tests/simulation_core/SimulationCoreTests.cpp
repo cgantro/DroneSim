@@ -162,6 +162,48 @@ void Verify_KinematicDroneStopsAtStaticBuildings()
     EXPECT_DOUBLE_EQ(simulation.State(droneId).velocityMetersPerSecond.x, 0.0);
 }
 
+void Verify_KinematicDroneKeepsItsBodyAboveTerrain()
+{
+    terrain::TerrainGrid ground;
+    ground.sampleCount = 3U;
+    ground.spacingXMeters = 1.0F;
+    ground.spacingYMeters = 1.0F;
+    ground.referenceElevationMeters = 10.0F;
+    ground.heightOffsetsMeters.assign(9U, 0.0F);
+
+    SimulationCore simulation{SimulationDynamics::Kinematic};
+    DroneState start;
+    start.positionMeters = {0.0, 0.0, 10.15};
+    start.velocityMetersPerSecond = {0.0, 0.0, -5.0};
+    start.mode = FlightMode::Flying;
+    simulation.SetInitialState(simulation.PrimaryDroneId(), start);
+    simulation.SetTerrain(std::move(ground));
+
+    simulation.AdvanceOneTick();
+
+    EXPECT_NEAR(simulation.State().positionMeters.z, 10.12, 1.0e-9);
+    EXPECT_DOUBLE_EQ(simulation.State().velocityMetersPerSecond.z, 0.0);
+
+    terrain::TerrainGrid risingGround;
+    risingGround.sampleCount = 3U;
+    risingGround.spacingXMeters = 1.0F;
+    risingGround.spacingYMeters = 1.0F;
+    risingGround.referenceElevationMeters = 10.0F;
+    risingGround.heightOffsetsMeters.assign(9U, 1.0F);
+    risingGround.heightOffsetsMeters[4] = 0.0F;
+
+    SimulationCore hillside{SimulationDynamics::Kinematic};
+    DroneState aboveSlope;
+    aboveSlope.positionMeters = {0.0, 0.0, 10.60};
+    aboveSlope.mode = FlightMode::Hovering;
+    hillside.SetInitialState(hillside.PrimaryDroneId(), aboveSlope);
+    hillside.SetTerrain(std::move(risingGround));
+
+    hillside.AdvanceOneTick();
+
+    EXPECT_NEAR(hillside.State().positionMeters.z, 10.63, 1.0e-6);
+}
+
 void Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers()
 {
     SimulationCore simulation{SimulationDynamics::Kinematic};
@@ -439,6 +481,7 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
     EXPECT_NO_FATAL_FAILURE(Verify_KinematicDroneStopsAtStaticBuildings());
+    EXPECT_NO_FATAL_FAILURE(Verify_KinematicDroneKeepsItsBodyAboveTerrain());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_UsesInitialMotorSpeedsInRigidBodyMode());
