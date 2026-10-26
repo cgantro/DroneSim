@@ -41,6 +41,8 @@ struct RendererUniformNames final
     inline static constexpr char useBaseTexture[] = "u_UseBaseTexture";
     inline static constexpr char triplanarTexture[] = "u_TriplanarTexture";
     inline static constexpr char terrainSurface[] = "u_TerrainSurface";
+    inline static constexpr char flowingWater[] = "u_FlowingWater";
+    inline static constexpr char timeSeconds[] = "u_TimeSeconds";
     inline static constexpr char metallicFactor[] = "u_MetallicFactor";
     inline static constexpr char roughnessFactor[] = "u_RoughnessFactor";
     inline static constexpr char cameraPosition[] = "u_CameraPosition";
@@ -188,6 +190,11 @@ void Renderer::SetSceneViewport(int x, int y, int width, int height)
 #endif
 }
 
+void Renderer::SetAnimationTimeSeconds(float seconds) noexcept
+{
+    m_AnimationTimeSeconds = seconds;
+}
+
 void Renderer::Draw(
     const glm::mat4& model,
     const Mesh& mesh,
@@ -217,6 +224,9 @@ void Renderer::Draw(
     shader.SetInt(RendererUniformNames::useBaseTexture, baseTexture != nullptr ? 1 : 0);
     shader.SetInt(RendererUniformNames::triplanarTexture, triplanarTexture ? 1 : 0);
     shader.SetInt(RendererUniformNames::terrainSurface, terrainSurface ? 1 : 0);
+    shader.SetInt(RendererUniformNames::flowingWater,
+        material.Effect() == Material::SurfaceEffect::FlowingWater ? 1 : 0);
+    shader.SetFloat(RendererUniformNames::timeSeconds, m_AnimationTimeSeconds);
     shader.SetFloat(RendererUniformNames::metallicFactor, material.MetallicFactor());
     shader.SetFloat(RendererUniformNames::roughnessFactor, material.RoughnessFactor());
 

@@ -163,7 +163,9 @@ std::vector<DroneTelemetry> ReadFleetTelemetry(const Json& telemetry)
             ReadUnsigned(Required(item, "id"), "drone.id"),
             Required(item, "name").get<std::string>(),
             ReadFlightMode(Required(item, "flight_mode")),
-            ReadVector(Required(item, "position_meters"))});
+            ReadVector(Required(item, "position_meters")),
+            item.value("mission_target", std::string{}),
+            item.value("mission_status", std::string{})});
     }
     return drones;
 }
@@ -346,7 +348,11 @@ Json EncodeCommandPayload(InspectionCommand command)
 
 Json EncodeCommandPayload(FleetCommand command)
 {
-    const char* action = command == FleetCommand::AddDrone ? "add_drone" : "status";
+    const char* action = "status";
+    if (command == FleetCommand::AddDrone)
+        action = "add_drone";
+    else if (command == FleetCommand::DispatchReconnaissance)
+        action = "dispatch_reconnaissance";
     return {{"target", "fleet"}, {"action", action}};
 }
 
@@ -420,6 +426,8 @@ CommandPacket DecodeCommand(std::string_view datagram)
     {
         if (action == "add_drone") packet.command = FleetCommand::AddDrone;
         else if (action == "status") packet.command = FleetCommand::GetStatus;
+        else if (action == "dispatch_reconnaissance")
+            packet.command = FleetCommand::DispatchReconnaissance;
         else throw std::invalid_argument("알 수 없는 편대 동작입니다.");
         return packet;
     }
@@ -475,7 +483,9 @@ std::string EncodeReply(const CommandReply& reply)
             {"id", drone.id}, {"name", drone.name},
             {"flight_mode", simulation::ToString(drone.mode)},
             {"position_meters", {drone.positionMeters.x,
-                drone.positionMeters.y, drone.positionMeters.z}}
+                drone.positionMeters.y, drone.positionMeters.z}},
+            {"mission_target", drone.missionTarget},
+            {"mission_status", drone.missionStatus}
         });
     }
     const std::string datagram = Wrap("reply", std::move(payload)).dump();

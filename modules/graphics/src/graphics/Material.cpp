@@ -7,10 +7,12 @@ namespace aerosimlab::graphics
 Material::Material(
     const glm::vec4& baseColorFactor,
     float metallicFactor,
-    float roughnessFactor)
+    float roughnessFactor,
+    SurfaceEffect surfaceEffect)
     : m_BaseColorFactor(baseColorFactor),
       m_MetallicFactor(metallicFactor),
-      m_RoughnessFactor(roughnessFactor)
+      m_RoughnessFactor(roughnessFactor),
+      m_SurfaceEffect(surfaceEffect)
 {
 }
 
@@ -27,6 +29,11 @@ float Material::MetallicFactor() const
 float Material::RoughnessFactor() const
 {
     return m_RoughnessFactor;
+}
+
+Material::SurfaceEffect Material::Effect() const
+{
+    return m_SurfaceEffect;
 }
 
 } // namespace aerosimlab::graphics

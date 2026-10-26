@@ -1,5 +1,6 @@
 #include "AeroSimLabApp.h"
 #include "terrain/MapFlightRoute.h"
+#include "graphics/Window.h"
 #include <glm/geometric.hpp>
 #include <algorithm>
 #include <cmath>
@@ -30,6 +31,18 @@ bool AeroSimLabApp::InspectionMissionIsActive() const
 bool AeroSimLabApp::RequestInspectionMission(
     std::optional<std::size_t> selectedTargetIndex)
 {
+    if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
+        [](const auto& entry)
+        {
+            return entry.second.status == "출발 준비"
+                || entry.second.status == "이동 중"
+                || entry.second.status == "착륙 중";
+        }))
+    {
+        inspectionMission_.error = "편대 정찰이 진행 중일 때는 주 드론 임무를 시작할 수 없습니다.";
+        return false;
+    }
+
     if (InspectionMissionIsActive())
     {
         inspectionMission_.error = "정찰 임무가 이미 진행 중입니다.";
@@ -85,6 +98,135 @@ bool AeroSimLabApp::RequestInspectionMission(
 #endif
     inspectionMission_.stage = InspectionMissionStage::StartRequested;
     return true;
+}
+
+bool AeroSimLabApp::StartFleetReconnaissance()
+{
+    if (InspectionMissionIsActive() || inspectionTargets_.empty())
+        return false;
+    if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
+        [](const auto& entry)
+        {
+            return entry.second.status == "출발 준비"
+                || entry.second.status == "이동 중"
+                || entry.second.status == "착륙 중";
+        }))
+        return false;
+
+    const auto droneIds = simulation_.DroneIds();
+    if (droneIds.empty() || std::any_of(droneIds.begin(), droneIds.end(),
+        [this](aerosimlab::simulation::DroneId id)
+        {
+            return simulation_.State(id).mode != aerosimlab::simulation::FlightMode::Grounded;
+        }))
+        return false;
+
+    std::vector<std::size_t> targetOrder{0U};
+    for (const std::string_view preferredName : {"탄천교 하부", "탄천 물길"})
+    {
+        const auto target = std::find_if(inspectionTargets_.begin(), inspectionTargets_.end(),
+            [preferredName](const InspectionTarget& item)
+            {
+                return item.displayName == preferredName;
+            });
+        if (target != inspectionTargets_.end())
+            targetOrder.push_back(static_cast<std::size_t>(
+                std::distance(inspectionTargets_.begin(), target)));
+    }
+
+    std::vector<FleetReconnaissanceState> missions;
+    missions.reserve(droneIds.size());
+    for (std::size_t index = 0; index < droneIds.size(); ++index)
+    {
+        const std::size_t targetIndex = index < targetOrder.size()
+            ? targetOrder[index] : index % inspectionTargets_.size();
+        const auto& target = inspectionTargets_[targetIndex];
+        const auto& start = simulation_.State(droneIds[index]).positionMeters;
+        const auto route = aerosimlab::terrain::PlanMapFlightRoute(
+            terrainGrid_, routeBuildings_, start, target.approachPositionMeters);
+        if (!route)
+            return false;
+
+        FleetReconnaissanceState mission;
+        mission.targetIndex = targetIndex;
+        mission.startPositionMeters = start;
+        mission.routeWaypointsMeters.assign(route->begin() + 1, route->end());
+        mission.status = "출발 준비";
+        missions.push_back(std::move(mission));
+    }
+
+    for (std::size_t index = 0; index < droneIds.size(); ++index)
+    {
+        const aerosimlab::simulation::DroneCommand takeoff{
+            aerosimlab::simulation::DroneCommand::Kind::TakeOff};
+        if (simulation_.Apply(droneIds[index], takeoff)
+            != aerosimlab::simulation::CommandResult::Accepted)
+            return false;
+        fleetReconnaissance_[droneIds[index]] = std::move(missions[index]);
+    }
+    externalControl_ = true;
+    groundControlActive_ = true;
+    window_->SetTitle("DroneSim | 편대 정찰 임무 진행 중");
+    return true;
+}
+
+void AeroSimLabApp::AdvanceFleetReconnaissance()
+{
+    using DroneId = aerosimlab::simulation::DroneId;
+    using Command = aerosimlab::simulation::DroneCommand;
+    using FlightMode = aerosimlab::simulation::FlightMode;
+
+    for (auto& [droneId, mission] : fleetReconnaissance_)
+    {
+        if (mission.status == "정찰 위치 도착" || mission.status == "경로 오류")
+            continue;
+
+        const auto& state = simulation_.State(droneId);
+        if (state.mode == FlightMode::Grounded)
+        {
+            const auto& target = inspectionTargets_[mission.targetIndex];
+            const glm::dvec2 horizontalError{
+                state.positionMeters.x - target.approachPositionMeters.x,
+                state.positionMeters.y - target.approachPositionMeters.y};
+            mission.status = glm::length(horizontalError) <= 5.0
+                ? "정찰 위치 도착" : "목표 외 착륙";
+            continue;
+        }
+        if (state.mode == FlightMode::TakingOff || state.mode == FlightMode::Landing)
+            continue;
+
+        if (!mission.waypointCommanded)
+        {
+            mission.waypointCommanded = true;
+            mission.status = "이동 중";
+        }
+        else if (mission.nextWaypoint >= mission.routeWaypointsMeters.size())
+        {
+            const Command land{Command::Kind::Land};
+            if (simulation_.Apply(droneId, land) == aerosimlab::simulation::CommandResult::Accepted)
+                mission.status = "착륙 중";
+            else
+                mission.status = "경로 오류";
+            continue;
+        }
+        else if (glm::length(mission.routeWaypointsMeters[mission.nextWaypoint]
+                - state.positionMeters) <= 2.0)
+        {
+            ++mission.nextWaypoint;
+            if (mission.nextWaypoint >= mission.routeWaypointsMeters.size())
+                continue;
+        }
+
+        if (mission.nextWaypoint < mission.routeWaypointsMeters.size())
+        {
+            Command waypoint;
+            waypoint.kind = Command::Kind::SetWaypoint;
+            waypoint.vector = mission.routeWaypointsMeters[mission.nextWaypoint];
+            if (simulation_.Apply(droneId, waypoint)
+                != aerosimlab::simulation::CommandResult::Accepted)
+                mission.status = "경로 오류";
+        }
+    }
 }
 
 bool AeroSimLabApp::CancelInspectionMission()

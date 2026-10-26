@@ -60,6 +60,7 @@ enum ControlId : int
     inspectionResumeButtonId,
     inspectionCancelButtonId,
     addDroneButtonId,
+    fleetMissionButtonId,
     droneListId
 };
 
@@ -288,7 +289,7 @@ void SetControlsEnabled(AppState& state, bool enabled)
         recordingStartButtonId, recordingStopButtonId, recordingReplayButtonId,
         videoRecordingStartButtonId, videoRecordingStopButtonId,
         inspectionStartButtonId, inspectionPauseButtonId, inspectionResumeButtonId,
-        inspectionCancelButtonId, addDroneButtonId};
+        inspectionCancelButtonId, addDroneButtonId, fleetMissionButtonId};
     for (const int id : buttonIds)
         EnableWindow(GetDlgItem(GetParent(state.statusText), id), enabled);
 }
@@ -340,7 +341,7 @@ void StartRequest(HWND window, AppState& state,
 
 std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply& reply)
 {
-    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 15> messages{{
+    constexpr std::array<std::pair<std::string_view, std::wstring_view>, 17> messages{{
         {"recording_started", L"입력 기록을 시작했습니다. 게임패드와 비행 명령을 기록합니다."},
         {"recording_stopped", L"기록을 마쳤습니다. 시뮬레이터를 닫기 전까지 재생할 수 있습니다."},
         {"recording_replay_started", L"입력 기록을 재생합니다."},
@@ -353,6 +354,8 @@ std::wstring CommandStatusMessage(const aerosimlab::communication::CommandReply&
         {"video_recording_not_active", L"진행 중인 EO 영상 녹화가 없습니다."},
         {"video_recording_requires_native", L"웹 영상 저장은 아직 연결되지 않았습니다."},
         {"drone_added", L"새 드론을 지면에 추가했습니다."},
+        {"fleet_reconnaissance_started", L"편대 정찰을 시작했습니다. 각 드론에 정찰 지점을 나눠 배정했습니다."},
+        {"fleet_reconnaissance_rejected", L"편대 정찰을 시작하지 못했습니다. 모든 드론이 지상에 있고 임무가 없는지 확인하세요."},
         {"fleet_limit_reached", L"드론은 최대 8대까지 추가할 수 있습니다."},
         {"spawn_outside_terrain", L"지도 범위 밖에는 새 드론을 추가할 수 없습니다."},
         {"recording_secondary_unsupported", L"입력 기록 중에는 주 드론만 조종할 수 있습니다."}
@@ -432,6 +435,9 @@ void ShowResult(AppState& state)
                 << droneTelemetry.positionMeters.y << L", " << droneTelemetry.positionMeters.z << L") m";
             if (droneTelemetry.id == primaryDroneId)
                 row << L"  |  주 드론";
+            if (!droneTelemetry.missionTarget.empty())
+                row << L"  |  " << FromUtf8(droneTelemetry.missionTarget)
+                    << L": " << FromUtf8(droneTelemetry.missionStatus);
             const std::wstring text = row.str();
             const LRESULT rowIndex = SendMessageW(state.droneList, LB_ADDSTRING, 0,
                 reinterpret_cast<LPARAM>(text.c_str()));
@@ -524,9 +530,11 @@ void CreateControls(HWND window, AppState& state)
     AddLabel(window, L"편대 상태", 565, 62, 150);
     AddControl(window, L"BUTTON", L"드론 추가", BS_PUSHBUTTON,
         565, 88, 290, 34, addDroneButtonId);
+    AddControl(window, L"BUTTON", L"편대 정찰 동시 출발", BS_PUSHBUTTON,
+        565, 128, 290, 34, fleetMissionButtonId);
     state.droneList = AddControl(window, L"LISTBOX", L"",
         WS_BORDER | WS_VSCROLL | LBS_NOINTEGRALHEIGHT,
-        565, 132, 290, 290, droneListId);
+        565, 170, 290, 252, droneListId);
 
     AddLabel(window, L"EO 실시간 영상", 565, 438, 180);
     state.videoStatus = AddControl(window, L"STATIC", L"시뮬레이터에 연결하면 영상 수신을 시작합니다.",
@@ -621,6 +629,9 @@ LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
         break;
     case addDroneButtonId:
         packet.command = aerosimlab::communication::FleetCommand::AddDrone;
+        break;
+    case fleetMissionButtonId:
+        packet.command = aerosimlab::communication::FleetCommand::DispatchReconnaissance;
         break;
     default: return 0;
     }

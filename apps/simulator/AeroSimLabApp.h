@@ -184,6 +184,8 @@ private:
     [[nodiscard]] bool ResumeInspectionMission();
     [[nodiscard]] bool CancelInspectionMission();
     void AdvanceInspectionMission();
+    [[nodiscard]] bool StartFleetReconnaissance();
+    void AdvanceFleetReconnaissance();
     void FailInspectionMission(const std::string& reason);
     [[nodiscard]] std::string InspectionMissionStatus() const;
     /** @brief 명령을 적용하고 성공한 명령만 입력 기록에 남긴다. */
@@ -416,6 +418,17 @@ private:
     std::unique_ptr<aerosimlab::graphics::Texture2D> terrainSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
+    struct FleetReconnaissanceState
+    {
+        std::size_t targetIndex = 0;
+        glm::dvec3 startPositionMeters{0.0};
+        std::vector<glm::dvec3> routeWaypointsMeters;
+        std::size_t nextWaypoint = 0;
+        std::string status;
+        bool waypointCommanded = false;
+    };
+    std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>
+        fleetReconnaissance_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
@@ -423,7 +436,8 @@ private:
     aerosimlab::graphics::Material groundMaterial_{
         glm::vec4{0.25F, 0.40F, 0.25F, 1.0F}, 0.0F, 0.92F};
     aerosimlab::graphics::Material waterMaterial_{
-        glm::vec4{0.08F, 0.35F, 0.55F, 1.0F}, 0.0F, 0.38F};
+        glm::vec4{0.08F, 0.35F, 0.55F, 1.0F}, 0.0F, 0.38F,
+        aerosimlab::graphics::Material::SurfaceEffect::FlowingWater};
     aerosimlab::graphics::Material roadMaterial_{
         glm::vec4{0.22F, 0.25F, 0.27F, 1.0F}, 0.0F, 0.95F};
     aerosimlab::graphics::Material bridgeMaterial_{

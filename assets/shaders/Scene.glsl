@@ -56,6 +56,8 @@ uniform sampler2D u_BaseTexture;
 uniform int u_UseBaseTexture;
 uniform int u_TriplanarTexture;
 uniform int u_TerrainSurface;
+uniform int u_FlowingWater;
+uniform float u_TimeSeconds;
 out vec4 FragColor;
 
 float HashTerrainCell(vec2 cell)
@@ -164,6 +166,18 @@ void main()
         baseColor *= 0.78 + vegetation * 0.30;
         float rockAmount = smoothstep(0.38, 0.78, 1.0 - N.y);
         baseColor = mix(baseColor, vec3(0.34, 0.33, 0.30), rockAmount * 0.42);
+    }
+
+    if (u_FlowingWater != 0)
+    {
+        // 장면 좌표를 따라 흐르는 밝은 줄무늬로 강물의 이동을 보여준다.
+        vec2 flowPosition = v_ModelPosition.xz;
+        float current = sin(flowPosition.x * 0.19 + flowPosition.y * 0.07
+            - u_TimeSeconds * 1.8);
+        float ripple = sin(flowPosition.x * 0.48 - flowPosition.y * 0.16
+            - u_TimeSeconds * 3.2);
+        float foam = smoothstep(0.72, 0.96, current * 0.72 + ripple * 0.28);
+        baseColor = mix(baseColor, vec3(0.36, 0.69, 0.77), foam * 0.24);
     }
 
     float baseAlpha = u_BaseColorFactor.a;

@@ -54,7 +54,8 @@ enum class InspectionCommand
 enum class FleetCommand
 {
     AddDrone,
-    GetStatus
+    GetStatus,
+    DispatchReconnaissance
 };
 
 /** @brief UDP로 받은 비행·카메라·기록·편대 명령 중 하나를 보관한다. */
@@ -78,6 +79,8 @@ struct DroneTelemetry
     std::string name;
     simulation::FlightMode mode = simulation::FlightMode::Grounded;
     glm::dvec3 positionMeters{0.0};
+    std::string missionTarget;
+    std::string missionStatus;
 };
 
 /** @brief 명령 응답에 실어 지상통제 프로그램으로 돌려보낼 모의 상태다. */

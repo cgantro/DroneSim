@@ -14,6 +14,11 @@ namespace aerosimlab::graphics
 class Material final
 {
 public:
+    enum class SurfaceEffect
+    {
+        None,
+        FlowingWater
+    };
     /**
      * @brief 표면 기본색과 반사 특성을 정한다.
      * @param baseColorFactor 표면색·투명도 배율. RGB는 빛 계산용 선형 색이고 alpha는 투명도 값이다.
@@ -21,13 +26,15 @@ public:
      * @param roughnessFactor 반사 경계가 흐려지는 정도 [0..1], 단위 없음.
      * @details 이 생성자는 값을 그대로 보관한다. Scene.glsl에서 금속성은 0~1, 거칠기는 0.05~1로 제한해 조명 계산에 쓴다.
      */
-    Material(const glm::vec4& baseColorFactor, float metallicFactor, float roughnessFactor);
+    Material(const glm::vec4& baseColorFactor, float metallicFactor, float roughnessFactor,
+        SurfaceEffect surfaceEffect = SurfaceEffect::None);
 
     const glm::vec4& BaseColorFactor() const;
 
     float MetallicFactor() const;
 
     float RoughnessFactor() const;
+    SurfaceEffect Effect() const;
 
 private:
     // 기본값 (1,1,1,1)은 화면 색을 바꾸지 않는다.
@@ -38,6 +45,7 @@ private:
 
     // 0에 가까우면 작은 밝은 반사, 1에 가까우면 넓고 흐린 반사가 된다. Scene.glsl은 0.05보다 작은 값을 막는다.
     float m_RoughnessFactor = 1.0F;
+    SurfaceEffect m_SurfaceEffect = SurfaceEffect::None;
 
 };
 

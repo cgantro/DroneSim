@@ -582,6 +582,12 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         {
             if (command == aerosimlab::communication::FleetCommand::AddDrone)
                 ApplyAddDroneCommand(reply);
+            else if (command == aerosimlab::communication::FleetCommand::DispatchReconnaissance)
+            {
+                reply.accepted = StartFleetReconnaissance();
+                reply.status = reply.accepted
+                    ? "fleet_reconnaissance_started" : "fleet_reconnaissance_rejected";
+            }
         }
     }, pending.packet.command);
 
@@ -631,8 +637,12 @@ aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
     for (const auto id : fleetDroneIds_)
     {
         const auto& drone = simulation_.State(id);
+        const auto mission = fleetReconnaissance_.find(id);
         telemetry.drones.push_back({
-            id, "드론 " + std::to_string(id), drone.mode, drone.positionMeters});
+            id, "드론 " + std::to_string(id), drone.mode, drone.positionMeters,
+            mission == fleetReconnaissance_.end() ? std::string{}
+                : inspectionTargets_[mission->second.targetIndex].displayName,
+            mission == fleetReconnaissance_.end() ? std::string{} : mission->second.status});
     }
     return telemetry;
 }

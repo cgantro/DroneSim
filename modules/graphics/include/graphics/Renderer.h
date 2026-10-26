@@ -32,6 +32,7 @@ public:
     void Resize(int width, int height);
 #endif
     void SetSceneViewport(int x, int y, int width, int height);
+    void SetAnimationTimeSeconds(float seconds) noexcept;
     void Draw(
         const glm::mat4& model,
         const Mesh& mesh,
@@ -51,6 +52,7 @@ private:
 #endif
     glm::vec3 m_LightDirection{-0.45F, 0.85F, 0.35F};
     glm::ivec4 m_SceneViewport{0, 0, 0, 0};
+    float m_AnimationTimeSeconds = 0.0F;
 };
 
 } // namespace aerosimlab::graphics
