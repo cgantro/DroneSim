@@ -11,6 +11,7 @@
 #include <cmath>
 #include <filesystem>
 #include <limits>
+#include <random>
 #include <stdexcept>
 
 namespace aerosimlab::simulation
@@ -53,6 +54,47 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
 
     EXPECT_GT(simulation.State().positionMeters.z, groundHeight + 0.5);
     EXPECT_NE(simulation.State().mode, FlightMode::TakingOff);
+}
+
+void Verify_RigidBodyTakeoffWithDemoWind()
+{
+    const auto terrain = terrain::TerrainGrid::Load(
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+            / "assets/maps/tancheon/terrain.aerotrn");
+    constexpr glm::dvec2 startMeters{-410.0, 442.0};
+    const double groundHeight = terrain.HeightAtLocalMeters(startMeters);
+
+    SimulationCore simulation{SimulationDynamics::RigidBody};
+    simulation.SetTerrain(terrain);
+    simulation.SetInitialPose({startMeters.x, startMeters.y, groundHeight + 0.24}, 0.0);
+
+    std::mt19937 windGenerator{0x44524F4EU};
+    glm::dvec3 windVelocity{0.0};
+    glm::dvec3 windTarget{0.0};
+    std::uint32_t gustTicksRemaining = 0U;
+    std::uniform_real_distribution<double> chooseWind{-0.5, 0.5};
+
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
+    for (int tick = 0; tick < 600; ++tick)
+    {
+        if (gustTicksRemaining == 0U)
+        {
+            windTarget = {chooseWind(windGenerator), chooseWind(windGenerator), 0.0};
+            gustTicksRemaining = 240U;
+        }
+        --gustTicksRemaining;
+        windVelocity += (windTarget - windVelocity) * 0.01;
+        simulation.SetWindVelocityMetersPerSecond(windVelocity);
+        simulation.AdvanceOneTick();
+    }
+
+    EXPECT_NE(simulation.State().mode, FlightMode::TakingOff)
+        << "position=" << simulation.State().positionMeters.x << ","
+        << simulation.State().positionMeters.y << ","
+        << simulation.State().positionMeters.z
+        << " ground=" << groundHeight
+        << " vertical_speed=" << simulation.State().velocityMetersPerSecond.z;
+    EXPECT_LT(glm::distance(glm::dvec2{simulation.State().positionMeters}, startMeters), 5.0);
 }
 
 void Verify_BatteryModel_ConsumesOnlyWhileFlyingAndClampsAtZero()
@@ -582,6 +624,7 @@ void Verify_EoCameraModelUsesBuildingFootprintsForOcclusion()
 TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_RigidBodyTakeoffFromTancheonDemoStart());
+    EXPECT_NO_FATAL_FAILURE(Verify_RigidBodyTakeoffWithDemoWind());
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_ConsumesOnlyWhileFlyingAndClampsAtZero());
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_RejectsInvalidSettings());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick());
