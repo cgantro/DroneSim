@@ -35,6 +35,14 @@ struct PrismContact
     double penetrationMeters = 0.0;
 };
 
+/** @brief 높이를 모르는 건물 외곽선을 비행 금지 구역으로 취급한 접촉이다. */
+struct FootprintContact
+{
+    glm::dvec2 normal;
+    glm::dvec2 impactPointMeters;
+    double penetrationMeters = 0.0;
+};
+
 /** @brief 기체 기준 충돌 모양의 바깥 반경을 구한다. */
 double CollisionRadius(std::span<const RigidBodyBox> boxes);
 
@@ -67,6 +75,12 @@ std::optional<BoxContact> FindBoxContact(
 
 /** @brief 외곽선의 유한 좌표와 넓이가 유효한지 확인한다. */
 bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept;
+
+/** @brief 높이를 모르는 다각형과 원형 수평 투영의 겹침을 찾는다. */
+std::optional<FootprintContact> FindFootprintContact(
+    std::span<const glm::dvec2> outlineMeters,
+    const glm::dvec2& centerMeters,
+    double horizontalRadiusMeters);
 
 /** @brief 수직 프리즘과 원형 수평 투영을 사용해 겹침을 찾는다. */
 std::optional<PrismContact> FindPrismContact(

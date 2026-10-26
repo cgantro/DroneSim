@@ -340,6 +340,7 @@ struct Obstacle
     std::vector<glm::dvec2> outlineMeters;
     double bottomMeters = 0.0;
     double topMeters = 0.0;
+    bool footprintOnly = false;
 };
 
 struct ContactCandidate
@@ -826,17 +827,44 @@ struct PhysicsWorld::Impl
                             * std::abs(worldBox.axes[1].z)
                         + worldBox.halfExtentsMeters.z
                             * std::abs(worldBox.axes[2].z);
-                    const auto contact = detail::FindPrismContact(
-                        obstacle.outlineMeters, obstacle.bottomMeters,
-                        obstacle.topMeters, worldBox.centerMeters,
-                        std::hypot(radiusX, radiusY), radiusZ);
+                    std::optional<BoxContact> contact;
+                    if (obstacle.footprintOnly)
+                    {
+                        const auto footprintContact = detail::FindFootprintContact(
+                            obstacle.outlineMeters,
+                            {worldBox.centerMeters.x, worldBox.centerMeters.y},
+                            std::hypot(radiusX, radiusY));
+                        if (footprintContact)
+                        {
+                            contact = BoxContact{
+                                {footprintContact->normal.x,
+                                    footprintContact->normal.y, 0.0},
+                                {footprintContact->impactPointMeters.x,
+                                    footprintContact->impactPointMeters.y,
+                                    worldBox.centerMeters.z},
+                                footprintContact->penetrationMeters};
+                        }
+                    }
+                    else
+                    {
+                        const auto prismContact = detail::FindPrismContact(
+                            obstacle.outlineMeters, obstacle.bottomMeters,
+                            obstacle.topMeters, worldBox.centerMeters,
+                            std::hypot(radiusX, radiusY), radiusZ);
+                        if (prismContact)
+                        {
+                            contact = BoxContact{prismContact->normal,
+                                prismContact->impactPointMeters,
+                                prismContact->penetrationMeters};
+                        }
+                    }
                     if (!contact || contact->penetrationMeters <= greatestPenetration)
                         continue;
                     greatestPenetration = contact->penetrationMeters;
                     deepestContact = ContactCandidate{
-                        BoxContact{contact->normal, contact->impactPointMeters,
-                            contact->penetrationMeters},
-                        "building", static_cast<int>(index + 1)};
+                        *contact,
+                        obstacle.footprintOnly ? "unknown-height-building" : "building",
+                        static_cast<int>(index + 1)};
                 }
                 continue;
             }
@@ -919,7 +947,7 @@ void PhysicsWorld::AddStaticObstacleBox(
         throw std::invalid_argument("고정 상자의 위치와 크기를 확인해 주세요.");
     }
     impl_->obstacles.push_back(
-        {centerMeters, glm::dvec3{halfExtentsMeters}, {}, 0.0, 0.0});
+        {centerMeters, glm::dvec3{halfExtentsMeters}, {}, 0.0, 0.0, false});
 }
 
 void PhysicsWorld::AddStaticObstaclePrism(
@@ -947,7 +975,29 @@ void PhysicsWorld::AddStaticObstaclePrism(
         {center.x, center.y, (bottomMeters + topMeters) * 0.5},
         {(maximum.x - minimum.x) * 0.5,
             (maximum.y - minimum.y) * 0.5, halfHeight},
-        outlineMeters, bottomMeters, topMeters});
+        outlineMeters, bottomMeters, topMeters, false});
+}
+
+void PhysicsWorld::AddStaticObstacleFootprint(
+    const std::vector<glm::dvec2>& outlineMeters)
+{
+    if (!detail::IsValidFootprint(outlineMeters))
+        throw std::invalid_argument("구조물 외곽선 좌표를 확인해 주세요.");
+
+    glm::dvec2 minimum = outlineMeters.front();
+    glm::dvec2 maximum = minimum;
+    for (const glm::dvec2& point : outlineMeters)
+    {
+        minimum = glm::min(minimum, point);
+        maximum = glm::max(maximum, point);
+    }
+
+    const glm::dvec2 center = (minimum + maximum) * 0.5;
+    impl_->obstacles.push_back({
+        {center.x, center.y, 0.0},
+        {(maximum.x - minimum.x) * 0.5,
+            (maximum.y - minimum.y) * 0.5, 0.0},
+        outlineMeters, 0.0, 0.0, true});
 }
 
 RigidBodyHandle PhysicsWorld::CreateQuadrotor(

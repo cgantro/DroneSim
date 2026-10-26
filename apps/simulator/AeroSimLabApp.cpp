@@ -737,11 +737,17 @@ void AeroSimLabApp::LoadMapFeatures()
     {
         const auto bounds =
             aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-        if (building.heightMeters > 0.0)
+        if (building.heightSource
+                == aerosimlab::terrain::BuildingHeightSource::OsmHeightTag
+            && building.heightMeters > 0.0)
         {
             simulation_.AddStaticObstaclePrism(building.outlineMeters,
                 bounds.centerMeters.z - bounds.halfExtentsMeters.z,
                 bounds.centerMeters.z + bounds.halfExtentsMeters.z);
+        }
+        else
+        {
+            simulation_.AddStaticObstacleFootprint(building.outlineMeters);
         }
         inspectionOccluders_.push_back({building.outlineMeters,
             bounds.centerMeters.z - bounds.halfExtentsMeters.z,

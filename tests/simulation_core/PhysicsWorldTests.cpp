@@ -556,6 +556,33 @@ void Verify_AirSimPhysics_IndoorWallContactStopsHorizontalMotion()
     EXPECT_GT(courtyardState.linearVelocityMetersPerSecond.x, 0.1);
 }
 
+void Verify_AirSimPhysics_UnknownHeightFootprintBlocksAtAnyAltitude()
+{
+    PhysicsWorld world;
+    world.AddStaticObstacleFootprint(
+        {{-0.15, -5.0}, {0.15, -5.0}, {0.15, 5.0}, {-0.15, 5.0}});
+
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    RigidBodyDefinition definition;
+    definition.positionMeters = {-1.0, 0.0, 100.0};
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
+        / (parameters.rotors.size() * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(hoverSpeed);
+    world.SetMotorTargets(drone, motorTargets);
+
+    RigidBodyState state = world.State(drone);
+    state.linearVelocityMetersPerSecond.x = 2.0;
+    world.SetState(drone, state);
+    for (int tick = 0; tick < 60; ++tick)
+        world.Step(1.0 / 60.0);
+
+    state = world.State(drone);
+    EXPECT_LT(state.positionMeters.x, -0.15);
+    EXPECT_LT(state.linearVelocityMetersPerSecond.x, 0.5);
+}
+
 void Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere()
 {
     PhysicsWorld world;
@@ -777,6 +804,8 @@ TEST(PhysicsWorldTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysicsKeepsContactAcrossMicroscopicGroundGaps());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_IndoorWallContactStopsHorizontalMotion());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysics_UnknownHeightFootprintBlocksAtAnyAltitude());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere());
     EXPECT_NO_FATAL_FAILURE(Verify_CollisionBroadphase_KeepsTouchingBoxesForPreciseTest());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimCollision_SeparatesOverlappingDrones());

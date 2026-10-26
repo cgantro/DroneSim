@@ -165,6 +165,19 @@ void Verify_KinematicDroneStopsAtStaticBuildings()
     EXPECT_LE(simulation.State(droneId).positionMeters.x, 0.200001);
     EXPECT_DOUBLE_EQ(simulation.State(droneId).velocityMetersPerSecond.x, 0.0);
 
+    SimulationCore unknownHeight{SimulationDynamics::Kinematic};
+    DroneState highAltitudeStart;
+    highAltitudeStart.positionMeters = {0.0, 0.0, 100.0};
+    highAltitudeStart.velocityMetersPerSecond = {5.0, 0.0, 0.0};
+    highAltitudeStart.mode = FlightMode::Flying;
+    unknownHeight.SetInitialState(unknownHeight.PrimaryDroneId(), highAltitudeStart);
+    unknownHeight.AddStaticObstacleFootprint(
+        {{0.5, -2.0}, {1.5, -2.0}, {1.5, 2.0}, {0.5, 2.0}});
+    for (int tick = 0; tick < 60; ++tick)
+        unknownHeight.AdvanceOneTick();
+    EXPECT_LE(unknownHeight.State().positionMeters.x, 0.200001);
+    EXPECT_DOUBLE_EQ(unknownHeight.State().velocityMetersPerSecond.x, 0.0);
+
     SimulationCore courtyard{SimulationDynamics::Kinematic};
     DroneState courtyardStart;
     courtyardStart.positionMeters = {1.5, 2.0, 10.0};

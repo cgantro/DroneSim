@@ -82,6 +82,10 @@ public:
         const std::vector<glm::dvec2>& outlineMeters,
         double bottomMeters, double topMeters);
 
+    /** @brief 높이 정보가 없는 구조물 외곽선을 수평 비행 금지 구역으로 등록한다. */
+    void AddStaticObstacleFootprint(
+        const std::vector<glm::dvec2>& outlineMeters);
+
     /** @brief 기체 설정의 질량·관성·로터·충돌 상자로 쿼드콥터를 만든다. */
     [[nodiscard]] RigidBodyHandle CreateQuadrotor(
         const RigidBodyDefinition& definition,

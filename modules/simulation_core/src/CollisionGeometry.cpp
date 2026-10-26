@@ -93,6 +93,104 @@ bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept
     return std::isfinite(twiceArea) && std::abs(twiceArea) > 1.0e-9;
 }
 
+namespace
+{
+struct FootprintProjection
+{
+    bool inside = false;
+    glm::dvec2 nearestPoint{0.0};
+    glm::dvec2 outwardNormal{0.0};
+    double distanceMeters = 0.0;
+};
+
+std::optional<FootprintProjection> ProjectToFootprint(
+    std::span<const glm::dvec2> outlineMeters,
+    const glm::dvec2& centerMeters)
+{
+    if (!IsValidFootprint(outlineMeters)
+        || !std::isfinite(centerMeters.x) || !std::isfinite(centerMeters.y))
+        return std::nullopt;
+
+    bool inside = false;
+    double twiceArea = 0.0;
+    double nearestDistanceSquared = std::numeric_limits<double>::infinity();
+    glm::dvec2 nearestPoint{0.0};
+    glm::dvec2 outwardNormal{0.0};
+
+    for (std::size_t index = 0; index < outlineMeters.size(); ++index)
+    {
+        const glm::dvec2& first = outlineMeters[index];
+        const glm::dvec2& second = outlineMeters[(index + 1U) % outlineMeters.size()];
+        twiceArea += first.x * second.y - second.x * first.y;
+    }
+
+    for (std::size_t index = 0; index < outlineMeters.size(); ++index)
+    {
+        const glm::dvec2& first = outlineMeters[index];
+        const glm::dvec2& second = outlineMeters[(index + 1U) % outlineMeters.size()];
+        const glm::dvec2 edge = second - first;
+        const double edgeLengthSquared = glm::dot(edge, edge);
+
+        const glm::dvec2& previous = outlineMeters[
+            (index + outlineMeters.size() - 1U) % outlineMeters.size()];
+        if ((first.y > centerMeters.y) != (previous.y > centerMeters.y)
+            && centerMeters.x < (previous.x - first.x)
+                * (centerMeters.y - first.y) / (previous.y - first.y) + first.x)
+        {
+            inside = !inside;
+        }
+
+        if (edgeLengthSquared <= 1.0e-12)
+            continue;
+
+        const double fraction = std::clamp(
+            glm::dot(centerMeters - first, edge) / edgeLengthSquared, 0.0, 1.0);
+        const glm::dvec2 point = first + edge * fraction;
+        const glm::dvec2 offset = centerMeters - point;
+        const double distanceSquared = glm::dot(offset, offset);
+        if (distanceSquared >= nearestDistanceSquared)
+            continue;
+
+        nearestDistanceSquared = distanceSquared;
+        nearestPoint = point;
+        const double edgeLength = std::sqrt(edgeLengthSquared);
+        outwardNormal = twiceArea >= 0.0
+            ? glm::dvec2{edge.y, -edge.x} / edgeLength
+            : glm::dvec2{-edge.y, edge.x} / edgeLength;
+    }
+
+    if (!std::isfinite(nearestDistanceSquared))
+        return std::nullopt;
+
+    const double distance = std::sqrt(nearestDistanceSquared);
+    if (!inside && distance > 1.0e-12)
+        outwardNormal = (centerMeters - nearestPoint) / distance;
+    return FootprintProjection{inside, nearestPoint, outwardNormal, distance};
+}
+}
+
+std::optional<FootprintContact> FindFootprintContact(
+    std::span<const glm::dvec2> outlineMeters,
+    const glm::dvec2& centerMeters,
+    double horizontalRadiusMeters)
+{
+    if (!std::isfinite(horizontalRadiusMeters) || !(horizontalRadiusMeters > 0.0))
+        return std::nullopt;
+
+    const auto projection = ProjectToFootprint(outlineMeters, centerMeters);
+    if (!projection)
+        return std::nullopt;
+
+    const double penetrationMeters = projection->inside
+        ? horizontalRadiusMeters + projection->distanceMeters
+        : horizontalRadiusMeters - projection->distanceMeters;
+    if (penetrationMeters <= 0.0)
+        return std::nullopt;
+
+    return FootprintContact{
+        projection->outwardNormal, projection->nearestPoint, penetrationMeters};
+}
+
 std::optional<PrismContact> FindPrismContact(
     std::span<const glm::dvec2> outlineMeters,
     double bottomMeters, double topMeters,
@@ -121,56 +219,14 @@ std::optional<PrismContact> FindPrismContact(
         ? verticalOverlap
         : std::min(distanceToMoveDown, distanceToMoveUp);
 
-    const glm::dvec2 center{centerMeters.x, centerMeters.y};
-    bool inside = false;
-    double twiceArea = 0.0;
-    for (std::size_t i = 0; i < outlineMeters.size(); ++i)
-    {
-        const glm::dvec2& a = outlineMeters[i];
-        const glm::dvec2& b = outlineMeters[(i + 1U) % outlineMeters.size()];
-        twiceArea += a.x * b.y - b.x * a.y;
-        const glm::dvec2& previous = outlineMeters[
-            (i + outlineMeters.size() - 1U) % outlineMeters.size()];
-        if ((a.y > center.y) != (previous.y > center.y)
-            && center.x < (previous.x - a.x) * (center.y - a.y)
-                / (previous.y - a.y) + a.x)
-            inside = !inside;
-    }
-
-    double nearestDistanceSquared = std::numeric_limits<double>::infinity();
-    glm::dvec2 nearestPoint{0.0};
-    glm::dvec2 nearestNormal{0.0};
-    for (std::size_t i = 0; i < outlineMeters.size(); ++i)
-    {
-        const glm::dvec2& a = outlineMeters[i];
-        const glm::dvec2& b = outlineMeters[(i + 1U) % outlineMeters.size()];
-        const glm::dvec2 edge = b - a;
-        const double edgeLengthSquared = glm::dot(edge, edge);
-        if (edgeLengthSquared <= 1.0e-12)
-            continue;
-        const double fraction = std::clamp(
-            glm::dot(center - a, edge) / edgeLengthSquared, 0.0, 1.0);
-        const glm::dvec2 point = a + edge * fraction;
-        const glm::dvec2 offset = center - point;
-        const double distanceSquared = glm::dot(offset, offset);
-        if (distanceSquared >= nearestDistanceSquared)
-            continue;
-        nearestDistanceSquared = distanceSquared;
-        nearestPoint = point;
-        const double edgeLength = std::sqrt(edgeLengthSquared);
-        nearestNormal = twiceArea >= 0.0
-            ? glm::dvec2{edge.y, -edge.x} / edgeLength
-            : glm::dvec2{-edge.y, edge.x} / edgeLength;
-        if (distanceSquared > 1.0e-12 && !inside)
-            nearestNormal = offset / std::sqrt(distanceSquared);
-    }
-    if (!std::isfinite(nearestDistanceSquared))
+    const auto projection = ProjectToFootprint(
+        outlineMeters, {centerMeters.x, centerMeters.y});
+    if (!projection)
         return std::nullopt;
 
-    const double distance = std::sqrt(nearestDistanceSquared);
-    const double horizontalPenetration = inside
-        ? horizontalRadiusMeters + distance
-        : horizontalRadiusMeters - distance;
+    const double horizontalPenetration = projection->inside
+        ? horizontalRadiusMeters + projection->distanceMeters
+        : horizontalRadiusMeters - projection->distanceMeters;
     if (horizontalPenetration <= 0.0)
         return std::nullopt;
 
@@ -179,14 +235,16 @@ std::optional<PrismContact> FindPrismContact(
     {
         result.normal = {0.0, 0.0, moveUp ? 1.0 : -1.0};
         result.penetrationMeters = verticalPenetration;
-        result.impactPointMeters = {center.x, center.y,
+        result.impactPointMeters = {centerMeters.x, centerMeters.y,
             result.normal.z > 0.0 ? topMeters : bottomMeters};
     }
     else
     {
-        result.normal = {nearestNormal.x, nearestNormal.y, 0.0};
+        result.normal = {
+            projection->outwardNormal.x, projection->outwardNormal.y, 0.0};
         result.penetrationMeters = horizontalPenetration;
-        result.impactPointMeters = {nearestPoint.x, nearestPoint.y,
+        result.impactPointMeters = {
+            projection->nearestPoint.x, projection->nearestPoint.y,
             std::clamp(centerMeters.z, bottomMeters, topMeters)};
     }
     return result;

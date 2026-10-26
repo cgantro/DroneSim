@@ -49,6 +49,11 @@ struct SimulationCore::EcsStorage
         double topMeters = 0.0;
     };
 
+    struct StaticObstacleFootprint
+    {
+        std::vector<glm::dvec2> outlineMeters;
+    };
+
     struct InitialPose
     {
         glm::dvec3 positionMeters{0.0};
@@ -78,6 +83,7 @@ struct SimulationCore::EcsStorage
     DroneId nextDroneId = 1;
     std::vector<StaticObstacleBox> kinematicObstacles;
     std::vector<StaticObstaclePrism> kinematicPrisms;
+    std::vector<StaticObstacleFootprint> kinematicFootprints;
     std::optional<terrain::TerrainGrid> terrainGrid;
     bool measureEcsSystemDuration = false;
     EcsSystemDurations lastEcsSystemDurations;
@@ -314,6 +320,37 @@ struct SimulationCore::EcsStorage
                     control.targetVelocityMetersPerSecond.x -= inwardTargetSpeed * normal.x;
                     control.targetVelocityMetersPerSecond.y -= inwardTargetSpeed * normal.y;
                 }
+            }
+        }
+
+        for (const StaticObstacleFootprint& obstacle : kinematicFootprints)
+        {
+            constexpr double droneRadiusMeters = 0.4242640687119285;
+            const auto contact = detail::FindFootprintContact(
+                obstacle.outlineMeters,
+                {state.positionMeters.x, state.positionMeters.y}, droneRadiusMeters);
+            if (!contact)
+                continue;
+
+            state.positionMeters.x += contact->normal.x * contact->penetrationMeters;
+            state.positionMeters.y += contact->normal.y * contact->penetrationMeters;
+            const glm::dvec2 normal = contact->normal;
+            const glm::dvec2 velocity{
+                state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y};
+            const double inwardSpeed = glm::dot(velocity, normal);
+            if (inwardSpeed < 0.0)
+            {
+                state.velocityMetersPerSecond.x -= inwardSpeed * normal.x;
+                state.velocityMetersPerSecond.y -= inwardSpeed * normal.y;
+            }
+            const glm::dvec2 target{
+                control.targetVelocityMetersPerSecond.x,
+                control.targetVelocityMetersPerSecond.y};
+            const double inwardTargetSpeed = glm::dot(target, normal);
+            if (inwardTargetSpeed < 0.0)
+            {
+                control.targetVelocityMetersPerSecond.x -= inwardTargetSpeed * normal.x;
+                control.targetVelocityMetersPerSecond.y -= inwardTargetSpeed * normal.y;
             }
         }
     }
@@ -1047,6 +1084,22 @@ void SimulationCore::AddStaticObstaclePrism(
 #endif
     ecs_->kinematicPrisms.push_back(
         {outlineMeters, bottomMeters, topMeters});
+}
+
+void SimulationCore::AddStaticObstacleFootprint(
+    const std::vector<glm::dvec2>& outlineMeters)
+{
+    if (!detail::IsValidFootprint(outlineMeters))
+        throw std::invalid_argument("구조물 외곽선 좌표를 확인해 주세요.");
+
+#if !defined(__EMSCRIPTEN__)
+    if (ecs_->dynamics == SimulationDynamics::RigidBody)
+    {
+        ecs_->physics->AddStaticObstacleFootprint(outlineMeters);
+        return;
+    }
+#endif
+    ecs_->kinematicFootprints.push_back({outlineMeters});
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)

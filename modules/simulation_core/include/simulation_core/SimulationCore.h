@@ -202,6 +202,10 @@ public:
         const std::vector<glm::dvec2>& outlineMeters,
         double bottomMeters, double topMeters);
 
+    /** @brief 높이를 확인할 수 없는 구조물 외곽선을 비행 금지 구역으로 등록한다. */
+    void AddStaticObstacleFootprint(
+        const std::vector<glm::dvec2>& outlineMeters);
+
     /** @brief 지형 높이 자료를 설정해 비행체가 지면 아래로 내려가지 않게 한다. */
     void SetTerrain(terrain::TerrainGrid terrain);
 
