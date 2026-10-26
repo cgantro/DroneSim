@@ -254,6 +254,12 @@ target_link_libraries(aerosimlab_headless PRIVATE
   aerosimlab_simulation_core
   nlohmann_json::nlohmann_json
 )
+if(NOT EMSCRIPTEN)
+  add_executable(aerosimlab_terrain_grid_converter
+    tools/terrain/convert_ascii_grid.cpp
+  )
+  target_link_libraries(aerosimlab_terrain_grid_converter PRIVATE aerosimlab_terrain)
+endif()
 if(EMSCRIPTEN)
   target_link_options(aerosimlab_headless PRIVATE
     "--preload-file" "${CMAKE_SOURCE_DIR}/scenarios@scenarios"
