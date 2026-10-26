@@ -111,14 +111,18 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
                 bounds.centerMeters.z + bounds.halfExtentsMeters.z);
         }
     };
-    const auto verifyTakeoff = [&terrainGrid, &addBuildingCollisions](
-        const glm::dvec2& position)
+    const auto verifyTakeoff = [&terrainGrid, &addBuildingCollisions, &firstTarget](
+        const glm::dvec2& position, bool checkScreenshotTime)
     {
         SimulationCore target{SimulationDynamics::RigidBody};
         target.SetTerrain(terrainGrid);
         addBuildingCollisions(target);
         const double ground = terrainGrid.HeightAtLocalMeters(position);
-        target.SetInitialPose({position.x, position.y, ground + 0.24}, 0.0);
+        const auto facade = terrain::GetNearestMapBuildingFacade(*firstTarget, position);
+        const double yaw = std::atan2(
+            facade.centerMeters.y - position.y,
+            facade.centerMeters.x - position.x);
+        target.SetInitialPose({position.x, position.y, ground + 0.24}, yaw);
         EXPECT_EQ(target.Apply(Command(DroneCommand::Kind::TakeOff)),
             CommandResult::Accepted);
 
@@ -138,6 +142,15 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
             windVelocity += (windTarget - windVelocity) * 0.01;
             target.SetWindVelocityMetersPerSecond(windVelocity);
             target.AdvanceOneTick();
+            if (checkScreenshotTime && tick == 5940)
+            {
+                EXPECT_NE(target.State().mode, FlightMode::TakingOff)
+                    << "화면의 모의 시간에 이륙 상태가 남았습니다. 위치="
+                    << target.State().positionMeters.x << ","
+                    << target.State().positionMeters.y << ","
+                    << target.State().positionMeters.z << " 수직 속도="
+                    << target.State().velocityMetersPerSecond.z;
+            }
         }
         EXPECT_NE(target.State().mode, FlightMode::TakingOff)
             << "출발점=" << position.x << "," << position.y
@@ -146,8 +159,8 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
             << target.State().positionMeters.z;
         EXPECT_GT(target.State().positionMeters.z, ground + 0.5);
     };
-    verifyTakeoff(previousStartMeters);
-    verifyTakeoff(startMeters);
+    verifyTakeoff(previousStartMeters, true);
+    verifyTakeoff(startMeters, false);
 
     const double groundHeight = currentGroundHeight;
 
