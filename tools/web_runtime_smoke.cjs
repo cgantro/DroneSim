@@ -243,7 +243,7 @@ async function run() {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     const videoBytes = fs.readFileSync(videoPath);
     const videoHash = crypto.createHash("sha256").update(videoBytes).digest("hex");
-    if (manifest.format_version !== 2
+    if (manifest.format_version !== 3
         || manifest.collection_state !== "CAPTURED"
         || manifest.mission_outcome !== "COMPLETED"
         || manifest.video_bytes !== videoBytes.length
@@ -254,17 +254,42 @@ async function run() {
         || !Array.isArray(manifest.expected_zones) || manifest.expected_zones.length !== 1
         || !Array.isArray(manifest.captured_zones) || manifest.captured_zones.length !== 1
         || !Array.isArray(manifest.missing_zones) || manifest.missing_zones.length !== 0
+        || !Array.isArray(manifest.missing_zone_videos)
+        || manifest.missing_zone_videos.length !== 0
         || manifest.capture_summary?.expected_zone_count !== 1
         || manifest.capture_summary?.captured_zone_count !== 1
-        || manifest.capture_summary?.missing_zone_count !== 0)
+        || manifest.capture_summary?.missing_zone_count !== 0
+        || !Array.isArray(manifest.zone_recordings)
+        || manifest.zone_recordings.length !== 1
+        || manifest.zone_recordings[0].collection_state !== "CAPTURED"
+        || manifest.zone_recordings[0].download_ready !== true
+        || manifest.zone_recordings[0].video_bytes <= 0
+        || !manifest.zone_recordings[0].video_checksum)
       throw new Error("촬영 기록의 영상 크기·체크섬·상태 표본이 올바르지 않습니다.");
     const capturedZone = manifest.captured_zones[0];
     if (capturedZone.inspection_zone_id !== manifest.expected_zones[0].inspection_zone_id
         || !Number.isFinite(capturedZone.simulation_tick)
         || !Number.isFinite(capturedZone.simulation_time_seconds)
         || capturedZone.video_frame_requested !== true
-        || capturedZone.recording_elapsed_milliseconds < 0)
+        || capturedZone.recording_elapsed_milliseconds < 0
+        || capturedZone.collection_state !== "CAPTURED"
+        || capturedZone.download_ready !== true
+        || !capturedZone.video_file)
       throw new Error("완료된 점검 구역의 실제 촬영 프레임 시각이 기록되지 않았습니다.");
+    const zoneVideoPromise = page.waitForEvent("download");
+    await page.locator("#web-eo-zone-downloads a[data-zone-video]").click();
+    const zoneVideoDownload = await zoneVideoPromise;
+    const zoneVideoPath = await zoneVideoDownload.path();
+    if (!zoneVideoPath || !zoneVideoDownload.suggestedFilename().endsWith(".webm"))
+      throw new Error("점검 구역별 영상을 내려받지 못했습니다.");
+    const zoneVideoBytes = fs.readFileSync(zoneVideoPath);
+    const zoneVideoHash = crypto.createHash("sha256").update(zoneVideoBytes).digest("hex");
+    const savedZoneVideo = manifest.zone_recordings[0];
+    if (zoneVideoBytes.length !== savedZoneVideo.video_bytes
+        || zoneVideoHash !== savedZoneVideo.video_checksum
+        || savedZoneVideo.video_file !== capturedZone.video_file
+        || savedZoneVideo.inspection_zone_id !== capturedZone.inspection_zone_id)
+      throw new Error("구역별 영상과 촬영 기록의 크기·체크섬·구역 ID가 맞지 않습니다.");
     for (let index = 1; index < manifest.samples.length; ++index) {
       const elapsedDifference = manifest.samples[index].recording_elapsed_milliseconds
         - manifest.samples[index - 1].recording_elapsed_milliseconds;
@@ -288,7 +313,7 @@ async function run() {
         || !Number.isFinite(sample.simulation_time_seconds)
         || !sample.capture_assessment)
       throw new Error("촬영 기록에 점검 구역·시간·위치·자세·판정 정보가 없습니다.");
-    console.log("Chromium에서 선택한 점검 구역, EO 영상 저장, 촬영 기록과 체크섬을 확인했습니다.");
+    console.log("Chromium에서 점검 구역별 영상, 임무 영상, 촬영 기록과 체크섬을 확인했습니다.");
   } catch (error) {
     console.error(`웹 시작 검사 실패: ${error.message}`);
     process.exitCode = 1;

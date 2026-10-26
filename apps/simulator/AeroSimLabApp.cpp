@@ -1367,6 +1367,14 @@ void AeroSimLabApp::AdvanceInspectionMission()
             static_cast<void>(ApplyAndRecordCommand(stopYaw));
             inspectionCaptureStartFrame_ = simulation_.Camera().lastFrameTick;
             inspectionMissionStage_ = Stage::Capturing;
+#ifdef __EMSCRIPTEN__
+            EM_ASM({
+                if (window.startDroneSimInspectionZoneRecording)
+                    window.startDroneSimInspectionZoneRecording(
+                        UTF8ToString($0), UTF8ToString($1), $2);
+            }, inspectionFacilityId_.c_str(), inspectionZoneId_.c_str(),
+                static_cast<double>(simulation_.TickCount()));
+#endif
         }
         else
         {

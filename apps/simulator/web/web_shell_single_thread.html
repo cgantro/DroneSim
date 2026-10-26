@@ -27,6 +27,7 @@
       #web-eo-live { display: grid; gap: 5px; min-width: 190px; color: #d4dde0; }
       #web-eo-live video { display: block; width: min(22vw, 220px); height: 124px; background: #080a0b; object-fit: contain; }
       #web-eo-recording-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+      #web-eo-zone-downloads { display: grid; gap: 4px; }
       #web-eo-recording a { color: #9fd5ff; }
       #web-eo-recording a[hidden] { display: none; }
       @media (max-width: 720px) { #web-gcs { align-items: flex-start; flex-direction: column; } #web-gcs-status { min-width: 0; } #web-gcs-controls { flex-wrap: wrap; } }
@@ -52,6 +53,7 @@
         <div id="web-eo-recording-controls">
           <a id="web-eo-video-download" hidden>영상 내려받기</a>
           <a id="web-eo-manifest-download" hidden>촬영 기록 내려받기</a>
+          <div id="web-eo-zone-downloads" aria-label="구역별 촬영 영상"></div>
         </div>
       </div>
       <div id="web-gcs-controls">
@@ -94,6 +96,11 @@
       var eoWebRtcSender = null;
       var eoWebRtcReceiver = null;
       var eoRecorderChunks = [];
+      var eoZoneRecorder = null;
+      var eoZoneRecorderChunks = [];
+      var eoZoneRecordings = [];
+      var eoZoneRecordingPromises = [];
+      var eoActiveZoneRecording = null;
       var eoTelemetrySamples = [];
       var eoCaptureEvents = [];
       var eoExpectedZones = [];
@@ -148,6 +155,9 @@
 
       function beginInspectionCaptureRecord(targetIndex) {
         eoCaptureEvents = [];
+        eoZoneRecordings = [];
+        eoZoneRecordingPromises = [];
+        eoActiveZoneRecording = null;
         eoExpectedZones = eoInspectionTargets
           .filter(function (target) { return targetIndex < 0 || target.index === targetIndex; })
           .map(function (target) {
@@ -158,12 +168,115 @@
           });
       }
 
+      window.startDroneSimInspectionZoneRecording = function (
+          facilityId, zoneId, simulationTick) {
+        if (!eoRecorder || eoZoneRecorder || eoRecordingFinalizing)
+          return;
+        var target = eoExpectedZones.find(function (zone) {
+          return zone.inspection_zone_id === zoneId;
+        });
+        if (!target)
+          return;
+        try {
+          var chunks = [];
+          eoZoneRecorderChunks = chunks;
+          eoActiveZoneRecording = {
+            facility_id: facilityId,
+            inspection_zone_id: zoneId,
+            start_simulation_tick: Number(simulationTick),
+            start_recording_elapsed_milliseconds:
+              Math.round(performance.now() - eoRecordingStartedAt)
+          };
+          eoZoneRecorder = new MediaRecorder(eoRecorder.stream, {
+            mimeType: eoRecorder.mimeType
+          });
+          eoZoneRecorder.addEventListener("dataavailable", function (event) {
+            if (event.data && event.data.size > 0)
+              chunks.push(event.data);
+          });
+          eoZoneRecorder.addEventListener("error", function (event) {
+            setEoRecordingStatus("구역 영상 녹화 오류: "
+              + (event.error?.message || "원인을 확인할 수 없습니다."));
+          });
+          eoZoneRecorder.start(100);
+        } catch (error) {
+          eoZoneRecorder = null;
+          eoActiveZoneRecording = null;
+          eoZoneRecorderChunks = [];
+          eoZoneRecordings.push({
+            facility_id: facilityId,
+            inspection_zone_id: zoneId,
+            start_simulation_tick: Number(simulationTick),
+            collection_state: "FAILED",
+            failure_reason: error.message
+          });
+          setEoRecordingStatus("구역 영상 녹화를 시작하지 못했습니다: " + error.message);
+        }
+      };
+
+      async function finishInspectionZoneRecording(captureEvent) {
+        if (!eoZoneRecorder || !eoActiveZoneRecording)
+          return null;
+        var recorder = eoZoneRecorder;
+        var recording = eoActiveZoneRecording;
+        var chunks = eoZoneRecorderChunks;
+        eoZoneRecorder = null;
+        eoActiveZoneRecording = null;
+        eoZoneRecorderChunks = [];
+        await new Promise(function (resolve) {
+          recorder.addEventListener("stop", resolve, { once: true });
+          recorder.stop();
+        });
+        var videoBlob = new Blob(chunks, {
+          type: recorder.mimeType || "video/webm"
+        });
+        if (videoBlob.size === 0) {
+          eoZoneRecordings.push(Object.assign({}, recording, {
+            collection_state: "FAILED",
+            failure_reason: "영상 프레임이 녹화되지 않았습니다."
+          }));
+          return null;
+        }
+
+        var timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        var videoName = "dronesim-zone-" + recording.inspection_zone_id
+          + "-" + timestamp + ".webm";
+        var checksum = null;
+        if (window.crypto && crypto.subtle) {
+          try {
+            var digest = await crypto.subtle.digest("SHA-256", await videoBlob.arrayBuffer());
+            checksum = Array.from(new Uint8Array(digest), function (value) {
+              return value.toString(16).padStart(2, "0");
+            }).join("");
+          } catch (_) {}
+        }
+        var savedRecording = Object.assign({}, recording, {
+          collection_state: "CAPTURED",
+          download_ready: true,
+          video_file: videoName,
+          video_mime_type: videoBlob.type,
+          video_bytes: videoBlob.size,
+          video_checksum_algorithm: checksum ? "SHA-256" : null,
+          video_checksum: checksum,
+          capture_simulation_tick: captureEvent.simulation_tick,
+          capture_simulation_time_seconds: captureEvent.simulation_time_seconds
+        });
+        eoZoneRecordings.push(savedRecording);
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(videoBlob);
+        link.download = videoName;
+        link.dataset.zoneVideo = "true";
+        link.textContent = recording.inspection_zone_id + " 영상 내려받기";
+        document.getElementById("web-eo-zone-downloads").appendChild(link);
+        return savedRecording;
+      }
+
       window.recordDroneSimCapturedZone = function (facilityId, zoneId, simulationTick) {
         if (!eoRecorder || eoCaptureEvents.some(function (event) {
           return event.inspection_zone_id === zoneId;
         }))
           return;
-        eoCaptureEvents.push({
+        var captureEvent = {
           facility_id: facilityId,
           inspection_zone_id: zoneId,
           simulation_tick: Number(simulationTick),
@@ -171,9 +284,19 @@
           video_frame_requested: Boolean(eoRecorderVideoTrack
             && typeof eoRecorderVideoTrack.requestFrame === "function"),
           recording_elapsed_milliseconds: Math.round(performance.now() - eoRecordingStartedAt)
-        });
+        };
+        eoCaptureEvents.push(captureEvent);
         if (eoRecorderVideoTrack && typeof eoRecorderVideoTrack.requestFrame === "function")
           eoRecorderVideoTrack.requestFrame();
+        var zoneRecordingPromise = finishInspectionZoneRecording(captureEvent).then(
+          function (zoneRecording) {
+            captureEvent.collection_state = "CAPTURED";
+            captureEvent.download_ready = Boolean(zoneRecording);
+            if (zoneRecording)
+              captureEvent.video_file = zoneRecording.video_file;
+            return zoneRecording;
+          });
+        eoZoneRecordingPromises.push(zoneRecordingPromise);
       };
 
       function setEoRecordingStatus(message) {
@@ -311,6 +434,25 @@
         if (!eoRecorder || eoRecordingFinalizing)
           return;
         eoRecordingFinalizing = true;
+        if (eoZoneRecorder && eoActiveZoneRecording) {
+          var incompleteRecording = Object.assign({}, eoActiveZoneRecording);
+          var incompleteRecorder = eoZoneRecorder;
+          eoZoneRecorder = null;
+          eoActiveZoneRecording = null;
+          await new Promise(function (resolve) {
+            incompleteRecorder.addEventListener("stop", resolve, { once: true });
+            incompleteRecorder.stop();
+          });
+          eoZoneRecorderChunks = [];
+          eoZoneRecordings.push(Object.assign(incompleteRecording, {
+            collection_state: "INCOMPLETE",
+            video_file: null,
+            video_bytes: 0,
+            video_checksum_algorithm: null,
+            video_checksum: null
+          }));
+        }
+        await Promise.all(eoZoneRecordingPromises);
         var recorder = eoRecorder;
         eoRecorder = null;
         await new Promise(function (resolve) {
@@ -353,8 +495,14 @@
             return event.inspection_zone_id === zone.inspection_zone_id;
           });
         });
+        var missingZoneVideos = eoExpectedZones.filter(function (zone) {
+          return !eoCaptureEvents.some(function (event) {
+            return event.inspection_zone_id === zone.inspection_zone_id
+              && event.download_ready;
+          });
+        });
         var manifest = {
-          format_version: 2,
+          format_version: 3,
           collection_state: "CAPTURED",
           recording_source: "시뮬레이터 화면의 EO 시점 영역",
           video_file: videoName,
@@ -366,7 +514,9 @@
           mission_status: finalSample ? finalSample.mission_status : "기록 없음",
           expected_zones: eoExpectedZones,
           captured_zones: eoCaptureEvents,
+          zone_recordings: eoZoneRecordings,
           missing_zones: missingZones,
+          missing_zone_videos: missingZoneVideos,
           capture_summary: {
             expected_zone_count: eoExpectedZones.length,
             captured_zone_count: eoCaptureEvents.length,
@@ -387,7 +537,8 @@
         manifestLink.hidden = false;
         setEoRecordingStatus("영상·기록을 내려받을 수 있습니다. 구역 "
           + eoCaptureEvents.length + "/" + eoExpectedZones.length + "곳 촬영, 누락 "
-          + missingZones.length + "곳 · 상태 표본 " + eoTelemetrySamples.length + "개");
+          + missingZones.length + "곳 · 구역 영상 누락 " + missingZoneVideos.length
+          + "개 · 상태 표본 " + eoTelemetrySamples.length + "개");
         eoRecordingFinalizing = false;
       }
 
@@ -406,6 +557,7 @@
         }
         eoTelemetrySamples = [];
         eoRecorderChunks = [];
+        document.getElementById("web-eo-zone-downloads").replaceChildren();
         eoRecordingStartedAt = performance.now();
         eoLastTelemetrySampleAt = 0;
         var stream = null;
