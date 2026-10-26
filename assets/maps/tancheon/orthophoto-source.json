@@ -1,0 +1,50 @@
+{
+  "source": "국토지리정보원 2025년 정사영상, 25 cm 지상표본거리",
+  "map_sheets": [
+    "37709004",
+    "37709005"
+  ],
+  "target_center_wgs84": {
+    "longitude": 127.1018462,
+    "latitude": 37.4936231
+  },
+  "target_crs": "EPSG:5186 (Korea 2000 / Central Belt 2010)",
+  "bounds_meters": {
+    "west": 208406.56251788812,
+    "south": 543201.2429522893,
+    "east": 209606.56251788812,
+    "north": 544401.2429522893
+  },
+  "ground_extent_meters": {
+    "width": 1200,
+    "height": 1200
+  },
+  "output": {
+    "file": "terrain.jpg",
+    "width": 4096,
+    "height": 4096,
+    "format": "JPEG quality 90"
+  },
+  "notes": "위치 기준은 1:5000 도엽 색인에서 가져왔으며, 각 TIFF에는 GeoTIFF 위치 태그가 없어 도엽 경계를 사용해 정합했다. 높이와 건물/교량 3D 형상은 포함하지 않는다.",
+  "available_source_sheets": [
+    "37705093",
+    "37705094",
+    "37705095",
+    "37709003",
+    "37709004",
+    "37709005"
+  ],
+  "used_source_sheets": [
+    "37709004",
+    "37709005"
+  ],
+  "map_index_crs": "EPSG:5174, transformed to EPSG:5186",
+  "source_resolution_meters_per_pixel": 0.25,
+  "source_image_dimensions_pixels": [
+    9252,
+    11508
+  ],
+  "processing": "각 도엽의 지도 경계를 이용해 1.2 km 정사각형을 자르고 4096 x 4096으로 축소",
+  "license": "공공데이터포털 정사영상 안내의 이용허락범위: 제한 없음. 출처: 국토지리정보원.",
+  "georeferencing_note": "TIFF 자체에는 위치 태그가 없어 도엽 경계로 등록했다. 도엽 경계 변환을 사용했으며 지상 기준점 측량으로 오차를 별도 검증한 자료는 아니다."
+}
