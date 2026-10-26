@@ -1,4 +1,5 @@
 #include "media/RtpVideoStream.h"
+#include "media/RecordedCaptureTransfer.h"
 
 #include "communication/UdpSocket.h"
 
@@ -6,10 +7,14 @@
 
 #include <array>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace
 {
@@ -80,5 +85,70 @@ TEST(RtpVideoStreamTests, SendsH264FrameAndReceivesDecodedRgb)
     EXPECT_GT(bottomHalf[2], bottomHalf[0]);
     EXPECT_GT(sender.Stats().framesSubmitted, 0U);
     EXPECT_GT(receiver.Stats().framesDecoded, 0U);
+}
+
+TEST(RecordedCaptureTransferTests, ReceivesAndVerifiesCaptureFiles)
+{
+    struct TemporaryTree
+    {
+        std::filesystem::path path;
+        ~TemporaryTree()
+        {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    };
+
+    const auto uniqueSuffix = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto root = std::filesystem::temp_directory_path()
+        / ("dronesim-capture-transfer-" + std::to_string(uniqueSuffix));
+    const TemporaryTree cleanup{root};
+    const auto senderDirectory = root / "sender";
+    const auto receiverDirectory = root / "receiver";
+    std::filesystem::create_directories(senderDirectory);
+
+    const aerosimlab::media::RecordedCaptureFiles files{
+        .video = senderDirectory / "capture.mp4",
+        .metadata = senderDirectory / "capture.jsonl",
+        .manifest = senderDirectory / "capture.manifest.json"};
+    const std::array<std::pair<std::filesystem::path, std::string>, 3> contents{{
+        {files.video, std::string(64U * 1024U + 9U, 'v')},
+        {files.metadata, "{\"simulation_tick\":42}\n"},
+        {files.manifest, "{\"collection_state\":\"SAVED\"}\n"}}};
+    for (const auto& [path, content] : contents)
+    {
+        std::ofstream output(path, std::ios::binary);
+        ASSERT_TRUE(output);
+        output.write(content.data(), static_cast<std::streamsize>(content.size()));
+        ASSERT_TRUE(output);
+    }
+
+    aerosimlab::media::RecordedCaptureReceiver receiver;
+    std::string error;
+    ASSERT_TRUE(receiver.Start(0, receiverDirectory, error)) << error;
+    ASSERT_TRUE(aerosimlab::media::SendRecordedCapture("127.0.0.1",
+        receiver.LocalPort(), files, error)) << error;
+
+    std::optional<aerosimlab::media::RecordedCaptureTransferResult> received;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::chrono::steady_clock::now() < deadline && !received)
+    {
+        received = receiver.TakeLatestResult();
+        if (!received)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(received);
+    EXPECT_TRUE(received->verified) << received->message;
+    EXPECT_EQ(received->manifestPath.filename(), files.manifest.filename());
+    for (const auto& [path, expected] : contents)
+    {
+        const std::filesystem::path deliveredPath = receiverDirectory / path.filename();
+        ASSERT_TRUE(std::filesystem::exists(deliveredPath));
+        std::ifstream input(deliveredPath, std::ios::binary);
+        const std::string actual((std::istreambuf_iterator<char>(input)),
+            std::istreambuf_iterator<char>());
+        EXPECT_EQ(actual, expected);
+    }
 }
 }

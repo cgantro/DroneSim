@@ -3,6 +3,7 @@
 
 #include "GroundControlClient.h"
 #include "communication/UdpSocket.h"
+#include "media/RecordedCaptureTransfer.h"
 #include "media/RtpVideoStream.h"
 #include "simulation_core/ScenarioRunner.h"
 
@@ -12,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <deque>
+#include <filesystem>
 #include <future>
 #include <optional>
 #include <sstream>
@@ -67,9 +69,11 @@ struct AppState
     HWND droneList = nullptr;
     HWND videoView = nullptr;
     HWND videoStatus = nullptr;
+    HWND captureTransferStatus = nullptr;
     HBITMAP videoBitmap = nullptr;
     std::uint32_t* videoPixels = nullptr;
     aerosimlab::media::RtpVideoReceiver videoReceiver;
+    aerosimlab::media::RecordedCaptureReceiver captureReceiver;
     std::string videoSenderHost;
     std::optional<std::chrono::steady_clock::time_point> lastVideoFrameAt;
     bool requestPending = false;
@@ -133,6 +137,46 @@ std::wstring FromUtf8(std::string_view text)
     MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
         result.data(), size);
     return result;
+}
+
+std::filesystem::path CaptureReceiveDirectory()
+{
+    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
+    if (length == 0)
+        return std::filesystem::temp_directory_path() / L"DroneSim" / L"received";
+    std::wstring localAppData(length, L'\0');
+    const DWORD written = GetEnvironmentVariableW(
+        L"LOCALAPPDATA", localAppData.data(), length);
+    if (written == 0 || written >= length)
+        return std::filesystem::temp_directory_path() / L"DroneSim" / L"received";
+    localAppData.resize(written);
+    return std::filesystem::path{localAppData} / L"DroneSim" / L"received";
+}
+
+void StartCaptureReceiver(AppState& state)
+{
+    std::string error;
+    const auto directory = CaptureReceiveDirectory();
+    if (state.captureReceiver.Start(
+            aerosimlab::media::defaultCaptureTransferPort, directory, error))
+    {
+        SetWindowTextW(state.captureTransferStatus, L"점검 자료 수신 대기 중 (TCP 5603)");
+        return;
+    }
+    SetWindowTextW(state.captureTransferStatus,
+        (L"점검 자료 수신을 시작하지 못했습니다: " + FromUtf8(error)).c_str());
+}
+
+void UpdateCaptureTransfer(AppState& state)
+{
+    if (auto result = state.captureReceiver.TakeLatestResult())
+    {
+        const std::wstring message = result->verified
+            ? L"점검 자료 수신 및 무결성 확인 완료: "
+                + result->manifestPath.filename().wstring()
+            : L"점검 자료 수신 실패: " + FromUtf8(result->message);
+        SetWindowTextW(state.captureTransferStatus, message.c_str());
+    }
 }
 
 std::wstring WidenAscii(std::string_view text)
@@ -468,6 +512,8 @@ void CreateControls(HWND window, AppState& state)
         SS_LEFT, 20, 446, 510, 34, statusTextId);
     state.telemetryText = AddControl(window, L"STATIC", L"드론과 카메라 상태가 여기에 표시됩니다.",
         SS_LEFT, 20, 483, 510, 72, telemetryTextId);
+    state.captureTransferStatus = AddControl(window, L"STATIC", L"점검 자료 수신기를 시작하는 중입니다.",
+        SS_LEFT, 565, 653, 320, 42, 0);
 }
 
 LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
@@ -541,6 +587,7 @@ LRESULT HandleTimer(HWND window, AppState& state, WPARAM wParam)
         return 0;
 
     UpdateVideo(state);
+    UpdateCaptureTransfer(state);
 
     if (state.requestPending
         && state.request.wait_for(std::chrono::milliseconds::zero()) == std::future_status::ready)
@@ -580,6 +627,7 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
     {
     case WM_CREATE:
         CreateControls(window, *state);
+        StartCaptureReceiver(*state);
         state->nextStatusPoll = std::chrono::steady_clock::now();
         SetTimer(window, requestTimerId, requestPollMilliseconds, nullptr);
         return 0;
@@ -598,6 +646,7 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
         DestroyWindow(window);
         return 0;
     case WM_DESTROY:
+        state->captureReceiver.Stop();
         if (state->videoView)
             SendMessageW(state->videoView, STM_SETIMAGE, IMAGE_BITMAP, 0);
         if (state->videoBitmap)
@@ -635,7 +684,7 @@ int WINAPI wWinMain(
     AppState state;
     HWND window = CreateWindowExW(0, windowClassName, L"AeroSimLab 지상통제",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 900, 700, nullptr, nullptr, instance, &state);
+        CW_USEDEFAULT, CW_USEDEFAULT, 900, 740, nullptr, nullptr, instance, &state);
     if (!window)
         return 1;
 

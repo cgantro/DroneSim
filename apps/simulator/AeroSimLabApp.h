@@ -352,6 +352,9 @@ private:
     std::unique_ptr<aerosimlab::media::RtpVideoSender> eoVideoSender_;
     std::jthread eoVideoStartWorker_;
     std::atomic_bool eoVideoStartPending_ = false;
+    std::jthread captureTransferWorker_;
+    std::atomic_bool captureTransferPending_ = false;
+    std::chrono::steady_clock::time_point nextCaptureTransferAttempt_{};
     std::string eoVideoDestinationAddress_;
     std::string eoVideoAttemptedAddress_;
     std::string eoVideoStartError_;

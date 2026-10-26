@@ -123,6 +123,16 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
         metadataPath, calculatedChecksum, error)) << error;
     EXPECT_EQ(calculatedChecksum,
         manifestData.at("metadata_checksum").get<std::string>());
+    ASSERT_TRUE(simulator::EoVideoRecorder::MarkCaptureDelivered(
+        manifestPath, error)) << error;
+    std::ifstream deliveredManifestFile(manifestPath);
+    ASSERT_TRUE(deliveredManifestFile.good());
+    const auto deliveredManifest = nlohmann::json::parse(
+        std::istreambuf_iterator<char>{deliveredManifestFile},
+        std::istreambuf_iterator<char>{});
+    EXPECT_EQ(deliveredManifest.at("collection_state").get<std::string>(),
+        "DELIVERED");
+    deliveredManifestFile.close();
 
     const auto failedVideoPath = outputDirectory / "failed-inspection.mp4";
     simulator::EoVideoRecorder failedRecorder;

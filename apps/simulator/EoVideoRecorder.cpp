@@ -1,12 +1,12 @@
 #include "EoVideoRecorder.h"
 
+#include "media/RecordedCaptureTransfer.h"
 #include <nlohmann/json.hpp>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 
 #include <chrono>
-#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstdlib>
@@ -14,12 +14,17 @@
 #include <fstream>
 #include <iomanip>
 #include <mutex>
-#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
 #include <thread>
 #include <utility>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#endif
 
 namespace aerosimlab::simulator
 {
@@ -65,34 +70,6 @@ namespace
 {
 using Json = nlohmann::json;
 constexpr std::size_t maximumQueuedFrames = 8U;
-
-std::optional<std::uint32_t> CalculateCrc32(const std::filesystem::path& path)
-{
-    std::ifstream input(path, std::ios::binary);
-    if (!input)
-        return std::nullopt;
-
-    std::array<unsigned char, 64U * 1024U> buffer{};
-    std::uint32_t checksum = 0xFFFFFFFFU;
-    while (input)
-    {
-        input.read(reinterpret_cast<char*>(buffer.data()),
-            static_cast<std::streamsize>(buffer.size()));
-        const std::streamsize bytesRead = input.gcount();
-        for (std::streamsize index = 0; index < bytesRead; ++index)
-        {
-            checksum ^= buffer[static_cast<std::size_t>(index)];
-            for (int bit = 0; bit < 8; ++bit)
-            {
-                const std::uint32_t lowBitMask = 0U - (checksum & 1U);
-                checksum = (checksum >> 1U) ^ (0xEDB88320U & lowBitMask);
-            }
-        }
-    }
-    if (!input.eof())
-        return std::nullopt;
-    return checksum ^ 0xFFFFFFFFU;
-}
 
 std::string FormatCrc32(std::uint32_t checksum)
 {
@@ -562,14 +539,99 @@ const std::filesystem::path& EoVideoRecorder::VideoPath() const noexcept
 bool EoVideoRecorder::CalculateFileChecksum(
     const std::filesystem::path& path, std::string& checksum, std::string& error)
 {
-    const auto value = CalculateCrc32(path);
-    if (!value)
+    std::uint32_t value = 0;
+    if (!aerosimlab::media::CalculateFileCrc32(path, value, error))
+        return false;
+    checksum = FormatCrc32(value);
+    return true;
+}
+
+std::vector<std::filesystem::path> EoVideoRecorder::FindSavedCaptures()
+{
+    std::vector<std::filesystem::path> captures;
+    const auto directory = UserDataDirectory() / "recordings";
+    std::error_code error;
+    if (!std::filesystem::is_directory(directory, error))
+        return captures;
+
+    for (std::filesystem::directory_iterator entry(directory, error), end;
+         !error && entry != end; entry.increment(error))
     {
-        error = "파일 체크섬을 계산하지 못했습니다.";
+        if (!entry->is_regular_file(error)
+            || entry->path().extension() != ".json")
+            continue;
+        const std::string filename = entry->path().filename().string();
+        if (!filename.ends_with(".manifest.json"))
+            continue;
+        try
+        {
+            std::ifstream input(entry->path());
+            const Json manifest = Json::parse(input);
+            if (manifest.value("collection_state", std::string{}) == "SAVED")
+                captures.push_back(entry->path());
+        }
+        catch (const std::exception&)
+        {
+            // 녹화 중이거나 손상된 목록은 전송 대상에서 건너뛴다.
+        }
+    }
+    return captures;
+}
+
+bool EoVideoRecorder::MarkCaptureDelivered(
+    const std::filesystem::path& manifestPath, std::string& error)
+{
+    try
+    {
+        std::ifstream input(manifestPath);
+        Json manifest = Json::parse(input);
+        input.close();
+        if (manifest.value("collection_state", std::string{}) != "SAVED")
+        {
+            error = "전달 대기 상태의 녹화 자료가 아닙니다.";
+            return false;
+        }
+        manifest["collection_state"] = "DELIVERED";
+        auto temporaryPath = manifestPath;
+        temporaryPath += ".partial";
+        {
+            std::ofstream output(temporaryPath, std::ios::out | std::ios::trunc);
+            output << manifest.dump(2) << '\n';
+            output.flush();
+            if (!output)
+            {
+                error = "전달 상태를 녹화 목록에 기록하지 못했습니다.";
+                return false;
+            }
+        }
+#ifdef _WIN32
+        if (!MoveFileExW(std::filesystem::path{temporaryPath}.c_str(),
+                manifestPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
+            error = "전달 상태를 녹화 목록에 반영하지 못했습니다. Windows 오류: "
+                + std::to_string(GetLastError());
+            std::error_code ignored;
+            std::filesystem::remove(temporaryPath, ignored);
+            return false;
+        }
+#else
+        std::error_code renameError;
+        std::filesystem::rename(temporaryPath, manifestPath, renameError);
+        if (renameError)
+        {
+            error = "전달 상태를 녹화 목록에 반영하지 못했습니다: "
+                + renameError.message();
+            std::filesystem::remove(temporaryPath, renameError);
+            return false;
+        }
+#endif
+        return true;
+    }
+    catch (const std::exception& exception)
+    {
+        error = exception.what();
         return false;
     }
-    checksum = FormatCrc32(*value);
-    return true;
 }
 
 std::filesystem::path NewEoRecordingPath()

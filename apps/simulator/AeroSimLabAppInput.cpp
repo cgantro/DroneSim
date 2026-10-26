@@ -2,6 +2,7 @@
 
 #include "graphics/MultisampleFramebuffer.h"
 #include "media/RtpVideoStream.h"
+#include "media/RecordedCaptureTransfer.h"
 #include "FleetDroneSpawn.h"
 #include "graphics/Window.h"
 
@@ -97,6 +98,45 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         && *fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
     {
         StartEoVideoStream(peer);
+        if (!captureTransferPending_.load()
+            && std::chrono::steady_clock::now() >= nextCaptureTransferAttempt_)
+        {
+            if (captureTransferWorker_.joinable())
+                captureTransferWorker_.join();
+            const std::string destination = peer.AddressIpv4();
+            captureTransferPending_ = true;
+            nextCaptureTransferAttempt_ = std::chrono::steady_clock::now()
+                + std::chrono::seconds(2);
+            captureTransferWorker_ = std::jthread([this, destination]
+            {
+                try
+                {
+                    for (const auto& manifestPath : EoVideoRecorder::FindSavedCaptures())
+                    {
+                        const std::string manifestName = manifestPath.filename().string();
+                        constexpr std::string_view manifestSuffix = ".manifest.json";
+                        const std::string baseName = manifestName.substr(
+                            0, manifestName.size() - manifestSuffix.size());
+                        const aerosimlab::media::RecordedCaptureFiles files{
+                            .video = manifestPath.parent_path() / (baseName + ".mp4"),
+                            .metadata = manifestPath.parent_path() / (baseName + ".jsonl"),
+                            .manifest = manifestPath};
+                        std::string transferError;
+                        if (!aerosimlab::media::SendRecordedCapture(destination,
+                                aerosimlab::media::defaultCaptureTransferPort,
+                                files, transferError))
+                            break;
+                        static_cast<void>(EoVideoRecorder::MarkCaptureDelivered(
+                            manifestPath, transferError));
+                    }
+                }
+                catch (...)
+                {
+                    // 전송을 못한 자료는 SAVED 상태로 남아 다음 연결 확인 때 다시 시도한다.
+                }
+                captureTransferPending_ = false;
+            });
+        }
         auto reply = makeReply();
         reply.accepted = true;
         reply.status = "fleet_status";

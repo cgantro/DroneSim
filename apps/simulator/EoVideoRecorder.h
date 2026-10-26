@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace aerosimlab::simulator
 {
@@ -55,6 +56,13 @@ public:
     [[nodiscard]] static bool CalculateFileChecksum(
         const std::filesystem::path& path, std::string& checksum,
         std::string& error);
+
+    /** @brief 저장은 끝났지만 지상통제소 전달이 끝나지 않은 자료를 찾는다. */
+    [[nodiscard]] static std::vector<std::filesystem::path> FindSavedCaptures();
+
+    /** @brief 확인 응답을 받은 뒤 목록의 상태를 전달 완료로 바꾼다. */
+    [[nodiscard]] static bool MarkCaptureDelivered(
+        const std::filesystem::path& manifestPath, std::string& error);
 
 private:
     struct Impl;

@@ -199,7 +199,10 @@ target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_cor
 add_library(aerosimlab_sensor STATIC modules/sensor/src/RgbFrame.cpp)
 target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
 if(NOT EMSCRIPTEN)
-  add_library(aerosimlab_media STATIC modules/media/src/RtpVideoStream.cpp)
+  add_library(aerosimlab_media STATIC
+    modules/media/src/RtpVideoStream.cpp
+    modules/media/src/RecordedCaptureTransfer.cpp
+  )
   target_include_directories(aerosimlab_media PUBLIC modules/media/include)
   if(WIN32 AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
     target_compile_definitions(aerosimlab_media PRIVATE
