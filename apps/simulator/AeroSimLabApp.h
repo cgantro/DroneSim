@@ -93,13 +93,13 @@ public:
 #ifdef __EMSCRIPTEN__
     /** @brief 웹 지상통제 버튼에서 비행 명령을 예약한다. */
     void QueueWebFlightCommand(aerosimlab::simulation::DroneCommand::Kind kind);
-    /** @brief 웹 지상통제에서 자동 점검 임무를 시작한다. */
+    /** @brief 사람이 지정한 정찰 위치를 방문해 영상을 수집한다. */
     [[nodiscard]] bool StartWebInspectionMission(int targetIndex);
-    /** @brief 이동·카메라 정렬 중인 웹 점검 임무를 잠시 멈춘다. */
+    /** @brief 이동·카메라 정렬 중인 웹 정찰 임무를 잠시 멈춘다. */
     [[nodiscard]] bool PauseWebInspectionMission();
-    /** @brief 멈춘 웹 점검 임무를 이어서 진행한다. */
+    /** @brief 멈춘 웹 정찰 임무를 이어서 진행한다. */
     [[nodiscard]] bool ResumeWebInspectionMission();
-    /** @brief 진행 중인 웹 점검 임무를 중단하고 착륙을 요청한다. */
+    /** @brief 진행 중인 웹 정찰 임무를 중단하고 착륙을 요청한다. */
     [[nodiscard]] bool CancelWebInspectionMission();
     /** @brief 웹 조작 버튼의 입력을 다음 비행 Tick에 적용한다. */
     void SetWebPilotAxes(const aerosimlab::manual_control::GamepadAxes& axes);

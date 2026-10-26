@@ -173,12 +173,12 @@ void DrawFlightStatusPanel(
             simulation.SimulationTimeSeconds(),
             static_cast<unsigned long long>(simulation.TickCount()));
         ImGui::Separator();
-        ImGui::Text("OSM 건물 %s 영상 수집 목표: %s",
+        ImGui::Text("OSM 건물 %s 정찰 목표: %s",
             inspectionFacilityId.c_str(), CaptureStatusLabel(captureAssessment));
         ImGui::TextDisabled("목표가 카메라 화면에 잡히는지 보여 줍니다. 파손 여부는 사람이 영상으로 확인합니다.");
-        ImGui::Text("영상 수집 임무: %s", inspectionMissionStatus.c_str());
+        ImGui::Text("정찰 임무: %s", inspectionMissionStatus.c_str());
         ImGui::Text("촬영 위치까지 %.1f m", missionDistanceMeters);
-        if (missionCanStart && ImGui::Button("영상 수집 시작"))
+        if (missionCanStart && ImGui::Button("정찰 임무 시작"))
             startInspectionMission();
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();

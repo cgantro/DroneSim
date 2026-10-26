@@ -406,7 +406,7 @@ void ShowResult(AppState& state)
                   << L"카메라: " << WidenAscii(aerosimlab::communication::ToString(
                       reply.telemetry.camera.status))
                   << L"   생성 프레임: " << reply.telemetry.camera.frameCount
-                  << L"\r\n점검 임무: " << FromUtf8(reply.telemetry.inspectionMissionStatus);
+                  << L"\r\n정찰 임무: " << FromUtf8(reply.telemetry.inspectionMissionStatus);
         SetWindowTextW(state.telemetryText, telemetry.str().c_str());
         std::uint64_t selectedDroneId = 0;
         const LRESULT selectedRow = SendMessageW(state.droneList, LB_GETCURSEL, 0, 0);
@@ -512,14 +512,14 @@ void CreateControls(HWND window, AppState& state)
         20, 375, 155, 32, videoRecordingStartButtonId);
     AddControl(window, L"BUTTON", L"영상 녹화 종료", BS_PUSHBUTTON,
         185, 375, 155, 32, videoRecordingStopButtonId);
-    AddControl(window, L"BUTTON", L"자동 점검 시작", BS_PUSHBUTTON,
-        20, 414, 85, 32, inspectionStartButtonId);
+    AddControl(window, L"BUTTON", L"정찰 임무 시작", BS_PUSHBUTTON,
+        20, 414, 115, 32, inspectionStartButtonId);
     AddControl(window, L"BUTTON", L"일시 정지", BS_PUSHBUTTON,
-        110, 414, 70, 32, inspectionPauseButtonId);
+        140, 414, 70, 32, inspectionPauseButtonId);
     AddControl(window, L"BUTTON", L"재개", BS_PUSHBUTTON,
-        185, 414, 70, 32, inspectionResumeButtonId);
+        215, 414, 70, 32, inspectionResumeButtonId);
     AddControl(window, L"BUTTON", L"임무 중단", BS_PUSHBUTTON,
-        260, 414, 80, 32, inspectionCancelButtonId);
+        290, 414, 80, 32, inspectionCancelButtonId);
 
     AddLabel(window, L"편대 상태", 565, 62, 150);
     AddControl(window, L"BUTTON", L"드론 추가", BS_PUSHBUTTON,

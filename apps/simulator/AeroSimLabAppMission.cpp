@@ -20,7 +20,7 @@ bool AeroSimLabApp::RequestInspectionMission(
         || inspectionMission_.stage == InspectionMissionStage::Capturing
         || inspectionMission_.stage == InspectionMissionStage::Landing)
     {
-        inspectionMission_.error = "점검 임무가 이미 진행 중입니다.";
+        inspectionMission_.error = "정찰 임무가 이미 진행 중입니다.";
         return false;
     }
 
@@ -40,7 +40,7 @@ bool AeroSimLabApp::RequestInspectionMission(
     if (selectedTargetIndex
         && *selectedTargetIndex >= inspectionTargets_.size())
     {
-        inspectionMission_.error = "선택한 점검 구역을 찾을 수 없습니다.";
+        inspectionMission_.error = "선택한 정찰 위치를 찾을 수 없습니다.";
         inspectionMission_.stage = InspectionMissionStage::Failed;
         return false;
     }
@@ -59,7 +59,7 @@ bool AeroSimLabApp::RequestInspectionMission(
             firstTarget.approachPositionMeters);
         if (!route)
         {
-            inspectionMission_.error = "현재 위치에서 첫 점검 구역까지 건물 우회 경로를 찾지 못했습니다.";
+            inspectionMission_.error = "현재 위치에서 첫 정찰 위치까지 건물 우회 경로를 찾지 못했습니다.";
             inspectionMission_.stage = InspectionMissionStage::Failed;
             return false;
         }
@@ -124,7 +124,7 @@ bool AeroSimLabApp::ResumeInspectionMission()
         if (ApplyAndRecordCommand(waypoint)
             != aerosimlab::simulation::CommandResult::Accepted)
         {
-            FailInspectionMission("점검 경로를 다시 시작하지 못했습니다.");
+            FailInspectionMission("정찰 경로를 다시 시작하지 못했습니다.");
             return false;
         }
     }
@@ -170,7 +170,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
         && inspectionMission_.stage != Stage::Failed
         && elapsedTicks > 60U * 180U * inspectionMission_.targetCount)
     {
-        FailInspectionMission("임무 제한 시간 안에 구역 촬영을 마치지 못했습니다.");
+        FailInspectionMission("제한 시간 안에 정찰 위치의 영상 수집을 마치지 못했습니다.");
         return;
     }
 
@@ -186,7 +186,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
             if (ApplyAndRecordCommand(waypoint)
                 != aerosimlab::simulation::CommandResult::Accepted)
             {
-                FailInspectionMission("점검 구역 이동 명령을 적용하지 못했습니다.");
+                FailInspectionMission("정찰 위치 이동 명령을 적용하지 못했습니다.");
                 return;
             }
             inspectionMission_.stage = Stage::Approaching;
@@ -215,7 +215,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
                 if (ApplyAndRecordCommand(waypoint)
                     != aerosimlab::simulation::CommandResult::Accepted)
                 {
-                    FailInspectionMission("다음 점검 경유점 이동 명령을 적용하지 못했습니다.");
+                    FailInspectionMission("다음 정찰 경유점 이동 명령을 적용하지 못했습니다.");
                     return;
                 }
             }
@@ -261,7 +261,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
             if (ApplyAndRecordCommand(alignYaw)
                 != aerosimlab::simulation::CommandResult::Accepted)
             {
-                FailInspectionMission("점검면을 향해 카메라 방향을 맞추지 못했습니다.");
+                FailInspectionMission("정찰 대상에 카메라 방향을 맞추지 못했습니다.");
                 return;
             }
         }
@@ -316,7 +316,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
                 if (ApplyAndRecordCommand(waypoint)
                     != aerosimlab::simulation::CommandResult::Accepted)
                 {
-                    FailInspectionMission("다음 점검 구역 이동 명령을 적용하지 못했습니다.");
+                    FailInspectionMission("다음 정찰 위치 이동 명령을 적용하지 못했습니다.");
                     return;
                 }
                 inspectionMission_.captureStartFrame = 0;
@@ -406,7 +406,7 @@ std::string AeroSimLabApp::InspectionMissionStatus() const
         return "영상 저장 완료 (" + std::to_string(inspectionMission_.completedTargetCount)
             + "개 위치)";
     case InspectionMissionStage::GeometryOnly:
-        return "구도 확인 완료 (" + std::to_string(inspectionMission_.completedTargetCount)
+        return "영상 수집 완료 (" + std::to_string(inspectionMission_.completedTargetCount)
             + "개 위치)";
     case InspectionMissionStage::Failed: return "실패: " + inspectionMission_.error;
     }

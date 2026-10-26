@@ -64,7 +64,7 @@
         <select id="inspection-target" data-inspection-target disabled>
           <option value="-1">모든 시험 구역</option>
         </select>
-        <button type="button" data-start-inspection disabled>영상 수집 시작</button>
+        <button type="button" data-start-inspection disabled>정찰 임무 시작</button>
         <button type="button" data-pause-inspection disabled
             title="이동·카메라 정렬 중에만 가능하며, 영상 기록은 계속됩니다.">일시 정지</button>
         <button type="button" data-resume-inspection disabled>재개</button>
@@ -688,7 +688,7 @@
           storage_state: mediaSaved ? "SAVED" : "CAPTURED",
           storage_backend: mediaSaved ? "OPFS" : "일부 저장 또는 다운로드 전용",
           recording_duration_milliseconds: Math.round(performance.now() - eoRecordingStartedAt),
-          mission_outcome: finalSample && finalSample.mission_status.indexOf("구도 확인 완료") >= 0
+          mission_outcome: finalSample && finalSample.mission_status.indexOf("영상 수집 완료") >= 0
             ? "COMPLETED" : "FAILED",
           mission_status: finalSample ? finalSample.mission_status : "기록 없음",
           expected_zones: eoExpectedZones,
@@ -854,7 +854,7 @@
           }
         }
         if (eoRecorder && latestGroundControlState
-            && (latestGroundControlState.missionStatus.indexOf("구도 확인 완료") >= 0
+            && (latestGroundControlState.missionStatus.indexOf("영상 수집 완료") >= 0
               || latestGroundControlState.missionStatus.indexOf("실패:") >= 0))
           void finishEoRecording();
       };

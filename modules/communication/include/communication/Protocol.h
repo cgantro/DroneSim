@@ -41,7 +41,7 @@ enum class VideoRecordingCommand
     Stop
 };
 
-/** @brief 준비된 점검 구역 전체를 순서대로 수행한다. */
+/** @brief 등록된 정찰 위치를 순서대로 방문해 영상을 수집한다. */
 enum class InspectionCommand
 {
     Start,
