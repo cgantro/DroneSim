@@ -176,4 +176,13 @@ glm::dvec2 TerrainGrid::ToLocalMeters(
         (longitudeDegrees - centerLongitudeDegrees) * metersPerLongitudeDegree,
         (latitudeDegrees - centerLatitudeDegrees) * metersPerLatitudeDegree};
 }
+
+glm::dvec3 TerrainGrid::ToSimulationPositionMeters(
+    const glm::dvec3& eastNorthUpMeters) const
+{
+    return {
+        eastNorthUpMeters.x,
+        eastNorthUpMeters.y,
+        eastNorthUpMeters.z + HeightAtLocalMeters({0.0, 0.0})};
+}
 }

@@ -35,6 +35,8 @@ void Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight()
     EXPECT_TRUE(terrain.ContainsLocalPositionMeters({10.0, 20.0}));
     EXPECT_FALSE(terrain.ContainsLocalPositionMeters({10.01, 0.0}));
     EXPECT_FLOAT_EQ(terrain.HeightAtLocalMeters({0.0, 0.0}), 120.0F);
+    EXPECT_EQ(terrain.ToSimulationPositionMeters({5.0, -2.0, 3.0}),
+        glm::dvec3(5.0, -2.0, 123.0));
 }
 
 void Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin()

@@ -1060,11 +1060,12 @@ void AeroSimLabApp::LoadMapFeatures()
         {
             routeWaypoints = aerosimlab::simulation::ParseInspectionWaypointsJson(
                 target.at("waypoints_meters").dump());
-            for (const glm::dvec3& waypoint : routeWaypoints)
+            for (glm::dvec3& waypoint : routeWaypoints)
             {
                 if (!terrainGrid_.ContainsLocalPositionMeters({waypoint.x, waypoint.y}))
                     throw std::runtime_error("점검 경유점이 지형 범위를 벗어났습니다: "
                         + zoneId);
+                waypoint = terrainGrid_.ToSimulationPositionMeters(waypoint);
             }
         }
         if (target.contains("inspection_surface"))
@@ -1073,6 +1074,9 @@ void AeroSimLabApp::LoadMapFeatures()
                 target.at("inspection_surface").dump());
             approachPosition = ReadPlanVector(
                 target.at("approach_position_meters"), "approach_position_meters");
+            surface.centerMeters = terrainGrid_.ToSimulationPositionMeters(
+                surface.centerMeters);
+            approachPosition = terrainGrid_.ToSimulationPositionMeters(approachPosition);
         }
         else
         {

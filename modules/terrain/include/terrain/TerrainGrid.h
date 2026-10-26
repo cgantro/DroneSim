@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 namespace aerosimlab::terrain
 {
@@ -38,5 +39,9 @@ struct TerrainGrid
     /** @brief 위도·경도를 지형 중심 기준의 동쪽·북쪽 미터 좌표로 바꾼다. */
     [[nodiscard]] glm::dvec2 ToLocalMeters(
         double latitudeDegrees, double longitudeDegrees) const;
+
+    /** @brief ENU 위치의 높이 원점을 지형 중심 고도로 옮겨 시뮬레이터 좌표로 바꾼다. */
+    [[nodiscard]] glm::dvec3 ToSimulationPositionMeters(
+        const glm::dvec3& eastNorthUpMeters) const;
 };
 }
