@@ -220,7 +220,11 @@ async function run() {
     if (!missionStatus.includes("점검 임무: 구도 확인 완료 (1개 구역)"))
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${missionStatus}`);
     await page.waitForFunction(
-      () => document.querySelector("#web-eo-recording")?.textContent.includes("내려받을 수 있습니다"),
+      () => {
+        const text = document.querySelector("#web-eo-recording")?.textContent || "";
+        return text.includes("내려받을 수 있습니다")
+          || text.includes("브라우저에 저장했습니다");
+      },
       null,
       { timeout: 10000 }
     );
@@ -243,8 +247,11 @@ async function run() {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     const videoBytes = fs.readFileSync(videoPath);
     const videoHash = crypto.createHash("sha256").update(videoBytes).digest("hex");
-    if (manifest.format_version !== 3
+    if (manifest.format_version !== 4
         || manifest.collection_state !== "CAPTURED"
+        || manifest.verification_state !== "VERIFIED"
+        || manifest.storage_state !== "SAVED"
+        || manifest.storage_backend !== "OPFS"
         || manifest.mission_outcome !== "COMPLETED"
         || manifest.video_bytes !== videoBytes.length
         || manifest.video_checksum !== videoHash
@@ -262,6 +269,9 @@ async function run() {
         || !Array.isArray(manifest.zone_recordings)
         || manifest.zone_recordings.length !== 1
         || manifest.zone_recordings[0].collection_state !== "CAPTURED"
+        || manifest.zone_recordings[0].storage_state !== "SAVED"
+        || manifest.zone_recordings[0].storage_backend !== "OPFS"
+        || manifest.zone_recordings[0].verification_state !== "VERIFIED"
         || manifest.zone_recordings[0].download_ready !== true
         || manifest.zone_recordings[0].video_bytes <= 0
         || !manifest.zone_recordings[0].video_checksum)
@@ -273,6 +283,8 @@ async function run() {
         || capturedZone.video_frame_requested !== true
         || capturedZone.recording_elapsed_milliseconds < 0
         || capturedZone.collection_state !== "CAPTURED"
+        || capturedZone.storage_state !== "SAVED"
+        || capturedZone.verification_state !== "VERIFIED"
         || capturedZone.download_ready !== true
         || !capturedZone.video_file)
       throw new Error("완료된 점검 구역의 실제 촬영 프레임 시각이 기록되지 않았습니다.");
@@ -317,6 +329,28 @@ async function run() {
         || !sample.capture_assessment)
       throw new Error("촬영 기록에 점검 구역·시간·위치·자세·판정 정보가 없습니다.");
     console.log("Chromium에서 점검 구역별 영상, 임무 영상, 촬영 기록과 체크섬을 확인했습니다.");
+
+    const expectedBrowserFiles = [
+      manifest.video_file,
+      manifest.video_file.replace(/\.webm$/i, ".manifest.json"),
+      savedZoneVideo.video_file,
+    ];
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForFunction(
+      () => document.querySelector("#startup-status")?.hidden === true,
+      null,
+      { timeout: 45000 }
+    );
+    await page.waitForFunction(
+      (expectedNames) => {
+        const savedNames = [...document.querySelectorAll("#web-eo-saved-files a[data-opfs-file]")]
+          .map((link) => link.dataset.opfsFile);
+        return expectedNames.every((name) => savedNames.includes(name));
+      },
+      expectedBrowserFiles,
+      { timeout: 10000 }
+    );
+    console.log("새로고침 뒤에도 OPFS의 임무 영상·구역 영상·촬영 기록을 다시 찾았습니다.");
   } catch (error) {
     console.error(`웹 시작 검사 실패: ${error.message}`);
     process.exitCode = 1;

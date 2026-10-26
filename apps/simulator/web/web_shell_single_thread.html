@@ -28,6 +28,7 @@
       #web-eo-live video { display: block; width: min(22vw, 220px); height: 124px; background: #080a0b; object-fit: contain; }
       #web-eo-recording-controls { display: flex; flex-wrap: wrap; gap: 6px; }
       #web-eo-zone-downloads { display: grid; gap: 4px; }
+      #web-eo-saved-files { display: grid; gap: 4px; max-height: 96px; overflow: auto; }
       #web-eo-recording a { color: #9fd5ff; }
       #web-eo-recording a[hidden] { display: none; }
       @media (max-width: 720px) { #web-gcs { align-items: flex-start; flex-direction: column; } #web-gcs-status { min-width: 0; } #web-gcs-controls { flex-wrap: wrap; } }
@@ -54,6 +55,8 @@
           <a id="web-eo-video-download" hidden>영상 내려받기</a>
           <a id="web-eo-manifest-download" hidden>촬영 기록 내려받기</a>
           <div id="web-eo-zone-downloads" aria-label="구역별 촬영 영상"></div>
+          <strong>이 브라우저에 저장된 자료</strong>
+          <div id="web-eo-saved-files" aria-label="브라우저 저장 자료"></div>
         </div>
       </div>
       <div id="web-gcs-controls">
@@ -109,6 +112,7 @@
       var eoLastTelemetrySampleAt = 0;
       var eoRecordingFinalizing = false;
       var latestGroundControlState = null;
+      var eoDownloadUrls = [];
 
       function showStartupError(message) {
         window.clearTimeout(startupTimeout);
@@ -131,6 +135,9 @@
           button.disabled = false;
         });
         document.querySelector("#inspection-target").disabled = false;
+        refreshSavedRecordingLinks().catch(function (error) {
+          setEoRecordingStatus("저장 자료를 읽지 못했습니다: " + error.message);
+        });
         startEoWebRtcLoopback().catch(function (error) {
           closeEoWebRtc();
           setEoLiveStatus("EO 영상 · WebRTC 연결 실패: " + error.message);
@@ -241,10 +248,12 @@
         var timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         var videoName = "dronesim-zone-" + recording.inspection_zone_id
           + "-" + timestamp + ".webm";
+        var storedVideo = await saveRecordingToBrowser(videoName, videoBlob);
         var checksum = null;
         if (window.crypto && crypto.subtle) {
           try {
-            var digest = await crypto.subtle.digest("SHA-256", await videoBlob.arrayBuffer());
+            var digest = await crypto.subtle.digest(
+              "SHA-256", await storedVideo.file.arrayBuffer());
             checksum = Array.from(new Uint8Array(digest), function (value) {
               return value.toString(16).padStart(2, "0");
             }).join("");
@@ -252,10 +261,13 @@
         }
         var savedRecording = Object.assign({}, recording, {
           collection_state: "CAPTURED",
+          storage_state: storedVideo.saved ? "SAVED" : "CAPTURED",
+          storage_backend: storedVideo.saved ? "OPFS" : "다운로드 전용",
+          verification_state: checksum ? "VERIFIED" : "UNVERIFIED",
           download_ready: true,
           video_file: videoName,
           video_mime_type: videoBlob.type,
-          video_bytes: videoBlob.size,
+          video_bytes: storedVideo.file.size,
           video_checksum_algorithm: checksum ? "SHA-256" : null,
           video_checksum: checksum,
           capture_simulation_tick: captureEvent.simulation_tick,
@@ -263,7 +275,7 @@
         });
         eoZoneRecordings.push(savedRecording);
         var link = document.createElement("a");
-        link.href = URL.createObjectURL(videoBlob);
+        link.href = createDownloadUrl(storedVideo.file);
         link.download = videoName;
         link.dataset.zoneVideo = "true";
         link.textContent = recording.inspection_zone_id + " 영상 내려받기";
@@ -291,6 +303,10 @@
         var zoneRecordingPromise = finishInspectionZoneRecording(captureEvent).then(
           function (zoneRecording) {
             captureEvent.collection_state = "CAPTURED";
+            captureEvent.storage_state = zoneRecording
+              ? zoneRecording.storage_state : "CAPTURED";
+            captureEvent.verification_state = zoneRecording
+              ? zoneRecording.verification_state : "UNVERIFIED";
             captureEvent.download_ready = Boolean(zoneRecording);
             if (zoneRecording)
               captureEvent.video_file = zoneRecording.video_file;
@@ -305,6 +321,79 @@
 
       function setEoLiveStatus(message) {
         document.querySelector("#web-eo-live-status").textContent = message;
+      }
+
+      function createDownloadUrl(file) {
+        var url = URL.createObjectURL(file);
+        eoDownloadUrls.push(url);
+        return url;
+      }
+
+      async function saveRecordingToBrowser(fileName, blob) {
+        if (!navigator.storage || typeof navigator.storage.getDirectory !== "function")
+          return { file: blob, saved: false };
+
+        var directory = null;
+        var writable = null;
+        try {
+          var root = await navigator.storage.getDirectory();
+          directory = await root.getDirectoryHandle("DroneSim", { create: true });
+          var fileHandle = await directory.getFileHandle(fileName, { create: true });
+          writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return { file: await fileHandle.getFile(), saved: true };
+        } catch (error) {
+          if (writable) {
+            try { await writable.abort(); } catch (_) {}
+          }
+          if (directory) {
+            try { await directory.removeEntry(fileName); } catch (_) {}
+          }
+          setEoRecordingStatus("브라우저 저장에 실패해 내려받기만 준비했습니다: "
+            + error.message);
+          return { file: blob, saved: false };
+        }
+      }
+
+      async function refreshSavedRecordingLinks() {
+        var container = document.getElementById("web-eo-saved-files");
+        container.replaceChildren();
+        if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") {
+          container.textContent = "이 브라우저는 영구 저장을 지원하지 않습니다.";
+          return;
+        }
+
+        var root = await navigator.storage.getDirectory();
+        var directory;
+        try {
+          directory = await root.getDirectoryHandle("DroneSim");
+        } catch (error) {
+          if (error.name === "NotFoundError") {
+            container.textContent = "저장된 자료가 없습니다.";
+            return;
+          }
+          throw error;
+        }
+
+        var entries = [];
+        for await (var entry of directory.values()) {
+          if (entry.kind === "file")
+            entries.push(entry);
+        }
+        entries.sort(function (left, right) { return left.name.localeCompare(right.name); });
+        if (entries.length === 0) {
+          container.textContent = "저장된 자료가 없습니다.";
+          return;
+        }
+        for (var entry of entries) {
+          var link = document.createElement("a");
+          link.href = createDownloadUrl(await entry.getFile());
+          link.download = entry.name;
+          link.dataset.opfsFile = entry.name;
+          link.textContent = entry.name + " 내려받기";
+          container.appendChild(link);
+        }
       }
 
       function waitForIceGathering(pc) {
@@ -404,6 +493,7 @@
       window.addEventListener("beforeunload", function () {
         closeEoWebRtc();
         window.cancelAnimationFrame(eoCanvasFrame);
+        eoDownloadUrls.forEach(function (url) { URL.revokeObjectURL(url); });
       });
 
       function eoRecordingMimeType() {
@@ -473,7 +563,8 @@
         var timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         var videoName = "dronesim-eo-" + timestamp + ".webm";
         var finalSample = eoTelemetrySamples[eoTelemetrySamples.length - 1];
-        var videoUrl = URL.createObjectURL(videoBlob);
+        var storedVideo = await saveRecordingToBrowser(videoName, videoBlob);
+        var videoUrl = createDownloadUrl(storedVideo.file);
         var videoLink = document.getElementById("web-eo-video-download");
         videoLink.href = videoUrl;
         videoLink.download = videoName;
@@ -482,7 +573,8 @@
         var sha256 = "계산할 수 없음";
         if (window.crypto && crypto.subtle) {
           try {
-            var digest = await crypto.subtle.digest("SHA-256", await videoBlob.arrayBuffer());
+            var digest = await crypto.subtle.digest(
+              "SHA-256", await storedVideo.file.arrayBuffer());
             sha256 = Array.from(new Uint8Array(digest), function (value) {
               return value.toString(16).padStart(2, "0");
             }).join("");
@@ -501,13 +593,30 @@
               && event.download_ready;
           });
         });
+        var verifiedZoneVideos = eoExpectedZones.length > 0
+          && missingZones.length === 0
+          && missingZoneVideos.length === 0
+          && eoZoneRecordings.length === eoExpectedZones.length
+          && eoZoneRecordings.every(function (recording) {
+            return recording.storage_state === "SAVED"
+              && recording.verification_state === "VERIFIED";
+          });
+        var mediaSaved = storedVideo.saved
+          && eoZoneRecordings.length === eoExpectedZones.length
+          && eoZoneRecordings.every(function (recording) {
+            return recording.storage_state === "SAVED";
+          });
         var manifest = {
-          format_version: 3,
+          format_version: 4,
           collection_state: "CAPTURED",
+          verification_state: storedVideo.saved && sha256 !== "계산할 수 없음"
+            && verifiedZoneVideos ? "VERIFIED" : "INCOMPLETE",
           recording_source: "시뮬레이터 화면의 EO 시점 영역",
           video_file: videoName,
           video_mime_type: videoBlob.type,
-          video_bytes: videoBlob.size,
+          video_bytes: storedVideo.file.size,
+          storage_state: mediaSaved ? "SAVED" : "CAPTURED",
+          storage_backend: mediaSaved ? "OPFS" : "일부 저장 또는 다운로드 전용",
           recording_duration_milliseconds: Math.round(performance.now() - eoRecordingStartedAt),
           mission_outcome: finalSample && finalSample.mission_status.indexOf("구도 확인 완료") >= 0
             ? "COMPLETED" : "FAILED",
@@ -531,18 +640,26 @@
         };
         var manifestBlob = new Blob([JSON.stringify(manifest, null, 2) + "\n"],
           { type: "application/json" });
+        var manifestName = videoName.replace(/\.webm$/i, ".manifest.json");
+        var storedManifest = await saveRecordingToBrowser(manifestName, manifestBlob);
         var manifestLink = document.getElementById("web-eo-manifest-download");
-        manifestLink.href = URL.createObjectURL(manifestBlob);
-        manifestLink.download = videoName.replace(/\.webm$/i, ".manifest.json");
+        manifestLink.href = createDownloadUrl(storedManifest.file);
+        manifestLink.download = manifestName;
         manifestLink.hidden = false;
-        setEoRecordingStatus("영상·기록을 내려받을 수 있습니다. 구역 "
+        await refreshSavedRecordingLinks().catch(function (error) {
+          setEoRecordingStatus("파일은 저장했지만 목록을 갱신하지 못했습니다: "
+            + error.message);
+        });
+        setEoRecordingStatus((mediaSaved && storedManifest.saved
+          ? "영상·기록을 브라우저에 저장했습니다. "
+          : "영상·기록을 내려받을 수 있습니다. ") + "구역 "
           + eoCaptureEvents.length + "/" + eoExpectedZones.length + "곳 촬영, 누락 "
           + missingZones.length + "곳 · 구역 영상 누락 " + missingZoneVideos.length
           + "개 · 상태 표본 " + eoTelemetrySamples.length + "개");
         eoRecordingFinalizing = false;
       }
 
-      function startEoRecording() {
+      async function startEoRecording() {
         var mimeType = eoRecordingMimeType();
         if (!mimeType) {
           setEoRecordingStatus("이 브라우저는 화면 녹화를 지원하지 않습니다.");
@@ -664,12 +781,13 @@
               Module._DroneSimWebFlightCommand(Number(button.dataset.command));
           });
         });
-        document.querySelector("#web-gcs [data-start-inspection]").addEventListener("click", function () {
+        document.querySelector("#web-gcs [data-start-inspection]").addEventListener(
+            "click", async function () {
           if (eoRecorder || eoRecordingFinalizing) {
             setEoRecordingStatus("현재 점검 임무의 녹화가 진행 중입니다.");
             return;
           }
-          if (!startEoRecording())
+          if (!await startEoRecording())
             return;
           var targetIndex = Number(document.querySelector("#inspection-target").value);
           beginInspectionCaptureRecord(targetIndex);
