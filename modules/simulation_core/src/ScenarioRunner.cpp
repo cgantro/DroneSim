@@ -1022,6 +1022,7 @@ void PopulateFinalSnapshot(
     const DroneIds& droneIds,
     const DroneObservations& observations,
     const DroneEnergies& energies,
+    const std::unordered_map<std::string, double>& flightDistancesMeters,
     ScenarioResult& result)
 {
     result.tickCount = simulation.TickCount();
@@ -1054,6 +1055,7 @@ void PopulateFinalSnapshot(
             droneName, observation.lastKnownState,
             observation.status, observation.lastHeartbeatTick};
         drone.finalCamera = simulation.Camera(droneIds.at(droneName));
+        drone.flightDistanceMeters = flightDistancesMeters.at(droneName);
         drone.reportedBatteryPercent = observation.lastKnownBatteryPercent;
         const auto energy = energies.find(droneName);
         if (energy != energies.end())
@@ -1249,9 +1251,15 @@ ScenarioResult RunScenario(std::string_view jsonText)
 
     DroneIds droneIds = CreateScenarioDrones(definition, simulation);
     DroneObservations observations;
+    std::unordered_map<std::string, glm::dvec3> previousPositions;
+    std::unordered_map<std::string, double> flightDistancesMeters;
     for (const auto& [droneName, droneId] : droneIds)
+    {
         observations.emplace(droneName, DroneObservation{
             DroneCommunicationStatus::Connected, 0, simulation.State(droneId)});
+        previousPositions.emplace(droneName, simulation.State(droneId).positionMeters);
+        flightDistancesMeters.emplace(droneName, 0.0);
+    }
     DroneEnergies energies;
     if (definition.energyModel)
     {
@@ -1325,6 +1333,14 @@ ScenarioResult RunScenario(std::string_view jsonText)
         ApplyCameraEvents(tick, definition.cameraEvents, simulation, droneIds,
             definition.primaryDroneName, nextCameraEvent, result);
         simulation.AdvanceOneTick();
+        for (const auto& [droneName, droneId] : droneIds)
+        {
+            const glm::dvec3& currentPosition =
+                simulation.State(droneId).positionMeters;
+            flightDistancesMeters.at(droneName) += glm::distance(
+                previousPositions.at(droneName), currentPosition);
+            previousPositions.at(droneName) = currentPosition;
+        }
         if (definition.energyModel)
             AdvanceEnergy(*definition.energyModel, droneIds, simulation, energies);
         RecordMinimumDroneSeparation(
@@ -1353,7 +1369,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 observation.lastKnownBatteryPercent = BatteryPercent(energy->second);
         }
     }
-    PopulateFinalSnapshot(definition, simulation, droneIds, observations, energies, result);
+    PopulateFinalSnapshot(definition, simulation, droneIds, observations, energies,
+        flightDistancesMeters, result);
     CheckExpectedResults(definition, result);
     return result;
 }
