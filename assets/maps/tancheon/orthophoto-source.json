@@ -21,10 +21,10 @@
   },
   "output": {
     "file": "terrain.jpg",
-    "width": 3072,
-    "height": 3072,
+    "width": 2048,
+    "height": 2048,
     "format": "JPEG quality 92",
-    "ground_sample_distance_meters_per_pixel": 0.390625
+    "ground_sample_distance_meters_per_pixel": 0.5859375
   },
   "notes": "위치 기준은 1:5000 도엽 색인에서 가져왔으며, 각 TIFF에는 GeoTIFF 위치 태그가 없어 도엽 경계를 사용해 정합했다. 높이와 건물/교량 3D 형상은 포함하지 않는다.",
   "available_source_sheets": [
@@ -86,7 +86,7 @@
     "source_height_pixels": 4800,
     "source_ground_sample_distance_meters_per_pixel": 0.25
   },
-  "processing": "원본 25cm 정사영상에서 중심 기준 1.2km 정사각형을 잘랐습니다. 37709004와 37709005의 408픽셀(약 102m) 겹침을 선형으로 섞고, Lanczos 보간으로 3072 x 3072 크기로 줄인 뒤 JPEG 품질 92로 저장했습니다. 최종 픽셀 간격은 약 39cm입니다. 원본 TIFF 여섯 장 가운데 이 범위와 겹치는 두 장만 사용했습니다.",
+  "processing": "원본 25cm 정사영상에서 중심 기준 1.2km 정사각형을 잘랐습니다. 37709004와 37709005의 408픽셀(약 102m) 겹침을 선형으로 섞고, Lanczos 보간으로 2048 x 2048 크기로 줄인 뒤 JPEG 품질 90으로 저장했습니다. 최종 픽셀 간격은 약 59cm입니다. 원본 TIFF 여섯 장 가운데 이 범위와 겹치는 두 장만 사용했습니다.",
   "license": "공공데이터포털 정사영상 안내의 이용허락범위: 제한 없음. 출처: 국토지리정보원.",
   "georeferencing_note": "TIFF에 위치 태그가 없어 EPSG:5179 도엽 색인을 기준으로 위치를 정했다. 영상 내부에서 상대 위치는 확인했지만 지상 기준점 측량으로 절대 위치 오차를 검증하지는 않았다."
 }
