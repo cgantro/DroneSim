@@ -331,6 +331,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     apps/simulator/AeroSimLabAppBenchmark.cpp
     apps/simulator/AeroSimLabAppGamepad.cpp
     apps/simulator/AeroSimLabAppInput.cpp
+    apps/simulator/AeroSimLabAppMission.cpp
     apps/simulator/FleetDroneSpawn.cpp
     apps/simulator/SimulationBenchmark.cpp
   )
