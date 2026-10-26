@@ -2,12 +2,14 @@
 #include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/InspectionSurfaceJson.h"
+#include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
 #include <glm/geometric.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <limits>
 #include <stdexcept>
 
@@ -31,6 +33,26 @@ void ReachHovering(SimulationCore& simulation)
         simulation.AdvanceOneTick();
     }
     ASSERT_EQ(simulation.State().mode, FlightMode::Hovering);
+}
+
+void Verify_RigidBodyTakeoffFromTancheonDemoStart()
+{
+    const auto terrain = terrain::TerrainGrid::Load(
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+            / "assets/maps/tancheon/terrain.aerotrn");
+    constexpr glm::dvec2 startMeters{-410.0, 442.0};
+    const double groundHeight = terrain.HeightAtLocalMeters(startMeters);
+
+    SimulationCore simulation{SimulationDynamics::RigidBody};
+    simulation.SetTerrain(terrain);
+    simulation.SetInitialPose({startMeters.x, startMeters.y, groundHeight + 0.24}, 0.0);
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
+
+    for (int tick = 0; tick < 600; ++tick)
+        simulation.AdvanceOneTick();
+
+    EXPECT_GT(simulation.State().positionMeters.z, groundHeight + 0.5);
+    EXPECT_NE(simulation.State().mode, FlightMode::TakingOff);
 }
 
 void Verify_BatteryModel_ConsumesOnlyWhileFlyingAndClampsAtZero()
@@ -559,6 +581,7 @@ void Verify_EoCameraModelUsesBuildingFootprintsForOcclusion()
 
 TEST(SimulationCoreTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(Verify_RigidBodyTakeoffFromTancheonDemoStart());
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_ConsumesOnlyWhileFlyingAndClampsAtZero());
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_RejectsInvalidSettings());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick());

@@ -71,7 +71,7 @@ AeroSimLabApp* activeWebApplication = nullptr;
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 탄천유수지 체육시설 주소 지점에 둔 시뮬레이션용 출발 위치다.
-constexpr glm::dvec2 demoDroneStartMeters{-472.0, 442.0};
+constexpr glm::dvec2 demoDroneStartMeters{-410.0, 442.0};
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
