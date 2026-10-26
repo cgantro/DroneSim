@@ -746,6 +746,7 @@ void AeroSimLabApp::LoadTerrain()
 {
     terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load(
         AssetPath("maps/tancheon/terrain.aerotrn"));
+    simulation_.SetTerrain(terrainGrid_);
     terrainMesh_ = CreateTerrainMesh(terrainGrid_);
 }
 
@@ -774,10 +775,8 @@ void AeroSimLabApp::LoadMapFeatures()
     {
         const auto bounds =
             aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-#ifndef __EMSCRIPTEN__
         simulation_.AddStaticObstacleBox(
             bounds.centerMeters, glm::vec3{bounds.halfExtentsMeters});
-#endif
         inspectionOccluders_.push_back({building.outlineMeters,
             bounds.centerMeters.z - bounds.halfExtentsMeters.z,
             bounds.centerMeters.z + bounds.halfExtentsMeters.z});
@@ -948,9 +947,6 @@ void AeroSimLabApp::InitializeStartingState()
         startElevation +
             aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters});
     fleetDroneIds_ = simulation_.DroneIds();
-#ifndef __EMSCRIPTEN__
-    simulation_.SetTerrain(terrainGrid_);
-#endif
 }
 
 aerosimlab::simulation::CaptureAssessment AeroSimLabApp::AssessInspectionView() const

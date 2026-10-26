@@ -7,6 +7,7 @@
 #include "simulation_core/ScopedDuration.h"
 
 #include <flecs.h>
+#include <glm/common.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
@@ -16,6 +17,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace aerosimlab::simulation
 {
@@ -33,6 +35,12 @@ bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
 
 struct SimulationCore::EcsStorage
 {
+    struct StaticObstacleBox
+    {
+        glm::dvec3 centerMeters{0.0};
+        glm::dvec3 halfExtentsMeters{0.0};
+    };
+
     struct InitialPose
     {
         glm::dvec3 positionMeters{0.0};
@@ -60,6 +68,8 @@ struct SimulationCore::EcsStorage
     std::unordered_map<DroneId, BatteryModel> batteries;
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
+    std::vector<StaticObstacleBox> kinematicObstacles;
+    std::optional<terrain::TerrainGrid> terrainGrid;
     bool measureEcsSystemDuration = false;
     EcsSystemDurations lastEcsSystemDurations;
     double lastFlecsProgressDurationMicroseconds = 0.0;
@@ -128,9 +138,63 @@ struct SimulationCore::EcsStorage
                     auto states = iterator.field<DroneState>(0);
                     auto controls = iterator.field<DroneControlState>(1);
                     for (const std::size_t row : iterator)
+                    {
+                        const glm::dvec3 previousPosition = states[row].positionMeters;
                         DroneModel::AdvanceOneTick(states[row], controls[row]);
+                        ResolveKinematicContacts(
+                            states[row], controls[row], previousPosition);
+                    }
                 }
             });
+    }
+
+    void ResolveKinematicContacts(
+        DroneState& state, DroneControlState& control,
+        const glm::dvec3& previousPosition) const
+    {
+        if (terrainGrid
+            && terrainGrid->ContainsLocalPositionMeters(
+                {state.positionMeters.x, state.positionMeters.y}))
+        {
+            control.groundElevationMeters = terrainGrid->HeightAtLocalMeters(
+                {state.positionMeters.x, state.positionMeters.y});
+            if (state.positionMeters.z < control.groundElevationMeters)
+            {
+                state.positionMeters.z = control.groundElevationMeters;
+                state.velocityMetersPerSecond.z = 0.0;
+            }
+        }
+
+        constexpr glm::dvec3 droneHalfExtentsMeters{0.30, 0.30, 0.12};
+        for (const StaticObstacleBox& obstacle : kinematicObstacles)
+        {
+            const glm::dvec3 offset = state.positionMeters - obstacle.centerMeters;
+            const glm::dvec3 overlap = obstacle.halfExtentsMeters
+                + droneHalfExtentsMeters - glm::abs(offset);
+            if (overlap.x <= 0.0 || overlap.y <= 0.0 || overlap.z <= 0.0)
+                continue;
+
+            glm::length_t axis = 0;
+            if (overlap.y < overlap[axis])
+                axis = 1;
+            if (overlap.z < overlap[axis])
+                axis = 2;
+
+            const double previousSide = previousPosition[axis]
+                - obstacle.centerMeters[axis];
+            const double currentSide = offset[axis];
+            const double side = previousSide != 0.0
+                ? std::copysign(1.0, previousSide)
+                : (currentSide != 0.0 ? std::copysign(1.0, currentSide) : 1.0);
+            state.positionMeters[axis] = obstacle.centerMeters[axis]
+                + side * (obstacle.halfExtentsMeters[axis]
+                    + droneHalfExtentsMeters[axis]);
+
+            if (state.velocityMetersPerSecond[axis] * side < 0.0)
+                state.velocityMetersPerSecond[axis] = 0.0;
+            if (control.targetVelocityMetersPerSecond[axis] * side < 0.0)
+                control.targetVelocityMetersPerSecond[axis] = 0.0;
+        }
     }
 
 #if !defined(__EMSCRIPTEN__)
@@ -812,24 +876,40 @@ double SimulationCore::LastContactGenerationDurationMicroseconds() const noexcep
     return ecs_->lastContactGenerationDurationMicroseconds;
 }
 
-#ifndef __EMSCRIPTEN__
 void SimulationCore::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    if (!ecs_->physics)
-        throw std::logic_error("고정 장애물은 강체 모의에서만 추가할 수 있습니다.");
+    if (!std::isfinite(centerMeters.x) || !std::isfinite(centerMeters.y)
+        || !std::isfinite(centerMeters.z)
+        || !std::isfinite(halfExtentsMeters.x)
+        || !std::isfinite(halfExtentsMeters.y)
+        || !std::isfinite(halfExtentsMeters.z)
+        || halfExtentsMeters.x <= 0.0F || halfExtentsMeters.y <= 0.0F
+        || halfExtentsMeters.z <= 0.0F)
+    {
+        throw std::invalid_argument("장애물 위치와 크기를 확인해 주세요.");
+    }
 
-    ecs_->physics->AddStaticObstacleBox(centerMeters, halfExtentsMeters);
+#if !defined(__EMSCRIPTEN__)
+    if (ecs_->dynamics == SimulationDynamics::RigidBody)
+    {
+        ecs_->physics->AddStaticObstacleBox(centerMeters, halfExtentsMeters);
+        return;
+    }
+#endif
+    ecs_->kinematicObstacles.push_back(
+        {centerMeters, glm::dvec3{halfExtentsMeters}});
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
 {
-    if (!ecs_->physics)
-        throw std::logic_error("지형 충돌은 강체 모의에서만 설정할 수 있습니다.");
-
-    ecs_->physics->SetTerrain(std::move(terrain));
-}
+#if !defined(__EMSCRIPTEN__)
+    if (ecs_->dynamics == SimulationDynamics::RigidBody)
+        ecs_->physics->SetTerrain(terrain);
 #endif
+
+    ecs_->terrainGrid = std::move(terrain);
+}
 
 std::uint64_t SimulationCore::TickCount() const noexcept
 {

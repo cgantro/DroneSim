@@ -192,14 +192,12 @@ public:
     /** @brief 마지막 Tick에서 접촉 정보를 찾는 데 든 시간을 마이크로초로 반환한다. */
     [[nodiscard]] double LastContactGenerationDurationMicroseconds() const noexcept;
 
-#ifndef __EMSCRIPTEN__
-    /** @brief 강체 모드에 지도 건물 같은 고정 상자 장애물을 추가한다. */
+    /** @brief 지도 건물처럼 움직이지 않는 상자 장애물을 추가한다. */
     void AddStaticObstacleBox(
         const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters);
 
-    /** @brief 강체 모드의 바닥을 높이 자료로 바꾼다. 다른 모드에서는 예외를 던진다. */
+    /** @brief 지형 높이 자료를 설정해 비행체가 지면 아래로 내려가지 않게 한다. */
     void SetTerrain(terrain::TerrainGrid terrain);
-#endif
 
     /** @brief 지금까지 실행한 고정 간격 단계 수를 반환한다. */
     [[nodiscard]] std::uint64_t TickCount() const noexcept;

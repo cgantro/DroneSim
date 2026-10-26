@@ -129,6 +129,24 @@ void Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks()
         hillsideElevationMeters, 1.0e-9);
 }
 
+void Verify_KinematicDroneStopsAtStaticBuildings()
+{
+    SimulationCore simulation{SimulationDynamics::Kinematic};
+    const DroneId droneId = simulation.PrimaryDroneId();
+    DroneState start;
+    start.positionMeters = {0.0, 0.0, 2.0};
+    start.velocityMetersPerSecond = {5.0, 0.0, 0.0};
+    start.mode = FlightMode::Flying;
+    simulation.SetInitialState(droneId, start);
+    simulation.AddStaticObstacleBox({1.0, 0.0, 2.0}, {0.5F, 2.0F, 1.0F});
+
+    for (int tick = 0; tick < 60; ++tick)
+        simulation.AdvanceOneTick();
+
+    EXPECT_LE(simulation.State(droneId).positionMeters.x, 0.200001);
+    EXPECT_DOUBLE_EQ(simulation.State(droneId).velocityMetersPerSecond.x, 0.0);
+}
+
 void Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers()
 {
     SimulationCore simulation{SimulationDynamics::Kinematic};
@@ -405,6 +423,7 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_RejectsInvalidSettings());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
+    EXPECT_NO_FATAL_FAILURE(Verify_KinematicDroneStopsAtStaticBuildings());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_UsesInitialMotorSpeedsInRigidBodyMode());
