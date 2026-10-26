@@ -539,6 +539,22 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
                 return;
             }
 
+            if (command == aerosimlab::communication::InspectionCommand::Pause)
+            {
+                reply.accepted = PauseInspectionMission();
+                reply.status = reply.accepted
+                    ? "inspection_mission_paused" : "inspection_mission_cannot_pause";
+                return;
+            }
+
+            if (command == aerosimlab::communication::InspectionCommand::Resume)
+            {
+                reply.accepted = ResumeInspectionMission();
+                reply.status = reply.accepted
+                    ? "inspection_mission_resumed" : "inspection_mission_not_paused";
+                return;
+            }
+
             reply.accepted = CancelInspectionMission();
             reply.status = reply.accepted
                 ? "inspection_mission_cancelled" : "no_active_inspection_mission";

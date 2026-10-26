@@ -71,6 +71,13 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     inspection.command = InspectionCommand::Cancel;
     EXPECT_EQ(std::get<InspectionCommand>(
         DecodeCommand(EncodeCommand(inspection)).command), InspectionCommand::Cancel);
+    for (const auto expected : {InspectionCommand::Pause,
+             InspectionCommand::Resume})
+    {
+        inspection.command = expected;
+        EXPECT_EQ(std::get<InspectionCommand>(
+            DecodeCommand(EncodeCommand(inspection)).command), expected);
+    }
 
     CommandPacket addDrone;
     addDrone.commandId = 10;

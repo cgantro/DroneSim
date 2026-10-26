@@ -44,6 +44,8 @@ enum class VideoRecordingCommand
 enum class InspectionCommand
 {
     Start,
+    Pause,
+    Resume,
     Cancel
 };
 

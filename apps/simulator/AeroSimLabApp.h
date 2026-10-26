@@ -170,6 +170,8 @@ private:
     void AdvanceManualControlTick();
     [[nodiscard]] bool RequestInspectionMission(
         std::optional<std::size_t> selectedTargetIndex = std::nullopt);
+    [[nodiscard]] bool PauseInspectionMission();
+    [[nodiscard]] bool ResumeInspectionMission();
     [[nodiscard]] bool CancelInspectionMission();
     void AdvanceInspectionMission();
     void FailInspectionMission(const std::string& reason);
@@ -262,6 +264,7 @@ private:
     {
         Ready,
         StartRequested,
+        Paused,
         TakingOff,
         Approaching,
         AligningCamera,
@@ -272,7 +275,9 @@ private:
         Failed
     };
     InspectionMissionStage inspectionMissionStage_ = InspectionMissionStage::Ready;
+    InspectionMissionStage pausedMissionStage_ = InspectionMissionStage::Ready;
     std::uint64_t inspectionMissionStartTick_ = 0;
+    std::uint64_t inspectionMissionPauseStartTick_ = 0;
     std::uint64_t inspectionCaptureStartFrame_ = 0;
     std::uint64_t inspectionCaptureReadyTick_ = 0;
     bool inspectionReadyFrameSaved_ = false;

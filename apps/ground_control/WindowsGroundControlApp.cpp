@@ -56,6 +56,8 @@ enum ControlId : int
     videoRecordingStartButtonId,
     videoRecordingStopButtonId,
     inspectionStartButtonId,
+    inspectionPauseButtonId,
+    inspectionResumeButtonId,
     inspectionCancelButtonId,
     addDroneButtonId,
     droneListId
@@ -285,7 +287,8 @@ void SetControlsEnabled(AppState& state, bool enabled)
         cameraOnButtonId, cameraOffButtonId, cameraFaultButtonId, cameraRecoverButtonId,
         recordingStartButtonId, recordingStopButtonId, recordingReplayButtonId,
         videoRecordingStartButtonId, videoRecordingStopButtonId,
-        inspectionStartButtonId, inspectionCancelButtonId, addDroneButtonId};
+        inspectionStartButtonId, inspectionPauseButtonId, inspectionResumeButtonId,
+        inspectionCancelButtonId, addDroneButtonId};
     for (const int id : buttonIds)
         EnableWindow(GetDlgItem(GetParent(state.statusText), id), enabled);
 }
@@ -483,9 +486,13 @@ void CreateControls(HWND window, AppState& state)
     AddControl(window, L"BUTTON", L"영상 녹화 종료", BS_PUSHBUTTON,
         185, 375, 155, 32, videoRecordingStopButtonId);
     AddControl(window, L"BUTTON", L"자동 점검 시작", BS_PUSHBUTTON,
-        350, 375, 100, 32, inspectionStartButtonId);
+        20, 414, 85, 32, inspectionStartButtonId);
+    AddControl(window, L"BUTTON", L"일시 정지", BS_PUSHBUTTON,
+        110, 414, 70, 32, inspectionPauseButtonId);
+    AddControl(window, L"BUTTON", L"재개", BS_PUSHBUTTON,
+        185, 414, 70, 32, inspectionResumeButtonId);
     AddControl(window, L"BUTTON", L"임무 중단", BS_PUSHBUTTON,
-        460, 375, 70, 32, inspectionCancelButtonId);
+        260, 414, 80, 32, inspectionCancelButtonId);
 
     AddLabel(window, L"편대 상태", 565, 62, 150);
     AddControl(window, L"BUTTON", L"드론 추가", BS_PUSHBUTTON,
@@ -514,11 +521,11 @@ void CreateControls(HWND window, AppState& state)
         SendMessageW(state.videoView, STM_SETIMAGE, IMAGE_BITMAP,
             reinterpret_cast<LPARAM>(state.videoBitmap));
 
-    AddLabel(window, L"명령 결과", 20, 420, 100);
+    AddLabel(window, L"명령 결과", 20, 455, 100);
     state.statusText = AddControl(window, L"STATIC", L"시뮬레이터에 연결해 명령을 보냅니다.",
-        SS_LEFT, 20, 446, 510, 34, statusTextId);
+        SS_LEFT, 20, 480, 510, 34, statusTextId);
     state.telemetryText = AddControl(window, L"STATIC", L"드론과 카메라 상태가 여기에 표시됩니다.",
-        SS_LEFT, 20, 483, 510, 72, telemetryTextId);
+        SS_LEFT, 20, 517, 510, 82, telemetryTextId);
     state.captureTransferStatus = AddControl(window, L"STATIC", L"점검 자료 수신기를 시작하는 중입니다.",
         SS_LEFT, 565, 653, 320, 42, 0);
 }
@@ -575,6 +582,12 @@ LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
         break;
     case inspectionStartButtonId:
         packet.command = aerosimlab::communication::InspectionCommand::Start;
+        break;
+    case inspectionPauseButtonId:
+        packet.command = aerosimlab::communication::InspectionCommand::Pause;
+        break;
+    case inspectionResumeButtonId:
+        packet.command = aerosimlab::communication::InspectionCommand::Resume;
         break;
     case inspectionCancelButtonId:
         packet.command = aerosimlab::communication::InspectionCommand::Cancel;

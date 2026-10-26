@@ -1255,6 +1255,7 @@ void AeroSimLabApp::AdvanceManualControlTick()
 {
     const bool inspectionMissionActive =
         inspectionMissionStage_ == InspectionMissionStage::StartRequested
+        || inspectionMissionStage_ == InspectionMissionStage::Paused
         || inspectionMissionStage_ == InspectionMissionStage::TakingOff
         || inspectionMissionStage_ == InspectionMissionStage::Approaching
         || inspectionMissionStage_ == InspectionMissionStage::AligningCamera
@@ -1323,6 +1324,7 @@ bool AeroSimLabApp::RequestInspectionMission(
     std::optional<std::size_t> selectedTargetIndex)
 {
     if (inspectionMissionStage_ == InspectionMissionStage::StartRequested
+        || inspectionMissionStage_ == InspectionMissionStage::Paused
         || inspectionMissionStage_ == InspectionMissionStage::TakingOff
         || inspectionMissionStage_ == InspectionMissionStage::Approaching
         || inspectionMissionStage_ == InspectionMissionStage::AligningCamera
@@ -1374,7 +1376,8 @@ bool AeroSimLabApp::CancelInspectionMission()
         || inspectionMissionStage_ == Stage::Approaching
         || inspectionMissionStage_ == Stage::AligningCamera
         || inspectionMissionStage_ == Stage::Capturing
-        || inspectionMissionStage_ == Stage::Landing;
+        || inspectionMissionStage_ == Stage::Landing
+        || inspectionMissionStage_ == Stage::Paused;
     if (!missionIsActive)
         return false;
 
@@ -1382,10 +1385,55 @@ bool AeroSimLabApp::CancelInspectionMission()
     return true;
 }
 
+bool AeroSimLabApp::PauseInspectionMission()
+{
+    using Stage = InspectionMissionStage;
+    const bool canPause = inspectionMissionStage_ == Stage::Approaching
+        || inspectionMissionStage_ == Stage::AligningCamera;
+    if (!canPause)
+        return false;
+
+    const aerosimlab::simulation::DroneCommand stop{
+        aerosimlab::simulation::DroneCommand::Kind::Stop};
+    if (ApplyAndRecordCommand(stop) != aerosimlab::simulation::CommandResult::Accepted)
+        return false;
+
+    pausedMissionStage_ = inspectionMissionStage_;
+    inspectionMissionPauseStartTick_ = simulation_.TickCount();
+    inspectionMissionStage_ = Stage::Paused;
+    return true;
+}
+
+bool AeroSimLabApp::ResumeInspectionMission()
+{
+    if (inspectionMissionStage_ != InspectionMissionStage::Paused)
+        return false;
+
+    inspectionMissionStartTick_ += simulation_.TickCount()
+        - inspectionMissionPauseStartTick_;
+    inspectionMissionStage_ = pausedMissionStage_;
+    if (pausedMissionStage_ == InspectionMissionStage::Approaching)
+    {
+        aerosimlab::simulation::DroneCommand waypoint;
+        waypoint.kind = aerosimlab::simulation::DroneCommand::Kind::SetWaypoint;
+        waypoint.vector = missionGoalMeters_;
+        if (ApplyAndRecordCommand(waypoint)
+            != aerosimlab::simulation::CommandResult::Accepted)
+        {
+            FailInspectionMission("점검 경로를 다시 시작하지 못했습니다.");
+            return false;
+        }
+    }
+    return true;
+}
+
 void AeroSimLabApp::AdvanceInspectionMission()
 {
     using Stage = InspectionMissionStage;
     using CommandKind = aerosimlab::simulation::DroneCommand::Kind;
+
+    if (inspectionMissionStage_ == Stage::Paused)
+        return;
 
     if (inspectionMissionStage_ == Stage::StartRequested)
     {
@@ -1643,6 +1691,7 @@ std::string AeroSimLabApp::InspectionMissionStatus() const
     {
     case InspectionMissionStage::Ready: return "대기 중";
     case InspectionMissionStage::StartRequested: return progress + "시작 준비 중";
+    case InspectionMissionStage::Paused: return progress + "일시 정지";
     case InspectionMissionStage::TakingOff: return progress + "이륙 중";
     case InspectionMissionStage::Approaching: return progress + "점검 구역으로 이동 중";
     case InspectionMissionStage::AligningCamera:

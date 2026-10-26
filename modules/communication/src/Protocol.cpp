@@ -221,6 +221,8 @@ VideoRecordingCommand ReadVideoRecordingCommand(std::string_view action)
 InspectionCommand ReadInspectionCommand(std::string_view action)
 {
     if (action == "start") return InspectionCommand::Start;
+    if (action == "pause") return InspectionCommand::Pause;
+    if (action == "resume") return InspectionCommand::Resume;
     if (action == "cancel") return InspectionCommand::Cancel;
     throw std::invalid_argument("알 수 없는 점검 임무 명령입니다.");
 }
@@ -326,8 +328,18 @@ Json EncodeCommandPayload(VideoRecordingCommand command)
 
 Json EncodeCommandPayload(InspectionCommand command)
 {
-    const char* action = command == InspectionCommand::Start ? "start" : "cancel";
-    return {{"target", "inspection_mission"}, {"action", action}};
+    switch (command)
+    {
+    case InspectionCommand::Start:
+        return {{"target", "inspection_mission"}, {"action", "start"}};
+    case InspectionCommand::Pause:
+        return {{"target", "inspection_mission"}, {"action", "pause"}};
+    case InspectionCommand::Resume:
+        return {{"target", "inspection_mission"}, {"action", "resume"}};
+    case InspectionCommand::Cancel:
+        return {{"target", "inspection_mission"}, {"action", "cancel"}};
+    }
+    throw std::invalid_argument("알 수 없는 점검 임무 명령입니다.");
 }
 
 Json EncodeCommandPayload(FleetCommand command)
