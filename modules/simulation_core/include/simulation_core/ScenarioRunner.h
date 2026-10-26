@@ -91,6 +91,8 @@ struct ScenarioResult
         bool returnedForLowBattery = false;
         /** @brief 매 고정 Tick의 위치 변화를 더한 3차원 이동거리다. 단위는 미터다. */
         double flightDistanceMeters = 0.0;
+        /** @brief Grounded가 아닌 비행 상태였던 누적 모의 시간이다. 단위는 초다. */
+        double flightTimeSeconds = 0.0;
     };
     /** @brief 시나리오에 등장한 드론의 마지막 상태를 입력 순서대로 보관한다. */
     std::vector<Drone> drones;

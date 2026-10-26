@@ -83,6 +83,7 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
             {"communication_status", communicationStatusName(drone.communicationStatus)},
             {"last_heartbeat_tick", drone.lastHeartbeatTick},
             {"flight_distance_meters", drone.flightDistanceMeters},
+            {"flight_time_seconds", drone.flightTimeSeconds},
             {"battery", std::move(battery)}});
     }
 

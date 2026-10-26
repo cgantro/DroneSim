@@ -1023,6 +1023,7 @@ void PopulateFinalSnapshot(
     const DroneObservations& observations,
     const DroneEnergies& energies,
     const std::unordered_map<std::string, double>& flightDistancesMeters,
+    const std::unordered_map<std::string, double>& flightTimesSeconds,
     ScenarioResult& result)
 {
     result.tickCount = simulation.TickCount();
@@ -1056,6 +1057,7 @@ void PopulateFinalSnapshot(
             observation.status, observation.lastHeartbeatTick};
         drone.finalCamera = simulation.Camera(droneIds.at(droneName));
         drone.flightDistanceMeters = flightDistancesMeters.at(droneName);
+        drone.flightTimeSeconds = flightTimesSeconds.at(droneName);
         drone.reportedBatteryPercent = observation.lastKnownBatteryPercent;
         const auto energy = energies.find(droneName);
         if (energy != energies.end())
@@ -1253,12 +1255,14 @@ ScenarioResult RunScenario(std::string_view jsonText)
     DroneObservations observations;
     std::unordered_map<std::string, glm::dvec3> previousPositions;
     std::unordered_map<std::string, double> flightDistancesMeters;
+    std::unordered_map<std::string, double> flightTimesSeconds;
     for (const auto& [droneName, droneId] : droneIds)
     {
         observations.emplace(droneName, DroneObservation{
             DroneCommunicationStatus::Connected, 0, simulation.State(droneId)});
         previousPositions.emplace(droneName, simulation.State(droneId).positionMeters);
         flightDistancesMeters.emplace(droneName, 0.0);
+        flightTimesSeconds.emplace(droneName, 0.0);
     }
     DroneEnergies energies;
     if (definition.energyModel)
@@ -1332,6 +1336,11 @@ ScenarioResult RunScenario(std::string_view jsonText)
             activeAvoidanceTargets, result);
         ApplyCameraEvents(tick, definition.cameraEvents, simulation, droneIds,
             definition.primaryDroneName, nextCameraEvent, result);
+        for (const auto& [droneName, droneId] : droneIds)
+        {
+            if (simulation.State(droneId).mode != FlightMode::Grounded)
+                flightTimesSeconds.at(droneName) += DroneModel::fixedStepSeconds;
+        }
         simulation.AdvanceOneTick();
         for (const auto& [droneName, droneId] : droneIds)
         {
@@ -1370,7 +1379,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         }
     }
     PopulateFinalSnapshot(definition, simulation, droneIds, observations, energies,
-        flightDistancesMeters, result);
+        flightDistancesMeters, flightTimesSeconds, result);
     CheckExpectedResults(definition, result);
     return result;
 }

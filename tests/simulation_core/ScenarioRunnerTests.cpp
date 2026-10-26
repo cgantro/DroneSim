@@ -853,6 +853,8 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
     EXPECT_DOUBLE_EQ(result.drones[1].finalState.positionMeters.x, 12.0);
     EXPECT_NEAR(result.drones[0].flightDistanceMeters, 1.5, 1.0e-9);
     EXPECT_NEAR(result.drones[1].flightDistanceMeters, 3.5, 1.0e-9);
+    EXPECT_NEAR(result.drones[0].flightTimeSeconds, 175.0 / 60.0, 1.0e-12);
+    EXPECT_NEAR(result.drones[1].flightTimeSeconds, 3.0, 1.0e-12);
     EXPECT_EQ(result.finalState.positionMeters, result.drones[0].finalState.positionMeters);
     ASSERT_GE(result.eventLog.size(), 3);
     EXPECT_NE(result.eventLog[1].find("늦게 전달"), std::string::npos);
