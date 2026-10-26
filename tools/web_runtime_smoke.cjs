@@ -209,6 +209,32 @@ async function run() {
       null,
       { timeout: 10000 }
     );
+    await page.waitForFunction(
+      () => {
+        const status = document.querySelector("#web-gcs-status")?.textContent || "";
+        return status.includes("점검 구역으로 이동 중")
+          || status.includes("카메라를 점검면에 맞추는 중");
+      },
+      null,
+      { timeout: 30000 }
+    );
+    await page.getByRole("button", { name: "일시 정지" }).click();
+    await page.waitForFunction(
+      () => document.querySelector("#web-gcs-status")?.textContent
+        .includes("점검 임무: 구역 1/1: 일시 정지"),
+      null,
+      { timeout: 5000 }
+    );
+    await page.getByRole("button", { name: "재개" }).click();
+    await page.waitForFunction(
+      () => {
+        const status = document.querySelector("#web-gcs-status")?.textContent || "";
+        return status.includes("점검 구역으로 이동 중")
+          || status.includes("카메라를 점검면에 맞추는 중");
+      },
+      null,
+      { timeout: 5000 }
+    );
     try {
       await page.waitForFunction(
         () => {

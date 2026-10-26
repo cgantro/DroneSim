@@ -65,6 +65,10 @@
           <option value="-1">모든 시험 구역</option>
         </select>
         <button type="button" data-start-inspection disabled>자동 점검 시작</button>
+        <button type="button" data-pause-inspection disabled
+            title="이동·카메라 정렬 중에만 가능하며, 영상 기록은 계속됩니다.">일시 정지</button>
+        <button type="button" data-resume-inspection disabled>재개</button>
+        <button type="button" data-cancel-inspection disabled>임무 중단</button>
         <button type="button" data-command="0" disabled>이륙</button>
         <button type="button" data-command="1" disabled>정지</button>
         <button type="button" data-axis="forward:1" disabled>전진</button>
@@ -811,6 +815,18 @@
           + " · 저장·전송 완료 판정은 아님</span>"
           + "<span id=\"web-gcs-mission\">점검 임무: " + missionStatus + "</span>";
 
+        var missionCanStart = missionStatus.includes("대기 중")
+          || missionStatus.includes("저장 완료")
+          || missionStatus.includes("확인 완료")
+          || missionStatus.includes("실패:");
+        var missionIsPaused = missionStatus.includes("일시 정지");
+        var missionCanPause = missionStatus.includes("점검 구역으로 이동 중")
+          || missionStatus.includes("카메라를 점검면에 맞추는 중");
+        document.querySelector("[data-start-inspection]").disabled = !missionCanStart;
+        document.querySelector("[data-pause-inspection]").disabled = !missionCanPause;
+        document.querySelector("[data-resume-inspection]").disabled = !missionIsPaused;
+        document.querySelector("[data-cancel-inspection]").disabled = missionCanStart;
+
       };
 
       window.updateDroneSimInspectionMetadata = function (cameraX, cameraY, cameraZ,
@@ -873,6 +889,21 @@
           if (typeof Module._DroneSimWebStartInspectionMission !== "function"
               || !Module._DroneSimWebStartInspectionMission(targetIndex))
             void finishEoRecording();
+        });
+        document.querySelector("#web-gcs [data-pause-inspection]").addEventListener(
+            "click", function () {
+          if (typeof Module._DroneSimWebPauseInspectionMission === "function")
+            Module._DroneSimWebPauseInspectionMission();
+        });
+        document.querySelector("#web-gcs [data-resume-inspection]").addEventListener(
+            "click", function () {
+          if (typeof Module._DroneSimWebResumeInspectionMission === "function")
+            Module._DroneSimWebResumeInspectionMission();
+        });
+        document.querySelector("#web-gcs [data-cancel-inspection]").addEventListener(
+            "click", function () {
+          if (typeof Module._DroneSimWebCancelInspectionMission === "function")
+            Module._DroneSimWebCancelInspectionMission();
         });
         document.querySelectorAll("#web-gcs [data-axis]").forEach(function (button) {
           var parts = button.dataset.axis.split(":");

@@ -614,6 +614,24 @@ bool AeroSimLabApp::StartWebInspectionMission(int targetIndex)
     return RequestInspectionMission(selectedTarget);
 }
 
+bool AeroSimLabApp::PauseWebInspectionMission()
+{
+    externalControl_ = true;
+    return PauseInspectionMission();
+}
+
+bool AeroSimLabApp::ResumeWebInspectionMission()
+{
+    externalControl_ = true;
+    return ResumeInspectionMission();
+}
+
+bool AeroSimLabApp::CancelWebInspectionMission()
+{
+    externalControl_ = true;
+    return CancelInspectionMission();
+}
+
 void AeroSimLabApp::SetWebPilotAxes(
     const aerosimlab::manual_control::GamepadAxes& axes)
 {
@@ -1925,5 +1943,29 @@ extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStartInspectionMission(int target
     return aerosimlab::simulator::activeWebApplication
         ->StartWebInspectionMission(targetIndex)
         ? 1 : 0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebPauseInspectionMission()
+{
+    if (aerosimlab::simulator::activeWebApplication == nullptr)
+        return 0;
+    return aerosimlab::simulator::activeWebApplication
+        ->PauseWebInspectionMission() ? 1 : 0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebResumeInspectionMission()
+{
+    if (aerosimlab::simulator::activeWebApplication == nullptr)
+        return 0;
+    return aerosimlab::simulator::activeWebApplication
+        ->ResumeWebInspectionMission() ? 1 : 0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebCancelInspectionMission()
+{
+    if (aerosimlab::simulator::activeWebApplication == nullptr)
+        return 0;
+    return aerosimlab::simulator::activeWebApplication
+        ->CancelWebInspectionMission() ? 1 : 0;
 }
 #endif
