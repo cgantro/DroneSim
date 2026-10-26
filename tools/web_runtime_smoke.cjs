@@ -285,6 +285,7 @@ async function run() {
         || manifest.storage_state !== "SAVED"
         || manifest.storage_backend !== "OPFS"
         || manifest.mission_outcome !== "COMPLETED"
+        || manifest.video_storage_matches_capture !== true
         || manifest.video_bytes !== videoBytes.length
         || manifest.video_checksum !== videoHash
         || manifest.recording_duration_milliseconds <= 0
@@ -304,6 +305,7 @@ async function run() {
         || manifest.zone_recordings[0].storage_state !== "SAVED"
         || manifest.zone_recordings[0].storage_backend !== "OPFS"
         || manifest.zone_recordings[0].verification_state !== "VERIFIED"
+        || manifest.zone_recordings[0].video_storage_matches_capture !== true
         || manifest.zone_recordings[0].download_ready !== true
         || manifest.zone_recordings[0].video_bytes <= 0
         || !manifest.zone_recordings[0].video_checksum)

@@ -126,6 +126,7 @@
       var eoWebRtcSender = null;
       var eoWebRtcReceiver = null;
       var eoRecorderChunks = [];
+      var eoRecorderChunkChecksums = [];
       var eoRecorderSink = null;
       var eoRecorderFileName = "";
       var eoZoneRecorder = null;
@@ -282,21 +283,16 @@
         var videoName = "dronesim-zone-" + recording.inspection_zone_id
           + "-" + timestamp + ".webm";
         var storedVideo = await saveRecordingToBrowser(videoName, videoBlob);
-        var checksum = null;
-        if (window.crypto && crypto.subtle) {
-          try {
-            var digest = await crypto.subtle.digest(
-              "SHA-256", await storedVideo.file.arrayBuffer());
-            checksum = Array.from(new Uint8Array(digest), function (value) {
-              return value.toString(16).padStart(2, "0");
-            }).join("");
-          } catch (_) {}
-        }
+        var sourceChecksum = await sha256Hex(videoBlob);
+        var checksum = await sha256Hex(storedVideo.file);
+        var storageMatchesCapture = storedVideo.saved
+          && sourceChecksum !== null && checksum === sourceChecksum;
         var savedRecording = Object.assign({}, recording, {
           collection_state: "CAPTURED",
           storage_state: storedVideo.saved ? "SAVED" : "CAPTURED",
           storage_backend: storedVideo.saved ? "OPFS" : "다운로드 전용",
-          verification_state: checksum ? "VERIFIED" : "UNVERIFIED",
+          verification_state: storageMatchesCapture ? "VERIFIED" : "UNVERIFIED",
+          video_storage_matches_capture: storageMatchesCapture,
           download_ready: true,
           video_file: videoName,
           video_mime_type: videoBlob.type,
@@ -360,6 +356,33 @@
         var url = URL.createObjectURL(file);
         eoDownloadUrls.push(url);
         return url;
+      }
+
+      async function sha256Hex(blob) {
+        if (!window.crypto || !crypto.subtle)
+          return null;
+        try {
+          var digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+          return Array.from(new Uint8Array(digest), function (value) {
+            return value.toString(16).padStart(2, "0");
+          }).join("");
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function storedChunksMatchCapture(file, chunkChecksums) {
+        if (!chunkChecksums.length)
+          return false;
+        var offset = 0;
+        for (var chunk of chunkChecksums) {
+          var expectedChecksum = await chunk.checksum;
+          if (!expectedChecksum || offset + chunk.bytes > file.size
+              || await sha256Hex(file.slice(offset, offset + chunk.bytes)) !== expectedChecksum)
+            return false;
+          offset += chunk.bytes;
+        }
+        return offset === file.size;
       }
 
       async function openRecordingSink(fileName) {
@@ -669,18 +692,10 @@
         videoLink.download = videoName;
         videoLink.hidden = false;
 
-        var sha256 = "계산할 수 없음";
-        if (window.crypto && crypto.subtle) {
-          try {
-            var digest = await crypto.subtle.digest(
-              "SHA-256", await storedVideo.file.arrayBuffer());
-            sha256 = Array.from(new Uint8Array(digest), function (value) {
-              return value.toString(16).padStart(2, "0");
-            }).join("");
-          } catch (_) {
-            sha256 = "계산할 수 없음";
-          }
-        }
+        var sha256 = await sha256Hex(storedVideo.file) || "계산할 수 없음";
+        var storageMatchesCapture = storedVideo.saved
+          && await storedChunksMatchCapture(storedVideo.file, eoRecorderChunkChecksums);
+        eoRecorderChunkChecksums = [];
         var missingZones = eoExpectedZones.filter(function (zone) {
           return !eoCaptureEvents.some(function (event) {
             return event.inspection_zone_id === zone.inspection_zone_id;
@@ -708,7 +723,7 @@
         var manifest = {
           format_version: 4,
           collection_state: "CAPTURED",
-          verification_state: storedVideo.saved && sha256 !== "계산할 수 없음"
+          verification_state: storageMatchesCapture && sha256 !== "계산할 수 없음"
             && verifiedZoneVideos ? "VERIFIED" : "INCOMPLETE",
           recording_source: "시뮬레이터 화면의 EO 시점 영역",
           video_file: videoName,
@@ -732,6 +747,7 @@
           },
           video_checksum_algorithm: sha256 === "계산할 수 없음" ? null : "SHA-256",
           video_checksum: sha256,
+          video_storage_matches_capture: storageMatchesCapture,
           simulation_tick_rate_hz: 60,
           coordinate_frame: "시뮬레이터 로컬 좌표, m",
           sample_interval_milliseconds: 250,
@@ -773,6 +789,7 @@
         }
         eoTelemetrySamples = [];
         eoRecorderChunks = [];
+        eoRecorderChunkChecksums = [];
         document.getElementById("web-eo-zone-downloads").replaceChildren();
         eoRecordingStartedAt = performance.now();
         eoLastTelemetrySampleAt = 0;
@@ -791,6 +808,10 @@
               eoRecorderSink.append(event.data);
             else
               eoRecorderChunks.push(event.data);
+            eoRecorderChunkChecksums.push({
+              bytes: event.data.size,
+              checksum: sha256Hex(event.data)
+            });
           });
           eoRecorder.addEventListener("error", function (event) {
             setEoRecordingStatus("브라우저 녹화 오류: "
