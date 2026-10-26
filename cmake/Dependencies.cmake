@@ -29,7 +29,7 @@ function(aerosimlab_add_airsim_dependency)
   set(BUILD_TESTING OFF)
   FetchContent_Declare(
     Eigen3
-    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_REPOSITORY https://eigen.googlesource.com/mirror
     GIT_TAG 3.4.0
     GIT_SHALLOW TRUE
   )
