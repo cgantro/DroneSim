@@ -1,5 +1,7 @@
 #include "terrain/MapWaterBodies.h"
 
+#include "MapGeometry.h"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -60,24 +62,6 @@ bool IntersectsTerrain(const std::vector<glm::dvec2>& ring, const TerrainGrid& t
     return minimumX <= halfX && maximumX >= -halfX && minimumY <= halfY && maximumY >= -halfY;
 }
 
-bool ContainsPoint(const std::vector<glm::dvec2>& ring, const glm::dvec2& point) noexcept
-{
-    if (ring.size() < 3U)
-        return false;
-
-    bool inside = false;
-    for (std::size_t index = 0, previous = ring.size() - 1U; index < ring.size();
-         previous = index++)
-    {
-        const glm::dvec2& first = ring[index];
-        const glm::dvec2& second = ring[previous];
-        const bool crossesY = (first.y > point.y) != (second.y > point.y);
-        if (crossesY &&
-            point.x < (second.x - first.x) * (point.y - first.y) / (second.y - first.y) + first.x)
-            inside = !inside;
-    }
-    return inside;
-}
 } // namespace
 
 std::vector<MapWaterBody> LoadMapWaterBodies(const std::filesystem::path& path,
@@ -137,9 +121,12 @@ std::vector<MapWaterBody> LoadMapWaterBodies(const std::filesystem::path& path,
 
 bool ContainsWater(const MapWaterBody& water, const glm::dvec2& pointMeters) noexcept
 {
-    if (!ContainsPoint(water.outerBoundaryMeters, pointMeters))
+    if (!detail::ContainsPointInRing(water.outerBoundaryMeters, pointMeters))
         return false;
     return std::none_of(water.innerBoundariesMeters.begin(), water.innerBoundariesMeters.end(),
-                        [&](const auto& inner) { return ContainsPoint(inner, pointMeters); });
+        [&](const auto& inner)
+        {
+            return detail::ContainsPointInRing(inner, pointMeters);
+        });
 }
 } // namespace aerosimlab::terrain

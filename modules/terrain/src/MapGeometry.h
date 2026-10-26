@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -15,6 +16,27 @@
 namespace aerosimlab::terrain::detail
 {
 using PolygonPoint = std::array<double, 2>;
+
+/** @brief 다각형 안에 점이 있는지 계산한다. */
+inline bool ContainsPointInRing(
+    const std::vector<glm::dvec2>& ring, const glm::dvec2& point) noexcept
+{
+    if (ring.size() < 3U)
+        return false;
+
+    bool inside = false;
+    for (std::size_t index = 0, previous = ring.size() - 1U;
+         index < ring.size(); previous = index++)
+    {
+        const glm::dvec2& first = ring[index];
+        const glm::dvec2& second = ring[previous];
+        const bool crossesY = (first.y > point.y) != (second.y > point.y);
+        if (crossesY && point.x < (second.x - first.x)
+                * (point.y - first.y) / (second.y - first.y) + first.x)
+            inside = !inside;
+    }
+    return inside;
+}
 
 inline double Coordinate(const PolygonPoint& point, int edge) noexcept
 {

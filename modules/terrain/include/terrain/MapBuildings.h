@@ -3,6 +3,7 @@
 #include "terrain/TerrainGrid.h"
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -61,6 +62,17 @@ struct MapBuildingFacade
 /** @brief 건물 외곽의 동·북 범위와 지면·높이 범위에서 충돌용 상자를 만든다. */
 [[nodiscard]] MapBuildingBoundsMeters GetMapBuildingBoundsMeters(
     const MapBuilding& building);
+
+/** @brief 주어진 3차원 위치가 건물 외곽과 높이 범위 안에 있는지 확인한다. */
+[[nodiscard]] bool ContainsMapBuildingVolume(
+    const MapBuilding& building, const glm::dvec3& positionMeters) noexcept;
+
+/** @brief 선분을 따라가며 건물 안을 벗어나는 첫 위치를 찾는다. */
+[[nodiscard]] std::optional<glm::dvec3> FindFirstPointOutsideMapBuildings(
+    const glm::dvec3& startMeters,
+    const glm::dvec3& endMeters,
+    const std::vector<MapBuilding>& buildings,
+    double sampleSpacingMeters);
 
 /** @brief 접근 위치에서 가장 가까운 실제 외곽선 변을 외벽 시험면으로 만든다. */
 [[nodiscard]] MapBuildingFacade GetNearestMapBuildingFacade(

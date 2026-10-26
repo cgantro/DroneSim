@@ -12,6 +12,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include <glm/geometric.hpp>
+
 namespace aerosimlab::terrain
 {
 namespace
@@ -150,6 +152,76 @@ MapBuildingBoundsMeters GetMapBuildingBoundsMeters(const MapBuilding& building)
         {(maximum.x - minimum.x) * 0.5,
             (maximum.y - minimum.y) * 0.5,
             (topElevation - groundMinimum) * 0.5}};
+}
+
+bool ContainsMapBuildingVolume(
+    const MapBuilding& building, const glm::dvec3& positionMeters) noexcept
+{
+    if (building.outlineMeters.size() < 3U
+        || building.outlineMeters.size() != building.groundElevationsMeters.size()
+        || !std::isfinite(building.heightMeters)
+        || !(building.heightMeters > 0.0)
+        || !std::isfinite(positionMeters.x)
+        || !std::isfinite(positionMeters.y)
+        || !std::isfinite(positionMeters.z))
+        return false;
+
+    double groundMinimum = building.groundElevationsMeters.front();
+    double groundMaximum = groundMinimum;
+    for (const double elevation : building.groundElevationsMeters)
+    {
+        if (!std::isfinite(elevation))
+            return false;
+        groundMinimum = std::min(groundMinimum, elevation);
+        groundMaximum = std::max(groundMaximum, elevation);
+    }
+    if (positionMeters.z < groundMinimum
+        || positionMeters.z > groundMaximum + building.heightMeters)
+        return false;
+
+    return detail::ContainsPointInRing(
+        building.outlineMeters, {positionMeters.x, positionMeters.y});
+}
+
+std::optional<glm::dvec3> FindFirstPointOutsideMapBuildings(
+    const glm::dvec3& startMeters,
+    const glm::dvec3& endMeters,
+    const std::vector<MapBuilding>& buildings,
+    double sampleSpacingMeters)
+{
+    if (!std::isfinite(sampleSpacingMeters) || !(sampleSpacingMeters > 0.0))
+        throw std::invalid_argument("위치 확인 간격은 0보다 커야 합니다.");
+    if (!std::isfinite(startMeters.x) || !std::isfinite(startMeters.y)
+        || !std::isfinite(startMeters.z) || !std::isfinite(endMeters.x)
+        || !std::isfinite(endMeters.y) || !std::isfinite(endMeters.z))
+        throw std::invalid_argument("건물 밖 위치를 찾을 선분을 확인해 주세요.");
+
+    const glm::dvec3 segment = endMeters - startMeters;
+    const double lengthMeters = glm::length(segment);
+    const auto isInsideBuilding = [&buildings](const glm::dvec3& position)
+    {
+        return std::any_of(buildings.begin(), buildings.end(),
+            [&position](const MapBuilding& building)
+            {
+                return ContainsMapBuildingVolume(building, position);
+            });
+    };
+    if (!isInsideBuilding(startMeters))
+        return startMeters;
+    if (!(lengthMeters > 0.0))
+        return std::nullopt;
+
+    const std::size_t sampleCount = static_cast<std::size_t>(
+        std::ceil(lengthMeters / sampleSpacingMeters));
+    for (std::size_t sample = 1U; sample <= sampleCount; ++sample)
+    {
+        const double fraction = std::min(
+            1.0, static_cast<double>(sample) * sampleSpacingMeters / lengthMeters);
+        const glm::dvec3 candidate = startMeters + segment * fraction;
+        if (!isInsideBuilding(candidate))
+            return candidate;
+    }
+    return std::nullopt;
 }
 
 MapBuildingFacade GetNearestMapBuildingFacade(

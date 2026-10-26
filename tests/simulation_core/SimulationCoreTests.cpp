@@ -62,24 +62,6 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
         });
     ASSERT_NE(firstTarget, inspectionBuildings.end());
 
-    const auto isInsideFootprint = [](const glm::dvec2& point,
-                                       const std::vector<glm::dvec2>& outline)
-    {
-        bool inside = false;
-        for (std::size_t index = 0, previous = outline.size() - 1U;
-             index < outline.size(); previous = index++)
-        {
-            const glm::dvec2& currentPoint = outline[index];
-            const glm::dvec2& previousPoint = outline[previous];
-            const bool crosses = (currentPoint.y > point.y)
-                != (previousPoint.y > point.y);
-            if (crosses && point.x < (previousPoint.x - currentPoint.x)
-                    * (point.y - currentPoint.y)
-                    / (previousPoint.y - currentPoint.y) + currentPoint.x)
-                inside = !inside;
-        }
-        return inside;
-    };
     const auto observerPosition = [&firstTarget](const glm::dvec2& start)
     {
         const auto facade = terrain::GetNearestMapBuildingFacade(*firstTarget, start);
@@ -89,10 +71,30 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
     };
     constexpr glm::dvec2 previousStartMeters{-472.0, 442.0};
     constexpr glm::dvec2 startMeters{-410.0, 442.0};
-    EXPECT_TRUE(isInsideFootprint(observerPosition(previousStartMeters), gym->outlineMeters));
-    EXPECT_FALSE(isInsideFootprint(observerPosition(startMeters), gym->outlineMeters));
-
     const double previousGroundHeight = terrainGrid.HeightAtLocalMeters(previousStartMeters);
+    const glm::dvec2 previousObserverXY = observerPosition(previousStartMeters);
+    const glm::dvec3 previousObserverPosition{
+        previousObserverXY.x, previousObserverXY.y, previousGroundHeight + 0.24 + 10.0};
+    EXPECT_TRUE(terrain::ContainsMapBuildingVolume(*gym, previousObserverPosition));
+
+    const auto clearObserverPosition = terrain::FindFirstPointOutsideMapBuildings(
+        previousObserverPosition,
+        {previousStartMeters.x, previousStartMeters.y, previousGroundHeight + 0.24},
+        inspectionBuildings, 0.5);
+    ASSERT_TRUE(clearObserverPosition.has_value());
+    EXPECT_GT(glm::distance(previousObserverPosition, *clearObserverPosition), 0.0);
+    EXPECT_FALSE(terrain::ContainsMapBuildingVolume(*gym, *clearObserverPosition));
+    EXPECT_FALSE(std::any_of(inspectionBuildings.begin(), inspectionBuildings.end(),
+        [&clearObserverPosition](const terrain::MapBuilding& building)
+        {
+            return terrain::ContainsMapBuildingVolume(building, *clearObserverPosition);
+        }));
+
+    const glm::dvec2 currentObserverXY = observerPosition(startMeters);
+    const double currentGroundHeight = terrainGrid.HeightAtLocalMeters(startMeters);
+    EXPECT_FALSE(terrain::ContainsMapBuildingVolume(*gym,
+        {currentObserverXY.x, currentObserverXY.y, currentGroundHeight + 0.24 + 10.0}));
+
     SimulationCore previousStart{SimulationDynamics::RigidBody};
     previousStart.SetTerrain(terrainGrid);
     previousStart.SetInitialPose({previousStartMeters.x, previousStartMeters.y,

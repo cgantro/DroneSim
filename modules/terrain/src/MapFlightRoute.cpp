@@ -1,5 +1,7 @@
 #include "terrain/MapFlightRoute.h"
 
+#include "MapGeometry.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -48,22 +50,6 @@ double DistanceToSegmentSquared(
     return glm::dot(difference, difference);
 }
 
-bool IsInsidePolygon(const glm::dvec2& point, const std::vector<glm::dvec2>& polygon)
-{
-    bool inside = false;
-    for (std::size_t index = 0, previous = polygon.size() - 1U;
-         index < polygon.size(); previous = index++)
-    {
-        const glm::dvec2& start = polygon[index];
-        const glm::dvec2& end = polygon[previous];
-        const bool crosses = (start.y > point.y) != (end.y > point.y);
-        if (crosses && point.x < (end.x - start.x) * (point.y - start.y)
-                / (end.y - start.y) + start.x)
-            inside = !inside;
-    }
-    return inside;
-}
-
 bool IsBlocked(
     const glm::dvec2& point,
     const std::vector<MapBuilding>& buildings,
@@ -74,7 +60,7 @@ bool IsBlocked(
         const auto& outline = building.outlineMeters;
         if (outline.size() < 3U)
             continue;
-        if (IsInsidePolygon(point, outline))
+        if (detail::ContainsPointInRing(outline, point))
             return true;
         for (std::size_t index = 0; index < outline.size(); ++index)
         {

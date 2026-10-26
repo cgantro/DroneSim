@@ -1386,7 +1386,17 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     const float yaw = static_cast<float>(state.yawRadians);
     const glm::vec3 forward{std::cos(yaw), 0.0F, -std::sin(yaw)};
     const glm::vec3 up{0.0F, 1.0F, 0.0F};
-    observerCamera_->SetPosition(dronePosition - forward * 18.0F + up * 10.0F);
+    constexpr double followDistanceMeters = 18.0;
+    constexpr double followHeightMeters = 10.0;
+    glm::dvec3 observerPositionMeters = state.positionMeters
+        - glm::dvec3{std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0}
+            * followDistanceMeters
+        + glm::dvec3{0.0, 0.0, followHeightMeters};
+    // 카메라가 건물 안에 놓이면 선분을 따라 기체 쪽의 첫 안전 위치로 옮긴다.
+    if (const auto clearPosition = aerosimlab::terrain::FindFirstPointOutsideMapBuildings(
+        observerPositionMeters, state.positionMeters, routeBuildings_, 0.5))
+        observerPositionMeters = *clearPosition;
+    observerCamera_->SetPosition(ToRenderPosition(observerPositionMeters));
     observerCamera_->SetTarget(dronePosition + forward * 3.0F + up * 1.5F);
     observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
     observerCamera_->SetFieldOfViewDegrees(50.0F);
