@@ -249,8 +249,21 @@ async function run() {
         || manifest.video_checksum !== videoHash
         || manifest.recording_duration_milliseconds <= 0
         || manifest.sample_interval_milliseconds !== 250
-        || !Array.isArray(manifest.samples) || manifest.samples.length < 2)
+        || !Array.isArray(manifest.samples) || manifest.samples.length < 2
+        || !Array.isArray(manifest.expected_zones) || manifest.expected_zones.length !== 1
+        || !Array.isArray(manifest.captured_zones) || manifest.captured_zones.length !== 1
+        || !Array.isArray(manifest.missing_zones) || manifest.missing_zones.length !== 0
+        || manifest.capture_summary?.expected_zone_count !== 1
+        || manifest.capture_summary?.captured_zone_count !== 1
+        || manifest.capture_summary?.missing_zone_count !== 0)
       throw new Error("촬영 기록의 영상 크기·체크섬·상태 표본이 올바르지 않습니다.");
+    const capturedZone = manifest.captured_zones[0];
+    if (capturedZone.inspection_zone_id !== manifest.expected_zones[0].inspection_zone_id
+        || !Number.isFinite(capturedZone.simulation_tick)
+        || !Number.isFinite(capturedZone.simulation_time_seconds)
+        || capturedZone.video_frame_requested !== true
+        || capturedZone.recording_elapsed_milliseconds < 0)
+      throw new Error("완료된 점검 구역의 실제 촬영 프레임 시각이 기록되지 않았습니다.");
     for (let index = 1; index < manifest.samples.length; ++index) {
       const elapsedDifference = manifest.samples[index].recording_elapsed_milliseconds
         - manifest.samples[index - 1].recording_elapsed_milliseconds;

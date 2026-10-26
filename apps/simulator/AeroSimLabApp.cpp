@@ -1062,8 +1062,9 @@ void AeroSimLabApp::LoadMapFeatures()
         EM_ASM({
             if (window.addDroneSimInspectionTarget)
                 window.addDroneSimInspectionTarget(
-                    $0, UTF8ToString($1));
-        }, static_cast<int>(index), target.facilityId.c_str());
+                    $0, UTF8ToString($1), UTF8ToString($2));
+        }, static_cast<int>(index), target.facilityId.c_str(),
+            target.zoneId.c_str());
     }
 #endif
 }
@@ -1392,6 +1393,15 @@ void AeroSimLabApp::AdvanceInspectionMission()
 #endif
         if (inspectionReadyFrameSaved_)
         {
+#ifdef __EMSCRIPTEN__
+            EM_ASM({
+                if (window.recordDroneSimCapturedZone) {
+                    window.recordDroneSimCapturedZone(
+                        UTF8ToString($0), UTF8ToString($1), $2);
+                }
+            }, inspectionFacilityId_.c_str(), inspectionZoneId_.c_str(),
+                static_cast<double>(camera.lastFrameTick));
+#endif
             ++completedInspectionTargetCount_;
             if (activeInspectionTargetIndex_ + 1U < inspectionMissionEndTargetIndex_)
             {

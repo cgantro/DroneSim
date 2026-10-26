@@ -86,6 +86,7 @@
         }
       }, 20000);
       var eoRecorder = null;
+      var eoRecorderVideoTrack = null;
       var eoStreamCanvas = document.createElement("canvas");
       var eoStreamContext = eoStreamCanvas.getContext("2d");
       var eoCanvasFrame = 0;
@@ -94,6 +95,9 @@
       var eoWebRtcReceiver = null;
       var eoRecorderChunks = [];
       var eoTelemetrySamples = [];
+      var eoCaptureEvents = [];
+      var eoExpectedZones = [];
+      var eoInspectionTargets = [];
       var eoRecordingStartedAt = 0;
       var eoLastTelemetrySampleAt = 0;
       var eoRecordingFinalizing = false;
@@ -130,12 +134,46 @@
         var select = document.querySelector("#inspection-target");
         while (select.options.length > 1)
           select.remove(1);
+        eoInspectionTargets = [];
       };
-      window.addDroneSimInspectionTarget = function (index, facilityId) {
+      window.addDroneSimInspectionTarget = function (index, facilityId, zoneId) {
         var option = document.createElement("option");
         option.value = String(index);
         option.textContent = "OSM 건물 " + facilityId + " · 외벽 시험 구역";
         document.querySelector("#inspection-target").add(option);
+        eoInspectionTargets.push({
+          index: Number(index), facility_id: facilityId, inspection_zone_id: zoneId
+        });
+      };
+
+      function beginInspectionCaptureRecord(targetIndex) {
+        eoCaptureEvents = [];
+        eoExpectedZones = eoInspectionTargets
+          .filter(function (target) { return targetIndex < 0 || target.index === targetIndex; })
+          .map(function (target) {
+            return {
+              facility_id: target.facility_id,
+              inspection_zone_id: target.inspection_zone_id
+            };
+          });
+      }
+
+      window.recordDroneSimCapturedZone = function (facilityId, zoneId, simulationTick) {
+        if (!eoRecorder || eoCaptureEvents.some(function (event) {
+          return event.inspection_zone_id === zoneId;
+        }))
+          return;
+        eoCaptureEvents.push({
+          facility_id: facilityId,
+          inspection_zone_id: zoneId,
+          simulation_tick: Number(simulationTick),
+          simulation_time_seconds: Number(simulationTick) / 60,
+          video_frame_requested: Boolean(eoRecorderVideoTrack
+            && typeof eoRecorderVideoTrack.requestFrame === "function"),
+          recording_elapsed_milliseconds: Math.round(performance.now() - eoRecordingStartedAt)
+        });
+        if (eoRecorderVideoTrack && typeof eoRecorderVideoTrack.requestFrame === "function")
+          eoRecorderVideoTrack.requestFrame();
       };
 
       function setEoRecordingStatus(message) {
@@ -280,6 +318,7 @@
           recorder.stop();
         });
         recorder.stream.getTracks().forEach(function (track) { track.stop(); });
+        eoRecorderVideoTrack = null;
 
         var videoBlob = new Blob(eoRecorderChunks, { type: recorder.mimeType || "video/webm" });
         eoRecorderChunks = [];
@@ -309,6 +348,11 @@
             sha256 = "계산할 수 없음";
           }
         }
+        var missingZones = eoExpectedZones.filter(function (zone) {
+          return !eoCaptureEvents.some(function (event) {
+            return event.inspection_zone_id === zone.inspection_zone_id;
+          });
+        });
         var manifest = {
           format_version: 1,
           collection_state: "CAPTURED",
@@ -320,6 +364,14 @@
           mission_outcome: finalSample && finalSample.mission_status.indexOf("구도 확인 완료") >= 0
             ? "COMPLETED" : "FAILED",
           mission_status: finalSample ? finalSample.mission_status : "기록 없음",
+          expected_zones: eoExpectedZones,
+          captured_zones: eoCaptureEvents,
+          missing_zones: missingZones,
+          capture_summary: {
+            expected_zone_count: eoExpectedZones.length,
+            captured_zone_count: eoCaptureEvents.length,
+            missing_zone_count: missingZones.length
+          },
           video_checksum_algorithm: sha256 === "계산할 수 없음" ? null : "SHA-256",
           video_checksum: sha256,
           simulation_tick_rate_hz: 60,
@@ -333,8 +385,9 @@
         manifestLink.href = URL.createObjectURL(manifestBlob);
         manifestLink.download = videoName.replace(/\.webm$/i, ".manifest.json");
         manifestLink.hidden = false;
-        setEoRecordingStatus("영상과 촬영 기록을 내려받을 수 있습니다. "
-          + (eoTelemetrySamples.length ? eoTelemetrySamples.length + "개 상태 표본" : "상태 표본 없음"));
+        setEoRecordingStatus("영상·기록을 내려받을 수 있습니다. 구역 "
+          + eoCaptureEvents.length + "/" + eoExpectedZones.length + "곳 촬영, 누락 "
+          + missingZones.length + "곳 · 상태 표본 " + eoTelemetrySamples.length + "개");
         eoRecordingFinalizing = false;
       }
 
@@ -359,6 +412,7 @@
         try {
           stream = eoStreamCanvas.captureStream(20);
           eoRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+          eoRecorderVideoTrack = stream.getVideoTracks()[0] || null;
           eoRecorder.addEventListener("dataavailable", function (event) {
             if (event.data && event.data.size > 0)
               eoRecorderChunks.push(event.data);
@@ -465,9 +519,10 @@
           }
           if (!startEoRecording())
             return;
+          var targetIndex = Number(document.querySelector("#inspection-target").value);
+          beginInspectionCaptureRecord(targetIndex);
           if (typeof Module._DroneSimWebStartInspectionMission !== "function"
-              || !Module._DroneSimWebStartInspectionMission(
-                Number(document.querySelector("#inspection-target").value)))
+              || !Module._DroneSimWebStartInspectionMission(targetIndex))
             void finishEoRecording();
         });
         document.querySelectorAll("#web-gcs [data-axis]").forEach(function (button) {
