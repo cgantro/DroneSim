@@ -11,7 +11,7 @@
       #startup-status { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 24px; color: #e5e7eb; background: #141719; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
       #startup-status[hidden] { display: none; }
       #startup-message { max-width: 560px; }
-      #web-gcs { position: fixed; z-index: 2; left: 12px; right: 12px; bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; color: #f3f4f6; background: rgb(17 24 28 / 92%); border: 1px solid rgb(255 255 255 / 18%); border-radius: 10px; font: 13px/1.4 system-ui, sans-serif; }
+      #web-gcs { position: fixed; z-index: 2; left: 12px; right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 14px; color: #f3f4f6; background: rgb(17 24 28 / 92%); border: 1px solid rgb(255 255 255 / 18%); border-radius: 10px; font: 13px/1.4 system-ui, sans-serif; }
       #web-gcs-status { min-width: 250px; }
       #web-gcs-status strong { display: block; font-size: 14px; }
       #web-gcs-status span { color: #cbd5d9; }
@@ -24,6 +24,8 @@
       #web-gcs [data-start-inspection] { background: #315f87; }
       #web-gcs [data-inspection-target] { min-height: 38px; padding: 6px 10px; color: #f8fafc; background: #26343a; border: 1px solid #66777e; border-radius: 6px; font: inherit; }
       #web-eo-recording { display: grid; gap: 5px; min-width: 190px; color: #d4dde0; }
+      #web-eo-live { display: grid; gap: 5px; min-width: 190px; color: #d4dde0; }
+      #web-eo-live video { display: block; width: min(22vw, 220px); height: 124px; background: #080a0b; object-fit: contain; }
       #web-eo-recording-controls { display: flex; flex-wrap: wrap; gap: 6px; }
       #web-eo-recording a { color: #9fd5ff; }
       #web-eo-recording a[hidden] { display: none; }
@@ -40,6 +42,10 @@
         <strong>지상통제 · 준비 중</strong>
         <span>가상 시험면 촬영 조건: 준비 중</span>
         <span id="web-gcs-mission">점검 임무: 대기 중</span>
+      </div>
+      <div id="web-eo-live" aria-live="polite">
+        <strong id="web-eo-live-status">EO 영상 · 연결 준비 중</strong>
+        <video id="web-eo-live-video" autoplay muted playsinline></video>
       </div>
       <div id="web-eo-recording" aria-live="polite">
         <strong>EO 기록: 대기 중</strong>
@@ -80,9 +86,12 @@
         }
       }, 20000);
       var eoRecorder = null;
-      var eoRecorderCanvas = null;
-      var eoRecorderContext = null;
-      var eoRecorderFrame = 0;
+      var eoStreamCanvas = document.createElement("canvas");
+      var eoStreamContext = eoStreamCanvas.getContext("2d");
+      var eoCanvasFrame = 0;
+      var eoWebRtcStream = null;
+      var eoWebRtcSender = null;
+      var eoWebRtcReceiver = null;
       var eoRecorderChunks = [];
       var eoTelemetrySamples = [];
       var eoRecordingStartedAt = 0;
@@ -111,6 +120,10 @@
           button.disabled = false;
         });
         document.querySelector("#inspection-target").disabled = false;
+        startEoWebRtcLoopback().catch(function (error) {
+          closeEoWebRtc();
+          setEoLiveStatus("EO 영상 · WebRTC 연결 실패: " + error.message);
+        });
       };
 
       window.clearDroneSimInspectionTargets = function () {
@@ -129,6 +142,109 @@
         document.querySelector("#web-eo-recording strong").textContent = "EO 기록: " + message;
       }
 
+      function setEoLiveStatus(message) {
+        document.querySelector("#web-eo-live-status").textContent = message;
+      }
+
+      function waitForIceGathering(pc) {
+        if (pc.iceGatheringState === "complete")
+          return Promise.resolve();
+        return new Promise(function (resolve, reject) {
+          var timeout = window.setTimeout(function () {
+            pc.removeEventListener("icegatheringstatechange", checkState);
+            reject(new Error("ICE 후보 수집 시간이 초과됐습니다."));
+          }, 10000);
+          function checkState() {
+            if (pc.iceGatheringState !== "complete")
+              return;
+            window.clearTimeout(timeout);
+            pc.removeEventListener("icegatheringstatechange", checkState);
+            resolve();
+          }
+          pc.addEventListener("icegatheringstatechange", checkState);
+        });
+      }
+
+      function waitForRtcConnection(pc) {
+        if (pc.connectionState === "connected")
+          return Promise.resolve();
+        return new Promise(function (resolve, reject) {
+          var timeout = window.setTimeout(function () {
+            pc.removeEventListener("connectionstatechange", checkState);
+            reject(new Error("영상 수신 연결 시간이 초과됐습니다."));
+          }, 10000);
+          function checkState() {
+            if (pc.connectionState === "connected") {
+              window.clearTimeout(timeout);
+              pc.removeEventListener("connectionstatechange", checkState);
+              resolve();
+            } else if (pc.connectionState === "failed") {
+              window.clearTimeout(timeout);
+              pc.removeEventListener("connectionstatechange", checkState);
+              reject(new Error("브라우저 WebRTC 연결이 실패했습니다."));
+            }
+          }
+          pc.addEventListener("connectionstatechange", checkState);
+          checkState();
+        });
+      }
+
+      function closeEoWebRtc() {
+        if (eoWebRtcSender) {
+          if (eoWebRtcSender.signalingState !== "closed")
+            eoWebRtcSender.close();
+        }
+        if (eoWebRtcReceiver) {
+          if (eoWebRtcReceiver.signalingState !== "closed")
+            eoWebRtcReceiver.close();
+        }
+        if (eoWebRtcStream) {
+          eoWebRtcStream.getTracks().forEach(function (track) { track.stop(); });
+        }
+      }
+
+      async function startEoWebRtcLoopback() {
+        if (!window.RTCPeerConnection || !HTMLCanvasElement.prototype.captureStream)
+          throw new Error("이 브라우저는 WebRTC 영상 수신을 지원하지 않습니다.");
+        if (!eoStreamContext)
+          throw new Error("EO 영상 캔버스를 만들지 못했습니다.");
+
+        setEoLiveStatus("EO 영상 · 전송 경로 연결 중");
+        copyEoViewport();
+        eoWebRtcStream = eoStreamCanvas.captureStream(24);
+        eoWebRtcSender = new RTCPeerConnection({ iceServers: [] });
+        eoWebRtcReceiver = new RTCPeerConnection({ iceServers: [] });
+        var liveVideo = document.querySelector("#web-eo-live-video");
+        eoWebRtcSender.addEventListener("connectionstatechange", function () {
+          if (eoWebRtcSender.connectionState === "disconnected"
+              || eoWebRtcSender.connectionState === "failed")
+            setEoLiveStatus("EO 영상 · WebRTC 연결 끊김");
+        });
+        eoWebRtcReceiver.addEventListener("track", function (event) {
+          liveVideo.srcObject = event.streams[0];
+          void liveVideo.play().catch(function () {});
+        });
+        eoWebRtcStream.getTracks().forEach(function (track) {
+          eoWebRtcSender.addTrack(track, eoWebRtcStream);
+        });
+
+        await eoWebRtcSender.setLocalDescription(
+          await eoWebRtcSender.createOffer());
+        await waitForIceGathering(eoWebRtcSender);
+        await eoWebRtcReceiver.setRemoteDescription(eoWebRtcSender.localDescription);
+        await eoWebRtcReceiver.setLocalDescription(
+          await eoWebRtcReceiver.createAnswer());
+        await waitForIceGathering(eoWebRtcReceiver);
+        await eoWebRtcSender.setRemoteDescription(eoWebRtcReceiver.localDescription);
+        await waitForRtcConnection(eoWebRtcSender);
+        setEoLiveStatus("EO 영상 · 로컬 WebRTC 수신 연결됨");
+      }
+
+      window.addEventListener("beforeunload", function () {
+        closeEoWebRtc();
+        window.cancelAnimationFrame(eoCanvasFrame);
+      });
+
       function eoRecordingMimeType() {
         if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream)
           return "";
@@ -137,20 +253,20 @@
       }
 
       function copyEoViewport() {
-        if (!eoRecorder || !Module.canvas || !eoRecorderContext)
-          return;
-        var source = Module.canvas;
-        var sourceX = Math.floor(source.width * 2 / 3);
-        var sourceWidth = source.width - sourceX;
-        if (sourceWidth > 0 && source.height > 0) {
-          if (eoRecorderCanvas.width !== sourceWidth || eoRecorderCanvas.height !== source.height) {
-            eoRecorderCanvas.width = sourceWidth;
-            eoRecorderCanvas.height = source.height;
+        if (Module.canvas && eoStreamContext) {
+          var source = Module.canvas;
+          var sourceX = Math.floor(source.width * 2 / 3);
+          var sourceWidth = source.width - sourceX;
+          if (sourceWidth > 0 && source.height > 0) {
+            if (eoStreamCanvas.width !== sourceWidth || eoStreamCanvas.height !== source.height) {
+              eoStreamCanvas.width = sourceWidth;
+              eoStreamCanvas.height = source.height;
+            }
+            eoStreamContext.drawImage(source, sourceX, 0, sourceWidth, source.height,
+              0, 0, sourceWidth, source.height);
           }
-          eoRecorderContext.drawImage(source, sourceX, 0, sourceWidth, source.height,
-            0, 0, sourceWidth, source.height);
         }
-        eoRecorderFrame = window.requestAnimationFrame(copyEoViewport);
+        eoCanvasFrame = window.requestAnimationFrame(copyEoViewport);
       }
 
       async function finishEoRecording() {
@@ -159,7 +275,6 @@
         eoRecordingFinalizing = true;
         var recorder = eoRecorder;
         eoRecorder = null;
-        window.cancelAnimationFrame(eoRecorderFrame);
         await new Promise(function (resolve) {
           recorder.addEventListener("stop", resolve, { once: true });
           recorder.stop();
@@ -232,9 +347,7 @@
         if (eoRecorder)
           return true;
 
-        eoRecorderCanvas = document.createElement("canvas");
-        eoRecorderContext = eoRecorderCanvas.getContext("2d");
-        if (!eoRecorderContext) {
+        if (!eoStreamContext || eoStreamCanvas.width === 0 || eoStreamCanvas.height === 0) {
           setEoRecordingStatus("EO 화면을 준비하지 못했습니다.");
           return false;
         }
@@ -244,7 +357,7 @@
         eoLastTelemetrySampleAt = 0;
         var stream = null;
         try {
-          stream = eoRecorderCanvas.captureStream(20);
+          stream = eoStreamCanvas.captureStream(20);
           eoRecorder = new MediaRecorder(stream, { mimeType: mimeType });
           eoRecorder.addEventListener("dataavailable", function (event) {
             if (event.data && event.data.size > 0)

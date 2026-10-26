@@ -103,6 +103,20 @@ async function run() {
       null,
       { timeout: 5000 }
     );
+    await page.waitForFunction(
+      () => {
+        const video = document.querySelector("#web-eo-live-video");
+        const streamStatus = document.querySelector("#web-eo-live-status")?.textContent || "";
+        return streamStatus.includes("로컬 WebRTC 수신 연결됨")
+          && video?.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+          && video.videoWidth > 0 && video.videoHeight > 0
+          && video.srcObject instanceof MediaStream
+          && video.srcObject.getVideoTracks().some((track) => track.readyState === "live");
+      },
+      null,
+      { timeout: 20000 }
+    );
+    console.log("Chromium에서 EO 영상의 WebRTC 송수신과 수신 화면을 확인했습니다.");
     await page.getByRole("button", { name: "이륙" }).click();
     await page.waitForFunction(
       () => !document.querySelector("#web-gcs-status")?.textContent.includes("grounded"),
