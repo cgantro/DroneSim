@@ -270,34 +270,45 @@ private:
         std::vector<glm::dvec3> routeWaypointsMeters;
         glm::dvec3 approachPositionMeters{0.0};
     };
-    enum class InspectionMissionStage
+    /** @brief 점검 임무의 진행 단계와 현재 구역을 함께 보관한다. */
+    struct InspectionMissionState
     {
-        Ready,
-        StartRequested,
-        Paused,
-        TakingOff,
-        Approaching,
-        AligningCamera,
-        Capturing,
-        Landing,
-        Saved,
-        GeometryOnly,
-        Failed
+        enum class Stage
+        {
+            Ready,
+            StartRequested,
+            Paused,
+            TakingOff,
+            Approaching,
+            AligningCamera,
+            Capturing,
+            Landing,
+            Saved,
+            GeometryOnly,
+            Failed
+        };
+        Stage stage = Stage::Ready;
+        Stage pausedStage = Stage::Ready;
+        std::uint64_t startTick = 0;
+        std::uint64_t pauseStartTick = 0;
+        std::uint64_t captureStartFrame = 0;
+        std::uint64_t captureReadyTick = 0;
+        bool readyFrameSaved = false;
+        std::string error;
+        std::size_t activeTargetIndex = 0;
+        std::size_t routeWaypointIndex = 0;
+        std::size_t endTargetIndex = 0;
+        std::size_t targetCount = 0;
+        std::size_t completedTargetCount = 0;
+        glm::dvec3 goalMeters{0.0};
+        std::string facilityId;
+        std::string zoneId;
+        aerosimlab::simulation::InspectionSurface surface;
     };
-    InspectionMissionStage inspectionMissionStage_ = InspectionMissionStage::Ready;
-    InspectionMissionStage pausedMissionStage_ = InspectionMissionStage::Ready;
-    std::uint64_t inspectionMissionStartTick_ = 0;
-    std::uint64_t inspectionMissionPauseStartTick_ = 0;
-    std::uint64_t inspectionCaptureStartFrame_ = 0;
-    std::uint64_t inspectionCaptureReadyTick_ = 0;
-    bool inspectionReadyFrameSaved_ = false;
-    std::string inspectionMissionError_;
+    using InspectionMissionStage = InspectionMissionState::Stage;
+    InspectionMissionState inspectionMission_;
     std::vector<InspectionTarget> inspectionTargets_;
-    std::size_t activeInspectionTargetIndex_ = 0;
-    std::size_t currentInspectionRouteWaypointIndex_ = 0;
-    std::size_t inspectionMissionEndTargetIndex_ = 0;
-    std::size_t inspectionMissionTargetCount_ = 0;
-    std::size_t completedInspectionTargetCount_ = 0;
+    std::vector<aerosimlab::simulation::InspectionOccluderPolygon> inspectionOccluders_;
     bool externalControl_ = false;
     bool groundControlActive_ = false;
     std::optional<std::chrono::steady_clock::time_point> lastGroundControlMessage_;
@@ -393,11 +404,6 @@ private:
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
-    glm::dvec3 missionGoalMeters_{0.0};
-    std::string inspectionFacilityId_;
-    std::string inspectionZoneId_;
-    aerosimlab::simulation::InspectionSurface inspectionSurface_;
-    std::vector<aerosimlab::simulation::InspectionOccluderPolygon> inspectionOccluders_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};

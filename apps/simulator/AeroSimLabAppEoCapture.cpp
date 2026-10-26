@@ -171,16 +171,17 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
             std::string error;
             const auto captureAssessment =
                 aerosimlab::simulation::EoCameraModel::AssessCapture(
-                    cameraState->second, inspectionSurface_, {}, inspectionOccluders_);
+                    cameraState->second, inspectionMission_.surface, {},
+                    inspectionOccluders_);
             if (!eoVideoRecorder_->WriteFrame(eoFrame_, cameraState->second,
                 static_cast<double>(simulationTick) / 60.0,
                 captureAssessment, error))
             {
                 const bool missionIsActive =
-                    inspectionMissionStage_ != InspectionMissionStage::Ready
-                    && inspectionMissionStage_ != InspectionMissionStage::Saved
-                    && inspectionMissionStage_ != InspectionMissionStage::GeometryOnly
-                    && inspectionMissionStage_ != InspectionMissionStage::Failed;
+                    inspectionMission_.stage != InspectionMissionStage::Ready
+                    && inspectionMission_.stage != InspectionMissionStage::Saved
+                    && inspectionMission_.stage != InspectionMissionStage::GeometryOnly
+                    && inspectionMission_.stage != InspectionMissionStage::Failed;
                 if (missionIsActive)
                 {
                     FailInspectionMission("점검 영상을 저장하지 못했습니다. " + error);
@@ -198,11 +199,11 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
                 }
             }
 #ifndef __EMSCRIPTEN__
-            else if (inspectionMissionStage_ == InspectionMissionStage::Capturing
+            else if (inspectionMission_.stage == InspectionMissionStage::Capturing
                 && captureAssessment
                     == aerosimlab::simulation::CaptureAssessment::Ready)
             {
-                inspectionReadyFrameSaved_ = true;
+                inspectionMission_.readyFrameSaved = true;
             }
 #endif
         }
