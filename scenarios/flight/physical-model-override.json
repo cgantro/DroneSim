@@ -1,7 +1,7 @@
 {
   "version": 1,
   "dynamics": "rigid_body",
-  "ticks": 240,
+  "ticks": 600,
   "commands": [
     {"tick": 0, "type": "takeoff"}
   ],

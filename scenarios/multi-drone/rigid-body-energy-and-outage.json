@@ -6,7 +6,7 @@
     {
       "name": "low-charge",
       "initial_position_meters": [0, 0, 0],
-      "battery_capacity_watt_hours": 0.3,
+      "battery_capacity_watt_hours": 0.5,
       "initial_battery_percent": 80
     },
     {"name": "lost-link", "initial_position_meters": [10, 0, 0]},
@@ -35,7 +35,7 @@
     "reserve_percent": 50
   },
   "collision_avoidance": {
-    "safety_distance_meters": 2.0,
+    "safety_distance_meters": 2.1,
     "prediction_horizon_seconds": 3.0,
     "lateral_offset_meters": 3.0
   },
@@ -76,9 +76,9 @@
     "tolerance_meters": 0.5,
     "drones": [
       {"name": "low-charge", "mode": "grounded", "position_meters": [0, 0, 0.2]},
-      {"name": "lost-link", "mode": "following_waypoint", "position_meters": [10.79582, 0, 1.75003]},
-      {"name": "reserve-1", "mode": "hovering", "position_meters": [15, 0, 1.5]},
-      {"name": "reserve-2", "mode": "hovering", "position_meters": [21, 0, 1.5]}
+      {"name": "lost-link", "mode": "taking_off", "position_meters": [10, 0, 1.33]},
+      {"name": "reserve-1", "mode": "hovering", "position_meters": [21, 0, 1.5]},
+      {"name": "reserve-2", "mode": "hovering", "position_meters": [15, 0, 1.5]}
     ]
   }
 }

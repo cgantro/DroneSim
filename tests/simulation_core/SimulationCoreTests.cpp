@@ -2,6 +2,7 @@
 #include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/InspectionSurfaceJson.h"
+#include "terrain/MapBuildings.h"
 #include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
@@ -38,14 +39,63 @@ void ReachHovering(SimulationCore& simulation)
 
 void Verify_RigidBodyTakeoffFromTancheonDemoStart()
 {
-    const auto terrain = terrain::TerrainGrid::Load(
+    const auto terrainGrid = terrain::TerrainGrid::Load(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
             / "assets/maps/tancheon/terrain.aerotrn");
+    const auto buildings = terrain::LoadMapBuildingFootprints(
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+            / "assets/maps/tancheon/site.geojson", terrainGrid);
+    const auto gym = std::find_if(buildings.begin(), buildings.end(),
+        [](const terrain::MapBuilding& building)
+        {
+            return building.osmId == "1034405204";
+        });
+    ASSERT_NE(gym, buildings.end());
+
+    const auto inspectionBuildings = terrain::LoadMapBuildings(
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+            / "assets/maps/tancheon/site.geojson", terrainGrid);
+    const auto firstTarget = std::find_if(inspectionBuildings.begin(),
+        inspectionBuildings.end(), [](const terrain::MapBuilding& building)
+        {
+            return building.osmId == "692770099";
+        });
+    ASSERT_NE(firstTarget, inspectionBuildings.end());
+
+    const auto isInsideFootprint = [](const glm::dvec2& point,
+                                       const std::vector<glm::dvec2>& outline)
+    {
+        bool inside = false;
+        for (std::size_t index = 0, previous = outline.size() - 1U;
+             index < outline.size(); previous = index++)
+        {
+            const glm::dvec2& currentPoint = outline[index];
+            const glm::dvec2& previousPoint = outline[previous];
+            const bool crosses = (currentPoint.y > point.y)
+                != (previousPoint.y > point.y);
+            if (crosses && point.x < (previousPoint.x - currentPoint.x)
+                    * (point.y - currentPoint.y)
+                    / (previousPoint.y - currentPoint.y) + currentPoint.x)
+                inside = !inside;
+        }
+        return inside;
+    };
+    const auto observerPosition = [&firstTarget](const glm::dvec2& start)
+    {
+        const auto facade = terrain::GetNearestMapBuildingFacade(*firstTarget, start);
+        const glm::dvec2 heading = glm::normalize(
+            glm::dvec2{facade.centerMeters.x, facade.centerMeters.y} - start);
+        return start - heading * 18.0;
+    };
+    constexpr glm::dvec2 previousStartMeters{-472.0, 442.0};
     constexpr glm::dvec2 startMeters{-410.0, 442.0};
-    const double groundHeight = terrain.HeightAtLocalMeters(startMeters);
+    EXPECT_TRUE(isInsideFootprint(observerPosition(previousStartMeters), gym->outlineMeters));
+    EXPECT_FALSE(isInsideFootprint(observerPosition(startMeters), gym->outlineMeters));
+
+    const double groundHeight = terrainGrid.HeightAtLocalMeters(startMeters);
 
     SimulationCore simulation{SimulationDynamics::RigidBody};
-    simulation.SetTerrain(terrain);
+    simulation.SetTerrain(terrainGrid);
     simulation.SetInitialPose({startMeters.x, startMeters.y, groundHeight + 0.24}, 0.0);
     ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
 
