@@ -837,11 +837,12 @@
       }
 
       window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive,
-          captureAssessment, missionStatus, simulationTick) {
+          captureAssessment, missionStatus, simulationTick, missionActive, grounded) {
         latestGroundControlState = {
           mode: mode, x: x, y: y, z: z, speed: speed,
           cameraActive: cameraActive, captureAssessment: captureAssessment,
-          missionStatus: missionStatus, simulationTick: Number(simulationTick)
+          missionStatus: missionStatus, simulationTick: Number(simulationTick),
+          missionActive: Boolean(missionActive)
         };
         var status = document.getElementById("web-gcs-status");
         var captureLabels = {
@@ -867,17 +868,17 @@
           + " · 파손 여부는 사람이 영상으로 확인</span>"
           + "<span id=\"web-gcs-mission\">정찰 임무: " + missionStatus + "</span>";
 
-        var missionCanStart = missionStatus.includes("대기 중")
-          || missionStatus.includes("저장 완료")
-          || missionStatus.includes("확인 완료")
-          || missionStatus.includes("실패:");
+        var missionCanStart = !missionActive && Boolean(grounded);
         var missionIsPaused = missionStatus.includes("일시 정지");
-        var missionCanPause = missionStatus.includes("촬영 위치로 이동 중")
-          || missionStatus.includes("카메라 방향을 맞추는 중");
+        var missionCanPause = missionActive && (missionStatus.includes("촬영 위치로 이동 중")
+          || missionStatus.includes("카메라 방향을 맞추는 중"));
+        document.querySelectorAll("#web-gcs [data-command], #web-gcs [data-axis]")
+          .forEach(function (button) { button.disabled = missionActive; });
+        document.querySelector("#inspection-target").disabled = missionActive;
         document.querySelector("[data-start-inspection]").disabled = !missionCanStart;
         document.querySelector("[data-pause-inspection]").disabled = !missionCanPause;
         document.querySelector("[data-resume-inspection]").disabled = !missionIsPaused;
-        document.querySelector("[data-cancel-inspection]").disabled = missionCanStart;
+        document.querySelector("[data-cancel-inspection]").disabled = !missionActive;
 
       };
 
@@ -936,6 +937,7 @@
           }
           if (!await startEoRecording())
             return;
+          releaseAll();
           var targetIndex = Number(document.querySelector("#inspection-target").value);
           beginInspectionCaptureRecord(targetIndex);
           if (typeof Module._DroneSimWebStartInspectionMission !== "function"

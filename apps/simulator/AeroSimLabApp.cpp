@@ -608,6 +608,8 @@ void AeroSimLabApp::QueueWebFlightCommand(
     aerosimlab::simulation::DroneCommand::Kind kind)
 {
     externalControl_ = true;
+    if (InspectionMissionIsActive())
+        return;
     if (!commandRecording_.IsReplaying())
         pendingControllerAction_ = aerosimlab::simulation::DroneCommand{kind};
 }
@@ -648,6 +650,12 @@ void AeroSimLabApp::SetWebPilotAxes(
     const aerosimlab::manual_control::GamepadAxes& axes)
 {
     externalControl_ = true;
+    if (InspectionMissionIsActive())
+    {
+        webPilotAxes_.reset();
+        pendingPilotCommand_.reset();
+        return;
+    }
     if (!commandRecording_.IsReplaying())
         webPilotAxes_ = axes;
 }

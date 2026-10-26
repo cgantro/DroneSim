@@ -80,6 +80,9 @@ bool AeroSimLabApp::RequestInspectionMission(
     SetActiveInspectionTarget(inspectionMission_.activeTargetIndex);
     pendingControllerAction_.reset();
     pendingPilotCommand_.reset();
+#ifdef __EMSCRIPTEN__
+    webPilotAxes_.reset();
+#endif
     inspectionMission_.stage = InspectionMissionStage::StartRequested;
     return true;
 }

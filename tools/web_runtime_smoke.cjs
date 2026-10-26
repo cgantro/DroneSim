@@ -218,6 +218,14 @@ async function run() {
       null,
       { timeout: 30000 }
     );
+    for (const label of ["이륙", "정지", "전진", "후진", "좌측", "우측",
+      "상승", "하강", "좌회전", "우회전", "착륙"]) {
+      if (!await page.getByRole("button", { name: label }).isDisabled())
+        throw new Error(`정찰 임무 중 ${label} 수동 조작이 활성화되어 있습니다.`);
+    }
+    if (!await page.locator("#inspection-target").isDisabled()
+        || await page.getByRole("button", { name: "임무 중단" }).isDisabled())
+      throw new Error("정찰 임무 중 목표 선택 또는 임무 중단 상태가 올바르지 않습니다.");
     await page.getByRole("button", { name: "일시 정지" }).click();
     await page.waitForFunction(
       () => document.querySelector("#web-gcs-status")?.textContent
@@ -251,6 +259,15 @@ async function run() {
     const missionStatus = await telemetry.innerText();
     if (!missionStatus.includes("정찰 임무: 영상 수집 완료 (1개 위치)"))
       throw new Error(`정찰 임무가 끝나지 않았습니다: ${missionStatus}`);
+    for (const label of ["이륙", "정지", "전진", "후진", "좌측", "우측",
+      "상승", "하강", "좌회전", "우회전", "착륙"]) {
+      if (await page.getByRole("button", { name: label }).isDisabled())
+        throw new Error(`정찰 임무 종료 뒤 ${label} 수동 조작이 다시 활성화되지 않았습니다.`);
+    }
+    if (await page.locator("#inspection-target").isDisabled()
+        || await page.getByRole("button", { name: "정찰 임무 시작" }).isDisabled()
+        || !await page.getByRole("button", { name: "임무 중단" }).isDisabled())
+      throw new Error("정찰 임무 완료 뒤 조작 상태가 올바르게 복구되지 않았습니다.");
     await page.waitForFunction(
       () => {
         const text = document.querySelector("#web-eo-recording")?.textContent || "";
