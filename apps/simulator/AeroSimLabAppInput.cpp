@@ -1,8 +1,6 @@
 #include "AeroSimLabApp.h"
 
 #include "graphics/MultisampleFramebuffer.h"
-#include "media/RtpVideoStream.h"
-#include "media/RecordedCaptureTransfer.h"
 #include "FleetDroneSpawn.h"
 #include "graphics/Window.h"
 
@@ -15,6 +13,11 @@
 #include <exception>
 #include <string>
 #include <variant>
+
+#ifndef __EMSCRIPTEN__
+#include "media/RtpVideoStream.h"
+#include "media/RecordedCaptureTransfer.h"
+#endif
 
 namespace aerosimlab::simulator
 {
