@@ -406,6 +406,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> droneMesh_;
+    std::unique_ptr<aerosimlab::graphics::Texture2D> terrainSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;

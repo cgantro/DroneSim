@@ -385,6 +385,11 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson@maps/tancheon/site.geojson"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json@maps/tancheon/demo-inspection-plan.json"
     )
+    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.ppm")
+      target_link_options(aerosimlab_simulator PRIVATE
+        "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.ppm@maps/tancheon/terrain.ppm"
+      )
+    endif()
   else()
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory

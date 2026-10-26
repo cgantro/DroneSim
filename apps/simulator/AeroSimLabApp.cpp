@@ -741,6 +741,10 @@ void AeroSimLabApp::LoadSceneModels()
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
 #endif
+    const auto terrainTexturePath = AssetPath("maps/tancheon/terrain.ppm");
+    if (std::filesystem::exists(terrainTexturePath))
+        terrainSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
+            terrainTexturePath);
 }
 
 void AeroSimLabApp::LoadTerrain()
@@ -1235,7 +1239,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     const glm::vec3& cameraPosition, bool showMissionGuides)
 {
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
-        view, projection, cameraPosition);
+        view, projection, cameraPosition, terrainSurfaceTexture_.get(), false,
+        terrainSurfaceTexture_ == nullptr);
     if (waterMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *waterMesh_, waterMaterial_, *shader_,
             view, projection, cameraPosition);
