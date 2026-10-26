@@ -98,7 +98,7 @@ async function run() {
       () => {
         const status = document.querySelector("#web-gcs-status")?.textContent || "";
         return status.includes("비행 상태:")
-          && status.includes("가상 시험면 촬영 조건:");
+          && status.includes("카메라 목표 화면 확인:");
       },
       null,
       { timeout: 5000 }
@@ -202,7 +202,7 @@ async function run() {
     const inspectionTarget = page.locator("#inspection-target");
     await inspectionTarget.selectOption("1");
     const selectedFacility = await inspectionTarget.locator("option:checked").innerText();
-    await page.getByRole("button", { name: "자동 점검 시작" }).click();
+    await page.getByRole("button", { name: "영상 수집 시작" }).click();
     await page.waitForFunction(
       () => document.querySelector("#web-eo-recording")?.textContent
         .includes("브라우저 저장 공간에 조각별 기록"),
@@ -212,8 +212,8 @@ async function run() {
     await page.waitForFunction(
       () => {
         const status = document.querySelector("#web-gcs-status")?.textContent || "";
-        return status.includes("점검 구역으로 이동 중")
-          || status.includes("카메라를 점검면에 맞추는 중");
+        return status.includes("촬영 위치로 이동 중")
+          || status.includes("카메라 방향을 맞추는 중");
       },
       null,
       { timeout: 30000 }
@@ -221,7 +221,7 @@ async function run() {
     await page.getByRole("button", { name: "일시 정지" }).click();
     await page.waitForFunction(
       () => document.querySelector("#web-gcs-status")?.textContent
-        .includes("점검 임무: 구역 1/1: 일시 정지"),
+        .includes("영상 수집 임무: 목표 1/1: 일시 정지"),
       null,
       { timeout: 5000 }
     );
@@ -229,8 +229,8 @@ async function run() {
     await page.waitForFunction(
       () => {
         const status = document.querySelector("#web-gcs-status")?.textContent || "";
-        return status.includes("점검 구역으로 이동 중")
-          || status.includes("카메라를 점검면에 맞추는 중");
+        return status.includes("촬영 위치로 이동 중")
+          || status.includes("카메라 방향을 맞추는 중");
       },
       null,
       { timeout: 5000 }
@@ -239,8 +239,8 @@ async function run() {
       await page.waitForFunction(
         () => {
           const status = document.querySelector("#web-gcs-status")?.textContent || "";
-          return status.includes("점검 임무: 구도 확인 완료")
-            || status.includes("점검 임무: 실패:");
+          return status.includes("영상 수집 임무: 구도 확인 완료")
+            || status.includes("영상 수집 임무: 실패:");
         },
         null,
         { timeout: 240000 }
@@ -249,7 +249,7 @@ async function run() {
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${await telemetry.innerText()}`);
     }
     const missionStatus = await telemetry.innerText();
-    if (!missionStatus.includes("점검 임무: 구도 확인 완료 (1개 구역)"))
+    if (!missionStatus.includes("영상 수집 임무: 구도 확인 완료 (1개 위치)"))
       throw new Error(`자동 점검 임무가 끝나지 않았습니다: ${missionStatus}`);
     await page.waitForFunction(
       () => {
