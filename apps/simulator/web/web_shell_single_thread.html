@@ -358,8 +358,14 @@
                 try { await directory.removeEntry(fileName); } catch (_) {}
                 throw this.error;
               }
-              await this.writable.close();
-              return await this.fileHandle.getFile();
+              try {
+                await this.writable.close();
+                return await this.fileHandle.getFile();
+              } catch (error) {
+                try { await this.writable.abort(); } catch (_) {}
+                try { await directory.removeEntry(fileName); } catch (_) {}
+                throw error;
+              }
             },
             abort: async function () {
               try { await this.writable.abort(); } catch (_) {}
