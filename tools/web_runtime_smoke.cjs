@@ -201,7 +201,8 @@ async function run() {
     );
     const inspectionTarget = page.locator("#inspection-target");
     await inspectionTarget.selectOption("1");
-    const selectedFacility = await inspectionTarget.locator("option:checked").innerText();
+    const selectedFacility = await inspectionTarget.locator("option:checked")
+      .getAttribute("data-facility-id");
     await page.getByRole("button", { name: "정찰 임무 시작" }).click();
     await page.waitForFunction(
       () => document.querySelector("#web-eo-recording")?.textContent

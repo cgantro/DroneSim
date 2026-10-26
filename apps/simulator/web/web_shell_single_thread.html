@@ -204,6 +204,7 @@
       window.addDroneSimInspectionTarget = function (index, facilityId, zoneId) {
         var option = document.createElement("option");
         option.value = String(index);
+        option.dataset.facilityId = facilityId;
         option.textContent = "촬영 위치 " + (eoInspectionTargets.length + 1);
         document.querySelector("#inspection-target").add(option);
         eoInspectionTargets.push({
