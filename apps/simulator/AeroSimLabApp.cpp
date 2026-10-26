@@ -99,7 +99,7 @@ glm::dvec3 ReadPlanVector(const nlohmann::json& value, std::string_view field)
     if (!value.is_array() || value.size() != 3)
         throw std::runtime_error(std::string(field) + "은 숫자 세 개가 필요합니다.");
     glm::dvec3 result;
-    for (std::size_t axis = 0; axis < 3; ++axis)
+    for (int axis = 0; axis < 3; ++axis)
     {
         if (!value[axis].is_number())
             throw std::runtime_error(std::string(field) + "에 숫자가 아닌 값이 있습니다.");
