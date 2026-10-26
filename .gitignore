@@ -69,3 +69,6 @@ __pycache__/
 # become repository data.
 .env
 graphify-out
+
+# 원본 공간정보는 크기 때문에 로컬에서 보관하고, 실행용 자료만 관리한다.
+/assets/maps/tancheon/source/
