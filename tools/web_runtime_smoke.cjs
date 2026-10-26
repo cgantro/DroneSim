@@ -226,7 +226,7 @@ async function run() {
     );
 
     const videoDownloadPromise = page.waitForEvent("download");
-    await page.getByRole("link", { name: "영상 내려받기" }).click();
+    await page.getByRole("link", { name: "영상 내려받기", exact: true }).click();
     const videoDownload = await videoDownloadPromise;
     if (!videoDownload.suggestedFilename().endsWith(".webm"))
       throw new Error(`영상 파일 형식이 WebM이 아닙니다: ${videoDownload.suggestedFilename()}`);
