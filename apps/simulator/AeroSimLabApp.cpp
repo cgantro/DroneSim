@@ -1129,16 +1129,27 @@ void AeroSimLabApp::RenderFrame()
     renderer_->Resize(width, height);
     const int observerWidth = width * 2 / 3;
     const int cameraWidth = width - observerWidth;
+    const auto& camera = simulation_.Camera();
+    const int cameraHeight = std::min(height,
+        cameraWidth * static_cast<int>(camera.model.imageHeightPixels)
+            / static_cast<int>(camera.model.imageWidthPixels));
+    const int cameraBottom = (height - cameraHeight) / 2;
+    const int cameraTop = height - cameraBottom - cameraHeight;
     UpdateObserverCamera(observerWidth, height);
-    UpdateEoCamera(cameraWidth, height);
+    UpdateEoCamera(cameraWidth, cameraHeight);
     renderer_->BeginFrame();
     renderer_->SetSceneViewport(0, 0, observerWidth, height);
     DrawWorld(observerCamera_->GetViewMatrix(), observerCamera_->GetProjectionMatrix(),
         observerCamera_->GetPosition(), true);
-    renderer_->SetSceneViewport(observerWidth, 0, cameraWidth, height);
+    renderer_->SetSceneViewport(observerWidth, cameraBottom, cameraWidth, cameraHeight);
     DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
         eoCamera_->GetPosition(), false);
     renderer_->EndFrame();
+    EM_ASM({
+        if (window.setDroneSimEoViewport) {
+            window.setDroneSimEoViewport($0, $1, $2, $3);
+        }
+    }, observerWidth, cameraTop, cameraWidth, cameraHeight);
 #else
     if (hud_)
     {

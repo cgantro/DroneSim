@@ -10,8 +10,8 @@
       #sim-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); min-height: 0; gap: 8px; }
       .view-panel { min-width: 0; min-height: 0; overflow: hidden; background: #19232c; border: 1px solid #34434d; border-radius: 8px; }
       #scene-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr); }
-      #scene-panel canvas { display: block; width: 100%; height: 100%; outline: none; }
-      #camera-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr); }
+      #scene-panel canvas { display: block; width: 150%; max-width: none; height: 100%; outline: none; }
+      #camera-panel { display: grid; width: 100%; height: auto; aspect-ratio: 1.1; align-self: end; grid-template-rows: 38px minmax(0, 1fr); }
       .panel-title { display: flex; align-items: center; padding: 0 12px; color: #dce6eb; border-bottom: 1px solid #34434d; font-weight: 650; }
       #web-eo-live { display: grid; grid-template-rows: 30px minmax(0, 1fr); min-height: 0; padding: 8px; gap: 4px; }
       #web-eo-live-status { color: #cbd5d9; }
@@ -19,26 +19,27 @@
       #startup-status { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 24px; color: #e5e7eb; background: #141719; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
       #startup-status[hidden] { display: none; }
       #startup-message { max-width: 560px; }
-      #web-gcs { min-height: 0; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr) minmax(190px, 1fr); align-items: center; gap: 12px; padding: 10px 12px; color: #f3f4f6; background: #19232c; border: 1px solid #34434d; border-radius: 8px; overflow: auto; font: 13px/1.4 system-ui, sans-serif; }
+      #web-gcs { min-height: 0; display: grid; grid-template-columns: minmax(160px, 0.7fr) minmax(220px, 1fr) minmax(420px, 1.8fr); align-items: center; gap: 12px; padding: 10px 12px; color: #f3f4f6; background: #19232c; border: 1px solid #34434d; border-radius: 8px; overflow: hidden; font: 13px/1.4 system-ui, sans-serif; }
       #web-gcs-status { min-width: 250px; }
       #web-gcs-status strong { display: block; font-size: 14px; }
       #web-gcs-status span { color: #cbd5d9; }
-      #web-gcs-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
-      #web-gcs button { min-width: 42px; min-height: 38px; padding: 6px 10px; color: #f8fafc; background: #34434a; border: 1px solid #66777e; border-radius: 6px; font: inherit; touch-action: none; }
+      #web-gcs-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; gap: 5px; }
+      #web-gcs button { min-width: 0; min-height: 34px; padding: 4px 6px; color: #f8fafc; background: #34434a; border: 1px solid #66777e; border-radius: 6px; font: inherit; font-size: 12px; white-space: nowrap; touch-action: none; }
       #web-gcs button:hover:not(:disabled) { background: #46616b; }
       #web-gcs button:disabled { opacity: .55; }
       #web-gcs [data-command="0"] { background: #176b50; }
       #web-gcs [data-command="2"] { background: #8c3c3c; }
       #web-gcs [data-start-inspection] { background: #315f87; }
-      #web-gcs [data-inspection-target] { min-height: 38px; padding: 6px 10px; color: #f8fafc; background: #26343a; border: 1px solid #66777e; border-radius: 6px; font: inherit; }
+      #web-gcs [data-inspection-target] { min-width: 0; min-height: 34px; padding: 4px 6px; color: #f8fafc; background: #26343a; border: 1px solid #66777e; border-radius: 6px; font: inherit; }
+      #web-gcs-controls [data-start-inspection] { grid-column: span 2; }
       #web-eo-recording { display: grid; gap: 5px; min-width: 0; color: #d4dde0; }
       #web-eo-recording-controls { display: flex; flex-wrap: wrap; gap: 6px; }
       #web-eo-zone-downloads { display: grid; gap: 4px; }
       #web-eo-saved-files { display: grid; gap: 4px; max-height: 96px; overflow: auto; }
       #web-eo-recording a { color: #9fd5ff; }
       #web-eo-recording a[hidden] { display: none; }
-      @media (max-width: 850px) { body { grid-template-rows: minmax(0, 1fr) minmax(210px, 34vh); } #sim-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(190px, 1fr); } #web-gcs { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); } #web-eo-recording { display: none; } }
-      @media (max-width: 560px) { body { grid-template-rows: minmax(0, 1fr) 240px; } #sim-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); } #camera-panel { grid-template-columns: 74px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } .panel-title { writing-mode: vertical-rl; justify-content: center; padding: 6px; } #web-eo-live { grid-template-rows: minmax(0, 1fr); } #web-eo-live-status { display: none; } #web-gcs { grid-template-columns: minmax(0, 1fr); gap: 6px; } #web-gcs-status { min-width: 0; } }
+      @media (max-width: 850px) { body { grid-template-rows: minmax(0, 1fr) minmax(240px, 38vh); } #sim-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(190px, 1fr); } #web-gcs { grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr); } #web-gcs-controls { grid-column: 1 / -1; grid-template-columns: repeat(7, minmax(0, 1fr)); } #web-eo-recording { display: none; } }
+      @media (max-width: 560px) { body { grid-template-rows: minmax(0, 1fr) minmax(270px, 45vh); } #sim-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); } #camera-panel { width: auto; height: auto; aspect-ratio: auto; align-self: stretch; grid-template-columns: 74px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } .panel-title { writing-mode: vertical-rl; justify-content: center; padding: 6px; } #web-eo-live { grid-template-rows: minmax(0, 1fr); } #web-eo-live-status { display: none; } #web-gcs { grid-template-columns: minmax(0, 1fr); gap: 6px; } #web-gcs-status { min-width: 0; } #web-gcs-controls { grid-column: auto; grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     </style>
   </head>
   <body>
@@ -113,6 +114,7 @@
       var eoRecorderVideoTrack = null;
       var eoStreamCanvas = document.createElement("canvas");
       var eoStreamContext = eoStreamCanvas.getContext("2d");
+      var eoViewport = null;
       var eoCanvasFrame = 0;
       var eoWebRtcStream = null;
       var eoWebRtcSender = null;
@@ -163,6 +165,10 @@
           closeEoWebRtc();
           setEoLiveStatus("EO 영상 · WebRTC 연결 실패: " + error.message);
         });
+      };
+
+      window.setDroneSimEoViewport = function (x, y, width, height) {
+        eoViewport = { x: x, y: y, width: width, height: height };
       };
 
       window.clearDroneSimInspectionTargets = function () {
@@ -573,17 +579,19 @@
       }
 
       function copyEoViewport() {
-        if (Module.canvas && eoStreamContext) {
+        if (Module.canvas && eoStreamContext && eoViewport
+            && eoViewport.width > 0 && eoViewport.height > 0) {
           var source = Module.canvas;
-          var sourceX = Math.floor(source.width * 2 / 3);
-          var sourceWidth = source.width - sourceX;
-          if (sourceWidth > 0 && source.height > 0) {
-            if (eoStreamCanvas.width !== sourceWidth || eoStreamCanvas.height !== source.height) {
-              eoStreamCanvas.width = sourceWidth;
-              eoStreamCanvas.height = source.height;
-            }
-            eoStreamContext.drawImage(source, sourceX, 0, sourceWidth, source.height,
-              0, 0, sourceWidth, source.height);
+          if (eoStreamCanvas.width !== eoViewport.width
+              || eoStreamCanvas.height !== eoViewport.height) {
+            eoStreamCanvas.width = eoViewport.width;
+            eoStreamCanvas.height = eoViewport.height;
+          }
+          if (eoViewport.x + eoViewport.width <= source.width
+              && eoViewport.y + eoViewport.height <= source.height) {
+            eoStreamContext.drawImage(source,
+              eoViewport.x, eoViewport.y, eoViewport.width, eoViewport.height,
+              0, 0, eoViewport.width, eoViewport.height);
           }
         }
         eoCanvasFrame = window.requestAnimationFrame(copyEoViewport);
@@ -825,7 +833,7 @@
           + "<span>위치 " + x.toFixed(1) + ", " + y.toFixed(1) + ", " + z.toFixed(1)
           + " m · 속도 " + speed.toFixed(1) + " m/s · EO "
           + (cameraActive ? "켜짐" : "꺼짐") + "</span>"
-          + "<span>웹 비행 모형: 운동학 계산 · 지형·건물 충돌 적용</span>"
+          + "<span>웹 비행 모형: 간이 운동학 · 지형·건물 접촉 적용</span>"
           + "<span>카메라 목표 화면 확인: "
           + (captureLabels[captureAssessment] || captureLabels.unknown)
           + " · 파손 여부는 사람이 영상으로 확인</span>"
