@@ -562,6 +562,14 @@ ScenarioResult::MissionTask ReadMissionTask(
     task.startTick = ReadUnsigned(Required(taskValue, "start_tick"), "start_tick");
     task.deadlineTick = ReadUnsigned(
         Required(taskValue, "deadline_tick"), "deadline_tick");
+    if (taskValue.contains("max_capture_retries"))
+    {
+        const std::uint64_t retryCount = ReadUnsigned(
+            taskValue["max_capture_retries"], "max_capture_retries");
+        if (retryCount > 10U)
+            throw std::invalid_argument("max_capture_retries는 0부터 10 사이여야 합니다.");
+        task.maximumCaptureRetries = static_cast<std::uint32_t>(retryCount);
+    }
     task.toleranceMeters = ReadFiniteNumber(
         Required(taskValue, "tolerance_meters"), "tolerance_meters");
     const auto inspectionSurface = taskValue.find("inspection_surface");
@@ -581,6 +589,9 @@ ScenarioResult::MissionTask ReadMissionTask(
         if (!inspectionZoneIds.insert(task.inspectionZoneId).second)
             throw std::invalid_argument("inspection_zone_id는 임무 안에서 고유해야 합니다.");
     }
+    if (task.maximumCaptureRetries > 0U && !task.inspectionSurface)
+        throw std::invalid_argument(
+            "max_capture_retries를 쓰려면 inspection_surface가 필요합니다.");
     const auto inspectionOccluders = taskValue.find("inspection_occluders");
     if (inspectionOccluders != taskValue.end())
         task.inspectionOccluders = ReadInspectionOccluders(*inspectionOccluders);

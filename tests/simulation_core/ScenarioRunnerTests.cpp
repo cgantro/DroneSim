@@ -310,6 +310,30 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
     EXPECT_FALSE(incomplete.mission->tasks[0].firstGeometryCaptureTick.has_value());
     EXPECT_EQ(incomplete.mission->tasks[0].lastCaptureAssessment,
         CaptureAssessment::CameraUnavailable);
+
+    nlohmann::json recoveredCamera = withCameraDisabled;
+    recoveredCamera["ticks"] = 220;
+    recoveredCamera["mission"]["tasks"].erase(1);
+    recoveredCamera["mission"]["tasks"][0]["max_capture_retries"] = 1;
+    recoveredCamera["drones"][1]["initial_position_meters"] = {0.0, 1.0, 0.0};
+    recoveredCamera["expected"]["drones"][1]["position_meters"] = {0.0, 0.0, 1.5};
+    const ScenarioResult retried = RunScenario(recoveredCamera.dump());
+    ASSERT_TRUE(retried.passed)
+        << (retried.issues.empty() ? "" : retried.issues.front());
+    ASSERT_TRUE(retried.mission.has_value());
+    const auto& retriedTask = retried.mission->tasks[0];
+    EXPECT_TRUE(retriedTask.completed);
+    EXPECT_EQ(retriedTask.captureRetryCount, 1U);
+    EXPECT_EQ(retriedTask.maximumCaptureRetries, 1U);
+    EXPECT_TRUE(retriedTask.firstGeometryCaptureTick.has_value());
+    EXPECT_EQ(retriedTask.assignmentHistory.size(), 2U);
+    EXPECT_EQ(retriedTask.assignmentHistory[0], "east");
+    EXPECT_EQ(retriedTask.assignmentHistory[1], "north");
+
+    nlohmann::json excessiveCaptureRetries = recoveredCamera;
+    excessiveCaptureRetries["mission"]["tasks"][0]["max_capture_retries"] = 11;
+    EXPECT_THROW(static_cast<void>(RunScenario(excessiveCaptureRetries.dump())),
+        std::invalid_argument);
 }
 
 void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()

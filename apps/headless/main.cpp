@@ -137,6 +137,8 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                 {"initial_drone", task.initialDroneName},
                 {"assignment_history", task.assignmentHistory},
                 {"reassignment_count", task.reassignmentCount},
+                {"capture_retry_count", task.captureRetryCount},
+                {"max_capture_retries", task.maximumCaptureRetries},
                 {"target_position_meters", {
                     task.targetPositionMeters.x,
                     task.targetPositionMeters.y,

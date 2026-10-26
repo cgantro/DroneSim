@@ -484,13 +484,15 @@ void UpdateMissionCommands(
         return;
 
     const auto findNearestDrone = [&](
-        const glm::dvec3& target, bool allowBusy) -> std::optional<std::string>
+        const glm::dvec3& target,
+        bool allowBusy,
+        std::string_view excludedDrone) -> std::optional<std::string>
     {
         std::optional<std::string> nearest;
         double nearestDistanceSquared = std::numeric_limits<double>::infinity();
         const auto considerDrone = [&](const std::string& droneName)
         {
-            if (!IsConnected(observations, droneName))
+            if (droneName == excludedDrone || !IsConnected(observations, droneName))
                 return;
             if (simulation.HasBattery(droneIds.at(droneName))
                 && simulation.Battery(droneIds.at(droneName)).IsReturningForLowBattery())
@@ -547,7 +549,7 @@ void UpdateMissionCommands(
             + " 드론의 완료 보고를 받지 못해 미확정으로 남았습니다.");
 
         const std::optional<std::string> replacement =
-            findNearestDrone(CurrentWaypoint(task), true);
+            findNearestDrone(CurrentWaypoint(task), true, {});
         if (!replacement)
             continue;
 
@@ -580,8 +582,14 @@ void UpdateMissionCommands(
         if (task.completed || task.failed || !task.droneName.empty()
             || tick < task.startTick)
             continue;
-        const std::optional<std::string> availableDrone =
-            findNearestDrone(CurrentWaypoint(task), false);
+        std::optional<std::string> availableDrone;
+        if (!task.lastCaptureAttemptDroneName.empty())
+        {
+            availableDrone = findNearestDrone(CurrentWaypoint(task), false,
+                task.lastCaptureAttemptDroneName);
+        }
+        if (!availableDrone)
+            availableDrone = findNearestDrone(CurrentWaypoint(task), false, {});
         if (!availableDrone)
             continue;
         task.droneName = *availableDrone;
@@ -913,6 +921,7 @@ void ApplyCameraEvents(
 
 void UpdateMissionResults(
     std::uint64_t tick,
+    std::uint64_t tickCount,
     std::optional<ScenarioResult::Mission>& mission,
     const SimulationCore& simulation,
     const DroneIds& droneIds,
@@ -973,6 +982,28 @@ void UpdateMissionResults(
         }
         else if (tick >= task.deadlineTick)
         {
+            if (task.inspectionSurface && !task.firstGeometryCaptureTick
+                && task.captureRetryCount < task.maximumCaptureRetries
+                && tick + 1U < tickCount)
+            {
+                const std::uint64_t attemptDuration =
+                    task.deadlineTick - task.startTick;
+                ++task.captureRetryCount;
+                task.lastCaptureAttemptDroneName = task.droneName;
+                task.droneName.clear();
+                task.started = false;
+                task.startTick = tick + 1U;
+                task.deadlineTick = task.startTick + std::min(
+                    attemptDuration, tickCount - 1U - task.startTick);
+                task.currentWaypointIndex = 0U;
+                task.firstGeometryCaptureTick.reset();
+                task.lastCaptureAssessment = CaptureAssessment::NoNewFrame;
+                result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
+                    + task.name + "' 점검면 촬영을 확인하지 못해 구역을 다시 배정합니다. 재시도 "
+                    + std::to_string(task.captureRetryCount) + "/"
+                    + std::to_string(task.maximumCaptureRetries) + ".");
+                continue;
+            }
             task.failed = true;
             if (task.inspectionSurface && !task.firstGeometryCaptureTick)
             {
@@ -1325,8 +1356,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
         }
         RecordMinimumDroneSeparation(
             definition, simulation, droneIds, dronePositionsMeters, result);
-        UpdateMissionResults(tick, result.mission, simulation, droneIds,
-            observations, result);
+        UpdateMissionResults(tick, definition.tickCount, result.mission,
+            simulation, droneIds, observations, result);
         const std::uint64_t completedTick = tick + 1;
         if (definition.trajectorySampleEveryTicks
             && (completedTick % *definition.trajectorySampleEveryTicks == 0
