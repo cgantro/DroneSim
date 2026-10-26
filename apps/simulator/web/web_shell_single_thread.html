@@ -25,7 +25,12 @@
       #web-gcs-status strong { display: block; font-size: 14px; }
       #web-gcs-status span { color: #cbd5d9; }
       #web-gcs { min-height: 0; display: grid; grid-template-columns: minmax(240px, 0.8fr) minmax(0, 2fr); align-items: stretch; gap: 14px; padding: 10px 12px; color: #f3f4f6; background: #19232c; border: 1px solid #34434d; border-radius: 8px; overflow: hidden; font: 13px/1.4 system-ui, sans-serif; }
-      #web-gcs-controls { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-content: center; align-items: center; gap: 6px; }
+      #web-gcs-controls { display: grid; grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1.7fr); align-content: center; gap: 12px; }
+      .control-group { display: grid; align-content: center; gap: 6px; min-width: 0; }
+      .control-group h3 { margin: 0; color: #cbd5d9; font-size: 12px; font-weight: 650; }
+      #inspection-target-label { color: #cbd5d9; font-size: 12px; }
+      #mission-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+      #flight-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
       #web-gcs button { min-width: 0; min-height: 34px; padding: 4px 6px; color: #f8fafc; background: #34434a; border: 1px solid #66777e; border-radius: 6px; font: inherit; font-size: 12px; white-space: nowrap; touch-action: none; }
       #web-gcs button:hover:not(:disabled) { background: #46616b; }
       #web-gcs button:disabled { opacity: .55; }
@@ -41,8 +46,8 @@
       #web-eo-saved-files details > summary { color: #cbd5d9; cursor: pointer; }
       #web-eo-recording a { color: #9fd5ff; }
       #web-eo-recording a[hidden] { display: none; }
-      @media (max-width: 850px) { body { grid-template-rows: minmax(0, 1fr) minmax(240px, 38vh); } #sim-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); } #web-gcs { grid-template-columns: minmax(0, 1fr); } #web-gcs-controls { grid-template-columns: repeat(5, minmax(0, 1fr)); } #web-eo-recording { display: none; } }
-      @media (max-width: 560px) { body { grid-template-rows: minmax(0, 1fr) minmax(270px, 45vh); } #sim-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); } #right-rail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } #flight-status-panel .panel-title { writing-mode: horizontal-tb; } #camera-panel { width: auto; height: auto; aspect-ratio: auto; align-self: stretch; grid-template-columns: 74px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } #camera-panel .panel-title { writing-mode: vertical-rl; justify-content: center; padding: 6px; } #web-eo-live { grid-template-rows: minmax(0, 1fr); } #web-eo-live-status { display: none; } #web-gcs { grid-template-columns: minmax(0, 1fr); gap: 6px; } #web-gcs-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+      @media (max-width: 850px) { body { grid-template-rows: minmax(0, 1fr) minmax(240px, 38vh); } #sim-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); } #web-gcs { grid-template-columns: minmax(0, 1fr); } #web-gcs-controls { grid-template-columns: minmax(0, 1fr); gap: 8px; } #web-eo-recording { display: none; } }
+      @media (max-width: 560px) { body { grid-template-rows: minmax(0, 1fr) minmax(270px, 45vh); } #sim-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); } #right-rail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } #flight-status-panel .panel-title { writing-mode: horizontal-tb; } #camera-panel { width: auto; height: auto; aspect-ratio: auto; align-self: stretch; grid-template-columns: 74px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); } #camera-panel .panel-title { writing-mode: vertical-rl; justify-content: center; padding: 6px; } #web-eo-live { grid-template-rows: minmax(0, 1fr); } #web-eo-live-status { display: none; } #web-gcs { grid-template-columns: minmax(0, 1fr); gap: 6px; } #mission-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); } #flight-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     </style>
   </head>
   <body>
@@ -84,26 +89,36 @@
         </div>
       </div>
       <div id="web-gcs-controls">
-        <label for="inspection-target">영상 촬영 위치</label>
-        <select id="inspection-target" data-inspection-target disabled>
-          <option value="-1">모든 시험 구역</option>
-        </select>
-        <button type="button" data-start-inspection disabled>정찰 임무 시작</button>
-        <button type="button" data-pause-inspection disabled
-            title="이동·카메라 정렬 중에만 가능하며, 영상 기록은 계속됩니다.">일시 정지</button>
-        <button type="button" data-resume-inspection disabled>재개</button>
-        <button type="button" data-cancel-inspection disabled>임무 중단</button>
-        <button type="button" data-command="0" disabled>이륙</button>
-        <button type="button" data-command="1" disabled>정지</button>
-        <button type="button" data-axis="forward:1" disabled>전진</button>
-        <button type="button" data-axis="forward:-1" disabled>후진</button>
-        <button type="button" data-axis="right:-1" disabled>좌측</button>
-        <button type="button" data-axis="right:1" disabled>우측</button>
-        <button type="button" data-axis="vertical:1" disabled>상승</button>
-        <button type="button" data-axis="vertical:-1" disabled>하강</button>
-        <button type="button" data-axis="yaw:-1" disabled>좌회전</button>
-        <button type="button" data-axis="yaw:1" disabled>우회전</button>
-        <button type="button" data-command="2" disabled>착륙</button>
+        <section class="control-group" aria-label="영상 정찰 임무">
+          <h3>영상 정찰 임무</h3>
+          <label id="inspection-target-label" for="inspection-target">촬영 위치</label>
+          <select id="inspection-target" data-inspection-target disabled>
+            <option value="-1">모든 촬영 위치</option>
+          </select>
+          <div id="mission-actions">
+            <button type="button" data-start-inspection disabled>정찰 임무 시작</button>
+            <button type="button" data-pause-inspection disabled
+                title="이동·카메라 정렬 중에만 가능하며, 영상 기록은 계속됩니다.">일시 정지</button>
+            <button type="button" data-resume-inspection disabled>재개</button>
+            <button type="button" data-cancel-inspection disabled>임무 중단</button>
+          </div>
+        </section>
+        <section class="control-group" aria-label="수동 비행 조작">
+          <h3>수동 비행 조작</h3>
+          <div id="flight-actions">
+            <button type="button" data-command="0" disabled>이륙</button>
+            <button type="button" data-command="1" disabled>정지</button>
+            <button type="button" data-command="2" disabled>착륙</button>
+            <button type="button" data-axis="forward:1" disabled>전진</button>
+            <button type="button" data-axis="forward:-1" disabled>후진</button>
+            <button type="button" data-axis="right:-1" disabled>좌측</button>
+            <button type="button" data-axis="right:1" disabled>우측</button>
+            <button type="button" data-axis="vertical:1" disabled>상승</button>
+            <button type="button" data-axis="vertical:-1" disabled>하강</button>
+            <button type="button" data-axis="yaw:-1" disabled>좌회전</button>
+            <button type="button" data-axis="yaw:1" disabled>우회전</button>
+          </div>
+        </section>
       </div>
     </section>
     <script>
@@ -189,7 +204,7 @@
       window.addDroneSimInspectionTarget = function (index, facilityId, zoneId) {
         var option = document.createElement("option");
         option.value = String(index);
-        option.textContent = "OSM 건물 " + facilityId + " · 외벽 시험 구역";
+        option.textContent = "촬영 위치 " + (eoInspectionTargets.length + 1);
         document.querySelector("#inspection-target").add(option);
         eoInspectionTargets.push({
           index: Number(index), facility_id: facilityId, inspection_zone_id: zoneId
