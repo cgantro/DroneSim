@@ -202,6 +202,26 @@ void Verify_KinematicDroneKeepsItsBodyAboveTerrain()
     hillside.AdvanceOneTick();
 
     EXPECT_NEAR(hillside.State().positionMeters.z, 10.63, 1.0e-6);
+
+    terrain::TerrainGrid landingGround;
+    landingGround.sampleCount = 3U;
+    landingGround.spacingXMeters = 1.0F;
+    landingGround.spacingYMeters = 1.0F;
+    landingGround.heightOffsetsMeters.assign(9U, 0.0F);
+
+    SimulationCore landing{SimulationDynamics::Kinematic};
+    landing.SetTerrain(std::move(landingGround));
+    DroneState descending;
+    descending.positionMeters = {0.0, 0.0, 0.20};
+    descending.velocityMetersPerSecond = {0.0, 0.0, -1.0};
+    descending.mode = FlightMode::Landing;
+    landing.SetInitialState(landing.PrimaryDroneId(), descending);
+
+    for (int tick = 0; tick < 30; ++tick)
+        landing.AdvanceOneTick();
+
+    EXPECT_EQ(landing.State().mode, FlightMode::Grounded);
+    EXPECT_NEAR(landing.State().positionMeters.z, 0.12, 1.0e-9);
 }
 
 void Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers()

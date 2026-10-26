@@ -187,6 +187,14 @@ struct SimulationCore::EcsStorage
                     state.velocityMetersPerSecond.z = 0.0;
                 if (control.targetVelocityMetersPerSecond.z < 0.0)
                     control.targetVelocityMetersPerSecond.z = 0.0;
+                if (state.mode == FlightMode::Landing)
+                {
+                    // 충돌 형상이 지면에서 기체 중심을 띄우므로, 이 접촉을 착륙 완료로 본다.
+                    state.velocityMetersPerSecond = glm::dvec3{0.0};
+                    control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
+                    control.commandedYawRateRadiansPerSecond = 0.0;
+                    state.mode = FlightMode::Grounded;
+                }
             }
         }
 
