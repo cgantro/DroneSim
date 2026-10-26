@@ -215,9 +215,12 @@
       var eoZoneRecorderChunks = [];
       var eoZoneRecordings = [];
       var eoZoneRecordingPromises = [];
+      var eoCaptureImages = [];
+      var eoCaptureImagePromises = [];
       var eoActiveZoneRecording = null;
       var eoTelemetrySamples = [];
       var eoCaptureEvents = [];
+      var latestEoCaptureMetadata = null;
       var eoExpectedZones = [];
       var eoInspectionTargets = [];
       var eoRecordingStartedAt = 0;
@@ -290,7 +293,10 @@
         eoCaptureEvents = [];
         eoZoneRecordings = [];
         eoZoneRecordingPromises = [];
+        eoCaptureImages = [];
+        eoCaptureImagePromises = [];
         eoActiveZoneRecording = null;
+        latestEoCaptureMetadata = null;
         eoExpectedZones = eoInspectionTargets
           .filter(function (target) { return targetIndex < 0 || target.index === targetIndex; })
           .map(function (target) {
@@ -404,6 +410,82 @@
         return savedRecording;
       }
 
+      async function saveInspectionCaptureImage(captureEvent, metadata) {
+        var imageRecord = {
+          facility_id: captureEvent.facility_id,
+          inspection_zone_id: captureEvent.inspection_zone_id,
+          simulation_tick: captureEvent.simulation_tick,
+          simulation_time_seconds: captureEvent.simulation_time_seconds,
+          recording_elapsed_milliseconds: captureEvent.recording_elapsed_milliseconds,
+          metadata_simulation_tick: metadata ? metadata.simulation_tick : null,
+          drone_position_meters: metadata ? metadata.drone_position_meters : null,
+          camera_position_meters: metadata ? metadata.camera_position_meters : null,
+          camera_orientation_xyzw: metadata ? metadata.camera_orientation_xyzw : null,
+          capture_assessment: metadata ? metadata.capture_assessment : null
+        };
+
+        try {
+          if (!eoStreamCanvas || eoStreamCanvas.width === 0 || eoStreamCanvas.height === 0)
+            throw new Error("EO 화면이 비어 있습니다.");
+          var imageWidth = eoStreamCanvas.width;
+          var imageHeight = eoStreamCanvas.height;
+          var imageBlob = await new Promise(function (resolve, reject) {
+            eoStreamCanvas.toBlob(function (blob) {
+              if (blob)
+                resolve(blob);
+              else
+                reject(new Error("PNG 사진을 만들지 못했습니다."));
+            }, "image/png");
+          });
+          if (imageBlob.size === 0)
+            throw new Error("사진 파일에 영상 정보가 없습니다.");
+
+          var zoneName = captureEvent.inspection_zone_id
+            .replace(/[^a-zA-Z0-9_-]+/g, "-");
+          var imageName = "DroneSim_Image_" + zoneName + "_"
+            + recordingTimestamp() + ".png";
+          var sourceChecksum = await sha256Hex(imageBlob);
+          var storedImage = await saveRecordingToBrowser(imageName, imageBlob);
+          var checksum = await sha256Hex(storedImage.file);
+          var storageMatchesCapture = storedImage.saved
+            && sourceChecksum !== null && checksum === sourceChecksum;
+          Object.assign(imageRecord, {
+            collection_state: "CAPTURED",
+            storage_state: storedImage.saved ? "SAVED" : "CAPTURED",
+            storage_backend: storedImage.saved ? "OPFS" : "다운로드 전용",
+            verification_state: storageMatchesCapture ? "VERIFIED" : "UNVERIFIED",
+            download_ready: true,
+            image_file: imageName,
+            image_mime_type: imageBlob.type || "image/png",
+            image_width: imageWidth,
+            image_height: imageHeight,
+            image_bytes: storedImage.file.size,
+            image_checksum_algorithm: checksum ? "SHA-256" : null,
+            image_checksum: checksum,
+            image_storage_matches_capture: storageMatchesCapture
+          });
+
+          var link = document.createElement("a");
+          link.href = createDownloadUrl(storedImage.file);
+          link.download = imageName;
+          link.dataset.zoneImage = "true";
+          link.textContent = captureEvent.inspection_zone_id + " 사진 내려받기";
+          document.getElementById("web-eo-zone-downloads").appendChild(link);
+        } catch (error) {
+          Object.assign(imageRecord, {
+            collection_state: "FAILED",
+            storage_state: "FAILED",
+            verification_state: "UNVERIFIED",
+            download_ready: false,
+            failure_reason: error.message
+          });
+          setEoRecordingStatus("정지 사진 저장 실패: " + error.message);
+        }
+
+        eoCaptureImages.push(imageRecord);
+        return imageRecord;
+      }
+
       window.recordDroneSimCapturedZone = function (facilityId, zoneId, simulationTick) {
         if (!eoRecorder || eoCaptureEvents.some(function (event) {
           return event.inspection_zone_id === zoneId;
@@ -418,9 +500,21 @@
             && typeof eoRecorderVideoTrack.requestFrame === "function"),
           recording_elapsed_milliseconds: Math.round(performance.now() - eoRecordingStartedAt)
         };
+        var captureMetadata = latestEoCaptureMetadata
+          && latestEoCaptureMetadata.inspection_zone_id === zoneId
+          ? latestEoCaptureMetadata : null;
         eoCaptureEvents.push(captureEvent);
         if (eoRecorderVideoTrack && typeof eoRecorderVideoTrack.requestFrame === "function")
           eoRecorderVideoTrack.requestFrame();
+        var imagePromise = saveInspectionCaptureImage(captureEvent, captureMetadata).then(
+          function (imageRecord) {
+            captureEvent.image_file = imageRecord.image_file || null;
+            captureEvent.image_storage_state = imageRecord.storage_state;
+            captureEvent.image_verification_state = imageRecord.verification_state;
+            captureEvent.image_download_ready = imageRecord.download_ready;
+            return imageRecord;
+          });
+        eoCaptureImagePromises.push(imagePromise);
         var zoneRecordingPromise = finishInspectionZoneRecording(captureEvent).then(
           function (zoneRecording) {
             captureEvent.collection_state = "CAPTURED";
@@ -564,6 +658,7 @@
       function savedFileLabel(file) {
         var name = file.name.toLowerCase();
         var kind = name.endsWith(".manifest.json") ? "촬영 기록"
+          : name.indexOf("_image_") >= 0 ? "정지 사진"
           : name.indexOf("_zone_") >= 0 ? "구역 영상" : "임무 영상";
         var savedAt = new Intl.DateTimeFormat("ko-KR", {
           month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"
@@ -791,6 +886,7 @@
           }));
         }
         await Promise.all(eoZoneRecordingPromises);
+        await Promise.all(eoCaptureImagePromises);
         var recorder = eoRecorder;
         eoRecorder = null;
         await new Promise(function (resolve) {
@@ -849,6 +945,19 @@
               && event.download_ready;
           });
         });
+        var missingZoneImages = eoExpectedZones.filter(function (zone) {
+          return !eoCaptureImages.some(function (image) {
+            return image.inspection_zone_id === zone.inspection_zone_id
+              && image.download_ready;
+          });
+        });
+        var verifiedZoneImages = eoExpectedZones.length > 0
+          && missingZoneImages.length === 0
+          && eoCaptureImages.length === eoExpectedZones.length
+          && eoCaptureImages.every(function (image) {
+            return image.storage_state === "SAVED"
+              && image.verification_state === "VERIFIED";
+          });
         var verifiedZoneVideos = eoExpectedZones.length > 0
           && missingZones.length === 0
           && missingZoneVideos.length === 0
@@ -858,15 +967,19 @@
               && recording.verification_state === "VERIFIED";
           });
         var mediaSaved = storedVideo.saved
+          && eoCaptureImages.length === eoExpectedZones.length
+          && eoCaptureImages.every(function (image) {
+            return image.storage_state === "SAVED";
+          })
           && eoZoneRecordings.length === eoExpectedZones.length
           && eoZoneRecordings.every(function (recording) {
             return recording.storage_state === "SAVED";
           });
         var manifest = {
-          format_version: 4,
+          format_version: 5,
           collection_state: "CAPTURED",
           verification_state: storageMatchesCapture && sha256 !== "계산할 수 없음"
-            && verifiedZoneVideos ? "VERIFIED" : "INCOMPLETE",
+            && verifiedZoneVideos && verifiedZoneImages ? "VERIFIED" : "INCOMPLETE",
           recording_source: "시뮬레이터 화면의 EO 시점 영역",
           video_file: videoName,
           video_mime_type: videoMimeType,
@@ -879,13 +992,19 @@
           mission_status: finalSample ? finalSample.mission_status : "기록 없음",
           expected_zones: eoExpectedZones,
           captured_zones: eoCaptureEvents,
+          captured_images: eoCaptureImages,
           zone_recordings: eoZoneRecordings,
           missing_zones: missingZones,
           missing_zone_videos: missingZoneVideos,
+          missing_zone_images: missingZoneImages,
           capture_summary: {
             expected_zone_count: eoExpectedZones.length,
             captured_zone_count: eoCaptureEvents.length,
-            missing_zone_count: missingZones.length
+            missing_zone_count: missingZones.length,
+            captured_image_count: eoCaptureImages.filter(function (image) {
+              return image.download_ready;
+            }).length,
+            missing_image_count: missingZoneImages.length
           },
           video_checksum_algorithm: sha256 === "계산할 수 없음" ? null : "SHA-256",
           video_checksum: sha256,
@@ -912,7 +1031,8 @@
           : "영상·기록을 내려받을 수 있습니다. ") + "구역 "
           + eoCaptureEvents.length + "/" + eoExpectedZones.length + "곳 촬영, 누락 "
           + missingZones.length + "곳 · 구역 영상 누락 " + missingZoneVideos.length
-          + "개 · 상태 표본 " + eoTelemetrySamples.length + "개");
+          + "개 · 정지 사진 " + (eoCaptureImages.length - missingZoneImages.length)
+          + "장 · 상태 표본 " + eoTelemetrySamples.length + "개");
         eoRecordingFinalizing = false;
       }
 
@@ -930,6 +1050,12 @@
           return false;
         }
         eoTelemetrySamples = [];
+        eoCaptureImages = [];
+        eoCaptureImagePromises = [];
+        eoCaptureEvents = [];
+        eoZoneRecordings = [];
+        eoZoneRecordingPromises = [];
+        latestEoCaptureMetadata = null;
         eoRecorderChunks = [];
         eoRecorderChunkChecksums = [];
         document.getElementById("web-eo-zone-downloads").replaceChildren();
@@ -1029,10 +1155,19 @@
           quaternionX, quaternionY, quaternionZ, quaternionW, facilityId, zoneId) {
         if (eoRecorder && latestGroundControlState) {
           var elapsedMilliseconds = performance.now() - eoRecordingStartedAt;
+          var state = latestGroundControlState;
+          latestEoCaptureMetadata = {
+            simulation_tick: state.simulationTick,
+            facility_id: facilityId,
+            inspection_zone_id: zoneId,
+            drone_position_meters: [state.x, state.y, state.z],
+            camera_position_meters: [cameraX, cameraY, cameraZ],
+            camera_orientation_xyzw: [quaternionX, quaternionY, quaternionZ, quaternionW],
+            capture_assessment: state.captureAssessment
+          };
           if (eoTelemetrySamples.length === 0
               || elapsedMilliseconds - eoLastTelemetrySampleAt >= 250) {
             eoLastTelemetrySampleAt = elapsedMilliseconds;
-            var state = latestGroundControlState;
             eoTelemetrySamples.push({
               recording_elapsed_milliseconds: Math.round(elapsedMilliseconds),
               simulation_tick: state.simulationTick,

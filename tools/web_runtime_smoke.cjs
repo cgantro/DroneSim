@@ -298,7 +298,7 @@ async function run() {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     const videoBytes = fs.readFileSync(videoPath);
     const videoHash = crypto.createHash("sha256").update(videoBytes).digest("hex");
-    if (manifest.format_version !== 4
+    if (manifest.format_version !== 5
         || manifest.collection_state !== "CAPTURED"
         || manifest.verification_state !== "VERIFIED"
         || manifest.storage_state !== "SAVED"
@@ -320,6 +320,12 @@ async function run() {
         || manifest.capture_summary?.missing_zone_count !== 0
         || !Array.isArray(manifest.zone_recordings)
         || manifest.zone_recordings.length !== 1
+        || !Array.isArray(manifest.captured_images)
+        || manifest.captured_images.length !== 1
+        || !Array.isArray(manifest.missing_zone_images)
+        || manifest.missing_zone_images.length !== 0
+        || manifest.capture_summary?.captured_image_count !== 1
+        || manifest.capture_summary?.missing_image_count !== 0
         || manifest.zone_recordings[0].collection_state !== "CAPTURED"
         || manifest.zone_recordings[0].storage_state !== "SAVED"
         || manifest.zone_recordings[0].storage_backend !== "OPFS"
@@ -341,6 +347,40 @@ async function run() {
         || capturedZone.download_ready !== true
         || !capturedZone.video_file)
       throw new Error("완료된 점검 구역의 실제 촬영 프레임 시각이 기록되지 않았습니다.");
+    const capturedImage = manifest.captured_images[0];
+    if (capturedImage.inspection_zone_id !== capturedZone.inspection_zone_id
+        || capturedImage.collection_state !== "CAPTURED"
+        || capturedImage.storage_state !== "SAVED"
+        || capturedImage.storage_backend !== "OPFS"
+        || capturedImage.verification_state !== "VERIFIED"
+        || capturedImage.image_storage_matches_capture !== true
+        || capturedImage.download_ready !== true
+        || !capturedImage.image_file.endsWith(".png")
+        || capturedImage.image_bytes <= 100
+        || capturedImage.image_width <= 0 || capturedImage.image_height <= 0
+        || !capturedImage.image_checksum
+        || !Array.isArray(capturedImage.camera_position_meters)
+        || !Array.isArray(capturedImage.camera_orientation_xyzw))
+      throw new Error("정지 사진의 저장 상태·크기·카메라 정보가 올바르지 않습니다.");
+    if (capturedZone.image_file !== capturedImage.image_file
+        || capturedZone.image_storage_state !== "SAVED"
+        || capturedZone.image_verification_state !== "VERIFIED"
+        || capturedZone.image_download_ready !== true)
+      throw new Error("촬영 지점과 정지 사진의 연결 정보가 맞지 않습니다.");
+    const zoneImagePromise = page.waitForEvent("download");
+    await page.locator("#web-eo-zone-downloads a[data-zone-image]").click();
+    const zoneImageDownload = await zoneImagePromise;
+    const zoneImagePath = await zoneImageDownload.path();
+    if (!zoneImagePath || !zoneImageDownload.suggestedFilename().endsWith(".png"))
+      throw new Error("촬영 지점의 정지 사진을 내려받지 못했습니다.");
+    const zoneImageBytes = fs.readFileSync(zoneImagePath);
+    const zoneImageHash = crypto.createHash("sha256").update(zoneImageBytes).digest("hex");
+    if (zoneImageBytes.length !== capturedImage.image_bytes
+        || zoneImageHash !== capturedImage.image_checksum
+        || zoneImageBytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a"
+        || zoneImageBytes.readUInt32BE(16) !== capturedImage.image_width
+        || zoneImageBytes.readUInt32BE(20) !== capturedImage.image_height)
+      throw new Error("내려받은 PNG 사진과 기록의 크기·체크섬이 맞지 않습니다.");
     const zoneVideoPromise = page.waitForEvent("download");
     await page.locator("#web-eo-zone-downloads a[data-zone-video]").click();
     const zoneVideoDownload = await zoneVideoPromise;
@@ -381,11 +421,12 @@ async function run() {
         || !Number.isFinite(sample.simulation_time_seconds)
         || !sample.capture_assessment)
       throw new Error("촬영 기록에 점검 구역·시간·위치·자세·판정 정보가 없습니다.");
-    console.log("Chromium에서 점검 구역별 영상, 임무 영상, 촬영 기록과 체크섬을 확인했습니다.");
+    console.log("Chromium에서 구역별 영상·정지 사진, 임무 영상, 촬영 기록과 체크섬을 확인했습니다.");
 
     const expectedBrowserFiles = [
       manifest.video_file,
       manifest.video_file.replace(/\.webm$/i, ".manifest.json"),
+      capturedImage.image_file,
       savedZoneVideo.video_file,
     ];
     await page.reload({ waitUntil: "domcontentloaded" });
