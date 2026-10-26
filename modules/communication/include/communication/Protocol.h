@@ -43,7 +43,8 @@ enum class VideoRecordingCommand
 /** @brief 준비된 점검 구역 전체를 순서대로 수행한다. */
 enum class InspectionCommand
 {
-    Start
+    Start,
+    Cancel
 };
 
 /** @brief 시뮬레이터의 여러 드론을 추가하거나 상태를 조회한다. */

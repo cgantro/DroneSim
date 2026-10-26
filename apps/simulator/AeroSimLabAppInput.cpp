@@ -529,11 +529,19 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         {
             ApplyVideoRecordingCommand(command, reply);
         },
-        [this, &reply](aerosimlab::communication::InspectionCommand)
+        [this, &reply](aerosimlab::communication::InspectionCommand command)
         {
-            reply.accepted = RequestInspectionMission();
+            if (command == aerosimlab::communication::InspectionCommand::Start)
+            {
+                reply.accepted = RequestInspectionMission();
+                reply.status = reply.accepted
+                    ? "inspection_mission_started" : InspectionMissionStatus();
+                return;
+            }
+
+            reply.accepted = CancelInspectionMission();
             reply.status = reply.accepted
-                ? "inspection_mission_started" : InspectionMissionStatus();
+                ? "inspection_mission_cancelled" : "no_active_inspection_mission";
         },
         [this, &reply](aerosimlab::communication::FleetCommand command)
         {

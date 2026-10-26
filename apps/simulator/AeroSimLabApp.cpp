@@ -1366,6 +1366,22 @@ bool AeroSimLabApp::RequestInspectionMission(
     return true;
 }
 
+bool AeroSimLabApp::CancelInspectionMission()
+{
+    using Stage = InspectionMissionStage;
+    const bool missionIsActive = inspectionMissionStage_ == Stage::StartRequested
+        || inspectionMissionStage_ == Stage::TakingOff
+        || inspectionMissionStage_ == Stage::Approaching
+        || inspectionMissionStage_ == Stage::AligningCamera
+        || inspectionMissionStage_ == Stage::Capturing
+        || inspectionMissionStage_ == Stage::Landing;
+    if (!missionIsActive)
+        return false;
+
+    FailInspectionMission("지상통제소에서 임무를 중단했습니다.");
+    return true;
+}
+
 void AeroSimLabApp::AdvanceInspectionMission()
 {
     using Stage = InspectionMissionStage;

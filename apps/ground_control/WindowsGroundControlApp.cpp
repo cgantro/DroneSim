@@ -56,6 +56,7 @@ enum ControlId : int
     videoRecordingStartButtonId,
     videoRecordingStopButtonId,
     inspectionStartButtonId,
+    inspectionCancelButtonId,
     addDroneButtonId,
     droneListId
 };
@@ -284,7 +285,7 @@ void SetControlsEnabled(AppState& state, bool enabled)
         cameraOnButtonId, cameraOffButtonId, cameraFaultButtonId, cameraRecoverButtonId,
         recordingStartButtonId, recordingStopButtonId, recordingReplayButtonId,
         videoRecordingStartButtonId, videoRecordingStopButtonId,
-        inspectionStartButtonId, addDroneButtonId};
+        inspectionStartButtonId, inspectionCancelButtonId, addDroneButtonId};
     for (const int id : buttonIds)
         EnableWindow(GetDlgItem(GetParent(state.statusText), id), enabled);
 }
@@ -482,7 +483,9 @@ void CreateControls(HWND window, AppState& state)
     AddControl(window, L"BUTTON", L"영상 녹화 종료", BS_PUSHBUTTON,
         185, 375, 155, 32, videoRecordingStopButtonId);
     AddControl(window, L"BUTTON", L"자동 점검 시작", BS_PUSHBUTTON,
-        350, 375, 180, 32, inspectionStartButtonId);
+        350, 375, 100, 32, inspectionStartButtonId);
+    AddControl(window, L"BUTTON", L"임무 중단", BS_PUSHBUTTON,
+        460, 375, 70, 32, inspectionCancelButtonId);
 
     AddLabel(window, L"편대 상태", 565, 62, 150);
     AddControl(window, L"BUTTON", L"드론 추가", BS_PUSHBUTTON,
@@ -572,6 +575,9 @@ LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
         break;
     case inspectionStartButtonId:
         packet.command = aerosimlab::communication::InspectionCommand::Start;
+        break;
+    case inspectionCancelButtonId:
+        packet.command = aerosimlab::communication::InspectionCommand::Cancel;
         break;
     case addDroneButtonId:
         packet.command = aerosimlab::communication::FleetCommand::AddDrone;
