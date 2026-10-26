@@ -323,7 +323,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     modules/graphics/include
   )
   target_link_libraries(aerosimlab_graphics PUBLIC glfw glm::glm
-    PRIVATE nlohmann_json::nlohmann_json)
+    PRIVATE nlohmann_json::nlohmann_json aerosimlab_stb_image)
   if(EMSCRIPTEN)
     target_link_libraries(aerosimlab_graphics PUBLIC OpenGL::GL)
     target_link_options(aerosimlab_graphics INTERFACE "-sUSE_GLFW=3" "-sFULL_ES3=1")
@@ -394,11 +394,16 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE@models/drones/x500/LICENSE"
     )
-    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.ppm")
-      target_link_options(aerosimlab_simulator PRIVATE
-        "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.ppm@maps/tancheon/terrain.ppm"
-      )
-    endif()
+    foreach(terrain_texture_extension IN ITEMS png jpg jpeg ppm)
+      set(terrain_texture_path
+        "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.${terrain_texture_extension}")
+      if(EXISTS "${terrain_texture_path}")
+        target_link_options(aerosimlab_simulator PRIVATE
+          "--embed-file=${terrain_texture_path}@maps/tancheon/terrain.${terrain_texture_extension}"
+        )
+        break()
+      endif()
+    endforeach()
     if(EXISTS "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb")
       target_link_options(aerosimlab_simulator PRIVATE
         "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb@maps/tancheon/terrain.glb"

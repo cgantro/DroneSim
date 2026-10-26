@@ -64,6 +64,18 @@ function(aerosimlab_add_scenario_dependencies)
 endfunction()
 
 function(aerosimlab_add_graphics_dependencies)
+  FetchContent_Declare(
+    stb_image
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG 003501f6d7a8668ce8b6d875e34dd97ad0d5d5b5
+    GIT_SHALLOW FALSE
+  )
+  FetchContent_MakeAvailable(stb_image)
+  add_library(aerosimlab_stb_image INTERFACE)
+  target_include_directories(aerosimlab_stb_image SYSTEM INTERFACE
+    "${stb_image_SOURCE_DIR}"
+  )
+
   if(EMSCRIPTEN)
     add_library(glfw INTERFACE)
     add_library(OpenGL::GL INTERFACE IMPORTED GLOBAL)

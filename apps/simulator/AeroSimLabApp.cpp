@@ -690,12 +690,21 @@ void AeroSimLabApp::LoadSceneModels()
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
     droneMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
         AssetPath("models/drones/x500/visual.glb").string());
-    droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
+    droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
-    const auto terrainTexturePath = AssetPath("maps/tancheon/terrain.ppm");
-    if (std::filesystem::exists(terrainTexturePath))
-        terrainSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadPpm(
+    constexpr std::array<const char*, 4> terrainTextureExtensions{
+        "png", "jpg", "jpeg", "ppm"};
+    for (const char* extension : terrainTextureExtensions)
+    {
+        const auto terrainTexturePath = AssetPath(
+            "maps/tancheon/terrain." + std::string(extension));
+        if (!std::filesystem::exists(terrainTexturePath))
+            continue;
+
+        terrainSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
             terrainTexturePath);
+        break;
+    }
 }
 
 void AeroSimLabApp::LoadTerrain()

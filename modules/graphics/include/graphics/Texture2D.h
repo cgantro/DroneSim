@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -19,6 +20,10 @@ public:
     [[nodiscard]] static std::unique_ptr<Texture2D> LoadPpm(
         const std::filesystem::path& path);
 
+    /** @brief PPM, PNG, JPEG 이미지를 읽어 GPU 텍스처로 올린다. */
+    [[nodiscard]] static std::unique_ptr<Texture2D> LoadFromFile(
+        const std::filesystem::path& path);
+
     ~Texture2D();
 
     Texture2D(const Texture2D&) = delete;
@@ -30,6 +35,9 @@ public:
     void Unbind() const;
 
 private:
+    Texture2D(std::uint32_t width, std::uint32_t height,
+        const std::uint8_t* pixels, std::size_t pixelByteCount);
+
     std::uint32_t rendererId_ = 0U;
 };
 
