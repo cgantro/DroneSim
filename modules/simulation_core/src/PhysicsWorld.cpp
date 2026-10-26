@@ -337,6 +337,9 @@ struct Obstacle
 {
     glm::dvec3 centerMeters;
     glm::dvec3 halfExtentsMeters;
+    std::vector<glm::dvec2> outlineMeters;
+    double bottomMeters = 0.0;
+    double topMeters = 0.0;
 };
 
 struct ContactCandidate
@@ -739,6 +742,42 @@ struct PhysicsWorld::Impl
         for (std::size_t index = 0; index < obstacles.size(); ++index)
         {
             const Obstacle& obstacle = obstacles[index];
+            if (!obstacle.outlineMeters.empty())
+            {
+                for (const OrientedBox& worldBox : body.worldCollisionBoxes)
+                {
+                    const double radiusX = worldBox.halfExtentsMeters.x
+                            * std::abs(worldBox.axes[0].x)
+                        + worldBox.halfExtentsMeters.y
+                            * std::abs(worldBox.axes[1].x)
+                        + worldBox.halfExtentsMeters.z
+                            * std::abs(worldBox.axes[2].x);
+                    const double radiusY = worldBox.halfExtentsMeters.x
+                            * std::abs(worldBox.axes[0].y)
+                        + worldBox.halfExtentsMeters.y
+                            * std::abs(worldBox.axes[1].y)
+                        + worldBox.halfExtentsMeters.z
+                            * std::abs(worldBox.axes[2].y);
+                    const double radiusZ = worldBox.halfExtentsMeters.x
+                            * std::abs(worldBox.axes[0].z)
+                        + worldBox.halfExtentsMeters.y
+                            * std::abs(worldBox.axes[1].z)
+                        + worldBox.halfExtentsMeters.z
+                            * std::abs(worldBox.axes[2].z);
+                    const auto contact = detail::FindPrismContact(
+                        obstacle.outlineMeters, obstacle.bottomMeters,
+                        obstacle.topMeters, worldBox.centerMeters,
+                        std::hypot(radiusX, radiusY), radiusZ);
+                    if (!contact || contact->penetrationMeters <= greatestPenetration)
+                        continue;
+                    greatestPenetration = contact->penetrationMeters;
+                    deepestContact = ContactCandidate{
+                        BoxContact{contact->normal, contact->impactPointMeters,
+                            contact->penetrationMeters},
+                        "building", static_cast<int>(index + 1)};
+                }
+                continue;
+            }
             const glm::dvec3 nearest = glm::clamp(center,
                 obstacle.centerMeters - obstacle.halfExtentsMeters,
                 obstacle.centerMeters + obstacle.halfExtentsMeters);
@@ -817,7 +856,36 @@ void PhysicsWorld::AddStaticObstacleBox(
     {
         throw std::invalid_argument("고정 상자의 위치와 크기를 확인해 주세요.");
     }
-    impl_->obstacles.push_back({centerMeters, glm::dvec3{halfExtentsMeters}});
+    impl_->obstacles.push_back(
+        {centerMeters, glm::dvec3{halfExtentsMeters}, {}, 0.0, 0.0});
+}
+
+void PhysicsWorld::AddStaticObstaclePrism(
+    const std::vector<glm::dvec2>& outlineMeters,
+    double bottomMeters, double topMeters)
+{
+    if (!detail::IsValidFootprint(outlineMeters)
+        || !std::isfinite(bottomMeters)
+        || !std::isfinite(topMeters) || !(topMeters > bottomMeters))
+        throw std::invalid_argument("건물 외곽선과 높이 범위를 확인해 주세요.");
+
+    glm::dvec2 minimum = outlineMeters.front();
+    glm::dvec2 maximum = minimum;
+    for (const glm::dvec2& point : outlineMeters)
+    {
+        if (!std::isfinite(point.x) || !std::isfinite(point.y))
+            throw std::invalid_argument("건물 외곽선 좌표를 확인해 주세요.");
+        minimum = glm::min(minimum, point);
+        maximum = glm::max(maximum, point);
+    }
+
+    const glm::dvec2 center = (minimum + maximum) * 0.5;
+    const double halfHeight = (topMeters - bottomMeters) * 0.5;
+    impl_->obstacles.push_back({
+        {center.x, center.y, (bottomMeters + topMeters) * 0.5},
+        {(maximum.x - minimum.x) * 0.5,
+            (maximum.y - minimum.y) * 0.5, halfHeight},
+        outlineMeters, bottomMeters, topMeters});
 }
 
 RigidBodyHandle PhysicsWorld::CreateQuadrotor(

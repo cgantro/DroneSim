@@ -2,6 +2,7 @@
 #if !defined(__EMSCRIPTEN__)
 #include "simulation_core/PhysicsWorld.h"
 #endif
+#include "CollisionGeometry.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
@@ -41,6 +42,13 @@ struct SimulationCore::EcsStorage
         glm::dvec3 halfExtentsMeters{0.0};
     };
 
+    struct StaticObstaclePrism
+    {
+        std::vector<glm::dvec2> outlineMeters;
+        double bottomMeters = 0.0;
+        double topMeters = 0.0;
+    };
+
     struct InitialPose
     {
         glm::dvec3 positionMeters{0.0};
@@ -69,6 +77,7 @@ struct SimulationCore::EcsStorage
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
     std::vector<StaticObstacleBox> kinematicObstacles;
+    std::vector<StaticObstaclePrism> kinematicPrisms;
     std::optional<terrain::TerrainGrid> terrainGrid;
     bool measureEcsSystemDuration = false;
     EcsSystemDurations lastEcsSystemDurations;
@@ -226,6 +235,50 @@ struct SimulationCore::EcsStorage
                 state.velocityMetersPerSecond[axis] = 0.0;
             if (control.targetVelocityMetersPerSecond[axis] * side < 0.0)
                 control.targetVelocityMetersPerSecond[axis] = 0.0;
+        }
+
+        for (const StaticObstaclePrism& obstacle : kinematicPrisms)
+        {
+            constexpr double droneRadiusMeters = 0.4242640687119285;
+            const auto contact = detail::FindPrismContact(
+                obstacle.outlineMeters, obstacle.bottomMeters, obstacle.topMeters,
+                state.positionMeters, droneRadiusMeters,
+                droneHalfExtentsMeters.z);
+            if (!contact)
+                continue;
+
+            if (std::abs(contact->normal.z) > 0.5)
+            {
+                state.positionMeters.z += contact->normal.z
+                    * contact->penetrationMeters;
+                if (state.velocityMetersPerSecond.z * contact->normal.z < 0.0)
+                    state.velocityMetersPerSecond.z = 0.0;
+                if (control.targetVelocityMetersPerSecond.z * contact->normal.z < 0.0)
+                    control.targetVelocityMetersPerSecond.z = 0.0;
+            }
+            else
+            {
+                const glm::dvec2 normal{contact->normal.x, contact->normal.y};
+                const glm::dvec2 correction = normal * contact->penetrationMeters;
+                state.positionMeters.x += correction.x;
+                state.positionMeters.y += correction.y;
+                const glm::dvec2 velocity{state.velocityMetersPerSecond.x,
+                    state.velocityMetersPerSecond.y};
+                const double inwardSpeed = glm::dot(velocity, normal);
+                if (inwardSpeed < 0.0)
+                {
+                    state.velocityMetersPerSecond.x -= inwardSpeed * normal.x;
+                    state.velocityMetersPerSecond.y -= inwardSpeed * normal.y;
+                }
+                const glm::dvec2 target{control.targetVelocityMetersPerSecond.x,
+                    control.targetVelocityMetersPerSecond.y};
+                const double inwardTargetSpeed = glm::dot(target, normal);
+                if (inwardTargetSpeed < 0.0)
+                {
+                    control.targetVelocityMetersPerSecond.x -= inwardTargetSpeed * normal.x;
+                    control.targetVelocityMetersPerSecond.y -= inwardTargetSpeed * normal.y;
+                }
+            }
         }
     }
 
@@ -932,6 +985,32 @@ void SimulationCore::AddStaticObstacleBox(
 #endif
     ecs_->kinematicObstacles.push_back(
         {centerMeters, glm::dvec3{halfExtentsMeters}});
+}
+
+void SimulationCore::AddStaticObstaclePrism(
+    const std::vector<glm::dvec2>& outlineMeters,
+    double bottomMeters, double topMeters)
+{
+    if (!detail::IsValidFootprint(outlineMeters) || !std::isfinite(bottomMeters)
+        || !std::isfinite(topMeters) || !(topMeters > bottomMeters))
+        throw std::invalid_argument("건물 외곽선과 높이 범위를 확인해 주세요.");
+
+    for (const glm::dvec2& point : outlineMeters)
+    {
+        if (!std::isfinite(point.x) || !std::isfinite(point.y))
+            throw std::invalid_argument("건물 외곽선 좌표를 확인해 주세요.");
+    }
+
+#if !defined(__EMSCRIPTEN__)
+    if (ecs_->dynamics == SimulationDynamics::RigidBody)
+    {
+        ecs_->physics->AddStaticObstaclePrism(
+            outlineMeters, bottomMeters, topMeters);
+        return;
+    }
+#endif
+    ecs_->kinematicPrisms.push_back(
+        {outlineMeters, bottomMeters, topMeters});
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)

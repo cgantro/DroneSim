@@ -5,6 +5,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <vector>
 
 namespace aerosimlab::simulation::detail
 {
@@ -20,6 +21,14 @@ struct OrientedBox
 
 /** @brief 첫 번째 상자 바깥을 향하는 접촉 방향과 가장 깊은 접촉점이다. */
 struct BoxContact
+{
+    glm::dvec3 normal;
+    glm::dvec3 impactPointMeters;
+    double penetrationMeters = 0.0;
+};
+
+/** @brief 평면 건물 외곽선을 높이로 돌출한 장애물과 원형 기체 투영의 접촉이다. */
+struct PrismContact
 {
     glm::dvec3 normal;
     glm::dvec3 impactPointMeters;
@@ -55,4 +64,14 @@ OrientedBox ToWorldBox(
 std::optional<BoxContact> FindBoxContact(
     const OrientedBox& firstBox,
     const OrientedBox& secondBox);
+
+/** @brief 외곽선의 유한 좌표와 넓이가 유효한지 확인한다. */
+bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept;
+
+/** @brief 수직 프리즘과 원형 수평 투영을 사용해 겹침을 찾는다. */
+std::optional<PrismContact> FindPrismContact(
+    std::span<const glm::dvec2> outlineMeters,
+    double bottomMeters, double topMeters,
+    const glm::dvec3& centerMeters,
+    double horizontalRadiusMeters, double verticalRadiusMeters);
 }

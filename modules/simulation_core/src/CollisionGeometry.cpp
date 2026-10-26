@@ -77,6 +77,114 @@ OrientedBox ToWorldBox(
         glm::length(halfExtents)};
 }
 
+bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept
+{
+    if (outlineMeters.size() < 3U)
+        return false;
+    double twiceArea = 0.0;
+    for (std::size_t i = 0; i < outlineMeters.size(); ++i)
+    {
+        const glm::dvec2& current = outlineMeters[i];
+        const glm::dvec2& next = outlineMeters[(i + 1U) % outlineMeters.size()];
+        if (!std::isfinite(current.x) || !std::isfinite(current.y))
+            return false;
+        twiceArea += current.x * next.y - next.x * current.y;
+    }
+    return std::isfinite(twiceArea) && std::abs(twiceArea) > 1.0e-9;
+}
+
+std::optional<PrismContact> FindPrismContact(
+    std::span<const glm::dvec2> outlineMeters,
+    double bottomMeters, double topMeters,
+    const glm::dvec3& centerMeters,
+    double horizontalRadiusMeters, double verticalRadiusMeters)
+{
+    if (!IsValidFootprint(outlineMeters) || !std::isfinite(bottomMeters)
+        || !std::isfinite(topMeters) || !std::isfinite(centerMeters.x)
+        || !std::isfinite(centerMeters.y) || !std::isfinite(centerMeters.z)
+        || !(topMeters > bottomMeters) || !(horizontalRadiusMeters > 0.0)
+        || !(verticalRadiusMeters > 0.0))
+        return std::nullopt;
+
+    const double verticalOverlap = std::min(
+        centerMeters.z + verticalRadiusMeters, topMeters)
+        - std::max(centerMeters.z - verticalRadiusMeters, bottomMeters);
+    if (verticalOverlap <= 0.0)
+        return std::nullopt;
+
+    const glm::dvec2 center{centerMeters.x, centerMeters.y};
+    bool inside = false;
+    double twiceArea = 0.0;
+    for (std::size_t i = 0; i < outlineMeters.size(); ++i)
+    {
+        const glm::dvec2& a = outlineMeters[i];
+        const glm::dvec2& b = outlineMeters[(i + 1U) % outlineMeters.size()];
+        twiceArea += a.x * b.y - b.x * a.y;
+        const glm::dvec2& previous = outlineMeters[
+            (i + outlineMeters.size() - 1U) % outlineMeters.size()];
+        if ((a.y > center.y) != (previous.y > center.y)
+            && center.x < (previous.x - a.x) * (center.y - a.y)
+                / (previous.y - a.y) + a.x)
+            inside = !inside;
+    }
+
+    double nearestDistanceSquared = std::numeric_limits<double>::infinity();
+    glm::dvec2 nearestPoint{0.0};
+    glm::dvec2 nearestNormal{0.0};
+    for (std::size_t i = 0; i < outlineMeters.size(); ++i)
+    {
+        const glm::dvec2& a = outlineMeters[i];
+        const glm::dvec2& b = outlineMeters[(i + 1U) % outlineMeters.size()];
+        const glm::dvec2 edge = b - a;
+        const double edgeLengthSquared = glm::dot(edge, edge);
+        if (edgeLengthSquared <= 1.0e-12)
+            continue;
+        const double fraction = std::clamp(
+            glm::dot(center - a, edge) / edgeLengthSquared, 0.0, 1.0);
+        const glm::dvec2 point = a + edge * fraction;
+        const glm::dvec2 offset = center - point;
+        const double distanceSquared = glm::dot(offset, offset);
+        if (distanceSquared >= nearestDistanceSquared)
+            continue;
+        nearestDistanceSquared = distanceSquared;
+        nearestPoint = point;
+        const double edgeLength = std::sqrt(edgeLengthSquared);
+        nearestNormal = twiceArea >= 0.0
+            ? glm::dvec2{edge.y, -edge.x} / edgeLength
+            : glm::dvec2{-edge.y, edge.x} / edgeLength;
+        if (distanceSquared > 1.0e-12 && !inside)
+            nearestNormal = offset / std::sqrt(distanceSquared);
+    }
+    if (!std::isfinite(nearestDistanceSquared))
+        return std::nullopt;
+
+    const double distance = std::sqrt(nearestDistanceSquared);
+    const double horizontalPenetration = inside
+        ? horizontalRadiusMeters + distance
+        : horizontalRadiusMeters - distance;
+    if (horizontalPenetration <= 0.0)
+        return std::nullopt;
+
+    PrismContact result;
+    if (verticalOverlap < horizontalPenetration)
+    {
+        const double below = centerMeters.z - bottomMeters;
+        const double above = topMeters - centerMeters.z;
+        result.normal = {0.0, 0.0, below < above ? -1.0 : 1.0};
+        result.penetrationMeters = verticalOverlap;
+        result.impactPointMeters = {center.x, center.y,
+            result.normal.z > 0.0 ? topMeters : bottomMeters};
+    }
+    else
+    {
+        result.normal = {nearestNormal.x, nearestNormal.y, 0.0};
+        result.penetrationMeters = horizontalPenetration;
+        result.impactPointMeters = {nearestPoint.x, nearestPoint.y,
+            std::clamp(centerMeters.z, bottomMeters, topMeters)};
+    }
+    return result;
+}
+
 std::optional<BoxContact> FindBoxContact(
     const OrientedBox& firstBox,
     const OrientedBox& secondBox)

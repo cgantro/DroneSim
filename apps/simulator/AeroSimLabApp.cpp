@@ -795,8 +795,12 @@ void AeroSimLabApp::LoadMapFeatures()
     {
         const auto bounds =
             aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-        simulation_.AddStaticObstacleBox(
-            bounds.centerMeters, glm::vec3{bounds.halfExtentsMeters});
+        if (building.heightMeters > 0.0)
+        {
+            simulation_.AddStaticObstaclePrism(building.outlineMeters,
+                bounds.centerMeters.z - bounds.halfExtentsMeters.z,
+                bounds.centerMeters.z + bounds.halfExtentsMeters.z);
+        }
         inspectionOccluders_.push_back({building.outlineMeters,
             bounds.centerMeters.z - bounds.halfExtentsMeters.z,
             bounds.centerMeters.z + bounds.halfExtentsMeters.z});

@@ -512,7 +512,9 @@ void Verify_AirSimPhysicsKeepsContactAcrossMicroscopicGroundGaps()
 void Verify_AirSimPhysics_IndoorWallContactStopsHorizontalMotion()
 {
     PhysicsWorld world;
-    world.AddStaticObstacleBox({0.0, 0.0, 10.0}, {0.15F, 5.0F, 5.0F});
+    world.AddStaticObstaclePrism(
+        {{-0.15, -5.0}, {0.15, -5.0}, {0.15, 5.0}, {-0.15, 5.0}},
+        5.0, 15.0);
 
     const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
     RigidBodyDefinition droneDefinition;
@@ -534,6 +536,23 @@ void Verify_AirSimPhysics_IndoorWallContactStopsHorizontalMotion()
     state = world.State(drone);
     EXPECT_LT(state.positionMeters.x, -0.15);
     EXPECT_LT(state.linearVelocityMetersPerSecond.x, 0.5);
+
+    PhysicsWorld courtyard;
+    courtyard.AddStaticObstaclePrism(
+        {{0.0, 0.0}, {3.0, 0.0}, {3.0, 3.0}, {2.0, 3.0},
+            {2.0, 1.0}, {1.0, 1.0}, {1.0, 3.0}, {0.0, 3.0}},
+        5.0, 15.0);
+    droneDefinition.positionMeters = {1.5, 2.0, 10.0};
+    const RigidBodyHandle courtyardDrone =
+        courtyard.CreateQuadrotor(droneDefinition, parameters);
+    courtyard.SetMotorTargets(courtyardDrone, motorTargets);
+    RigidBodyState courtyardState = courtyard.State(courtyardDrone);
+    courtyardState.linearVelocityMetersPerSecond.x = 0.2;
+    courtyard.SetState(courtyardDrone, courtyardState);
+    courtyard.Step(1.0 / 60.0);
+    courtyardState = courtyard.State(courtyardDrone);
+    EXPECT_GT(courtyardState.positionMeters.x, 1.5);
+    EXPECT_GT(courtyardState.linearVelocityMetersPerSecond.x, 0.1);
 }
 
 void Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere()

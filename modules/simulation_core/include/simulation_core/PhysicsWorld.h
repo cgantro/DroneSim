@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/gtc/quaternion.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "terrain/TerrainGrid.h"
@@ -8,6 +9,7 @@
 #include <cstdint>
 #include <array>
 #include <memory>
+#include <vector>
 
 namespace aerosimlab::simulation
 {
@@ -74,6 +76,11 @@ public:
     /** @brief 장면의 고정 상자 장애물을 추가해 접촉 여부를 검사한다. */
     void AddStaticObstacleBox(
         const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters);
+
+    /** @brief 평면 외곽선을 높이로 돌출한 고정 장애물을 추가한다. */
+    void AddStaticObstaclePrism(
+        const std::vector<glm::dvec2>& outlineMeters,
+        double bottomMeters, double topMeters);
 
     /** @brief 기체 설정의 질량·관성·로터·충돌 상자로 쿼드콥터를 만든다. */
     [[nodiscard]] RigidBodyHandle CreateQuadrotor(

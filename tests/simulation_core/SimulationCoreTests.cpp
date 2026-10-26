@@ -153,13 +153,29 @@ void Verify_KinematicDroneStopsAtStaticBuildings()
     start.velocityMetersPerSecond = {5.0, 0.0, 0.0};
     start.mode = FlightMode::Flying;
     simulation.SetInitialState(droneId, start);
-    simulation.AddStaticObstacleBox({1.0, 0.0, 2.0}, {0.5F, 2.0F, 1.0F});
+    simulation.AddStaticObstaclePrism(
+        {{0.5, -2.0}, {1.5, -2.0}, {1.5, 2.0}, {0.5, 2.0}},
+        1.0, 3.0);
 
     for (int tick = 0; tick < 60; ++tick)
         simulation.AdvanceOneTick();
 
     EXPECT_LE(simulation.State(droneId).positionMeters.x, 0.200001);
     EXPECT_DOUBLE_EQ(simulation.State(droneId).velocityMetersPerSecond.x, 0.0);
+
+    SimulationCore courtyard{SimulationDynamics::Kinematic};
+    DroneState courtyardStart;
+    courtyardStart.positionMeters = {1.5, 2.0, 10.0};
+    courtyardStart.velocityMetersPerSecond = {0.2, 0.0, 0.0};
+    courtyardStart.mode = FlightMode::Flying;
+    courtyard.SetInitialState(courtyard.PrimaryDroneId(), courtyardStart);
+    courtyard.AddStaticObstaclePrism(
+        {{0.0, 0.0}, {3.0, 0.0}, {3.0, 3.0}, {2.0, 3.0},
+            {2.0, 1.0}, {1.0, 1.0}, {1.0, 3.0}, {0.0, 3.0}},
+        5.0, 15.0);
+    courtyard.AdvanceOneTick();
+    EXPECT_GT(courtyard.State().positionMeters.x, 1.5);
+    EXPECT_GT(courtyard.State().velocityMetersPerSecond.x, 0.1);
 }
 
 void Verify_KinematicDroneKeepsItsBodyAboveTerrain()

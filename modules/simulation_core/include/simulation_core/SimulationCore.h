@@ -6,6 +6,7 @@
 #include "terrain/TerrainGrid.h"
 
 #include <glm/vec3.hpp>
+#include <glm/vec2.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -195,6 +196,11 @@ public:
     /** @brief 지도 건물처럼 움직이지 않는 상자 장애물을 추가한다. */
     void AddStaticObstacleBox(
         const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters);
+
+    /** @brief 건물 외곽선을 높이로 돌출해 충돌 장애물로 등록한다. */
+    void AddStaticObstaclePrism(
+        const std::vector<glm::dvec2>& outlineMeters,
+        double bottomMeters, double topMeters);
 
     /** @brief 지형 높이 자료를 설정해 비행체가 지면 아래로 내려가지 않게 한다. */
     void SetTerrain(terrain::TerrainGrid terrain);
