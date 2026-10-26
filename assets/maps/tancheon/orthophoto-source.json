@@ -23,7 +23,7 @@
     "file": "terrain.jpg",
     "width": 2048,
     "height": 2048,
-    "format": "JPEG quality 92",
+    "format": "JPEG quality 90",
     "ground_sample_distance_meters_per_pixel": 0.5859375
   },
   "notes": "위치 기준은 1:5000 도엽 색인에서 가져왔으며, 각 TIFF에는 GeoTIFF 위치 태그가 없어 도엽 경계를 사용해 정합했다. 높이와 건물/교량 3D 형상은 포함하지 않는다.",
