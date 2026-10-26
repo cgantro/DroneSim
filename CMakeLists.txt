@@ -158,13 +158,13 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/InspectionSurfaceJson.cpp
   modules/simulation_core/src/ScenarioRunner.cpp
   modules/simulation_core/src/ScenarioDefinition.cpp
+  modules/simulation_core/src/CollisionGeometry.cpp
   modules/simulation_core/src/SimulationCore.cpp
   modules/simulation_core/src/QuadrotorModel.cpp
   modules/simulation_core/src/QuadrotorFlightController.cpp
 )
 if(NOT EMSCRIPTEN)
   target_sources(aerosimlab_simulation_core PRIVATE
-    modules/simulation_core/src/CollisionGeometry.cpp
     modules/simulation_core/src/PhysicsWorld.cpp
   )
 endif()
