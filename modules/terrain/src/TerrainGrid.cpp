@@ -37,6 +37,26 @@ void RequireFinitePositive(float value, const char* label)
     if (!std::isfinite(value) || !(value > 0.0F))
         throw std::invalid_argument(std::string("지형 ") + label + " 값은 0보다 커야 합니다.");
 }
+
+glm::dvec3 Wgs84SurfacePositionEcef(
+    double latitudeDegrees, double longitudeDegrees)
+{
+    constexpr double semiMajorAxisMeters = 6'378'137.0;
+    constexpr double flattening = 1.0 / 298.257223563;
+    constexpr double eccentricitySquared = flattening * (2.0 - flattening);
+    constexpr double radiansPerDegree = std::numbers::pi_v<double> / 180.0;
+
+    const double latitudeRadians = latitudeDegrees * radiansPerDegree;
+    const double longitudeRadians = longitudeDegrees * radiansPerDegree;
+    const double sinLatitude = std::sin(latitudeRadians);
+    const double cosLatitude = std::cos(latitudeRadians);
+    const double primeVerticalRadius = semiMajorAxisMeters
+        / std::sqrt(1.0 - eccentricitySquared * sinLatitude * sinLatitude);
+    return {
+        primeVerticalRadius * cosLatitude * std::cos(longitudeRadians),
+        primeVerticalRadius * cosLatitude * std::sin(longitudeRadians),
+        primeVerticalRadius * (1.0 - eccentricitySquared) * sinLatitude};
+}
 }
 
 TerrainGrid TerrainGrid::Load(const std::filesystem::path& path)
@@ -168,13 +188,23 @@ glm::dvec2 TerrainGrid::ToLocalMeters(
         throw std::invalid_argument("위도와 경도는 유효한 좌표여야 합니다.");
     }
 
-    constexpr double metersPerLatitudeDegree = 111'320.0;
     constexpr double radiansPerDegree = std::numbers::pi_v<double> / 180.0;
-    const double metersPerLongitudeDegree = metersPerLatitudeDegree
-        * std::cos(centerLatitudeDegrees * radiansPerDegree);
+    const glm::dvec3 origin = Wgs84SurfacePositionEcef(
+        centerLatitudeDegrees, centerLongitudeDegrees);
+    const glm::dvec3 point = Wgs84SurfacePositionEcef(
+        latitudeDegrees, longitudeDegrees);
+    const glm::dvec3 delta = point - origin;
+    const double originLatitudeRadians = centerLatitudeDegrees * radiansPerDegree;
+    const double originLongitudeRadians = centerLongitudeDegrees * radiansPerDegree;
+    const double sinLatitude = std::sin(originLatitudeRadians);
+    const double cosLatitude = std::cos(originLatitudeRadians);
+    const double sinLongitude = std::sin(originLongitudeRadians);
+    const double cosLongitude = std::cos(originLongitudeRadians);
     return {
-        (longitudeDegrees - centerLongitudeDegrees) * metersPerLongitudeDegree,
-        (latitudeDegrees - centerLatitudeDegrees) * metersPerLatitudeDegree};
+        -sinLongitude * delta.x + cosLongitude * delta.y,
+        -sinLatitude * cosLongitude * delta.x
+            - sinLatitude * sinLongitude * delta.y
+            + cosLatitude * delta.z};
 }
 
 glm::dvec3 TerrainGrid::ToSimulationPositionMeters(

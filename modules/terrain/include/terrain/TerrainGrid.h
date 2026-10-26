@@ -36,7 +36,7 @@ struct TerrainGrid
     /** @brief 지도 중심 기준의 동쪽·북쪽 위치에서 격자 높이를 보간해 반환한다. */
     [[nodiscard]] float HeightAtLocalMeters(const glm::dvec2& positionMeters) const;
 
-    /** @brief 위도·경도를 지형 중심 기준의 동쪽·북쪽 미터 좌표로 바꾼다. */
+    /** @brief WGS84 위도·경도를 지형 중심 접평면의 동쪽·북쪽 미터 좌표로 바꾼다. */
     [[nodiscard]] glm::dvec2 ToLocalMeters(
         double latitudeDegrees, double longitudeDegrees) const;
 
