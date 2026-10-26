@@ -9,8 +9,9 @@ if(GIT_EXECUTABLE AND EXISTS "${SOURCE_DIR}/.git")
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET
   )
+  string(REPLACE "," ";" revision_paths "${REVISION_PATHS}")
   execute_process(
-    COMMAND "${GIT_EXECUTABLE}" status --porcelain
+    COMMAND "${GIT_EXECUTABLE}" status --porcelain -- ${revision_paths}
     WORKING_DIRECTORY "${SOURCE_DIR}"
     OUTPUT_VARIABLE worktree_status
     OUTPUT_STRIP_TRAILING_WHITESPACE

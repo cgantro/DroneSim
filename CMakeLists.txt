@@ -291,6 +291,17 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   set(_aerosimlab_generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
   set(_aerosimlab_build_revision_header
     "${_aerosimlab_generated_dir}/AeroSimLabBuildRevision.h")
+  set(_aerosimlab_revision_paths
+    CMakeLists.txt
+    cmake
+    apps/simulator
+    modules
+    assets
+    ":(exclude)assets/models/source"
+    ":(exclude)assets/**/README.md"
+    ":(exclude)assets/**/LICENSE")
+  string(REPLACE ";" "," _aerosimlab_revision_paths_argument
+    "${_aerosimlab_revision_paths}")
   set(_aerosimlab_build_revision_dependencies
     "${CMAKE_SOURCE_DIR}/cmake/GenerateBuildRevision.cmake")
   if(GIT_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
@@ -327,6 +338,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     # 실행하는 대신, 현재 Git 작업 폴더의 파일과 부모 폴더를 의존성으로 둔다.
     execute_process(
       COMMAND "${GIT_EXECUTABLE}" ls-files --cached --others --exclude-standard
+        -- ${_aerosimlab_revision_paths}
       WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
       OUTPUT_VARIABLE _aerosimlab_worktree_files
       OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -350,8 +362,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
         endwhile()
       endif()
     endforeach()
-    # 새 최상위 미추적 파일도 감지한다. 하위 파일은 위에서 부모 폴더를 추적한다.
-    list(APPEND _aerosimlab_build_revision_dependencies "${CMAKE_SOURCE_DIR}")
+    # 실행 코드와 실제 자산만 추적해 문서·시험 변경으로 앱을 다시 만들지 않는다.
     list(REMOVE_DUPLICATES _aerosimlab_build_revision_dependencies)
   endif()
   add_custom_command(
@@ -360,6 +371,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
       "-DOUTPUT=${_aerosimlab_build_revision_header}"
       "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
+      "-DREVISION_PATHS=${_aerosimlab_revision_paths_argument}"
       -P "${CMAKE_SOURCE_DIR}/cmake/GenerateBuildRevision.cmake"
     DEPENDS ${_aerosimlab_build_revision_dependencies}
     VERBATIM
