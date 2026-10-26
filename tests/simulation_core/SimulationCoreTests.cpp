@@ -1,4 +1,5 @@
 #include "simulation_core/SimulationCore.h"
+#include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/InspectionSurfaceJson.h"
 
@@ -27,6 +28,38 @@ void ReachHovering(SimulationCore& simulation)
         simulation.AdvanceOneTick();
     }
     ASSERT_EQ(simulation.State().mode, FlightMode::Hovering);
+}
+
+void Verify_BatteryModel_ConsumesOnlyWhileFlyingAndClampsAtZero()
+{
+    const BatteryModelParameters parameters{10.0, 40.0, 120.0, 20.0};
+    BatteryModel battery{parameters, 50.0};
+    EXPECT_DOUBLE_EQ(battery.InitialWattHours(), 5.0);
+    EXPECT_DOUBLE_EQ(battery.RemainingPercent(), 50.0);
+    EXPECT_FALSE(battery.ShouldReturnForLowBattery());
+
+    battery.Advance(FlightMode::Grounded);
+    EXPECT_DOUBLE_EQ(battery.RemainingWattHours(), 5.0);
+
+    battery.Advance(FlightMode::Hovering);
+    EXPECT_NEAR(battery.ConsumedWattHours(),
+        40.0 * DroneModel::fixedStepSeconds / 3600.0, 1.0e-12);
+
+    BatteryModel nearlyEmpty{{1.0, 40.0, 120.0, 5.0}, 0.001};
+    for (int tick = 0; tick < 100; ++tick)
+        nearlyEmpty.Advance(FlightMode::Flying);
+    EXPECT_DOUBLE_EQ(nearlyEmpty.RemainingWattHours(), 0.0);
+    EXPECT_TRUE(nearlyEmpty.ShouldReturnForLowBattery());
+    nearlyEmpty.MarkReturningForLowBattery();
+    EXPECT_TRUE(nearlyEmpty.IsReturningForLowBattery());
+}
+
+void Verify_BatteryModel_RejectsInvalidSettings()
+{
+    EXPECT_THROW((BatteryModel{{0.0, 40.0, 120.0, 20.0}}), std::invalid_argument);
+    EXPECT_THROW((BatteryModel{{10.0, -1.0, 120.0, 20.0}}), std::invalid_argument);
+    EXPECT_THROW((BatteryModel{{10.0, 40.0, 120.0, 101.0}}), std::invalid_argument);
+    EXPECT_THROW((BatteryModel{{10.0, 40.0, 120.0, 20.0}, 101.0}), std::invalid_argument);
 }
 
 }
@@ -345,6 +378,8 @@ void Verify_EoCameraModelUsesBuildingFootprintsForOcclusion()
 
 TEST(SimulationCoreTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_ConsumesOnlyWhileFlyingAndClampsAtZero());
+    EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_RejectsInvalidSettings());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsCommandsThatDoNotMatchFlightStateOrContainInvalidNumbers());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose());

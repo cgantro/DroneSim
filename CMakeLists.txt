@@ -150,6 +150,7 @@ target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
 target_link_libraries(aerosimlab_terrain PUBLIC glm::glm PRIVATE nlohmann_json::nlohmann_json)
 
 add_library(aerosimlab_simulation_core STATIC
+  modules/simulation_core/src/BatteryModel.cpp
   modules/simulation_core/src/DroneModel.cpp
   modules/simulation_core/src/CommandRecording.cpp
   modules/simulation_core/src/EoCameraModel.cpp

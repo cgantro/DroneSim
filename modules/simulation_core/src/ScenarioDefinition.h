@@ -1,5 +1,6 @@
 #pragma once
 
+#include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScenarioRunner.h"
@@ -86,13 +87,7 @@ struct CollisionAvoidanceSettings
     double lateralOffsetMeters;
 };
 
-struct EnergyModelSettings
-{
-    double capacityWattHours;
-    double hoverPowerWatts;
-    double flightPowerWatts;
-    double reservePercent;
-};
+using EnergyModelSettings = BatteryModelParameters;
 
 /** @brief JSON 카메라 동작을 실행 단계에서 안전하게 구분한다. */
 enum class CameraEventAction
