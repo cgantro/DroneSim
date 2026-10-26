@@ -7,72 +7,7 @@ endif()
 
 project(AeroSimLab VERSION 0.1.0 LANGUAGES C CXX)
 
-set(AEROSIMLAB_SOURCE_REVISION "unknown")
 find_package(Git QUIET)
-if(GIT_FOUND)
-  # 새 커밋의 리비전이 다음 빌드의 측정 결과에도 반영되도록 Git 참조를 감시한다.
-  execute_process(
-    COMMAND "${GIT_EXECUTABLE}" rev-parse --git-path HEAD
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    OUTPUT_VARIABLE AEROSIMLAB_GIT_HEAD_FILE
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-  )
-  if(AEROSIMLAB_GIT_HEAD_FILE)
-    get_filename_component(AEROSIMLAB_GIT_HEAD_FILE
-      "${AEROSIMLAB_GIT_HEAD_FILE}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
-    if(EXISTS "${AEROSIMLAB_GIT_HEAD_FILE}")
-      set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-        "${AEROSIMLAB_GIT_HEAD_FILE}")
-    endif()
-  endif()
-
-  execute_process(
-    COMMAND "${GIT_EXECUTABLE}" symbolic-ref --quiet HEAD
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    OUTPUT_VARIABLE AEROSIMLAB_GIT_BRANCH_REFERENCE
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-  )
-  if(AEROSIMLAB_GIT_BRANCH_REFERENCE)
-    execute_process(
-      COMMAND "${GIT_EXECUTABLE}" rev-parse --git-path "${AEROSIMLAB_GIT_BRANCH_REFERENCE}"
-      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-      OUTPUT_VARIABLE AEROSIMLAB_GIT_BRANCH_FILE
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET
-    )
-    if(AEROSIMLAB_GIT_BRANCH_FILE)
-      get_filename_component(AEROSIMLAB_GIT_BRANCH_FILE
-        "${AEROSIMLAB_GIT_BRANCH_FILE}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
-      if(EXISTS "${AEROSIMLAB_GIT_BRANCH_FILE}")
-        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-          "${AEROSIMLAB_GIT_BRANCH_FILE}")
-      endif()
-    endif()
-  endif()
-
-  execute_process(
-    COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    OUTPUT_VARIABLE AEROSIMLAB_SOURCE_REVISION
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-  )
-  if(NOT AEROSIMLAB_SOURCE_REVISION)
-    set(AEROSIMLAB_SOURCE_REVISION "unknown")
-  endif()
-  execute_process(
-    COMMAND "${GIT_EXECUTABLE}" status --porcelain
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    OUTPUT_VARIABLE AEROSIMLAB_WORKTREE_STATUS
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-  )
-  if(AEROSIMLAB_WORKTREE_STATUS)
-    string(APPEND AEROSIMLAB_SOURCE_REVISION "-dirty")
-  endif()
-endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -353,6 +288,20 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     )
   endif()
   target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator)
+  set(_aerosimlab_generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
+  set(_aerosimlab_build_revision_header
+    "${_aerosimlab_generated_dir}/AeroSimLabBuildRevision.h")
+  add_custom_target(aerosimlab_build_revision
+    COMMAND "${CMAKE_COMMAND}"
+      "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
+      "-DOUTPUT=${_aerosimlab_build_revision_header}"
+      "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
+      -P "${CMAKE_SOURCE_DIR}/cmake/GenerateBuildRevision.cmake"
+    BYPRODUCTS "${_aerosimlab_build_revision_header}"
+    VERBATIM
+  )
+  add_dependencies(aerosimlab_simulator_app aerosimlab_build_revision)
+  target_include_directories(aerosimlab_simulator_app PRIVATE "${_aerosimlab_generated_dir}")
   target_link_libraries(aerosimlab_simulator_app PUBLIC
     aerosimlab_graphics
     aerosimlab_simulation_core
@@ -368,10 +317,6 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   )
-  # 커밋 표시는 벤치마크 결과를 만드는 파일에서만 사용한다.
-  # 대상 전체에 넣으면 커밋할 때마다 시뮬레이터 파일을 전부 다시 컴파일한다.
-  set_source_files_properties(apps/simulator/AeroSimLabAppBenchmark.cpp PROPERTIES
-    COMPILE_DEFINITIONS "AEROSIMLAB_SOURCE_REVISION=\"${AEROSIMLAB_SOURCE_REVISION}\"")
   if(WIN32)
     target_link_libraries(aerosimlab_simulator_app PRIVATE Psapi)
   endif()
