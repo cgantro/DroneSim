@@ -56,6 +56,7 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
                 : simulation::CaptureAssessment::Ready,
             error)) << error;
     }
+    std::fill(frame.pixels.begin(), frame.pixels.end(), 0U);
     auto metadataPath = videoPath;
     metadataPath.replace_extension(".jsonl");
     EXPECT_FALSE(std::filesystem::exists(metadataPath));
@@ -76,6 +77,7 @@ void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
     ASSERT_TRUE(decodedVideo.read(decodedFrame));
     EXPECT_EQ(decodedFrame.cols, cameraModel.imageWidthPixels);
     EXPECT_EQ(decodedFrame.rows, cameraModel.imageHeightPixels);
+    EXPECT_GT(cv::mean(decodedFrame)[0], 100.0);
     decodedVideo.release();
 
     std::ifstream metadata(metadataPath);

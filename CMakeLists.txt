@@ -96,6 +96,7 @@ endif()
 
 if(NOT EMSCRIPTEN)
   find_package(OpenCV REQUIRED COMPONENTS core imgproc videoio)
+  find_package(Threads REQUIRED)
 endif()
 
 option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
@@ -304,7 +305,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   )
   if(NOT EMSCRIPTEN)
     target_link_libraries(aerosimlab_simulator_app PRIVATE
-      aerosimlab_vision aerosimlab_imgui opencv_videoio)
+      aerosimlab_vision aerosimlab_imgui opencv_videoio Threads::Threads)
   endif()
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_REVISION="${AEROSIMLAB_SOURCE_REVISION}"

@@ -33,7 +33,10 @@ public:
         const std::string& facilityId, const std::string& inspectionZoneId,
         std::string& error);
 
-    /** @brief RGB 프레임, 카메라 자세, 점검 구역 판정을 함께 저장한다. */
+    /**
+     * @brief 프레임과 촬영 정보를 제한된 대기열에 복사해 인코더 작업자에게 넘긴다.
+     * @return 저장 대기열이 처리 속도를 따라가지 못하면 빠짐없이 저장할 수 있도록 false를 돌려준다.
+     */
     [[nodiscard]] bool WriteFrame(const sensor::RgbFrame& frame,
         const simulation::CameraState& camera, double simulationTimeSeconds,
         simulation::CaptureAssessment captureAssessment,
@@ -60,6 +63,7 @@ private:
     std::filesystem::path metadataPath_;
     std::filesystem::path metadataTemporaryPath_;
     std::uint64_t savedFrameCount_ = 0;
+    std::uint64_t queuedFrameCount_ = 0;
     int width_ = 0;
     int height_ = 0;
     double framesPerSecond_ = 0.0;
