@@ -55,6 +55,7 @@ enum ControlId : int
     recordingReplayButtonId,
     videoRecordingStartButtonId,
     videoRecordingStopButtonId,
+    inspectionStartButtonId,
     addDroneButtonId,
     droneListId
 };
@@ -283,7 +284,7 @@ void SetControlsEnabled(AppState& state, bool enabled)
         cameraOnButtonId, cameraOffButtonId, cameraFaultButtonId, cameraRecoverButtonId,
         recordingStartButtonId, recordingStopButtonId, recordingReplayButtonId,
         videoRecordingStartButtonId, videoRecordingStopButtonId,
-        addDroneButtonId};
+        inspectionStartButtonId, addDroneButtonId};
     for (const int id : buttonIds)
         EnableWindow(GetDlgItem(GetParent(state.statusText), id), enabled);
 }
@@ -399,7 +400,8 @@ void ShowResult(AppState& state)
                   << primaryDrone.positionMeters.y << L", " << primaryDrone.positionMeters.z << L")m\r\n"
                   << L"카메라: " << WidenAscii(aerosimlab::communication::ToString(
                       reply.telemetry.camera.status))
-                  << L"   생성 프레임: " << reply.telemetry.camera.frameCount;
+                  << L"   생성 프레임: " << reply.telemetry.camera.frameCount
+                  << L"\r\n점검 임무: " << FromUtf8(reply.telemetry.inspectionMissionStatus);
         SetWindowTextW(state.telemetryText, telemetry.str().c_str());
         SendMessageW(state.droneList, LB_RESETCONTENT, 0, 0);
         for (const auto& droneTelemetry : reply.telemetry.drones)
@@ -479,6 +481,8 @@ void CreateControls(HWND window, AppState& state)
         20, 375, 155, 32, videoRecordingStartButtonId);
     AddControl(window, L"BUTTON", L"영상 녹화 종료", BS_PUSHBUTTON,
         185, 375, 155, 32, videoRecordingStopButtonId);
+    AddControl(window, L"BUTTON", L"자동 점검 시작", BS_PUSHBUTTON,
+        350, 375, 180, 32, inspectionStartButtonId);
 
     AddLabel(window, L"편대 상태", 565, 62, 150);
     AddControl(window, L"BUTTON", L"드론 추가", BS_PUSHBUTTON,
@@ -565,6 +569,9 @@ LRESULT HandleCommand(HWND window, AppState& state, WPARAM wParam)
         break;
     case videoRecordingStopButtonId:
         packet.command = aerosimlab::communication::VideoRecordingCommand::Stop;
+        break;
+    case inspectionStartButtonId:
+        packet.command = aerosimlab::communication::InspectionCommand::Start;
         break;
     case addDroneButtonId:
         packet.command = aerosimlab::communication::FleetCommand::AddDrone;

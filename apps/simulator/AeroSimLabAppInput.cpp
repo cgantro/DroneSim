@@ -529,6 +529,12 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         {
             ApplyVideoRecordingCommand(command, reply);
         },
+        [this, &reply](aerosimlab::communication::InspectionCommand)
+        {
+            reply.accepted = RequestInspectionMission();
+            reply.status = reply.accepted
+                ? "inspection_mission_started" : InspectionMissionStatus();
+        },
         [this, &reply](aerosimlab::communication::FleetCommand command)
         {
             if (command == aerosimlab::communication::FleetCommand::AddDrone)
@@ -576,6 +582,7 @@ aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
     telemetry.simulationTimeSeconds = simulation_.SimulationTimeSeconds();
     telemetry.drone = simulation_.State();
     telemetry.camera = simulation_.Camera();
+    telemetry.inspectionMissionStatus = InspectionMissionStatus();
     telemetry.drones.reserve(fleetDroneIds_.size());
     for (const auto id : fleetDroneIds_)
     {

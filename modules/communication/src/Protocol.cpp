@@ -185,6 +185,12 @@ Telemetry ReadTelemetry(const Json& value)
     camera.frameCount = ReadUnsigned(Required(value, "camera_frame_count"), "camera_frame_count");
     camera.lastFrameTick = ReadUnsigned(Required(value, "camera_last_frame_tick"), "camera_last_frame_tick");
     telemetry.drones = ReadFleetTelemetry(value);
+    if (value.contains("inspection_mission_status"))
+    {
+        if (!value["inspection_mission_status"].is_string())
+            throw std::invalid_argument("점검 임무 상태가 문자열이 아닙니다.");
+        telemetry.inspectionMissionStatus = value["inspection_mission_status"].get<std::string>();
+    }
     return telemetry;
 }
 
@@ -210,6 +216,12 @@ VideoRecordingCommand ReadVideoRecordingCommand(std::string_view action)
     if (action == "video_start") return VideoRecordingCommand::Start;
     if (action == "video_stop") return VideoRecordingCommand::Stop;
     throw std::invalid_argument("알 수 없는 영상 녹화 명령입니다.");
+}
+
+InspectionCommand ReadInspectionCommand(std::string_view action)
+{
+    if (action == "start") return InspectionCommand::Start;
+    throw std::invalid_argument("알 수 없는 점검 임무 명령입니다.");
 }
 
 simulation::DroneCommand ReadDroneCommand(const Json& payload, std::string_view action)
@@ -311,6 +323,11 @@ Json EncodeCommandPayload(VideoRecordingCommand command)
     return {{"target", "video_recording"}, {"action", action}};
 }
 
+Json EncodeCommandPayload(InspectionCommand)
+{
+    return {{"target", "inspection_mission"}, {"action", "start"}};
+}
+
 Json EncodeCommandPayload(FleetCommand command)
 {
     const char* action = command == FleetCommand::AddDrone ? "add_drone" : "status";
@@ -364,6 +381,11 @@ CommandPacket DecodeCommand(std::string_view datagram)
         packet.command = ReadVideoRecordingCommand(action);
         return packet;
     }
+    if (target == "inspection_mission")
+    {
+        packet.command = ReadInspectionCommand(action);
+        return packet;
+    }
     if (target == "fleet")
     {
         if (action == "add_drone") packet.command = FleetCommand::AddDrone;
@@ -389,7 +411,8 @@ std::string EncodeReply(const CommandReply& reply)
         {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
         {"camera_status", aerosimlab::communication::ToString(camera.status)},
         {"camera_frame_count", camera.frameCount},
-        {"camera_last_frame_tick", camera.lastFrameTick}
+        {"camera_last_frame_tick", camera.lastFrameTick},
+        {"inspection_mission_status", reply.telemetry.inspectionMissionStatus}
     };
     if (reply.status != "fleet_status" && reply.telemetry.drones.size() <= 1U)
     {
