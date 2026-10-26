@@ -72,6 +72,13 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
     constexpr glm::dvec2 previousStartMeters{-472.0, 442.0};
     constexpr glm::dvec2 startMeters{-410.0, 442.0};
     const double previousGroundHeight = terrainGrid.HeightAtLocalMeters(previousStartMeters);
+    const double currentGroundHeight = terrainGrid.HeightAtLocalMeters(startMeters);
+    EXPECT_FALSE(std::any_of(inspectionBuildings.begin(), inspectionBuildings.end(),
+        [&startMeters, currentGroundHeight](const terrain::MapBuilding& building)
+        {
+            return terrain::ContainsMapBuildingVolume(building,
+                {startMeters.x, startMeters.y, currentGroundHeight + 0.24});
+        })) << "현재 출발 위치가 건물 충돌 부피와 겹칩니다.";
     const glm::dvec2 previousObserverXY = observerPosition(previousStartMeters);
     const glm::dvec3 previousObserverPosition{
         previousObserverXY.x, previousObserverXY.y, previousGroundHeight + 0.24 + 10.0};
@@ -91,21 +98,58 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
         }));
 
     const glm::dvec2 currentObserverXY = observerPosition(startMeters);
-    const double currentGroundHeight = terrainGrid.HeightAtLocalMeters(startMeters);
     EXPECT_FALSE(terrain::ContainsMapBuildingVolume(*gym,
         {currentObserverXY.x, currentObserverXY.y, currentGroundHeight + 0.24 + 10.0}));
 
-    SimulationCore previousStart{SimulationDynamics::RigidBody};
-    previousStart.SetTerrain(terrainGrid);
-    previousStart.SetInitialPose({previousStartMeters.x, previousStartMeters.y,
-        previousGroundHeight + 0.24}, 0.0);
-    ASSERT_EQ(previousStart.Apply(Command(DroneCommand::Kind::TakeOff)),
-        CommandResult::Accepted);
-    for (int tick = 0; tick < 600; ++tick)
-        previousStart.AdvanceOneTick();
-    EXPECT_NE(previousStart.State().mode, FlightMode::TakingOff);
+    const auto addBuildingCollisions = [&inspectionBuildings](SimulationCore& target)
+    {
+        for (const auto& building : inspectionBuildings)
+        {
+            const auto bounds = terrain::GetMapBuildingBoundsMeters(building);
+            target.AddStaticObstaclePrism(building.outlineMeters,
+                bounds.centerMeters.z - bounds.halfExtentsMeters.z,
+                bounds.centerMeters.z + bounds.halfExtentsMeters.z);
+        }
+    };
+    const auto verifyTakeoff = [&terrainGrid, &addBuildingCollisions](
+        const glm::dvec2& position)
+    {
+        SimulationCore target{SimulationDynamics::RigidBody};
+        target.SetTerrain(terrainGrid);
+        addBuildingCollisions(target);
+        const double ground = terrainGrid.HeightAtLocalMeters(position);
+        target.SetInitialPose({position.x, position.y, ground + 0.24}, 0.0);
+        EXPECT_EQ(target.Apply(Command(DroneCommand::Kind::TakeOff)),
+            CommandResult::Accepted);
 
-    const double groundHeight = terrainGrid.HeightAtLocalMeters(startMeters);
+        std::mt19937 windGenerator{0x44524F4EU};
+        glm::dvec3 windVelocity{0.0};
+        glm::dvec3 windTarget{0.0};
+        std::uint32_t gustTicksRemaining = 0U;
+        std::uniform_real_distribution<double> chooseWind{-0.5, 0.5};
+        for (int tick = 0; tick < 6000; ++tick)
+        {
+            if (gustTicksRemaining == 0U)
+            {
+                windTarget = {chooseWind(windGenerator), chooseWind(windGenerator), 0.0};
+                gustTicksRemaining = 240U;
+            }
+            --gustTicksRemaining;
+            windVelocity += (windTarget - windVelocity) * 0.01;
+            target.SetWindVelocityMetersPerSecond(windVelocity);
+            target.AdvanceOneTick();
+        }
+        EXPECT_NE(target.State().mode, FlightMode::TakingOff)
+            << "출발점=" << position.x << "," << position.y
+            << " 현재 위치=" << target.State().positionMeters.x << ","
+            << target.State().positionMeters.y << ","
+            << target.State().positionMeters.z;
+        EXPECT_GT(target.State().positionMeters.z, ground + 0.5);
+    };
+    verifyTakeoff(previousStartMeters);
+    verifyTakeoff(startMeters);
+
+    const double groundHeight = currentGroundHeight;
 
     SimulationCore simulation{SimulationDynamics::RigidBody};
     simulation.SetTerrain(terrainGrid);
