@@ -99,6 +99,8 @@
       var eoWebRtcSender = null;
       var eoWebRtcReceiver = null;
       var eoRecorderChunks = [];
+      var eoRecorderSink = null;
+      var eoRecorderFileName = "";
       var eoZoneRecorder = null;
       var eoZoneRecorderChunks = [];
       var eoZoneRecordings = [];
@@ -329,6 +331,48 @@
         return url;
       }
 
+      async function openRecordingSink(fileName) {
+        if (!navigator.storage || typeof navigator.storage.getDirectory !== "function")
+          return null;
+        try {
+          var root = await navigator.storage.getDirectory();
+          var directory = await root.getDirectoryHandle("DroneSim", { create: true });
+          var fileHandle = await directory.getFileHandle(fileName, { create: true });
+          var writable = await fileHandle.createWritable();
+          return {
+            fileHandle: fileHandle,
+            writable: writable,
+            pendingWrite: Promise.resolve(),
+            error: null,
+            append: function (chunk) {
+              if (this.error)
+                return;
+              this.pendingWrite = this.pendingWrite
+                .then(() => this.error ? undefined : this.writable.write(chunk))
+                .catch((error) => { this.error = error; });
+            },
+            finish: async function () {
+              await this.pendingWrite;
+              if (this.error) {
+                try { await this.writable.abort(); } catch (_) {}
+                try { await directory.removeEntry(fileName); } catch (_) {}
+                throw this.error;
+              }
+              await this.writable.close();
+              return await this.fileHandle.getFile();
+            },
+            abort: async function () {
+              try { await this.writable.abort(); } catch (_) {}
+              try { await directory.removeEntry(fileName); } catch (_) {}
+            }
+          };
+        } catch (error) {
+          setEoRecordingStatus("브라우저에 바로 저장할 수 없어 녹화 조각을 메모리에 보관합니다: "
+            + error.message);
+          return null;
+        }
+      }
+
       async function saveRecordingToBrowser(fileName, blob) {
         if (!navigator.storage || typeof navigator.storage.getDirectory !== "function")
           return { file: blob, saved: false };
@@ -552,18 +596,34 @@
         recorder.stream.getTracks().forEach(function (track) { track.stop(); });
         eoRecorderVideoTrack = null;
 
-        var videoBlob = new Blob(eoRecorderChunks, { type: recorder.mimeType || "video/webm" });
+        var videoName = eoRecorderFileName;
+        var storedVideo = null;
+        var saveFailure = null;
+        var videoMimeType = recorder.mimeType || "video/webm";
+        if (eoRecorderSink) {
+          try {
+            var savedFile = await eoRecorderSink.finish();
+            storedVideo = { file: savedFile, saved: true };
+          } catch (error) {
+            saveFailure = error;
+          }
+          eoRecorderSink = null;
+        } else {
+          var videoBlob = new Blob(eoRecorderChunks, { type: videoMimeType });
+          if (videoBlob.size > 0)
+            storedVideo = await saveRecordingToBrowser(videoName, videoBlob);
+        }
         eoRecorderChunks = [];
-        if (videoBlob.size === 0) {
-          setEoRecordingStatus("영상 프레임이 없어 저장하지 못했습니다.");
+        eoRecorderFileName = "";
+        if (!storedVideo || storedVideo.file.size === 0) {
+          setEoRecordingStatus(saveFailure
+            ? "영상 조각을 브라우저에 저장하지 못했습니다: " + saveFailure.message
+            : "영상 프레임이 없어 저장하지 못했습니다.");
           eoRecordingFinalizing = false;
           return;
         }
 
-        var timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        var videoName = "dronesim-eo-" + timestamp + ".webm";
         var finalSample = eoTelemetrySamples[eoTelemetrySamples.length - 1];
-        var storedVideo = await saveRecordingToBrowser(videoName, videoBlob);
         var videoUrl = createDownloadUrl(storedVideo.file);
         var videoLink = document.getElementById("web-eo-video-download");
         videoLink.href = videoUrl;
@@ -613,7 +673,7 @@
             && verifiedZoneVideos ? "VERIFIED" : "INCOMPLETE",
           recording_source: "시뮬레이터 화면의 EO 시점 영역",
           video_file: videoName,
-          video_mime_type: videoBlob.type,
+          video_mime_type: videoMimeType,
           video_bytes: storedVideo.file.size,
           storage_state: mediaSaved ? "SAVED" : "CAPTURED",
           storage_backend: mediaSaved ? "OPFS" : "일부 저장 또는 다운로드 전용",
@@ -677,13 +737,20 @@
         document.getElementById("web-eo-zone-downloads").replaceChildren();
         eoRecordingStartedAt = performance.now();
         eoLastTelemetrySampleAt = 0;
+        var timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        eoRecorderFileName = "dronesim-eo-" + timestamp + ".webm";
         var stream = null;
         try {
+          eoRecorderSink = await openRecordingSink(eoRecorderFileName);
           stream = eoStreamCanvas.captureStream(20);
           eoRecorder = new MediaRecorder(stream, { mimeType: mimeType });
           eoRecorderVideoTrack = stream.getVideoTracks()[0] || null;
           eoRecorder.addEventListener("dataavailable", function (event) {
-            if (event.data && event.data.size > 0)
+            if (!event.data || event.data.size === 0)
+              return;
+            if (eoRecorderSink)
+              eoRecorderSink.append(event.data);
+            else
               eoRecorderChunks.push(event.data);
           });
           eoRecorder.addEventListener("error", function (event) {
@@ -692,10 +759,16 @@
           });
           eoRecorder.start(1000);
           copyEoViewport();
-          setEoRecordingStatus("녹화 중");
+          setEoRecordingStatus(eoRecorderSink
+            ? "녹화 중 · 브라우저 저장 공간에 조각별 기록"
+            : "녹화 중 · 종료 후 브라우저에 저장");
           return true;
         } catch (error) {
           eoRecorder = null;
+          if (eoRecorderSink)
+            await eoRecorderSink.abort();
+          eoRecorderSink = null;
+          eoRecorderFileName = "";
           if (stream)
             stream.getTracks().forEach(function (track) { track.stop(); });
           setEoRecordingStatus("녹화를 시작하지 못했습니다: " + error.message);

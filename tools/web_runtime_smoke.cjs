@@ -203,6 +203,12 @@ async function run() {
     await inspectionTarget.selectOption("1");
     const selectedFacility = await inspectionTarget.locator("option:checked").innerText();
     await page.getByRole("button", { name: "자동 점검 시작" }).click();
+    await page.waitForFunction(
+      () => document.querySelector("#web-eo-recording")?.textContent
+        .includes("브라우저 저장 공간에 조각별 기록"),
+      null,
+      { timeout: 10000 }
+    );
     try {
       await page.waitForFunction(
         () => {
