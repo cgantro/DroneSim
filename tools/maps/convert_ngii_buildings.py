@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any
 
 
-BUILDING_LAYER = "N1A_A0010000"
-BRIDGE_LAYER = "N1A_A0070000"
-TREE_LAYER = "N1P_D0030000"
+BUILDING_LAYERS = ("N1A_A0010000", "N3A_A0010000")
+BRIDGE_LAYERS = ("N1A_A0070000", "N3A_A0070000")
+TREE_LAYERS = ("N1P_D0030000", "N3P_D0030000")
 WGS84_A = 6_378_137.0
 WGS84_F = 1.0 / 298.257222101
 E2 = WGS84_F * (2.0 - WGS84_F)
@@ -559,11 +559,22 @@ def _is_bridge_duplicate_building(
     return False
 
 
+def _find_layer_files(
+    members: dict[str, str], layer_names: tuple[str, ...]
+) -> tuple[str | None, str | None, str | None]:
+    """1:1,000 도엽에서 건물·교량·나무 레이어의 파일을 찾는다."""
+    for layer_name in layer_names:
+        layer = layer_name.lower()
+        files = tuple(members.get(layer + suffix) for suffix in (".shp", ".dbf", ".prj"))
+        if all(files):
+            return files
+    return None, None, None
+
+
 def _read_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, Any]]:
     with zipfile.ZipFile(path) as archive:
         members = {Path(name).name.lower(): name for name in archive.namelist()}
-        layer = BUILDING_LAYER.lower()
-        shp_name, dbf_name, prj_name = (members.get(layer + suffix) for suffix in (".shp", ".dbf", ".prj"))
+        shp_name, dbf_name, prj_name = _find_layer_files(members, BUILDING_LAYERS)
         if not shp_name or not dbf_name or not prj_name:
             return []
         projection = archive.read(prj_name).decode("cp949", "replace")
@@ -597,10 +608,7 @@ def _read_tree_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, A
     """1:1,000 수치지도에 표시된 나무 위치를 GeoJSON 점으로 바꾼다."""
     with zipfile.ZipFile(path) as archive:
         members = {Path(name).name.lower(): name for name in archive.namelist()}
-        layer = TREE_LAYER.lower()
-        shp_name, dbf_name, prj_name = (
-            members.get(layer + suffix) for suffix in (".shp", ".dbf", ".prj")
-        )
+        shp_name, dbf_name, prj_name = _find_layer_files(members, TREE_LAYERS)
         if not shp_name or not dbf_name or not prj_name:
             return []
         projection = archive.read(prj_name).decode("cp949", "replace")
@@ -642,10 +650,7 @@ def _read_bridge_archive(path: Path, bounds: dict[str, float]) -> list[dict[str,
     """1:1,000 수치지도에 기록된 교량 외곽선을 장면 좌표로 바꾼다."""
     with zipfile.ZipFile(path) as archive:
         members = {Path(name).name.lower(): name for name in archive.namelist()}
-        layer = BRIDGE_LAYER.lower()
-        shp_name, dbf_name, prj_name = (
-            members.get(layer + suffix) for suffix in (".shp", ".dbf", ".prj")
-        )
+        shp_name, dbf_name, prj_name = _find_layer_files(members, BRIDGE_LAYERS)
         if not shp_name or not dbf_name or not prj_name:
             return []
         projection = archive.read(prj_name).decode("cp949", "replace")
