@@ -89,20 +89,25 @@ const char* MissionOutcomeName(EoVideoRecorder::MissionOutcome outcome)
     return "UNKNOWN";
 }
 
-std::filesystem::path UserDataDirectory()
+std::filesystem::path RecordingDirectory()
 {
+#ifdef AEROSIMLAB_SOURCE_DIR
+    return std::filesystem::path{AEROSIMLAB_SOURCE_DIR} / "output" / "recordings";
+#else
 #ifdef _WIN32
     if (const char* localAppData = std::getenv("LOCALAPPDATA");
         localAppData && *localAppData)
-        return std::filesystem::path{localAppData} / "DroneSim";
+        return std::filesystem::path{localAppData} / "DroneSim" / "recordings";
 #else
     if (const char* xdgDataHome = std::getenv("XDG_DATA_HOME");
         xdgDataHome && *xdgDataHome)
-        return std::filesystem::path{xdgDataHome} / "dronesim";
+        return std::filesystem::path{xdgDataHome} / "dronesim" / "recordings";
     if (const char* home = std::getenv("HOME"); home && *home)
-        return std::filesystem::path{home} / ".local" / "share" / "dronesim";
+        return std::filesystem::path{home} / ".local" / "share" / "dronesim"
+            / "recordings";
 #endif
-    return std::filesystem::temp_directory_path() / "DroneSim";
+    return std::filesystem::temp_directory_path() / "DroneSim" / "recordings";
+#endif
 }
 }
 
@@ -549,7 +554,7 @@ bool EoVideoRecorder::CalculateFileChecksum(
 std::vector<std::filesystem::path> EoVideoRecorder::FindSavedCaptures()
 {
     std::vector<std::filesystem::path> captures;
-    const auto directory = UserDataDirectory() / "recordings";
+    const auto directory = RecordingDirectory();
     std::error_code error;
     if (!std::filesystem::is_directory(directory, error))
         return captures;
@@ -649,6 +654,6 @@ std::filesystem::path NewEoRecordingPath()
     std::ostringstream name;
     name << "inspection_" << std::put_time(&localTime, "%Y%m%d_%H%M%S")
          << '_' << std::setw(3) << std::setfill('0') << milliseconds << ".mp4";
-    return UserDataDirectory() / "recordings" / name.str();
+    return RecordingDirectory() / name.str();
 }
 }
