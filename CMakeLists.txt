@@ -272,6 +272,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     apps/simulator/AeroSimLabApp.cpp
     apps/simulator/AeroSimLabAppLifecycle.cpp
     apps/simulator/AeroSimLabAppBenchmark.cpp
+    apps/simulator/BuildRevision.cpp
     apps/simulator/AeroSimLabAppGamepad.cpp
     apps/simulator/AeroSimLabAppInput.cpp
     apps/simulator/AeroSimLabAppMission.cpp

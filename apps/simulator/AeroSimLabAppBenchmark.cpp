@@ -1,5 +1,5 @@
 #include "AeroSimLabApp.h"
-#include "AeroSimLabBuildRevision.h"
+#include "BuildRevision.h"
 #include "SimulationBenchmark.h"
 #include "graphics/GlApi.h"
 #include "graphics/Window.h"
@@ -79,7 +79,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     };
 
     ViewerBenchmarkMeasurements measurements = benchmarkMeasurements_;
-    measurements.sourceRevision = aerosimlab::build_info::sourceRevision;
+    measurements.sourceRevision = aerosimlab::simulator::BuildRevision();
     measurements.windowVisible = visibleBenchmarkMode_;
     measurements.warmupSeconds = benchmarkWarmupDurationSeconds;
     measurements.framebufferWidth = framebufferWidth;
