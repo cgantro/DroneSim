@@ -775,8 +775,6 @@ void AeroSimLabApp::LoadMapFeatures()
     routeBuildings_ = aerosimlab::terrain::LoadMapBuildingFootprints(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto& buildings = routeBuildings_;
-    const auto roads = aerosimlab::terrain::LoadMapRoads(
-        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto bridges = aerosimlab::terrain::LoadMapBridgeFootprints(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto waterBodies = aerosimlab::terrain::LoadMapWaterBodies(
@@ -796,8 +794,13 @@ void AeroSimLabApp::LoadMapFeatures()
         simulation_.AddStaticObstaclePrism(
             bridge.outlineMeters, ground + 6.0, ground + 6.8);
     }
-    roadMesh_ = CreateRoadMesh(roads, false);
-    bridgeMesh_ = CreateRoadMesh(roads, true);
+    if (terrainSurfaceTexture_ == nullptr)
+    {
+        const auto roads = aerosimlab::terrain::LoadMapRoads(
+            AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+        roadMesh_ = CreateRoadMesh(roads, false);
+        bridgeMesh_ = CreateRoadMesh(roads, true);
+    }
     bridgeFootprintMesh_ = CreateBridgeFootprintMesh(bridges);
     waterMesh_ = CreateWaterMesh(waterBodies, terrainGrid_);
     taggedBuildingMesh_ = CreateBuildingMesh(buildings,
