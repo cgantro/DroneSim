@@ -1623,8 +1623,8 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     const float yaw = static_cast<float>(state.yawRadians);
     const glm::vec3 forward{std::cos(yaw), 0.0F, -std::sin(yaw)};
     const glm::vec3 up{0.0F, 1.0F, 0.0F};
-    constexpr double followDistanceMeters = 10.0;
-    constexpr double followHeightMeters = 6.0;
+    constexpr double followDistanceMeters = 6.0;
+    constexpr double followHeightMeters = 3.5;
     glm::dvec3 observerPositionMeters = state.positionMeters
         - glm::dvec3{std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0}
             * followDistanceMeters
@@ -1634,7 +1634,7 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
         observerPositionMeters, state.positionMeters, routeBuildings_, 0.5))
         observerPositionMeters = *clearPosition;
     observerCamera_->SetPosition(ToRenderPosition(observerPositionMeters));
-    observerCamera_->SetTarget(dronePosition + forward * 4.0F + up * 1.5F);
+    observerCamera_->SetTarget(dronePosition + forward * 2.0F + up * 0.8F);
     observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
     observerCamera_->SetFieldOfViewDegrees(50.0F);
 }
@@ -1812,7 +1812,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         droneCameraModel_->Draw(cameraMount, *renderer_, *shader_, view, projection,
             cameraPosition);
 
-        if (showMissionGuides
+        if (showMissionGuides && InspectionMissionIsActive()
             && cameraState.status == aerosimlab::simulation::CameraStatus::Active)
         {
             const glm::dvec3 cameraForward = glm::normalize(
@@ -1821,7 +1821,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
                 aerosimlab::simulation::EoCameraModel::UpAxis(cameraState));
             const glm::dvec3 cameraRight = glm::normalize(
                 glm::cross(cameraForward, cameraUp));
-            constexpr double viewDistanceMeters = 5.0;
+            constexpr double viewDistanceMeters = 1.5;
             const double halfHeightMeters = viewDistanceMeters * std::tan(
                 glm::radians(cameraState.model.verticalFieldOfViewDegrees * 0.5));
             const double halfWidthMeters = halfHeightMeters
