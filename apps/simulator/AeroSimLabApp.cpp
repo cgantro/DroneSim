@@ -1222,6 +1222,21 @@ void AeroSimLabApp::LoadMapFeatures()
             .routeAutomaticallyPlanned = true});
     }
 
+    // 기본 임무는 아파트 외벽보다 탄천교와 물길을 먼저 지나도록 순서를 정한다.
+    const auto targetPriority = [](const InspectionTarget& target)
+    {
+        if (target.zoneId == "bridge-underside")
+            return 0;
+        if (target.zoneId == "river-channel")
+            return 1;
+        return 2;
+    };
+    std::stable_sort(inspectionTargets_.begin(), inspectionTargets_.end(),
+        [&targetPriority](const InspectionTarget& left, const InspectionTarget& right)
+        {
+            return targetPriority(left) < targetPriority(right);
+        });
+
     glm::dvec3 routeStart{
         demoDroneStartMeters.x,
         demoDroneStartMeters.y,
@@ -1587,9 +1602,11 @@ void AeroSimLabApp::RenderFrame()
             == aerosimlab::simulation::CameraStatus::Active;
         const auto& camera = simulation_.Camera();
         const glm::dvec3& dronePosition = simulation_.State().positionMeters;
+        const glm::dvec3& capturePosition = inspectionTargets_[
+            inspectionMission_.activeTargetIndex].approachPositionMeters;
         const double missionDistanceMeters = std::hypot(
-            inspectionMission_.goalMeters.x - dronePosition.x,
-            inspectionMission_.goalMeters.y - dronePosition.y);
+            capturePosition.x - dronePosition.x,
+            capturePosition.y - dronePosition.y);
         const bool missionCanStart = inspectionMission_.stage
                 == InspectionMissionStage::Ready
             || inspectionMission_.stage == InspectionMissionStage::Saved
