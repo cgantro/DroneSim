@@ -467,6 +467,74 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgeFootprintMesh(
         indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
 
+/** @brief 같은 교각 발자국으로 화면에 보일 기둥 메시를 만든다. */
+std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgePierMesh(
+    const std::vector<aerosimlab::terrain::MapBridgePier>& piers)
+{
+    std::vector<aerosimlab::graphics::Vertex> vertices;
+    std::vector<std::uint32_t> indices;
+    for (const auto& pier : piers)
+    {
+        const auto triangles = TriangulateFootprint(pier.outlineMeters);
+        if (triangles.empty())
+            continue;
+
+        const double winding = PolygonArea(pier.outlineMeters) > 0.0 ? 1.0 : -1.0;
+        const std::uint32_t topStart = static_cast<std::uint32_t>(vertices.size());
+        for (const auto& point : pier.outlineMeters)
+        {
+            vertices.push_back({ToRenderPosition(
+                {point.x, point.y, pier.topElevationMeters}),
+                {0.0F, 1.0F, 0.0F}, {static_cast<float>(point.x),
+                    static_cast<float>(point.y)}});
+        }
+        for (const auto& triangle : triangles)
+        {
+            if (winding > 0.0)
+                indices.insert(indices.end(), {topStart + triangle[0],
+                    topStart + triangle[2], topStart + triangle[1]});
+            else
+                indices.insert(indices.end(), {topStart + triangle[0],
+                    topStart + triangle[1], topStart + triangle[2]});
+        }
+
+        for (std::size_t index = 0; index < pier.outlineMeters.size(); ++index)
+        {
+            const std::size_t next = (index + 1U) % pier.outlineMeters.size();
+            const glm::dvec2& first = pier.outlineMeters[index];
+            const glm::dvec2& second = pier.outlineMeters[next];
+            const glm::dvec2 edge = second - first;
+            glm::dvec3 outward{edge.y, 0.0, edge.x};
+            outward *= winding;
+            const glm::vec3 normal = glm::normalize(ToRenderDirection(outward));
+            const float edgeLength = static_cast<float>(glm::length(edge));
+            const float pierHeight = static_cast<float>(
+                pier.topElevationMeters - pier.bottomElevationMeters);
+            constexpr float concreteTileWidthMeters = 5.0F;
+            constexpr float concreteTileHeightMeters = 3.0F;
+            const std::uint32_t wallStart = static_cast<std::uint32_t>(vertices.size());
+            vertices.insert(vertices.end(), {
+                {ToRenderPosition({first.x, first.y, pier.bottomElevationMeters}),
+                    normal, {0.0F, pierHeight / concreteTileHeightMeters}},
+                {ToRenderPosition({second.x, second.y, pier.bottomElevationMeters}),
+                    normal, {edgeLength / concreteTileWidthMeters,
+                        pierHeight / concreteTileHeightMeters}},
+                {ToRenderPosition({second.x, second.y, pier.topElevationMeters}),
+                    normal, {edgeLength / concreteTileWidthMeters, 0.0F}},
+                {ToRenderPosition({first.x, first.y, pier.topElevationMeters}),
+                    normal, {0.0F, 0.0F}}});
+            indices.insert(indices.end(), {wallStart, wallStart + 1U, wallStart + 2U,
+                wallStart, wallStart + 2U, wallStart + 3U});
+        }
+    }
+
+    if (indices.empty())
+        return {};
+    return std::make_unique<aerosimlab::graphics::Mesh>(
+        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
+        indices.data(), static_cast<std::uint32_t>(indices.size()));
+}
+
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
     const aerosimlab::terrain::TerrainGrid& terrain)
 {
@@ -861,6 +929,7 @@ void AeroSimLabApp::LoadMapFeatures()
             AssetPath(treeAssets[species]).string());
         treeModels_[species]->SetInstances(treeTransforms[species]);
     }
+    std::vector<aerosimlab::terrain::MapBridgePier> bridgePiers;
     for (const auto& bridge : bridges)
     {
         if (bridge.outlineMeters.size() < 3U || bridge.groundElevationsMeters.empty())
@@ -876,6 +945,15 @@ void AeroSimLabApp::LoadMapFeatures()
         simulation_.AddStaticObstaclePrism(
             bridge.outlineMeters, ground + bridgeDeckUndersideHeightMeters,
             ground + bridgeDeckUndersideHeightMeters + bridgeDeckThicknessMeters);
+        auto estimatedPiers = aerosimlab::terrain::EstimateMapBridgePiers(
+            bridge, terrainGrid_, ground + bridgeDeckUndersideHeightMeters);
+        for (const auto& pier : estimatedPiers)
+        {
+            simulation_.AddStaticObstaclePrism(pier.outlineMeters,
+                pier.bottomElevationMeters, pier.topElevationMeters);
+        }
+        bridgePiers.insert(bridgePiers.end(),
+            estimatedPiers.begin(), estimatedPiers.end());
     }
     if (terrainSurfaceTexture_ == nullptr)
     {
@@ -888,6 +966,7 @@ void AeroSimLabApp::LoadMapFeatures()
         bridges, terrainGrid_, BridgeMeshPart::DeckSurface);
     bridgeStructureMesh_ = CreateBridgeFootprintMesh(
         bridges, terrainGrid_, BridgeMeshPart::DeckStructure);
+    bridgePierMesh_ = CreateBridgePierMesh(bridgePiers);
     waterMesh_ = CreateWaterMesh(waterBodies, terrainGrid_);
     taggedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, terrainGrid_, false);
@@ -1595,6 +1674,9 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     if (bridgeStructureMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *bridgeStructureMesh_,
             bridgeMaterial_, *shader_, view, projection, cameraPosition);
+    if (bridgePierMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *bridgePierMesh_,
+            bridgePierMaterial_, *shader_, view, projection, cameraPosition);
     if (bridgeFootprintMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *bridgeFootprintMesh_, orthophotoMaterial,
             *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());

@@ -499,6 +499,33 @@ void Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection()
     EXPECT_NE(std::find(names.begin(), names.end(), "탄천교"), names.end());
     EXPECT_NE(std::find(names.begin(), names.end(), "수서IC교"), names.end());
     EXPECT_NE(std::find(names.begin(), names.end(), "광평교"), names.end());
+
+    std::size_t estimatedPierCount = 0U;
+    for (const MapBridgeFootprint& bridge : bridges)
+    {
+        if (bridge.name != "탄천교")
+            continue;
+
+        double groundElevation = 0.0;
+        for (const double elevation : bridge.groundElevationsMeters)
+            groundElevation += elevation;
+        groundElevation /= static_cast<double>(bridge.groundElevationsMeters.size());
+
+        const auto piers = EstimateMapBridgePiers(bridge, terrain,
+            groundElevation + 6.0);
+        estimatedPierCount += piers.size();
+        for (const MapBridgePier& pier : piers)
+        {
+            EXPECT_EQ(pier.outlineMeters.size(), 4U);
+            EXPECT_LT(pier.bottomElevationMeters, pier.topElevationMeters);
+            EXPECT_DOUBLE_EQ(pier.topElevationMeters, groundElevation + 6.0);
+            for (const glm::dvec2& corner : pier.outlineMeters)
+            {
+                EXPECT_TRUE(terrain.ContainsLocalPositionMeters(corner));
+            }
+        }
+    }
+    EXPECT_GT(estimatedPierCount, 0U);
 }
 
 void Verify_BridgeOutsideTerrainIsSkipped()

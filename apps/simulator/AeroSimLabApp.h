@@ -10,6 +10,7 @@
 #include "sensor/RgbFrame.h"
 #include "simulation_core/CommandRecording.h"
 #include "simulation_core/EoCameraModel.h"
+#include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
 #include "terrain/MapTrees.h"
 #ifndef __EMSCRIPTEN__
@@ -417,6 +418,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeFootprintMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeStructureMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> bridgePierMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingWallMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingMesh_;
@@ -452,6 +454,8 @@ private:
         glm::vec4{0.22F, 0.25F, 0.27F, 1.0F}, 0.0F, 0.95F};
     aerosimlab::graphics::Material bridgeMaterial_{
         glm::vec4{0.60F, 0.62F, 0.64F, 1.0F}, 0.0F, 0.88F};
+    aerosimlab::graphics::Material bridgePierMaterial_{
+        glm::vec4{0.42F, 0.44F, 0.46F, 1.0F}, 0.0F, 0.92F};
     aerosimlab::graphics::Material buildingMaterial_{
         glm::vec4{0.57F, 0.61F, 0.65F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material estimatedBuildingMaterial_{
