@@ -15,6 +15,74 @@ SPEC.loader.exec_module(converter)
 
 
 class NgiiBuildingConversionTests(unittest.TestCase):
+    def test_integrated_building_archive_streams_name_height_and_floors(self):
+        bounds = {"west": 209000.0, "south": 543795.0,
+                  "east": 209015.0, "north": 543810.0}
+        ring = [
+            (209004.0, 543799.0), (209008.0, 543799.0),
+            (209008.0, 543803.0), (209004.0, 543803.0),
+            (209004.0, 543799.0),
+        ]
+        fields = [("A1", 28), ("A2", 19), ("A16", 18),
+                  ("A24", 254), ("A25", 254), ("A26", 9)]
+        row = {
+            "A1": "building-001",
+            "A2": "1171010500102230000",
+            "A16": "35.4",
+            "A24": "탄천 아파트",
+            "A25": "101동",
+            "A26": "10",
+        }
+
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary) / "integrated.zip"
+            self._write_building_archive(archive, ring, fields, row)
+
+            self.assertTrue(converter._is_integrated_building_archive(archive))
+            features = converter._read_integrated_buildings(archive, bounds)
+
+        self.assertEqual(len(features), 1)
+        tags = features[0]["properties"]["tags"]
+        self.assertEqual(features[0]["id"], "building-001")
+        self.assertEqual(tags["name"], "탄천 아파트")
+        self.assertEqual(tags["height"], "35.4")
+        self.assertEqual(tags["building:levels"], "10")
+
+    def test_integrated_building_metadata_keeps_existing_name_and_records_conflicts(self):
+        ring = [[127.0, 37.0], [127.001, 37.0],
+                [127.001, 37.001], [127.0, 37.001], [127.0, 37.0]]
+        existing = {
+            "type": "Feature",
+            "properties": {
+                "osm_id": "map-building-1",
+                "tags": {
+                    "building": "yes", "name": "기존 건물명",
+                    "height": "28", "building:levels": "8",
+                },
+            },
+            "geometry": {"type": "Polygon", "coordinates": [ring]},
+        }
+        integrated = {
+            "type": "Feature", "id": "source-1",
+            "properties": {"parcel_id": "pnu-1", "tags": {
+                "building": "yes", "name": "새 자료 이름",
+                "height": "30", "building:levels": "9",
+                "height_source": "building-integrated-data",
+            }},
+            "geometry": {"type": "Polygon", "coordinates": [ring]},
+        }
+
+        result = converter._enrich_building_metadata([existing], [integrated])
+        tags = result[0]["properties"]["tags"]
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(tags["name"], "기존 건물명")
+        self.assertEqual(tags["height"], "30")
+        self.assertEqual(tags["building_previous_height"], "28")
+        self.assertEqual(tags["building:levels"], "9")
+        self.assertEqual(tags["building_previous_levels"], "8")
+        self.assertEqual(result[0]["properties"]["building_integrated_id"], "source-1")
+
     def test_scene_origin_projects_back_to_recorded_location(self):
         longitude, latitude = converter.epsg5186_to_wgs84(
             209006.56251788812, 543801.2429522893
@@ -238,7 +306,7 @@ class NgiiBuildingConversionTests(unittest.TestCase):
         self.assertTrue(converter._is_bridge_duplicate_building(building, bridges))
 
     @staticmethod
-    def _write_building_archive(path, ring):
+    def _write_building_archive(path, ring, fields=None, row=None):
         xs, ys = zip(*ring)
         shape_bounds = min(xs), min(ys), max(xs), max(ys)
         content = struct.pack("<i4d2i", 5, *shape_bounds, 1, len(ring))
@@ -251,16 +319,26 @@ class NgiiBuildingConversionTests(unittest.TestCase):
         struct.pack_into("<4d", shape_header, 36, *shape_bounds)
         shape_data = shape_header + struct.pack(">ii", 1, len(content) // 2) + content
 
-        dbf_header = bytearray(65)
+        fields = fields or [("UFID", 254)]
+        row = row or {"UFID": "test-id"}
+        header_size = 32 + 32 * len(fields) + 1
+        row_size = 1 + sum(width for _, width in fields)
+        dbf_header = bytearray(header_size)
         dbf_header[0] = 3
-        struct.pack_into("<IHH", dbf_header, 4, 1, 65, 255)
-        dbf_field = bytearray(32)
-        dbf_field[:4] = b"UFID"
-        dbf_field[11] = ord("C")
-        dbf_field[16] = 254
-        dbf_header[32:64] = dbf_field
-        dbf_header[64] = 0x0D
-        dbf_data = dbf_header + b" " + b"test-id".ljust(254) + b"\x1a"
+        struct.pack_into("<IHH", dbf_header, 4, 1, header_size, row_size)
+        dbf_offset = 32
+        for name, width in fields:
+            dbf_field = bytearray(32)
+            dbf_field[: len(name)] = name.encode("ascii")
+            dbf_field[11] = ord("C")
+            dbf_field[16] = width
+            dbf_header[dbf_offset : dbf_offset + 32] = dbf_field
+            dbf_offset += 32
+        dbf_header[dbf_offset] = 0x0D
+        dbf_record = bytearray(b" ")
+        for name, width in fields:
+            dbf_record.extend(row.get(name, "").encode("cp949").ljust(width))
+        dbf_data = dbf_header + dbf_record + b"\x1a"
         projection = (
             'PROJCS["Korea_2000_Central_Belt_2010",'
             'PARAMETER["False_Easting",200000.0]]'

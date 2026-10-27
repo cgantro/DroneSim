@@ -162,6 +162,182 @@ def _read_dbf_rows(data: bytes) -> list[dict[str, str]]:
     return rows
 
 
+def _read_dbf_layout(stream: Any) -> tuple[int, int, dict[str, tuple[int, int]]]:
+    """큰 DBF도 파일 전체를 메모리에 올리지 않고 열 구조만 읽는다."""
+    header = stream.read(32)
+    if len(header) != 32:
+        raise ValueError("건물 속성표 헤더가 잘렸습니다.")
+    count, header_size, row_size = struct.unpack_from("<IHH", header, 4)
+    descriptor_bytes = stream.read(header_size - 32)
+    if len(descriptor_bytes) != header_size - 32:
+        raise ValueError("건물 속성표 필드 정보가 잘렸습니다.")
+
+    fields: dict[str, tuple[int, int]] = {}
+    offset = 1
+    for position in range(0, len(descriptor_bytes), 32):
+        descriptor = descriptor_bytes[position : position + 32]
+        if not descriptor or descriptor[0] == 0x0D:
+            break
+        name = descriptor[:11].split(b"\0", 1)[0].decode("ascii", "replace")
+        width = descriptor[16]
+        fields[name] = (offset, width)
+        offset += width
+    return count, row_size, fields
+
+
+def _iter_dbf_rows(
+    stream: Any,
+    count: int,
+    row_size: int,
+    fields: dict[str, tuple[int, int]],
+    wanted_fields: tuple[str, ...],
+):
+    """필요한 DBF 항목만 한 행씩 읽는다."""
+    for index in range(count):
+        record = stream.read(row_size)
+        if len(record) != row_size:
+            raise ValueError(f"건물 속성표가 {index}번째 행에서 끝났습니다.")
+        if record[0] == ord("*"):
+            yield {}
+            continue
+        row = {}
+        for name in wanted_fields:
+            field = fields.get(name)
+            if field is None:
+                continue
+            start, width = field
+            row[name] = (
+                record[start : start + width]
+                .decode("cp949", "replace")
+                .replace("\0", "")
+                .strip()
+            )
+        yield row
+
+
+def _iter_shapefile_rings(stream: Any, count: int, bounds: dict[str, float]):
+    """도형 경계가 장면과 겹치는 건물 외곽선만 한 개씩 읽는다."""
+    header = stream.read(100)
+    if len(header) != 100 or struct.unpack_from("<i", header, 32)[0] != 5:
+        raise ValueError("건물 도형은 완전한 Polygon SHP여야 합니다.")
+
+    for index in range(count):
+        record_header = stream.read(8)
+        if len(record_header) != 8:
+            raise ValueError(f"건물 도형 파일이 {index}번째 도형에서 끝났습니다.")
+        _, content_words = struct.unpack(">ii", record_header)
+        content_size = content_words * 2
+        content = stream.read(content_size)
+        if len(content) != content_size:
+            raise ValueError(f"건물 도형의 {index}번째 자료가 잘렸습니다.")
+        if len(content) < 44:
+            yield []
+            continue
+
+        shape_type = struct.unpack_from("<i", content)[0]
+        if shape_type == 0:
+            yield []
+            continue
+        if shape_type != 5:
+            raise ValueError(f"건물 도형 안에 예기치 않은 형식이 있습니다: {shape_type}")
+
+        west, south, east, north = struct.unpack_from("<4d", content, 4)
+        if (east < bounds["west"] or west > bounds["east"]
+                or north < bounds["south"] or south > bounds["north"]):
+            yield []
+            continue
+
+        part_count, point_count = struct.unpack_from("<ii", content, 36)
+        if part_count < 1 or point_count < 3:
+            yield []
+            continue
+        parts = struct.unpack_from(f"<{part_count}i", content, 44)
+        points_offset = 44 + 4 * part_count
+        points = [
+            struct.unpack_from("<2d", content, points_offset + point * 16)
+            for point in range(point_count)
+        ]
+        first_part_end = parts[1] if part_count > 1 else point_count
+        yield points[parts[0] : first_part_end]
+
+
+def _is_integrated_building_archive(path: Path) -> bool:
+    """A코드 필드를 쓰는 건물통합정보 자료인지 헤더만 확인한다."""
+    with zipfile.ZipFile(path) as archive:
+        dbf_name = next(
+            (name for name in archive.namelist() if name.lower().endswith(".dbf")), None
+        )
+        if not dbf_name:
+            return False
+        with archive.open(dbf_name) as stream:
+            _, _, fields = _read_dbf_layout(stream)
+    return {"A1", "A2", "A16", "A24", "A25", "A26"} <= fields.keys()
+
+
+def _read_integrated_buildings(
+    path: Path, bounds: dict[str, float]
+) -> list[dict[str, Any]]:
+    """건물통합정보의 외곽선·이름·높이·층수를 장면 범위만 읽는다."""
+    with zipfile.ZipFile(path) as archive:
+        members = {Path(name).name.lower(): name for name in archive.namelist()}
+        shp_name = next((name for key, name in members.items() if key.endswith(".shp")), None)
+        dbf_name = next((name for key, name in members.items() if key.endswith(".dbf")), None)
+        prj_name = next((name for key, name in members.items() if key.endswith(".prj")), None)
+        if not shp_name or not dbf_name or not prj_name:
+            raise ValueError(f"건물 자료에 SHP, DBF, 좌표계 파일이 모두 필요합니다: {path.name}")
+        projection = archive.read(prj_name).decode("cp949", "replace")
+        if not any(name in projection for name in (
+            "Korea_2000_Central_Belt_2010",
+            "Korea_2000_Korea_Central_Belt_2010",
+        )):
+            raise ValueError(f"EPSG:5186 좌표계가 아닌 건물 자료입니다: {path.name}")
+
+        with archive.open(dbf_name) as dbf, archive.open(shp_name) as shp:
+            count, row_size, fields = _read_dbf_layout(dbf)
+            required = {"A1", "A2", "A16", "A24", "A25", "A26"}
+            if not required <= fields.keys():
+                raise ValueError(f"건물통합정보 필드가 부족합니다: {path.name}")
+            rows = _iter_dbf_rows(
+                dbf, count, row_size, fields, tuple(sorted(required))
+            )
+            rings = _iter_shapefile_rings(shp, count, bounds)
+            features = []
+            for ring, row in zip(rings, rows, strict=True):
+                if not ring or not row:
+                    continue
+                clipped = _clip_ring(ring, bounds)
+                if not clipped:
+                    continue
+
+                building_id = row["A1"]
+                parcel_id = row["A2"]
+                name = row["A24"] or row["A25"]
+                height = _positive_number(row["A16"])
+                floors = _positive_number(row["A26"])
+                tags: dict[str, str] = {"building": "yes"}
+                if name:
+                    tags["name"] = name
+                if height > 0:
+                    tags["height"] = f"{height:g}"
+                    tags["height_source"] = "building-integrated-data"
+                if floors > 0:
+                    tags["building:levels"] = f"{floors:g}"
+
+                coordinates = [list(epsg5186_to_wgs84(x, y)) for x, y in clipped]
+                coordinates.append(coordinates[0])
+                features.append({
+                    "type": "Feature",
+                    "id": building_id,
+                    "properties": {
+                        "osm_id": f"fac:{building_id}",
+                        "parcel_id": parcel_id,
+                        "tags": tags,
+                    },
+                    "geometry": {"type": "Polygon", "coordinates": [coordinates]},
+                })
+    return features
+
+
 def _read_building_register(
     csv_path: Path, legal_dong_path: Path
 ) -> dict[str, list[dict[str, str]]]:
@@ -323,6 +499,75 @@ def _combine_building_sources(
         if index not in consumed
     )
     return combined
+
+
+def _enrich_building_metadata(
+    features: list[dict[str, Any]],
+    integrated_features: list[dict[str, Any]],
+    append_unmatched: bool = True,
+) -> list[dict[str, Any]]:
+    """기존 건물 외곽선을 유지하면서 통합정보의 높이와 층수를 보탠다."""
+    existing_buildings = [
+        feature for feature in features
+        if feature.get("geometry", {}).get("type") == "Polygon"
+        and feature.get("properties", {}).get("tags", {}).get("building")
+    ]
+    matches: dict[int, list[int]] = {index: [] for index in range(len(integrated_features))}
+    reverse: dict[int, list[int]] = {index: [] for index in range(len(existing_buildings))}
+
+    for incoming_index, incoming in enumerate(integrated_features):
+        incoming_ring = incoming["geometry"]["coordinates"][0]
+        incoming_center = _center(incoming_ring)
+        for existing_index, existing in enumerate(existing_buildings):
+            existing_ring = existing["geometry"]["coordinates"][0]
+            if (_point_in_ring(incoming_center, existing_ring)
+                    or _point_in_ring(_center(existing_ring), incoming_ring)):
+                matches[incoming_index].append(existing_index)
+                reverse[existing_index].append(incoming_index)
+
+    unmatched = []
+    for incoming_index, incoming in enumerate(integrated_features):
+        candidates = matches[incoming_index]
+        if not candidates:
+            if append_unmatched:
+                unmatched.append(incoming)
+            continue
+        if len(candidates) != 1 or len(reverse[candidates[0]]) != 1:
+            continue
+
+        existing = existing_buildings[candidates[0]]
+        old_tags = existing["properties"].setdefault("tags", {})
+        new_tags = incoming["properties"].get("tags", {})
+        if new_tags.get("name") and not old_tags.get("name"):
+            old_tags["name"] = new_tags["name"]
+
+        new_height = _positive_number(new_tags.get("height", ""))
+        old_height = _positive_number(old_tags.get("height", ""))
+        if new_height > 0:
+            if old_height > 0 and abs(new_height - old_height) > 0.5:
+                old_tags["building_previous_height"] = f"{old_height:g}"
+                old_tags["height_conflict"] = "true"
+            old_tags["height"] = f"{new_height:g}"
+            old_tags["height_source"] = (
+                new_tags.get("height_source") or "building-integrated-data"
+            )
+
+        new_floors = _positive_number(new_tags.get("building:levels", ""))
+        old_floors = _positive_number(old_tags.get("building:levels", ""))
+        if new_floors > 0:
+            if old_floors > 0 and new_floors != old_floors:
+                old_tags["building_previous_levels"] = f"{old_floors:g}"
+                old_tags["building_levels_conflict"] = "true"
+            old_tags["building:levels"] = f"{new_floors:g}"
+
+        properties = existing["properties"]
+        if new_tags.get("height_source") == "building-integrated-data":
+            properties["building_integrated_id"] = incoming.get("id", "")
+        parcel_id = incoming["properties"].get("parcel_id", "")
+        if parcel_id:
+            properties["parcel_id"] = parcel_id
+
+    return features + unmatched
 
 
 def _read_shapefile(data: bytes) -> tuple[list[list[tuple[float, float]]], tuple[float, ...]]:
@@ -835,6 +1080,7 @@ def convert(
     building_data_path: Path | None = None,
     register_path: Path | None = None,
     legal_dong_path: Path | None = None,
+    building_attributes_path: Path | None = None,
 ) -> int:
     bounds = json.loads(bounds_path.read_text(encoding="utf-8"))["bounds_meters"]
     source_files = sorted(source_dir.glob("*.zip"))
@@ -844,16 +1090,26 @@ def convert(
     official_features = []
     bridge_features = []
     tree_features = []
+    integrated_features = []
     for source in source_files:
         official_features.extend(_read_archive(source, bounds))
         bridge_features.extend(_read_bridge_archive(source, bounds))
         tree_features.extend(_read_tree_archive(source, bounds))
     if building_data_path and building_data_path.exists():
-        if not register_path or not legal_dong_path:
-            raise ValueError("건축물대장 CSV와 법정동 코드 자료도 지정해야 합니다.")
-        register = _read_building_register(register_path, legal_dong_path)
-        building_features = _read_vworld_buildings(building_data_path, bounds, register)
-        official_features = _combine_building_sources(official_features, building_features)
+        if _is_integrated_building_archive(building_data_path):
+            integrated_features = _read_integrated_buildings(building_data_path, bounds)
+        else:
+            if not register_path or not legal_dong_path:
+                raise ValueError("이 건물 자료에는 건축물대장 CSV와 법정동 코드 자료가 필요합니다.")
+            register = _read_building_register(register_path, legal_dong_path)
+            building_features = _read_vworld_buildings(building_data_path, bounds, register)
+            official_features = _combine_building_sources(official_features, building_features)
+    if building_attributes_path and building_attributes_path.exists():
+        if not _is_integrated_building_archive(building_attributes_path):
+            raise ValueError("건물 보완 자료는 A코드 건물통합정보여야 합니다.")
+        integrated_features.extend(
+            _read_integrated_buildings(building_attributes_path, bounds)
+        )
     if not official_features:
         raise ValueError(
             "받은 도엽의 건물 도형이 현재 장면과 겹치지 않습니다. "
@@ -861,7 +1117,19 @@ def convert(
         )
 
     site = json.loads(site_path.read_text(encoding="utf-8"))
+    previous_building_data = [
+        feature for feature in site["features"]
+        if str(feature.get("properties", {}).get("osm_id", "")).startswith("fac:")
+    ]
     merged = _merge_site(site, official_features, bridge_features)
+    if previous_building_data:
+        merged["features"] = _enrich_building_metadata(
+            merged["features"], previous_building_data, append_unmatched=False
+        )
+    if integrated_features:
+        merged["features"] = _enrich_building_metadata(
+            merged["features"], integrated_features
+        )
     retained_features = [
         feature for feature in merged["features"]
         if not str(feature.get("properties", {}).get("osm_id", "")).startswith("ngii-tree:")
@@ -876,7 +1144,10 @@ def convert(
         json.dump(merged, temporary, ensure_ascii=False, separators=(",", ":"))
         temporary.write("\n")
     os.replace(temporary_path, output_path)
-    return len(official_features)
+    return sum(
+        bool(feature.get("properties", {}).get("tags", {}).get("building"))
+        for feature in merged["features"]
+    )
 
 
 def main() -> int:
@@ -903,7 +1174,11 @@ def main() -> int:
     source = repository / "assets/maps/tancheon/source"
     parser.add_argument(
         "--building-data", type=Path, default=source / "vworld-buildings-songpa.zip",
-        help="선택한 송파구 건물 외곽선 자료 ZIP",
+        help="송파구 건물 외곽선 자료 ZIP (건물통합정보는 높이·층수를 직접 읽음)",
+    )
+    parser.add_argument(
+        "--building-attributes", type=Path,
+        help="기존 건물 모양을 유지하며 높이·층수·이름을 보탤 건물통합정보 ZIP",
     )
     parser.add_argument(
         "--building-register", type=Path, default=source / "building-register-songpa.csv",
@@ -918,6 +1193,7 @@ def main() -> int:
         count = convert(
             args.source_dir, args.site, args.bounds, args.output,
             args.building_data, args.building_register, args.legal_dong_codes,
+            args.building_attributes,
         )
     except (OSError, ValueError, zipfile.BadZipFile, json.JSONDecodeError) as error:
         parser.exit(1, f"지도 변환 실패: {error}\n")
