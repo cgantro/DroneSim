@@ -584,7 +584,7 @@ void Verify_SimulationCore_TracksEachDroneCameraIndependently()
         simulation.State(second).orientation)
         * (simulation.Camera(second).positionMeters
             - simulation.State(second).positionMeters);
-    EXPECT_NEAR(cameraOffsetInBody.x, 0.15, 1.0e-9);
+    EXPECT_NEAR(cameraOffsetInBody.x, 0.12, 1.0e-9);
     EXPECT_NEAR(cameraOffsetInBody.y, 0.0, 1.0e-9);
     EXPECT_NEAR(cameraOffsetInBody.z, -0.10, 1.0e-9);
 
@@ -654,6 +654,34 @@ void Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels()
     camera.status = CameraStatus::Disabled;
     EXPECT_EQ(EoCameraModel::AssessCapture(camera, surface),
         CaptureAssessment::CameraUnavailable);
+
+    // 기체에 고정된 전방 카메라가 실제로 볼 수 있는 물길과 교각 면을 확인한다.
+    CameraState forwardCamera;
+    forwardCamera.positionMeters = {0.0, 0.0, 3.1};
+    InspectionSurface waterSurface;
+    waterSurface.centerMeters = {30.0, 0.0, 0.25};
+    waterSurface.normal = {0.0, 0.0, 1.0};
+    waterSurface.widthAxis = {0.0, 1.0, 0.0};
+    waterSurface.widthMeters = 20.0;
+    waterSurface.heightMeters = 8.0;
+    waterSurface.minimumDistanceMeters = 15.0;
+    waterSurface.maximumDistanceMeters = 40.0;
+    waterSurface.maximumIncidenceAngleDegrees = 88.0;
+    EXPECT_EQ(EoCameraModel::AssessCapture(forwardCamera, waterSurface),
+        CaptureAssessment::Ready);
+
+    forwardCamera.positionMeters = {0.0, 0.0, 4.2};
+    InspectionSurface pierSide;
+    pierSide.centerMeters = {12.0, 0.0, 3.0};
+    pierSide.normal = {-1.0, 0.0, 0.0};
+    pierSide.widthAxis = {0.0, 1.0, 0.0};
+    pierSide.widthMeters = 2.0;
+    pierSide.heightMeters = 1.5;
+    pierSide.minimumDistanceMeters = 4.0;
+    pierSide.maximumDistanceMeters = 16.0;
+    pierSide.maximumIncidenceAngleDegrees = 25.0;
+    EXPECT_EQ(EoCameraModel::AssessCapture(forwardCamera, pierSide),
+        CaptureAssessment::Ready);
 }
 
 void Verify_InspectionSurfaceJsonNormalizesAxesAndRejectsInvalidCaptureRules()

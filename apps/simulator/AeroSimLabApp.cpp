@@ -86,7 +86,6 @@ constexpr glm::dvec2 demoDroneStartMeters{-410.0, 457.0};
 constexpr glm::vec3 cameraLensCenterInModelMeters{0.015F, 0.048F, 0.030F};
 constexpr double bridgeDeckUndersideHeightMeters = 6.0;
 constexpr double bridgeDeckThicknessMeters = 0.8;
-constexpr double bridgeInspectionApproachBelowDeckMeters = 1.2;
 // 나무 GLB 중 가장 높은 모델에 최대 배율을 적용한 높이다.
 constexpr double tallestTreeModelHeightMeters = 25.5;
 // 전방 카메라 시야가 수관에 막히지 않도록 통과 고도에 더하는 여유다.
@@ -1125,6 +1124,7 @@ void AeroSimLabApp::LoadMapFeatures()
         treeModels_[species]->SetInstances(treeTransforms[species]);
     }
     std::vector<aerosimlab::terrain::MapBridgePier> bridgePiers;
+    std::vector<aerosimlab::terrain::MapBridgePier> mainBridgePiers;
     for (const auto& bridge : bridges)
     {
         if (bridge.outlineMeters.size() < 3U || bridge.groundElevationsMeters.empty())
@@ -1142,6 +1142,8 @@ void AeroSimLabApp::LoadMapFeatures()
             ground + bridgeDeckUndersideHeightMeters + bridgeDeckThicknessMeters);
         auto estimatedPiers = aerosimlab::terrain::EstimateMapBridgePiers(
             bridge, terrainGrid_, ground + bridgeDeckUndersideHeightMeters);
+        if (bridge.name == "탄천교")
+            mainBridgePiers = estimatedPiers;
         for (const auto& pier : estimatedPiers)
         {
             simulation_.AddStaticObstaclePrism(pier.outlineMeters,
@@ -1337,36 +1339,69 @@ void AeroSimLabApp::LoadMapFeatures()
     if (mainBridge != bridges.end())
     {
         glm::dvec2 bridgeCenter{0.0};
-        double bridgeGround = 0.0;
         for (std::size_t index = 0; index < mainBridge->outlineMeters.size(); ++index)
         {
             bridgeCenter += mainBridge->outlineMeters[index];
-            bridgeGround += mainBridge->groundElevationsMeters[index];
         }
         bridgeCenter /= static_cast<double>(mainBridge->outlineMeters.size());
-        bridgeGround /= static_cast<double>(mainBridge->groundElevationsMeters.size());
         const double centerGround = terrainGrid_.HeightAtLocalMeters({0.0, 0.0});
 
-        aerosimlab::simulation::InspectionSurface underside;
-        underside.centerMeters = terrainGrid_.ToSimulationPositionMeters(
-            {bridgeCenter.x, bridgeCenter.y,
-                bridgeGround - centerGround + bridgeDeckUndersideHeightMeters});
-        underside.normal = {0.0, 0.0, -1.0};
-        underside.widthAxis = {1.0, 0.0, 0.0};
-        underside.widthMeters = 14.0;
-        underside.heightMeters = 2.0;
-        underside.minimumDistanceMeters = 1.0;
-        underside.maximumDistanceMeters = 8.0;
-        underside.maximumIncidenceAngleDegrees = 75.0;
+        if (mainBridgePiers.empty())
+            throw std::runtime_error("탄천교 아래 촬영에 필요한 교각 형상을 만들지 못했습니다.");
+
+        const auto pierCenter = [](const aerosimlab::terrain::MapBridgePier& pier)
+        {
+            glm::dvec2 center{0.0};
+            for (const auto& point : pier.outlineMeters)
+                center += point;
+            return center / static_cast<double>(pier.outlineMeters.size());
+        };
+        const auto nearestPier = std::min_element(mainBridgePiers.begin(),
+            mainBridgePiers.end(), [&pierCenter](const auto& left, const auto& right)
+            {
+                return glm::length(pierCenter(left) - demoDroneStartMeters)
+                    < glm::length(pierCenter(right) - demoDroneStartMeters);
+            });
+        const glm::dvec2 pierMiddle = pierCenter(*nearestPier);
+        std::size_t nearestFace = 0U;
+        double nearestFaceDistance = std::numeric_limits<double>::max();
+        for (std::size_t index = 0; index < nearestPier->outlineMeters.size(); ++index)
+        {
+            const glm::dvec2 midpoint = (nearestPier->outlineMeters[index]
+                + nearestPier->outlineMeters[(index + 1U)
+                    % nearestPier->outlineMeters.size()]) * 0.5;
+            const double distance = glm::length(midpoint - demoDroneStartMeters);
+            if (distance < nearestFaceDistance)
+            {
+                nearestFaceDistance = distance;
+                nearestFace = index;
+            }
+        }
+        const glm::dvec2 faceStart = nearestPier->outlineMeters[nearestFace];
+        const glm::dvec2 faceEnd = nearestPier->outlineMeters[
+            (nearestFace + 1U) % nearestPier->outlineMeters.size()];
+        const glm::dvec2 faceMidpoint = (faceStart + faceEnd) * 0.5;
+        const glm::dvec2 faceDirection = glm::normalize(faceEnd - faceStart);
+        const glm::dvec2 faceNormal = glm::normalize(faceMidpoint - pierMiddle);
+        aerosimlab::simulation::InspectionSurface pierSide;
+        pierSide.centerMeters = terrainGrid_.ToSimulationPositionMeters({
+            faceMidpoint.x, faceMidpoint.y,
+            (nearestPier->bottomElevationMeters + nearestPier->topElevationMeters)
+                * 0.5});
+        pierSide.normal = {faceNormal.x, faceNormal.y, 0.0};
+        pierSide.widthAxis = {faceDirection.x, faceDirection.y, 0.0};
+        pierSide.widthMeters = std::min(2.0, glm::length(faceEnd - faceStart));
+        pierSide.heightMeters = 1.5;
+        pierSide.minimumDistanceMeters = 4.0;
+        pierSide.maximumDistanceMeters = 16.0;
+        pierSide.maximumIncidenceAngleDegrees = 25.0;
         inspectionTargets_.push_back({
             .facilityId = "osm-bridge-" + mainBridge->osmId,
-            .displayName = "탄천교 하부",
+            .displayName = "탄천교 아래 교각 정찰",
             .zoneId = "bridge-underside",
-            .surface = underside,
-            .approachPositionMeters = terrainGrid_.ToSimulationPositionMeters(
-                {bridgeCenter.x, bridgeCenter.y,
-                    bridgeGround - centerGround + bridgeDeckUndersideHeightMeters
-                        - bridgeInspectionApproachBelowDeckMeters}),
+            .surface = pierSide,
+            .approachPositionMeters = pierSide.centerMeters
+                + glm::dvec3{faceNormal.x * 12.0, faceNormal.y * 12.0, 1.2},
             .routeAutomaticallyPlanned = true});
 
         glm::dvec2 riverPosition = bridgeCenter;
@@ -1395,19 +1430,24 @@ void AeroSimLabApp::LoadMapFeatures()
         riverSurface.centerMeters = terrainGrid_.ToSimulationPositionMeters(
             {riverPosition.x, riverPosition.y, riverGround - centerGround + 0.25});
         riverSurface.normal = {0.0, 0.0, 1.0};
-        riverSurface.widthAxis = {1.0, 0.0, 0.0};
+        const glm::dvec2 riverApproachDirection = glm::normalize(
+            demoDroneStartMeters - riverPosition);
+        riverSurface.widthAxis = {
+            -riverApproachDirection.y, riverApproachDirection.x, 0.0};
         riverSurface.widthMeters = 20.0;
         riverSurface.heightMeters = 8.0;
-        riverSurface.minimumDistanceMeters = 2.0;
-        riverSurface.maximumDistanceMeters = 15.0;
-        riverSurface.maximumIncidenceAngleDegrees = 80.0;
+        riverSurface.minimumDistanceMeters = 15.0;
+        riverSurface.maximumDistanceMeters = 40.0;
+        riverSurface.maximumIncidenceAngleDegrees = 88.0;
         inspectionTargets_.push_back({
             .facilityId = "tancheon-waterway",
             .displayName = "탄천 물길",
             .zoneId = "river-channel",
             .surface = riverSurface,
             .approachPositionMeters = terrainGrid_.ToSimulationPositionMeters(
-                {riverPosition.x, riverPosition.y, riverGround - centerGround + 7.0}),
+                {riverPosition.x + riverApproachDirection.x * 30.0,
+                    riverPosition.y + riverApproachDirection.y * 30.0,
+                    riverGround - centerGround + 3.2}),
             .routeAutomaticallyPlanned = true});
     }
 
