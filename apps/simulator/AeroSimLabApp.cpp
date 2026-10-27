@@ -72,6 +72,9 @@ constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 탄천유수지 체육시설 주소 지점에 둔 시뮬레이션용 출발 위치다.
 constexpr glm::dvec2 demoDroneStartMeters{-410.0, 442.0};
+constexpr double bridgeDeckUndersideHeightMeters = 6.0;
+constexpr double bridgeDeckThicknessMeters = 0.8;
+constexpr double bridgeInspectionApproachBelowDeckMeters = 1.2;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -356,8 +359,6 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateRoadMesh(
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgeFootprintMesh(
     const std::vector<aerosimlab::terrain::MapBridgeFootprint>& bridges)
 {
-    constexpr double undersideHeightMeters = 6.0;
-    constexpr double deckThicknessMeters = 0.8;
     std::vector<aerosimlab::graphics::Vertex> vertices;
     std::vector<std::uint32_t> indices;
 
@@ -376,8 +377,8 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgeFootprintMesh(
         }
         center /= static_cast<double>(bridge.outlineMeters.size());
         groundElevation /= static_cast<double>(bridge.groundElevationsMeters.size());
-        const double deckBottom = groundElevation + undersideHeightMeters;
-        const double deckTop = deckBottom + deckThicknessMeters;
+        const double deckBottom = groundElevation + bridgeDeckUndersideHeightMeters;
+        const double deckTop = deckBottom + bridgeDeckThicknessMeters;
         const std::uint32_t centerIndex = static_cast<std::uint32_t>(vertices.size());
         vertices.push_back({ToRenderPosition({center.x, center.y, deckTop}),
             {0.0F, 1.0F, 0.0F}, {0.5F, 0.5F}});
@@ -790,9 +791,10 @@ void AeroSimLabApp::LoadMapFeatures()
             ground += bridge.groundElevationsMeters[index];
         }
         ground /= static_cast<double>(bridge.groundElevationsMeters.size());
-        // OSM에는 상판 높이가 없어 DEM 위 6m 높이의 임시 상판으로 충돌을 근사한다.
+        // OSM에 교량 높이가 없어 지면에서 6m 위에 두께 0.8m의 임시 상판을 놓는다.
         simulation_.AddStaticObstaclePrism(
-            bridge.outlineMeters, ground + 6.0, ground + 6.8);
+            bridge.outlineMeters, ground + bridgeDeckUndersideHeightMeters,
+            ground + bridgeDeckUndersideHeightMeters + bridgeDeckThicknessMeters);
     }
     if (terrainSurfaceTexture_ == nullptr)
     {
@@ -973,7 +975,8 @@ void AeroSimLabApp::LoadMapFeatures()
 
         aerosimlab::simulation::InspectionSurface underside;
         underside.centerMeters = terrainGrid_.ToSimulationPositionMeters(
-            {bridgeCenter.x, bridgeCenter.y, bridgeGround - centerGround + 6.0});
+            {bridgeCenter.x, bridgeCenter.y,
+                bridgeGround - centerGround + bridgeDeckUndersideHeightMeters});
         underside.normal = {0.0, 0.0, -1.0};
         underside.widthAxis = {1.0, 0.0, 0.0};
         underside.widthMeters = 14.0;
@@ -987,7 +990,9 @@ void AeroSimLabApp::LoadMapFeatures()
             .zoneId = "bridge-underside",
             .surface = underside,
             .approachPositionMeters = terrainGrid_.ToSimulationPositionMeters(
-                {bridgeCenter.x, bridgeCenter.y, bridgeGround - centerGround + 4.8}),
+                {bridgeCenter.x, bridgeCenter.y,
+                    bridgeGround - centerGround + bridgeDeckUndersideHeightMeters
+                        - bridgeInspectionApproachBelowDeckMeters}),
             .routeAutomaticallyPlanned = true});
 
         glm::dvec2 riverPosition = bridgeCenter;
