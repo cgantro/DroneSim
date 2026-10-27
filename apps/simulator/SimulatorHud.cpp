@@ -59,13 +59,25 @@ const char* CaptureStatusLabel(simulation::CaptureAssessment assessment)
 
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
-    const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspaceV2");
+    const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspaceV3");
     if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
     {
         ImGui::DockBuilderAddNode(dockspaceId,
             ImGuiDockNodeFlags_DockSpace | ImGuiDockNodeFlags_PassthruCentralNode);
         ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
-        ImGui::DockBuilderDockWindow("장면##SceneViewV2", dockspaceId);
+        ImGuiID sceneNode = 0;
+        ImGuiID sideNode = 0;
+        ImGui::DockBuilderSplitNode(
+            dockspaceId, ImGuiDir_Right, 0.30F, &sideNode, &sceneNode);
+
+        ImGuiID cameraNode = 0;
+        ImGuiID statusNode = 0;
+        ImGui::DockBuilderSplitNode(
+            sideNode, ImGuiDir_Down, 0.52F, &cameraNode, &statusNode);
+
+        ImGui::DockBuilderDockWindow("장면##SceneViewV3", sceneNode);
+        ImGui::DockBuilderDockWindow("카메라##CameraViewV3", cameraNode);
+        ImGui::DockBuilderDockWindow("AeroSimLab | 비행 상태##FlightStatusV3", statusNode);
         ImGui::DockBuilderFinish(dockspaceId);
     }
     ImGui::DockSpaceOverViewport(dockspaceId, viewport);
@@ -73,7 +85,7 @@ void CreateDefaultDockspace(ImGuiViewport* viewport)
 
 void DrawScenePanel(const std::function<std::uint32_t(int, int)>& renderScene)
 {
-    if (ImGui::Begin("장면##SceneViewV2"))
+    if (ImGui::Begin("장면##SceneViewV3"))
     {
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const ImVec2 imageSize{
@@ -87,21 +99,12 @@ void DrawScenePanel(const std::function<std::uint32_t(int, int)>& renderScene)
 }
 
 void DrawCameraPanel(
-    ImGuiViewport* viewport,
     bool cameraActive,
     int cameraImageWidth,
     int cameraImageHeight,
     const std::function<std::uint32_t()>& renderCamera)
 {
-    const float cameraPanelWidth = std::min(448.0F, viewport->WorkSize.x * 0.45F);
-    const float cameraPanelHeight = cameraPanelWidth * 0.82F;
-    ImGui::SetNextWindowSize(
-        ImVec2{cameraPanelWidth, cameraPanelHeight}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2{
-        viewport->WorkPos.x + viewport->WorkSize.x - cameraPanelWidth - 12.0F,
-        viewport->WorkPos.y + viewport->WorkSize.y - cameraPanelHeight - 12.0F},
-        ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("카메라##CameraViewV2"))
+    if (ImGui::Begin("카메라##CameraViewV3"))
     {
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const ImVec2 imageOrigin = ImGui::GetCursorPos();
@@ -158,11 +161,7 @@ void DrawFlightStatusPanel(
     const std::function<void()>& startInspectionMission,
     simulation::CaptureAssessment captureAssessment)
 {
-    ImGui::SetNextWindowPos(ImVec2{14.0F, 14.0F}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.86F);
-    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize
-        | ImGuiWindowFlags_NoSavedSettings;
-    if (ImGui::Begin("AeroSimLab | 비행 상태", nullptr, flags))
+    if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
     {
         const auto& primary = simulation.State();
         ImGui::Text("주 드론: %s", DroneName(simulation.PrimaryDroneId()).c_str());
@@ -310,7 +309,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
     DrawScenePanel(renderScene);
-    DrawCameraPanel(viewport, cameraActive, cameraImageWidth, cameraImageHeight, renderCamera);
+    DrawCameraPanel(cameraActive, cameraImageWidth, cameraImageHeight, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
         missionDistanceMeters, inspectionTargetName,
         inspectionMissionStatus,
