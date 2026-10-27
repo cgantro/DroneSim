@@ -248,9 +248,8 @@ class NgiiBuildingConversionTests(unittest.TestCase):
         self.assertIn("ngii:house-1", ids)
         self.assertNotIn("ngii:deck-1", ids)
 
-    def test_road_ramp_outlines_are_not_imported_as_buildings(self):
-        def building(feature_id):
-            offset = 0.01 if feature_id == "ordinary-building" else 0.0
+    def test_road_surface_outlines_are_not_imported_as_buildings(self):
+        def building(feature_id, offset):
             return {
                 "type": "Feature",
                 "id": feature_id,
@@ -266,13 +265,15 @@ class NgiiBuildingConversionTests(unittest.TestCase):
             }
 
         retained_building_id = "ngii:ordinary-building"
+        road_buildings = [
+            building(feature_id, index * 0.01)
+            for index, feature_id in enumerate(
+                sorted(converter.NGII_ROAD_SURFACE_BUILDING_IDS)
+            )
+        ]
         result = converter._merge_site(
             {"type": "FeatureCollection", "features": []},
-            [
-                building("1000037709004A00110000000000003425"),
-                building("1000377090220A00110000000000000058"),
-                building("ordinary-building"),
-            ],
+            road_buildings + [building("ordinary-building", 2.0)],
         )
 
         ids = {feature["properties"]["osm_id"] for feature in result["features"]}
