@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import os
@@ -76,6 +77,22 @@ def epsg5186_to_wgs84(easting: float, northing: float) -> tuple[float, float]:
 
 
 def _read_dbf_ids(data: bytes) -> list[str]:
+    rows = _read_dbf_rows(data)
+    if not rows or "UFID" not in rows[0]:
+        raise ValueError("건물 속성표에 UFID 항목이 없습니다.")
+    return [row.get("UFID", "") for row in rows]
+
+
+def _positive_number(value: str) -> float:
+    try:
+        number = float(value.replace(",", ""))
+        return number if math.isfinite(number) and number > 0.0 else 0.0
+    except (AttributeError, ValueError):
+        return 0.0
+
+
+def _read_dbf_rows(data: bytes) -> list[dict[str, str]]:
+    """SHP 속성표를 열어 각 도형에 붙은 문자·숫자 정보를 읽는다."""
     count, header_size, row_size = struct.unpack_from("<IHH", data, 4)
     fields: list[tuple[str, int, int]] = []
     offset = 1
@@ -88,19 +105,184 @@ def _read_dbf_ids(data: bytes) -> list[str]:
         fields.append((name, offset, width))
         offset += width
 
-    id_field = next((field for field in fields if field[0] == "UFID"), None)
-    if id_field is None:
-        raise ValueError("건물 속성표에 UFID 항목이 없습니다.")
-    _, id_offset, id_width = id_field
-
-    ids = []
-    for row in range(count):
-        record = data[header_size + row * row_size : header_size + (row + 1) * row_size]
+    rows = []
+    for index in range(count):
+        record = data[header_size + index * row_size : header_size + (index + 1) * row_size]
         if len(record) != row_size or record[0] == ord("*"):
-            ids.append("")
+            rows.append({})
             continue
-        ids.append(record[id_offset : id_offset + id_width].decode("ascii").strip())
-    return ids
+        rows.append({
+            name: record[start : start + width].decode("cp949", "replace").strip()
+            for name, start, width in fields
+        })
+    return rows
+
+
+def _read_building_register(
+    csv_path: Path, legal_dong_path: Path
+) -> dict[str, list[dict[str, str]]]:
+    """법정동과 번지로 건축물대장 행을 필지번호에 연결한다."""
+    legal_dongs = json.loads(legal_dong_path.read_text(encoding="utf-8"))
+    records: dict[str, list[dict[str, str]]] = {}
+    with csv_path.open(encoding="utf-8-sig", newline="") as source:
+        for row in csv.DictReader(source):
+            dong_code = legal_dongs.get(row.get("법정동", ""))
+            land_type = row.get("대지구분", "").strip()
+            lot_number = row.get("번", "").strip()
+            sub_number = row.get("지", "").strip()
+            if (row.get("시도") != "서울특별시" or row.get("시군구") != "송파구"
+                    or not dong_code or land_type not in ("대지", "산")
+                    or not lot_number.isdigit() or not sub_number.isdigit()):
+                continue
+            if len(lot_number) > 4 or len(sub_number) > 4:
+                continue
+
+            # PNU는 법정동 코드, 대지 구분, 본번, 부번을 이어 붙인 필지 식별자다.
+            parcel_id = (
+                dong_code
+                + ("2" if land_type == "산" else "1")
+                + lot_number.zfill(4)
+                + sub_number.zfill(4)
+            )
+            records.setdefault(parcel_id, []).append(row)
+    return records
+
+
+def _read_vworld_buildings(
+    path: Path,
+    bounds: dict[str, float],
+    register: dict[str, list[dict[str, str]]],
+) -> list[dict[str, Any]]:
+    """송파구 건물 외곽선에 확인 가능한 건축물대장 정보를 붙인다."""
+    with zipfile.ZipFile(path) as archive:
+        members = {Path(name).name.lower(): name for name in archive.namelist()}
+        shp_name = next((name for key, name in members.items() if key.endswith(".shp")), None)
+        dbf_name = next((name for key, name in members.items() if key.endswith(".dbf")), None)
+        prj_name = next((name for key, name in members.items() if key.endswith(".prj")), None)
+        if not shp_name or not dbf_name or not prj_name:
+            raise ValueError(f"건물 자료에 SHP, DBF, 좌표계 파일이 모두 필요합니다: {path.name}")
+        projection = archive.read(prj_name).decode("cp949", "replace")
+        if not any(name in projection for name in (
+            "Korea_2000_Central_Belt_2010",
+            "Korea_2000_Korea_Central_Belt_2010",
+        )):
+            raise ValueError(f"EPSG:5186 좌표계가 아닌 건물 자료입니다: {path.name}")
+        rows = _read_dbf_rows(archive.read(dbf_name))
+        shapes, _ = _read_shapefile(archive.read(shp_name))
+
+    if len(shapes) != len(rows):
+        raise ValueError(f"건물 도형 수와 속성 수가 다릅니다: {path.name}")
+
+    parcel_counts: dict[str, int] = {}
+    for row in rows:
+        parcel_id = row.get("PNU", "")
+        if parcel_id:
+            parcel_counts[parcel_id] = parcel_counts.get(parcel_id, 0) + 1
+
+    features = []
+    for ring, row in zip(shapes, rows, strict=True):
+        if not ring or not row:
+            continue
+        clipped = _clip_ring(ring, bounds)
+        if not clipped:
+            continue
+
+        parcel_id = row.get("PNU", "")
+        matching_register = register.get(parcel_id, [])
+        # 같은 필지에 건물이 여러 개 있으면 번지만으로 높이나 이름을 고르지 않는다.
+        register_row = (
+            matching_register[0]
+            if parcel_counts.get(parcel_id) == 1 and len(matching_register) == 1
+            else None
+        )
+        shape_height = row.get("HEIGHT", "")
+        register_height = register_row.get("높이", "") if register_row else ""
+        shape_floors = row.get("GRND_FLR", "")
+        register_floors = register_row.get("지상층수", "") if register_row else ""
+        shape_name = row.get("BLD_NM", "") or row.get("DONG_NM", "")
+        register_name = (
+            (register_row.get("건물명", "") or register_row.get("동명", ""))
+            if register_row else ""
+        )
+
+        tags: dict[str, str] = {"building": "yes"}
+        if register_row:
+            tags["building_register_match"] = "one-to-one"
+        name = register_name or shape_name
+        if name:
+            tags["name"] = name
+        height = _positive_number(shape_height) or _positive_number(register_height)
+        if height > 0:
+            tags["height"] = f"{height:g}"
+            tags["height_source"] = "vworld-footprint" if _positive_number(shape_height) else "building-register"
+        if _positive_number(register_height) > 0:
+            tags["building_register_height"] = f"{_positive_number(register_height):g}"
+            if (height > 0 and _positive_number(shape_height) > 0
+                    and abs(_positive_number(shape_height) - _positive_number(register_height)) > 0.5):
+                tags["height_conflict"] = "true"
+        floors = _positive_number(register_floors) or _positive_number(shape_floors)
+        if floors > 0:
+            tags["building:levels"] = f"{floors:g}"
+
+        coordinates = [list(epsg5186_to_wgs84(x, y)) for x, y in clipped]
+        coordinates.append(coordinates[0])
+        features.append({
+            "type": "Feature",
+            "id": row.get("UFID", ""),
+            "properties": {
+                "osm_id": f"fac:{row.get('UFID', '')}",
+                "parcel_id": parcel_id,
+                "building_register_pk": register_row.get("PK", "") if register_row else "",
+                "tags": tags,
+            },
+            "geometry": {"type": "Polygon", "coordinates": [coordinates]},
+        })
+    return features
+
+
+def _combine_building_sources(
+    detailed_features: list[dict[str, Any]],
+    building_features: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """겹치는 건물은 1:1 수치지도 외곽선을 쓰고, 나머지는 건물 자료로 채운다."""
+    candidates: dict[int, list[int]] = {index: [] for index in range(len(building_features))}
+    reverse: dict[int, list[int]] = {index: [] for index in range(len(detailed_features))}
+    for building_index, building in enumerate(building_features):
+        building_ring = building["geometry"]["coordinates"][0]
+        building_center = _center(building_ring)
+        for detailed_index, detailed in enumerate(detailed_features):
+            detailed_ring = detailed["geometry"]["coordinates"][0]
+            detailed_center = _center(detailed_ring)
+            if (_point_in_ring(building_center, detailed_ring)
+                    or _point_in_ring(detailed_center, building_ring)):
+                candidates[building_index].append(detailed_index)
+                reverse[detailed_index].append(building_index)
+
+    combined = []
+    consumed: set[int] = set()
+    for building_index, building in enumerate(building_features):
+        matches = candidates[building_index]
+        if len(matches) == 1 and len(reverse[matches[0]]) == 1:
+            detailed_index = matches[0]
+            detailed = detailed_features[detailed_index]
+            combined.append({
+                **building,
+                "geometry": detailed["geometry"],
+                "properties": {
+                    **building["properties"],
+                    "osm_id": detailed["properties"]["osm_id"],
+                },
+            })
+            consumed.add(detailed_index)
+        elif not matches:
+            combined.append(building)
+
+    # 여러 도형이 한 건물로 겹치면 어느 도형의 속성인지 단정하지 않는다.
+    combined.extend(
+        feature for index, feature in enumerate(detailed_features)
+        if index not in consumed
+    )
+    return combined
 
 
 def _read_shapefile(data: bytes) -> tuple[list[list[tuple[float, float]]], tuple[float, ...]]:
@@ -286,9 +468,17 @@ def _merge_site(
     site: dict[str, Any], official_features: list[dict[str, Any]]
 ) -> dict[str, Any]:
     # 이전 변환 결과를 다시 입력해도 수치지도 도형이 계속 쌓이지 않게 한다.
+    previous_official = {}
+    for feature in site["features"]:
+        properties = feature.get("properties", {})
+        source_id = str(properties.get("osm_id", ""))
+        if source_id.startswith(("ngii:", "fac:")):
+            previous_official[source_id] = properties
     source_features = [
         feature for feature in site["features"]
-        if not str(feature.get("properties", {}).get("osm_id", "")).startswith("ngii:")
+        if not str(feature.get("properties", {}).get("osm_id", "")).startswith(
+            ("ngii:", "fac:")
+        )
     ]
     source_features = _deduplicate_site_buildings(source_features)
     osm_buildings = []
@@ -302,8 +492,21 @@ def _merge_site(
     matched_osm_ids: set[str] = set()
     official_features = _deduplicate_footprints(official_features)
     for official in official_features:
+        source_id = str(official.get("properties", {}).get("osm_id", ""))
+        old_properties = previous_official.get(source_id, {})
+        if old_properties:
+            new_properties = official.get("properties", {})
+            old_tags = old_properties.get("tags", {})
+            new_tags = new_properties.get("tags", {})
+            official["properties"] = {
+                **old_properties,
+                **new_properties,
+                "tags": {**old_tags, **new_tags},
+            }
         official_ring = official["geometry"]["coordinates"][0]
         official_center = _center(official_ring)
+        source_properties: dict[str, Any] = {}
+        source_tags: dict[str, Any] = {}
         for osm in osm_buildings:
             properties = osm["properties"]
             osm_id = str(properties.get("osm_id", ""))
@@ -313,13 +516,22 @@ def _merge_site(
             osm_center = _center(osm_ring)
             if (_point_in_ring(official_center, osm_ring)
                     or _point_in_ring(osm_center, official_ring)):
-                official["properties"] = dict(properties)
-                official["geometry"] = {
-                    "type": "Polygon", "coordinates": [official_ring]
-                }
+                if not source_properties:
+                    source_properties = properties
+                source_tags.update(properties.get("tags", {}))
                 if osm_id:
                     matched_osm_ids.add(osm_id)
-                break
+        if source_properties:
+            official_properties = official.get("properties", {})
+            official_tags = official_properties.get("tags", {})
+            official["properties"] = {
+                **source_properties,
+                **official_properties,
+                "tags": {**source_tags, **official_tags},
+            }
+            official["geometry"] = {
+                "type": "Polygon", "coordinates": [official_ring]
+            }
 
     retained = [
         feature for feature in source_features
@@ -331,7 +543,15 @@ def _merge_site(
     }
 
 
-def convert(source_dir: Path, site_path: Path, bounds_path: Path, output_path: Path) -> int:
+def convert(
+    source_dir: Path,
+    site_path: Path,
+    bounds_path: Path,
+    output_path: Path,
+    building_data_path: Path | None = None,
+    register_path: Path | None = None,
+    legal_dong_path: Path | None = None,
+) -> int:
     bounds = json.loads(bounds_path.read_text(encoding="utf-8"))["bounds_meters"]
     source_files = sorted(source_dir.glob("*.zip"))
     if not source_files:
@@ -340,6 +560,12 @@ def convert(source_dir: Path, site_path: Path, bounds_path: Path, output_path: P
     official_features = []
     for source in source_files:
         official_features.extend(_read_archive(source, bounds))
+    if building_data_path and building_data_path.exists():
+        if not register_path or not legal_dong_path:
+            raise ValueError("건축물대장 CSV와 법정동 코드 자료도 지정해야 합니다.")
+        register = _read_building_register(register_path, legal_dong_path)
+        building_features = _read_vworld_buildings(building_data_path, bounds, register)
+        official_features = _combine_building_sources(official_features, building_features)
     if not official_features:
         raise ValueError(
             "받은 도엽의 건물 도형이 현재 장면과 겹치지 않습니다. "
@@ -381,9 +607,25 @@ def main() -> int:
         "--output", type=Path, default=repository / "assets/maps/tancheon/site.geojson",
         help="변환 결과를 저장할 GeoJSON 경로",
     )
+    source = repository / "assets/maps/tancheon/source"
+    parser.add_argument(
+        "--building-data", type=Path, default=source / "vworld-buildings-songpa.zip",
+        help="선택한 송파구 건물 외곽선 자료 ZIP",
+    )
+    parser.add_argument(
+        "--building-register", type=Path, default=source / "building-register-songpa.csv",
+        help="건축물대장 CSV",
+    )
+    parser.add_argument(
+        "--legal-dong-codes", type=Path, default=source / "legal-dong-codes-songpa.json",
+        help="법정동 이름과 코드 대응 자료",
+    )
     args = parser.parse_args()
     try:
-        count = convert(args.source_dir, args.site, args.bounds, args.output)
+        count = convert(
+            args.source_dir, args.site, args.bounds, args.output,
+            args.building_data, args.building_register, args.legal_dong_codes,
+        )
     except (OSError, ValueError, zipfile.BadZipFile, json.JSONDecodeError) as error:
         parser.exit(1, f"지도 변환 실패: {error}\n")
     print(f"건물 {count}개를 장면 범위에 맞춰 {args.output}에 반영했습니다.")
