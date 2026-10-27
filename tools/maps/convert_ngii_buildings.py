@@ -201,6 +201,53 @@ def _center(ring: list[list[float]]) -> tuple[float, float]:
             sum(point[1] for point in points) / len(points))
 
 
+def _footprint_key(feature: dict[str, Any]) -> tuple[tuple[float, float], ...]:
+    """도엽 경계에서 되풀이된 같은 건물 외곽선을 같은 키로 만든다."""
+    ring = feature.get("geometry", {}).get("coordinates", [[]])[0]
+    points = [(round(point[0], 8), round(point[1], 8)) for point in ring]
+    if len(points) > 1 and points[0] == points[-1]:
+        points.pop()
+    if not points:
+        return ()
+
+    # 시작점이나 진행 방향이 다른 같은 외곽선도 같은 키로 본다.
+    candidates = []
+    for ordered in (points, list(reversed(points))):
+        start = min(range(len(ordered)), key=ordered.__getitem__)
+        candidates.append(tuple(ordered[start:] + ordered[:start]))
+    return min(candidates)
+
+
+def _deduplicate_footprints(
+    features: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    unique: dict[tuple[tuple[float, float], ...], dict[str, Any]] = {}
+    for feature in features:
+        unique.setdefault(_footprint_key(feature), feature)
+    return list(unique.values())
+
+
+def _deduplicate_site_buildings(
+    features: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    unique: dict[tuple[tuple[float, float], ...], dict[str, Any]] = {}
+    retained = []
+    for feature in features:
+        properties = feature.get("properties", {})
+        geometry = feature.get("geometry", {})
+        is_building = (
+            geometry.get("type") == "Polygon"
+            and properties.get("tags", {}).get("building")
+        )
+        if not is_building:
+            retained.append(feature)
+            continue
+        unique.setdefault(_footprint_key(feature), feature)
+
+    retained.extend(unique.values())
+    return retained
+
+
 def _read_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, Any]]:
     with zipfile.ZipFile(path) as archive:
         members = {Path(name).name.lower(): name for name in archive.namelist()}
@@ -238,8 +285,14 @@ def _read_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, Any]]:
 def _merge_site(
     site: dict[str, Any], official_features: list[dict[str, Any]]
 ) -> dict[str, Any]:
+    # 이전 변환 결과를 다시 입력해도 수치지도 도형이 계속 쌓이지 않게 한다.
+    source_features = [
+        feature for feature in site["features"]
+        if not str(feature.get("properties", {}).get("osm_id", "")).startswith("ngii:")
+    ]
+    source_features = _deduplicate_site_buildings(source_features)
     osm_buildings = []
-    for feature in site["features"]:
+    for feature in source_features:
         properties = feature.get("properties", {})
         geometry = feature.get("geometry", {})
         if (geometry.get("type") == "Polygon"
@@ -247,6 +300,7 @@ def _merge_site(
             osm_buildings.append(feature)
 
     matched_osm_ids: set[str] = set()
+    official_features = _deduplicate_footprints(official_features)
     for official in official_features:
         official_ring = official["geometry"]["coordinates"][0]
         official_center = _center(official_ring)
@@ -268,10 +322,13 @@ def _merge_site(
                 break
 
     retained = [
-        feature for feature in site["features"]
+        feature for feature in source_features
         if str(feature.get("properties", {}).get("osm_id", "")) not in matched_osm_ids
     ]
-    return {**site, "features": retained + official_features}
+    return {
+        **site,
+        "features": _deduplicate_site_buildings(retained + official_features),
+    }
 
 
 def convert(source_dir: Path, site_path: Path, bounds_path: Path, output_path: Path) -> int:
