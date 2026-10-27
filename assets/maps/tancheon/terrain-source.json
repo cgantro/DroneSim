@@ -52,10 +52,10 @@
   },
   "spot_height_leave_one_out_check": {
     "sample_count": 18,
-    "baseline_mae_meters": 4.21,
+    "baseline_mae_meters": 4.17,
     "corrected_mae_meters": 3.47,
-    "baseline_rmse_meters": 6.71,
-    "corrected_rmse_meters": 5.02,
+    "baseline_rmse_meters": 6.68,
+    "corrected_rmse_meters": 5.01,
     "note": "표고점 하나씩을 보정에서 빼고 예측한 결과다. 같은 수치지도 안의 표고점과 비교했으므로 독립 측량 정확도 검증은 아니다."
   },
   "license": "공공데이터포털 DEM 안내의 이용허락범위: 제한 없음. 출처: 국토지리정보원."

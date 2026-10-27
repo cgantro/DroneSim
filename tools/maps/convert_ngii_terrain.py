@@ -1,4 +1,4 @@
-"""1:1,000 등고선·표고점을 기존 탄천 DEM에 반영한다."""
+"""원본 DEM에 1:1,000 등고선과 표고점을 반영해 탄천 지형 격자를 만든다."""
 
 from __future__ import annotations
 
@@ -9,10 +9,13 @@ import struct
 import zipfile
 from pathlib import Path
 
+import numpy as np
+import rasterio
+from pyproj import Transformer
+
 from convert_ngii_buildings import _read_dbf_rows
 
 
-HEADER_SIZE = 40
 GRID_SPACING_METERS = 5.0
 SAMPLE_RADIUS_METERS = 100.0
 SAMPLE_BIN_METERS = 25.0
@@ -98,20 +101,63 @@ def load_contours_and_heights(source_dir: Path, bounds: dict[str, float]):
     return contours, spot_heights
 
 
-def load_base_grid(path: Path, source_elevation: float):
-    """기존 격자를 읽고 높이 조회에 필요한 정보를 반환한다."""
-    data = path.read_bytes()
-    if data[:8] not in (b"AEROTRN1", b"AEROTRN2") or len(data) < HEADER_SIZE:
-        raise ValueError("기존 지형 격자 파일을 읽지 못했습니다.")
-    count = struct.unpack_from("<I", data, 8)[0]
-    spacing_x, spacing_y, reference = struct.unpack_from("<fff", data, 12)
-    latitude, longitude = struct.unpack_from("<dd", data, 24)
-    code = "f" if data[:8] == b"AEROTRN2" else "h"
-    values = struct.unpack_from(f"<{count * count}{code}", data, HEADER_SIZE)
-    if code == "h":
-        values = tuple(float(value) for value in values)
-    return (count, spacing_x, spacing_y, reference, latitude, longitude,
-            source_elevation, values)
+def load_base_dem(path: Path, metadata: dict, reference: float):
+    """원본 DEM을 장면 좌표로 읽고 중심 기준 높이 차를 만든다."""
+    bounds = metadata["bounds_meters"]
+    count_value = (bounds["east"] - bounds["west"]) / GRID_SPACING_METERS
+    if not math.isclose(count_value, round(count_value), abs_tol=1.0e-6):
+        raise ValueError("장면 너비가 지형 격자 간격으로 나누어떨어지지 않습니다.")
+    count = round(count_value) + 1
+
+    with rasterio.open(path) as source:
+        if source.crs is None or source.transform.a <= 0 or source.transform.e >= 0:
+            raise ValueError("DEM에 좌표계나 북쪽 기준 격자 정보가 없습니다.")
+        target_crs = metadata["target_crs"].split()[0]
+        transform = Transformer.from_crs(target_crs, source.crs, always_xy=True)
+        columns, rows = np.meshgrid(np.arange(count), np.arange(count))
+        target_x = bounds["west"] + columns * GRID_SPACING_METERS
+        target_y = bounds["north"] - rows * GRID_SPACING_METERS
+        source_x, source_y = transform.transform(target_x, target_y)
+
+        source_column = (source_x - source.transform.c) / source.transform.a - 0.5
+        source_row = (source_y - source.transform.f) / source.transform.e - 0.5
+        if (np.any(source_x < source.bounds.left)
+                or np.any(source_x > source.bounds.right)
+                or np.any(source_y < source.bounds.bottom)
+                or np.any(source_y > source.bounds.top)):
+            raise ValueError("DEM이 필요한 장면 범위를 모두 덮지 않습니다.")
+        source_column = np.clip(source_column, 0.0, source.width - 1.0)
+        source_row = np.clip(source_row, 0.0, source.height - 1.0)
+
+        column_before = np.floor(source_column).astype(int)
+        row_before = np.floor(source_row).astype(int)
+        column_after = np.minimum(column_before + 1, source.width - 1)
+        row_after = np.minimum(row_before + 1, source.height - 1)
+        values = source.read(1)
+        if source.nodata is not None and any(
+            np.any(values[row_index, column_index] == source.nodata)
+            for row_index, column_index in (
+                (row_before, column_before), (row_before, column_after),
+                (row_after, column_before), (row_after, column_after))
+        ):
+            raise ValueError("DEM 장면 범위에 높이 자료가 비어 있는 곳이 있습니다.")
+        column_fraction = source_column - column_before
+        row_fraction = source_row - row_before
+        north = (values[row_before, column_before] * (1.0 - column_fraction)
+                 + values[row_before, column_after] * column_fraction)
+        south = (values[row_after, column_before] * (1.0 - column_fraction)
+                 + values[row_after, column_after] * column_fraction)
+        elevations = north * (1.0 - row_fraction) + south * row_fraction
+
+        if not np.all(np.isfinite(elevations)):
+            raise ValueError("DEM에 유효하지 않은 높이가 있습니다.")
+
+        center_elevation = float(elevations[count // 2, count // 2])
+        offsets = (elevations - center_elevation).astype("<f4").ravel()
+        latitude = metadata["target_center_wgs84"]["latitude"]
+        longitude = metadata["target_center_wgs84"]["longitude"]
+        return (count, GRID_SPACING_METERS, GRID_SPACING_METERS, reference,
+                latitude, longitude, center_elevation, offsets)
 
 
 def base_height(x, y, grid, center_x, center_y):
@@ -231,7 +277,7 @@ def write_grid(output_path, terrain, contours, spot_heights, bounds, center_x, c
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=Path, required=True)
-    parser.add_argument("--terrain", type=Path, required=True)
+    parser.add_argument("--dem", type=Path, required=True)
     parser.add_argument("--terrain-metadata", type=Path, required=True)
     parser.add_argument("--orthophoto-metadata", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -242,13 +288,14 @@ def main():
     center_x = (bounds["west"] + bounds["east"]) / 2
     center_y = (bounds["south"] + bounds["north"]) / 2
     terrain_metadata = json.loads(args.terrain_metadata.read_text(encoding="utf-8"))
-    terrain = load_base_grid(
-        args.terrain, terrain_metadata["center_elevation_meters_from_dem"]
+    terrain = load_base_dem(
+        args.dem, metadata, terrain_metadata["simulation_reference_height_meters"]
     )
     contours, spot_heights = load_contours_and_heights(args.source_dir, bounds)
     baseline, corrected = validate(
         contours, spot_heights, terrain, center_x, center_y
     )
+    print(f"DEM 기준 중심 높이: {terrain[6]:.3f}m")
     print(f"읽은 등고선 표본: {len(contours):,}개, 표고점: {len(spot_heights)}개")
     print(f"표고점 제외 검증 MAE: {baseline[0]:.2f}m → {corrected[0]:.2f}m")
     print(f"표고점 제외 검증 RMSE: {baseline[1]:.2f}m → {corrected[1]:.2f}m")
