@@ -82,6 +82,8 @@ constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 탄천유수지 체육시설 주소 지점에 둔 시뮬레이션용 출발 위치다.
 constexpr glm::dvec2 demoDroneStartMeters{-410.0, 457.0};
+// GLB 원점은 장착 브래킷이고 렌즈 중심은 그 원점에서 앞·위로 떨어져 있다.
+constexpr glm::vec3 cameraLensCenterInModelMeters{0.015F, 0.048F, 0.030F};
 constexpr double bridgeDeckUndersideHeightMeters = 6.0;
 constexpr double bridgeDeckThicknessMeters = 0.8;
 constexpr double bridgeInspectionApproachBelowDeckMeters = 1.2;
@@ -1801,10 +1803,12 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         cameraOrientation[0] = cameraRight;
         cameraOrientation[1] = correctedCameraUp;
         cameraOrientation[2] = cameraForward;
+        constexpr float cameraModelScale = 1.0F;
         const glm::mat4 cameraMount = glm::translate(glm::mat4{1.0F},
                 ToRenderPosition(cameraState.positionMeters))
             * glm::mat4_cast(glm::quat_cast(cameraOrientation))
-            * glm::scale(glm::mat4{1.0F}, glm::vec3{1.4F});
+            * glm::translate(glm::mat4{1.0F}, -cameraLensCenterInModelMeters)
+            * glm::scale(glm::mat4{1.0F}, glm::vec3{cameraModelScale});
         droneCameraModel_->Draw(cameraMount, *renderer_, *shader_, view, projection,
             cameraPosition);
 
