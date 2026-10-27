@@ -54,6 +54,43 @@ void RequireFinitePositive(float value, const char* label)
         throw std::invalid_argument(std::string("지형 ") + label + " 값은 0보다 커야 합니다.");
 }
 
+struct TerrainCellCoordinates
+{
+    std::uint32_t northRow;
+    std::uint32_t westColumn;
+    float eastFraction;
+    float southFraction;
+};
+
+TerrainCellCoordinates FindTerrainCell(
+    const TerrainGrid& terrain, const glm::dvec2& positionMeters)
+{
+    if (terrain.sampleCount < 2U || !std::isfinite(positionMeters.x)
+        || !std::isfinite(positionMeters.y)
+        || !std::isfinite(terrain.spacingXMeters) || !(terrain.spacingXMeters > 0.0F)
+        || !std::isfinite(terrain.spacingYMeters) || !(terrain.spacingYMeters > 0.0F)
+        || !std::isfinite(terrain.referenceElevationMeters)
+        || terrain.heightOffsetsMeters.size()
+            != static_cast<std::size_t>(terrain.sampleCount) * terrain.sampleCount)
+    {
+        throw std::invalid_argument("지형 위치와 격자 자료를 확인해 주세요.");
+    }
+    if (!terrain.ContainsLocalPositionMeters(positionMeters))
+        throw std::out_of_range("요청한 위치가 지형 격자 범위를 벗어났습니다.");
+
+    const double column = (positionMeters.x + terrain.HalfWidthMeters())
+        / terrain.spacingXMeters;
+    const double row = (terrain.HalfDepthMeters() - positionMeters.y)
+        / terrain.spacingYMeters;
+    const auto westColumn = std::min(
+        static_cast<std::uint32_t>(std::floor(column)), terrain.sampleCount - 2U);
+    const auto northRow = std::min(
+        static_cast<std::uint32_t>(std::floor(row)), terrain.sampleCount - 2U);
+    return {northRow, westColumn,
+        static_cast<float>(column - westColumn),
+        static_cast<float>(row - northRow)};
+}
+
 glm::dvec3 Wgs84SurfacePositionEcef(
     double latitudeDegrees, double longitudeDegrees)
 {
@@ -315,34 +352,42 @@ bool TerrainGrid::ContainsLocalPositionMeters(
 
 float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
 {
-    if (sampleCount < 2U || !std::isfinite(positionMeters.x)
-        || !std::isfinite(positionMeters.y)
-        || !std::isfinite(spacingXMeters) || !(spacingXMeters > 0.0F)
-        || !std::isfinite(spacingYMeters) || !(spacingYMeters > 0.0F)
-        || !std::isfinite(referenceElevationMeters)
-        || heightOffsetsMeters.size() != static_cast<std::size_t>(sampleCount) * sampleCount)
+    const auto cell = FindTerrainCell(*this, positionMeters);
+    const std::uint32_t eastColumn = cell.westColumn + 1U;
+    const std::uint32_t southRow = cell.northRow + 1U;
+    const float north = std::lerp(
+        HeightAt(cell.northRow, cell.westColumn), HeightAt(cell.northRow, eastColumn),
+        cell.eastFraction);
+    const float south = std::lerp(
+        HeightAt(southRow, cell.westColumn), HeightAt(southRow, eastColumn),
+        cell.eastFraction);
+    return referenceElevationMeters + std::lerp(north, south, cell.southFraction);
+}
+
+float TerrainGrid::HeightAtRenderedSurfaceMeters(
+    const glm::dvec2& positionMeters) const
+{
+    const auto cell = FindTerrainCell(*this, positionMeters);
+    const std::uint32_t eastColumn = cell.westColumn + 1U;
+    const std::uint32_t southRow = cell.northRow + 1U;
+    const float east = cell.eastFraction;
+    const float south = cell.southFraction;
+
+    // 지형 메시의 북동·남서 대각선을 기준으로 같은 삼각형 평면에서 높이를 구한다.
+    if (east + south <= 1.0F)
     {
-        throw std::invalid_argument("지형 위치와 격자 자료를 확인해 주세요.");
+        const float northWest = 1.0F - east - south;
+        return referenceElevationMeters
+            + HeightAt(cell.northRow, cell.westColumn) * northWest
+            + HeightAt(southRow, cell.westColumn) * south
+            + HeightAt(cell.northRow, eastColumn) * east;
     }
 
-    if (!ContainsLocalPositionMeters(positionMeters))
-        throw std::out_of_range("요청한 위치가 지형 격자 범위를 벗어났습니다.");
-
-    const double halfWidth = HalfWidthMeters();
-    const double halfDepth = HalfDepthMeters();
-    const double column = (positionMeters.x + halfWidth) / spacingXMeters;
-    const double row = (halfDepth - positionMeters.y) / spacingYMeters;
-    const auto columnBefore = static_cast<std::uint32_t>(std::floor(column));
-    const auto rowBefore = static_cast<std::uint32_t>(std::floor(row));
-    const std::uint32_t columnAfter = std::min(columnBefore + 1U, sampleCount - 1U);
-    const std::uint32_t rowAfter = std::min(rowBefore + 1U, sampleCount - 1U);
-    const float columnFraction = static_cast<float>(column - columnBefore);
-    const float rowFraction = static_cast<float>(row - rowBefore);
-    const float north = std::lerp(
-        HeightAt(rowBefore, columnBefore), HeightAt(rowBefore, columnAfter), columnFraction);
-    const float south = std::lerp(
-        HeightAt(rowAfter, columnBefore), HeightAt(rowAfter, columnAfter), columnFraction);
-    return referenceElevationMeters + std::lerp(north, south, rowFraction);
+    const float southEast = east + south - 1.0F;
+    return referenceElevationMeters
+        + HeightAt(cell.northRow, eastColumn) * (1.0F - south)
+        + HeightAt(southRow, cell.westColumn) * (1.0F - east)
+        + HeightAt(southRow, eastColumn) * southEast;
 }
 
 glm::dvec2 TerrainGrid::ToLocalMeters(

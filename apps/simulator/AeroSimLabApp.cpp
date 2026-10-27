@@ -256,7 +256,7 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
         if (!createWalls)
         {
             const std::uint32_t roofStart = static_cast<std::uint32_t>(vertices.size());
-            // Poly Haven 원본 재질의 실제 가로·세로 크기인 2.1m에 맞춰 반복한다.
+            // 콘크리트 재질의 실제 크기인 2.1m에 맞춰 반복한다.
             constexpr double roofTextureTileSizeMeters = 2.1;
             for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
             {
@@ -602,19 +602,26 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
         indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
 
-/** @brief 물 경계를 작은 격자로 나눠 DEM 높이에 맞춘 표면을 만든다. */
+/** @brief 물 안에 있는 지형 삼각형을 수면으로 덮어 지형과 틈이 생기지 않게 한다. */
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateWaterMesh(
     const std::vector<aerosimlab::terrain::MapWaterBody>& waterBodies,
     const aerosimlab::terrain::TerrainGrid& terrain)
 {
-    constexpr double cellSizeMeters = 3.0;
     constexpr double surfaceOffsetMeters = 0.25;
-    const double halfX = (static_cast<double>(terrain.sampleCount) - 1.0)
-        * terrain.spacingXMeters * 0.5;
-    const double halfY = (static_cast<double>(terrain.sampleCount) - 1.0)
-        * terrain.spacingYMeters * 0.5;
+    constexpr double waterBoundaryBucketSizeMeters = 1.0;
+    const double halfX = terrain.HalfWidthMeters();
+    const double halfY = terrain.HalfDepthMeters();
+    const auto subdivisions = static_cast<std::uint32_t>(std::max(1.0, std::ceil(
+        std::max(static_cast<double>(terrain.spacingXMeters),
+            static_cast<double>(terrain.spacingYMeters)))));
     std::vector<aerosimlab::graphics::Vertex> vertices;
     std::vector<std::uint32_t> indices;
+
+    struct WaterSurfacePoint
+    {
+        glm::dvec2 position;
+        double elevation;
+    };
 
     for (const auto& body : waterBodies)
     {
@@ -633,35 +640,209 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateWaterMesh(
             maximumY = std::max(maximumY, point.y);
         }
 
-        const double westEdge = std::max(minimumX, -halfX);
-        const double eastEdge = std::min(maximumX, halfX);
-        const double southEdge = std::max(minimumY, -halfY);
-        const double northEdge = std::min(maximumY, halfY);
-        for (double south = southEdge; south < northEdge; south += cellSizeMeters)
+        struct BoundarySegment
         {
-            const double north = std::min(south + cellSizeMeters, northEdge);
-            for (double west = westEdge; west < eastEdge; west += cellSizeMeters)
+            glm::dvec2 first;
+            glm::dvec2 second;
+        };
+        const std::size_t bucketCount = static_cast<std::size_t>(
+            std::ceil((maximumY - minimumY) / waterBoundaryBucketSizeMeters)) + 1U;
+        std::vector<std::vector<BoundarySegment>> boundaryBuckets(bucketCount);
+        const auto addRing = [&](const std::vector<glm::dvec2>& ring)
+        {
+            for (std::size_t index = 0U; index < ring.size(); ++index)
             {
-                const double east = std::min(west + cellSizeMeters, eastEdge);
-                const glm::dvec2 center{(west + east) * 0.5, (south + north) * 0.5};
-                if (!aerosimlab::terrain::ContainsWater(body, center))
+                const glm::dvec2 first = ring[index];
+                const glm::dvec2 second = ring[(index + 1U) % ring.size()];
+                if (first.y == second.y)
                     continue;
+                const std::size_t firstBucket = std::min(
+                    static_cast<std::size_t>(std::floor(
+                        (std::min(first.y, second.y) - minimumY)
+                        / waterBoundaryBucketSizeMeters)),
+                    boundaryBuckets.size() - 1U);
+                const std::size_t lastBucket = std::min(
+                    static_cast<std::size_t>(std::floor(
+                        (std::max(first.y, second.y) - minimumY)
+                        / waterBoundaryBucketSizeMeters)),
+                    boundaryBuckets.size() - 1U);
+                for (std::size_t bucket = firstBucket; bucket <= lastBucket; ++bucket)
+                    boundaryBuckets[bucket].push_back({first, second});
+            }
+        };
+        addRing(body.outerBoundaryMeters);
+        for (const auto& inner : body.innerBoundariesMeters)
+            addRing(inner);
 
-                const std::uint32_t first = static_cast<std::uint32_t>(vertices.size());
-                const auto addCorner = [&](double x, double y, float u, float v)
+        const auto containsWater = [&](const glm::dvec2& point)
+        {
+            if (point.x < minimumX || point.x > maximumX
+                || point.y < minimumY || point.y > maximumY)
+                return false;
+            const std::size_t bucket = std::min(
+                static_cast<std::size_t>(std::floor(
+                    (point.y - minimumY) / waterBoundaryBucketSizeMeters)),
+                boundaryBuckets.size() - 1U);
+            bool inside = false;
+            for (const auto& segment : boundaryBuckets[bucket])
+            {
+                if ((segment.first.y > point.y) == (segment.second.y > point.y))
+                    continue;
+                const double intersectionX = segment.first.x
+                    + (point.y - segment.first.y)
+                        * (segment.second.x - segment.first.x)
+                        / (segment.second.y - segment.first.y);
+                if (point.x < intersectionX)
+                    inside = !inside;
+            }
+            return inside;
+        };
+
+        if (maximumX < -halfX || minimumX > halfX
+            || maximumY < -halfY || minimumY > halfY)
+            continue;
+
+        const auto gridIndex = [](double position, double origin, double spacing,
+                                   std::uint32_t sampleCount)
+        {
+            const double cell = std::floor((position - origin) / spacing);
+            return static_cast<std::uint32_t>(std::clamp(
+                cell, 0.0, static_cast<double>(sampleCount - 2U)));
+        };
+        const std::uint32_t firstColumn = gridIndex(
+            minimumX, -halfX, terrain.spacingXMeters, terrain.sampleCount);
+        const std::uint32_t lastColumn = gridIndex(
+            maximumX, -halfX, terrain.spacingXMeters, terrain.sampleCount);
+        const std::uint32_t firstRow = gridIndex(
+            -maximumY, -halfY, terrain.spacingYMeters, terrain.sampleCount);
+        const std::uint32_t lastRow = gridIndex(
+            -minimumY, -halfY, terrain.spacingYMeters, terrain.sampleCount);
+
+        for (std::uint32_t row = firstRow; row <= lastRow; ++row)
+        {
+            const double north = halfY - static_cast<double>(row) * terrain.spacingYMeters;
+            const double south = north - terrain.spacingYMeters;
+            for (std::uint32_t column = firstColumn; column <= lastColumn; ++column)
+            {
+                const double west = -halfX + static_cast<double>(column)
+                    * terrain.spacingXMeters;
+                const double east = west + terrain.spacingXMeters;
+                const glm::dvec2 northWest{west, north};
+                const glm::dvec2 northEast{east, north};
+                const glm::dvec2 southWest{west, south};
+                const glm::dvec2 southEast{east, south};
+                const auto addTriangle = [&](const glm::dvec2& firstPoint,
+                                             const glm::dvec2& secondPoint,
+                                             const glm::dvec2& thirdPoint,
+                                             std::uint32_t firstRow,
+                                             std::uint32_t firstColumn,
+                                             std::uint32_t secondRow,
+                                             std::uint32_t secondColumn,
+                                             std::uint32_t thirdRow,
+                                             std::uint32_t thirdColumn)
                 {
-                    const glm::dvec2 point{x, y};
-                    const double elevation = terrain.HeightAtLocalMeters(point)
-                        + surfaceOffsetMeters;
-                    vertices.push_back({ToRenderPosition({x, y, elevation}),
-                        {0.0F, 1.0F, 0.0F}, {u, v}});
+                    const auto makePoint = [&](const glm::dvec2& point,
+                                               std::uint32_t vertexRow,
+                                               std::uint32_t vertexColumn)
+                    {
+                        const double elevation = terrain.referenceElevationMeters
+                            + terrain.HeightAt(vertexRow, vertexColumn)
+                            + surfaceOffsetMeters;
+                        return WaterSurfacePoint{point, elevation};
+                    };
+                    const std::array<WaterSurfacePoint, 3> triangle{
+                        makePoint(firstPoint, firstRow, firstColumn),
+                        makePoint(secondPoint, secondRow, secondColumn),
+                        makePoint(thirdPoint, thirdRow, thirdColumn)};
+                    const auto append = [&](const WaterSurfacePoint& first,
+                                            const WaterSurfacePoint& second,
+                                            const WaterSurfacePoint& third)
+                    {
+                        const glm::dvec2 center =
+                            (first.position + second.position + third.position) / 3.0;
+                        if (!containsWater(center))
+                            return;
+                        const std::uint32_t triangleStart =
+                            static_cast<std::uint32_t>(vertices.size());
+                        const auto addVertex = [&](const WaterSurfacePoint& point)
+                        {
+                            vertices.push_back({ToRenderPosition({point.position.x,
+                                point.position.y, point.elevation}),
+                                {0.0F, 1.0F, 0.0F}, {0.0F, 0.0F}});
+                        };
+                        addVertex(first);
+                        addVertex(second);
+                        addVertex(third);
+                        indices.insert(indices.end(), {triangleStart,
+                            triangleStart + 1U, triangleStart + 2U});
+                    };
+
+                    const glm::dvec2 center =
+                        (firstPoint + secondPoint + thirdPoint) / 3.0;
+                    const bool firstInside = containsWater(firstPoint);
+                    const bool secondInside = containsWater(secondPoint);
+                    const bool thirdInside = containsWater(thirdPoint);
+                    const bool centerInside = containsWater(center);
+                    if (firstInside && secondInside && thirdInside && centerInside)
+                    {
+                        append(triangle[0], triangle[1], triangle[2]);
+                        return;
+                    }
+
+                    const glm::dvec2 firstMidpoint = (firstPoint + secondPoint) * 0.5;
+                    const glm::dvec2 secondMidpoint = (secondPoint + thirdPoint) * 0.5;
+                    const glm::dvec2 thirdMidpoint = (thirdPoint + firstPoint) * 0.5;
+                    if (!firstInside && !secondInside && !thirdInside && !centerInside
+                        && !containsWater(firstMidpoint) && !containsWater(secondMidpoint)
+                        && !containsWater(thirdMidpoint))
+                        return;
+
+                    const auto interpolate = [&](std::uint32_t eastSteps,
+                                                  std::uint32_t southSteps)
+                    {
+                        const double firstWeight = 1.0
+                            - static_cast<double>(eastSteps + southSteps) / subdivisions;
+                        const double secondWeight =
+                            static_cast<double>(eastSteps) / subdivisions;
+                        const double thirdWeight =
+                            static_cast<double>(southSteps) / subdivisions;
+                        return WaterSurfacePoint{
+                            triangle[0].position * firstWeight
+                                + triangle[1].position * secondWeight
+                                + triangle[2].position * thirdWeight,
+                            triangle[0].elevation * firstWeight
+                                + triangle[1].elevation * secondWeight
+                                + triangle[2].elevation * thirdWeight};
+                    };
+                    for (std::uint32_t eastStep = 0U; eastStep < subdivisions; ++eastStep)
+                    {
+                        for (std::uint32_t southStep = 0U;
+                             southStep + eastStep < subdivisions; ++southStep)
+                        {
+                            const WaterSurfacePoint first =
+                                interpolate(eastStep, southStep);
+                            const WaterSurfacePoint east =
+                                interpolate(eastStep + 1U, southStep);
+                            const WaterSurfacePoint south =
+                                interpolate(eastStep, southStep + 1U);
+                            append(first, east, south);
+
+                            if (eastStep + southStep + 1U < subdivisions)
+                            {
+                                const WaterSurfacePoint eastSouth =
+                                    interpolate(eastStep + 1U, southStep + 1U);
+                                append(east, eastSouth, south);
+                            }
+                        }
+                    }
                 };
-                addCorner(west, south, 0.0F, 0.0F);
-                addCorner(west, north, 0.0F, 1.0F);
-                addCorner(east, north, 1.0F, 1.0F);
-                addCorner(east, south, 1.0F, 0.0F);
-                indices.insert(indices.end(), {first, first + 1U, first + 2U,
-                    first, first + 2U, first + 3U});
+
+                // 지형 메시와 같은 대각선으로 나눠 수면과 지면이 서로 교차하지 않게 한다.
+                addTriangle(northWest, southWest, northEast,
+                    row, column, row + 1U, column, row, column + 1U);
+                addTriangle(northEast, southWest, southEast,
+                    row, column + 1U, row + 1U, column,
+                    row + 1U, column + 1U);
             }
         }
     }
