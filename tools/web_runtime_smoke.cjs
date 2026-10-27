@@ -310,7 +310,11 @@ async function run() {
     if (webGlErrors.length > 0)
       throw new Error(`화면을 다시 띄우는 동안 WebGL 오류가 발생했습니다: ${webGlErrors.join(" | ")}`);
     await page.waitForFunction(
-      () => document.querySelector("#inspection-target")?.options.length === 4,
+      () => {
+        const targets = document.querySelector("#inspection-target");
+        return targets?.options.length > 1
+          && Boolean(targets.options[1]?.dataset.facilityId);
+      },
       null,
       { timeout: 10000 }
     );
