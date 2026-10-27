@@ -634,6 +634,9 @@ if(BUILD_TESTING)
       target_include_directories(aerosimlab_simulator_integration_tests PRIVATE
         modules/graphics/src/graphics
       )
+      target_compile_definitions(aerosimlab_simulator_integration_tests PRIVATE
+        AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+      )
       target_link_libraries(aerosimlab_simulator_integration_tests PRIVATE
         aerosimlab_simulator_app
         aerosimlab_ground_control_client

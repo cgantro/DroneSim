@@ -1,6 +1,9 @@
 #include "graphics/Camera.h"
 #include "graphics/GlApi.h"
 #include "graphics/GlbModel.h"
+#include "graphics/MultisampleFramebuffer.h"
+#include "graphics/Renderer.h"
+#include "graphics/Shader.h"
 #include "graphics/Window.h"
 #include "GlbData.h"
 
@@ -190,7 +193,7 @@ private:
     std::filesystem::path path_;
 };
 
-void Verify_GlbModelLoadsEmbeddedBaseColorPng()
+void Verify_GlbModelRendersEmbeddedBaseColorPng()
 {
     TemporaryGlbFile fixture;
     Window::Properties properties;
@@ -200,11 +203,35 @@ void Verify_GlbModelLoadsEmbeddedBaseColorPng()
     properties.visible = false;
     properties.vsync = false;
     Window window(properties);
+    Renderer renderer;
+    renderer.Init(properties.width, properties.height);
+    MultisampleFramebuffer target(properties.width, properties.height);
+    Shader shader((std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+        / "assets/shaders/Scene.glsl").string());
+    Camera camera{{0.0F, 0.0F, 1.0F}, {0.0F, 0.0F, 0.0F}, 1.0F};
 
     {
         const auto model = GlbModel::Load(fixture.Path().string());
         ASSERT_NE(model, nullptr);
         EXPECT_EQ(model->PartCount(), 1U);
+
+        renderer.BeginView(target);
+        model->Draw(glm::mat4{1.0F}, renderer, shader,
+            camera.GetViewMatrix(), camera.GetProjectionMatrix(), camera.GetPosition());
+        renderer.EndView(target);
+
+        ASSERT_TRUE(target.QueueRgbReadback(1U));
+        target.FinishRgbReadbacks();
+        std::vector<std::uint8_t> pixels;
+        std::uint64_t renderedTick = 0U;
+        ASSERT_TRUE(target.TryReadRgbPixels(pixels, renderedTick));
+        ASSERT_EQ(renderedTick, 1U);
+        ASSERT_EQ(pixels.size(), 64U * 64U * 3U);
+
+        const std::size_t centerPixel = (32U * 64U + 32U) * 3U;
+        EXPECT_GT(pixels[centerPixel], 32U);
+        EXPECT_GT(pixels[centerPixel], pixels[centerPixel + 1U] * 3U);
+        EXPECT_GT(pixels[centerPixel], pixels[centerPixel + 2U] * 3U);
         EXPECT_EQ(glGetError(), GL_NO_ERROR);
     }
 }
@@ -228,7 +255,7 @@ TEST(CameraTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_GraphicsCamera_UsesSuppliedUpDirectionForRoll());
     EXPECT_NO_FATAL_FAILURE(Verify_TextureCoordinatesPreserveGlTfValues());
-    EXPECT_NO_FATAL_FAILURE(Verify_GlbModelLoadsEmbeddedBaseColorPng());
+    EXPECT_NO_FATAL_FAILURE(Verify_GlbModelRendersEmbeddedBaseColorPng());
 }
 
 }
