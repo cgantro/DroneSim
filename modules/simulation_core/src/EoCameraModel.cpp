@@ -9,7 +9,8 @@ namespace aerosimlab::simulation
 {
 namespace
 {
-constexpr glm::dvec3 cameraMountPositionBodyMeters{0.35, 0.0, 0.12};
+// X500 화면 모델의 기준점에 대해 카메라를 앞쪽 아래에 붙인다.
+constexpr glm::dvec3 cameraMountPositionBodyMeters{0.15, 0.0, -0.10};
 constexpr glm::dvec3 cameraOpticalAxisBody{25.0, 0.0, -2.5};
 
 bool SegmentIntersectsBox(

@@ -580,8 +580,13 @@ void Verify_SimulationCore_TracksEachDroneCameraIndependently()
     EXPECT_EQ(simulation.Camera(second).status, CameraStatus::Fault);
     EXPECT_EQ(simulation.Camera(primary).frameCount, 0U);
     EXPECT_EQ(simulation.Camera(second).frameCount, 0U);
-    EXPECT_NEAR(simulation.Camera(second).positionMeters.x,
-        simulation.State(second).positionMeters.x + 0.35 * std::cos(0.5), 1.0e-9);
+    const glm::dvec3 cameraOffsetInBody = glm::inverse(
+        simulation.State(second).orientation)
+        * (simulation.Camera(second).positionMeters
+            - simulation.State(second).positionMeters);
+    EXPECT_NEAR(cameraOffsetInBody.x, 0.15, 1.0e-9);
+    EXPECT_NEAR(cameraOffsetInBody.y, 0.0, 1.0e-9);
+    EXPECT_NEAR(cameraOffsetInBody.z, -0.10, 1.0e-9);
 
     simulation.SetCameraEnabled(primary, true);
     simulation.SetCameraFault(second, false);
