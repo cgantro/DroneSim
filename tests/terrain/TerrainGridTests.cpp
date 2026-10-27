@@ -286,6 +286,59 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
     EXPECT_FALSE(routeHitsBridgeStructure)
         << "다리 하부 경로가 상판 또는 추정 교각 충돌 영역을 통과합니다.";
 
+    // 기본 임무와 같은 순서로 다리·물길을 지난 뒤 111동 경로도 이어지는지 확인한다.
+    glm::dvec3 missionRouteStart = demoStartPosition;
+    const auto bridgeFirstRoute = PlanMapFlightRouteUnderBridge(
+        terrain, buildings, *tancheonBridge, bridgePiers,
+        missionRouteStart, bridgeApproach, bridgeDeckBottom, bridgeDeckTop,
+        3.0, cameraTransitAltitudeMeters);
+    ASSERT_TRUE(bridgeFirstRoute.has_value());
+    missionRouteStart = bridgeApproach;
+
+    const auto waterBodies = LoadMapWaterBodies(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+    glm::dvec2 riverPosition = bridgeCenter;
+    double nearestWaterDistance = std::numeric_limits<double>::max();
+    for (const auto& water : waterBodies)
+    {
+        for (int northStep = -12; northStep <= 12; ++northStep)
+        {
+            for (int eastStep = -12; eastStep <= 12; ++eastStep)
+            {
+                const glm::dvec2 point = bridgeCenter
+                    + glm::dvec2{eastStep * 5.0, northStep * 5.0};
+                if (!ContainsWater(water, point))
+                    continue;
+                const double distance = glm::length(point - bridgeCenter);
+                if (distance < nearestWaterDistance)
+                {
+                    nearestWaterDistance = distance;
+                    riverPosition = point;
+                }
+            }
+        }
+    }
+    const double riverGround = terrain.HeightAtLocalMeters(riverPosition);
+    const glm::dvec3 riverApproach = terrain.ToSimulationPositionMeters(
+        {riverPosition.x, riverPosition.y,
+            riverGround - centerGround + 7.0});
+    const auto riverRoute = PlanMapFlightRoute(
+        terrain, buildings, missionRouteStart, riverApproach, 3.0,
+        cameraTransitAltitudeMeters);
+    ASSERT_TRUE(riverRoute.has_value());
+    missionRouteStart = riverApproach;
+
+    const auto firstBuilding = std::find_if(visibleBuildings.begin(),
+        visibleBuildings.end(), [](const MapBuilding& building)
+        {
+            return building.osmId == "692770099";
+        });
+    ASSERT_NE(firstBuilding, visibleBuildings.end());
+    const auto firstBuildingRoute = PlanMapFlightRouteToFacade(
+        terrain, buildings, *firstBuilding, missionRouteStart, 8.0, 20.0);
+    ASSERT_TRUE(firstBuildingRoute.has_value())
+        << "탄천교 하부와 물길을 지난 뒤 헬리오시티 111동에 접근할 수 없습니다.";
+
     const std::string helio110BuildingId = "692770092";
     const auto helio110 = std::find_if(visibleBuildings.begin(), visibleBuildings.end(),
         [&helio110BuildingId](const MapBuilding& building)
