@@ -1627,8 +1627,8 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     const float yaw = static_cast<float>(state.yawRadians);
     const glm::vec3 forward{std::cos(yaw), 0.0F, -std::sin(yaw)};
     const glm::vec3 up{0.0F, 1.0F, 0.0F};
-    constexpr double followDistanceMeters = 16.0;
-    constexpr double followHeightMeters = 10.0;
+    constexpr double followDistanceMeters = 10.0;
+    constexpr double followHeightMeters = 6.0;
     glm::dvec3 observerPositionMeters = state.positionMeters
         - glm::dvec3{std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0}
             * followDistanceMeters
@@ -1638,7 +1638,7 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
         observerPositionMeters, state.positionMeters, routeBuildings_, 0.5))
         observerPositionMeters = *clearPosition;
     observerCamera_->SetPosition(ToRenderPosition(observerPositionMeters));
-    observerCamera_->SetTarget(dronePosition + forward * 12.0F + up * 2.5F);
+    observerCamera_->SetTarget(dronePosition + forward * 4.0F + up * 1.5F);
     observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
     observerCamera_->SetFieldOfViewDegrees(50.0F);
 }
@@ -1700,21 +1700,22 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         renderer_->Draw(glm::mat4{1.0F}, *bridgeFootprintMesh_, orthophotoMaterial,
             *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
     if (taggedBuildingMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, buildingRoofMaterial_,
-            *shader_, view, projection, cameraPosition);
+        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, orthophotoMaterial,
+            *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
     if (taggedBuildingWallMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingWallMesh_, buildingMaterial_,
             *shader_, view, projection, cameraPosition, buildingFacadeTexture_.get());
     if (estimatedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
-            buildingRoofMaterial_, *shader_, view, projection, cameraPosition);
+            orthophotoMaterial, *shader_, view, projection, cameraPosition,
+            terrainSurfaceTexture_.get());
     if (estimatedBuildingWallMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingWallMesh_,
             estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,
             buildingFacadeTexture_.get());
     if (footprintBuildingMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *footprintBuildingMesh_, buildingRoofMaterial_,
-            *shader_, view, projection, cameraPosition);
+        renderer_->Draw(glm::mat4{1.0F}, *footprintBuildingMesh_, orthophotoMaterial,
+            *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
     if (footprintBuildingWallMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *footprintBuildingWallMesh_,
             estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,

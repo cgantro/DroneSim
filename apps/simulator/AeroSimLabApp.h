@@ -460,8 +460,6 @@ private:
         glm::vec4{0.57F, 0.61F, 0.65F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material estimatedBuildingMaterial_{
         glm::vec4{0.66F, 0.54F, 0.36F, 1.0F}, 0.0F, 0.9F};
-    aerosimlab::graphics::Material buildingRoofMaterial_{
-        glm::vec4{0.28F, 0.30F, 0.29F, 1.0F}, 0.0F, 0.96F};
     std::unique_ptr<aerosimlab::graphics::Texture2D> buildingFacadeTexture_;
     aerosimlab::graphics::Material missionRouteMaterial_{
         glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
