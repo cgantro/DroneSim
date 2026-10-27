@@ -75,6 +75,7 @@ constexpr glm::dvec2 demoDroneStartMeters{-410.0, 442.0};
 constexpr double bridgeDeckUndersideHeightMeters = 6.0;
 constexpr double bridgeDeckThicknessMeters = 0.8;
 constexpr double bridgeInspectionApproachBelowDeckMeters = 1.2;
+constexpr double unknownBuildingDisplayHeightMeters = 6.0;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -229,6 +230,11 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
         if (triangles.empty())
             continue;
 
+        // 높이가 없는 OSM 건물은 화면에서 위치를 확인할 수 있게만 낮게 세운다.
+        // 이 임시 높이는 건물 충돌이나 정찰 경로 계산에는 사용하지 않는다.
+        const double displayHeight = building.heightMeters > 0.0
+            ? building.heightMeters : unknownBuildingDisplayHeightMeters;
+
         const double winding = PolygonArea(building.outlineMeters) > 0.0 ? 1.0 : -1.0;
         if (!createWalls)
         {
@@ -239,7 +245,7 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
             {
                 const auto& point = building.outlineMeters[i];
                 const double roofHeight = building.groundElevationsMeters[i]
-                    + building.heightMeters;
+                    + displayHeight;
                 const glm::vec2 uv{
                     static_cast<float>((point.x + halfX) / (2.0F * halfX)),
                     static_cast<float>((halfY - point.y) / (2.0F * halfY))};
@@ -269,7 +275,7 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
             outward *= winding;
             const glm::vec3 normal = glm::normalize(ToRenderDirection(outward));
             const float edgeLength = static_cast<float>(glm::length(edge));
-            const float wallHeight = static_cast<float>(building.heightMeters);
+            const float wallHeight = static_cast<float>(displayHeight);
             constexpr float facadeTileWidthMeters = 5.0F;
             constexpr float facadeTileHeightMeters = 3.0F;
             const auto bottomFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
@@ -277,9 +283,9 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
             const auto bottomSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
                 building.groundElevationsMeters[next]});
             const auto topFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
-                building.groundElevationsMeters[i] + building.heightMeters});
+                building.groundElevationsMeters[i] + displayHeight});
             const auto topSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
-                building.groundElevationsMeters[next] + building.heightMeters});
+                building.groundElevationsMeters[next] + displayHeight});
             const std::uint32_t wallStart = static_cast<std::uint32_t>(vertices.size());
             vertices.insert(vertices.end(), {
                 {bottomFirst, normal, {0.0F, wallHeight / facadeTileHeightMeters}},
@@ -1395,7 +1401,8 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     const glm::vec3 forward{std::cos(yaw), 0.0F, -std::sin(yaw)};
     const glm::vec3 up{0.0F, 1.0F, 0.0F};
     constexpr double followDistanceMeters = 18.0;
-    constexpr double followHeightMeters = 10.0;
+    // 화면을 지면과 거의 나란히 두지 않아 가까운 정사영상이 과하게 늘어나지 않게 한다.
+    constexpr double followHeightMeters = 26.5;
     glm::dvec3 observerPositionMeters = state.positionMeters
         - glm::dvec3{std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0}
             * followDistanceMeters
