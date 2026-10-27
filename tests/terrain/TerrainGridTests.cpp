@@ -172,6 +172,26 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
         routeStart = facadeRoute->approachPositionMeters;
     }
 
+    const auto bridges = LoadMapBridgeFootprints(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+    const auto tancheonBridge = std::find_if(bridges.begin(), bridges.end(),
+        [](const MapBridgeFootprint& bridge) { return bridge.name == "탄천교"; });
+    ASSERT_NE(tancheonBridge, bridges.end());
+    glm::dvec2 bridgeCenter{0.0};
+    double bridgeGround = 0.0;
+    for (std::size_t index = 0; index < tancheonBridge->outlineMeters.size(); ++index)
+    {
+        bridgeCenter += tancheonBridge->outlineMeters[index];
+        bridgeGround += tancheonBridge->groundElevationsMeters[index];
+    }
+    bridgeCenter /= static_cast<double>(tancheonBridge->outlineMeters.size());
+    bridgeGround /= static_cast<double>(tancheonBridge->groundElevationsMeters.size());
+    const double centerGround = terrain.HeightAtLocalMeters({0.0, 0.0});
+    const glm::dvec3 bridgeApproach = terrain.ToSimulationPositionMeters(
+        {bridgeCenter.x, bridgeCenter.y, bridgeGround - centerGround + 4.8});
+    EXPECT_TRUE(PlanMapFlightRoute(
+        terrain, buildings, routeStart, bridgeApproach).has_value());
+
     const std::string helio110BuildingId = "692770092";
     const auto helio110 = std::find_if(visibleBuildings.begin(), visibleBuildings.end(),
         [&helio110BuildingId](const MapBuilding& building)
