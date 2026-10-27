@@ -248,6 +248,36 @@ class NgiiBuildingConversionTests(unittest.TestCase):
         self.assertIn("ngii:house-1", ids)
         self.assertNotIn("ngii:deck-1", ids)
 
+    def test_road_ramp_outlines_are_not_imported_as_buildings(self):
+        def building(feature_id):
+            offset = 0.01 if feature_id == "ordinary-building" else 0.0
+            return {
+                "type": "Feature",
+                "id": feature_id,
+                "properties": {
+                    "osm_id": f"ngii:{feature_id}",
+                    "tags": {"building": "yes"},
+                },
+                "geometry": {"type": "Polygon", "coordinates": [[
+                    [127.0 + offset, 37.0], [127.001 + offset, 37.0],
+                    [127.001 + offset, 37.001], [127.0 + offset, 37.001],
+                    [127.0 + offset, 37.0],
+                ]]},
+            }
+
+        retained_building_id = "ngii:ordinary-building"
+        result = converter._merge_site(
+            {"type": "FeatureCollection", "features": []},
+            [
+                building("1000037709004A00110000000000003425"),
+                building("1000377090220A00110000000000000058"),
+                building("ordinary-building"),
+            ],
+        )
+
+        ids = {feature["properties"]["osm_id"] for feature in result["features"]}
+        self.assertEqual(ids, {retained_building_id})
+
     def test_official_bridge_outline_replaces_same_named_osm_polygon(self):
         osm = {
             "type": "Feature",

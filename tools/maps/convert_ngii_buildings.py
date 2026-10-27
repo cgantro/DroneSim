@@ -18,6 +18,12 @@ from typing import Any
 BUILDING_LAYERS = ("N1A_A0010000", "N3A_A0010000")
 BRIDGE_LAYERS = ("N1A_A0070000", "N3A_A0070000")
 TREE_LAYERS = ("N1P_D0030000", "N3P_D0030000")
+# 항공 정사영상과 도로 중심선을 대조해 건물이 아닌 것으로 확인한 도형입니다.
+# 1:1,000 건물 레이어에 들어간 고가도로 진입부가 건물 높이와 충돌 장애물로 잘못 처리됩니다.
+NGII_ROAD_DUPLICATE_BUILDING_IDS = frozenset({
+    "1000037709004A00110000000000003425",
+    "1000377090220A00110000000000000058",
+})
 WGS84_A = 6_378_137.0
 WGS84_F = 1.0 / 298.257222101
 E2 = WGS84_F * (2.0 - WGS84_F)
@@ -998,6 +1004,10 @@ def _merge_site(
 
     matched_osm_ids: set[str] = set()
     official_features = _deduplicate_footprints(official_features)
+    official_features = [
+        feature for feature in official_features
+        if str(feature.get("id", "")) not in NGII_ROAD_DUPLICATE_BUILDING_IDS
+    ]
     # 교량 상판과 같은 외곽선이 수치지도 건물로 중복 등록되면 하부 경로가 막힌다.
     official_features = [
         feature for feature in official_features
