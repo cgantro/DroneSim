@@ -8,6 +8,7 @@ import math
 import struct
 import zipfile
 from pathlib import Path
+from typing import Iterable
 
 import numpy as np
 import rasterio
@@ -52,50 +53,63 @@ def read_shapes(data: bytes, shape_type: int):
             raise ValueError("수치지도 안에 예상하지 못한 도형이 있습니다.")
 
 
-def load_contours_and_heights(source_dir: Path, bounds: dict[str, float]):
+def load_contours_and_heights(source_dirs: Iterable[Path], bounds: dict[str, float]):
     """장면 범위에 들어오는 등고선과 표고점을 읽는다."""
     contours: list[tuple[float, float, float]] = []
     spot_heights: list[tuple[float, float, float]] = []
-    for archive_path in sorted(source_dir.glob("*.zip")):
+    archive_paths = sorted(
+        archive_path
+        for source_dir in source_dirs
+        for archive_path in source_dir.glob("*.zip")
+    )
+    for archive_path in archive_paths:
         with zipfile.ZipFile(archive_path) as archive:
             members = {Path(name).name.lower(): name for name in archive.namelist()}
-            contour_shape = members.get("n1l_f0010000.shp")
-            contour_table = members.get("n1l_f0010000.dbf")
-            if contour_shape and contour_table:
-                shape_data = archive.read(contour_shape)
-                west, south, east, north = struct.unpack_from("<4d", shape_data, 36)
-                if not (west > bounds["east"] or east < bounds["west"]
-                        or south > bounds["north"] or north < bounds["south"]):
+            for layer in ("n1l_f0010000", "n3l_f0010000"):
+                contour_shape = members.get(f"{layer}.shp")
+                contour_table = members.get(f"{layer}.dbf")
+                if not contour_shape or not contour_table:
+                    continue
+                try:
+                    shape_data = archive.read(contour_shape)
                     rows = _read_dbf_rows(archive.read(contour_table))
-                    for parts, row in zip(
-                        read_shapes(shape_data, 3), rows, strict=True
-                    ):
-                        elevation = float(row.get("등고수치", "0") or 0)
-                        for line in parts:
-                            for start, end in zip(line, line[1:]):
-                                length = math.dist(start, end)
-                                steps = max(1, math.ceil(length / 2.5))
-                                for step in range(steps + 1):
-                                    fraction = step / steps
-                                    x = start[0] + (end[0] - start[0]) * fraction
-                                    y = start[1] + (end[1] - start[1]) * fraction
-                                    if (bounds["west"] <= x <= bounds["east"]
-                                            and bounds["south"] <= y <= bounds["north"]):
-                                        contours.append((x, y, elevation))
+                except zipfile.BadZipFile:
+                    continue
+                west, south, east, north = struct.unpack_from("<4d", shape_data, 36)
+                if (west > bounds["east"] or east < bounds["west"]
+                        or south > bounds["north"] or north < bounds["south"]):
+                    continue
+                for parts, row in zip(read_shapes(shape_data, 3), rows, strict=True):
+                    elevation = float(row.get("등고수치", "0") or 0)
+                    for line in parts:
+                        for start, end in zip(line, line[1:]):
+                            length = math.dist(start, end)
+                            steps = max(1, math.ceil(length / 2.5))
+                            for step in range(steps + 1):
+                                fraction = step / steps
+                                x = start[0] + (end[0] - start[0]) * fraction
+                                y = start[1] + (end[1] - start[1]) * fraction
+                                if (bounds["west"] <= x <= bounds["east"]
+                                        and bounds["south"] <= y <= bounds["north"]):
+                                    contours.append((x, y, elevation))
 
-            point_shape = members.get("n1p_f0020000.shp")
-            point_table = members.get("n1p_f0020000.dbf")
-            if point_shape and point_table:
-                rows = _read_dbf_rows(archive.read(point_table))
-                for points, row in zip(
-                    read_shapes(archive.read(point_shape), 1), rows, strict=True
-                ):
-                    if not points or not row.get("수치"):
-                        continue
-                    x, y = points[0]
-                    if (bounds["west"] <= x <= bounds["east"]
-                            and bounds["south"] <= y <= bounds["north"]):
-                        spot_heights.append((x, y, float(row["수치"])))
+            for layer in ("n1p_f0020000", "n3p_f0020000"):
+                point_shape = members.get(f"{layer}.shp")
+                point_table = members.get(f"{layer}.dbf")
+                if not point_shape or not point_table:
+                    continue
+                try:
+                    rows = _read_dbf_rows(archive.read(point_table))
+                    shapes = read_shapes(archive.read(point_shape), 1)
+                    for points, row in zip(shapes, rows, strict=True):
+                        if not points or not row.get("수치"):
+                            continue
+                        x, y = points[0]
+                        if (bounds["west"] <= x <= bounds["east"]
+                                and bounds["south"] <= y <= bounds["north"]):
+                            spot_heights.append((x, y, float(row["수치"])))
+                except zipfile.BadZipFile:
+                    continue
     if not contours or not spot_heights:
         raise ValueError("장면 범위에서 등고선과 표고점을 찾지 못했습니다.")
     return contours, spot_heights
@@ -276,7 +290,10 @@ def write_grid(output_path, terrain, contours, spot_heights, bounds, center_x, c
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-dir", type=Path, required=True)
+    parser.add_argument(
+        "--source-dir", type=Path, action="append", required=True,
+        help="등고선·표고점이 든 수치지도 ZIP 폴더. 여러 폴더를 지정할 수 있습니다.",
+    )
     parser.add_argument("--dem", type=Path, required=True)
     parser.add_argument("--terrain-metadata", type=Path, required=True)
     parser.add_argument("--orthophoto-metadata", type=Path, required=True)
