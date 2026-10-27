@@ -1813,6 +1813,36 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             * glm::scale(glm::mat4{1.0F}, glm::vec3{1.4F});
         droneCameraModel_->Draw(cameraMount, *renderer_, *shader_, view, projection,
             cameraPosition);
+
+        if (showMissionGuides
+            && cameraState.status == aerosimlab::simulation::CameraStatus::Active)
+        {
+            const glm::dvec3 cameraForward = glm::normalize(
+                aerosimlab::simulation::EoCameraModel::OpticalAxis(cameraState));
+            const glm::dvec3 cameraUp = glm::normalize(
+                aerosimlab::simulation::EoCameraModel::UpAxis(cameraState));
+            const glm::dvec3 cameraRight = glm::normalize(
+                glm::cross(cameraForward, cameraUp));
+            constexpr double viewDistanceMeters = 5.0;
+            const double halfHeightMeters = viewDistanceMeters * std::tan(
+                glm::radians(cameraState.model.verticalFieldOfViewDegrees * 0.5));
+            const double halfWidthMeters = halfHeightMeters
+                * cameraState.model.imageWidthPixels
+                / static_cast<double>(cameraState.model.imageHeightPixels);
+            const glm::dvec3 farCenter = cameraState.positionMeters
+                + cameraForward * viewDistanceMeters;
+            const std::array<glm::dvec3, 4> corners{
+                farCenter - cameraRight * halfWidthMeters - cameraUp * halfHeightMeters,
+                farCenter + cameraRight * halfWidthMeters - cameraUp * halfHeightMeters,
+                farCenter + cameraRight * halfWidthMeters + cameraUp * halfHeightMeters,
+                farCenter - cameraRight * halfWidthMeters + cameraUp * halfHeightMeters};
+
+            for (std::size_t corner = 0; corner < corners.size(); ++corner)
+            {
+                drawRouteSegment(cameraState.positionMeters, corners[corner]);
+                drawRouteSegment(corners[corner], corners[(corner + 1U) % corners.size()]);
+            }
+        }
     }
 }
 
