@@ -361,7 +361,8 @@ void AeroSimLabApp::ApplyVideoRecordingCommand(
         const auto& model = simulation_.Camera().model;
         const auto path = NewEoRecordingPath();
         if (!recorder->Start(path, model.imageWidthPixels, model.imageHeightPixels,
-            60.0, inspectionMission_.facilityId, inspectionMission_.zoneId, error))
+            EoVideoRecorder::recordedFramesPerSecond,
+            inspectionMission_.facilityId, inspectionMission_.zoneId, error))
         {
             reply.status = "video_recording_failed:" + error;
             return;

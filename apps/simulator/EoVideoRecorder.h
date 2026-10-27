@@ -16,6 +16,9 @@ namespace aerosimlab::simulator
 class EoVideoRecorder final
 {
 public:
+    static constexpr std::uint64_t simulationTicksPerRecordedFrame = 4U;
+    static constexpr double recordedFramesPerSecond = 15.0;
+
     enum class MissionOutcome
     {
         Completed,

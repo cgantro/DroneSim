@@ -177,9 +177,14 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
                 aerosimlab::simulation::EoCameraModel::AssessCapture(
                     cameraState->second, inspectionMission_.surface, {},
                     inspectionOccluders_);
-            if (!eoVideoRecorder_->WriteFrame(eoFrame_, cameraState->second,
-                static_cast<double>(simulationTick) / 60.0,
-                captureAssessment, error))
+            const bool isInspectionFrame = captureAssessment
+                == aerosimlab::simulation::CaptureAssessment::Ready;
+            const bool isScheduledVideoFrame = simulationTick
+                % EoVideoRecorder::simulationTicksPerRecordedFrame == 0U;
+            if ((isInspectionFrame || isScheduledVideoFrame)
+                && !eoVideoRecorder_->WriteFrame(eoFrame_, cameraState->second,
+                    static_cast<double>(simulationTick) / 60.0,
+                    captureAssessment, error))
             {
                 const bool missionIsActive =
                     inspectionMission_.stage != InspectionMissionStage::Ready
@@ -203,9 +208,8 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
                 }
             }
 #ifndef __EMSCRIPTEN__
-            else if (inspectionMission_.stage == InspectionMissionStage::Capturing
-                && captureAssessment
-                    == aerosimlab::simulation::CaptureAssessment::Ready)
+            else if (isInspectionFrame
+                && inspectionMission_.stage == InspectionMissionStage::Capturing)
             {
                 inspectionMission_.readyFrameSaved = true;
             }
