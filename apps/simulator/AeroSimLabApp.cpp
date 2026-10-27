@@ -68,6 +68,16 @@ namespace
 #ifdef __EMSCRIPTEN__
 AeroSimLabApp* activeWebApplication = nullptr;
 #endif
+void SetStartupDetail(std::string_view message)
+{
+#ifdef __EMSCRIPTEN__
+    const std::string text(message);
+    EM_ASM({ window.setSimulatorStartupStatus(UTF8ToString($0)); }, text.c_str());
+#else
+    static_cast<void>(message);
+#endif
+}
+
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 탄천유수지 체육시설 주소 지점에 둔 시뮬레이션용 출발 위치다.
@@ -779,6 +789,7 @@ void AeroSimLabApp::LoadTerrain()
 
 void AeroSimLabApp::LoadMapFeatures()
 {
+    SetStartupDetail("건물·교량·하천 윤곽을 읽고 있습니다.");
     routeBuildings_ = aerosimlab::terrain::LoadMapBuildingFootprints(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto& buildings = routeBuildings_;
@@ -813,16 +824,21 @@ void AeroSimLabApp::LoadMapFeatures()
     waterMesh_ = CreateWaterMesh(waterBodies, terrainGrid_);
     taggedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, terrainGrid_, false);
+    SetStartupDetail("높이가 확인된 건물의 벽을 만들고 있습니다.");
     taggedBuildingWallMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, terrainGrid_, true);
+    SetStartupDetail("층수로 높이를 추정한 건물 지붕을 만들고 있습니다.");
     estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, terrainGrid_, false);
+    SetStartupDetail("층수로 높이를 추정한 건물 벽을 만들고 있습니다.");
     estimatedBuildingWallMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, terrainGrid_, true);
+    SetStartupDetail("건물 충돌 구역을 준비하고 있습니다.");
     inspectionOccluders_.reserve(buildings.size());
     std::unordered_map<std::string, const aerosimlab::terrain::MapBuilding*> buildingsById;
     for (const auto& building : buildings)
     {
+        SetStartupDetail(std::string("건물 충돌 구역: ") + building.osmId);
         const auto bounds =
             aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
         if (building.heightMeters > 0.0)
@@ -844,6 +860,7 @@ void AeroSimLabApp::LoadMapFeatures()
             buildingsById.emplace(building.osmId, &building);
     }
 
+    SetStartupDetail("시험용 정찰 위치와 경로를 읽고 있습니다.");
     std::ifstream planFile(AssetPath("maps/tancheon/demo-inspection-plan.json"));
     if (!planFile)
         throw std::runtime_error("시험용 시설물 점검 계획을 열지 못했습니다.");
