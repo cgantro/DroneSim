@@ -1423,10 +1423,12 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
 void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, bool showMissionGuides)
 {
+    static const aerosimlab::graphics::Material orthophotoMaterial{
+        glm::vec4{1.0F}, 0.0F, 0.92F};
     renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
     const bool hasOrthophoto = terrainSurfaceTexture_ != nullptr;
     const auto& terrainMaterial = hasOrthophoto
-        ? orthophotoMaterial_ : groundMaterial_;
+        ? orthophotoMaterial : groundMaterial_;
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, terrainMaterial, *shader_,
         view, projection, cameraPosition, terrainSurfaceTexture_.get(), false,
         !hasOrthophoto);
@@ -1444,14 +1446,14 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         renderer_->Draw(glm::mat4{1.0F}, *bridgeFootprintMesh_,
             bridgeFootprintMaterial_, *shader_, view, projection, cameraPosition);
     if (taggedBuildingMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, orthophotoMaterial_,
+        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, orthophotoMaterial,
             *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
     if (taggedBuildingWallMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingWallMesh_, buildingMaterial_,
             *shader_, view, projection, cameraPosition, buildingFacadeTexture_.get());
     if (estimatedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
-            orthophotoMaterial_, *shader_, view, projection, cameraPosition,
+            orthophotoMaterial, *shader_, view, projection, cameraPosition,
             terrainSurfaceTexture_.get());
     if (estimatedBuildingWallMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingWallMesh_,

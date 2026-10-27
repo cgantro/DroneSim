@@ -436,8 +436,6 @@ private:
         glm::vec4{1.0F}, 0.16F, 0.40F};
     aerosimlab::graphics::Material groundMaterial_{
         glm::vec4{0.25F, 0.40F, 0.25F, 1.0F}, 0.0F, 0.92F};
-    aerosimlab::graphics::Material orthophotoMaterial_{
-        glm::vec4{1.0F}, 0.0F, 0.92F};
     aerosimlab::graphics::Material waterMaterial_{
         glm::vec4{0.08F, 0.35F, 0.55F, 1.0F}, 0.0F, 0.38F,
         aerosimlab::graphics::Material::SurfaceEffect::FlowingWater};
