@@ -2136,9 +2136,9 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             for (std::size_t corner = 0; corner < corners.size(); ++corner)
             {
                 drawRouteSegment(cameraState.positionMeters, corners[corner],
-                    missionRouteMaterial_);
+                    cameraViewMaterial_);
                 drawRouteSegment(corners[corner],
-                    corners[(corner + 1U) % corners.size()], missionRouteMaterial_);
+                    corners[(corner + 1U) % corners.size()], cameraViewMaterial_);
             }
         }
     }
