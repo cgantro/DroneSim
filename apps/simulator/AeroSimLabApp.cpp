@@ -230,8 +230,10 @@ std::vector<std::array<std::uint32_t, 3>> TriangulateFootprint(
 
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
     const std::vector<aerosimlab::terrain::MapBuilding>& buildings,
+    const aerosimlab::terrain::TerrainGrid& terrain,
     aerosimlab::terrain::BuildingHeightSource heightSource,
-    bool createWalls)
+    bool createWalls,
+    bool useOrthophoto)
 {
     std::vector<aerosimlab::graphics::Vertex> vertices;
     std::vector<std::uint32_t> indices;
@@ -255,15 +257,22 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
         if (!createWalls)
         {
             const std::uint32_t roofStart = static_cast<std::uint32_t>(vertices.size());
-            // 콘크리트 재질의 실제 크기인 2.1m에 맞춰 반복한다.
+            const double halfWidth = terrain.HalfWidthMeters();
+            const double halfDepth = terrain.HalfDepthMeters();
             constexpr double roofTextureTileSizeMeters = 2.1;
             for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
             {
                 const auto& point = building.outlineMeters[i];
+                // 정사영상이 있으면 위치를 그대로 따라가고, 없으면 콘크리트 무늬를 반복한다.
+                const glm::vec2 textureCoordinate = useOrthophoto
+                    ? glm::vec2{
+                        static_cast<float>((point.x + halfWidth) / (2.0 * halfWidth)),
+                        static_cast<float>((halfDepth - point.y) / (2.0 * halfDepth))}
+                    : glm::vec2{
+                        static_cast<float>(point.x / roofTextureTileSizeMeters),
+                        static_cast<float>(-point.y / roofTextureTileSizeMeters)};
                 vertices.push_back({ToRenderPosition({point.x, point.y, roofElevation}),
-                    {0.0F, 1.0F, 0.0F},
-                    {static_cast<float>(point.x / roofTextureTileSizeMeters),
-                        static_cast<float>(-point.y / roofTextureTileSizeMeters)}});
+                    {0.0F, 1.0F, 0.0F}, textureCoordinate});
             }
             for (const auto& triangle : triangles)
             {
@@ -1165,24 +1174,28 @@ void AeroSimLabApp::LoadMapFeatures()
         bridges, terrainGrid_, BridgeMeshPart::DeckStructure);
     bridgePierMesh_ = CreateBridgePierMesh(bridgePiers);
     waterMesh_ = CreateWaterMesh(waterBodies, terrainGrid_);
-    taggedBuildingMesh_ = CreateBuildingMesh(buildings,
-        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, false);
+    taggedBuildingMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
+        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, false,
+        terrainSurfaceTexture_ != nullptr);
     SetStartupDetail("높이가 확인된 건물의 벽을 만들고 있습니다.");
-    taggedBuildingWallMesh_ = CreateBuildingMesh(buildings,
-        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, true);
+    taggedBuildingWallMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
+        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, true,
+        terrainSurfaceTexture_ != nullptr);
     SetStartupDetail("층수로 높이를 추정한 건물 지붕을 만들고 있습니다.");
-    estimatedBuildingMesh_ = CreateBuildingMesh(buildings,
-        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, false);
+    estimatedBuildingMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
+        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, false,
+        terrainSurfaceTexture_ != nullptr);
     SetStartupDetail("층수로 높이를 추정한 건물 벽을 만들고 있습니다.");
-    estimatedBuildingWallMesh_ = CreateBuildingMesh(buildings,
-        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, true);
+    estimatedBuildingWallMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
+        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, true,
+        terrainSurfaceTexture_ != nullptr);
     SetStartupDetail("높이를 알 수 없는 건물 외곽을 임시 높이로 표시합니다.");
-    footprintBuildingMesh_ = CreateBuildingMesh(buildings,
+    footprintBuildingMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromFootprint,
-        false);
-    footprintBuildingWallMesh_ = CreateBuildingMesh(buildings,
+        false, terrainSurfaceTexture_ != nullptr);
+    footprintBuildingWallMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromFootprint,
-        true);
+        true, terrainSurfaceTexture_ != nullptr);
     SetStartupDetail("건물 충돌 구역을 준비하고 있습니다.");
     inspectionOccluders_.reserve(buildings.size());
     std::unordered_map<std::string, const aerosimlab::terrain::MapBuilding*> buildingsById;
@@ -1960,7 +1973,9 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         if (mesh)
         {
             renderer_->Draw(glm::mat4{1.0F}, *mesh, buildingRoofMaterial_,
-                *shader_, view, projection, cameraPosition, buildingRoofTexture_.get());
+                *shader_, view, projection, cameraPosition,
+                terrainSurfaceTexture_ ? terrainSurfaceTexture_.get()
+                                       : buildingRoofTexture_.get());
         }
     };
     drawBuildingRoof(taggedBuildingMesh_);
