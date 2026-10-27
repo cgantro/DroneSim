@@ -2008,7 +2008,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         DrawCube(transform, cameraPosition, material, view, projection);
     };
 
-    if (showMissionGuides && InspectionMissionIsActive()
+    if (showMissionGuides
         && inspectionMission_.activeTargetIndex < inspectionTargets_.size())
     {
         const InspectionTarget& target =
