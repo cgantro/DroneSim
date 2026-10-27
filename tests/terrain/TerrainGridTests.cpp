@@ -493,7 +493,7 @@ void Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection()
         names.push_back(bridge.name);
     }
 
-    EXPECT_EQ(bridges.size(), 6U);
+    EXPECT_EQ(bridges.size(), 7U);
     EXPECT_EQ(std::count_if(bridges.begin(), bridges.end(),
         [](const MapBridgeFootprint& bridge) { return bridge.name == "탄천교"; }), 2);
     EXPECT_NE(std::find(names.begin(), names.end(), "탄천교"), names.end());
