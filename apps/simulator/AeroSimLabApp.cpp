@@ -1603,10 +1603,22 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             glm::mat4_cast(ToRenderOrientation(drone.orientation));
         droneModel_->Draw(heading, *renderer_, *shader_, view, projection,
             cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true);
-        const glm::mat4 cameraMount = heading
-            * glm::translate(glm::mat4{1.0F}, glm::vec3{0.025F, -0.09F, 0.0F})
-            * glm::mat4_cast(glm::angleAxis(1.57079632679F,
-                glm::vec3{0.0F, 1.0F, 0.0F}))
+        const auto& cameraState = simulation_.Camera(id);
+        const glm::vec3 cameraForward = glm::normalize(ToRenderDirection(
+            aerosimlab::simulation::EoCameraModel::OpticalAxis(cameraState)));
+        const glm::vec3 cameraUp = glm::normalize(ToRenderDirection(
+            aerosimlab::simulation::EoCameraModel::UpAxis(cameraState)));
+        const glm::vec3 cameraRight = glm::normalize(
+            glm::cross(cameraUp, cameraForward));
+        const glm::vec3 correctedCameraUp = glm::normalize(
+            glm::cross(cameraForward, cameraRight));
+        glm::mat3 cameraOrientation{1.0F};
+        cameraOrientation[0] = cameraRight;
+        cameraOrientation[1] = correctedCameraUp;
+        cameraOrientation[2] = cameraForward;
+        const glm::mat4 cameraMount = glm::translate(glm::mat4{1.0F},
+                ToRenderPosition(cameraState.positionMeters))
+            * glm::mat4_cast(glm::quat_cast(cameraOrientation))
             * glm::scale(glm::mat4{1.0F}, glm::vec3{1.4F});
         droneCameraModel_->Draw(cameraMount, *renderer_, *shader_, view, projection,
             cameraPosition);
