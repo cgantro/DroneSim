@@ -422,6 +422,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson@maps/tancheon/site.geojson"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json@maps/tancheon/demo-inspection-plan.json"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/apartment-facade.png@maps/tancheon/apartment-facade.png"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/roof-concrete.jpg@maps/tancheon/roof-concrete.jpg"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb@models/drones/x500/visual.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb@models/drones/x500/action-camera.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
@@ -458,7 +459,8 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn"
       "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson"
       "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json"
-      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/apartment-facade.png")
+      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/apartment-facade.png"
+      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/roof-concrete.jpg")
 
     foreach(terrain_texture_extension IN ITEMS png jpg jpeg ppm)
       set(terrain_texture_path

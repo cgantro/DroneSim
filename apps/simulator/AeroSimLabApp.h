@@ -429,6 +429,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneCameraModel_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> terrainSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
+    std::unique_ptr<aerosimlab::graphics::Texture2D> buildingRoofTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     struct FleetReconnaissanceState
     {
@@ -459,7 +460,7 @@ private:
     aerosimlab::graphics::Material buildingMaterial_{
         glm::vec4{0.57F, 0.61F, 0.65F, 1.0F}, 0.0F, 0.9F};
     aerosimlab::graphics::Material buildingRoofMaterial_{
-        glm::vec4{0.48F, 0.50F, 0.51F, 1.0F}, 0.0F, 0.96F};
+        glm::vec4{1.0F}, 0.0F, 0.96F};
     aerosimlab::graphics::Material estimatedBuildingMaterial_{
         glm::vec4{0.66F, 0.54F, 0.36F, 1.0F}, 0.0F, 0.9F};
     std::unique_ptr<aerosimlab::graphics::Texture2D> buildingFacadeTexture_;

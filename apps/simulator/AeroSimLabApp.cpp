@@ -246,13 +246,16 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
         if (!createWalls)
         {
             const std::uint32_t roofStart = static_cast<std::uint32_t>(vertices.size());
+            constexpr double roofTextureTileSizeMeters = 6.0;
             for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
             {
                 const auto& point = building.outlineMeters[i];
                 const double roofHeight = building.groundElevationsMeters[i]
                     + displayHeight;
                 vertices.push_back({ToRenderPosition({point.x, point.y, roofHeight}),
-                    {0.0F, 1.0F, 0.0F}, {0.0F, 0.0F}});
+                    {0.0F, 1.0F, 0.0F},
+                    {static_cast<float>(point.x / roofTextureTileSizeMeters),
+                        static_cast<float>(-point.y / roofTextureTileSizeMeters)}});
             }
             for (const auto& triangle : triangles)
             {
@@ -854,6 +857,8 @@ void AeroSimLabApp::LoadSceneModels()
         AssetPath("models/drones/x500/carbon-weave.ppm"));
     buildingFacadeTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
         AssetPath("maps/tancheon/apartment-facade.png"), true);
+    buildingRoofTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
+        AssetPath("maps/tancheon/roof-concrete.jpg"), true);
     constexpr std::array<const char*, 4> terrainTextureExtensions{
         "png", "jpg", "jpeg", "ppm"};
     for (const char* extension : terrainTextureExtensions)
@@ -1700,7 +1705,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         if (mesh)
         {
             renderer_->Draw(glm::mat4{1.0F}, *mesh, buildingRoofMaterial_,
-                *shader_, view, projection, cameraPosition);
+                *shader_, view, projection, cameraPosition, buildingRoofTexture_.get());
         }
     };
     drawBuildingRoof(taggedBuildingMesh_);
