@@ -220,13 +220,20 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
             bridgeGround - centerGround + 4.8});
     const auto bridgePiers = EstimateMapBridgePiers(
         *tancheonBridge, terrain, bridgeDeckBottom);
+    constexpr double cameraTransitAltitudeMeters = 60.0;
     const auto bridgeRoute = PlanMapFlightRouteUnderBridge(
         terrain, buildings, *tancheonBridge, bridgePiers,
-        routeStart, bridgeApproach, bridgeDeckBottom, bridgeDeckTop);
+        routeStart, bridgeApproach, bridgeDeckBottom, bridgeDeckTop, 3.0,
+        cameraTransitAltitudeMeters);
     ASSERT_TRUE(bridgeRoute.has_value())
         << "탄천교 하부 routeStart=" << routeStart.x << "," << routeStart.y
         << "," << routeStart.z << " goal=" << bridgeApproach.x << ","
         << bridgeApproach.y << "," << bridgeApproach.z;
+    EXPECT_TRUE(std::any_of(bridgeRoute->begin(), bridgeRoute->end(),
+        [](const glm::dvec3& waypoint)
+        {
+            return waypoint.z >= cameraTransitAltitudeMeters;
+        }));
     std::vector<MapBuilding> bridgeCollisionShapes{{
         .outlineMeters = tancheonBridge->outlineMeters,
         .groundElevationsMeters = std::vector<double>(

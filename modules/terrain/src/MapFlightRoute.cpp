@@ -407,13 +407,15 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRouteUnderBridge(
     const glm::dvec3& goalMeters,
     double deckBottomMeters,
     double deckTopMeters,
-    double buildingClearanceMeters)
+    double buildingClearanceMeters,
+    double minimumTransitAltitudeMeters)
 {
     if (bridge.outlineMeters.size() < 3U
         || !std::isfinite(deckBottomMeters) || !std::isfinite(deckTopMeters)
         || !(deckTopMeters > deckBottomMeters)
         || !std::isfinite(buildingClearanceMeters)
-        || !(buildingClearanceMeters > 0.0))
+        || !(buildingClearanceMeters > 0.0)
+        || !std::isfinite(minimumTransitAltitudeMeters))
         throw std::invalid_argument("교량 외곽선과 상판 높이를 확인해 주세요.");
 
     std::vector<MapBuilding> lowAltitudeObstacles;
@@ -441,7 +443,9 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRouteUnderBridge(
             result += point;
         return result / static_cast<double>(bridge.outlineMeters.size());
     }();
-    const double highAltitude = deckTopMeters + buildingClearanceMeters + 1.0;
+    const double highAltitude = std::max(
+        deckTopMeters + buildingClearanceMeters + 1.0,
+        minimumTransitAltitudeMeters);
     const double lowAltitude = std::min(goalMeters.z, deckBottomMeters - 1.5);
     std::optional<std::vector<glm::dvec3>> bestRoute;
     double bestDistance = std::numeric_limits<double>::infinity();
@@ -471,7 +475,8 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRouteUnderBridge(
         const glm::dvec3 highEntry{entry, highAltitude};
         const glm::dvec3 lowEntry{entry, lowAltitude};
         const auto highRoute = PlanMapFlightRoute(
-            terrain, buildings, startMeters, highEntry, buildingClearanceMeters);
+            terrain, buildings, startMeters, highEntry, buildingClearanceMeters,
+            minimumTransitAltitudeMeters);
         if (!highRoute)
             continue;
 

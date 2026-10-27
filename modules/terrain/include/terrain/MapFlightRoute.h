@@ -41,7 +41,8 @@ struct MapBuildingFacadeRoute
     const glm::dvec3& goalMeters,
     double deckBottomMeters,
     double deckTopMeters,
-    double buildingClearanceMeters = 3.0);
+    double buildingClearanceMeters = 3.0,
+    double minimumTransitAltitudeMeters = 0.0);
 
 /** @brief 건물 둘레를 살펴 출발 위치에서 닿을 수 있는 외벽 경로를 찾는다. */
 [[nodiscard]] std::optional<MapBuildingFacadeRoute> PlanMapFlightRouteToFacade(

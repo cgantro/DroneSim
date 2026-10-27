@@ -87,6 +87,10 @@ constexpr glm::vec3 cameraLensCenterInModelMeters{0.015F, 0.048F, 0.030F};
 constexpr double bridgeDeckUndersideHeightMeters = 6.0;
 constexpr double bridgeDeckThicknessMeters = 0.8;
 constexpr double bridgeInspectionApproachBelowDeckMeters = 1.2;
+// 나무 GLB 중 가장 높은 모델에 최대 배율을 적용한 높이다.
+constexpr double tallestTreeModelHeightMeters = 25.5;
+// 전방 카메라 시야가 수관에 막히지 않도록 통과 고도에 더하는 여유다.
+constexpr double cameraClearanceAboveCanopyMeters = 14.0;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -910,6 +914,7 @@ void AeroSimLabApp::LoadMapFeatures()
         "models/environment/trees/mature-scots-pine.glb",
         "models/environment/trees/mature-sycamore.glb"};
     std::array<std::vector<glm::mat4>, 3> treeTransforms;
+    cameraTransitAltitudeMeters_ = 0.0;
     for (const auto& tree : trees)
     {
         const auto east = static_cast<std::int64_t>(std::llround(tree.positionMeters.x * 10.0));
@@ -921,6 +926,9 @@ void AeroSimLabApp::LoadMapFeatures()
         const float scale = 0.82F + static_cast<float>((key >> 20U) % 37U) * 0.01F;
         const float ground = static_cast<float>(terrainGrid_.HeightAtLocalMeters(
             tree.positionMeters));
+        cameraTransitAltitudeMeters_ = std::max(cameraTransitAltitudeMeters_,
+            static_cast<double>(ground) + tallestTreeModelHeightMeters
+                + cameraClearanceAboveCanopyMeters);
         glm::mat4 transform = glm::translate(glm::mat4(1.0F), ToRenderPosition(
             {tree.positionMeters.x, tree.positionMeters.y, ground}));
         transform = glm::rotate(transform, yaw, glm::vec3{0.0F, 1.0F, 0.0F});
@@ -1263,7 +1271,8 @@ void AeroSimLabApp::LoadMapFeatures()
                 const auto facadeRoute =
                     aerosimlab::terrain::PlanMapFlightRouteToFacade(
                         terrainGrid_, routeBuildings_, *building, routeStart,
-                        preferredDistance, target.surface.maximumDistanceMeters);
+                        preferredDistance, target.surface.maximumDistanceMeters,
+                        2.0, 3.0, cameraTransitAltitudeMeters_);
                 if (!facadeRoute)
                     throw std::runtime_error("점검 구역까지 도달할 수 있는 외벽 경로를 찾지 못했습니다: "
                         + target.displayName);
@@ -1295,13 +1304,15 @@ void AeroSimLabApp::LoadMapFeatures()
                     route = aerosimlab::terrain::PlanMapFlightRouteUnderBridge(
                         terrainGrid_, routeBuildings_, *mainBridge, bridgePiers,
                         routeStart, target.approachPositionMeters, deckBottom,
-                        deckBottom + bridgeDeckThicknessMeters);
+                        deckBottom + bridgeDeckThicknessMeters, 3.0,
+                        cameraTransitAltitudeMeters_);
                 }
                 else
                 {
                     route = aerosimlab::terrain::PlanMapFlightRoute(
                         terrainGrid_, routeBuildings_, routeStart,
-                        target.approachPositionMeters);
+                        target.approachPositionMeters, 3.0,
+                        cameraTransitAltitudeMeters_);
                 }
                 // 접근점이 이웃 건물과 너무 가까우면 촬영 가능한 거리 안에서 바깥으로 옮긴다.
                 const double currentDistance = glm::length(
@@ -1314,7 +1325,8 @@ void AeroSimLabApp::LoadMapFeatures()
                     const glm::dvec3 candidate = target.surface.centerMeters
                         + target.surface.normal * distance;
                     route = aerosimlab::terrain::PlanMapFlightRoute(
-                        terrainGrid_, routeBuildings_, routeStart, candidate);
+                        terrainGrid_, routeBuildings_, routeStart, candidate, 3.0,
+                        cameraTransitAltitudeMeters_);
                     if (route)
                         target.approachPositionMeters = candidate;
                 }

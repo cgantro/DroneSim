@@ -81,7 +81,8 @@ bool AeroSimLabApp::RequestInspectionMission(
     {
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
             terrainGrid_, routeBuildings_, simulation_.State().positionMeters,
-            firstTarget.approachPositionMeters);
+            firstTarget.approachPositionMeters, 3.0,
+            cameraTransitAltitudeMeters_);
         if (!route)
         {
             inspectionMission_.error = "현재 위치에서 첫 정찰 위치까지 건물 우회 경로를 찾지 못했습니다.";
@@ -143,7 +144,8 @@ bool AeroSimLabApp::StartFleetReconnaissance()
         const auto& target = inspectionTargets_[targetIndex];
         const auto& start = simulation_.State(droneIds[index]).positionMeters;
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-            terrainGrid_, routeBuildings_, start, target.approachPositionMeters);
+            terrainGrid_, routeBuildings_, start, target.approachPositionMeters,
+            3.0, cameraTransitAltitudeMeters_);
         if (!route)
             return false;
 

@@ -327,6 +327,8 @@ private:
     std::vector<InspectionTarget> inspectionTargets_;
     std::vector<aerosimlab::simulation::InspectionOccluderPolygon> inspectionOccluders_;
     std::vector<aerosimlab::terrain::MapBuilding> routeBuildings_;
+    /** @brief 정찰 중 카메라 시야가 나무 수관에 가리지 않도록 확보한 통과 고도다. */
+    double cameraTransitAltitudeMeters_ = 0.0;
     bool externalControl_ = false;
     bool groundControlActive_ = false;
     std::optional<std::chrono::steady_clock::time_point> lastGroundControlMessage_;
