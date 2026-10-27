@@ -246,7 +246,8 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
         if (!createWalls)
         {
             const std::uint32_t roofStart = static_cast<std::uint32_t>(vertices.size());
-            constexpr double roofTextureTileSizeMeters = 24.0;
+            // Poly Haven 원본 재질의 실제 가로·세로 크기인 2.1m에 맞춰 반복한다.
+            constexpr double roofTextureTileSizeMeters = 2.1;
             for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
             {
                 const auto& point = building.outlineMeters[i];
