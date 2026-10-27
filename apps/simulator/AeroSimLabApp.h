@@ -418,6 +418,8 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingWallMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingWallMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> footprintBuildingMesh_;
+    std::unique_ptr<aerosimlab::graphics::Mesh> footprintBuildingWallMesh_;
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneModel_;
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneCameraModel_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> terrainSurfaceTexture_;

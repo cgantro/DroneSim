@@ -85,7 +85,6 @@ constexpr glm::dvec2 demoDroneStartMeters{-410.0, 457.0};
 constexpr double bridgeDeckUndersideHeightMeters = 6.0;
 constexpr double bridgeDeckThicknessMeters = 0.8;
 constexpr double bridgeInspectionApproachBelowDeckMeters = 1.2;
-constexpr double unknownBuildingDisplayHeightMeters = 6.0;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -240,10 +239,7 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
         if (triangles.empty())
             continue;
 
-        // 높이가 없는 OSM 건물은 화면에서 위치를 확인할 수 있게만 낮게 세운다.
-        // 이 임시 높이는 건물 충돌이나 정찰 경로 계산에는 사용하지 않는다.
-        const double displayHeight = building.heightMeters > 0.0
-            ? building.heightMeters : unknownBuildingDisplayHeightMeters;
+        const double displayHeight = building.heightMeters;
 
         const double winding = PolygonArea(building.outlineMeters) > 0.0 ? 1.0 : -1.0;
         if (!createWalls)
@@ -867,6 +863,13 @@ void AeroSimLabApp::LoadMapFeatures()
     SetStartupDetail("층수로 높이를 추정한 건물 벽을 만들고 있습니다.");
     estimatedBuildingWallMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, terrainGrid_, true);
+    SetStartupDetail("높이를 알 수 없는 건물 외곽을 임시 높이로 표시합니다.");
+    footprintBuildingMesh_ = CreateBuildingMesh(buildings,
+        aerosimlab::terrain::BuildingHeightSource::EstimatedFromFootprint,
+        terrainGrid_, false);
+    footprintBuildingWallMesh_ = CreateBuildingMesh(buildings,
+        aerosimlab::terrain::BuildingHeightSource::EstimatedFromFootprint,
+        terrainGrid_, true);
     SetStartupDetail("건물 충돌 구역을 준비하고 있습니다.");
     inspectionOccluders_.reserve(buildings.size());
     std::unordered_map<std::string, const aerosimlab::terrain::MapBuilding*> buildingsById;
@@ -877,7 +880,7 @@ void AeroSimLabApp::LoadMapFeatures()
             aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
         if (building.heightMeters > 0.0)
         {
-            // 층수에서 추정한 높이도 유한한 충돌 범위로 사용한다.
+            // 층수·외곽선에서 추정한 높이도 출처를 구분해 유한한 충돌 상자로 쓴다.
             simulation_.AddStaticObstaclePrism(building.outlineMeters,
                 bounds.centerMeters.z - bounds.halfExtentsMeters.z,
                 bounds.centerMeters.z + bounds.halfExtentsMeters.z);
@@ -1566,6 +1569,13 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             terrainSurfaceTexture_.get());
     if (estimatedBuildingWallMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingWallMesh_,
+            estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,
+            buildingFacadeTexture_.get());
+    if (footprintBuildingMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *footprintBuildingMesh_, orthophotoMaterial,
+            *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
+    if (footprintBuildingWallMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *footprintBuildingWallMesh_,
             estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,
             buildingFacadeTexture_.get());
 

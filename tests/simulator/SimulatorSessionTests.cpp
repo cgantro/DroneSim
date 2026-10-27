@@ -197,18 +197,10 @@ void Verify_TancheonBuildingDataStopsTheWebKinematicDrone()
         if (building.outlineMeters.size() < 3U)
             continue;
 
-        if (building.heightSource == terrain::BuildingHeightSource::OsmHeightTag
-            && building.heightMeters > 0.0)
-        {
-            const auto bounds = terrain::GetMapBuildingBoundsMeters(building);
-            webSimulation.AddStaticObstaclePrism(building.outlineMeters,
-                bounds.centerMeters.z - bounds.halfExtentsMeters.z,
-                bounds.centerMeters.z + bounds.halfExtentsMeters.z);
-        }
-        else
-        {
-            webSimulation.AddStaticObstacleFootprint(building.outlineMeters);
-        }
+        const auto bounds = terrain::GetMapBuildingBoundsMeters(building);
+        webSimulation.AddStaticObstaclePrism(building.outlineMeters,
+            bounds.centerMeters.z - bounds.halfExtentsMeters.z,
+            bounds.centerMeters.z + bounds.halfExtentsMeters.z);
     }
 
     bool foundTargetBuilding = false;

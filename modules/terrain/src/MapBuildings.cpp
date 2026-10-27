@@ -112,8 +112,16 @@ std::vector<MapBuilding> LoadMapBuildings(
             if (building.heightMeters > 0.0)
                 building.heightSource = BuildingHeightSource::EstimatedFromLevels;
         }
-        if (building.heightMeters > 0.0 || keepFootprintsWithoutHeight)
+        if (building.heightMeters > 0.0)
+        {
             buildings.push_back(std::move(building));
+        }
+        else if (keepFootprintsWithoutHeight)
+        {
+            building.heightMeters = estimatedFootprintBuildingHeightMeters;
+            building.heightSource = BuildingHeightSource::EstimatedFromFootprint;
+            buildings.push_back(std::move(building));
+        }
     }
     return buildings;
 }

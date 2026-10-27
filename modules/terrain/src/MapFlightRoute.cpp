@@ -72,6 +72,39 @@ bool IsBlocked(
     return false;
 }
 
+bool IsBlockedAtAltitude(
+    const glm::dvec2& point,
+    double altitudeMeters,
+    const std::vector<MapBuilding>& buildings,
+    double clearanceSquared)
+{
+    for (const MapBuilding& building : buildings)
+    {
+        const auto& outline = building.outlineMeters;
+        if (outline.size() < 3U)
+            continue;
+        bool horizontallyBlocked = detail::ContainsPointInRing(outline, point);
+        for (std::size_t index = 0; !horizontallyBlocked && index < outline.size(); ++index)
+        {
+            horizontallyBlocked = DistanceToSegmentSquared(point, outline[index],
+                outline[(index + 1U) % outline.size()]) < clearanceSquared;
+        }
+        if (!horizontallyBlocked)
+            continue;
+
+        const double groundTop = building.groundElevationsMeters.empty()
+            ? 0.0
+            : *std::max_element(building.groundElevationsMeters.begin(),
+                building.groundElevationsMeters.end());
+        const double buildingTop = building.heightMeters > 0.0
+            ? groundTop + building.heightMeters
+            : std::numeric_limits<double>::infinity();
+        if (altitudeMeters < buildingTop + minimumGroundClearanceMeters)
+            return true;
+    }
+    return false;
+}
+
 bool SegmentIsClear(
     const glm::dvec2& start,
     const glm::dvec2& end,
@@ -250,12 +283,14 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
     const std::vector<MapBuilding>& buildings,
     const glm::dvec3& startMeters,
     const glm::dvec3& goalMeters,
-    double buildingClearanceMeters)
+    double buildingClearanceMeters,
+    double minimumTransitAltitudeMeters)
 {
     if (terrain.sampleCount < 2U
         || !std::isfinite(startMeters.x) || !std::isfinite(startMeters.y)
         || !std::isfinite(startMeters.z) || !std::isfinite(goalMeters.x)
         || !std::isfinite(goalMeters.y) || !std::isfinite(goalMeters.z)
+        || !std::isfinite(minimumTransitAltitudeMeters)
         || !std::isfinite(buildingClearanceMeters)
         || !(buildingClearanceMeters > 0.0))
         throw std::invalid_argument("경로 시작점, 목표점과 건물 간격을 확인해 주세요.");
@@ -275,10 +310,38 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
     const glm::dvec2 start{startMeters.x, startMeters.y};
     const glm::dvec2 goal{goalMeters.x, goalMeters.y};
     const double clearanceSquared = buildingClearanceMeters * buildingClearanceMeters;
+    std::vector<MapBuilding> routeObstacles;
+    routeObstacles.reserve(buildings.size());
+    double transitAltitude = minimumTransitAltitudeMeters;
+    const double minimumRouteAltitude = std::min(startMeters.z, goalMeters.z);
+    for (const MapBuilding& building : buildings)
+    {
+        if (building.heightSource == BuildingHeightSource::EstimatedFromFootprint)
+        {
+            if (building.groundElevationsMeters.empty())
+                continue;
+            const double highestGround = *std::max_element(
+                building.groundElevationsMeters.begin(),
+                building.groundElevationsMeters.end());
+            transitAltitude = std::max(transitAltitude,
+                highestGround + building.heightMeters + minimumGroundClearanceMeters);
+            continue;
+        }
+
+        const double highestGround = building.groundElevationsMeters.empty()
+            ? 0.0
+            : *std::max_element(building.groundElevationsMeters.begin(),
+                building.groundElevationsMeters.end());
+        const double buildingTop = building.heightMeters > 0.0
+            ? highestGround + building.heightMeters
+            : std::numeric_limits<double>::infinity();
+        if (minimumRouteAltitude < buildingTop + minimumGroundClearanceMeters)
+            routeObstacles.push_back(building);
+    }
     if (!terrain.ContainsLocalPositionMeters(start)
         || !terrain.ContainsLocalPositionMeters(goal)
-        || IsBlocked(start, buildings, clearanceSquared)
-        || IsBlocked(goal, buildings, clearanceSquared))
+        || IsBlockedAtAltitude(start, startMeters.z, buildings, clearanceSquared)
+        || IsBlockedAtAltitude(goal, goalMeters.z, buildings, clearanceSquared))
         return std::nullopt;
 
     if (glm::length(goal - start) < 1.0e-6)
@@ -288,16 +351,16 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
     const Cell goalCell = NearestCell(grid, goal);
     const glm::dvec2 startCellPosition = Position(grid, startCell);
     const glm::dvec2 goalCellPosition = Position(grid, goalCell);
-    if (IsBlocked(startCellPosition, buildings, clearanceSquared)
-        || IsBlocked(goalCellPosition, buildings, clearanceSquared))
+    if (IsBlocked(startCellPosition, routeObstacles, clearanceSquared)
+        || IsBlocked(goalCellPosition, routeObstacles, clearanceSquared))
         return std::nullopt;
 
     const auto gridPath = FindGridPath(
-        grid, startCell, goalCell, buildings, clearanceSquared);
+        grid, startCell, goalCell, routeObstacles, clearanceSquared);
     if (!gridPath)
         return std::nullopt;
     const std::vector<glm::dvec2> horizontalPath = SimplifyPath(
-        *gridPath, grid, start, goal, buildings, clearanceSquared);
+        *gridPath, grid, start, goal, routeObstacles, clearanceSquared);
     if (horizontalPath.size() < 2U)
         return std::nullopt;
 
@@ -306,7 +369,14 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
         totalDistance += glm::length(horizontalPath[index] - horizontalPath[index - 1U]);
 
     std::vector<glm::dvec3> route;
-    route.reserve(horizontalPath.size() - 1U);
+    route.reserve(horizontalPath.size() + 1U);
+    const double startGroundAltitude = terrain.HeightAtLocalMeters(start);
+    const double safeStartAltitude = std::max(
+        transitAltitude,
+        startGroundAltitude + minimumGroundClearanceMeters);
+    if (startMeters.z + 1.0e-6 < safeStartAltitude)
+        route.emplace_back(startMeters.x, startMeters.y, safeStartAltitude);
+
     double traveledDistance = 0.0;
     for (std::size_t index = 1; index < horizontalPath.size(); ++index)
     {
@@ -318,8 +388,9 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
         const double groundAltitude = terrain.HeightAtLocalMeters(horizontalPath[index]);
         const double altitude = isGoal
             ? goalMeters.z
-            : std::max(plannedAltitude,
-                groundAltitude + minimumGroundClearanceMeters);
+            : std::max({plannedAltitude,
+                groundAltitude + minimumGroundClearanceMeters,
+                transitAltitude});
         if (altitude < groundAltitude + minimumGroundClearanceMeters)
             return std::nullopt;
         route.emplace_back(horizontalPath[index].x, horizontalPath[index].y, altitude);
@@ -335,7 +406,8 @@ std::optional<MapBuildingFacadeRoute> PlanMapFlightRouteToFacade(
     double preferredDistanceMeters,
     double maximumDistanceMeters,
     double approachStepMeters,
-    double buildingClearanceMeters)
+    double buildingClearanceMeters,
+    double minimumTransitAltitudeMeters)
 {
     if (!std::isfinite(startMeters.x) || !std::isfinite(startMeters.y)
         || !std::isfinite(preferredDistanceMeters)
@@ -368,7 +440,8 @@ std::optional<MapBuildingFacadeRoute> PlanMapFlightRouteToFacade(
             const glm::dvec3 approach = facade.centerMeters
                 + facade.outwardNormal * distance;
             auto route = PlanMapFlightRoute(
-                terrain, buildings, startMeters, approach, buildingClearanceMeters);
+                terrain, buildings, startMeters, approach, buildingClearanceMeters,
+                minimumTransitAltitudeMeters);
             if (route)
                 return MapBuildingFacadeRoute{
                     facade, approach, std::move(*route)};

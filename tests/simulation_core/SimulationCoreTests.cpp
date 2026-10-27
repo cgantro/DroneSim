@@ -45,13 +45,6 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
     const auto buildings = terrain::LoadMapBuildingFootprints(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
             / "assets/maps/tancheon/site.geojson", terrainGrid);
-    const auto gym = std::find_if(buildings.begin(), buildings.end(),
-        [](const terrain::MapBuilding& building)
-        {
-            return building.osmId == "1034405204";
-        });
-    ASSERT_NE(gym, buildings.end());
-
     const auto inspectionBuildings = terrain::LoadMapBuildings(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
             / "assets/maps/tancheon/site.geojson", terrainGrid);
@@ -69,9 +62,7 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
             glm::dvec2{facade.centerMeters.x, facade.centerMeters.y} - start);
         return start - heading * 18.0;
     };
-    constexpr glm::dvec2 previousStartMeters{-472.0, 442.0};
-    constexpr glm::dvec2 startMeters{-410.0, 442.0};
-    const double previousGroundHeight = terrainGrid.HeightAtLocalMeters(previousStartMeters);
+    constexpr glm::dvec2 startMeters{-410.0, 457.0};
     const double currentGroundHeight = terrainGrid.HeightAtLocalMeters(startMeters);
     EXPECT_FALSE(std::any_of(inspectionBuildings.begin(), inspectionBuildings.end(),
         [&startMeters, currentGroundHeight](const terrain::MapBuilding& building)
@@ -79,27 +70,14 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
             return terrain::ContainsMapBuildingVolume(building,
                 {startMeters.x, startMeters.y, currentGroundHeight + 0.24});
         })) << "현재 출발 위치가 건물 충돌 부피와 겹칩니다.";
-    const glm::dvec2 previousObserverXY = observerPosition(previousStartMeters);
-    const glm::dvec3 previousObserverPosition{
-        previousObserverXY.x, previousObserverXY.y, previousGroundHeight + 0.24 + 10.0};
-    EXPECT_TRUE(terrain::ContainsMapBuildingVolume(*gym, previousObserverPosition));
-
-    const auto clearObserverPosition = terrain::FindFirstPointOutsideMapBuildings(
-        previousObserverPosition,
-        {previousStartMeters.x, previousStartMeters.y, previousGroundHeight + 0.24},
-        inspectionBuildings, 0.5);
-    ASSERT_TRUE(clearObserverPosition.has_value());
-    EXPECT_GT(glm::distance(previousObserverPosition, *clearObserverPosition), 0.0);
-    EXPECT_FALSE(terrain::ContainsMapBuildingVolume(*gym, *clearObserverPosition));
-    EXPECT_FALSE(std::any_of(inspectionBuildings.begin(), inspectionBuildings.end(),
-        [&clearObserverPosition](const terrain::MapBuilding& building)
-        {
-            return terrain::ContainsMapBuildingVolume(building, *clearObserverPosition);
-        }));
-
     const glm::dvec2 currentObserverXY = observerPosition(startMeters);
-    EXPECT_FALSE(terrain::ContainsMapBuildingVolume(*gym,
-        {currentObserverXY.x, currentObserverXY.y, currentGroundHeight + 0.24 + 10.0}));
+    const glm::dvec3 currentObserverPosition{
+        currentObserverXY.x, currentObserverXY.y, currentGroundHeight + 0.24 + 10.0};
+    EXPECT_FALSE(std::any_of(inspectionBuildings.begin(), inspectionBuildings.end(),
+        [&currentObserverPosition](const terrain::MapBuilding& building)
+        {
+            return terrain::ContainsMapBuildingVolume(building, currentObserverPosition);
+        }));
 
     const auto addBuildingCollisions = [&inspectionBuildings](SimulationCore& target)
     {
@@ -159,8 +137,7 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
             << target.State().positionMeters.z;
         EXPECT_GT(target.State().positionMeters.z, ground + 0.5);
     };
-    verifyTakeoff(previousStartMeters, true);
-    verifyTakeoff(startMeters, false);
+    verifyTakeoff(startMeters, true);
 
     const double groundHeight = currentGroundHeight;
 
@@ -181,7 +158,7 @@ void Verify_RigidBodyTakeoffWithDemoWind()
     const auto terrain = terrain::TerrainGrid::Load(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
             / "assets/maps/tancheon/terrain.aerotrn");
-    constexpr glm::dvec2 startMeters{-410.0, 442.0};
+    constexpr glm::dvec2 startMeters{-410.0, 457.0};
     const double groundHeight = terrain.HeightAtLocalMeters(startMeters);
 
     SimulationCore simulation{SimulationDynamics::RigidBody};

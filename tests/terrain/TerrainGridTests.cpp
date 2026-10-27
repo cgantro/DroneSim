@@ -2,6 +2,7 @@
 #include "terrain/MapBuildings.h"
 #include "terrain/MapFlightRoute.h"
 #include "terrain/MapRoads.h"
+#include "terrain/MapTrees.h"
 #include "terrain/MapWaterBodies.h"
 #include "terrain/TerrainGrid.h"
 #include "simulation_core/EoCameraModel.h"
@@ -146,15 +147,33 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
     const auto visibleBuildings = LoadMapBuildings(
         root / "assets/maps/tancheon/site.geojson", terrain);
     ASSERT_GT(buildings.size(), visibleBuildings.size());
-    EXPECT_NE(std::find_if(buildings.begin(), buildings.end(),
-        [](const MapBuilding& building) { return building.heightMeters == 0.0; }),
-        buildings.end());
+    const auto estimatedFootprint = std::find_if(buildings.begin(), buildings.end(),
+        [](const MapBuilding& building)
+        {
+            return building.heightSource == BuildingHeightSource::EstimatedFromFootprint;
+        });
+    ASSERT_NE(estimatedFootprint, buildings.end());
+    EXPECT_DOUBLE_EQ(estimatedFootprint->heightMeters,
+        estimatedFootprintBuildingHeightMeters);
+    const auto estimatedBounds = GetMapBuildingBoundsMeters(*estimatedFootprint);
+    EXPECT_TRUE(ContainsMapBuildingVolume(*estimatedFootprint,
+        {estimatedBounds.centerMeters.x, estimatedBounds.centerMeters.y,
+            estimatedBounds.centerMeters.z}));
+    EXPECT_FALSE(ContainsMapBuildingVolume(*estimatedFootprint,
+        {estimatedBounds.centerMeters.x, estimatedBounds.centerMeters.y,
+            estimatedBounds.centerMeters.z + estimatedBounds.halfExtentsMeters.z + 0.1}));
 
     const std::array<std::string, 3> targetBuildingIds{
         "692770099", "692770087", "692770092"};
     const glm::dvec2 demoStart{-410.0, 457.0};
-    glm::dvec3 routeStart{demoStart,
+    const glm::dvec3 demoStartPosition{demoStart,
         terrain.HeightAtLocalMeters(demoStart) + 0.35};
+    EXPECT_FALSE(std::any_of(buildings.begin(), buildings.end(),
+        [&demoStartPosition](const MapBuilding& building)
+        {
+            return ContainsMapBuildingVolume(building, demoStartPosition);
+        }));
+    glm::dvec3 routeStart = demoStartPosition;
     for (const std::string& targetId : targetBuildingIds)
     {
         const auto target = std::find_if(visibleBuildings.begin(), visibleBuildings.end(),
@@ -169,6 +188,13 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
         ASSERT_FALSE(facadeRoute->waypointsMeters.empty()) << targetId;
         EXPECT_EQ(facadeRoute->waypointsMeters.back(),
             facadeRoute->approachPositionMeters);
+        if (routeStart.z < estimatedFootprintBuildingHeightMeters + 2.0)
+        {
+            EXPECT_EQ(facadeRoute->waypointsMeters.front().x, routeStart.x);
+            EXPECT_EQ(facadeRoute->waypointsMeters.front().y, routeStart.y);
+            EXPECT_GE(facadeRoute->waypointsMeters.front().z,
+                estimatedFootprintBuildingHeightMeters + 2.0);
+        }
         routeStart = facadeRoute->approachPositionMeters;
     }
 
@@ -188,9 +214,13 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
     bridgeGround /= static_cast<double>(tancheonBridge->groundElevationsMeters.size());
     const double centerGround = terrain.HeightAtLocalMeters({0.0, 0.0});
     const glm::dvec3 bridgeApproach = terrain.ToSimulationPositionMeters(
-        {bridgeCenter.x, bridgeCenter.y, bridgeGround - centerGround + 4.8});
+        {bridgeCenter.x, bridgeCenter.y,
+            bridgeGround - centerGround + 4.8});
     EXPECT_TRUE(PlanMapFlightRoute(
-        terrain, buildings, routeStart, bridgeApproach).has_value());
+        terrain, buildings, routeStart, bridgeApproach).has_value())
+        << "탄천교 하부 routeStart=" << routeStart.x << "," << routeStart.y
+        << "," << routeStart.z << " goal=" << bridgeApproach.x << ","
+        << bridgeApproach.y << "," << bridgeApproach.z;
 
     const std::string helio110BuildingId = "692770092";
     const auto helio110 = std::find_if(visibleBuildings.begin(), visibleBuildings.end(),
@@ -200,12 +230,33 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
     const glm::dvec2 reportedStart{-472.0, 442.0};
     const glm::dvec3 reportedStartMeters{reportedStart,
         terrain.HeightAtLocalMeters(reportedStart) + 0.35};
+    const auto buildingAtOldStart = std::find_if(buildings.begin(), buildings.end(),
+        [&reportedStartMeters](const MapBuilding& building)
+        {
+            return ContainsMapBuildingVolume(building, reportedStartMeters);
+        });
+    ASSERT_NE(buildingAtOldStart, buildings.end());
+    EXPECT_EQ(buildingAtOldStart->heightSource,
+        BuildingHeightSource::EstimatedFromFootprint);
     const auto helio110Route = PlanMapFlightRouteToFacade(
         terrain, buildings, *helio110, reportedStartMeters, 8.0, 20.0);
-    ASSERT_TRUE(helio110Route.has_value())
+    EXPECT_FALSE(helio110Route.has_value())
         << "facade-110-dong start=" << reportedStart.x << "," << reportedStart.y;
-    EXPECT_TRUE(PlanMapFlightRoute(terrain, buildings, reportedStartMeters,
-        helio110Route->approachPositionMeters).has_value());
+}
+
+void Verify_TancheonTreeLocationsStayInsideTheMappedScene()
+{
+    const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
+    const TerrainGrid terrain = TerrainGrid::Load(
+        root / "assets/maps/tancheon/terrain.aerotrn");
+    const auto trees = LoadMapTrees(
+        root / "assets/maps/tancheon/site.geojson", terrain);
+
+    EXPECT_GT(trees.size(), 100U);
+    EXPECT_TRUE(std::all_of(trees.begin(), trees.end(), [&terrain](const MapTree& tree)
+    {
+        return terrain.ContainsLocalPositionMeters(tree.positionMeters);
+    }));
 }
 
 void Verify_MapFlightRouteReportsABuildingWallWithoutAnOpening()
@@ -483,6 +534,7 @@ TEST(TerrainGridTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_MapFlightRouteGoesAroundBuildingFootprints());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints());
+    EXPECT_NO_FATAL_FAILURE(Verify_TancheonTreeLocationsStayInsideTheMappedScene());
     EXPECT_NO_FATAL_FAILURE(Verify_MapFlightRouteReportsABuildingWallWithoutAnOpening());
     EXPECT_NO_FATAL_FAILURE(Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin());
     EXPECT_NO_FATAL_FAILURE(

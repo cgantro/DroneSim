@@ -12,14 +12,17 @@
 
 namespace aerosimlab::terrain
 {
-/** @brief 건물 높이가 어디서 왔는지 구분한다. */
+inline constexpr double estimatedFootprintBuildingHeightMeters = 6.0;
+
+/** @brief 건물 높이가 실측 태그, 층수 환산, 외곽선 임시값 중 어디서 왔는지 구분한다. */
 enum class BuildingHeightSource
 {
     OsmHeightTag,
-    EstimatedFromLevels
+    EstimatedFromLevels,
+    EstimatedFromFootprint
 };
 
-/** @brief OSM 건물 외곽선과 지면 높이, 화면 표현용 높이를 보관한다. */
+/** @brief 건물 외곽선과 지면 높이, 높이 자료의 출처를 보관한다. */
 struct MapBuilding
 {
     std::string osmId;
@@ -55,7 +58,7 @@ struct MapBuildingFacade
 [[nodiscard]] std::vector<MapBuilding> LoadMapBuildings(
     const std::filesystem::path& path, const TerrainGrid& terrain);
 
-/** @brief 높이 정보가 없는 건물도 포함해 경로 장애물용 외곽선을 읽는다. */
+/** @brief 높이가 없는 건물에 임시 높이를 붙여 경로·충돌용 형상으로 읽는다. */
 [[nodiscard]] std::vector<MapBuilding> LoadMapBuildingFootprints(
     const std::filesystem::path& path, const TerrainGrid& terrain);
 
