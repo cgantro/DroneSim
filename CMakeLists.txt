@@ -438,18 +438,51 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       )
     endif()
   else()
+    set(simulator_runtime_assets
+      "${CMAKE_SOURCE_DIR}/assets/shaders/Scene.glsl"
+      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb"
+      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm"
+      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE"
+      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn"
+      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson"
+      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json"
+      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/apartment-facade.png")
+
+    foreach(terrain_texture_extension IN ITEMS png jpg jpeg ppm)
+      set(terrain_texture_path
+        "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.${terrain_texture_extension}")
+      if(EXISTS "${terrain_texture_path}")
+        list(APPEND simulator_runtime_assets "${terrain_texture_path}")
+        break()
+      endif()
+    endforeach()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb")
+      list(APPEND simulator_runtime_assets
+        "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb")
+    endif()
+
+    set(simulator_asset_copy_commands)
+    foreach(asset_path IN LISTS simulator_runtime_assets)
+      if(NOT EXISTS "${asset_path}")
+        message(FATAL_ERROR "시뮬레이터 실행 자료를 찾지 못했습니다: ${asset_path}")
+      endif()
+      file(RELATIVE_PATH runtime_path
+        "${CMAKE_SOURCE_DIR}/assets" "${asset_path}")
+      get_filename_component(runtime_directory "${runtime_path}" DIRECTORY)
+      list(APPEND simulator_asset_copy_commands
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+          "$<TARGET_FILE_DIR:aerosimlab_simulator>/${runtime_directory}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "${asset_path}"
+          "$<TARGET_FILE_DIR:aerosimlab_simulator>/${runtime_path}")
+    endforeach()
+
+    # 셰이더나 지도 자료가 바뀌면 C++를 다시 컴파일하지 않고 실행 자료만 갱신한다.
+    set_property(TARGET aerosimlab_simulator APPEND PROPERTY LINK_DEPENDS
+      ${simulator_runtime_assets})
     add_custom_command(TARGET aerosimlab_simulator POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/assets/shaders"
-        "$<TARGET_FILE_DIR:aerosimlab_simulator>/shaders"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/assets/models/drones"
-        "$<TARGET_FILE_DIR:aerosimlab_simulator>/models/drones"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/assets/maps"
-        "$<TARGET_FILE_DIR:aerosimlab_simulator>/maps"
-      VERBATIM
-    )
+      ${simulator_asset_copy_commands}
+      VERBATIM)
   endif()
 endif()
 

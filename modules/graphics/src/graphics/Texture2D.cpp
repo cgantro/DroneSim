@@ -52,7 +52,7 @@ void SetAnisotropicFilteringIfAvailable()
     GLfloat maximumAnisotropy = 1.0F;
     glGetFloatv(maxTextureMaxAnisotropy, &maximumAnisotropy);
     glTexParameterf(GL_TEXTURE_2D, textureMaxAnisotropy,
-        std::min(maximumAnisotropy, 8.0F));
+        std::min(maximumAnisotropy, 16.0F));
 #endif
 }
 

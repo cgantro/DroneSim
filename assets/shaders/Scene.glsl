@@ -60,24 +60,6 @@ uniform int u_FlowingWater;
 uniform float u_TimeSeconds;
 out vec4 FragColor;
 
-float HashTerrainCell(vec2 cell)
-{
-    vec3 value = fract(vec3(cell.x, cell.y, cell.x) * 0.1031);
-    value += dot(value, value.yzx + 33.33);
-    return fract((value.x + value.y) * value.z);
-}
-
-float TerrainNoise(vec2 position)
-{
-    vec2 cell = floor(position);
-    vec2 fraction = fract(position);
-    fraction = fraction * fraction * (3.0 - 2.0 * fraction);
-
-    float lower = mix(HashTerrainCell(cell), HashTerrainCell(cell + vec2(1.0, 0.0)), fraction.x);
-    float upper = mix(HashTerrainCell(cell + vec2(0.0, 1.0)), HashTerrainCell(cell + vec2(1.0)), fraction.x);
-    return mix(lower, upper, fraction.y);
-}
-
 vec3 ToneMapACES(vec3 color)
 {
     const float a = 2.51;
@@ -150,24 +132,6 @@ void main()
         baseColor *= surfaceColor;
     }
 
-    if (u_TerrainSurface != 0)
-    {
-        // 위성 사진의 실제 색을 유지하면서 가까운 지면에만 약한 자연스러운 명암 변화를 더한다.
-        vec2 groundPosition = v_ModelPosition.xz;
-        float pixelFootprint = max(
-            length(dFdx(groundPosition)), length(dFdy(groundPosition)));
-        float broadFade = 1.0 - smoothstep(0.55, 0.95, pixelFootprint * 0.06);
-        float detailFade = 1.0 - smoothstep(0.55, 0.95, pixelFootprint * 0.22);
-        float grainFade = 1.0 - smoothstep(0.55, 0.95, pixelFootprint * 0.9);
-        float broad = TerrainNoise(groundPosition * 0.06) * broadFade;
-        float detail = TerrainNoise(groundPosition * 0.22) * detailFade;
-        float grain = TerrainNoise(groundPosition * 0.9) * grainFade;
-        float vegetation = broad * 0.5 + detail * 0.34 + grain * 0.16;
-        baseColor *= 0.78 + vegetation * 0.30;
-        float rockAmount = smoothstep(0.38, 0.78, 1.0 - N.y);
-        baseColor = mix(baseColor, vec3(0.34, 0.33, 0.30), rockAmount * 0.42);
-    }
-
     if (u_FlowingWater != 0)
     {
         // 장면 좌표를 따라 흐르는 밝은 줄무늬로 강물의 이동을 보여준다.
@@ -204,10 +168,10 @@ void main()
     vec3 ambientLight = mix(groundAmbient, skyAmbient, upFactor);
     vec3 fillLight = baseColor * fillAmount * (1.0 - metallic) * 0.20;
 
-    vec3 color =
-        baseColor * ambientLight * (1.0 - metallic) +
-        directLight +
-        fillLight;
+    // 정사영상에는 빛과 그림자가 이미 담겨 있어, 지면은 사진 색을 그대로 쓴다.
+    vec3 color = u_TerrainSurface != 0
+        ? baseColor
+        : baseColor * ambientLight * (1.0 - metallic) + directLight + fillLight;
 
     // 먼 산은 대기 색과 섞어 지형의 크기와 깊이가 눈에 들어오게 한다.
     float viewDistance = length(u_CameraPosition - v_WorldPosition);
@@ -215,7 +179,8 @@ void main()
     color = mix(color, vec3(0.43, 0.60, 0.72), fogAmount);
 
     // ACES 곡선은 조명 결과를 화면 밝기 범위로 압축한다. 이어 1/2.2 거듭제곱 감마 보정으로 모니터 표시용 RGB 값에 맞춘다.
-    color = ToneMapACES(color);
+    if (u_TerrainSurface == 0)
+        color = ToneMapACES(color);
 
     color = pow(color, vec3(1.0 / 2.2));
 

@@ -1434,7 +1434,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         ? orthophotoMaterial : groundMaterial_;
     renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, terrainMaterial, *shader_,
         view, projection, cameraPosition, terrainSurfaceTexture_.get(), false,
-        !hasOrthophoto);
+        hasOrthophoto);
     if (waterMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *waterMesh_, waterMaterial_, *shader_,
             view, projection, cameraPosition);
