@@ -14,6 +14,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <numbers>
 #include <string>
 
@@ -230,11 +231,47 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
     const double centerGround = terrain.HeightAtLocalMeters({0.0, 0.0});
     const double bridgeDeckBottom = bridgeGround + 6.0;
     const double bridgeDeckTop = bridgeDeckBottom + 0.8;
-    const glm::dvec3 bridgeApproach = terrain.ToSimulationPositionMeters(
-        {bridgeCenter.x, bridgeCenter.y,
-            bridgeGround - centerGround + 4.8});
     const auto bridgePiers = EstimateMapBridgePiers(
         *tancheonBridge, terrain, bridgeDeckBottom);
+    ASSERT_FALSE(bridgePiers.empty());
+    const auto pierCenter = [](const MapBridgePier& pier)
+    {
+        glm::dvec2 center{0.0};
+        for (const auto& point : pier.outlineMeters)
+            center += point;
+        return center / static_cast<double>(pier.outlineMeters.size());
+    };
+    const auto nearestPier = std::min_element(bridgePiers.begin(), bridgePiers.end(),
+        [&pierCenter, &demoStart](const auto& left, const auto& right)
+        {
+            return glm::length(pierCenter(left) - demoStart)
+                < glm::length(pierCenter(right) - demoStart);
+        });
+    std::size_t nearestFace = 0U;
+    double nearestFaceDistance = std::numeric_limits<double>::max();
+    const glm::dvec2 nearestPierCenter = pierCenter(*nearestPier);
+    for (std::size_t index = 0; index < nearestPier->outlineMeters.size(); ++index)
+    {
+        const glm::dvec2 midpoint = (nearestPier->outlineMeters[index]
+            + nearestPier->outlineMeters[(index + 1U)
+                % nearestPier->outlineMeters.size()]) * 0.5;
+        const double distance = glm::length(midpoint - demoStart);
+        if (distance < nearestFaceDistance)
+        {
+            nearestFaceDistance = distance;
+            nearestFace = index;
+        }
+    }
+    const glm::dvec2 faceStart = nearestPier->outlineMeters[nearestFace];
+    const glm::dvec2 faceEnd = nearestPier->outlineMeters[
+        (nearestFace + 1U) % nearestPier->outlineMeters.size()];
+    const glm::dvec2 faceMidpoint = (faceStart + faceEnd) * 0.5;
+    const glm::dvec2 faceNormal = glm::normalize(faceMidpoint - nearestPierCenter);
+    const glm::dvec3 bridgeApproach = terrain.ToSimulationPositionMeters({
+        faceMidpoint.x + faceNormal.x * 12.0,
+        faceMidpoint.y + faceNormal.y * 12.0,
+        (nearestPier->bottomElevationMeters + nearestPier->topElevationMeters) * 0.5
+            + 1.2});
     constexpr double cameraTransitAltitudeMeters = 60.0;
     const auto bridgeRoute = PlanMapFlightRouteUnderBridge(
         terrain, buildings, *tancheonBridge, bridgePiers,
@@ -319,9 +356,11 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
         }
     }
     const double riverGround = terrain.HeightAtLocalMeters(riverPosition);
-    const glm::dvec3 riverApproach = terrain.ToSimulationPositionMeters(
-        {riverPosition.x, riverPosition.y,
-            riverGround - centerGround + 7.0});
+    const glm::dvec2 riverApproachDirection = glm::normalize(demoStart - riverPosition);
+    const glm::dvec3 riverApproach = terrain.ToSimulationPositionMeters({
+        riverPosition.x + riverApproachDirection.x * 30.0,
+        riverPosition.y + riverApproachDirection.y * 30.0,
+        riverGround - centerGround + 3.2});
     const auto riverRoute = PlanMapFlightRoute(
         terrain, buildings, missionRouteStart, riverApproach, 3.0,
         cameraTransitAltitudeMeters);
