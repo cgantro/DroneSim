@@ -754,6 +754,8 @@ void AeroSimLabApp::LoadSceneModels()
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
     droneModel_ = aerosimlab::graphics::GlbModel::Load(
         AssetPath("models/drones/x500/visual.glb").string());
+    droneCameraModel_ = aerosimlab::graphics::GlbModel::Load(
+        AssetPath("models/drones/x500/action-camera.glb").string());
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
     buildingFacadeTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
@@ -1601,6 +1603,13 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             glm::mat4_cast(ToRenderOrientation(drone.orientation));
         droneModel_->Draw(heading, *renderer_, *shader_, view, projection,
             cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true);
+        const glm::mat4 cameraMount = heading
+            * glm::translate(glm::mat4{1.0F}, glm::vec3{0.025F, -0.09F, 0.0F})
+            * glm::mat4_cast(glm::angleAxis(1.57079632679F,
+                glm::vec3{0.0F, 1.0F, 0.0F}))
+            * glm::scale(glm::mat4{1.0F}, glm::vec3{1.4F});
+        droneCameraModel_->Draw(cameraMount, *renderer_, *shader_, view, projection,
+            cameraPosition);
     }
 }
 

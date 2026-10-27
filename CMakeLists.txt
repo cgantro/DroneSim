@@ -422,6 +422,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json@maps/tancheon/demo-inspection-plan.json"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/apartment-facade.png@maps/tancheon/apartment-facade.png"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb@models/drones/x500/visual.glb"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb@models/drones/x500/action-camera.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE@models/drones/x500/LICENSE"
     )
@@ -444,6 +445,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     set(simulator_runtime_assets
       "${CMAKE_SOURCE_DIR}/assets/shaders/Scene.glsl"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb"
+      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE"
       "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn"
