@@ -526,12 +526,12 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
         indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
 
-/** @brief OSM 물 경계와 DEM 높이로 물 표면을 만든다. */
+/** @brief 물 경계를 작은 격자로 나눠 DEM 높이에 맞춘 표면을 만든다. */
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateWaterMesh(
     const std::vector<aerosimlab::terrain::MapWaterBody>& waterBodies,
     const aerosimlab::terrain::TerrainGrid& terrain)
 {
-    constexpr double cellSizeMeters = 12.0;
+    constexpr double cellSizeMeters = 3.0;
     constexpr double surfaceOffsetMeters = 0.25;
     const double halfX = (static_cast<double>(terrain.sampleCount) - 1.0)
         * terrain.spacingXMeters * 0.5;
@@ -540,36 +540,53 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateWaterMesh(
     std::vector<aerosimlab::graphics::Vertex> vertices;
     std::vector<std::uint32_t> indices;
 
-    for (double south = -halfY; south < halfY; south += cellSizeMeters)
+    for (const auto& body : waterBodies)
     {
-        const double north = std::min(south + cellSizeMeters, halfY);
-        for (double west = -halfX; west < halfX; west += cellSizeMeters)
-        {
-            const double east = std::min(west + cellSizeMeters, halfX);
-            const glm::dvec2 center{(west + east) * 0.5, (south + north) * 0.5};
-            const bool isWater = std::any_of(waterBodies.begin(), waterBodies.end(),
-                [&](const aerosimlab::terrain::MapWaterBody& body)
-                {
-                    return aerosimlab::terrain::ContainsWater(body, center);
-                });
-            if (!isWater)
-                continue;
+        if (body.outerBoundaryMeters.empty())
+            continue;
 
-            const std::uint32_t first = static_cast<std::uint32_t>(vertices.size());
-            const auto addCorner = [&](double x, double y, float u, float v)
+        double minimumX = body.outerBoundaryMeters.front().x;
+        double maximumX = minimumX;
+        double minimumY = body.outerBoundaryMeters.front().y;
+        double maximumY = minimumY;
+        for (const glm::dvec2& point : body.outerBoundaryMeters)
+        {
+            minimumX = std::min(minimumX, point.x);
+            maximumX = std::max(maximumX, point.x);
+            minimumY = std::min(minimumY, point.y);
+            maximumY = std::max(maximumY, point.y);
+        }
+
+        const double westEdge = std::max(minimumX, -halfX);
+        const double eastEdge = std::min(maximumX, halfX);
+        const double southEdge = std::max(minimumY, -halfY);
+        const double northEdge = std::min(maximumY, halfY);
+        for (double south = southEdge; south < northEdge; south += cellSizeMeters)
+        {
+            const double north = std::min(south + cellSizeMeters, northEdge);
+            for (double west = westEdge; west < eastEdge; west += cellSizeMeters)
             {
-                const glm::dvec2 point{x, y};
-                const double elevation = terrain.HeightAtLocalMeters(point)
-                    + surfaceOffsetMeters;
-                vertices.push_back({ToRenderPosition({x, y, elevation}),
-                    {0.0F, 1.0F, 0.0F}, {u, v}});
-            };
-            addCorner(west, south, 0.0F, 0.0F);
-            addCorner(west, north, 0.0F, 1.0F);
-            addCorner(east, north, 1.0F, 1.0F);
-            addCorner(east, south, 1.0F, 0.0F);
-            indices.insert(indices.end(), {first, first + 1U, first + 2U,
-                first, first + 2U, first + 3U});
+                const double east = std::min(west + cellSizeMeters, eastEdge);
+                const glm::dvec2 center{(west + east) * 0.5, (south + north) * 0.5};
+                if (!aerosimlab::terrain::ContainsWater(body, center))
+                    continue;
+
+                const std::uint32_t first = static_cast<std::uint32_t>(vertices.size());
+                const auto addCorner = [&](double x, double y, float u, float v)
+                {
+                    const glm::dvec2 point{x, y};
+                    const double elevation = terrain.HeightAtLocalMeters(point)
+                        + surfaceOffsetMeters;
+                    vertices.push_back({ToRenderPosition({x, y, elevation}),
+                        {0.0F, 1.0F, 0.0F}, {u, v}});
+                };
+                addCorner(west, south, 0.0F, 0.0F);
+                addCorner(west, north, 0.0F, 1.0F);
+                addCorner(east, north, 1.0F, 1.0F);
+                addCorner(east, south, 1.0F, 0.0F);
+                indices.insert(indices.end(), {first, first + 1U, first + 2U,
+                    first, first + 2U, first + 3U});
+            }
         }
     }
 
