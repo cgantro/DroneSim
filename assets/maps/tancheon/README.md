@@ -94,7 +94,7 @@ S-Map 화면에서 서울의 3D 건물과 지형을 볼 수 있지만, 화면에
 
 받은 공개 DEM의 원본 격자 간격은 90m입니다. 국토정보플랫폼의 공개 DEM 목록에서 내려받은 2025년 도엽 37709도 90m로 확인했습니다. 현재 지형은 이 DEM에 등고선과 표고점을 보태 만든 근사 자료이며, 별도의 5m DEM을 받은 것은 아닙니다.
 
-자료 안내가 서로 다릅니다. 경기기후플랫폼은 국토정보플랫폼에서 5m DEM을 제공한다고 답했지만, 탄천교 도엽으로 내려받은 2025년 공개 DEM은 90m였습니다. 국토지리정보원 자료와 LX 공간정보 안심구역 목록은 5m DEM을 공개제한 자료로 안내합니다. 탄천교 주변에서 실제로 받을 수 있는 5m 자료가 따로 있는지는 국토정보플랫폼에서 계속 확인해야 합니다. [경기기후플랫폼 안내](https://climate.gg.go.kr/ols/open-request/read?pstSeCd=BBS005&pstSn=558) · [국토정보플랫폼](https://map.ngii.go.kr/ms/map/NlipMap.do?tabGb=total) · [LX 공간정보 안심구역 자료·절차](https://lx.or.kr/spaceSecurity/sub_03.html) · [국토지리정보원 DEM 안내](https://www.ngii.go.kr/lib/file/pr_01.pdf) · [공개 DEM 자료](https://www.data.go.kr/data/15059920/fileData.do)
+국토지리정보원 안내표는 1m·5m·10m DEM을 비공개, 90m DEM을 일반 공개 자료로 구분합니다. 현재 국토정보플랫폼의 공개 DEM 목록에서도 2025년 도엽 37709는 기존에 받은 90m 자료와 같은 항목이며, 별도의 5m 파일은 확인되지 않았습니다. 경기기후플랫폼 답변에는 5m DEM 제공 안내가 있지만, 그 답변만으로 탄천교 자료를 이 플랫폼에서 직접 내려받을 수 있는지는 확인되지 않았습니다. 5m 원본이 꼭 필요하다면 국토지리정보원에 탄천교 구간의 제공 여부와 신청 자격을 문의해야 합니다. 지금 사용할 수 있는 더 세밀한 지형 근거는 1:1,000 등고선과 표고점이며, 이를 보간해 만든 현재 격자는 5m DEM과 같지 않습니다. [경기기후플랫폼 안내](https://climate.gg.go.kr/ols/open-request/read?pstSeCd=BBS005&pstSn=558) · [국토정보플랫폼 공개 DEM 목록](https://map.ngii.go.kr/ms/map/NlipMap.do?tabGb=total) · [국토지리정보원 DEM 안내](https://www.ngii.go.kr/lib/file/pr_01.pdf) · [공개 DEM 자료](https://www.data.go.kr/data/15059920/fileData.do)
 
 ## 좌표와 높이
 
