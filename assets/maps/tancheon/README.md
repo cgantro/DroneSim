@@ -98,7 +98,9 @@ S-Map 화면에서 서울의 3D 건물과 지형을 볼 수 있지만, 화면에
 
 다만 공공데이터포털의 `항공사진 수치표고성과 내역`에는 37709004·37709005 도엽의 2009년 성과가 `1m × 1m` 격자로 등록돼 있습니다. 이는 고해상도 자료가 제작됐다는 메타데이터 기록입니다. 내려받은 파일은 성과 목록 CSV이며 실제 격자 높이 파일은 포함하지 않습니다. 따라서 이 기록만으로 원본을 내려받거나 현재 장면의 지형을 1m 정확도로 만들 수 있다고 판단할 수 없습니다. 원본 제공 여부와 신청 조건을 국토지리정보원에 확인해야 합니다. [항공사진 수치표고성과 내역](https://www.data.go.kr/data/15067637/fileData.do)
 
-경기기후플랫폼 답변에도 5m DEM 제공 안내가 있지만, 탄천교 구간의 실제 파일을 내려받을 수 있는지는 확인되지 않았습니다. 원본을 받기 전까지 사용할 수 있는 세밀한 지형 근거는 1:1,000 등고선과 표고점이며, 이를 보간해 만든 현재 5m 간격 격자는 5m DEM과 같지 않습니다. [경기기후플랫폼 안내](https://climate.gg.go.kr/ols/open-request/read?pstSeCd=BBS005&pstSn=558) · [국토정보플랫폼 공개 DEM 목록](https://map.ngii.go.kr/ms/map/NlipMap.do?tabGb=total) · [국토지리정보원 DEM 안내](https://www.ngii.go.kr/lib/file/pr_01.pdf) · [공개 DEM 자료](https://www.data.go.kr/data/15059920/fileData.do)
+환경공간정보 자료목록에는 전국 `수치표고모델`이 5m로 등록되어 있고, 제공처는 국토지리정보원, 연결 화면은 국토정보플랫폼으로 나옵니다. 이 목록은 자료의 종류와 해상도를 안내하지만 DEM 원본 파일을 제공하지는 않습니다. [환경공간정보 자료목록](https://data.neins.go.kr/bbs/list)
+
+2026년 10월 28일 국토정보플랫폼에서 탄천 도엽 `37709005`를 조회했을 때는 연도별 공개 DEM 6개가 표시됐고, 화면은 로그인 상태가 아니었습니다. 현재 저장소에 받은 2025년 공개 DEM은 90m 격자입니다. 따라서 목록에 등록된 5m DEM 원본을 실제로 확보하기 전까지는 90m DEM에 등고선과 표고점을 보태 만든 근사 지형을 사용합니다. 이 근사 자료의 5m는 결과 격자 간격이며, 원본 DEM의 해상도가 아닙니다. [경기기후플랫폼 안내](https://climate.gg.go.kr/ols/open-request/read?pstSeCd=BBS005&pstSn=558) · [국토정보플랫폼 공개 DEM 목록](https://map.ngii.go.kr/ms/map/NlipMap.do?tabGb=total) · [국토지리정보원 DEM 안내](https://www.ngii.go.kr/lib/file/pr_01.pdf) · [공개 DEM 자료](https://www.data.go.kr/data/15059920/fileData.do)
 
 ## 좌표와 높이
 
