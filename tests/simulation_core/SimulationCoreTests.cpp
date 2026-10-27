@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -599,6 +600,24 @@ void Verify_SimulationCore_TracksEachDroneCameraIndependently()
         std::invalid_argument);
 }
 
+void Verify_KinematicWaypointTurnsDroneAndCameraTowardTravelDirection()
+{
+    SimulationCore simulation{SimulationDynamics::Kinematic};
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
+    for (int tick = 0; tick < 120; ++tick)
+        simulation.AdvanceOneTick();
+
+    ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::SetWaypoint,
+        {0.0, 10.0, simulation.State().positionMeters.z})), CommandResult::Accepted);
+    for (int tick = 0; tick < 120; ++tick)
+        simulation.AdvanceOneTick();
+
+    EXPECT_NEAR(simulation.State().yawRadians, glm::half_pi<double>(), 0.05);
+    const glm::dvec3 cameraAxis = EoCameraModel::OpticalAxis(simulation.Camera());
+    const glm::dvec2 cameraHeading = glm::normalize(glm::dvec2{cameraAxis.x, cameraAxis.y});
+    EXPECT_GT(glm::dot(cameraHeading, glm::dvec2{0.0, 1.0}), 0.99);
+}
+
 void Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels()
 {
     CameraState camera;
@@ -734,6 +753,8 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_RejectsUnsupportedInitialMotorSpeeds());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_TracksEachDroneCameraIndependently());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_KinematicWaypointTurnsDroneAndCameraTowardTravelDirection());
     EXPECT_NO_FATAL_FAILURE(
         Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels());
     EXPECT_NO_FATAL_FAILURE(

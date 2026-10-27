@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 #include <string_view>
 
 namespace aerosimlab::simulation
@@ -112,6 +113,7 @@ CommandResult DroneModel::Apply(
         return CommandResult::Accepted;
 
     case DroneCommand::Kind::SetWaypoint:
+    {
         if (!IsAirborne(state))
         {
             return CommandResult::InvalidFlightMode;
@@ -121,9 +123,16 @@ CommandResult DroneModel::Apply(
             return CommandResult::InvalidValue;
         }
         control.waypointMeters = command.vector;
+        const double offsetX = command.vector.x - state.positionMeters.x;
+        const double offsetY = command.vector.y - state.positionMeters.y;
+        if (std::hypot(offsetX, offsetY) > waypointToleranceMeters)
+        {
+            control.desiredYawRadians = std::atan2(offsetY, offsetX);
+        }
         state.mode = FlightMode::FollowingWaypoint;
         control.commandedYawRateRadiansPerSecond = 0.0;
         return CommandResult::Accepted;
+    }
 
     case DroneCommand::Kind::SetYawRate:
         if (!IsAirborne(state))
@@ -173,10 +182,21 @@ void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) n
     const bool wasAirborne = state.mode != FlightMode::Grounded;
     const double groundElevation = control.groundElevationMeters;
     const double takeoffTarget = groundElevation + takeoffHeightMeters;
-    state.yawRadians += control.commandedYawRateRadiansPerSecond * step;
+    double yawRate = control.commandedYawRateRadiansPerSecond;
+    if (state.mode == FlightMode::FollowingWaypoint && yawRate == 0.0)
+    {
+        constexpr double waypointYawGain = 2.0;
+        const double yawError = std::remainder(
+            control.desiredYawRadians - state.yawRadians, 2.0 * std::numbers::pi);
+        yawRate = std::clamp(
+            yawError * waypointYawGain,
+            -maximumYawRateRadiansPerSecond,
+            maximumYawRateRadiansPerSecond);
+    }
+    state.yawRadians += yawRate * step;
     state.orientation = glm::angleAxis(state.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
     state.angularVelocityRadiansPerSecond = {
-        0.0, 0.0, control.commandedYawRateRadiansPerSecond};
+        0.0, 0.0, yawRate};
 
     switch (state.mode)
     {
