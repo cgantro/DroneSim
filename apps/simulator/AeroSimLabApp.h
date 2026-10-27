@@ -250,7 +250,8 @@ private:
     [[nodiscard]] std::uint32_t RenderWorldToTarget(
         aerosimlab::graphics::MultisampleFramebuffer& target,
         const aerosimlab::graphics::Camera& camera,
-        bool showMissionGuides);
+        bool showMissionGuides,
+        std::optional<aerosimlab::simulation::DroneId> hiddenDroneId = std::nullopt);
     /** @brief 끝난 픽셀 읽기를 처리한 뒤 새 카메라 화면을 GPU에 맡긴다. */
     void CaptureEoFrame();
     /** @brief GPU에서 끝난 EO 픽셀 읽기와 측정값을 처리한다. */
@@ -263,7 +264,8 @@ private:
     void DrainEoReadbacks();
 #endif
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
-        const glm::vec3& cameraPosition, bool showMissionGuides);
+        const glm::vec3& cameraPosition, bool showMissionGuides,
+        std::optional<aerosimlab::simulation::DroneId> hiddenDroneId = std::nullopt);
     void DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
         const aerosimlab::graphics::Material& material,
         const glm::mat4& view, const glm::mat4& projection);

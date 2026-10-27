@@ -1466,7 +1466,7 @@ void AeroSimLabApp::RenderFrame()
         observerCamera_->GetPosition(), true);
     renderer_->SetSceneViewport(observerWidth, cameraBottom, cameraWidth, cameraHeight);
     DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
-        eoCamera_->GetPosition(), false);
+        eoCamera_->GetPosition(), false, simulation_.PrimaryDroneId());
     renderer_->EndFrame();
     EM_ASM({
         if (window.copyDroneSimEoViewport) {
@@ -1564,7 +1564,8 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
 }
 
 void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
-    const glm::vec3& cameraPosition, bool showMissionGuides)
+    const glm::vec3& cameraPosition, bool showMissionGuides,
+    std::optional<aerosimlab::simulation::DroneId> hiddenDroneId)
 {
     static const aerosimlab::graphics::Material orthophotoMaterial{
         glm::vec4{1.0F}, 0.0F, 0.92F};
@@ -1684,6 +1685,9 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 
     for (const aerosimlab::simulation::DroneId id : fleetDroneIds_)
     {
+        if (hiddenDroneId == id)
+            continue;
+
         const auto& drone = simulation_.State(id);
         const glm::vec3 position = ToRenderPosition(drone.positionMeters);
         const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *

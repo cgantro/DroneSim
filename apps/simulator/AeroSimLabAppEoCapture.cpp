@@ -36,7 +36,8 @@ std::uint32_t AeroSimLabApp::RenderCameraPanel()
         aerosimlab::simulation::ScopedDuration measureCameraScene(
             benchmarkMode_ ? &frameMeasurements_.cameraSceneRenderMicroseconds : nullptr);
         UpdateEoCamera(imageWidth, imageHeight);
-        static_cast<void>(RenderWorldToTarget(*cameraTarget_, *eoCamera_, false));
+        static_cast<void>(RenderWorldToTarget(*cameraTarget_, *eoCamera_, false,
+            simulation_.PrimaryDroneId()));
         lastRenderedEoFrameTick_ = camera.lastFrameTick;
     }
     aerosimlab::simulation::ScopedDuration measureEoReadbackHandling(
@@ -48,11 +49,12 @@ std::uint32_t AeroSimLabApp::RenderCameraPanel()
 std::uint32_t AeroSimLabApp::RenderWorldToTarget(
     aerosimlab::graphics::MultisampleFramebuffer& target,
     const aerosimlab::graphics::Camera& camera,
-    bool showMissionGuides)
+    bool showMissionGuides,
+    std::optional<aerosimlab::simulation::DroneId> hiddenDroneId)
 {
     renderer_->BeginView(target);
     DrawWorld(camera.GetViewMatrix(), camera.GetProjectionMatrix(),
-        camera.GetPosition(), showMissionGuides);
+        camera.GetPosition(), showMissionGuides, hiddenDroneId);
     renderer_->EndView(target);
     return target.GetTextureId();
 }
