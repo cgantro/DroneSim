@@ -1424,30 +1424,34 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     const glm::vec3& cameraPosition, bool showMissionGuides)
 {
     renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
-    renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
+    const bool hasOrthophoto = terrainSurfaceTexture_ != nullptr;
+    const auto& terrainMaterial = hasOrthophoto
+        ? orthophotoMaterial_ : groundMaterial_;
+    renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, terrainMaterial, *shader_,
         view, projection, cameraPosition, terrainSurfaceTexture_.get(), false,
-        terrainSurfaceTexture_ == nullptr);
+        !hasOrthophoto);
     if (waterMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *waterMesh_, waterMaterial_, *shader_,
             view, projection, cameraPosition);
-    if (roadMesh_)
+    // 정사영상에는 도로가 이미 찍혀 있어 같은 자리에 단색 메시를 덧그리지 않는다.
+    if (roadMesh_ && !hasOrthophoto)
         renderer_->Draw(glm::mat4{1.0F}, *roadMesh_, roadMaterial_, *shader_,
             view, projection, cameraPosition);
-    if (bridgeMesh_)
+    if (bridgeMesh_ && !hasOrthophoto)
         renderer_->Draw(glm::mat4{1.0F}, *bridgeMesh_, bridgeMaterial_, *shader_,
             view, projection, cameraPosition);
     if (bridgeFootprintMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *bridgeFootprintMesh_,
             bridgeFootprintMaterial_, *shader_, view, projection, cameraPosition);
     if (taggedBuildingMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, buildingMaterial_,
+        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, orthophotoMaterial_,
             *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
     if (taggedBuildingWallMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingWallMesh_, buildingMaterial_,
             *shader_, view, projection, cameraPosition, buildingFacadeTexture_.get());
     if (estimatedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingMesh_,
-            estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,
+            orthophotoMaterial_, *shader_, view, projection, cameraPosition,
             terrainSurfaceTexture_.get());
     if (estimatedBuildingWallMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingWallMesh_,
@@ -1477,7 +1481,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         const glm::mat4 transform = glm::translate(
             glm::mat4{1.0F}, (start + end) * 0.5F)
             * orientation
-            * glm::scale(glm::mat4{1.0F}, glm::vec3{0.10F, length, 0.10F});
+            * glm::scale(glm::mat4{1.0F}, glm::vec3{0.04F, length, 0.04F});
         DrawCube(transform, cameraPosition, missionRouteMaterial_, view, projection);
     };
 
