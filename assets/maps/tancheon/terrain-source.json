@@ -3,6 +3,24 @@
   "source_crs": "EPSG:5179",
   "source_cell_size_meters": 90,
   "terrain_grid": "241×241 samples, 5 m spacing. 90 m 공개 DEM에 등고선·표고점 높이 차를 보간해 반영",
+  "dem_tile_inspection": {
+    "37709": {
+      "grid_dimensions_samples": [253, 315],
+      "cell_size_meters": 90,
+      "bounds_epsg5179_meters": [955530, 1916190, 978300, 1944540]
+    },
+    "37705": {
+      "grid_dimensions_samples": [252, 315],
+      "cell_size_meters": 90,
+      "bounds_epsg5179_meters": [955710, 1943910, 978390, 1972260]
+    },
+    "overlap_check": {
+      "valid_samples": 1757,
+      "differing_samples": 0,
+      "maximum_absolute_difference_meters": 0,
+      "note": "두 공개 DEM 타일의 겹치는 251×7 격자를 비교했다. 현재 장면에 사용 중인 37709 타일은 목표 범위를 모두 덮고, 겹치는 높이값은 37705와 일치한다."
+    }
+  },
   "offset_range_meters": [
     -3.456,
     40.266
