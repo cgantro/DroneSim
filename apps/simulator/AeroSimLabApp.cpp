@@ -240,7 +240,13 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
         if (triangles.empty())
             continue;
 
-        const double displayHeight = building.heightMeters;
+        // 충돌체와 같은 바닥·지붕 높이를 써 화면과 충돌 범위를 맞춘다.
+        const auto buildingBounds =
+            aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
+        const double bottomElevation = buildingBounds.centerMeters.z
+            - buildingBounds.halfExtentsMeters.z;
+        const double roofElevation = buildingBounds.centerMeters.z
+            + buildingBounds.halfExtentsMeters.z;
 
         const double winding = PolygonArea(building.outlineMeters) > 0.0 ? 1.0 : -1.0;
         if (!createWalls)
@@ -251,9 +257,7 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
             for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
             {
                 const auto& point = building.outlineMeters[i];
-                const double roofHeight = building.groundElevationsMeters[i]
-                    + displayHeight;
-                vertices.push_back({ToRenderPosition({point.x, point.y, roofHeight}),
+                vertices.push_back({ToRenderPosition({point.x, point.y, roofElevation}),
                     {0.0F, 1.0F, 0.0F},
                     {static_cast<float>(point.x / roofTextureTileSizeMeters),
                         static_cast<float>(-point.y / roofTextureTileSizeMeters)}});
@@ -281,17 +285,17 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
             outward *= winding;
             const glm::vec3 normal = glm::normalize(ToRenderDirection(outward));
             const float edgeLength = static_cast<float>(glm::length(edge));
-            const float wallHeight = static_cast<float>(displayHeight);
+            const float wallHeight = static_cast<float>(roofElevation - bottomElevation);
             constexpr float facadeTileWidthMeters = 5.0F;
             constexpr float facadeTileHeightMeters = 3.0F;
             const auto bottomFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
-                building.groundElevationsMeters[i]});
+                bottomElevation});
             const auto bottomSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
-                building.groundElevationsMeters[next]});
+                bottomElevation});
             const auto topFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
-                building.groundElevationsMeters[i] + displayHeight});
+                roofElevation});
             const auto topSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
-                building.groundElevationsMeters[next] + displayHeight});
+                roofElevation});
             const std::uint32_t wallStart = static_cast<std::uint32_t>(vertices.size());
             vertices.insert(vertices.end(), {
                 {bottomFirst, normal, {0.0F, wallHeight / facadeTileHeightMeters}},
