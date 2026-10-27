@@ -9,8 +9,8 @@ namespace aerosimlab::simulation
 {
 namespace
 {
-// 카메라 렌즈를 기체 중심 아래에 두어 비행 자세와 함께 움직이게 한다.
-constexpr glm::dvec3 cameraMountPositionBodyMeters{0.0, 0.0, -0.10};
+// 외장 카메라 렌즈를 기체 앞쪽 아래에 두고 비행 자세와 함께 움직이게 한다.
+constexpr glm::dvec3 cameraMountPositionBodyMeters{0.12, 0.0, -0.10};
 constexpr glm::dvec3 cameraOpticalAxisBody{25.0, 0.0, -2.5};
 
 bool SegmentIntersectsBox(

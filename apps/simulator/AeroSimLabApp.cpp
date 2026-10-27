@@ -1802,14 +1802,17 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             aerosimlab::simulation::EoCameraModel::OpticalAxis(cameraState)));
         const glm::vec3 cameraUp = glm::normalize(ToRenderDirection(
             aerosimlab::simulation::EoCameraModel::UpAxis(cameraState)));
+        // 이 GLB의 렌즈는 모델의 -Z 방향을 향한다. 렌즈가 비행 방향을 보도록
+        // 카메라 모델의 뒤쪽(+Z)을 광축의 반대편에 맞춘다.
+        const glm::vec3 cameraBackward = -cameraForward;
         const glm::vec3 cameraRight = glm::normalize(
-            glm::cross(cameraUp, cameraForward));
+            glm::cross(cameraForward, cameraUp));
         const glm::vec3 correctedCameraUp = glm::normalize(
-            glm::cross(cameraForward, cameraRight));
+            glm::cross(cameraBackward, cameraRight));
         glm::mat3 cameraOrientation{1.0F};
         cameraOrientation[0] = cameraRight;
         cameraOrientation[1] = correctedCameraUp;
-        cameraOrientation[2] = cameraForward;
+        cameraOrientation[2] = cameraBackward;
         constexpr float cameraModelScale = 1.0F;
         const glm::mat4 cameraMount = glm::translate(glm::mat4{1.0F},
                 ToRenderPosition(cameraState.positionMeters))
