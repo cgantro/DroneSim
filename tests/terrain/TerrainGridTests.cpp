@@ -171,6 +171,21 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
             facadeRoute->approachPositionMeters);
         routeStart = facadeRoute->approachPositionMeters;
     }
+
+    const std::string helio110BuildingId = "692770092";
+    const auto helio110 = std::find_if(visibleBuildings.begin(), visibleBuildings.end(),
+        [&helio110BuildingId](const MapBuilding& building)
+        { return building.osmId == helio110BuildingId; });
+    ASSERT_NE(helio110, visibleBuildings.end());
+    const glm::dvec2 reportedStart{-472.0, 442.0};
+    const glm::dvec3 reportedStartMeters{reportedStart,
+        terrain.HeightAtLocalMeters(reportedStart) + 0.35};
+    const auto helio110Route = PlanMapFlightRouteToFacade(
+        terrain, buildings, *helio110, reportedStartMeters, 8.0, 20.0);
+    ASSERT_TRUE(helio110Route.has_value())
+        << "facade-110-dong start=" << reportedStart.x << "," << reportedStart.y;
+    EXPECT_TRUE(PlanMapFlightRoute(terrain, buildings, reportedStartMeters,
+        helio110Route->approachPositionMeters).has_value());
 }
 
 void Verify_MapFlightRouteReportsABuildingWallWithoutAnOpening()
