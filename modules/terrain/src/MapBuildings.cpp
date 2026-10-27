@@ -22,6 +22,15 @@ namespace
 using Json = nlohmann::json;
 constexpr double metersPerBuildingLevel = 3.0;
 
+std::string CleanBuildingName(std::string name)
+{
+    name.erase(std::remove_if(name.begin(), name.end(), [](unsigned char character)
+    {
+        return character < 0x20 || character == 0x7f;
+    }), name.end());
+    return name;
+}
+
 double ReadPositiveNumber(const Json& value)
 {
     if (value.is_number())
@@ -97,7 +106,7 @@ std::vector<MapBuilding> LoadMapBuildings(
 
         MapBuilding building;
         building.osmId = properties->value("osm_id", std::string{});
-        building.name = tags->value("name", std::string{});
+        building.name = CleanBuildingName(tags->value("name", std::string{}));
         if (!detail::ReadTerrainFootprint(
             geometry->value("coordinates", Json{}), terrain,
             building.outlineMeters, building.groundElevationsMeters))
