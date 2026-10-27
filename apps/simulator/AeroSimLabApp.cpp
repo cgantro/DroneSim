@@ -367,9 +367,17 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateRoadMesh(
         indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
 
-/** @brief OSM 교량 외곽선에 임시 상판의 윗면·밑면·옆면을 만든다. */
+enum class BridgeMeshPart
+{
+    DeckSurface,
+    DeckStructure
+};
+
+/** @brief 교량 외곽선으로 영상이 이어지는 상판과 충돌 두께를 그린다. */
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgeFootprintMesh(
-    const std::vector<aerosimlab::terrain::MapBridgeFootprint>& bridges)
+    const std::vector<aerosimlab::terrain::MapBridgeFootprint>& bridges,
+    const aerosimlab::terrain::TerrainGrid& terrain,
+    BridgeMeshPart meshPart)
 {
     std::vector<aerosimlab::graphics::Vertex> vertices;
     std::vector<std::uint32_t> indices;
@@ -391,22 +399,31 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgeFootprintMesh(
         groundElevation /= static_cast<double>(bridge.groundElevationsMeters.size());
         const double deckBottom = groundElevation + bridgeDeckUndersideHeightMeters;
         const double deckTop = deckBottom + bridgeDeckThicknessMeters;
-        const std::uint32_t centerIndex = static_cast<std::uint32_t>(vertices.size());
-        vertices.push_back({ToRenderPosition({center.x, center.y, deckTop}),
-            {0.0F, 1.0F, 0.0F}, {0.5F, 0.5F}});
-        for (std::size_t index = 0; index < bridge.outlineMeters.size(); ++index)
+        if (meshPart == BridgeMeshPart::DeckSurface)
         {
-            const glm::dvec2& point = bridge.outlineMeters[index];
-            vertices.push_back({ToRenderPosition({point.x, point.y, deckTop}),
-                {0.0F, 1.0F, 0.0F},
-                {static_cast<float>(point.x), static_cast<float>(point.y)}});
-        }
-        for (std::uint32_t index = 0; index < bridge.outlineMeters.size(); ++index)
-        {
-            const std::uint32_t first = centerIndex + 1U + index;
-            const std::uint32_t second = centerIndex + 1U
-                + (index + 1U) % static_cast<std::uint32_t>(bridge.outlineMeters.size());
-            indices.insert(indices.end(), {centerIndex, first, second});
+            const std::uint32_t centerIndex = static_cast<std::uint32_t>(vertices.size());
+            const double halfWidth = terrain.HalfWidthMeters();
+            const double halfDepth = terrain.HalfDepthMeters();
+            const auto addSurfaceVertex = [&](const glm::dvec2& point)
+            {
+                const glm::vec2 uv{
+                    static_cast<float>((point.x + halfWidth) / (2.0 * halfWidth)),
+                    static_cast<float>((halfDepth - point.y) / (2.0 * halfDepth))};
+                vertices.push_back({ToRenderPosition({point.x, point.y, deckTop}),
+                    {0.0F, 1.0F, 0.0F}, uv});
+            };
+            addSurfaceVertex(center);
+            for (const glm::dvec2& point : bridge.outlineMeters)
+                addSurfaceVertex(point);
+            for (std::uint32_t index = 0; index < bridge.outlineMeters.size(); ++index)
+            {
+                const std::uint32_t first = centerIndex + 1U + index;
+                const std::uint32_t second = centerIndex + 1U
+                    + (index + 1U)
+                        % static_cast<std::uint32_t>(bridge.outlineMeters.size());
+                indices.insert(indices.end(), {centerIndex, first, second});
+            }
+            continue;
         }
 
         const std::uint32_t undersideCenter = static_cast<std::uint32_t>(vertices.size());
@@ -850,7 +867,10 @@ void AeroSimLabApp::LoadMapFeatures()
         roadMesh_ = CreateRoadMesh(roads, false);
         bridgeMesh_ = CreateRoadMesh(roads, true);
     }
-    bridgeFootprintMesh_ = CreateBridgeFootprintMesh(bridges);
+    bridgeFootprintMesh_ = CreateBridgeFootprintMesh(
+        bridges, terrainGrid_, BridgeMeshPart::DeckSurface);
+    bridgeStructureMesh_ = CreateBridgeFootprintMesh(
+        bridges, terrainGrid_, BridgeMeshPart::DeckStructure);
     waterMesh_ = CreateWaterMesh(waterBodies, terrainGrid_);
     taggedBuildingMesh_ = CreateBuildingMesh(buildings,
         aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, terrainGrid_, false);
@@ -1554,9 +1574,12 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     if (bridgeMesh_ && !hasOrthophoto)
         renderer_->Draw(glm::mat4{1.0F}, *bridgeMesh_, bridgeMaterial_, *shader_,
             view, projection, cameraPosition);
+    if (bridgeStructureMesh_)
+        renderer_->Draw(glm::mat4{1.0F}, *bridgeStructureMesh_,
+            bridgeMaterial_, *shader_, view, projection, cameraPosition);
     if (bridgeFootprintMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *bridgeFootprintMesh_,
-            bridgeFootprintMaterial_, *shader_, view, projection, cameraPosition);
+        renderer_->Draw(glm::mat4{1.0F}, *bridgeFootprintMesh_, orthophotoMaterial,
+            *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
     if (taggedBuildingMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingMesh_, orthophotoMaterial,
             *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
