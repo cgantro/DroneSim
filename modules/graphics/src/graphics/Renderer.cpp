@@ -218,6 +218,7 @@ void Renderer::Draw(
     shader.SetMat4(RendererUniformNames::model, model);
     shader.SetMat4(RendererUniformNames::view, view);
     shader.SetMat4(RendererUniformNames::projection, projection);
+    shader.SetInt("u_UseInstances", mesh.InstanceCount() > 0U ? 1 : 0);
 
     shader.SetFloat4(RendererUniformNames::baseColorFactor, material.BaseColorFactor());
     shader.SetInt(RendererUniformNames::baseTexture, 0);
@@ -238,11 +239,17 @@ void Renderer::Draw(
 
     mesh.Bind();
 
-    glDrawElements(
-        GL_TRIANGLES,
-        static_cast<GLsizei>(mesh.GetIndexCount()),
-        GL_UNSIGNED_INT,
-        nullptr);
+    if (mesh.InstanceCount() > 0U)
+    {
+        glDrawElementsInstanced(GL_TRIANGLES,
+            static_cast<GLsizei>(mesh.GetIndexCount()), GL_UNSIGNED_INT, nullptr,
+            static_cast<GLsizei>(mesh.InstanceCount()));
+    }
+    else
+    {
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.GetIndexCount()),
+            GL_UNSIGNED_INT, nullptr);
+    }
 
     mesh.UnBind();
     if (baseTexture != nullptr)

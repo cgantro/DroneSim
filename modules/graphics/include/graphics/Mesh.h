@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 
 #include <glm/glm.hpp>
@@ -67,6 +68,12 @@ public:
     /** @brief 현재 선택된 정점 읽기 설정을 해제한다. GPU 데이터는 유지된다. */
     void UnBind() const;
 
+    /** @brief 같은 메시를 여러 위치에 한 번에 그리도록 변환 행렬을 GPU에 올린다. */
+    void SetInstances(std::span<const glm::mat4> transforms);
+
+    /** @brief 한 번의 그리기 호출로 표시할 복제 메시 수를 돌려준다. */
+    [[nodiscard]] std::uint32_t InstanceCount() const noexcept;
+
     /** @brief GPU의 연결 번호 배열에 저장된 꼭짓점 번호 개수를 반환한다. */
     std::uint32_t GetIndexCount() const;
 
@@ -94,6 +101,10 @@ private:
 
     // GPU에는 32-bit 꼭짓점 번호가 있다. 그리기 명령은 번호 세 개씩 묶어 삼각형을 만든다.
     std::unique_ptr<IndexBuffer> indexBuffer_;
+
+    // 여러 나무처럼 같은 메시를 다른 위치에 그릴 때 쓰는 변환 행렬 배열이다.
+    std::unique_ptr<VertexBuffer> instanceBuffer_;
+    std::uint32_t instanceCount_ = 0;
 };
 
 } // namespace aerosimlab::graphics

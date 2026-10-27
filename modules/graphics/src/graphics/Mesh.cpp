@@ -86,6 +86,42 @@ void Mesh::Bind() const { vertexArray_->Bind(); }
 void Mesh::UnBind() const { vertexArray_->UnBind(); }
 std::uint32_t Mesh::GetIndexCount() const { return indexBuffer_->GetCount(); }
 
+void Mesh::SetInstances(std::span<const glm::mat4> transforms)
+{
+    if (transforms.empty())
+    {
+        instanceBuffer_.reset();
+        instanceCount_ = 0;
+        return;
+    }
+    if (transforms.size() > static_cast<std::size_t>(std::numeric_limits<GLsizei>::max())
+        || transforms.size() > static_cast<std::size_t>(
+            std::numeric_limits<GLsizeiptr>::max()) / sizeof(glm::mat4))
+        throw std::runtime_error("Mesh instance data exceeds the OpenGL buffer limit");
+
+    instanceBuffer_ = std::make_unique<VertexBuffer>(transforms.data(),
+        static_cast<GLsizeiptr>(transforms.size() * sizeof(glm::mat4)));
+    vertexArray_->Bind();
+    instanceBuffer_->Bind();
+    for (GLuint column = 0; column < 4U; ++column)
+    {
+        const GLuint location = 3U + column;
+        glEnableVertexAttribArray(location);
+        glVertexAttribPointer(location, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
+            reinterpret_cast<void*>(static_cast<std::uintptr_t>(
+                column * sizeof(glm::vec4))));
+        glVertexAttribDivisor(location, 1);
+    }
+    instanceBuffer_->UnBind();
+    vertexArray_->UnBind();
+    instanceCount_ = static_cast<std::uint32_t>(transforms.size());
+}
+
+std::uint32_t Mesh::InstanceCount() const noexcept
+{
+    return instanceCount_;
+}
+
 std::unique_ptr<Mesh> Mesh::CreateCube(float sideLengthMeters)
 {
     if (!std::isfinite(sideLengthMeters) || sideLengthMeters <= 0.0F)

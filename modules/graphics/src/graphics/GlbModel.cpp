@@ -308,6 +308,18 @@ void GlbModel::Draw(const glm::mat4& modelTransform, Renderer& renderer,
     }
 }
 
+void GlbModel::SetInstances(std::span<const glm::mat4> modelTransforms)
+{
+    for (const auto& part : parts_)
+    {
+        std::vector<glm::mat4> partTransforms;
+        partTransforms.reserve(modelTransforms.size());
+        for (const glm::mat4& transform : modelTransforms)
+            partTransforms.push_back(transform * part->nodeTransform);
+        part->mesh->SetInstances(partTransforms);
+    }
+}
+
 std::size_t GlbModel::PartCount() const noexcept
 {
     return parts_.size();

@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,9 @@ public:
         const Material* fallbackMaterial = nullptr,
         const Texture2D* fallbackTexture = nullptr,
         bool fallbackTriplanar = false) const;
+
+    /** @brief 같은 GLB 모델을 여러 변환 위치에 배치해 한 번에 그리도록 준비한다. */
+    void SetInstances(std::span<const glm::mat4> modelTransforms);
 
     [[nodiscard]] std::size_t PartCount() const noexcept;
 

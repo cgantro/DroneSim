@@ -7,8 +7,13 @@
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
 layout(location = 2) in vec2 a_TextureCoordinate;
+layout(location = 3) in vec4 a_InstanceColumn0;
+layout(location = 4) in vec4 a_InstanceColumn1;
+layout(location = 5) in vec4 a_InstanceColumn2;
+layout(location = 6) in vec4 a_InstanceColumn3;
 
 uniform mat4 u_Model;
+uniform int u_UseInstances;
 uniform mat4 u_View;
 uniform mat4 u_Projection;
 
@@ -20,8 +25,11 @@ out vec2 v_TextureCoordinate;
 
 void main()
 {
+    mat4 model = u_UseInstances != 0
+        ? mat4(a_InstanceColumn0, a_InstanceColumn1, a_InstanceColumn2, a_InstanceColumn3)
+        : u_Model;
     // Local 좌표는 Mesh의 기준점에서 잰 위치이고 World 좌표는 장면 전체 기준 위치다. 모델 행렬로 Local을 World로 바꿔 표면과 광원을 같은 기준에서 비교한다.
-    vec4 worldPosition = u_Model * vec4(a_Position, 1.0);
+    vec4 worldPosition = model * vec4(a_Position, 1.0);
 
     v_WorldPosition = worldPosition.xyz;
     v_ModelPosition = a_Position;
@@ -30,7 +38,7 @@ void main()
 
     // 크기 배율이 축마다 다르면 방향만 모델 행렬로 바꾼 법선은 표면에 수직이 아니게 된다.
     // 역전치 행렬을 적용해 변환 뒤에도 표면에 수직인 방향을 유지한다.
-    v_Normal = mat3(transpose(inverse(u_Model))) * a_Normal;
+    v_Normal = mat3(transpose(inverse(model))) * a_Normal;
 
 
     // 좌표 변환은 점의 기준을 바꾸는 계산이다. Local에서 World, Camera, Clip 순서로 바꾸며 Camera 좌표는 카메라가 원점인 기준이고 Clip 좌표는 화면 자르기와 깊이 계산에 쓰이는 중간값이다.

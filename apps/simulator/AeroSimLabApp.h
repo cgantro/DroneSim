@@ -11,6 +11,7 @@
 #include "simulation_core/CommandRecording.h"
 #include "simulation_core/EoCameraModel.h"
 #include "terrain/MapBuildings.h"
+#include "terrain/MapTrees.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
 #endif
@@ -408,6 +409,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
+    std::array<std::unique_ptr<aerosimlab::graphics::GlbModel>, 3> treeModels_;
     std::unique_ptr<aerosimlab::graphics::Mesh> waterMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> roadMesh_;
     std::unique_ptr<aerosimlab::graphics::Mesh> bridgeMesh_;

@@ -128,6 +128,23 @@ inline float ReadFloat(const std::uint8_t* bytes)
     return value;
 }
 
+inline float ReadVertexComponent(const std::uint8_t* bytes,
+    std::uint32_t componentType)
+{
+    if (componentType == 5126U)
+        return ReadFloat(bytes);
+    if (componentType == 5122U)
+    {
+        const std::uint32_t raw = static_cast<std::uint32_t>(bytes[0])
+            | (static_cast<std::uint32_t>(bytes[1]) << 8U);
+        const std::int32_t signedValue = raw < 0x8000U
+            ? static_cast<std::int32_t>(raw)
+            : static_cast<std::int32_t>(raw) - 0x10000;
+        return std::max(static_cast<float>(signedValue) / 32767.0F, -1.0F);
+    }
+    throw std::runtime_error("GLB 위치 자료 형식이 올바르지 않습니다.");
+}
+
 inline std::uint32_t ReadIndex(const std::uint8_t* bytes, std::uint32_t componentType)
 {
     if (componentType == 5121U)
@@ -144,31 +161,53 @@ inline std::vector<Vertex> ReadVertices(const Json& document, const Json& primit
     const std::vector<std::uint8_t>& binary)
 {
     const Json& attributes = primitive.at("attributes");
+    const std::uint32_t positionType = document.at("accessors")
+        .at(attributes.at("POSITION").get<std::size_t>())
+        .at("componentType").get<std::uint32_t>();
+    const bool normalizedPositions = document.at("accessors")
+        .at(attributes.at("POSITION").get<std::size_t>())
+        .value("normalized", false);
+    const std::size_t positionComponentSize = positionType == 5122U ? 2U : 4U;
     const Accessor positions = ReadAccessor(document,
-        attributes.at("POSITION").get<std::size_t>(), binary, "VEC3", 12U);
-    if (positions.componentType != 5126U
+        attributes.at("POSITION").get<std::size_t>(), binary, "VEC3",
+        positionComponentSize * 3U);
+    if ((positions.componentType != 5126U
+            && !(positions.componentType == 5122U && normalizedPositions))
         || positions.count > std::numeric_limits<std::uint32_t>::max())
         throw std::runtime_error("GLB 위치 자료 형식이 올바르지 않습니다.");
 
     Accessor normals;
     if (attributes.contains("NORMAL"))
     {
-        normals = ReadAccessor(document, attributes.at("NORMAL").get<std::size_t>(),
-            binary, "VEC3", 12U);
-        if (normals.componentType != 5126U || normals.count != positions.count)
+        const std::size_t normalAccessorIndex =
+            attributes.at("NORMAL").get<std::size_t>();
+        const std::uint32_t normalType = document.at("accessors")
+            .at(normalAccessorIndex).at("componentType").get<std::uint32_t>();
+        const std::size_t normalComponentSize = normalType == 5122U ? 2U : 4U;
+        normals = ReadAccessor(document, normalAccessorIndex, binary, "VEC3",
+            normalComponentSize * 3U);
+        if ((normals.componentType != 5126U
+                && !(normals.componentType == 5122U && normals.normalized))
+            || normals.count != positions.count)
             throw std::runtime_error("GLB 표면 방향 자료 형식이 올바르지 않습니다.");
     }
     std::vector<Vertex> vertices(positions.count);
     for (std::size_t index = 0; index < vertices.size(); ++index)
     {
         const auto* position = positions.bytes + index * positions.stride;
-        vertices[index].position = {ReadFloat(position), ReadFloat(position + 4U),
-            ReadFloat(position + 8U)};
+        const std::size_t componentSize = positions.componentType == 5122U ? 2U : 4U;
+        vertices[index].position = {
+            ReadVertexComponent(position, positions.componentType),
+            ReadVertexComponent(position + componentSize, positions.componentType),
+            ReadVertexComponent(position + componentSize * 2U, positions.componentType)};
         if (attributes.contains("NORMAL"))
         {
             const auto* normal = normals.bytes + index * normals.stride;
-            vertices[index].normal = {ReadFloat(normal), ReadFloat(normal + 4U),
-                ReadFloat(normal + 8U)};
+            const std::size_t componentSize = normals.componentType == 5122U ? 2U : 4U;
+            vertices[index].normal = {
+                ReadVertexComponent(normal, normals.componentType),
+                ReadVertexComponent(normal + componentSize, normals.componentType),
+                ReadVertexComponent(normal + componentSize * 2U, normals.componentType)};
         }
         vertices[index].textureCoordinate = {0.0F, 0.0F};
     }

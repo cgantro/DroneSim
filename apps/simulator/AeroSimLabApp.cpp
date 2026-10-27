@@ -799,6 +799,38 @@ void AeroSimLabApp::LoadMapFeatures()
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
     const auto waterBodies = aerosimlab::terrain::LoadMapWaterBodies(
         AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+    const auto trees = aerosimlab::terrain::LoadMapTrees(
+        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
+    constexpr std::array<std::string_view, 3> treeAssets{
+        "models/environment/trees/mature-oak.glb",
+        "models/environment/trees/mature-scots-pine.glb",
+        "models/environment/trees/mature-sycamore.glb"};
+    std::array<std::vector<glm::mat4>, 3> treeTransforms;
+    for (const auto& tree : trees)
+    {
+        const auto east = static_cast<std::int64_t>(std::llround(tree.positionMeters.x * 10.0));
+        const auto north = static_cast<std::int64_t>(std::llround(tree.positionMeters.y * 10.0));
+        const std::uint64_t key = static_cast<std::uint64_t>(east) * 0x9E3779B185EBCA87ULL
+            ^ static_cast<std::uint64_t>(north) * 0xC2B2AE3D27D4EB4FULL;
+        const std::size_t species = static_cast<std::size_t>(key % treeTransforms.size());
+        const float yaw = static_cast<float>((key >> 8U) % 6284U) * 0.001F;
+        const float scale = 0.82F + static_cast<float>((key >> 20U) % 37U) * 0.01F;
+        const float ground = static_cast<float>(terrainGrid_.HeightAtLocalMeters(
+            tree.positionMeters));
+        glm::mat4 transform = glm::translate(glm::mat4(1.0F), ToRenderPosition(
+            {tree.positionMeters.x, tree.positionMeters.y, ground}));
+        transform = glm::rotate(transform, yaw, glm::vec3{0.0F, 1.0F, 0.0F});
+        transform = glm::scale(transform, glm::vec3{scale});
+        treeTransforms[species].push_back(transform);
+    }
+    for (std::size_t species = 0; species < treeAssets.size(); ++species)
+    {
+        if (treeTransforms[species].empty())
+            continue;
+        treeModels_[species] = aerosimlab::graphics::GlbModel::Load(
+            AssetPath(treeAssets[species]).string());
+        treeModels_[species]->SetInstances(treeTransforms[species]);
+    }
     for (const auto& bridge : bridges)
     {
         if (bridge.outlineMeters.size() < 3U || bridge.groundElevationsMeters.empty())
@@ -1507,6 +1539,12 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     if (waterMesh_)
         renderer_->Draw(glm::mat4{1.0F}, *waterMesh_, waterMaterial_, *shader_,
             view, projection, cameraPosition);
+    for (const auto& treeModel : treeModels_)
+    {
+        if (treeModel)
+            treeModel->Draw(glm::mat4{1.0F}, *renderer_, *shader_, view,
+                projection, cameraPosition);
+    }
     // 정사영상에는 도로가 이미 찍혀 있어 같은 자리에 단색 메시를 덧그리지 않는다.
     if (roadMesh_ && !hasOrthophoto)
         renderer_->Draw(glm::mat4{1.0F}, *roadMesh_, roadMaterial_, *shader_,

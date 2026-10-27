@@ -79,6 +79,7 @@ add_library(aerosimlab_terrain STATIC
   modules/terrain/src/MapBuildings.cpp
   modules/terrain/src/MapFlightRoute.cpp
   modules/terrain/src/MapRoads.cpp
+  modules/terrain/src/MapTrees.cpp
   modules/terrain/src/MapWaterBodies.cpp
   modules/terrain/src/TerrainGrid.cpp
 )
@@ -425,6 +426,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb@models/drones/x500/action-camera.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE@models/drones/x500/LICENSE"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-oak.glb@models/environment/trees/mature-oak.glb"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-scots-pine.glb@models/environment/trees/mature-scots-pine.glb"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-sycamore.glb@models/environment/trees/mature-sycamore.glb"
     )
     foreach(terrain_texture_extension IN ITEMS png jpg jpeg ppm)
       set(terrain_texture_path
@@ -448,6 +452,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE"
+      "${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-oak.glb"
+      "${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-scots-pine.glb"
+      "${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-sycamore.glb"
       "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn"
       "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson"
       "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json"
