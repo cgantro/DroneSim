@@ -235,12 +235,14 @@ void Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin()
         / "assets/maps/tancheon/terrain.aerotrn";
     const TerrainGrid terrain = TerrainGrid::Load(path);
 
-    EXPECT_EQ(terrain.sampleCount, 41U);
-    EXPECT_FLOAT_EQ(terrain.spacingXMeters, 30.0F);
-    EXPECT_FLOAT_EQ(terrain.spacingYMeters, 30.0F);
+    EXPECT_EQ(terrain.sampleCount, 241U);
+    EXPECT_FLOAT_EQ(terrain.spacingXMeters, 5.0F);
+    EXPECT_FLOAT_EQ(terrain.spacingYMeters, 5.0F);
     EXPECT_NEAR(terrain.centerLatitudeDegrees, 37.4936231, 1.0e-7);
     EXPECT_NEAR(terrain.centerLongitudeDegrees, 127.1018462, 1.0e-7);
     EXPECT_NEAR(terrain.HeightAtLocalMeters({0.0, 0.0}), 18.0F, 0.01F);
+    // 32.6m 표고점 주변의 굴곡이 낮은 해상도 DEM에 묻히지 않았는지 확인한다.
+    EXPECT_GT(terrain.HeightAtLocalMeters({-195.5, -24.5}), 37.0F);
 }
 
 void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
