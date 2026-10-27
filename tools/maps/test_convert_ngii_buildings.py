@@ -23,6 +23,45 @@ class NgiiBuildingConversionTests(unittest.TestCase):
         self.assertAlmostEqual(longitude, 127.1018462, places=8)
         self.assertAlmostEqual(latitude, 37.4936231, places=8)
 
+    def test_register_matches_a_unique_building_name_within_one_parcel(self):
+        rows = [
+            {"동명": "가동", "높이": "18.2", "지상층수": "7", "PK": "one"},
+            {"동명": "나동", "높이": "18.2", "지상층수": "7", "PK": "two"},
+        ]
+
+        result, match = converter._match_building_register(
+            {"DONG_NM": "가 동", "BLD_NM": ""}, 2, rows
+        )
+
+        self.assertEqual(match, "name")
+        self.assertIs(result, rows[0])
+
+    def test_register_uses_only_values_shared_by_every_building_on_a_parcel(self):
+        rows = [
+            {"동명": "가동", "높이": "18.2", "지상층수": "7", "PK": "one"},
+            {"동명": "나동", "높이": "18.2", "지상층수": "7", "PK": "two"},
+        ]
+
+        result, match = converter._match_building_register(
+            {"DONG_NM": "다동"}, 3, rows
+        )
+
+        self.assertEqual(match, "parcel-consensus")
+        self.assertEqual(result, {"높이": "18.2", "지상층수": "7"})
+
+    def test_register_does_not_guess_when_buildings_on_a_parcel_disagree(self):
+        rows = [
+            {"동명": "가동", "높이": "18.2", "지상층수": "7"},
+            {"동명": "나동", "높이": "24.0", "지상층수": "8"},
+        ]
+
+        result, match = converter._match_building_register(
+            {"DONG_NM": "다동"}, 3, rows
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(match, "unmatched")
+
     def test_polygon_is_clipped_to_the_scene_rectangle(self):
         bounds = {"west": 0.0, "south": 0.0, "east": 10.0, "north": 10.0}
         clipped = converter._clip_ring(

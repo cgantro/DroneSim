@@ -9,6 +9,7 @@ import math
 import os
 import struct
 import tempfile
+import unicodedata
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -90,6 +91,47 @@ def _positive_number(value: str) -> float:
         return number if math.isfinite(number) and number > 0.0 else 0.0
     except (AttributeError, ValueError):
         return 0.0
+
+
+def _normalize_building_name(value: str) -> str:
+    return "".join(
+        character for character in unicodedata.normalize("NFKC", value).casefold()
+        if character.isalnum()
+    )
+
+
+def _match_building_register(
+    building: dict[str, str],
+    parcel_shape_count: int,
+    register_rows: list[dict[str, str]],
+) -> tuple[dict[str, str] | None, str]:
+    if parcel_shape_count == 1 and len(register_rows) == 1:
+        return register_rows[0], "one-to-one"
+
+    names = {
+        _normalize_building_name(building.get("BLD_NM", "")),
+        _normalize_building_name(building.get("DONG_NM", "")),
+    } - {""}
+    name_matches = [
+        row for row in register_rows
+        if names & {
+            _normalize_building_name(row.get("건물명", "")),
+            _normalize_building_name(row.get("동명", "")),
+        } - {""}
+    ]
+    if len(name_matches) == 1:
+        return name_matches[0], "name"
+    if name_matches:
+        return None, "ambiguous-name"
+
+    agreed_values: dict[str, str] = {}
+    for field in ("높이", "지상층수"):
+        values = [_positive_number(row.get(field, "")) for row in register_rows]
+        if values and values[0] > 0.0 and all(value == values[0] for value in values):
+            agreed_values[field] = f"{values[0]:g}"
+    if agreed_values:
+        return agreed_values, "parcel-consensus"
+    return None, "unmatched"
 
 
 def _read_dbf_rows(data: bytes) -> list[dict[str, str]]:
@@ -189,12 +231,8 @@ def _read_vworld_buildings(
             continue
 
         parcel_id = row.get("PNU", "")
-        matching_register = register.get(parcel_id, [])
-        # 같은 필지에 건물이 여러 개 있으면 번지만으로 높이나 이름을 고르지 않는다.
-        register_row = (
-            matching_register[0]
-            if parcel_counts.get(parcel_id) == 1 and len(matching_register) == 1
-            else None
+        register_row, register_match = _match_building_register(
+            row, parcel_counts.get(parcel_id, 0), register.get(parcel_id, [])
         )
         shape_height = row.get("HEIGHT", "")
         register_height = register_row.get("높이", "") if register_row else ""
@@ -208,7 +246,7 @@ def _read_vworld_buildings(
 
         tags: dict[str, str] = {"building": "yes"}
         if register_row:
-            tags["building_register_match"] = "one-to-one"
+            tags["building_register_match"] = register_match
         name = register_name or shape_name
         if name:
             tags["name"] = name
