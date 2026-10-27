@@ -152,7 +152,7 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
 
     const std::array<std::string, 3> targetBuildingIds{
         "692770099", "692770087", "692770092"};
-    const glm::dvec2 demoStart{-410.0, 442.0};
+    const glm::dvec2 demoStart{-410.0, 457.0};
     glm::dvec3 routeStart{demoStart,
         terrain.HeightAtLocalMeters(demoStart) + 0.35};
     for (const std::string& targetId : targetBuildingIds)

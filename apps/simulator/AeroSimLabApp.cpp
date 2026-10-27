@@ -81,7 +81,7 @@ void SetStartupDetail(std::string_view message)
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 탄천유수지 체육시설 주소 지점에 둔 시뮬레이션용 출발 위치다.
-constexpr glm::dvec2 demoDroneStartMeters{-410.0, 442.0};
+constexpr glm::dvec2 demoDroneStartMeters{-410.0, 457.0};
 constexpr double bridgeDeckUndersideHeightMeters = 6.0;
 constexpr double bridgeDeckThicknessMeters = 0.8;
 constexpr double bridgeInspectionApproachBelowDeckMeters = 1.2;
