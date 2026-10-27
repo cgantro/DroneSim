@@ -16,6 +16,7 @@ from typing import Any
 
 
 BUILDING_LAYER = "N1A_A0010000"
+BRIDGE_LAYER = "N1A_A0070000"
 TREE_LAYER = "N1P_D0030000"
 WGS84_A = 6_378_137.0
 WGS84_F = 1.0 / 298.257222101
@@ -523,6 +524,7 @@ def _is_bridge_duplicate_building(
     building_ring = building["geometry"]["coordinates"][0]
     building_bounds = _ring_bounds(building_ring)
     building_area = _ring_area(building_ring)
+    bridge_groups: dict[str, list[list[list[float]]]] = {}
     for bridge in bridges:
         bridge_ring = bridge["geometry"]["coordinates"][0]
         bridge_area = _ring_area(bridge_ring)
@@ -531,6 +533,28 @@ def _is_bridge_duplicate_building(
         area_ratio = min(building_area, bridge_area) / max(building_area, bridge_area)
         if (area_ratio >= 0.85
                 and _bounds_overlap_ratio(building_bounds, _ring_bounds(bridge_ring)) >= 0.9):
+            return True
+        tags = bridge.get("properties", {}).get("tags", {})
+        name = tags.get("name:ko") or tags.get("name")
+        if name:
+            bridge_groups.setdefault(name, []).append(bridge_ring)
+
+    # 나란한 차도 두 면을 건물 하나로 묶어 그린 도형도 중복으로 걸러낸다.
+    for rings in bridge_groups.values():
+        if len(rings) < 2 or not all(
+            _point_in_ring(_center(ring), building_ring) for ring in rings
+        ):
+            continue
+        bridge_area = sum(_ring_area(ring) for ring in rings)
+        bridge_bounds = (
+            min(_ring_bounds(ring)[0] for ring in rings),
+            min(_ring_bounds(ring)[1] for ring in rings),
+            max(_ring_bounds(ring)[2] for ring in rings),
+            max(_ring_bounds(ring)[3] for ring in rings),
+        )
+        area_ratio = min(building_area, bridge_area) / max(building_area, bridge_area)
+        if (area_ratio >= 0.85
+                and _bounds_overlap_ratio(building_bounds, bridge_bounds) >= 0.9):
             return True
     return False
 
@@ -614,25 +638,91 @@ def _read_tree_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, A
         return features
 
 
+def _read_bridge_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, Any]]:
+    """1:1,000 수치지도에 기록된 교량 외곽선을 장면 좌표로 바꾼다."""
+    with zipfile.ZipFile(path) as archive:
+        members = {Path(name).name.lower(): name for name in archive.namelist()}
+        layer = BRIDGE_LAYER.lower()
+        shp_name, dbf_name, prj_name = (
+            members.get(layer + suffix) for suffix in (".shp", ".dbf", ".prj")
+        )
+        if not shp_name or not dbf_name or not prj_name:
+            return []
+        projection = archive.read(prj_name).decode("cp949", "replace")
+        if "Korea_2000_Central_Belt_2010" not in projection:
+            raise ValueError(f"EPSG:5186 좌표계가 아닌 도엽입니다: {path.name}")
+
+        shapes, _ = _read_shapefile(archive.read(shp_name))
+        rows = _read_dbf_rows(archive.read(dbf_name))
+        if len(shapes) != len(rows):
+            raise ValueError(f"교량 도형 수와 속성 수가 다릅니다: {path.name}")
+
+        features = []
+        for ring, row in zip(shapes, rows, strict=True):
+            if len(ring) < 4 or not row.get("UFID"):
+                continue
+            bridge_width = _positive_number(row.get("폭"))
+            if bridge_width > 0:
+                span_x = max(point[0] for point in ring) - min(point[0] for point in ring)
+                span_y = max(point[1] for point in ring) - min(point[1] for point in ring)
+                # 도형보다 작은 지도 표기 기호는 속성표의 실제 교량 폭으로 걸러낸다.
+                if math.hypot(span_x, span_y) < bridge_width:
+                    continue
+            clipped = _clip_ring(ring, bounds)
+            if not clipped:
+                continue
+            name = row.get("명칭", "").strip()
+            tags = {
+                "man_made": "bridge",
+                "source": "국토지리정보원 1:1,000 수치지도",
+            }
+            if name:
+                tags.update({"name": name, "name:ko": name, "bridge:name": name})
+            for source_field, tag in (
+                ("종류", "bridge:type"), ("연장", "bridge:length_m"),
+                ("폭", "bridge:width_m"), ("설치연도", "bridge:installed"),
+                ("재질", "bridge:material"), ("하천명", "bridge:waterway"),
+            ):
+                value = row.get(source_field, "").strip()
+                if value:
+                    tags[tag] = value
+            coordinates = [list(epsg5186_to_wgs84(x, y)) for x, y in clipped]
+            if coordinates[-1] != coordinates[0]:
+                coordinates.append(coordinates[0])
+            identifier = row["UFID"]
+            features.append({
+                "type": "Feature",
+                "id": identifier,
+                "properties": {
+                    "osm_id": f"ngii-bridge:{identifier}",
+                    "tags": tags,
+                },
+                "geometry": {"type": "Polygon", "coordinates": [coordinates]},
+            })
+        return features
+
+
 def _merge_site(
-    site: dict[str, Any], official_features: list[dict[str, Any]]
+    site: dict[str, Any], official_features: list[dict[str, Any]],
+    ngii_bridge_features: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    ngii_bridge_features = ngii_bridge_features or []
     # 이전 변환 결과를 다시 입력해도 수치지도 도형이 계속 쌓이지 않게 한다.
     previous_official = {}
     for feature in site["features"]:
         properties = feature.get("properties", {})
         source_id = str(properties.get("osm_id", ""))
-        if source_id.startswith(("ngii:", "ngii-tree:", "fac:")):
+        if source_id.startswith(("ngii:", "ngii-tree:", "ngii-bridge:", "fac:")):
             previous_official[source_id] = properties
     source_features = [
         feature for feature in site["features"]
         if not str(feature.get("properties", {}).get("osm_id", "")).startswith(
-            ("ngii:", "ngii-tree:", "fac:")
+            ("ngii:", "ngii-tree:", "ngii-bridge:", "fac:")
         )
     ]
     source_features = _deduplicate_site_buildings(source_features)
     osm_buildings = []
-    bridge_features = []
+    source_bridge_features = []
     for feature in source_features:
         properties = feature.get("properties", {})
         geometry = feature.get("geometry", {})
@@ -641,14 +731,27 @@ def _merge_site(
             osm_buildings.append(feature)
         if (geometry.get("type") == "Polygon"
                 and properties.get("tags", {}).get("man_made") == "bridge"):
-            bridge_features.append(feature)
+            source_bridge_features.append(feature)
+
+    official_bridge_names = {
+        feature.get("properties", {}).get("tags", {}).get("name:ko")
+        or feature.get("properties", {}).get("tags", {}).get("name")
+        for feature in ngii_bridge_features
+    }
+    bridge_features_for_buildings = [
+        feature for feature in source_bridge_features
+        if (
+            feature.get("properties", {}).get("tags", {}).get("name:ko")
+            or feature.get("properties", {}).get("tags", {}).get("name")
+        ) not in official_bridge_names
+    ] + ngii_bridge_features
 
     matched_osm_ids: set[str] = set()
     official_features = _deduplicate_footprints(official_features)
     # 교량 상판과 같은 외곽선이 수치지도 건물로 중복 등록되면 하부 경로가 막힌다.
     official_features = [
         feature for feature in official_features
-        if not _is_bridge_duplicate_building(feature, bridge_features)
+        if not _is_bridge_duplicate_building(feature, bridge_features_for_buildings)
     ]
     for official in official_features:
         source_id = str(official.get("properties", {}).get("osm_id", ""))
@@ -699,9 +802,23 @@ def _merge_site(
         feature for feature in source_features
         if str(feature.get("properties", {}).get("osm_id", "")) not in matched_osm_ids
     ]
+    if official_bridge_names:
+        retained = [
+            feature for feature in retained
+            if not (
+                feature.get("geometry", {}).get("type") == "Polygon"
+                and feature.get("properties", {}).get("tags", {}).get("man_made") == "bridge"
+                and (
+                    feature.get("properties", {}).get("tags", {}).get("name:ko")
+                    or feature.get("properties", {}).get("tags", {}).get("name")
+                ) in official_bridge_names
+            )
+        ]
     return {
         **site,
-        "features": _deduplicate_site_buildings(retained + official_features),
+        "features": _deduplicate_site_buildings(
+            retained + official_features + ngii_bridge_features
+        ),
     }
 
 
@@ -720,9 +837,11 @@ def convert(
         raise ValueError(f"수치지도 ZIP이 없습니다: {source_dir}")
 
     official_features = []
+    bridge_features = []
     tree_features = []
     for source in source_files:
         official_features.extend(_read_archive(source, bounds))
+        bridge_features.extend(_read_bridge_archive(source, bounds))
         tree_features.extend(_read_tree_archive(source, bounds))
     if building_data_path and building_data_path.exists():
         if not register_path or not legal_dong_path:
@@ -737,7 +856,7 @@ def convert(
         )
 
     site = json.loads(site_path.read_text(encoding="utf-8"))
-    merged = _merge_site(site, official_features)
+    merged = _merge_site(site, official_features, bridge_features)
     retained_features = [
         feature for feature in merged["features"]
         if not str(feature.get("properties", {}).get("osm_id", "")).startswith("ngii-tree:")

@@ -180,6 +180,63 @@ class NgiiBuildingConversionTests(unittest.TestCase):
         self.assertIn("ngii:house-1", ids)
         self.assertNotIn("ngii:deck-1", ids)
 
+    def test_official_bridge_outline_replaces_same_named_osm_polygon(self):
+        osm = {
+            "type": "Feature",
+            "properties": {
+                "osm_id": "osm-bridge",
+                "tags": {"man_made": "bridge", "name:ko": "탄천교"},
+            },
+            "geometry": {"type": "Polygon", "coordinates": [[
+                [127.1000, 37.4930], [127.1010, 37.4930],
+                [127.1010, 37.4940], [127.1000, 37.4940],
+                [127.1000, 37.4930],
+            ]]},
+        }
+        official = {
+            **osm,
+            "id": "map-bridge",
+            "properties": {
+                "osm_id": "ngii-bridge:map-bridge",
+                "tags": {"man_made": "bridge", "name:ko": "탄천교"},
+            },
+        }
+
+        result = converter._merge_site(
+            {"type": "FeatureCollection", "features": [osm]}, [], [official]
+        )
+
+        self.assertEqual(
+            [feature["properties"]["osm_id"] for feature in result["features"]],
+            ["ngii-bridge:map-bridge"],
+        )
+
+    def test_bridge_lanes_remove_a_single_building_outline_covering_both(self):
+        def feature(ring):
+            return {
+                "properties": {
+                    "tags": {"name:ko": "탄천교"},
+                },
+                "geometry": {"type": "Polygon", "coordinates": [ring]},
+            }
+
+        building = feature([
+            [0.0, 0.0], [10.0, 0.0], [10.0, 2.0],
+            [0.0, 2.0], [0.0, 0.0],
+        ])
+        bridges = [
+            feature([
+                [0.0, 0.0], [4.5, 0.0], [4.5, 2.0],
+                [0.0, 2.0], [0.0, 0.0],
+            ]),
+            feature([
+                [5.5, 0.0], [10.0, 0.0], [10.0, 2.0],
+                [5.5, 2.0], [5.5, 0.0],
+            ]),
+        ]
+
+        self.assertTrue(converter._is_bridge_duplicate_building(building, bridges))
+
     @staticmethod
     def _write_building_archive(path, ring):
         xs, ys = zip(*ring)
