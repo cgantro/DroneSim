@@ -465,6 +465,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     endif()
 
     set(simulator_asset_copy_commands)
+    set(simulator_runtime_outputs)
     foreach(asset_path IN LISTS simulator_runtime_assets)
       if(NOT EXISTS "${asset_path}")
         message(FATAL_ERROR "시뮬레이터 실행 자료를 찾지 못했습니다: ${asset_path}")
@@ -472,20 +473,28 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       file(RELATIVE_PATH runtime_path
         "${CMAKE_SOURCE_DIR}/assets" "${asset_path}")
       get_filename_component(runtime_directory "${runtime_path}" DIRECTORY)
+      set(runtime_output "${CMAKE_CURRENT_BINARY_DIR}/${runtime_path}")
+      list(APPEND simulator_runtime_outputs "${runtime_output}")
       list(APPEND simulator_asset_copy_commands
         COMMAND ${CMAKE_COMMAND} -E make_directory
-          "$<TARGET_FILE_DIR:aerosimlab_simulator>/${runtime_directory}"
+          "${CMAKE_CURRENT_BINARY_DIR}/${runtime_directory}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "${asset_path}"
-          "$<TARGET_FILE_DIR:aerosimlab_simulator>/${runtime_path}")
+          "${runtime_output}")
     endforeach()
 
-    # 셰이더나 지도 자료가 바뀌면 C++를 다시 컴파일하지 않고 실행 자료만 갱신한다.
-    set_property(TARGET aerosimlab_simulator APPEND PROPERTY LINK_DEPENDS
-      ${simulator_runtime_assets})
-    add_custom_command(TARGET aerosimlab_simulator POST_BUILD
+    # 실행 자료 복사는 링크 단계와 분리해, 지도·질감만 바뀔 때 실행 파일을 다시 만들지 않는다.
+    set(simulator_runtime_stamp
+      "${CMAKE_CURRENT_BINARY_DIR}/simulator_runtime_assets.stamp")
+    add_custom_command(OUTPUT "${simulator_runtime_stamp}"
+      BYPRODUCTS ${simulator_runtime_outputs}
       ${simulator_asset_copy_commands}
+      COMMAND ${CMAKE_COMMAND} -E touch "${simulator_runtime_stamp}"
+      DEPENDS ${simulator_runtime_assets}
       VERBATIM)
+    add_custom_target(aerosimlab_simulator_runtime_assets
+      DEPENDS "${simulator_runtime_stamp}")
+    add_dependencies(aerosimlab_simulator aerosimlab_simulator_runtime_assets)
   endif()
 endif()
 
