@@ -398,6 +398,115 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
     return route;
 }
 
+std::optional<std::vector<glm::dvec3>> PlanMapFlightRouteUnderBridge(
+    const TerrainGrid& terrain,
+    const std::vector<MapBuilding>& buildings,
+    const MapBridgeFootprint& bridge,
+    const std::vector<MapBridgePier>& piers,
+    const glm::dvec3& startMeters,
+    const glm::dvec3& goalMeters,
+    double deckBottomMeters,
+    double deckTopMeters,
+    double buildingClearanceMeters)
+{
+    if (bridge.outlineMeters.size() < 3U
+        || !std::isfinite(deckBottomMeters) || !std::isfinite(deckTopMeters)
+        || !(deckTopMeters > deckBottomMeters)
+        || !std::isfinite(buildingClearanceMeters)
+        || !(buildingClearanceMeters > 0.0))
+        throw std::invalid_argument("교량 외곽선과 상판 높이를 확인해 주세요.");
+
+    std::vector<MapBuilding> lowAltitudeObstacles;
+    lowAltitudeObstacles.reserve(buildings.size() + piers.size());
+    for (const MapBuilding& building : buildings)
+    {
+        MapBuilding obstacle = building;
+        obstacle.heightSource = BuildingHeightSource::OsmHeightTag;
+        lowAltitudeObstacles.push_back(std::move(obstacle));
+    }
+    for (const MapBridgePier& pier : piers)
+    {
+        lowAltitudeObstacles.push_back({
+            .outlineMeters = pier.outlineMeters,
+            .groundElevationsMeters = std::vector<double>(
+                pier.outlineMeters.size(), pier.bottomElevationMeters),
+            .heightMeters = pier.topElevationMeters - pier.bottomElevationMeters,
+            .heightSource = BuildingHeightSource::OsmHeightTag});
+    }
+
+    const glm::dvec2 center = [&bridge]
+    {
+        glm::dvec2 result{0.0};
+        for (const glm::dvec2& point : bridge.outlineMeters)
+            result += point;
+        return result / static_cast<double>(bridge.outlineMeters.size());
+    }();
+    const double highAltitude = deckTopMeters + buildingClearanceMeters + 1.0;
+    const double lowAltitude = std::min(goalMeters.z, deckBottomMeters - 1.5);
+    std::optional<std::vector<glm::dvec3>> bestRoute;
+    double bestDistance = std::numeric_limits<double>::infinity();
+
+    for (std::size_t index = 0; index < bridge.outlineMeters.size(); ++index)
+    {
+        const glm::dvec2 first = bridge.outlineMeters[index];
+        const glm::dvec2 second = bridge.outlineMeters[
+            (index + 1U) % bridge.outlineMeters.size()];
+        const glm::dvec2 edge = second - first;
+        const double edgeLength = glm::length(edge);
+        if (edgeLength < 1.0e-6)
+            continue;
+
+        const glm::dvec2 midpoint = (first + second) * 0.5;
+        glm::dvec2 outward{edge.y / edgeLength, -edge.x / edgeLength};
+        if (detail::ContainsPointInRing(
+                bridge.outlineMeters, midpoint + outward * 0.1))
+            outward = -outward;
+
+        const glm::dvec2 entry = midpoint
+            + outward * (buildingClearanceMeters + 1.0);
+        if (!terrain.ContainsLocalPositionMeters(entry)
+            || detail::ContainsPointInRing(bridge.outlineMeters, entry))
+            continue;
+
+        const glm::dvec3 highEntry{entry, highAltitude};
+        const glm::dvec3 lowEntry{entry, lowAltitude};
+        const auto highRoute = PlanMapFlightRoute(
+            terrain, buildings, startMeters, highEntry, buildingClearanceMeters);
+        if (!highRoute)
+            continue;
+
+        const auto lowRoute = PlanMapFlightRoute(
+            terrain, lowAltitudeObstacles, lowEntry, goalMeters,
+            buildingClearanceMeters, lowAltitude);
+        if (!lowRoute)
+            continue;
+
+        std::vector<glm::dvec3> route = *highRoute;
+        route.push_back(lowEntry);
+        route.insert(route.end(), lowRoute->begin(), lowRoute->end());
+        double distance = 0.0;
+        glm::dvec3 previous = startMeters;
+        for (const glm::dvec3& waypoint : *highRoute)
+        {
+            distance += glm::length(waypoint - previous);
+            previous = waypoint;
+        }
+        distance += glm::length(lowEntry - highEntry);
+        previous = lowEntry;
+        for (const glm::dvec3& waypoint : *lowRoute)
+        {
+            distance += glm::length(waypoint - previous);
+            previous = waypoint;
+        }
+        if (distance < bestDistance)
+        {
+            bestDistance = distance;
+            bestRoute = std::move(route);
+        }
+    }
+    return bestRoute;
+}
+
 std::optional<MapBuildingFacadeRoute> PlanMapFlightRouteToFacade(
     const TerrainGrid& terrain,
     const std::vector<MapBuilding>& buildings,

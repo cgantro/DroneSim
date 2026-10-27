@@ -1260,9 +1260,28 @@ void AeroSimLabApp::LoadMapFeatures()
             }
             else
             {
-                auto route = aerosimlab::terrain::PlanMapFlightRoute(
-                    terrainGrid_, routeBuildings_, routeStart,
-                    target.approachPositionMeters);
+                std::optional<std::vector<glm::dvec3>> route;
+                if (target.zoneId == "bridge-underside"
+                    && mainBridge != bridges.end())
+                {
+                    double bridgeGround = 0.0;
+                    for (const double elevation : mainBridge->groundElevationsMeters)
+                        bridgeGround += elevation;
+                    bridgeGround /= static_cast<double>(
+                        mainBridge->groundElevationsMeters.size());
+                    const double deckBottom =
+                        bridgeGround + bridgeDeckUndersideHeightMeters;
+                    route = aerosimlab::terrain::PlanMapFlightRouteUnderBridge(
+                        terrainGrid_, routeBuildings_, *mainBridge, bridgePiers,
+                        routeStart, target.approachPositionMeters, deckBottom,
+                        deckBottom + bridgeDeckThicknessMeters);
+                }
+                else
+                {
+                    route = aerosimlab::terrain::PlanMapFlightRoute(
+                        terrainGrid_, routeBuildings_, routeStart,
+                        target.approachPositionMeters);
+                }
                 // 접근점이 이웃 건물과 너무 가까우면 촬영 가능한 거리 안에서 바깥으로 옮긴다.
                 const double currentDistance = glm::length(
                     target.approachPositionMeters - target.surface.centerMeters);

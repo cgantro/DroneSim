@@ -213,14 +213,56 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
     bridgeCenter /= static_cast<double>(tancheonBridge->outlineMeters.size());
     bridgeGround /= static_cast<double>(tancheonBridge->groundElevationsMeters.size());
     const double centerGround = terrain.HeightAtLocalMeters({0.0, 0.0});
+    const double bridgeDeckBottom = bridgeGround + 6.0;
+    const double bridgeDeckTop = bridgeDeckBottom + 0.8;
     const glm::dvec3 bridgeApproach = terrain.ToSimulationPositionMeters(
         {bridgeCenter.x, bridgeCenter.y,
             bridgeGround - centerGround + 4.8});
-    EXPECT_TRUE(PlanMapFlightRoute(
-        terrain, buildings, routeStart, bridgeApproach).has_value())
+    const auto bridgePiers = EstimateMapBridgePiers(
+        *tancheonBridge, terrain, bridgeDeckBottom);
+    const auto bridgeRoute = PlanMapFlightRouteUnderBridge(
+        terrain, buildings, *tancheonBridge, bridgePiers,
+        routeStart, bridgeApproach, bridgeDeckBottom, bridgeDeckTop);
+    ASSERT_TRUE(bridgeRoute.has_value())
         << "탄천교 하부 routeStart=" << routeStart.x << "," << routeStart.y
         << "," << routeStart.z << " goal=" << bridgeApproach.x << ","
         << bridgeApproach.y << "," << bridgeApproach.z;
+    std::vector<MapBuilding> bridgeCollisionShapes{{
+        .outlineMeters = tancheonBridge->outlineMeters,
+        .groundElevationsMeters = std::vector<double>(
+            tancheonBridge->outlineMeters.size(), bridgeDeckBottom),
+        .heightMeters = bridgeDeckTop - bridgeDeckBottom}};
+    for (const auto& pier : bridgePiers)
+        bridgeCollisionShapes.push_back({
+            .outlineMeters = pier.outlineMeters,
+            .groundElevationsMeters = std::vector<double>(
+                pier.outlineMeters.size(), pier.bottomElevationMeters),
+            .heightMeters = pier.topElevationMeters - pier.bottomElevationMeters});
+    bool routeHitsBridgeStructure = false;
+    glm::dvec3 previous = routeStart;
+    for (const glm::dvec3& waypoint : *bridgeRoute)
+    {
+        const double segmentLength = glm::length(waypoint - previous);
+        const int sampleCount = std::max(1,
+            static_cast<int>(std::ceil(segmentLength / 0.5)));
+        for (int sample = 0; sample <= sampleCount; ++sample)
+        {
+            const glm::dvec3 point = glm::mix(previous, waypoint,
+                static_cast<double>(sample) / sampleCount);
+            if (std::any_of(bridgeCollisionShapes.begin(), bridgeCollisionShapes.end(),
+                    [&point](const MapBuilding& shape)
+                    { return ContainsMapBuildingVolume(shape, point); }))
+            {
+                routeHitsBridgeStructure = true;
+                break;
+            }
+        }
+        if (routeHitsBridgeStructure)
+            break;
+        previous = waypoint;
+    }
+    EXPECT_FALSE(routeHitsBridgeStructure)
+        << "다리 하부 경로가 상판 또는 추정 교각 충돌 영역을 통과합니다.";
 
     const std::string helio110BuildingId = "692770092";
     const auto helio110 = std::find_if(visibleBuildings.begin(), visibleBuildings.end(),

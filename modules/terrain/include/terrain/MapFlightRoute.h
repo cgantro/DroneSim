@@ -1,6 +1,7 @@
 #pragma once
 
 #include "terrain/MapBuildings.h"
+#include "terrain/MapBridges.h"
 
 #include <optional>
 #include <vector>
@@ -29,6 +30,18 @@ struct MapBuildingFacadeRoute
     const glm::dvec3& goalMeters,
     double buildingClearanceMeters = 3.0,
     double minimumTransitAltitudeMeters = 0.0);
+
+/** @brief 교량 상판을 피해 하부 접근 위치까지 이어지는 경로를 만든다. */
+[[nodiscard]] std::optional<std::vector<glm::dvec3>> PlanMapFlightRouteUnderBridge(
+    const TerrainGrid& terrain,
+    const std::vector<MapBuilding>& buildings,
+    const MapBridgeFootprint& bridge,
+    const std::vector<MapBridgePier>& piers,
+    const glm::dvec3& startMeters,
+    const glm::dvec3& goalMeters,
+    double deckBottomMeters,
+    double deckTopMeters,
+    double buildingClearanceMeters = 3.0);
 
 /** @brief 건물 둘레를 살펴 출발 위치에서 닿을 수 있는 외벽 경로를 찾는다. */
 [[nodiscard]] std::optional<MapBuildingFacadeRoute> PlanMapFlightRouteToFacade(
