@@ -468,6 +468,8 @@ private:
     std::unique_ptr<aerosimlab::graphics::Texture2D> buildingFacadeTexture_;
     aerosimlab::graphics::Material missionRouteMaterial_{
         glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
+    aerosimlab::graphics::Material inspectionTargetMaterial_{
+        glm::vec4{1.0F, 0.58F, 0.12F, 1.0F}, 0.0F, 0.48F};
     std::mt19937 windGenerator_{0x44524F4EU};
     glm::dvec3 windVelocityMetersPerSecond_{0.0};
     glm::dvec3 windTargetMetersPerSecond_{0.0};

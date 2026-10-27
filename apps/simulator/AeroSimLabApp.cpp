@@ -1979,7 +1979,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             buildingFacadeTexture_.get());
 
     const auto drawRouteSegment = [this, &view, &projection, &cameraPosition](
-        const glm::dvec3& startMeters, const glm::dvec3& endMeters)
+        const glm::dvec3& startMeters, const glm::dvec3& endMeters,
+        const aerosimlab::graphics::Material& material)
     {
         const glm::vec3 start = ToRenderPosition(startMeters);
         const glm::vec3 end = ToRenderPosition(endMeters);
@@ -1998,11 +1999,13 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         orientation[0] = glm::vec4{localX, 0.0F};
         orientation[1] = glm::vec4{localY, 0.0F};
         orientation[2] = glm::vec4{localZ, 0.0F};
+        constexpr float routeThicknessMeters = 0.12F;
         const glm::mat4 transform = glm::translate(
             glm::mat4{1.0F}, (start + end) * 0.5F)
             * orientation
-            * glm::scale(glm::mat4{1.0F}, glm::vec3{0.04F, length, 0.04F});
-        DrawCube(transform, cameraPosition, missionRouteMaterial_, view, projection);
+            * glm::scale(glm::mat4{1.0F},
+                glm::vec3{routeThicknessMeters, length, routeThicknessMeters});
+        DrawCube(transform, cameraPosition, material, view, projection);
     };
 
     if (showMissionGuides && InspectionMissionIsActive()
@@ -2013,10 +2016,37 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         glm::dvec3 previous = target.routeStartMeters;
         for (const glm::dvec3& waypoint : target.routeWaypointsMeters)
         {
-            drawRouteSegment(previous, waypoint);
+            drawRouteSegment(previous, waypoint, missionRouteMaterial_);
             previous = waypoint;
         }
-        drawRouteSegment(previous, target.approachPositionMeters);
+        drawRouteSegment(previous, target.approachPositionMeters, missionRouteMaterial_);
+
+        const glm::dvec3 verticalAxis = glm::normalize(glm::cross(
+            target.surface.normal, target.surface.widthAxis));
+        const glm::dvec3 halfWidth = target.surface.widthAxis
+            * (target.surface.widthMeters * 0.5);
+        const glm::dvec3 halfHeight = verticalAxis
+            * (target.surface.heightMeters * 0.5);
+        const glm::dvec3 center = target.surface.centerMeters;
+        const std::array<glm::dvec3, 4> captureCorners{
+            center - halfWidth - halfHeight,
+            center + halfWidth - halfHeight,
+            center + halfWidth + halfHeight,
+            center - halfWidth + halfHeight};
+        for (std::size_t corner = 0; corner < captureCorners.size(); ++corner)
+        {
+            drawRouteSegment(captureCorners[corner],
+                captureCorners[(corner + 1U) % captureCorners.size()],
+                inspectionTargetMaterial_);
+        }
+        const glm::vec3 targetMarker = ToRenderPosition(center);
+        DrawCube(glm::translate(glm::mat4{1.0F}, targetMarker)
+            * glm::scale(glm::mat4{1.0F}, glm::vec3{0.35F}),
+            cameraPosition, inspectionTargetMaterial_, view, projection);
+        const glm::vec3 approachMarker = ToRenderPosition(target.approachPositionMeters);
+        DrawCube(glm::translate(glm::mat4{1.0F}, approachMarker)
+            * glm::scale(glm::mat4{1.0F}, glm::vec3{0.65F}),
+            cameraPosition, missionRouteMaterial_, view, projection);
     }
 
     if (showMissionGuides)
@@ -2029,9 +2059,12 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             glm::dvec3 previous = mission.startPositionMeters;
             for (const glm::dvec3& waypoint : mission.routeWaypointsMeters)
             {
-                drawRouteSegment(previous, waypoint);
+                drawRouteSegment(previous, waypoint, missionRouteMaterial_);
                 previous = waypoint;
             }
+            drawRouteSegment(previous,
+                inspectionTargets_[mission.targetIndex].approachPositionMeters,
+                missionRouteMaterial_);
             const glm::vec3 marker = ToRenderPosition(
                 inspectionTargets_[mission.targetIndex].approachPositionMeters);
             DrawCube(glm::translate(glm::mat4{1.0F}, marker)
@@ -2086,7 +2119,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
                 aerosimlab::simulation::EoCameraModel::UpAxis(cameraState));
             const glm::dvec3 cameraRight = glm::normalize(
                 glm::cross(cameraForward, cameraUp));
-            constexpr double viewDistanceMeters = 1.5;
+            constexpr double viewDistanceMeters = 10.0;
             const double halfHeightMeters = viewDistanceMeters * std::tan(
                 glm::radians(cameraState.model.verticalFieldOfViewDegrees * 0.5));
             const double halfWidthMeters = halfHeightMeters
@@ -2102,8 +2135,10 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 
             for (std::size_t corner = 0; corner < corners.size(); ++corner)
             {
-                drawRouteSegment(cameraState.positionMeters, corners[corner]);
-                drawRouteSegment(corners[corner], corners[(corner + 1U) % corners.size()]);
+                drawRouteSegment(cameraState.positionMeters, corners[corner],
+                    missionRouteMaterial_);
+                drawRouteSegment(corners[corner],
+                    corners[(corner + 1U) % corners.size()], missionRouteMaterial_);
             }
         }
     }
