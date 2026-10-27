@@ -94,8 +94,12 @@ async function run() {
     await page.addInitScript(() => {
       window.__droneSimFrameTimings = [];
       window.addEventListener("error", (event) => {
+        const startupStatus = document.querySelector("#startup-status");
+        const startupMessage = document.querySelector("#startup-message");
         console.error("window 오류 위치:", event.message, event.filename,
-          event.lineno, event.colno, event.error?.stack || String(event.error));
+          event.lineno, event.colno, event.error?.stack || String(event.error),
+          "초기화 단계:", startupMessage?.textContent || "상태 없음",
+          "상태 역할:", startupStatus?.getAttribute("role") || "없음");
       });
       window.addEventListener("unhandledrejection", (event) => {
         console.error("처리되지 않은 비동기 오류:", event.reason?.stack || String(event.reason));
