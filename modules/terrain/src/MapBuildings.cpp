@@ -9,6 +9,7 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <numeric>
 #include <stdexcept>
 #include <utility>
 
@@ -224,16 +225,13 @@ std::optional<glm::dvec3> FindFirstPointOutsideMapBuildings(
     return std::nullopt;
 }
 
-MapBuildingFacade GetNearestMapBuildingFacade(
-    const MapBuilding& building, const glm::dvec2& approachPositionMeters)
+std::vector<MapBuildingFacade> GetMapBuildingFacades(const MapBuilding& building)
 {
     if (building.outlineMeters.size() < 3U
         || building.outlineMeters.size() != building.groundElevationsMeters.size()
-        || !std::isfinite(building.heightMeters) || !(building.heightMeters > 0.0)
-        || !std::isfinite(approachPositionMeters.x)
-        || !std::isfinite(approachPositionMeters.y))
+        || !std::isfinite(building.heightMeters) || !(building.heightMeters > 0.0))
     {
-        throw std::invalid_argument("건물 외곽선과 접근 위치를 확인해 주세요.");
+        throw std::invalid_argument("건물 외곽선과 높이를 확인해 주세요.");
     }
 
     for (std::size_t index = 0; index < building.outlineMeters.size(); ++index)
@@ -256,44 +254,62 @@ MapBuildingFacade GetNearestMapBuildingFacade(
         throw std::invalid_argument("건물 외곽선의 면적이 없습니다.");
 
     const bool counterClockwise = twiceSignedArea > 0.0;
-    double nearestDistanceSquared = std::numeric_limits<double>::infinity();
-    MapBuildingFacade nearestFacade;
+    std::vector<MapBuildingFacade> facades;
+    facades.reserve(building.outlineMeters.size());
     for (std::size_t index = 0; index < building.outlineMeters.size(); ++index)
     {
-        const std::size_t nextIndex =
-            (index + 1U) % building.outlineMeters.size();
+        const std::size_t nextIndex = (index + 1U) % building.outlineMeters.size();
         const glm::dvec2& start = building.outlineMeters[index];
-        const glm::dvec2 edge = building.outlineMeters[nextIndex] - start;
-        const double edgeLengthSquared = glm::dot(edge, edge);
-        if (!(edgeLengthSquared > 1.0e-12))
+        const glm::dvec2& end = building.outlineMeters[nextIndex];
+        const glm::dvec2 edge = end - start;
+        const double edgeLength = glm::length(edge);
+        if (!(edgeLength > 1.0e-6))
             continue;
 
-        const double fraction = std::clamp(glm::dot(
-            approachPositionMeters - start, edge) / edgeLengthSquared, 0.0, 1.0);
-        const glm::dvec2 closestPoint = start + edge * fraction;
-        const glm::dvec2 offset = approachPositionMeters - closestPoint;
-        const double distanceSquared = glm::dot(offset, offset);
-        if (distanceSquared >= nearestDistanceSquared)
-            continue;
-
-        const double edgeLength = std::sqrt(edgeLengthSquared);
         const glm::dvec2 widthAxis = edge / edgeLength;
         const glm::dvec2 outwardNormal = counterClockwise
             ? glm::dvec2{widthAxis.y, -widthAxis.x}
             : glm::dvec2{-widthAxis.y, widthAxis.x};
-        const glm::dvec2 edgeCenter = (start + building.outlineMeters[nextIndex]) * 0.5;
-        const double groundElevation = std::lerp(
+        const glm::dvec2 edgeCenter = (start + end) * 0.5;
+        const double groundElevation = std::midpoint(
             building.groundElevationsMeters[index],
-            building.groundElevationsMeters[nextIndex], 0.5);
-
-        nearestDistanceSquared = distanceSquared;
-        nearestFacade = {
+            building.groundElevationsMeters[nextIndex]);
+        facades.push_back({
             {edgeCenter.x, edgeCenter.y,
                 groundElevation + building.heightMeters * 0.5},
             {outwardNormal.x, outwardNormal.y, 0.0},
             {widthAxis.x, widthAxis.y, 0.0},
             edgeLength,
-            building.heightMeters};
+            building.heightMeters});
+    }
+    return facades;
+}
+
+MapBuildingFacade GetNearestMapBuildingFacade(
+    const MapBuilding& building, const glm::dvec2& approachPositionMeters)
+{
+    if (!std::isfinite(approachPositionMeters.x)
+        || !std::isfinite(approachPositionMeters.y))
+        throw std::invalid_argument("접근 위치를 확인해 주세요.");
+
+    const std::vector<MapBuildingFacade> facades = GetMapBuildingFacades(building);
+    double nearestDistanceSquared = std::numeric_limits<double>::infinity();
+    MapBuildingFacade nearestFacade;
+    for (const MapBuildingFacade& facade : facades)
+    {
+        const glm::dvec2 center{facade.centerMeters.x, facade.centerMeters.y};
+        const glm::dvec2 axis{facade.widthAxis.x, facade.widthAxis.y};
+        const double alongEdge = std::clamp(
+            glm::dot(approachPositionMeters - center, axis),
+            -facade.widthMeters * 0.5, facade.widthMeters * 0.5);
+        const glm::dvec2 closestPoint = center + axis * alongEdge;
+        const glm::dvec2 offset = approachPositionMeters - closestPoint;
+        const double distanceSquared = glm::dot(offset, offset);
+        if (distanceSquared >= nearestDistanceSquared)
+            continue;
+
+        nearestDistanceSquared = distanceSquared;
+        nearestFacade = facade;
     }
 
     if (!std::isfinite(nearestDistanceSquared))

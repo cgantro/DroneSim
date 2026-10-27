@@ -275,6 +275,7 @@ private:
         std::string facilityId;
         std::string displayName;
         std::string zoneId;
+        std::string buildingOsmId;
         aerosimlab::simulation::InspectionSurface surface;
         glm::dvec3 routeStartMeters{0.0};
         std::vector<glm::dvec3> routeWaypointsMeters;

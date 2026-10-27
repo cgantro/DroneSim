@@ -152,7 +152,6 @@ void DrawFlightStatusPanel(
     bool gamepadConnected,
     bool groundControlConnected,
     double missionDistanceMeters,
-    const std::string& inspectionFacilityId,
     const std::string& inspectionTargetName,
     const std::string& inspectionMissionStatus,
     bool missionCanStart,
@@ -175,8 +174,7 @@ void DrawFlightStatusPanel(
             static_cast<unsigned long long>(simulation.TickCount()));
         ImGui::Separator();
         ImGui::Text("정찰 대상: %s", inspectionTargetName.c_str());
-        ImGui::Text("시설물 ID: %s · 화면 확인: %s",
-            inspectionFacilityId.c_str(), CaptureStatusLabel(captureAssessment));
+        ImGui::Text("화면 확인: %s", CaptureStatusLabel(captureAssessment));
         ImGui::TextDisabled("목표가 카메라 화면에 잡히는지 보여 줍니다. 파손 여부는 사람이 영상으로 확인합니다.");
         ImGui::Text("정찰 임무: %s", inspectionMissionStatus.c_str());
         ImGui::Text("촬영 위치까지 %.1f m", missionDistanceMeters);
@@ -291,7 +289,6 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     bool gamepadConnected, bool groundControlConnected, bool cameraActive,
     int cameraImageWidth, int cameraImageHeight,
     double missionDistanceMeters,
-    const std::string& inspectionFacilityId,
     const std::string& inspectionTargetName,
     const std::string& inspectionMissionStatus, bool missionCanStart,
     const std::function<void()>& startInspectionMission,
@@ -315,7 +312,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     DrawScenePanel(renderScene);
     DrawCameraPanel(viewport, cameraActive, cameraImageWidth, cameraImageHeight, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
-        missionDistanceMeters, inspectionFacilityId, inspectionTargetName,
+        missionDistanceMeters, inspectionTargetName,
         inspectionMissionStatus,
         missionCanStart, startInspectionMission, captureAssessment);
 

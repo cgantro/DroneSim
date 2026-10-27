@@ -326,4 +326,54 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
     }
     return route;
 }
+
+std::optional<MapBuildingFacadeRoute> PlanMapFlightRouteToFacade(
+    const TerrainGrid& terrain,
+    const std::vector<MapBuilding>& buildings,
+    const MapBuilding& targetBuilding,
+    const glm::dvec3& startMeters,
+    double preferredDistanceMeters,
+    double maximumDistanceMeters,
+    double approachStepMeters,
+    double buildingClearanceMeters)
+{
+    if (!std::isfinite(startMeters.x) || !std::isfinite(startMeters.y)
+        || !std::isfinite(preferredDistanceMeters)
+        || !std::isfinite(maximumDistanceMeters)
+        || !std::isfinite(approachStepMeters)
+        || !(preferredDistanceMeters > 0.0)
+        || maximumDistanceMeters < preferredDistanceMeters
+        || !(approachStepMeters > 0.0))
+        throw std::invalid_argument("건물 접근 경로의 거리 설정을 확인해 주세요.");
+
+    std::vector<MapBuildingFacade> facades = GetMapBuildingFacades(targetBuilding);
+    const glm::dvec2 start{startMeters.x, startMeters.y};
+    std::stable_sort(facades.begin(), facades.end(),
+        [&start](const MapBuildingFacade& left, const MapBuildingFacade& right)
+        {
+            const glm::dvec2 leftOffset{
+                left.centerMeters.x - start.x, left.centerMeters.y - start.y};
+            const glm::dvec2 rightOffset{
+                right.centerMeters.x - start.x, right.centerMeters.y - start.y};
+            return glm::dot(leftOffset, leftOffset)
+                < glm::dot(rightOffset, rightOffset);
+        });
+
+    for (const MapBuildingFacade& facade : facades)
+    {
+        for (double distance = preferredDistanceMeters;
+             distance <= maximumDistanceMeters + 1.0e-9;
+             distance += approachStepMeters)
+        {
+            const glm::dvec3 approach = facade.centerMeters
+                + facade.outwardNormal * distance;
+            auto route = PlanMapFlightRoute(
+                terrain, buildings, startMeters, approach, buildingClearanceMeters);
+            if (route)
+                return MapBuildingFacadeRoute{
+                    facade, approach, std::move(*route)};
+        }
+    }
+    return std::nullopt;
+}
 }

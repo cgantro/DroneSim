@@ -886,6 +886,7 @@ void AeroSimLabApp::LoadMapFeatures()
         aerosimlab::simulation::InspectionSurface surface;
         std::vector<glm::dvec3> routeWaypoints;
         glm::dvec3 approachPosition{0.0};
+        std::string buildingOsmId;
         if (target.contains("waypoints_meters"))
         {
             routeWaypoints = aerosimlab::simulation::ParseInspectionWaypointsJson(
@@ -910,13 +911,14 @@ void AeroSimLabApp::LoadMapFeatures()
         }
         else
         {
-            const std::string buildingId =
+            buildingOsmId =
                 target.at("building_osm_id").get<std::string>();
-            const auto building = buildingsById.find(buildingId);
+            const auto building = buildingsById.find(buildingOsmId);
             if (building == buildingsById.end())
                 throw std::runtime_error("점검 계획에서 지정한 건물 자료를 찾지 못했습니다: "
-                    + buildingId);
-            displayName = building->second->name;
+                    + buildingOsmId);
+            if (displayName.empty())
+                displayName = building->second->name;
             if (displayName.empty())
                 displayName = "이름 없는 건물";
 
@@ -958,6 +960,7 @@ void AeroSimLabApp::LoadMapFeatures()
             .facilityId = facilityId,
             .displayName = displayName.empty() ? "점검 대상" : displayName,
             .zoneId = zoneId,
+            .buildingOsmId = std::move(buildingOsmId),
             .surface = surface,
             .routeWaypointsMeters = std::move(routeWaypoints),
             .approachPositionMeters = approachPosition,
@@ -1053,29 +1056,64 @@ void AeroSimLabApp::LoadMapFeatures()
         target.routeStartMeters = routeStart;
         if (target.routeAutomaticallyPlanned)
         {
-            auto route = aerosimlab::terrain::PlanMapFlightRoute(
-                terrainGrid_, routeBuildings_, routeStart,
-                target.approachPositionMeters);
-            // 외곽선이 겹친 곳에서는 선택한 벽 앞이 이웃 건물 안일 수 있다.
-            // 촬영 허용 거리 안에서 벽 바깥으로 옮겨 경로가 열리는 지점을 찾는다.
-            const double currentDistance = glm::length(
-                target.approachPositionMeters - target.surface.centerMeters);
-            constexpr double approachStepMeters = 2.0;
-            for (double distance = currentDistance + approachStepMeters;
-                 !route && distance <= target.surface.maximumDistanceMeters;
-                 distance += approachStepMeters)
+            if (!target.buildingOsmId.empty())
             {
-                const glm::dvec3 candidate = target.surface.centerMeters
-                    + target.surface.normal * distance;
-                route = aerosimlab::terrain::PlanMapFlightRoute(
-                    terrainGrid_, routeBuildings_, routeStart, candidate);
-                if (route)
-                    target.approachPositionMeters = candidate;
+                const auto building = std::find_if(routeBuildings_.begin(),
+                    routeBuildings_.end(), [&target](const auto& candidate)
+                    {
+                        return candidate.osmId == target.buildingOsmId;
+                    });
+                if (building == routeBuildings_.end())
+                    throw std::runtime_error("점검 경로에 필요한 건물 외곽선을 찾지 못했습니다: "
+                        + target.buildingOsmId);
+
+                const double preferredDistance = glm::length(
+                    target.approachPositionMeters - target.surface.centerMeters);
+                const auto facadeRoute =
+                    aerosimlab::terrain::PlanMapFlightRouteToFacade(
+                        terrainGrid_, routeBuildings_, *building, routeStart,
+                        preferredDistance, target.surface.maximumDistanceMeters);
+                if (!facadeRoute)
+                    throw std::runtime_error("점검 구역까지 도달할 수 있는 외벽 경로를 찾지 못했습니다: "
+                        + target.displayName);
+
+                target.surface.centerMeters = facadeRoute->facade.centerMeters;
+                target.surface.normal = facadeRoute->facade.outwardNormal;
+                target.surface.widthAxis = facadeRoute->facade.widthAxis;
+                target.surface.widthMeters = std::min(target.surface.widthMeters,
+                    facadeRoute->facade.widthMeters);
+                target.surface.heightMeters = std::min(target.surface.heightMeters,
+                    facadeRoute->facade.heightMeters);
+                target.approachPositionMeters = facadeRoute->approachPositionMeters;
+                target.routeWaypointsMeters.assign(facadeRoute->waypointsMeters.begin(),
+                    facadeRoute->waypointsMeters.end() - 1);
             }
-            if (!route)
-                throw std::runtime_error("점검 구역까지 건물을 피하는 경로를 찾지 못했습니다: "
-                    + target.zoneId);
-            target.routeWaypointsMeters.assign(route->begin(), route->end() - 1);
+            else
+            {
+                auto route = aerosimlab::terrain::PlanMapFlightRoute(
+                    terrainGrid_, routeBuildings_, routeStart,
+                    target.approachPositionMeters);
+                // 접근점이 이웃 건물과 너무 가까우면 촬영 가능한 거리 안에서 바깥으로 옮긴다.
+                const double currentDistance = glm::length(
+                    target.approachPositionMeters - target.surface.centerMeters);
+                constexpr double approachStepMeters = 2.0;
+                for (double distance = currentDistance + approachStepMeters;
+                     !route && distance <= target.surface.maximumDistanceMeters;
+                     distance += approachStepMeters)
+                {
+                    const glm::dvec3 candidate = target.surface.centerMeters
+                        + target.surface.normal * distance;
+                    route = aerosimlab::terrain::PlanMapFlightRoute(
+                        terrainGrid_, routeBuildings_, routeStart, candidate);
+                    if (route)
+                        target.approachPositionMeters = candidate;
+                }
+                if (!route)
+                    throw std::runtime_error(
+                        "점검 구역까지 건물을 피해 갈 경로를 찾지 못했습니다: "
+                        + target.displayName);
+                target.routeWaypointsMeters.assign(route->begin(), route->end() - 1);
+            }
         }
         routeStart = target.approachPositionMeters;
     }
@@ -1368,8 +1406,8 @@ void AeroSimLabApp::RenderFrame()
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
             camera.model.imageWidthPixels, camera.model.imageHeightPixels,
-            missionDistanceMeters, inspectionMission_.facilityId,
-            inspectionMission_.targetDisplayName, InspectionMissionStatus(),
+            missionDistanceMeters, inspectionMission_.targetDisplayName,
+            InspectionMissionStatus(),
             missionCanStart,
             [this] { static_cast<void>(RequestInspectionMission()); }, captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },

@@ -152,7 +152,7 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
 
     const std::array<std::string, 3> targetBuildingIds{
         "692770099", "692770087", "692770092"};
-    const glm::dvec2 demoStart{0.0, -9.0};
+    const glm::dvec2 demoStart{-410.0, 442.0};
     glm::dvec3 routeStart{demoStart,
         terrain.HeightAtLocalMeters(demoStart) + 0.35};
     for (const std::string& targetId : targetBuildingIds)
@@ -161,16 +161,15 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
             [&targetId](const MapBuilding& building)
             { return building.osmId == targetId; });
         ASSERT_NE(target, visibleBuildings.end());
-        const MapBuildingFacade facade = GetNearestMapBuildingFacade(
-            *target, demoStart);
-        const glm::dvec3 goal = facade.centerMeters
-            + facade.outwardNormal * 8.0;
-
-        const auto route = PlanMapFlightRoute(terrain, buildings, routeStart, goal);
-        ASSERT_TRUE(route.has_value()) << targetId;
-        ASSERT_FALSE(route->empty()) << targetId;
-        EXPECT_EQ(route->back(), goal);
-        routeStart = goal;
+        const auto facadeRoute = PlanMapFlightRouteToFacade(
+            terrain, buildings, *target, routeStart, 8.0, 20.0);
+        ASSERT_TRUE(facadeRoute.has_value()) << targetId
+            << " start=" << routeStart.x << "," << routeStart.y
+            << " facade search found no reachable approach";
+        ASSERT_FALSE(facadeRoute->waypointsMeters.empty()) << targetId;
+        EXPECT_EQ(facadeRoute->waypointsMeters.back(),
+            facadeRoute->approachPositionMeters);
+        routeStart = facadeRoute->approachPositionMeters;
     }
 }
 

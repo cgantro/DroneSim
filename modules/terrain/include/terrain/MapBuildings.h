@@ -77,4 +77,8 @@ struct MapBuildingFacade
 /** @brief 접근 위치에서 가장 가까운 실제 외곽선 변을 외벽 시험면으로 만든다. */
 [[nodiscard]] MapBuildingFacade GetNearestMapBuildingFacade(
     const MapBuilding& building, const glm::dvec2& approachPositionMeters);
+
+/** @brief 건물 외곽선의 각 변을 외벽 시험면으로 만든다. */
+[[nodiscard]] std::vector<MapBuildingFacade> GetMapBuildingFacades(
+    const MapBuilding& building);
 }

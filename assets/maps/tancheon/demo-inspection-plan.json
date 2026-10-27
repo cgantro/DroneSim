@@ -4,6 +4,7 @@
     {
       "facility_id": "osm-building-692770099",
       "zone_id": "facade-111-dong",
+      "name": "헬리오시티 111동",
       "building_osm_id": "692770099",
       "approach_distance_meters": 8.0,
       "capture": {
@@ -19,6 +20,7 @@
     {
       "facility_id": "osm-building-692770087",
       "zone_id": "facade-108-dong",
+      "name": "헬리오시티 108동",
       "building_osm_id": "692770087",
       "approach_distance_meters": 8.0,
       "capture": {
@@ -34,6 +36,7 @@
     {
       "facility_id": "osm-building-692770092",
       "zone_id": "facade-110-dong",
+      "name": "헬리오시티 110동",
       "building_osm_id": "692770092",
       "approach_distance_meters": 8.0,
       "capture": {
