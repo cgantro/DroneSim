@@ -15,6 +15,7 @@ from typing import Any
 
 
 BUILDING_LAYER = "N1A_A0010000"
+TREE_LAYER = "N1P_D0030000"
 WGS84_A = 6_378_137.0
 WGS84_F = 1.0 / 298.257222101
 E2 = WGS84_F * (2.0 - WGS84_F)
@@ -100,7 +101,7 @@ def _read_dbf_rows(data: bytes) -> list[dict[str, str]]:
         descriptor = data[position : position + 32]
         if descriptor[0] == 0x0D:
             break
-        name = descriptor[:11].split(b"\0", 1)[0].decode("ascii")
+        name = descriptor[:11].split(b"\0", 1)[0].decode("cp949", "replace")
         width = descriptor[16]
         fields.append((name, offset, width))
         offset += width
@@ -317,6 +318,27 @@ def _read_shapefile(data: bytes) -> tuple[list[list[tuple[float, float]]], tuple
     return records, bounds
 
 
+def _read_tree_points(data: bytes) -> tuple[list[tuple[float, float]], tuple[float, ...]]:
+    """수치지도 나무 점의 좌표를 읽는다."""
+    shape_type = struct.unpack_from("<i", data, 32)[0]
+    if shape_type != 1:
+        raise ValueError(f"나무 도형은 Point여야 합니다. 실제 형식: {shape_type}")
+    bounds = struct.unpack_from("<4d", data, 36)
+    points = []
+    position = 100
+    while position < len(data):
+        content_size = struct.unpack_from(">i", data, position + 4)[0] * 2
+        content = data[position + 8 : position + 8 + content_size]
+        position += 8 + content_size
+        if len(content) < 20 or struct.unpack_from("<i", content, 0)[0] == 0:
+            points.append((math.nan, math.nan))
+            continue
+        if struct.unpack_from("<i", content, 0)[0] != 1:
+            raise ValueError("나무 도형 안에 예기치 않은 형식이 있습니다.")
+        points.append(struct.unpack_from("<2d", content, 4))
+    return points, bounds
+
+
 def _clip_ring(
     ring: list[tuple[float, float]], bounds: dict[str, float]
 ) -> list[tuple[float, float]]:
@@ -430,6 +452,51 @@ def _deduplicate_site_buildings(
     return retained
 
 
+def _ring_bounds(ring: list[list[float]]) -> tuple[float, float, float, float]:
+    longitudes, latitudes = zip(*ring, strict=True)
+    return min(longitudes), min(latitudes), max(longitudes), max(latitudes)
+
+
+def _bounds_overlap_ratio(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+) -> float:
+    left = max(first[0], second[0])
+    bottom = max(first[1], second[1])
+    right = min(first[2], second[2])
+    top = min(first[3], second[3])
+    overlap = max(0.0, right - left) * max(0.0, top - bottom)
+    first_area = (first[2] - first[0]) * (first[3] - first[1])
+    second_area = (second[2] - second[0]) * (second[3] - second[1])
+    union = first_area + second_area - overlap
+    return overlap / union if union > 0.0 else 0.0
+
+
+def _ring_area(ring: list[list[float]]) -> float:
+    return abs(sum(
+        first[0] * second[1] - second[0] * first[1]
+        for first, second in zip(ring, ring[1:] + ring[:1], strict=True)
+    ) / 2.0)
+
+
+def _is_bridge_duplicate_building(
+    building: dict[str, Any], bridges: list[dict[str, Any]],
+) -> bool:
+    building_ring = building["geometry"]["coordinates"][0]
+    building_bounds = _ring_bounds(building_ring)
+    building_area = _ring_area(building_ring)
+    for bridge in bridges:
+        bridge_ring = bridge["geometry"]["coordinates"][0]
+        bridge_area = _ring_area(bridge_ring)
+        if bridge_area <= 0.0 or building_area <= 0.0:
+            continue
+        area_ratio = min(building_area, bridge_area) / max(building_area, bridge_area)
+        if (area_ratio >= 0.85
+                and _bounds_overlap_ratio(building_bounds, _ring_bounds(bridge_ring)) >= 0.9):
+            return True
+    return False
+
+
 def _read_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, Any]]:
     with zipfile.ZipFile(path) as archive:
         members = {Path(name).name.lower(): name for name in archive.namelist()}
@@ -464,6 +531,51 @@ def _read_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, Any]]:
         return features
 
 
+def _read_tree_archive(path: Path, bounds: dict[str, float]) -> list[dict[str, Any]]:
+    """1:1,000 수치지도에 표시된 나무 위치를 GeoJSON 점으로 바꾼다."""
+    with zipfile.ZipFile(path) as archive:
+        members = {Path(name).name.lower(): name for name in archive.namelist()}
+        layer = TREE_LAYER.lower()
+        shp_name, dbf_name, prj_name = (
+            members.get(layer + suffix) for suffix in (".shp", ".dbf", ".prj")
+        )
+        if not shp_name or not dbf_name or not prj_name:
+            return []
+        projection = archive.read(prj_name).decode("cp949", "replace")
+        if "Korea_2000_Central_Belt_2010" not in projection:
+            raise ValueError(f"EPSG:5186 좌표계가 아닌 도엽입니다: {path.name}")
+
+        points, _ = _read_tree_points(archive.read(shp_name))
+        rows = _read_dbf_rows(archive.read(dbf_name))
+        if len(points) != len(rows):
+            raise ValueError(f"나무 도형 수와 속성 수가 다릅니다: {path.name}")
+
+        features = []
+        for point, row in zip(points, rows, strict=True):
+            easting, northing = point
+            if not math.isfinite(easting) or not math.isfinite(northing):
+                continue
+            if not (bounds["west"] <= easting <= bounds["east"]
+                    and bounds["south"] <= northing <= bounds["north"]):
+                continue
+            identifier = row.get("UFID", "")
+            if not identifier:
+                continue
+            features.append({
+                "type": "Feature",
+                "id": identifier,
+                "properties": {
+                    "osm_id": f"ngii-tree:{identifier}",
+                    "tags": {"natural": "tree", "source": "NGII 1:1,000"},
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": list(epsg5186_to_wgs84(easting, northing)),
+                },
+            })
+        return features
+
+
 def _merge_site(
     site: dict[str, Any], official_features: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -472,25 +584,34 @@ def _merge_site(
     for feature in site["features"]:
         properties = feature.get("properties", {})
         source_id = str(properties.get("osm_id", ""))
-        if source_id.startswith(("ngii:", "fac:")):
+        if source_id.startswith(("ngii:", "ngii-tree:", "fac:")):
             previous_official[source_id] = properties
     source_features = [
         feature for feature in site["features"]
         if not str(feature.get("properties", {}).get("osm_id", "")).startswith(
-            ("ngii:", "fac:")
+            ("ngii:", "ngii-tree:", "fac:")
         )
     ]
     source_features = _deduplicate_site_buildings(source_features)
     osm_buildings = []
+    bridge_features = []
     for feature in source_features:
         properties = feature.get("properties", {})
         geometry = feature.get("geometry", {})
         if (geometry.get("type") == "Polygon"
                 and properties.get("tags", {}).get("building")):
             osm_buildings.append(feature)
+        if (geometry.get("type") == "Polygon"
+                and properties.get("tags", {}).get("man_made") == "bridge"):
+            bridge_features.append(feature)
 
     matched_osm_ids: set[str] = set()
     official_features = _deduplicate_footprints(official_features)
+    # 교량 상판과 같은 외곽선이 수치지도 건물로 중복 등록되면 하부 경로가 막힌다.
+    official_features = [
+        feature for feature in official_features
+        if not _is_bridge_duplicate_building(feature, bridge_features)
+    ]
     for official in official_features:
         source_id = str(official.get("properties", {}).get("osm_id", ""))
         old_properties = previous_official.get(source_id, {})
@@ -527,6 +648,9 @@ def _merge_site(
             official["properties"] = {
                 **source_properties,
                 **official_properties,
+                "osm_id": source_properties.get(
+                    "osm_id", official_properties.get("osm_id", "")
+                ),
                 "tags": {**source_tags, **official_tags},
             }
             official["geometry"] = {
@@ -558,8 +682,10 @@ def convert(
         raise ValueError(f"수치지도 ZIP이 없습니다: {source_dir}")
 
     official_features = []
+    tree_features = []
     for source in source_files:
         official_features.extend(_read_archive(source, bounds))
+        tree_features.extend(_read_tree_archive(source, bounds))
     if building_data_path and building_data_path.exists():
         if not register_path or not legal_dong_path:
             raise ValueError("건축물대장 CSV와 법정동 코드 자료도 지정해야 합니다.")
@@ -574,6 +700,11 @@ def convert(
 
     site = json.loads(site_path.read_text(encoding="utf-8"))
     merged = _merge_site(site, official_features)
+    retained_features = [
+        feature for feature in merged["features"]
+        if not str(feature.get("properties", {}).get("osm_id", "")).startswith("ngii-tree:")
+    ]
+    merged["features"] = retained_features + tree_features
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", newline="\n", dir=output_path.parent,

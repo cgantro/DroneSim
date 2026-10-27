@@ -100,6 +100,47 @@ class NgiiBuildingConversionTests(unittest.TestCase):
 
             self.assertEqual(output.read_text(encoding="utf-8"), "keep existing data")
 
+    def test_bridge_deck_is_not_imported_as_a_building(self):
+        bridge_ring = [
+            [127.1000, 37.4930], [127.1030, 37.4930],
+            [127.1030, 37.4940], [127.1000, 37.4940],
+            [127.1000, 37.4930],
+        ]
+        duplicate_ring = [
+            [127.10001, 37.49301], [127.10299, 37.49301],
+            [127.10299, 37.49399], [127.10001, 37.49399],
+            [127.10001, 37.49301],
+        ]
+        bridge = {
+            "type": "Feature",
+            "properties": {"osm_id": "bridge-1", "tags": {"man_made": "bridge"}},
+            "geometry": {"type": "Polygon", "coordinates": [bridge_ring]},
+        }
+        duplicate = {
+            "type": "Feature",
+            "properties": {"osm_id": "ngii:deck-1", "tags": {"building": "yes"}},
+            "geometry": {"type": "Polygon", "coordinates": [duplicate_ring]},
+        }
+        separate_building = {
+            "type": "Feature",
+            "properties": {"osm_id": "ngii:house-1", "tags": {"building": "yes"}},
+            "geometry": {"type": "Polygon", "coordinates": [[
+                [127.1040, 37.4930], [127.1042, 37.4930],
+                [127.1042, 37.4932], [127.1040, 37.4932],
+                [127.1040, 37.4930],
+            ]]},
+        }
+
+        result = converter._merge_site(
+            {"type": "FeatureCollection", "features": [bridge]},
+            [duplicate, separate_building],
+        )
+        ids = {feature["properties"]["osm_id"] for feature in result["features"]}
+
+        self.assertIn("bridge-1", ids)
+        self.assertIn("ngii:house-1", ids)
+        self.assertNotIn("ngii:deck-1", ids)
+
     @staticmethod
     def _write_building_archive(path, ring):
         xs, ys = zip(*ring)
