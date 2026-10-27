@@ -1843,8 +1843,8 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     const float yaw = static_cast<float>(state.yawRadians);
     const glm::vec3 forward{std::cos(yaw), 0.0F, -std::sin(yaw)};
     const glm::vec3 up{0.0F, 1.0F, 0.0F};
-    constexpr double followDistanceMeters = 2.8;
-    constexpr double followHeightMeters = 1.8;
+    constexpr double followDistanceMeters = 2.0;
+    constexpr double followHeightMeters = 1.25;
     glm::dvec3 observerPositionMeters = state.positionMeters
         - glm::dvec3{std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0}
             * followDistanceMeters
