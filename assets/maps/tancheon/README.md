@@ -92,9 +92,9 @@ S-Map 화면에서 서울의 3D 건물과 지형을 볼 수 있지만, 화면에
 
 현재 받은 공개 DEM 파일의 격자 간격은 90m입니다. 압축 파일 안의 원본 격자 크기를 읽어 확인했습니다. 5m 간격 지형 격자는 이 자료에 1:1,000 수치지도의 등고선과 표고점을 더해 보간한 결과이며, 실제 5m DEM과 다릅니다.
 
-자료 안내는 서로 맞지 않습니다. 경기기후플랫폼의 2026년 9월 답변은 국토정보플랫폼에서 5m DEM을 공개한다고 안내합니다. 하지만 탄천교를 검색해 열린 국토정보플랫폼의 `공개DEM` 목록에는 `2025 수원 37709` 등 연도별 공개 DEM만 표시됐고, 이미 받은 2025년 파일은 90m였습니다. 이 화면만으로 별도의 5m 자료가 없다고 단정할 수는 없습니다. 현재 5m 원본 파일이나 다운로드 확인 자료는 없습니다.
+자료 안내는 서로 다릅니다. 경기기후플랫폼의 2026년 9월 답변은 국토정보플랫폼에서 5m DEM을 공개한다고 안내합니다. 반면 국토지리정보원 안내 책자와 LX 공간정보 안심구역 자료 목록은 5m DEM을 일반 다운로드가 아닌 공개제한 자료로 분류합니다. 안심구역 자료 목록에는 전국 5m DEM이 있지만, 이용 신청과 심의, 분석센터 방문이 필요하고 분석 결과도 별도 반출 심의를 거쳐야 내려받을 수 있습니다. 따라서 경기기후플랫폼 답변만으로 5m DEM을 바로 내려받을 수 있다고 판단하지 않습니다.
 
-국토정보플랫폼의 자료 신청·다운로드 경로를 다시 확인해야 합니다. 당시 열린 화면에는 로그인 항목이 표시됐고 다운로드 동작도 시작되지 않았습니다. 로그인 상태가 확인되고 실제 파일을 받을 때까지 5m DEM을 확보한 것으로 취급하지 않습니다. [경기기후플랫폼의 5m DEM 안내](https://climate.gg.go.kr/ols/open-request/read?pstSeCd=BBS005&pstSn=558) · [국토정보플랫폼](https://map.ngii.go.kr/ms/map/NlipMap.do?tabGb=total) · [LX 공간정보 안심구역 자료·절차](https://lx.or.kr/spaceSecurity/sub_03.html) · [국토지리정보원 DEM 안내](https://www.ngii.go.kr/lib/file/pr_01.pdf) · [공개 DEM 자료](https://www.data.go.kr/data/15059920/fileData.do)
+탄천교를 검색해 열린 국토정보플랫폼의 `공개DEM` 목록에는 `2025 수원 37709` 등 연도별 공개 DEM이 표시됐고, 이미 받은 2025년 파일은 90m였습니다. 현재 5m 원본 파일은 없습니다. 국토정보플랫폼에서 실제로 5m 자료를 내려받을 수 있는지 확인하고, 제공되지 않으면 공간정보 안심구역에 이용 신청해야 합니다. [경기기후플랫폼의 5m DEM 안내](https://climate.gg.go.kr/ols/open-request/read?pstSeCd=BBS005&pstSn=558) · [국토정보플랫폼](https://map.ngii.go.kr/ms/map/NlipMap.do?tabGb=total) · [LX 공간정보 안심구역 자료·절차](https://lx.or.kr/spaceSecurity/sub_03.html) · [안심구역 신청·이용 절차](https://www.datafreezone.or.kr/center_02.do) · [국토지리정보원 DEM 안내](https://www.ngii.go.kr/lib/file/pr_01.pdf) · [공개 DEM 자료](https://www.data.go.kr/data/15059920/fileData.do)
 
 ## 좌표와 높이
 
