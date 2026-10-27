@@ -381,6 +381,8 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     DEPENDS "${_aerosimlab_build_revision_header}")
   add_dependencies(aerosimlab_simulator_app aerosimlab_build_revision)
   target_include_directories(aerosimlab_simulator_app PRIVATE "${_aerosimlab_generated_dir}")
+  set_source_files_properties(apps/simulator/BuildRevision.cpp PROPERTIES
+    OBJECT_DEPENDS "${_aerosimlab_build_revision_header}")
   target_link_libraries(aerosimlab_simulator_app PUBLIC
     aerosimlab_graphics
     aerosimlab_simulation_core
