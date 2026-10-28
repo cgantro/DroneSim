@@ -24,17 +24,21 @@ function(aerosimlab_add_ecs_dependencies)
 endfunction()
 
 function(aerosimlab_add_airsim_dependency)
-  set(EIGEN_BUILD_DOC OFF CACHE BOOL "Disable Eigen documentation" FORCE)
-  set(_aerosimlab_build_testing ${BUILD_TESTING})
-  set(BUILD_TESTING OFF)
   FetchContent_Declare(
     Eigen3
     GIT_REPOSITORY https://eigen.googlesource.com/mirror
     GIT_TAG 3.4.0
     GIT_SHALLOW TRUE
   )
-  FetchContent_MakeAvailable(Eigen3)
-  set(BUILD_TESTING ${_aerosimlab_build_testing})
+  FetchContent_GetProperties(Eigen3)
+  if(NOT eigen3_POPULATED)
+    FetchContent_Populate(Eigen3)
+  endif()
+  # 물리에 필요한 것은 Eigen 헤더뿐이므로, Eigen의 문서·시험·설치 규칙은 구성하지 않는다.
+  add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
+  set_target_properties(Eigen3::Eigen PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${eigen3_SOURCE_DIR}"
+  )
 
   set(_airsim_commit 1ca93f6f77e4e8a39b2b241c1fe2764da4d7dd41)
   set(_airsim_archive_name "AirSim-${_airsim_commit}.tar.gz")

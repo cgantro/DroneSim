@@ -9,6 +9,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "AEROSIMLAB_BUILD_GRAPHICS": "ON",
+        "BUILD_TESTING": "OFF",
         "VCPKG_MANIFEST_FEATURES": "desktop-video"
       }
     },
@@ -57,7 +58,6 @@
       "inherits": "ninja-release",
       "binaryDir": "${sourceDir}/build-emscripten-single-thread",
       "cacheVariables": {
-        "BUILD_TESTING": "OFF",
         "VCPKG_MANIFEST_FEATURES": ""
       }
     }
