@@ -341,6 +341,46 @@ void DrawFlightStatusPanel(
                 static_cast<unsigned long long>(metrics.deliveredMessages),
                 static_cast<unsigned long long>(metrics.forwardedMessages),
                 static_cast<unsigned long long>(metrics.droppedMessages));
+            if (ImGui::CollapsingHeader("현재 라우팅 경로"))
+            {
+                const auto droneIds = simulation.DroneIds();
+                constexpr ImGuiTableFlags routeTableFlags =
+                    ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
+                    | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp;
+                if (ImGui::BeginTable("FleetRoutes", 4, routeTableFlags,
+                        ImVec2(0.0F, 150.0F)))
+                {
+                    ImGui::TableSetupColumn("보내는 드론");
+                    ImGui::TableSetupColumn("목적지");
+                    ImGui::TableSetupColumn("다음 홉");
+                    ImGui::TableSetupColumn("연결 방식");
+                    ImGui::TableHeadersRow();
+                    for (const simulation::DroneId source : droneIds)
+                    {
+                        for (const simulation::DroneId destination : droneIds)
+                        {
+                            if (source == destination)
+                                continue;
+
+                            const auto nextHop = formationNetwork->NextHop(
+                                source, destination);
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::TextUnformatted(DroneName(source).c_str());
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::TextUnformatted(DroneName(destination).c_str());
+                            ImGui::TableSetColumnIndex(2);
+                            ImGui::TextUnformatted(nextHop
+                                ? DroneName(*nextHop).c_str() : "없음");
+                            ImGui::TableSetColumnIndex(3);
+                            const char* routeKind = !nextHop ? "경로 없음"
+                                : *nextHop == destination ? "직접 연결" : "중계";
+                            ImGui::TextUnformatted(routeKind);
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+            }
             const auto events = formationNetwork->Events();
             const std::size_t visibleEvents = std::min<std::size_t>(events.size(), 4U);
             for (std::size_t offset = 0; offset < visibleEvents; ++offset)
