@@ -23,6 +23,9 @@ if(MSVC)
   add_link_options("$<$<CONFIG:Release>:/DEBUG>")
 endif()
 
+if(POLICY CMP0135)
+  cmake_policy(SET CMP0135 NEW)
+endif()
 include(CTest)
 include(cmake/Dependencies.cmake)
 option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
@@ -123,10 +126,8 @@ if(NOT EMSCRIPTEN)
   target_sources(aerosimlab_communication PRIVATE modules/communication/src/UdpSocket.cpp)
 endif()
 target_include_directories(aerosimlab_communication PUBLIC modules/communication/include)
-target_link_libraries(aerosimlab_communication PUBLIC
-  aerosimlab_simulation_core
-  nlohmann_json::nlohmann_json
-)
+target_link_libraries(aerosimlab_communication PUBLIC aerosimlab_simulation_core)
+target_link_libraries(aerosimlab_communication PRIVATE nlohmann_json::nlohmann_json)
 if(WIN32)
   target_link_libraries(aerosimlab_communication PUBLIC ws2_32)
 endif()
@@ -149,9 +150,11 @@ if(NOT EMSCRIPTEN AND (AEROSIMLAB_BUILD_GRAPHICS OR BUILD_TESTING))
     target_compile_definitions(aerosimlab_media PRIVATE
       "AEROSIMLAB_GSTREAMER_PLUGIN_DIR=\"${AEROSIMLAB_GSTREAMER_PLUGIN_DIR}\""
       "AEROSIMLAB_GSTREAMER_BIN_DIR=\"${AEROSIMLAB_GSTREAMER_BIN_DIR}\"")
-    target_link_libraries(aerosimlab_media PUBLIC aerosimlab_sensor aerosimlab_gstreamer)
+    target_link_libraries(aerosimlab_media PUBLIC aerosimlab_sensor
+      PRIVATE aerosimlab_gstreamer)
   else()
-    target_link_libraries(aerosimlab_media PUBLIC aerosimlab_sensor PkgConfig::GSTREAMER)
+    target_link_libraries(aerosimlab_media PUBLIC aerosimlab_sensor
+      PRIVATE PkgConfig::GSTREAMER)
   endif()
 
   add_library(aerosimlab_vision STATIC
@@ -383,7 +386,8 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   )
   if(NOT EMSCRIPTEN)
     target_link_libraries(aerosimlab_simulator_app PRIVATE
-      aerosimlab_vision aerosimlab_media aerosimlab_imgui opencv_videoio Threads::Threads)
+      aerosimlab_vision aerosimlab_media aerosimlab_imgui opencv_videoio
+      Threads::Threads)
   endif()
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -647,6 +651,8 @@ if(BUILD_TESTING)
       target_link_libraries(aerosimlab_simulator_integration_tests PRIVATE
         aerosimlab_simulator_app
         aerosimlab_ground_control_client
+        nlohmann_json::nlohmann_json
+        opencv_videoio
         GTest::gtest_main
       )
       gtest_discover_tests(aerosimlab_simulator_integration_tests

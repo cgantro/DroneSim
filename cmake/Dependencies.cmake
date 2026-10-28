@@ -36,13 +36,21 @@ function(aerosimlab_add_airsim_dependency)
   FetchContent_MakeAvailable(Eigen3)
   set(BUILD_TESTING ${_aerosimlab_build_testing})
 
+  set(_airsim_commit 1ca93f6f77e4e8a39b2b241c1fe2764da4d7dd41)
+  set(_airsim_archive_name "AirSim-${_airsim_commit}.tar.gz")
+  set(_airsim_download_dir "${CMAKE_BINARY_DIR}/_deps/airsim-download")
   FetchContent_Declare(
     AirSim
-    GIT_REPOSITORY https://github.com/microsoft/AirSim.git
-    GIT_TAG 1ca93f6f77e4e8a39b2b241c1fe2764da4d7dd41
-    GIT_SHALLOW FALSE
+    URL "https://codeload.github.com/microsoft/AirSim/tar.gz/${_airsim_commit}"
+    URL_HASH SHA256=C7A349C097AA7507AD908C2FBEFF0ABB071D92BCA5032B35B5A00F02576991EB
+    DOWNLOAD_DIR "${_airsim_download_dir}"
+    DOWNLOAD_NAME "${_airsim_archive_name}"
   )
   FetchContent_MakeAvailable(AirSim)
+  # 압축 파일은 헤더를 풀고 나면 필요 없으므로 빌드 폴더에 남기지 않는다.
+  file(REMOVE
+    "${_airsim_download_dir}/${_airsim_archive_name}"
+    "${CMAKE_BINARY_DIR}/_deps/airsim-subbuild/airsim-populate-prefix/src/archive.tar")
 
   add_library(aerosimlab_airsim INTERFACE)
   target_include_directories(aerosimlab_airsim SYSTEM INTERFACE
