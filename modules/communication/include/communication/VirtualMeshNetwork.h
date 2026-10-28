@@ -52,6 +52,8 @@ struct VirtualMeshSettings
     std::uint64_t helloIntervalTicks = 60;
     std::uint64_t neighborTimeoutTicks = 180;
     std::uint64_t linkLatencyTicks = 1;
+    /** @brief 링크마다 기본 지연에 더할 수 있는 최대 무작위 Tick 수다. */
+    std::uint32_t linkLatencyJitterTicks = 0;
     std::uint64_t routeLifetimeTicks = 300;
     std::uint32_t maximumHops = 5;
     double packetLossProbability = 0.0;

@@ -89,6 +89,73 @@ TEST(VirtualMeshNetworkTests, RoutesProbeAndAcknowledgementAcrossMesh)
     }));
 }
 
+TEST(VirtualMeshNetworkTests, AppliesSeededLatencyJitterAndRepeatsIt)
+{
+    const auto collectLatencies = []
+    {
+        auto settings = QuickSettings();
+        settings.maximumLinkRangeMeters = 100.0;
+        settings.linkLatencyTicks = 2U;
+        settings.linkLatencyJitterTicks = 4U;
+        settings.randomSeed = 17U;
+
+        VirtualMeshNetwork network{settings};
+        const std::array nodes{
+            NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+            NetworkNodeSnapshot{2, {50.0, 0.0, 10.0}}};
+        network.UpdateNodes(nodes, {});
+        static_cast<void>(AdvanceTicks(network, 0, 15));
+        EXPECT_TRUE(network.Send(1, 2, 0U, "status", "prime"));
+        const auto primingDelivery = AdvanceTicks(network, 16U, 40U);
+        EXPECT_EQ(primingDelivery.size(), 1U);
+        if (primingDelivery.size() != 1U)
+            return std::vector<std::uint64_t>{};
+
+        std::vector<std::uint64_t> latencies;
+        std::uint64_t currentTick = 40U;
+        for (std::uint32_t sequence = 1U; sequence <= 16U; ++sequence)
+        {
+            network.Advance(currentTick);
+            const std::uint64_t sentAtTick = currentTick;
+            EXPECT_TRUE(network.Send(1, 2, sequence, "status", "sample"));
+
+            bool delivered = false;
+            for (std::uint64_t tick = sentAtTick + 1U;
+                 tick <= sentAtTick + 16U; ++tick)
+            {
+                network.Advance(tick);
+                if (!network.DeliveredMessages().empty())
+                {
+                    EXPECT_EQ(network.DeliveredMessages().size(), 1U);
+                    if (network.DeliveredMessages().size() != 1U)
+                        return std::vector<std::uint64_t>{};
+                    latencies.push_back(
+                        network.DeliveredMessages().front().deliveredAtTick - sentAtTick);
+                    currentTick = tick;
+                    delivered = true;
+                    break;
+                }
+            }
+            EXPECT_TRUE(delivered) << "메시지가 제한 시간 안에 도착하지 않았습니다.";
+            if (!delivered)
+                return std::vector<std::uint64_t>{};
+        }
+        return latencies;
+    };
+
+    const auto firstRun = collectLatencies();
+    const auto repeatedRun = collectLatencies();
+    ASSERT_EQ(firstRun.size(), 16U);
+    EXPECT_EQ(firstRun, repeatedRun);
+    EXPECT_TRUE(std::all_of(firstRun.begin(), firstRun.end(),
+        [](std::uint64_t latency)
+        {
+            return latency >= 2U && latency <= 6U;
+        })) << ::testing::PrintToString(firstRun);
+    EXPECT_LT(*std::min_element(firstRun.begin(), firstRun.end()),
+        *std::max_element(firstRun.begin(), firstRun.end()));
+}
+
 TEST(VirtualMeshNetworkTests, ComparesDirectLeaderAndAdaptiveMeshRouting)
 {
     const std::array lineNodes{

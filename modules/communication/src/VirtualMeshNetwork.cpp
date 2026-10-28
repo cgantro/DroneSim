@@ -537,10 +537,14 @@ void VirtualMeshNetwork::Transmit(
         return;
     }
 
-    randomState_ ^= randomState_ << 13U;
-    randomState_ ^= randomState_ >> 17U;
-    randomState_ ^= randomState_ << 5U;
-    const double randomValue = static_cast<double>(randomState_)
+    const auto drawRandomValue = [this]
+    {
+        randomState_ ^= randomState_ << 13U;
+        randomState_ ^= randomState_ >> 17U;
+        randomState_ ^= randomState_ << 5U;
+        return randomState_;
+    };
+    const double randomValue = static_cast<double>(drawRandomValue())
         / static_cast<double>(std::numeric_limits<std::uint32_t>::max());
     if (randomValue < settings_.packetLossProbability)
     {
@@ -550,9 +554,23 @@ void VirtualMeshNetwork::Transmit(
         return;
     }
 
+    std::uint64_t latencyTicks = std::max<std::uint64_t>(
+        settings_.linkLatencyTicks, 1U);
+    const std::uint64_t maximumTick = std::numeric_limits<std::uint64_t>::max();
+    if (settings_.linkLatencyJitterTicks > 0U)
+    {
+        const std::uint64_t jitterRange =
+            static_cast<std::uint64_t>(settings_.linkLatencyJitterTicks) + 1U;
+        const std::uint64_t jitterTicks = drawRandomValue() % jitterRange;
+        latencyTicks = latencyTicks > maximumTick - jitterTicks
+            ? maximumTick : latencyTicks + jitterTicks;
+    }
+    const std::uint64_t dueTick = currentTick_ > maximumTick - latencyTicks
+        ? maximumTick : currentTick_ + latencyTicks;
+
     packet.sender = sender;
     transmissions_.push_back({
-        currentTick_ + std::max<std::uint64_t>(settings_.linkLatencyTicks, 1U),
+        dueTick,
         nextTransmissionOrder_++, sender, receiver, std::move(packet)});
 }
 
