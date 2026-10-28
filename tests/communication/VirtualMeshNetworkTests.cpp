@@ -432,60 +432,84 @@ TEST(VirtualMeshNetworkTests, RuntimePacketLossDropsMessages)
     }));
 }
 
-TEST(VirtualMeshNetworkTests, RetriesRouteUntilDestinationAcknowledges)
+TEST(VirtualMeshNetworkTests, RetriesImportantMessagesUntilDestinationAcknowledges)
 {
-    VirtualMeshNetwork network{QuickSettings()};
+    auto settings = QuickSettings();
+    settings.reliableRetryIntervalTicks = 5U;
+    settings.maximumReliableAttempts = 4U;
+    VirtualMeshNetwork network{settings};
     const std::array nodes{
         NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
         NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}}};
     network.UpdateNodes(nodes, {});
-    static_cast<void>(AdvanceTicks(network, 0, 5));
+    static_cast<void>(AdvanceTicks(network, 0U, 3U));
+    ASSERT_TRUE(network.Send(1U, 2U, 1U, "route_probe", {}));
+    static_cast<void>(AdvanceTicks(network, 4U, 10U));
     network.SetPacketLossProbability(1.0);
 
     constexpr std::uint32_t routeSequence = 7U;
-    constexpr std::uint64_t retryIntervalTicks = 60U;
-    ASSERT_TRUE(network.Send(1, 2, routeSequence, "fleet_route", "route-data"));
-    network.Advance(6U);
+    const auto messageId = network.SendReliable(
+        1, 2, routeSequence, "fleet_route", "route-data");
+    ASSERT_TRUE(messageId.has_value());
+    network.Advance(11U);
     EXPECT_TRUE(network.DeliveredMessages().empty());
     EXPECT_GT(network.Metrics().droppedMessages, 0U);
     network.SetPacketLossProbability(0.0);
 
-    std::uint64_t lastTransmissionTick = 5U;
-    std::uint32_t transmissions = 1U;
-    bool acknowledged = false;
-    std::uint32_t receivedRouteCount = 0U;
+    const auto delivered = AdvanceTicks(network, 12U, 29U);
+    ASSERT_EQ(delivered.size(), 1U);
+    EXPECT_EQ(delivered.front().message.id, *messageId);
+    EXPECT_EQ(delivered.front().message.payload, "route-data");
+    EXPECT_EQ(network.Metrics().reliableRetries, 1U);
+    EXPECT_EQ(network.Metrics().reliableAcknowledgements, 1U);
+    EXPECT_EQ(network.Metrics().reliableFailures, 0U);
+}
 
-    for (std::uint64_t tick = 7U; tick <= 100U && !acknowledged; ++tick)
-    {
-        network.Advance(tick);
-        for (const DeliveredMeshMessage& delivered : network.DeliveredMessages())
-        {
-            if (delivered.message.kind == "fleet_route"
-                && delivered.message.sequence == routeSequence)
-            {
-                ++receivedRouteCount;
-                static_cast<void>(network.Send(delivered.message.destination,
-                    delivered.message.source, routeSequence, "fleet_route_ack", {}));
-            }
-            else if (delivered.message.kind == "fleet_route_ack"
-                && delivered.message.sequence == routeSequence)
-            {
-                acknowledged = true;
-            }
-        }
+TEST(VirtualMeshNetworkTests, RepeatsAcknowledgementWithoutDeliveringDuplicate)
+{
+    auto settings = QuickSettings();
+    settings.reliableRetryIntervalTicks = 5U;
+    settings.maximumReliableAttempts = 5U;
+    VirtualMeshNetwork network{settings};
+    const std::array nodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}}};
+    network.UpdateNodes(nodes, {});
+    static_cast<void>(AdvanceTicks(network, 0U, 3U));
+    ASSERT_TRUE(network.Send(1U, 2U, 1U, "route_probe", {}));
+    static_cast<void>(AdvanceTicks(network, 4U, 10U));
 
-        if (!acknowledged && transmissions < 10U
-            && tick >= lastTransmissionTick + retryIntervalTicks)
-        {
-            ASSERT_TRUE(network.Send(1, 2, routeSequence,
-                "fleet_route", "route-data"));
-            lastTransmissionTick = tick;
-            ++transmissions;
-        }
-    }
+    ASSERT_TRUE(network.SendReliable(1U, 2U, 9U, "mission_assign", "target=4"));
+    network.SetPacketLossProbability(1.0);
+    network.Advance(11U);
+    ASSERT_EQ(network.DeliveredMessages().size(), 1U);
+    network.Advance(12U);
+    EXPECT_EQ(network.DeliveredMessages().size(), 0U);
+    EXPECT_EQ(network.Metrics().duplicateReliableMessages, 0U);
 
-    EXPECT_TRUE(acknowledged);
-    EXPECT_GE(receivedRouteCount, 1U);
-    EXPECT_GT(transmissions, 1U);
+    network.SetPacketLossProbability(0.0);
+    static_cast<void>(AdvanceTicks(network, 13U, 29U));
+    EXPECT_EQ(network.Metrics().deliveredMessages, 2U);
+    EXPECT_EQ(network.Metrics().duplicateReliableMessages, 1U);
+    EXPECT_EQ(network.Metrics().reliableAcknowledgements, 1U);
+    EXPECT_EQ(network.Metrics().reliableFailures, 0U);
+}
+
+TEST(VirtualMeshNetworkTests, LimitsMessagesWaitingForARoute)
+{
+    auto settings = QuickSettings();
+    settings.maximumQueuedMessages = 2U;
+    VirtualMeshNetwork network{settings};
+    const std::array separatedNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {200.0, 0.0, 10.0}}};
+    network.UpdateNodes(separatedNodes, {});
+    network.Advance(0U);
+
+    EXPECT_TRUE(network.Send(1U, 2U, 1U, "status", "first"));
+    EXPECT_TRUE(network.Send(1U, 2U, 2U, "status", "second"));
+    EXPECT_FALSE(network.Send(1U, 2U, 3U, "status", "overflow"));
+    EXPECT_EQ(network.Metrics().queuedMessages, 2U);
+    EXPECT_EQ(network.Metrics().queueFullDrops, 1U);
 }
 }

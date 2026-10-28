@@ -1615,7 +1615,7 @@ bool AeroSimLabApp::SendFleetRouteAssignment(
         return true;
     }
 
-    const auto messageId = formationNetwork_->Send(fleetLeaderId_, droneId,
+    const auto messageId = formationNetwork_->SendReliable(fleetLeaderId_, droneId,
         sequence, "fleet_route", payload);
     if (!messageId)
         return false;

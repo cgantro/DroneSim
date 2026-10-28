@@ -74,6 +74,10 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
     case communication::MeshEventKind::MessageDelivered: return "메시지 전달";
     case communication::MeshEventKind::PacketDropped: return "패킷 폐기";
     case communication::MeshEventKind::RouteError: return "경로 오류";
+    case communication::MeshEventKind::ReliableRetry: return "중요 메시지 재전송";
+    case communication::MeshEventKind::ReliableAcknowledged: return "목적지 확인 응답";
+    case communication::MeshEventKind::ReliableFailed: return "메시지 확인 실패";
+    case communication::MeshEventKind::QueueFull: return "대기 한도 초과";
     }
     return "통신 사건";
 }

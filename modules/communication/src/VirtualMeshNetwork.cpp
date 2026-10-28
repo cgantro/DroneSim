@@ -71,6 +71,10 @@ VirtualMeshNetwork::VirtualMeshNetwork(VirtualMeshSettings settings)
         || settings_.helloIntervalTicks == 0U
         || settings_.neighborTimeoutTicks < settings_.helloIntervalTicks
         || settings_.routeLifetimeTicks == 0U || settings_.maximumHops == 0U
+        || settings_.reliableRetryIntervalTicks == 0U
+        || settings_.maximumReliableAttempts == 0U
+        || settings_.maximumQueuedMessages == 0U
+        || settings_.maximumScheduledTransmissions == 0U
         || !std::isfinite(settings_.packetLossProbability)
         || settings_.packetLossProbability < 0.0
         || settings_.packetLossProbability > 1.0)
@@ -330,6 +334,49 @@ std::optional<std::uint64_t> VirtualMeshNetwork::Send(
         .sequence = sequence,
         .kind = std::move(kind),
         .payload = std::move(payload)};
+    const std::uint64_t messageId = message.id;
+    return SendMessage(message) ? std::optional{messageId} : std::nullopt;
+}
+
+std::optional<std::uint64_t> VirtualMeshNetwork::SendReliable(
+    NetworkNodeId source, NetworkNodeId destination,
+    std::uint32_t sequence, std::string kind, std::string payload)
+{
+    if (!nodes_.contains(source) || !nodes_.contains(destination)
+        || source == destination || kind.empty())
+        return std::nullopt;
+    if (pendingReliableMessages_.size() >= settings_.maximumQueuedMessages)
+    {
+        ++metrics_.queueFullDrops;
+        ++metrics_.droppedMessages;
+        RecordEvent(MeshEventKind::QueueFull, source, destination,
+            "중요 메시지 대기 한도에 도달했습니다.");
+        return std::nullopt;
+    }
+
+    VirtualMeshMessage message{
+        .id = nextMessageId_++,
+        .source = source,
+        .destination = destination,
+        .sequence = sequence,
+        .kind = std::move(kind),
+        .payload = std::move(payload),
+        .reliable = true};
+    if (!SendMessage(message))
+        return std::nullopt;
+
+    const std::uint64_t messageId = message.id;
+    pendingReliableMessages_.emplace(messageId, PendingReliableMessage{
+        .message = std::move(message),
+        .lastAttemptTick = currentTick_,
+        .attempts = 1U});
+    return messageId;
+}
+
+bool VirtualMeshNetwork::SendMessage(const VirtualMeshMessage& message)
+{
+    const NetworkNodeId source = message.source;
+    const NetworkNodeId destination = message.destination;
     const NodePair pair{source, destination};
     if (settings_.mode == VirtualMeshMode::MultiHop
         && unavailableRoutes_.contains(pair))
@@ -338,7 +385,7 @@ std::optional<std::uint64_t> VirtualMeshNetwork::Send(
         ++metrics_.droppedMessages;
         RecordEvent(MeshEventKind::RouteError, source, destination,
             "고정 다중 홉 경로가 끊겨 재탐색하지 않았습니다.");
-        return std::nullopt;
+        return false;
     }
     const auto route = routes_[source].find(destination);
     if (route != routes_[source].end() && route->second.expiresAtTick > currentTick_
@@ -354,11 +401,55 @@ std::optional<std::uint64_t> VirtualMeshNetwork::Send(
     }
     else
     {
-        pendingMessages_[{source, destination}].push_back(std::move(message));
+        if (!QueuePendingMessage(message))
+            return false;
         if (!activeRequests_.contains(pair))
             StartRouteDiscovery(source, destination);
     }
-    return nextMessageId_ - 1U;
+    return true;
+}
+
+bool VirtualMeshNetwork::QueuePendingMessage(VirtualMeshMessage message)
+{
+    for (const auto& [endpoints, messages] : pendingMessages_)
+    {
+        static_cast<void>(endpoints);
+        if (std::any_of(messages.begin(), messages.end(),
+            [&message](const VirtualMeshMessage& queued)
+            {
+                return queued.id == message.id;
+            }))
+            return true;
+    }
+    if (metrics_.queuedMessages >= settings_.maximumQueuedMessages)
+    {
+        ++metrics_.queueFullDrops;
+        ++metrics_.droppedMessages;
+        RecordEvent(MeshEventKind::QueueFull, message.source, message.destination,
+            "경로를 기다리는 메시지 대기 한도에 도달했습니다.");
+        return false;
+    }
+    pendingMessages_[{message.source, message.destination}]
+        .push_back(std::move(message));
+    ++metrics_.queuedMessages;
+    return true;
+}
+
+void VirtualMeshNetwork::RemovePendingMessage(std::uint64_t messageId)
+{
+    for (auto iterator = pendingMessages_.begin(); iterator != pendingMessages_.end();)
+    {
+        const std::size_t before = iterator->second.size();
+        std::erase_if(iterator->second, [messageId](const VirtualMeshMessage& message)
+        {
+            return message.id == messageId;
+        });
+        metrics_.queuedMessages -= before - iterator->second.size();
+        if (iterator->second.empty())
+            iterator = pendingMessages_.erase(iterator);
+        else
+            ++iterator;
+    }
 }
 
 std::optional<std::uint64_t> VirtualMeshNetwork::SendLatest(
@@ -373,10 +464,12 @@ std::optional<std::uint64_t> VirtualMeshNetwork::SendLatest(
     const auto pending = pendingMessages_.find(pair);
     if (pending != pendingMessages_.end())
     {
+        const std::size_t before = pending->second.size();
         std::erase_if(pending->second, [&kind](const VirtualMeshMessage& message)
         {
             return message.kind == kind;
         });
+        metrics_.queuedMessages -= before - pending->second.size();
         if (pending->second.empty())
             pendingMessages_.erase(pending);
     }
@@ -412,6 +505,7 @@ void VirtualMeshNetwork::Advance(std::uint64_t tick)
         ProcessTransmission(std::move(transmission));
     }
     ExpireOldState();
+    AdvanceReliableMessages();
 }
 
 std::span<const DeliveredMeshMessage>
@@ -530,6 +624,63 @@ void VirtualMeshNetwork::SendHelloMessages()
     }
 }
 
+void VirtualMeshNetwork::AdvanceReliableMessages()
+{
+    const std::uint64_t retryInterval = settings_.reliableRetryIntervalTicks;
+    for (auto iterator = pendingReliableMessages_.begin();
+         iterator != pendingReliableMessages_.end();)
+    {
+        PendingReliableMessage& pending = iterator->second;
+        const std::uint64_t retryAt = pending.lastAttemptTick
+                > std::numeric_limits<std::uint64_t>::max() - retryInterval
+            ? std::numeric_limits<std::uint64_t>::max()
+            : pending.lastAttemptTick + retryInterval;
+        if (currentTick_ < retryAt)
+        {
+            ++iterator;
+            continue;
+        }
+
+        if (pending.attempts >= settings_.maximumReliableAttempts)
+        {
+            ++metrics_.reliableFailures;
+            ++metrics_.droppedMessages;
+            RecordEvent(MeshEventKind::ReliableFailed, pending.message.source,
+                pending.message.destination,
+                pending.message.kind + " 메시지 확인 응답을 받지 못했습니다.");
+            RemovePendingMessage(pending.message.id);
+            iterator = pendingReliableMessages_.erase(iterator);
+            continue;
+        }
+
+        if (SendMessage(pending.message))
+        {
+            pending.lastAttemptTick = currentTick_;
+            ++pending.attempts;
+            ++metrics_.reliableRetries;
+            RecordEvent(MeshEventKind::ReliableRetry, pending.message.source,
+                pending.message.destination,
+                pending.message.kind + " 메시지를 다시 보냈습니다.");
+        }
+        ++iterator;
+    }
+}
+
+void VirtualMeshNetwork::AcknowledgeReliableMessage(
+    NetworkNodeId destination, const VirtualMeshMessage& message)
+{
+    Packet acknowledgement;
+    acknowledgement.type = Packet::Type::DataAcknowledgement;
+    acknowledgement.message.id = message.id;
+    acknowledgement.message.source = destination;
+    acknowledgement.message.destination = message.source;
+    acknowledgement.message.sequence = message.sequence;
+    acknowledgement.message.kind = message.kind;
+    acknowledgement.remainingHops = settings_.maximumHops;
+    acknowledgement.message.route.push_back(destination);
+    ForwardData(destination, std::move(acknowledgement));
+}
+
 void VirtualMeshNetwork::Transmit(
     NetworkNodeId sender, NetworkNodeId receiver, Packet packet)
 {
@@ -540,6 +691,14 @@ void VirtualMeshNetwork::Transmit(
         ++metrics_.droppedMessages;
         RecordEvent(MeshEventKind::PacketDropped, sender, receiver,
             "메시지를 보낼 이웃 링크가 없습니다.");
+        return;
+    }
+    if (transmissions_.size() >= settings_.maximumScheduledTransmissions)
+    {
+        ++metrics_.droppedMessages;
+        ++metrics_.queueFullDrops;
+        RecordEvent(MeshEventKind::QueueFull, sender, receiver,
+            "예약된 전송 대기 한도에 도달했습니다.");
         return;
     }
 
@@ -605,8 +764,9 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
             if (transmission.sender == endpoints.first)
             {
                 droppedPacket.message.route.clear();
-                pendingMessages_[endpoints].push_back(std::move(droppedPacket.message));
-                if (!activeRequests_.contains(endpoints))
+                const bool queued = QueuePendingMessage(
+                    std::move(droppedPacket.message));
+                if (queued && !activeRequests_.contains(endpoints))
                     StartRouteDiscovery(endpoints.first, endpoints.second);
                 return;
             }
@@ -707,6 +867,7 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
             auto pending = pendingMessages_.find(pair);
             if (pending != pendingMessages_.end())
             {
+                metrics_.queuedMessages -= pending->second.size();
                 for (VirtualMeshMessage& message : pending->second)
                 {
                     Packet data;
@@ -730,8 +891,8 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
         {
             const NodePair pair{packet.requestOrigin, packet.requestDestination};
             packet.message.route.clear();
-            pendingMessages_[pair].push_back(std::move(packet.message));
-            if (!activeRequests_.contains(pair))
+            const bool queued = QueuePendingMessage(std::move(packet.message));
+            if (queued && !activeRequests_.contains(pair))
                 StartRouteDiscovery(pair.first, pair.second);
         }
         else
@@ -746,14 +907,54 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
         }
         return;
     case Packet::Type::Data:
+    case Packet::Type::DataAcknowledgement:
         packet.message.route.push_back(receiver);
         if (receiver == packet.message.destination)
         {
+            if (packet.type == Packet::Type::DataAcknowledgement)
+            {
+                if (pendingReliableMessages_.erase(packet.message.id) > 0U)
+                {
+                    ++metrics_.reliableAcknowledgements;
+                    RecordEvent(MeshEventKind::ReliableAcknowledged,
+                        packet.message.source, packet.message.destination,
+                        packet.message.kind + " 메시지 확인 응답을 받았습니다.");
+                }
+                return;
+            }
+
+            if (packet.message.reliable)
+            {
+                auto& received = receivedReliableMessages_[receiver];
+                if (received.contains(packet.message.id))
+                {
+                    ++metrics_.duplicateReliableMessages;
+                    AcknowledgeReliableMessage(receiver, packet.message);
+                    return;
+                }
+                const std::uint64_t retryWindow = settings_.reliableRetryIntervalTicks
+                    > std::numeric_limits<std::uint64_t>::max()
+                        / settings_.maximumReliableAttempts
+                    ? std::numeric_limits<std::uint64_t>::max()
+                    : settings_.reliableRetryIntervalTicks
+                        * settings_.maximumReliableAttempts;
+                const std::uint64_t retention = std::max(
+                    settings_.routeLifetimeTicks, retryWindow);
+                const std::uint64_t maximumTick =
+                    std::numeric_limits<std::uint64_t>::max();
+                received[packet.message.id] = currentTick_ > maximumTick - retention
+                    ? maximumTick : currentTick_ + retention;
+            }
+
             RecordEvent(MeshEventKind::MessageDelivered,
                 packet.message.source, packet.message.destination,
                 packet.message.kind + " 메시지가 도착했습니다.");
+            const bool reliable = packet.message.reliable;
+            const VirtualMeshMessage deliveredMessage = packet.message;
             deliveredMessages_.push_back({std::move(packet.message), currentTick_});
             ++metrics_.deliveredMessages;
+            if (reliable)
+                AcknowledgeReliableMessage(receiver, deliveredMessage);
             return;
         }
         ForwardData(receiver, std::move(packet));
@@ -824,6 +1025,12 @@ void VirtualMeshNetwork::ForwardData(NetworkNodeId node, Packet packet)
     if (routes == routes_.end())
     {
         ++metrics_.routeErrors;
+        if (packet.type == Packet::Type::DataAcknowledgement)
+        {
+            ++metrics_.droppedMessages;
+            RecordEvent(MeshEventKind::RouteError, node, packet.message.destination,
+                "확인 응답을 보낼 경로가 없어 원본 재전송을 기다립니다.");
+        }
         return;
     }
     const auto route = routes->second.find(packet.message.destination);
@@ -843,11 +1050,22 @@ void VirtualMeshNetwork::ForwardData(NetworkNodeId node, Packet packet)
                 "고정 다중 홉 경로가 끊겨 재탐색하지 않았습니다.");
             return;
         }
-        pendingMessages_[pair].push_back(std::move(packet.message));
+        if (packet.type == Packet::Type::DataAcknowledgement)
+        {
+            // 확인 응답은 원본이 다시 도착하면 재발급하므로 업무 메시지 큐에 넣지 않는다.
+            ++metrics_.routeErrors;
+            ++metrics_.droppedMessages;
+            RecordEvent(MeshEventKind::RouteError, node, packet.message.destination,
+                "확인 응답을 보낼 경로가 없어 원본 재전송을 기다립니다.");
+            return;
+        }
+        const NetworkNodeId destination = packet.message.destination;
+        const bool queued = QueuePendingMessage(std::move(packet.message));
         ++metrics_.routeErrors;
-        RecordEvent(MeshEventKind::RouteError, node, packet.message.destination,
-            "사용할 경로가 없어 다시 찾습니다.");
-        if (!activeRequests_.contains(pair))
+        if (queued)
+            RecordEvent(MeshEventKind::RouteError, node, destination,
+                "사용할 경로가 없어 다시 찾습니다.");
+        if (queued && !activeRequests_.contains(pair))
             StartRouteDiscovery(pair.first, pair.second);
         return;
     }
@@ -912,6 +1130,14 @@ void VirtualMeshNetwork::ExpireOldState()
     {
         static_cast<void>(node);
         std::erase_if(requests, [this](const auto& entry)
+        {
+            return entry.second <= currentTick_;
+        });
+    }
+    for (auto& [node, receivedMessages] : receivedReliableMessages_)
+    {
+        static_cast<void>(node);
+        std::erase_if(receivedMessages, [this](const auto& entry)
         {
             return entry.second <= currentTick_;
         });

@@ -3,6 +3,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -58,6 +59,10 @@ struct VirtualMeshSettings
     std::uint32_t maximumHops = 5;
     double packetLossProbability = 0.0;
     std::uint32_t randomSeed = 42;
+    std::uint64_t reliableRetryIntervalTicks = 60;
+    std::uint32_t maximumReliableAttempts = 10;
+    std::size_t maximumQueuedMessages = 256;
+    std::size_t maximumScheduledTransmissions = 4096;
 };
 
 /** @brief 모의 통신망을 통해 보낼 임무·상태 메시지다. */
@@ -70,6 +75,7 @@ struct VirtualMeshMessage
     std::string kind;
     std::string payload;
     std::vector<NetworkNodeId> route;
+    bool reliable = false;
 };
 
 /** @brief 목적지에 실제로 도착한 메시지와 모의 도착 Tick이다. */
@@ -88,6 +94,12 @@ struct VirtualMeshMetrics
     std::uint64_t deliveredMessages = 0;
     std::uint64_t droppedMessages = 0;
     std::uint64_t routeErrors = 0;
+    std::uint64_t reliableRetries = 0;
+    std::uint64_t reliableAcknowledgements = 0;
+    std::uint64_t reliableFailures = 0;
+    std::uint64_t duplicateReliableMessages = 0;
+    std::uint64_t queueFullDrops = 0;
+    std::size_t queuedMessages = 0;
 };
 
 enum class MeshEventKind
@@ -103,7 +115,11 @@ enum class MeshEventKind
     RouteFound,
     MessageDelivered,
     PacketDropped,
-    RouteError
+    RouteError,
+    ReliableRetry,
+    ReliableAcknowledged,
+    ReliableFailed,
+    QueueFull
 };
 
 /** @brief 화면과 시험 기록에 보여 줄 최근 통신 사건이다. */
@@ -163,6 +179,11 @@ public:
         NetworkNodeId source, NetworkNodeId destination,
         std::uint32_t sequence, std::string kind, std::string payload);
 
+    /** @brief 목적지 확인 응답을 기다리며 제한 횟수만큼 다시 보내는 중요 메시지다. */
+    [[nodiscard]] std::optional<std::uint64_t> SendReliable(
+        NetworkNodeId source, NetworkNodeId destination,
+        std::uint32_t sequence, std::string kind, std::string payload);
+
     /**
      * @brief 최신 값만 의미가 있는 보고를 보낸다.
      * @details 경로를 기다리는 동안 같은 종류의 보고가 있으면 새 내용으로 바꿉니다.
@@ -191,7 +212,7 @@ private:
 
     struct Packet
     {
-        enum class Type { Hello, Data, RouteRequest, RouteReply, RouteError };
+        enum class Type { Hello, Data, DataAcknowledgement, RouteRequest, RouteReply, RouteError };
         Type type = Type::Data;
         VirtualMeshMessage message;
         std::uint64_t requestId = 0;
@@ -216,6 +237,13 @@ private:
         std::uint64_t lastHeardTick = 0;
     };
 
+    struct PendingReliableMessage
+    {
+        VirtualMeshMessage message;
+        std::uint64_t lastAttemptTick = 0;
+        std::uint32_t attempts = 0;
+    };
+
     using NodePair = std::pair<NetworkNodeId, NetworkNodeId>;
 
     [[nodiscard]] bool LinkAvailable(NetworkNodeId sender,
@@ -223,6 +251,12 @@ private:
     [[nodiscard]] bool HasLineOfSight(const glm::dvec3& start,
         const glm::dvec3& end) const;
     void SendHelloMessages();
+    [[nodiscard]] bool SendMessage(const VirtualMeshMessage& message);
+    [[nodiscard]] bool QueuePendingMessage(VirtualMeshMessage message);
+    void RemovePendingMessage(std::uint64_t messageId);
+    void AdvanceReliableMessages();
+    void AcknowledgeReliableMessage(NetworkNodeId destination,
+        const VirtualMeshMessage& message);
     void Transmit(NetworkNodeId sender, NetworkNodeId receiver, Packet packet);
     void ProcessTransmission(Transmission transmission);
     void StartRouteDiscovery(NetworkNodeId source, NetworkNodeId destination);
@@ -244,6 +278,8 @@ private:
     std::map<NetworkNodeId, std::map<NetworkNodeId, RouteEntry>> routes_;
     std::map<NetworkNodeId, std::map<std::uint64_t, std::uint64_t>> seenRequests_;
     std::map<NodePair, std::vector<VirtualMeshMessage>> pendingMessages_;
+    std::map<std::uint64_t, PendingReliableMessage> pendingReliableMessages_;
+    std::map<NetworkNodeId, std::map<std::uint64_t, std::uint64_t>> receivedReliableMessages_;
     std::map<NodePair, std::uint64_t> activeRequests_;
     std::map<NodePair, std::uint64_t> activeRequestExpiryTicks_;
     std::set<NodePair> disabledLinks_;
