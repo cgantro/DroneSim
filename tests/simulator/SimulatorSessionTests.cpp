@@ -171,7 +171,10 @@ public:
 
     static void VerifyRelayRecoveryUsesTheConfiguredRadioRange()
     {
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({
+            .smokeTest = true,
+            .simulationDynamics = simulation::SimulationDynamics::RigidBody,
+            .networkEnabled = false});
         app.InitializeGraphics();
         app.fleetNetworkMode_ = communication::VirtualMeshMode::AdaptiveMesh;
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
@@ -190,12 +193,12 @@ public:
             app.simulation_.SetInitialState(droneId, state);
         };
         const double leaderGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({0.0, 0.0});
-        const double targetGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({180.0, 0.0});
+        const double targetGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({238.0, 0.0});
         setState(droneIds[0], {0.0, 0.0, leaderGround + 10.0},
             simulation::FlightMode::Hovering);
-        setState(droneIds[1], {10.0, 0.0, leaderGround + 0.5},
+        setState(droneIds[1], {90.0, 0.0, leaderGround + 0.5},
             simulation::FlightMode::Grounded);
-        setState(droneIds[2], {180.0, 0.0, targetGround + 10.0},
+        setState(droneIds[2], {238.0, 0.0, targetGround + 10.0},
             simulation::FlightMode::FollowingWaypoint);
         setState(droneIds[3], {20.0, 0.0, leaderGround + 10.0},
             simulation::FlightMode::Hovering);
@@ -248,6 +251,9 @@ public:
                 simulation::FlightMode::Hovering, "대기"),
             app.simulation_.TickCount(), 1U};
 
+        auto& disconnectedMission = app.fleetReconnaissance_.at(droneIds[2]);
+        disconnectedMission.routeReceived = false;
+        disconnectedMission.routeSentAtTick = 10000U;
         EXPECT_TRUE(app.TryStartFleetRelayRecovery());
         EXPECT_EQ(app.fleetRelayRecovery_.relayDroneId, droneIds[1]);
         EXPECT_EQ(app.fleetRelayRecovery_.disconnectedDroneId, droneIds[2]);
@@ -260,6 +266,56 @@ public:
         EXPECT_TRUE(app.formationNetwork_->CanExchangeAtPositions(
             droneIds[1], droneIds[2], app.fleetRelayRecovery_.holdPositionMeters,
             disconnectedPosition));
+
+        const auto relayDroneId = app.fleetRelayRecovery_.relayDroneId;
+        const auto recoveryStartedAtTick = app.fleetRelayRecovery_.startedAtTick;
+        bool telemetryRecovered = false;
+        bool telemetryRoutedViaRelay = false;
+        constexpr std::uint64_t maximumRecoveryTicks = 5000U;
+        for (std::uint64_t tick = 0U; tick < maximumRecoveryTicks; ++tick)
+        {
+            app.AdvanceSimulationTick();
+            const auto* report = app.FreshPeerTelemetry(droneIds[2]);
+            for (const auto& delivered : app.formationNetwork_->DeliveredMessages())
+            {
+                const auto& message = delivered.message;
+                if (message.kind == "drone_telemetry"
+                    && message.source == droneIds[2]
+                    && message.destination == droneIds[0]
+                    && std::find(message.route.begin(), message.route.end(), relayDroneId)
+                        != message.route.end())
+                    telemetryRoutedViaRelay = true;
+            }
+            telemetryRecovered = telemetryRecovered
+                || (report != nullptr
+                    && report->receivedAtTick > recoveryStartedAtTick
+                    && telemetryRoutedViaRelay
+                    && !app.fleetRelayRecovery_.waitingForTelemetry);
+            if (telemetryRecovered)
+                break;
+        }
+        EXPECT_TRUE(telemetryRecovered)
+            << "시작 후 " << app.simulation_.TickCount() - recoveryStartedAtTick
+            << " Tick, 정찰 텔레메트리 중계 경로=" << telemetryRoutedViaRelay
+            << ", 위치 링크(리더-중계/중계-정찰)="
+            << app.formationNetwork_->CanExchangeAtPositions(
+                droneIds[0], relayDroneId,
+                app.simulation_.State(droneIds[0]).positionMeters,
+                app.simulation_.State(relayDroneId).positionMeters)
+            << '/'
+            << app.formationNetwork_->CanExchangeAtPositions(
+                relayDroneId, droneIds[2],
+                app.simulation_.State(relayDroneId).positionMeters,
+                app.simulation_.State(droneIds[2]).positionMeters)
+            << ", 무전 활성(중계/정찰)="
+            << app.formationNetwork_->IsNodeRadioEnabled(relayDroneId)
+            << '/'
+            << app.formationNetwork_->IsNodeRadioEnabled(droneIds[2])
+            << ", 경로 요청/응답="
+            << app.formationNetwork_->Metrics().routeRequests << '/'
+            << app.formationNetwork_->Metrics().routeReplies
+            << ", 대기=" << app.formationNetwork_->Metrics().queuedMessages
+            << ", 버림=" << app.formationNetwork_->Metrics().droppedMessages;
     }
 
     static void VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget()
