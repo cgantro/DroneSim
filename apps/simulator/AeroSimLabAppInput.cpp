@@ -116,6 +116,10 @@ void AeroSimLabApp::ApplyDueFaultScenarioEvents()
         case Kind::CameraFault:
             simulation_.SetCameraFault(event.source, event.enabled);
             break;
+        case Kind::RotorMotorFault:
+            simulation_.SetRotorMotorFault(
+                event.source, event.rotorIndex, event.enabled);
+            break;
         case Kind::LinkState:
             formationNetwork_->SetLinkDisabled(
                 event.source, event.destination, event.enabled);

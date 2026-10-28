@@ -208,6 +208,11 @@ public:
             targetSpeeds_.at(rotorIndex) = 0.0;
     }
 
+    [[nodiscard]] bool IsRotorMotorFaulted(std::size_t rotorIndex) const
+    {
+        return motorFaults_.at(rotorIndex);
+    }
+
     void SetInitialMotorSpeeds(
         const std::array<double, QuadrotorParameters::rotorCount>& speeds,
         double maximumSpeed)
@@ -1073,6 +1078,12 @@ void PhysicsWorld::SetRotorMotorFault(
     RigidBodyHandle handle, std::size_t rotorIndex, bool faulted)
 {
     impl_->GetBody(handle).actuation.SetRotorMotorFault(rotorIndex, faulted);
+}
+
+bool PhysicsWorld::IsRotorMotorFaulted(
+    RigidBodyHandle handle, std::size_t rotorIndex) const
+{
+    return impl_->GetBody(handle).actuation.IsRotorMotorFaulted(rotorIndex);
 }
 
 void PhysicsWorld::SetInitialMotorSpeeds(

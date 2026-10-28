@@ -175,6 +175,9 @@ public:
     /** @brief AirSim 강체 모의에서 지정한 드론 로터의 전원을 끊거나 복구한다. 로터 번호는 0부터 시작한다. */
     void SetRotorMotorFault(DroneId droneId, std::size_t rotorIndex, bool faulted);
 
+    /** @brief 지정한 드론 로터가 고장 상태인지 확인한다. */
+    [[nodiscard]] bool IsRotorMotorFaulted(DroneId droneId, std::size_t rotorIndex) const;
+
     /** @brief 강체 모드에서 사용할 월드 기준 바람 속도를 설정한다. */
     void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity);
 

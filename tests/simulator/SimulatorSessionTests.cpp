@@ -966,6 +966,7 @@ TEST(SimulatorSessionTests, CoreScenarios)
         recording.RecordPacketLoss(100U, 0.25);
         recording.RecordLinkLatencyJitter(102U, 7U);
         recording.RecordCameraFault(103U, 2U, true);
+        recording.RecordRotorMotorFault(103U, 2U, 3U, true);
         recording.RecordLinkState(103U, 1U, 2U, true);
         recording.RecordDirectedLinkState(103U, 2U, 1U, true);
         recording.RecordRadioState(103U, 2U, false);
@@ -990,22 +991,27 @@ TEST(SimulatorSessionTests, CoreScenarios)
         EXPECT_EQ(jitterEvents.front().valueTicks, 7U);
         EXPECT_TRUE(replay.TakeDueEvents(502U).empty());
         const auto laterEvents = replay.TakeDueEvents(503U);
-        ASSERT_EQ(laterEvents.size(), 4U);
+        ASSERT_EQ(laterEvents.size(), 5U);
         EXPECT_EQ(laterEvents[0].kind,
             simulator::FaultScenarioTimeline::Event::Kind::CameraFault);
         EXPECT_EQ(laterEvents[0].source, 2U);
         EXPECT_TRUE(laterEvents[0].enabled);
         EXPECT_EQ(laterEvents[1].kind,
-            simulator::FaultScenarioTimeline::Event::Kind::LinkState);
+            simulator::FaultScenarioTimeline::Event::Kind::RotorMotorFault);
+        EXPECT_EQ(laterEvents[1].source, 2U);
+        EXPECT_EQ(laterEvents[1].rotorIndex, 3U);
         EXPECT_TRUE(laterEvents[1].enabled);
         EXPECT_EQ(laterEvents[2].kind,
-            simulator::FaultScenarioTimeline::Event::Kind::DirectedLinkState);
-        EXPECT_EQ(laterEvents[2].source, 2U);
-        EXPECT_EQ(laterEvents[2].destination, 1U);
+            simulator::FaultScenarioTimeline::Event::Kind::LinkState);
         EXPECT_TRUE(laterEvents[2].enabled);
         EXPECT_EQ(laterEvents[3].kind,
+            simulator::FaultScenarioTimeline::Event::Kind::DirectedLinkState);
+        EXPECT_EQ(laterEvents[3].source, 2U);
+        EXPECT_EQ(laterEvents[3].destination, 1U);
+        EXPECT_TRUE(laterEvents[3].enabled);
+        EXPECT_EQ(laterEvents[4].kind,
             simulator::FaultScenarioTimeline::Event::Kind::RadioState);
-        EXPECT_FALSE(laterEvents[3].enabled);
+        EXPECT_FALSE(laterEvents[4].enabled);
         EXPECT_TRUE(replay.ReplayFinished());
 
         std::filesystem::remove(path, filesystemError);

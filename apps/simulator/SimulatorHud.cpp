@@ -6,6 +6,7 @@
 #include <imgui_internal.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
+#include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/ScenarioRunner.h"
 
 #include <algorithm>
@@ -283,7 +284,7 @@ void DrawRecordingPanel(const SessionRecordingControls& controls)
     }
     if (controls.faultScenarioReplaying)
         ImGui::Text("저장한 장애를 다시 적용하는 중");
-    ImGui::TextDisabled("패킷 손실·지연 흔들림·링크·라디오 조작을 저장합니다.");
+    ImGui::TextDisabled("패킷 손실·지연·링크·라디오·카메라·로터 고장을 저장합니다.");
     ImGui::TextDisabled("재생하려면 같은 드론 구성으로 편대 임무를 먼저 시작하세요.");
     if (!controls.faultScenarioStatus.empty())
         ImGui::TextWrapped("%s", controls.faultScenarioStatus.c_str());
@@ -347,6 +348,7 @@ void DrawFlightStatusPanel(
     const communication::VirtualMeshNetwork* formationNetwork,
     int& selectedFaultSource,
     int& selectedFaultDestination,
+    int& selectedFaultRotor,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
@@ -354,6 +356,8 @@ void DrawFlightStatusPanel(
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
     const std::function<void(simulation::DroneId, bool)>& setCameraFault,
+    const std::function<void(simulation::DroneId, std::size_t, bool)>&
+        setRotorMotorFault,
     simulation::CaptureAssessment captureAssessment,
     const SessionRecordingControls& recordingControls)
 {
@@ -492,6 +496,27 @@ void DrawFlightStatusPanel(
                     {
                         setCameraFault(source, true);
                     }
+
+#ifndef __EMSCRIPTEN__
+                    constexpr int rotorCount = static_cast<int>(
+                        simulation::QuadrotorParameters::rotorCount);
+                    const char* rotorLabels[]{"로터 1", "로터 2", "로터 3", "로터 4"};
+                    selectedFaultRotor = std::clamp(selectedFaultRotor, 0, rotorCount - 1);
+                    ImGui::SetNextItemWidth(-1.0F);
+                    ImGui::Combo("고장 로터", &selectedFaultRotor,
+                        rotorLabels, rotorCount);
+                    const auto rotorIndex = static_cast<std::size_t>(selectedFaultRotor);
+                    if (simulation.IsRotorMotorFaulted(source, rotorIndex))
+                    {
+                        if (ImGui::Button("선택 로터 복구"))
+                            setRotorMotorFault(source, rotorIndex, false);
+                    }
+                    else if (ImGui::Button("선택 로터 고장 주입"))
+                    {
+                        setRotorMotorFault(source, rotorIndex, true);
+                    }
+                    ImGui::TextDisabled("전원이 끊기면 로터가 감속하며 기체 자세가 무너질 수 있습니다.");
+#endif
 
                     if (source == destination)
                     {
@@ -767,6 +792,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
     const std::function<void(simulation::DroneId, bool)>& setCameraFault,
+    const std::function<void(simulation::DroneId, std::size_t, bool)>&
+        setRotorMotorFault,
     simulation::CaptureAssessment captureAssessment,
     const SessionRecordingControls& recordingControls,
     const std::function<std::uint32_t(int, int)>& renderScene,
@@ -799,9 +826,9 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         setNetworkMode, packetLossPercent, setPacketLossPercent,
         latencyJitterTicks, setLatencyJitterTicks,
         formationNetwork, selectedFaultSource_,
-        selectedFaultDestination_, setFormationLinkDisabled,
+        selectedFaultDestination_, selectedFaultRotor_, setFormationLinkDisabled,
         setFormationDirectedLinkDisabled,
-        setFormationNodeRadioEnabled, setCameraFault,
+        setFormationNodeRadioEnabled, setCameraFault, setRotorMotorFault,
         captureAssessment, recordingControls);
 
     if (timings != nullptr)

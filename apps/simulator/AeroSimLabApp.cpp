@@ -893,6 +893,14 @@ void AeroSimLabApp::RenderFrame()
                 faultScenarioTimeline_.RecordCameraFault(
                     simulation_.TickCount(), droneId, faulted);
             },
+            [this](aerosimlab::simulation::DroneId droneId,
+                std::size_t rotorIndex, bool faulted)
+            {
+                simulation_.SetRotorMotorFault(droneId, rotorIndex, faulted);
+                faultScenarioTimeline_.RecordRotorMotorFault(
+                    simulation_.TickCount(), droneId,
+                    static_cast<std::uint32_t>(rotorIndex), faulted);
+            },
             captureAssessment,
             recordingControls,
             [this](int width, int height) { return RenderScenePanel(width, height); },

@@ -106,6 +106,8 @@ public:
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
         const std::function<void(simulation::DroneId, bool)>& setCameraFault,
+        const std::function<void(simulation::DroneId, std::size_t, bool)>&
+            setRotorMotorFault,
         simulation::CaptureAssessment captureAssessment,
         const SessionRecordingControls& recordingControls,
         const std::function<std::uint32_t(int, int)>& renderScene,
@@ -126,6 +128,7 @@ private:
     simulation::FormationShape selectedFormationShape_ = simulation::FormationShape::Vee;
     int selectedFaultSource_ = 0;
     int selectedFaultDestination_ = 1;
+    int selectedFaultRotor_ = 0;
     std::string layoutFile_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };

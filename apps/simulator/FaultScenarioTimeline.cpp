@@ -1,5 +1,7 @@
 #include "FaultScenarioTimeline.h"
 
+#include "simulation_core/QuadrotorModel.h"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -25,6 +27,7 @@ std::string_view EventName(FaultScenarioTimeline::Event::Kind kind)
     case Kind::PacketLoss: return "packet_loss";
     case Kind::LinkLatencyJitter: return "link_latency_jitter";
     case Kind::CameraFault: return "camera_fault";
+    case Kind::RotorMotorFault: return "rotor_motor_fault";
     case Kind::LinkState: return "link_state";
     case Kind::DirectedLinkState: return "directed_link_state";
     case Kind::RadioState: return "radio_state";
@@ -38,6 +41,7 @@ FaultScenarioTimeline::Event::Kind ReadEventKind(const Json& value)
     if (name == "packet_loss") return FaultScenarioTimeline::Event::Kind::PacketLoss;
     if (name == "link_latency_jitter") return FaultScenarioTimeline::Event::Kind::LinkLatencyJitter;
     if (name == "camera_fault") return FaultScenarioTimeline::Event::Kind::CameraFault;
+    if (name == "rotor_motor_fault") return FaultScenarioTimeline::Event::Kind::RotorMotorFault;
     if (name == "link_state") return FaultScenarioTimeline::Event::Kind::LinkState;
     if (name == "directed_link_state") return FaultScenarioTimeline::Event::Kind::DirectedLinkState;
     if (name == "radio_state") return FaultScenarioTimeline::Event::Kind::RadioState;
@@ -62,6 +66,25 @@ std::uint32_t ReadTickCount(const Json& value)
     if (ticks > std::numeric_limits<std::uint32_t>::max())
         throw std::invalid_argument("지연 Tick 수가 허용 범위를 넘었습니다.");
     return static_cast<std::uint32_t>(ticks);
+}
+
+std::uint32_t ReadRotorIndex(const Json& value)
+{
+    if (value.is_number_unsigned())
+    {
+        const std::uint64_t index = value.get<std::uint64_t>();
+        if (index < simulation::QuadrotorParameters::rotorCount)
+            return static_cast<std::uint32_t>(index);
+    }
+    else if (value.is_number_integer())
+    {
+        const std::int64_t index = value.get<std::int64_t>();
+        if (index >= 0
+            && static_cast<std::uint64_t>(index)
+                < simulation::QuadrotorParameters::rotorCount)
+            return static_cast<std::uint32_t>(index);
+    }
+    throw std::invalid_argument("로터 번호는 0부터 3 사이의 정수여야 합니다.");
 }
 }
 
@@ -111,6 +134,11 @@ bool FaultScenarioTimeline::SaveRecording(const std::filesystem::path& path,
             break;
         case Event::Kind::CameraFault:
             encoded["drone"] = event.source;
+            encoded["faulted"] = event.enabled;
+            break;
+        case Event::Kind::RotorMotorFault:
+            encoded["drone"] = event.source;
+            encoded["rotor_index"] = event.rotorIndex;
             encoded["faulted"] = event.enabled;
             break;
         case Event::Kind::LinkState:
@@ -215,6 +243,13 @@ bool FaultScenarioTimeline::LoadRecording(const std::filesystem::path& path,
                 if (!uniqueDroneIds.contains(event.source))
                     throw std::invalid_argument("카메라 장애 대상이 드론 목록에 없습니다.");
                 break;
+            case Event::Kind::RotorMotorFault:
+                event.source = ReadDroneId(encoded.at("drone"));
+                event.rotorIndex = ReadRotorIndex(encoded.at("rotor_index"));
+                event.enabled = encoded.at("faulted").get<bool>();
+                if (!uniqueDroneIds.contains(event.source))
+                    throw std::invalid_argument("로터 장애 대상이나 번호가 올바르지 않습니다.");
+                break;
             case Event::Kind::LinkState:
             case Event::Kind::DirectedLinkState:
                 event.source = ReadDroneId(encoded.at("source"));
@@ -299,6 +334,17 @@ void FaultScenarioTimeline::RecordCameraFault(std::uint64_t currentTick,
     Event event;
     event.kind = Event::Kind::CameraFault;
     event.source = droneId;
+    event.enabled = faulted;
+    Record(event, currentTick);
+}
+
+void FaultScenarioTimeline::RecordRotorMotorFault(std::uint64_t currentTick,
+    simulation::DroneId droneId, std::uint32_t rotorIndex, bool faulted)
+{
+    Event event;
+    event.kind = Event::Kind::RotorMotorFault;
+    event.source = droneId;
+    event.rotorIndex = rotorIndex;
     event.enabled = faulted;
     Record(event, currentTick);
 }

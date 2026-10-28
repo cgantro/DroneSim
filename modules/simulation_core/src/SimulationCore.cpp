@@ -1013,6 +1013,23 @@ void SimulationCore::SetRotorMotorFault(
 #endif
 }
 
+bool SimulationCore::IsRotorMotorFaulted(
+    DroneId droneId, std::size_t rotorIndex) const
+{
+#if !defined(__EMSCRIPTEN__)
+    if (ecs_->dynamics != SimulationDynamics::RigidBody)
+        throw std::logic_error("로터 고장은 AirSim 강체 모의에서만 확인할 수 있습니다.");
+
+    const RigidBodyHandle body = ecs_->FindDrone(droneId)
+        .get<EcsStorage::PhysicsBody>().handle;
+    return ecs_->physics->IsRotorMotorFaulted(body, rotorIndex);
+#else
+    static_cast<void>(droneId);
+    static_cast<void>(rotorIndex);
+    throw std::logic_error("웹 운동학 모의에는 로터 고장 모델이 없습니다.");
+#endif
+}
+
 void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
     if (!std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))

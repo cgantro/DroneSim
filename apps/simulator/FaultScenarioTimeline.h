@@ -22,6 +22,7 @@ public:
             PacketLoss,
             LinkLatencyJitter,
             CameraFault,
+            RotorMotorFault,
             LinkState,
             DirectedLinkState,
             RadioState
@@ -33,6 +34,7 @@ public:
         simulation::DroneId destination = 0;
         double value = 0.0;
         std::uint32_t valueTicks = 0;
+        std::uint32_t rotorIndex = 0;
         bool enabled = false;
     };
 
@@ -58,6 +60,8 @@ public:
         std::uint32_t maximumExtraTicks);
     void RecordCameraFault(std::uint64_t currentTick,
         simulation::DroneId droneId, bool faulted);
+    void RecordRotorMotorFault(std::uint64_t currentTick,
+        simulation::DroneId droneId, std::uint32_t rotorIndex, bool faulted);
     void RecordLinkState(std::uint64_t currentTick, simulation::DroneId source,
         simulation::DroneId destination, bool disabled);
     void RecordDirectedLinkState(std::uint64_t currentTick,
