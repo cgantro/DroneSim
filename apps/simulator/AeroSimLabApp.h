@@ -190,6 +190,12 @@ private:
     [[nodiscard]] bool CancelInspectionMission();
     void AdvanceInspectionMission();
     [[nodiscard]] bool FleetReconnaissanceCanStart() const;
+    [[nodiscard]] bool CompleteFleetMissionCanStart() const;
+    [[nodiscard]] bool CompleteFleetMissionIsActive() const;
+    [[nodiscard]] bool StartCompleteFleetMission(
+        aerosimlab::simulation::FormationShape shape);
+    [[nodiscard]] std::string CompleteFleetMissionStatus() const;
+    void AdvanceCompleteFleetMission();
     [[nodiscard]] bool StartFleetReconnaissance();
     void AdvanceFleetReconnaissance();
     [[nodiscard]] bool FleetReturnCanStart() const;
@@ -197,6 +203,12 @@ private:
     [[nodiscard]] std::string FleetReconnaissanceStatus() const;
     [[nodiscard]] bool StartFormationTransit(
         aerosimlab::simulation::FormationShape shape);
+    [[nodiscard]] bool StartFleetReconnaissance(
+        bool takeOffDrones,
+        const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
+    [[nodiscard]] bool StartFleetRally();
+    [[nodiscard]] bool StartFleetReturn(bool takeOffDrones);
+    void FailCompleteFleetMission(const std::string& reason);
     void AdvanceFormationTransit();
     void FailInspectionMission(const std::string& reason);
     [[nodiscard]] std::string InspectionMissionStatus() const;
@@ -428,6 +440,12 @@ private:
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneCameraModel_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
+    enum class FleetMissionLeg
+    {
+        Reconnaissance,
+        Regrouping,
+        Returning
+    };
     struct FleetReconnaissanceState
     {
         std::size_t targetIndex = 0;
@@ -436,7 +454,7 @@ private:
         std::size_t nextWaypoint = 0;
         std::string status;
         bool waypointCommanded = false;
-        bool returningToBase = false;
+        FleetMissionLeg leg = FleetMissionLeg::Reconnaissance;
     };
     std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>
         fleetReconnaissance_;
@@ -453,6 +471,26 @@ private:
         std::string status = "대기";
     };
     FormationTransitState formationTransit_;
+    struct CompleteFleetMissionState
+    {
+        enum class Stage
+        {
+            Idle,
+            FormationTransit,
+            Reconnaissance,
+            Regrouping,
+            Returning,
+            Completed,
+            Failed
+        };
+
+        Stage stage = Stage::Idle;
+        aerosimlab::simulation::FormationShape formationShape =
+            aerosimlab::simulation::FormationShape::Vee;
+        std::map<aerosimlab::simulation::DroneId, glm::dvec3> homePositionsMeters;
+        std::string status = "대기";
+    };
+    CompleteFleetMissionState completeFleetMission_;
     std::unique_ptr<aerosimlab::communication::VirtualMeshNetwork> formationNetwork_;
     std::vector<aerosimlab::communication::RadioObstacle> formationRadioObstacles_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;

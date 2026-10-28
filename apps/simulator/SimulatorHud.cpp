@@ -180,6 +180,9 @@ void DrawFlightStatusPanel(
     const std::function<void()>& startFleetReconnaissance,
     bool fleetReturnCanStart,
     const std::function<void()>& startFleetReturn,
+    const std::string& completeFleetMissionStatus,
+    bool completeFleetMissionCanStart,
+    const std::function<void(simulation::FormationShape)>& startCompleteFleetMission,
     const std::string& formationMissionStatus,
     bool formationMissionCanStart,
     bool formationMissionActive,
@@ -219,6 +222,13 @@ void DrawFlightStatusPanel(
             ImGui::TextDisabled("모든 드론이 지상에 있고 다른 임무가 없어야 합니다.");
         if (fleetReturnCanStart && ImGui::Button("출발 지점으로 복귀"))
             startFleetReturn();
+        ImGui::Separator();
+        ImGui::Text("전체 임무: %s", completeFleetMissionStatus.c_str());
+        if (completeFleetMissionCanStart
+            && ImGui::Button("전체 임무 시작 (M01 → M02 → M03)"))
+            startCompleteFleetMission(selectedFormationShape);
+        else if (!completeFleetMissionCanStart)
+            ImGui::TextDisabled("모든 드론이 지상에 있고 다른 임무가 없어야 합니다.");
         ImGui::Separator();
         ImGui::Text("편대 이동: %s", formationMissionStatus.c_str());
         const char* formationLabels[]{"V자", "일렬", "횡대"};
@@ -420,6 +430,9 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::function<void()>& startFleetReconnaissance,
     bool fleetReturnCanStart,
     const std::function<void()>& startFleetReturn,
+    const std::string& completeFleetMissionStatus,
+    bool completeFleetMissionCanStart,
+    const std::function<void(simulation::FormationShape)>& startCompleteFleetMission,
     const std::string& formationMissionStatus, bool formationMissionCanStart,
     bool formationMissionActive,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
@@ -450,7 +463,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         inspectionMissionStatus,
         missionCanStart, startInspectionMission, fleetReconnaissanceStatus,
         fleetReconnaissanceCanStart, startFleetReconnaissance, fleetReturnCanStart,
-        startFleetReturn, formationMissionStatus,
+        startFleetReturn, completeFleetMissionStatus, completeFleetMissionCanStart,
+        startCompleteFleetMission, formationMissionStatus,
         formationMissionCanStart, formationMissionActive, selectedFormationShape_,
         startFormationTransit, formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,

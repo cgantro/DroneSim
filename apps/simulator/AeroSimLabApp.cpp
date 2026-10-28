@@ -511,6 +511,7 @@ void AeroSimLabApp::AdvanceSimulationTick()
     AdvanceAmbientWind();
     AdvanceFleetReconnaissance();
     AdvanceFormationTransit();
+    AdvanceCompleteFleetMission();
     if (demoMode_ && !externalControl_
         && inspectionMission_.stage == InspectionMissionStage::Ready)
         static_cast<void>(RequestInspectionMission());
@@ -522,8 +523,13 @@ void AeroSimLabApp::AdvanceSimulationTick()
         [](const auto& entry)
         {
             return entry.second.status == "출발 준비"
-                || entry.second.status == "이동 중"
-                || entry.second.status == "착륙 중";
+                || entry.second.status == "정찰 이동 중"
+                || entry.second.status == "집결 이동 중"
+                || entry.second.status == "재집결 준비"
+                || entry.second.status == "복귀 준비"
+                || entry.second.status == "복귀 중"
+                || entry.second.status == "착륙 중"
+                || entry.second.status == "복귀 착륙 중";
         });
     if (!groundControlTickAdvanced
         && groundControlCommandExpiresAtTick_.empty()
@@ -712,7 +718,10 @@ void AeroSimLabApp::RenderFrame()
             || inspectionMission_.stage == InspectionMissionStage::Failed;
         const bool fleetReconnaissanceCanStart = FleetReconnaissanceCanStart();
         const bool fleetReturnCanStart = FleetReturnCanStart();
+        const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
         const bool formationMissionCanStart = fleetReconnaissanceCanStart;
+        const bool formationNetworkActive = formationTransit_.active
+            || CompleteFleetMissionIsActive();
         const auto captureAssessment = AssessInspectionView();
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -727,17 +736,22 @@ void AeroSimLabApp::RenderFrame()
             [this] { static_cast<void>(StartFleetReconnaissance()); },
             fleetReturnCanStart,
             [this] { static_cast<void>(StartFleetReturn()); },
+            CompleteFleetMissionStatus(), completeFleetMissionCanStart,
+            [this](aerosimlab::simulation::FormationShape shape)
+            {
+                static_cast<void>(StartCompleteFleetMission(shape));
+            },
             formationTransit_.status, formationMissionCanStart,
-            formationTransit_.active,
+            formationNetworkActive,
             [this](aerosimlab::simulation::FormationShape shape)
             {
                 static_cast<void>(StartFormationTransit(shape));
             },
             formationNetwork_.get(),
-            [this](aerosimlab::simulation::DroneId first,
+            [this, formationNetworkActive](aerosimlab::simulation::DroneId first,
                 aerosimlab::simulation::DroneId second, bool disabled)
             {
-                if (formationNetwork_ && formationTransit_.active)
+                if (formationNetwork_ && formationNetworkActive)
                     formationNetwork_->SetLinkDisabled(first, second, disabled);
             },
             captureAssessment,

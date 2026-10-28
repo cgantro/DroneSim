@@ -38,8 +38,10 @@ std::optional<glm::dvec3> DecodeWaypoint(const std::string& payload)
 
 bool IsFleetReconnaissanceActive(const std::string& status)
 {
-    return status == "출발 준비" || status == "이동 중"
-        || status == "복귀 준비" || status == "복귀 중" || status == "착륙 중";
+    return status == "출발 준비" || status == "정찰 이동 중"
+        || status == "집결 이동 중" || status == "재집결 준비"
+        || status == "복귀 준비" || status == "복귀 중"
+        || status == "착륙 중" || status == "복귀 착륙 중";
 }
 }
 
@@ -134,7 +136,13 @@ bool AeroSimLabApp::RequestInspectionMission(
 
 bool AeroSimLabApp::FleetReconnaissanceCanStart() const
 {
-    if (InspectionMissionIsActive() || formationTransit_.active || inspectionTargets_.empty())
+    const auto stage = completeFleetMission_.stage;
+    const bool sequenceActive = stage == CompleteFleetMissionState::Stage::FormationTransit
+        || stage == CompleteFleetMissionState::Stage::Reconnaissance
+        || stage == CompleteFleetMissionState::Stage::Regrouping
+        || stage == CompleteFleetMissionState::Stage::Returning;
+    if (InspectionMissionIsActive() || formationTransit_.active || sequenceActive
+        || inspectionTargets_.empty())
         return false;
     if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [](const auto& entry)
@@ -152,12 +160,93 @@ bool AeroSimLabApp::FleetReconnaissanceCanStart() const
         });
 }
 
+bool AeroSimLabApp::CompleteFleetMissionCanStart() const
+{
+    using Stage = CompleteFleetMissionState::Stage;
+    const bool sequenceActive = completeFleetMission_.stage == Stage::FormationTransit
+        || completeFleetMission_.stage == Stage::Reconnaissance
+        || completeFleetMission_.stage == Stage::Regrouping
+        || completeFleetMission_.stage == Stage::Returning;
+    if (sequenceActive || InspectionMissionIsActive() || formationTransit_.active
+        || inspectionTargets_.empty())
+        return false;
+
+    const auto droneIds = simulation_.DroneIds();
+    return droneIds.size() >= 2U && std::all_of(droneIds.begin(), droneIds.end(),
+        [this](aerosimlab::simulation::DroneId id)
+        {
+            return simulation_.State(id).mode
+                == aerosimlab::simulation::FlightMode::Grounded;
+        });
+}
+
+bool AeroSimLabApp::CompleteFleetMissionIsActive() const
+{
+    using Stage = CompleteFleetMissionState::Stage;
+    return completeFleetMission_.stage == Stage::FormationTransit
+        || completeFleetMission_.stage == Stage::Reconnaissance
+        || completeFleetMission_.stage == Stage::Regrouping
+        || completeFleetMission_.stage == Stage::Returning;
+}
+
+bool AeroSimLabApp::StartCompleteFleetMission(
+    aerosimlab::simulation::FormationShape shape)
+{
+    if (!CompleteFleetMissionCanStart())
+        return false;
+
+    completeFleetMission_.homePositionsMeters.clear();
+    for (const auto droneId : simulation_.DroneIds())
+        completeFleetMission_.homePositionsMeters.emplace(
+            droneId, simulation_.State(droneId).positionMeters);
+
+    if (!StartFormationTransit(shape))
+    {
+        completeFleetMission_.homePositionsMeters.clear();
+        return false;
+    }
+
+    completeFleetMission_.formationShape = shape;
+    completeFleetMission_.stage = CompleteFleetMissionState::Stage::FormationTransit;
+    completeFleetMission_.status = "M01 편대 이동 중";
+    return true;
+}
+
+std::string AeroSimLabApp::CompleteFleetMissionStatus() const
+{
+    return completeFleetMission_.status;
+}
+
 bool AeroSimLabApp::StartFleetReconnaissance()
 {
     if (!FleetReconnaissanceCanStart())
         return false;
 
+    std::map<aerosimlab::simulation::DroneId, glm::dvec3> homePositions;
+    for (const auto droneId : simulation_.DroneIds())
+        homePositions.emplace(droneId, simulation_.State(droneId).positionMeters);
+    return StartFleetReconnaissance(true, homePositions);
+}
+
+bool AeroSimLabApp::StartFleetReconnaissance(
+    bool takeOffDrones,
+    const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions)
+{
+    using namespace aerosimlab::simulation;
     const auto droneIds = simulation_.DroneIds();
+    const auto expectedMode = takeOffDrones ? FlightMode::Grounded : FlightMode::Hovering;
+    const auto dronesReady = std::all_of(droneIds.begin(), droneIds.end(),
+        [this, expectedMode, takeOffDrones](DroneId id)
+        {
+            const FlightMode mode = simulation_.State(id).mode;
+            return takeOffDrones
+                ? mode == expectedMode
+                : (mode == FlightMode::Hovering || mode == FlightMode::Flying
+                    || mode == FlightMode::FollowingWaypoint);
+        });
+    if (droneIds.empty() || inspectionTargets_.empty() || !dronesReady
+        || InspectionMissionIsActive())
+        return false;
 
     std::vector<FleetReconnaissanceState> missions;
     missions.reserve(droneIds.size());
@@ -174,28 +263,30 @@ bool AeroSimLabApp::StartFleetReconnaissance()
 
         FleetReconnaissanceState mission;
         mission.targetIndex = targetIndex;
-        mission.startPositionMeters = start;
+        const auto home = homePositions.find(droneIds[index]);
+        mission.startPositionMeters = home != homePositions.end()
+            ? home->second : start;
         mission.routeWaypointsMeters.assign(route->begin() + 1, route->end());
-        mission.status = "출발 준비";
+        mission.status = takeOffDrones ? "출발 준비" : "정찰 이동 중";
         missions.push_back(std::move(mission));
     }
 
-    std::vector<aerosimlab::simulation::DroneId> takingOff;
-    takingOff.reserve(droneIds.size());
-    for (std::size_t index = 0; index < droneIds.size(); ++index)
+    if (takeOffDrones)
     {
-        const aerosimlab::simulation::DroneCommand takeoff{
-            aerosimlab::simulation::DroneCommand::Kind::TakeOff};
-        if (simulation_.Apply(droneIds[index], takeoff)
-            != aerosimlab::simulation::CommandResult::Accepted)
+        std::vector<DroneId> takingOff;
+        takingOff.reserve(droneIds.size());
+        for (const DroneId droneId : droneIds)
         {
-            const aerosimlab::simulation::DroneCommand land{
-                aerosimlab::simulation::DroneCommand::Kind::Land};
-            for (const auto airborneDrone : takingOff)
-                static_cast<void>(simulation_.Apply(airborneDrone, land));
-            return false;
+            if (simulation_.Apply(droneId, {DroneCommand::Kind::TakeOff})
+                != CommandResult::Accepted)
+            {
+                for (const DroneId airborneDrone : takingOff)
+                    static_cast<void>(simulation_.Apply(airborneDrone,
+                        {DroneCommand::Kind::Land}));
+                return false;
+            }
+            takingOff.push_back(droneId);
         }
-        takingOff.push_back(droneIds[index]);
     }
     for (std::size_t index = 0; index < droneIds.size(); ++index)
         fleetReconnaissance_[droneIds[index]] = std::move(missions[index]);
@@ -208,7 +299,11 @@ bool AeroSimLabApp::StartFleetReconnaissance()
 bool AeroSimLabApp::FleetReturnCanStart() const
 {
     if (fleetReconnaissance_.empty() || InspectionMissionIsActive()
-        || formationTransit_.active)
+        || formationTransit_.active
+        || completeFleetMission_.stage == CompleteFleetMissionState::Stage::FormationTransit
+        || completeFleetMission_.stage == CompleteFleetMissionState::Stage::Reconnaissance
+        || completeFleetMission_.stage == CompleteFleetMissionState::Stage::Regrouping
+        || completeFleetMission_.stage == CompleteFleetMissionState::Stage::Returning)
         return false;
 
     const auto droneIds = simulation_.DroneIds();
@@ -221,7 +316,7 @@ bool AeroSimLabApp::FleetReturnCanStart() const
         return simulation_.State(droneId).mode
                 == aerosimlab::simulation::FlightMode::Grounded
             && mission != fleetReconnaissance_.end()
-            && !mission->second.returningToBase
+            && mission->second.leg == FleetMissionLeg::Reconnaissance
             && !IsFleetReconnaissanceActive(mission->second.status);
     });
 }
@@ -231,6 +326,13 @@ bool AeroSimLabApp::StartFleetReturn()
     if (!FleetReturnCanStart())
         return false;
 
+    return StartFleetReturn(true);
+}
+
+bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
+{
+    using namespace aerosimlab::simulation;
+
     const auto droneIds = simulation_.DroneIds();
     std::vector<std::vector<glm::dvec3>> returnRoutes;
     returnRoutes.reserve(droneIds.size());
@@ -238,6 +340,13 @@ bool AeroSimLabApp::StartFleetReturn()
     {
         const auto& state = simulation_.State(droneId);
         const auto& mission = fleetReconnaissance_.at(droneId);
+        const FlightMode mode = state.mode;
+        const bool ready = takeOffDrones
+            ? mode == FlightMode::Grounded
+            : (mode == FlightMode::Hovering || mode == FlightMode::Flying
+                || mode == FlightMode::FollowingWaypoint);
+        if (!ready || mission.leg == FleetMissionLeg::Returning)
+            return false;
         glm::dvec3 returnApproach = mission.startPositionMeters;
         returnApproach.z += 5.0;
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
@@ -248,19 +357,84 @@ bool AeroSimLabApp::StartFleetReturn()
         returnRoutes.emplace_back(route->begin() + 1, route->end());
     }
 
-    std::vector<aerosimlab::simulation::DroneId> takingOff;
-    takingOff.reserve(droneIds.size());
-    for (const auto droneId : droneIds)
+    if (takeOffDrones)
     {
-        const aerosimlab::simulation::DroneCommand takeoff{
-            aerosimlab::simulation::DroneCommand::Kind::TakeOff};
-        if (simulation_.Apply(droneId, takeoff)
-            != aerosimlab::simulation::CommandResult::Accepted)
+        std::vector<DroneId> takingOff;
+        takingOff.reserve(droneIds.size());
+        for (const DroneId droneId : droneIds)
         {
-            const aerosimlab::simulation::DroneCommand land{
-                aerosimlab::simulation::DroneCommand::Kind::Land};
-            for (const auto airborneDrone : takingOff)
-                static_cast<void>(simulation_.Apply(airborneDrone, land));
+            if (simulation_.Apply(droneId, {DroneCommand::Kind::TakeOff})
+                != CommandResult::Accepted)
+            {
+                for (const DroneId airborneDrone : takingOff)
+                    static_cast<void>(simulation_.Apply(airborneDrone,
+                        {DroneCommand::Kind::Land}));
+                return false;
+            }
+            takingOff.push_back(droneId);
+        }
+    }
+
+    for (std::size_t index = 0; index < droneIds.size(); ++index)
+    {
+        auto& mission = fleetReconnaissance_.at(droneIds[index]);
+        mission.leg = FleetMissionLeg::Returning;
+        mission.routeWaypointsMeters = std::move(returnRoutes[index]);
+        mission.nextWaypoint = 0;
+        mission.waypointCommanded = false;
+        mission.status = takeOffDrones ? "복귀 준비" : "복귀 중";
+    }
+    externalControl_ = true;
+    groundControlActive_ = true;
+    window_->SetTitle("DroneSim | 출발 지점으로 복귀 중");
+    return true;
+}
+
+bool AeroSimLabApp::StartFleetRally()
+{
+    using namespace aerosimlab::simulation;
+    const auto droneIds = simulation_.DroneIds();
+    if (droneIds.empty() || completeFleetMission_.homePositionsMeters.size()
+        != droneIds.size())
+        return false;
+
+    glm::dvec3 centerMeters{0.0};
+    for (const DroneId droneId : droneIds)
+        centerMeters += completeFleetMission_.homePositionsMeters.at(droneId);
+    centerMeters /= static_cast<double>(droneIds.size());
+    centerMeters.z += 12.0;
+    const auto offsets = FormationOffsets(FormationShape::Vee,
+        droneIds.size(), 8.0, 0.0);
+
+    std::vector<std::vector<glm::dvec3>> rallyRoutes;
+    rallyRoutes.reserve(droneIds.size());
+    for (std::size_t index = 0; index < droneIds.size(); ++index)
+    {
+        const DroneState& state = simulation_.State(droneIds[index]);
+        if (state.mode != FlightMode::Grounded)
+            return false;
+        const glm::dvec3 rallyTarget{
+            centerMeters.x + offsets[index].x,
+            centerMeters.y + offsets[index].y,
+            centerMeters.z};
+        const auto route = aerosimlab::terrain::PlanMapFlightRoute(
+            terrainGrid_, routeBuildings_, state.positionMeters, rallyTarget,
+            3.0, cameraTransitAltitudeMeters_);
+        if (!route)
+            return false;
+        rallyRoutes.emplace_back(route->begin() + 1, route->end());
+    }
+
+    std::vector<DroneId> takingOff;
+    takingOff.reserve(droneIds.size());
+    for (const DroneId droneId : droneIds)
+    {
+        if (simulation_.Apply(droneId, {DroneCommand::Kind::TakeOff})
+            != CommandResult::Accepted)
+        {
+            for (const DroneId airborneDrone : takingOff)
+                static_cast<void>(simulation_.Apply(airborneDrone,
+                    {DroneCommand::Kind::Land}));
             return false;
         }
         takingOff.push_back(droneId);
@@ -269,15 +443,14 @@ bool AeroSimLabApp::StartFleetReturn()
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
         auto& mission = fleetReconnaissance_.at(droneIds[index]);
-        mission.returningToBase = true;
-        mission.routeWaypointsMeters = std::move(returnRoutes[index]);
+        mission.leg = FleetMissionLeg::Regrouping;
+        mission.routeWaypointsMeters = std::move(rallyRoutes[index]);
         mission.nextWaypoint = 0;
         mission.waypointCommanded = false;
-        mission.status = "복귀 준비";
+        mission.status = "재집결 준비";
     }
-    externalControl_ = true;
-    groundControlActive_ = true;
-    window_->SetTitle("DroneSim | 출발 지점으로 복귀 중");
+    completeFleetMission_.stage = CompleteFleetMissionState::Stage::Regrouping;
+    completeFleetMission_.status = "M03 재집결 중";
     return true;
 }
 
@@ -309,25 +482,34 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
 
     for (auto& [droneId, mission] : fleetReconnaissance_)
     {
-        if ((!mission.returningToBase && (mission.status == "정찰 위치 도착"
-                || mission.status == "경로 오류"))
-            || (mission.returningToBase && (mission.status == "복귀 완료"
-                || mission.status == "복귀 실패")))
+        if ((mission.leg == FleetMissionLeg::Reconnaissance
+                && (mission.status == "정찰 위치 도착" || mission.status == "경로 오류"
+                    || mission.status == "목표 외 착륙"))
+            || (mission.leg == FleetMissionLeg::Regrouping
+                && (mission.status == "재집결 완료" || mission.status == "집결 실패"))
+            || (mission.leg == FleetMissionLeg::Returning
+                && (mission.status == "복귀 완료" || mission.status == "복귀 실패")))
             continue;
 
         const auto& state = simulation_.State(droneId);
         if (state.mode == FlightMode::Grounded)
         {
-            if (mission.status == "출발 준비" || mission.status == "복귀 준비")
+            if (mission.status == "출발 준비" || mission.status == "복귀 준비"
+                || mission.status == "재집결 준비")
                 continue;
 
-            const glm::dvec3& destination = mission.returningToBase
+            if (mission.leg == FleetMissionLeg::Regrouping)
+            {
+                mission.status = "집결 실패";
+                continue;
+            }
+            const glm::dvec3& destination = mission.leg == FleetMissionLeg::Returning
                 ? mission.startPositionMeters
                 : inspectionTargets_[mission.targetIndex].approachPositionMeters;
             const glm::dvec2 horizontalError{
                 state.positionMeters.x - destination.x,
                 state.positionMeters.y - destination.y};
-            if (mission.returningToBase)
+            if (mission.leg == FleetMissionLeg::Returning)
                 mission.status = glm::length(horizontalError) <= 5.0
                     ? "복귀 완료" : "복귀 실패";
             else
@@ -341,13 +523,22 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
         if (!mission.waypointCommanded)
         {
             mission.waypointCommanded = true;
-            mission.status = mission.returningToBase ? "복귀 중" : "이동 중";
+            mission.status = mission.leg == FleetMissionLeg::Returning
+                ? "복귀 중"
+                : mission.leg == FleetMissionLeg::Regrouping
+                    ? "집결 이동 중" : "정찰 이동 중";
         }
         else if (mission.nextWaypoint >= mission.routeWaypointsMeters.size())
         {
+            if (mission.leg == FleetMissionLeg::Regrouping)
+            {
+                mission.status = "재집결 완료";
+                continue;
+            }
             const Command land{Command::Kind::Land};
             if (simulation_.Apply(droneId, land) == aerosimlab::simulation::CommandResult::Accepted)
-                mission.status = "착륙 중";
+                mission.status = mission.leg == FleetMissionLeg::Returning
+                    ? "복귀 착륙 중" : "착륙 중";
             else
                 mission.status = "경로 오류";
             continue;
@@ -369,6 +560,126 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                 != aerosimlab::simulation::CommandResult::Accepted)
                 mission.status = "경로 오류";
         }
+    }
+}
+
+void AeroSimLabApp::AdvanceCompleteFleetMission()
+{
+    using Stage = CompleteFleetMissionState::Stage;
+    using FlightMode = aerosimlab::simulation::FlightMode;
+    if (completeFleetMission_.stage == Stage::Idle
+        || completeFleetMission_.stage == Stage::Completed
+        || completeFleetMission_.stage == Stage::Failed)
+        return;
+
+    if (completeFleetMission_.stage == Stage::FormationTransit)
+    {
+        if (formationTransit_.active)
+            return;
+        if (formationTransit_.status != "목적지 도착 · 편대 유지 중")
+        {
+            FailCompleteFleetMission("M01 편대 이동이 끝나지 않아 전체 임무를 중단했습니다.");
+            return;
+        }
+        if (!StartFleetReconnaissance(false, completeFleetMission_.homePositionsMeters))
+        {
+            FailCompleteFleetMission("M02 정찰 경로를 만들지 못해 기체를 착륙시킵니다.");
+            return;
+        }
+        completeFleetMission_.stage = Stage::Reconnaissance;
+        completeFleetMission_.status = "M02 분산 정찰 중";
+        return;
+    }
+
+    const auto droneIds = simulation_.DroneIds();
+    if (completeFleetMission_.stage == Stage::Reconnaissance)
+    {
+        for (const auto droneId : droneIds)
+        {
+            const auto mission = fleetReconnaissance_.find(droneId);
+            if (mission == fleetReconnaissance_.end())
+            {
+                FailCompleteFleetMission("드론별 정찰 상태를 찾지 못해 임무를 중단했습니다.");
+                return;
+            }
+            if (mission->second.status == "경로 오류"
+                || mission->second.status == "목표 외 착륙")
+            {
+                FailCompleteFleetMission("정찰 목표에 도착하지 못해 임무를 중단했습니다.");
+                return;
+            }
+            if (simulation_.State(droneId).mode != FlightMode::Grounded
+                || mission->second.status != "정찰 위치 도착")
+                return;
+        }
+
+        if (!StartFleetRally())
+        {
+            FailCompleteFleetMission("공통 집결 경로를 만들지 못해 임무를 중단했습니다.");
+            return;
+        }
+        return;
+    }
+
+    if (completeFleetMission_.stage == Stage::Regrouping)
+    {
+        for (const auto droneId : droneIds)
+        {
+            const auto mission = fleetReconnaissance_.find(droneId);
+            if (mission == fleetReconnaissance_.end()
+                || mission->second.status == "집결 실패")
+            {
+                FailCompleteFleetMission("모든 기체가 집결하지 못해 임무를 중단했습니다.");
+                return;
+            }
+            if (mission->second.status != "재집결 완료")
+                return;
+        }
+
+        if (!StartFleetReturn(false))
+        {
+            FailCompleteFleetMission("집결지에서 기지까지 복귀 경로를 만들지 못했습니다.");
+            return;
+        }
+        completeFleetMission_.stage = Stage::Returning;
+        completeFleetMission_.status = "M03 기지로 복귀 중";
+        return;
+    }
+
+    if (completeFleetMission_.stage == Stage::Returning)
+    {
+        for (const auto droneId : droneIds)
+        {
+            const auto mission = fleetReconnaissance_.find(droneId);
+            if (mission == fleetReconnaissance_.end()
+                || mission->second.status == "복귀 실패")
+            {
+                completeFleetMission_.stage = Stage::Failed;
+                completeFleetMission_.status = "복귀에 실패한 드론이 있습니다.";
+                return;
+            }
+            if (simulation_.State(droneId).mode != FlightMode::Grounded
+                || mission->second.status != "복귀 완료")
+                return;
+        }
+        completeFleetMission_.stage = Stage::Completed;
+        completeFleetMission_.status = "전체 임무 완료";
+        return;
+    }
+}
+
+void AeroSimLabApp::FailCompleteFleetMission(const std::string& reason)
+{
+    using FlightMode = aerosimlab::simulation::FlightMode;
+    using Command = aerosimlab::simulation::DroneCommand;
+    completeFleetMission_.stage = CompleteFleetMissionState::Stage::Failed;
+    completeFleetMission_.status = reason;
+    formationTransit_.active = false;
+    for (const auto droneId : simulation_.DroneIds())
+    {
+        const FlightMode mode = simulation_.State(droneId).mode;
+        if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
+            static_cast<void>(simulation_.Apply(droneId, {Command::Kind::Land}));
     }
 }
 
@@ -467,11 +778,12 @@ bool AeroSimLabApp::StartFormationTransit(
 void AeroSimLabApp::AdvanceFormationTransit()
 {
     using namespace aerosimlab::simulation;
-    if (!formationTransit_.active)
+    if (!formationTransit_.active && !CompleteFleetMissionIsActive())
         return;
 
     const std::vector<DroneId> droneIds = simulation_.DroneIds();
-    if (droneIds.size() < 2U || formationTransit_.route.leaderWaypointsMeters.empty())
+    if (formationTransit_.active && (droneIds.size() < 2U
+        || formationTransit_.route.leaderWaypointsMeters.empty()))
     {
         formationTransit_.active = false;
         formationTransit_.status = "편대 구성을 유지할 수 없어 임무를 멈췄습니다.";
@@ -480,8 +792,11 @@ void AeroSimLabApp::AdvanceFormationTransit()
 
     if (!formationNetwork_)
     {
-        formationTransit_.active = false;
-        formationTransit_.status = "편대 통신망을 시작하지 못했습니다.";
+        if (formationTransit_.active)
+        {
+            formationTransit_.active = false;
+            formationTransit_.status = "편대 통신망을 시작하지 못했습니다.";
+        }
         return;
     }
 
@@ -530,6 +845,9 @@ void AeroSimLabApp::AdvanceFormationTransit()
         formationTransit_.lastAppliedSequence[delivered.message.destination]
             = delivered.message.sequence;
     }
+
+    if (!formationTransit_.active)
+        return;
 
     const DroneId leaderId = droneIds.front();
     const DroneState& leader = simulation_.State(leaderId);
