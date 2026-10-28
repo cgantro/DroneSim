@@ -115,53 +115,70 @@ void DrawScenePanel(const std::function<std::uint32_t(int, int)>& renderScene)
 }
 
 void DrawCameraPanel(
-    bool cameraActive,
-    int cameraImageWidth,
-    int cameraImageHeight,
-    const std::function<std::uint32_t()>& renderCamera)
+    const simulation::SimulationCore& simulation,
+    const std::function<std::uint32_t(simulation::DroneId)>& renderCamera)
 {
     if (ImGui::Begin("카메라##CameraViewV3"))
     {
         const ImVec2 available = ImGui::GetContentRegionAvail();
-        const ImVec2 imageOrigin = ImGui::GetCursorPos();
-        const ImVec2 contentOrigin = ImGui::GetCursorScreenPos();
-        ImVec2 imageMaximum{contentOrigin.x + available.x,
-            contentOrigin.y + available.y};
-
-        if (cameraActive && cameraImageWidth > 0 && cameraImageHeight > 0)
+        const auto droneIds = simulation.DroneIds();
+        if (droneIds.empty())
         {
-            const float scale = std::min(
-                available.x / static_cast<float>(cameraImageWidth),
-                available.y / static_cast<float>(cameraImageHeight));
-            const ImVec2 imageSize{
-                static_cast<float>(cameraImageWidth) * scale,
-                static_cast<float>(cameraImageHeight) * scale};
-            ImGui::SetCursorPos(ImVec2{
-                imageOrigin.x + (available.x - imageSize.x) * 0.5F,
-                imageOrigin.y + (available.y - imageSize.y) * 0.5F});
-            const std::uint32_t texture = renderCamera();
-            ImGui::Image(static_cast<ImTextureID>(texture), imageSize,
-                ImVec2{0.0F, 1.0F}, ImVec2{1.0F, 0.0F});
-            imageMaximum = ImGui::GetItemRectMax();
+            ImGui::TextUnformatted("드론이 없습니다.");
         }
         else
         {
-            ImGui::TextUnformatted("카메라가 꺼져 있습니다.");
-        }
+            constexpr int cameraColumns = 2;
+            const int cameraRows = static_cast<int>(
+                (droneIds.size() + cameraColumns - 1U) / cameraColumns);
+            const float rowSpacing = ImGui::GetStyle().ItemSpacing.y;
+            const float cellHeight = std::max(1.0F,
+                (available.y - rowSpacing * static_cast<float>(cameraRows - 1))
+                    / static_cast<float>(cameraRows));
 
-        const std::string resolution = std::to_string(cameraImageWidth)
-            + " × " + std::to_string(cameraImageHeight);
-        const ImVec2 textSize = ImGui::CalcTextSize(resolution.c_str());
-        const ImVec2 padding{8.0F, 4.0F};
-        const ImVec2 badgeMinimum{
-            imageMaximum.x - textSize.x - padding.x * 2.0F - 8.0F,
-            imageMaximum.y - textSize.y - padding.y * 2.0F - 8.0F};
-        const ImVec2 badgeMaximum{imageMaximum.x - 8.0F, imageMaximum.y - 8.0F};
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        drawList->AddRectFilled(badgeMinimum, badgeMaximum,
-            IM_COL32(0, 0, 0, 190), 4.0F);
-        drawList->AddText(ImVec2{badgeMinimum.x + padding.x,
-            badgeMinimum.y + padding.y}, IM_COL32(255, 255, 255, 255), resolution.c_str());
+            if (ImGui::BeginTable("드론별 카메라", cameraColumns,
+                    ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuterH
+                        | ImGuiTableFlags_SizingStretchSame,
+                    available))
+            {
+                for (const simulation::DroneId droneId : droneIds)
+                {
+                    ImGui::TableNextColumn();
+                    const auto& camera = simulation.Camera(droneId);
+                    const std::string label = DroneName(droneId);
+                    ImGui::TextUnformatted(label.c_str());
+
+                    const int imageWidth = camera.model.imageWidthPixels;
+                    const int imageHeight = camera.model.imageHeightPixels;
+                    if (camera.status != simulation::CameraStatus::Active
+                        || imageWidth <= 0 || imageHeight <= 0)
+                    {
+                        ImGui::TextDisabled("%s",
+                            simulation::ToString(camera.status).data());
+                        continue;
+                    }
+
+                    const ImVec2 cell = ImGui::GetContentRegionAvail();
+                    const float imageBoxHeight = std::max(1.0F,
+                        cellHeight - ImGui::GetTextLineHeightWithSpacing()
+                            - ImGui::GetStyle().ItemSpacing.y);
+                    const float scale = std::min(
+                        cell.x / static_cast<float>(imageWidth),
+                        imageBoxHeight / static_cast<float>(imageHeight));
+                    const ImVec2 imageSize{
+                        static_cast<float>(imageWidth) * scale,
+                        static_cast<float>(imageHeight) * scale};
+                    const float imageX = ImGui::GetCursorPosX()
+                        + std::max(0.0F, (cell.x - imageSize.x) * 0.5F);
+                    ImGui::SetCursorPosX(imageX);
+                    const std::uint32_t texture = renderCamera(droneId);
+                    ImGui::Image(static_cast<ImTextureID>(texture), imageSize,
+                        ImVec2{0.0F, 1.0F}, ImVec2{1.0F, 0.0F});
+                    ImGui::TextDisabled("%d × %d", imageWidth, imageHeight);
+                }
+                ImGui::EndTable();
+            }
+        }
     }
     ImGui::End();
 }
@@ -425,8 +442,7 @@ void SimulatorHud::CollectCompletedGpuTimings(HudRenderTimings* timings)
 }
 
 void SimulatorHud::Render(const simulation::SimulationCore& simulation,
-    bool gamepadConnected, bool groundControlConnected, bool cameraActive,
-    int cameraImageWidth, int cameraImageHeight,
+    bool gamepadConnected, bool groundControlConnected,
     double missionDistanceMeters,
     const std::string& inspectionTargetName,
     const std::string& inspectionMissionStatus, bool missionCanStart,
@@ -449,7 +465,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         setFormationLinkDisabled,
     simulation::CaptureAssessment captureAssessment,
     const std::function<std::uint32_t(int, int)>& renderScene,
-    const std::function<std::uint32_t()>& renderCamera,
+    const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
     HudRenderTimings* timings)
 {
     CollectCompletedGpuTimings(timings);
@@ -465,7 +481,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
     DrawScenePanel(renderScene);
-    DrawCameraPanel(cameraActive, cameraImageWidth, cameraImageHeight, renderCamera);
+    DrawCameraPanel(simulation, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
         missionDistanceMeters, inspectionTargetName,
         inspectionMissionStatus,

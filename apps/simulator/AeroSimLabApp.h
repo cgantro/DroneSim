@@ -282,9 +282,12 @@ private:
     void UpdateObserverCamera(int width, int height);
     /** @brief 화면 크기에 맞춰 EO 카메라의 시야 비율을 갱신한다. */
     void UpdateEoCamera(int width, int height);
+    void UpdateEoCamera(aerosimlab::simulation::DroneId droneId,
+        aerosimlab::graphics::Camera& camera, int width, int height);
 #ifndef __EMSCRIPTEN__
     [[nodiscard]] std::uint32_t RenderScenePanel(int width, int height);
-    [[nodiscard]] std::uint32_t RenderCameraPanel();
+    [[nodiscard]] std::uint32_t RenderCameraPanel(
+        aerosimlab::simulation::DroneId droneId);
     [[nodiscard]] std::uint32_t RenderWorldToTarget(
         aerosimlab::graphics::MultisampleFramebuffer& target,
         const aerosimlab::graphics::Camera& camera,
@@ -433,6 +436,14 @@ private:
 #ifndef __EMSCRIPTEN__
     std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> sceneTarget_;
     std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> cameraTarget_;
+    struct AuxiliaryCameraView
+    {
+        std::unique_ptr<aerosimlab::graphics::Camera> camera;
+        std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> target;
+        std::optional<std::uint64_t> lastRenderedTick;
+    };
+    std::unordered_map<aerosimlab::simulation::DroneId, AuxiliaryCameraView>
+        auxiliaryCameraViews_;
     std::unique_ptr<EoVideoRecorder> eoVideoRecorder_;
     std::unique_ptr<aerosimlab::media::RtpVideoSender> eoVideoSender_;
     std::jthread eoVideoStartWorker_;

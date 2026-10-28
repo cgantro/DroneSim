@@ -704,9 +704,6 @@ void AeroSimLabApp::RenderFrame()
         const bool groundControlConnected = lastGroundControlMessage_
             && std::chrono::steady_clock::now() - *lastGroundControlMessage_
                 < std::chrono::seconds(2);
-        const bool cameraActive = simulation_.Camera().status
-            == aerosimlab::simulation::CameraStatus::Active;
-        const auto& camera = simulation_.Camera();
         const glm::dvec3& dronePosition = simulation_.State().positionMeters;
         const glm::dvec3& capturePosition = inspectionTargets_[
             inspectionMission_.activeTargetIndex].approachPositionMeters;
@@ -728,8 +725,7 @@ void AeroSimLabApp::RenderFrame()
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
-        hud_->Render(simulation_, gamepadConnected_, groundControlConnected, cameraActive,
-            camera.model.imageWidthPixels, camera.model.imageHeightPixels,
+        hud_->Render(simulation_, gamepadConnected_, groundControlConnected,
             missionDistanceMeters, inspectionMission_.targetDisplayName,
             InspectionMissionStatus(),
             missionCanStart && fleetReconnaissanceCanStart,
@@ -766,7 +762,10 @@ void AeroSimLabApp::RenderFrame()
             },
             captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },
-            [this] { return RenderCameraPanel(); },
+            [this](aerosimlab::simulation::DroneId droneId)
+            {
+                return RenderCameraPanel(droneId);
+            },
             benchmarkMode_ ? &hudTimings : nullptr);
         frameMeasurements_.hudInterfaceBuildMicroseconds = hudTimings.interfaceBuildMicroseconds;
         frameMeasurements_.hudFinalizeMicroseconds = hudTimings.frameFinalizeMicroseconds;
@@ -811,7 +810,16 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
 
 void AeroSimLabApp::UpdateEoCamera(int width, int height)
 {
-    const auto& cameraState = simulation_.Camera();
+    UpdateEoCamera(simulation_.PrimaryDroneId(), *eoCamera_, width, height);
+}
+
+void AeroSimLabApp::UpdateEoCamera(
+    aerosimlab::simulation::DroneId droneId,
+    aerosimlab::graphics::Camera& renderCamera,
+    int width,
+    int height)
+{
+    const auto& cameraState = simulation_.Camera(droneId);
     const glm::vec3 cameraPosition = ToRenderPosition(cameraState.positionMeters);
     const glm::dvec3 opticalAxis =
         aerosimlab::simulation::EoCameraModel::OpticalAxis(cameraState);
@@ -819,11 +827,11 @@ void AeroSimLabApp::UpdateEoCamera(int width, int height)
         aerosimlab::simulation::EoCameraModel::UpAxis(cameraState);
     const glm::vec3 viewDirection = ToRenderDirection(opticalAxis);
     const glm::vec3 cameraUp = ToRenderDirection(cameraUpAxis);
-    eoCamera_->SetPosition(cameraPosition);
-    eoCamera_->SetTarget(cameraPosition + viewDirection);
-    eoCamera_->SetUp(cameraUp);
-    eoCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
-    eoCamera_->SetFieldOfViewDegrees(
+    renderCamera.SetPosition(cameraPosition);
+    renderCamera.SetTarget(cameraPosition + viewDirection);
+    renderCamera.SetUp(cameraUp);
+    renderCamera.SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
+    renderCamera.SetFieldOfViewDegrees(
         static_cast<float>(cameraState.model.verticalFieldOfViewDegrees));
 }
 

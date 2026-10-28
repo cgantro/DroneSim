@@ -44,8 +44,7 @@ public:
     SimulatorHud& operator=(const SimulatorHud&) = delete;
 
     void Render(const simulation::SimulationCore& simulation,
-        bool gamepadConnected, bool groundControlConnected, bool cameraActive,
-        int cameraImageWidth, int cameraImageHeight,
+        bool gamepadConnected, bool groundControlConnected,
         double missionDistanceMeters,
         const std::string& inspectionTargetName,
         const std::string& inspectionMissionStatus, bool missionCanStart,
@@ -68,7 +67,7 @@ public:
             setFormationLinkDisabled,
         simulation::CaptureAssessment captureAssessment,
         const std::function<std::uint32_t(int, int)>& renderScene,
-        const std::function<std::uint32_t()>& renderCamera,
+        const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
         HudRenderTimings* timings = nullptr);
 
 private:
