@@ -33,6 +33,12 @@ enum class FleetDroneStatus : std::uint8_t
     LowBatteryReturnComplete,
     RouteFailed,
     OutsideTargetLanding,
+    DroneFailureLanding,
+    LeaderCommunicationFailureLanding,
+    BatteryReturnRouteFailed,
+    AssignmentExpiredLanding,
+    AssignmentExpiredWaiting,
+    LeaderReassignmentWaiting,
     RegroupFailed,
     ReturnFailed,
     RelayFailed

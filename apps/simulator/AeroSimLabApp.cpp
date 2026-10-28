@@ -1118,8 +1118,10 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     {
         for (const auto& [droneId, mission] : fleetReconnaissance_)
         {
-            if (mission.status != "출발 준비" && mission.status != "이동 중"
-                && mission.status != "착륙 중")
+            const auto missionStatus = detail::ParseFleetDroneStatus(mission.status);
+            if (missionStatus != detail::FleetDroneStatus::TakeoffReady
+                && missionStatus != detail::FleetDroneStatus::Reconnaissance
+                && missionStatus != detail::FleetDroneStatus::Landing)
                 continue;
             glm::dvec3 previous = mission.startPositionMeters;
             for (const glm::dvec3& waypoint : mission.routeWaypointsMeters)

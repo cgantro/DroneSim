@@ -6,7 +6,8 @@ FleetDroneStatus ParseFleetDroneStatus(std::string_view status) noexcept
 {
     if (status == "경로 전달 대기") return FleetDroneStatus::RoutePending;
     if (status == "출발 준비") return FleetDroneStatus::TakeoffReady;
-    if (status == "정찰 이동 중") return FleetDroneStatus::Reconnaissance;
+    if (status == "정찰 이동 중" || status == "이동 중")
+        return FleetDroneStatus::Reconnaissance;
     if (status == "중계 준비") return FleetDroneStatus::RelayPreparing;
     if (status == "중계 위치로 이동 중") return FleetDroneStatus::MovingToRelay;
     if (status == "집결 이동 중") return FleetDroneStatus::Regrouping;
@@ -24,6 +25,18 @@ FleetDroneStatus ParseFleetDroneStatus(std::string_view status) noexcept
     if (status == "저전력 복귀 완료") return FleetDroneStatus::LowBatteryReturnComplete;
     if (status == "경로 오류") return FleetDroneStatus::RouteFailed;
     if (status == "목표 외 착륙") return FleetDroneStatus::OutsideTargetLanding;
+    if (status == "기체 고장 · 안전 착륙")
+        return FleetDroneStatus::DroneFailureLanding;
+    if (status == "리더 통신 장애 · 기체 안전 착륙")
+        return FleetDroneStatus::LeaderCommunicationFailureLanding;
+    if (status == "배터리 부족 · 복귀 경로 오류")
+        return FleetDroneStatus::BatteryReturnRouteFailed;
+    if (status == "임무 권한 만료 · 안전 착륙")
+        return FleetDroneStatus::AssignmentExpiredLanding;
+    if (status == "임무 권한 만료 · 재배정 대기")
+        return FleetDroneStatus::AssignmentExpiredWaiting;
+    if (status == "리더 임무 재배정 대기")
+        return FleetDroneStatus::LeaderReassignmentWaiting;
     if (status == "집결 실패") return FleetDroneStatus::RegroupFailed;
     if (status == "복귀 실패") return FleetDroneStatus::ReturnFailed;
     if (status == "중계 실패 · 안전 착륙") return FleetDroneStatus::RelayFailed;
