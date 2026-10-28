@@ -22,11 +22,48 @@ std::uint32_t AeroSimLabApp::RenderScenePanel(int width, int height)
     return RenderWorldToTarget(*sceneTarget_, *observerCamera_, true);
 }
 
-std::uint32_t AeroSimLabApp::RenderCameraPanel()
+std::uint32_t AeroSimLabApp::RenderCameraPanel(
+    aerosimlab::simulation::DroneId droneId)
 {
-    const auto& camera = simulation_.Camera();
+    const auto& camera = simulation_.Camera(droneId);
     const int imageWidth = camera.model.imageWidthPixels;
     const int imageHeight = camera.model.imageHeightPixels;
+
+    if (droneId != simulation_.PrimaryDroneId())
+    {
+        auto& view = auxiliaryCameraViews_[droneId];
+        if (!view.camera)
+        {
+            const float aspectRatio = static_cast<float>(imageWidth)
+                / static_cast<float>(imageHeight);
+            view.camera = std::make_unique<aerosimlab::graphics::Camera>(
+                glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, aspectRatio,
+                static_cast<float>(camera.model.verticalFieldOfViewDegrees),
+                0.05F, 200.0F);
+        }
+        if (!view.target)
+        {
+            view.target = std::make_unique<
+                aerosimlab::graphics::MultisampleFramebuffer>(imageWidth, imageHeight);
+        }
+
+        const bool targetSizeChanged = view.target->GetWidth() != imageWidth
+            || view.target->GetHeight() != imageHeight;
+        view.target->Resize(imageWidth, imageHeight);
+        if (targetSizeChanged || !view.lastRenderedTick
+            || *view.lastRenderedTick != camera.lastFrameTick)
+        {
+            aerosimlab::simulation::ScopedDuration measureCameraScene(
+                benchmarkMode_
+                    ? &frameMeasurements_.cameraSceneRenderMicroseconds : nullptr);
+            UpdateEoCamera(droneId, *view.camera, imageWidth, imageHeight);
+            static_cast<void>(RenderWorldToTarget(*view.target, *view.camera,
+                false, droneId));
+            view.lastRenderedTick = camera.lastFrameTick;
+        }
+        return view.target->GetTextureId();
+    }
+
     const bool targetSizeChanged = cameraTarget_->GetWidth() != imageWidth
         || cameraTarget_->GetHeight() != imageHeight;
     cameraTarget_->Resize(imageWidth, imageHeight);
