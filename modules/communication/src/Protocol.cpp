@@ -479,14 +479,17 @@ std::string EncodeReply(const CommandReply& reply)
     payload["telemetry"]["drones"] = Json::array();
     for (const DroneTelemetry& drone : reply.telemetry.drones)
     {
-        payload["telemetry"]["drones"].push_back({
+        Json encodedDrone{
             {"id", drone.id}, {"name", drone.name},
             {"flight_mode", simulation::ToString(drone.mode)},
             {"position_meters", {drone.positionMeters.x,
-                drone.positionMeters.y, drone.positionMeters.z}},
-            {"mission_target", drone.missionTarget},
-            {"mission_status", drone.missionStatus}
-        });
+                drone.positionMeters.y, drone.positionMeters.z}}
+        };
+        if (!drone.missionTarget.empty())
+            encodedDrone["mission_target"] = drone.missionTarget;
+        if (!drone.missionStatus.empty())
+            encodedDrone["mission_status"] = drone.missionStatus;
+        payload["telemetry"]["drones"].push_back(std::move(encodedDrone));
     }
     const std::string datagram = Wrap("reply", std::move(payload)).dump();
     if (datagram.size() > maximumDatagramBytes)

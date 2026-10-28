@@ -116,6 +116,8 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
         {1, "드론 1", simulation::FlightMode::Hovering, {1.0, 2.0, 3.0}}};
     const std::string encodedReply = EncodeReply(reply);
     EXPECT_LE(encodedReply.size(), maximumDatagramBytes);
+    EXPECT_EQ(encodedReply.find("\"mission_target\""), std::string::npos);
+    EXPECT_EQ(encodedReply.find("\"mission_status\""), std::string::npos);
     const auto decoded = DecodeReply(encodedReply);
     EXPECT_EQ(decoded.commandId, 3);
     EXPECT_EQ(decoded.appliedTick, 9);
@@ -137,9 +139,17 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
 
     CommandReply fleetReply = reply;
     fleetReply.status = "fleet_status";
-    fleetReply.telemetry.drones.push_back(
-        {2, "드론 2", simulation::FlightMode::Grounded, {6.0, 2.0, 0.24}});
-    const auto decodedFleet = DecodeReply(EncodeReply(fleetReply));
+    DroneTelemetry secondDrone{
+        2, "드론 2", simulation::FlightMode::Grounded, {6.0, 2.0, 0.24}};
+    secondDrone.missionTarget = "구역 2";
+    secondDrone.missionStatus = "정찰 중";
+    fleetReply.telemetry.drones.push_back(secondDrone);
+    const auto encodedFleet = EncodeReply(fleetReply);
+    EXPECT_NE(encodedFleet.find("\"mission_target\":\"구역 2\""),
+        std::string::npos);
+    EXPECT_NE(encodedFleet.find("\"mission_status\":\"정찰 중\""),
+        std::string::npos);
+    const auto decodedFleet = DecodeReply(encodedFleet);
     ASSERT_EQ(decodedFleet.telemetry.drones.size(), 2U);
     EXPECT_EQ(decodedFleet.telemetry.drones[1].mode, simulation::FlightMode::Grounded);
     EXPECT_EQ(decodedFleet.telemetry.drones[1].positionMeters, glm::dvec3(6.0, 2.0, 0.24));
