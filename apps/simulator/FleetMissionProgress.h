@@ -7,7 +7,18 @@
 #include <span>
 #include <string_view>
 
-namespace aerosimlab::simulator::detail
+namespace aerosimlab::simulator
+{
+/** @brief 드론 한 대가 수행 중인 임무 구간이다. */
+enum class FleetMissionLeg : std::uint8_t
+{
+    Reconnaissance,
+    Regrouping,
+    Returning,
+    Relaying
+};
+
+namespace detail
 {
 /** @brief 화면 문구와 분리해 임무 판정에 사용하는 드론 상태다. */
 enum class FleetDroneStatus : std::uint8_t
@@ -55,16 +66,8 @@ enum class FleetDroneStatus : std::uint8_t
 struct FleetMissionReport
 {
     simulation::FlightMode mode;
-    std::uint8_t missionLeg;
+    FleetMissionLeg leg;
     FleetDroneStatus status;
-};
-
-/** @brief 전체 임무에서 확인 중인 단계다. */
-enum class FleetMissionPhase : std::uint8_t
-{
-    Reconnaissance,
-    Regrouping,
-    Returning
 };
 
 /** @brief 모든 드론의 보고를 모아 내린 단계 판정이다. */
@@ -88,6 +91,7 @@ struct FleetMissionProgressDecision
  * 복귀 단계는 모든 드론의 착륙까지 확인한 뒤 완료로 판정한다.
  */
 [[nodiscard]] FleetMissionProgressDecision EvaluateFleetMissionProgress(
-    FleetMissionPhase phase,
+    FleetMissionLeg leg,
     std::span<const std::optional<FleetMissionReport>> reports) noexcept;
+}
 }

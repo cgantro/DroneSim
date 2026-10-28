@@ -67,13 +67,12 @@ bool IsFleetMissionInProgress(std::string_view status) noexcept
 }
 
 FleetMissionProgressDecision EvaluateFleetMissionProgress(
-    FleetMissionPhase phase,
+    FleetMissionLeg leg,
     std::span<const std::optional<FleetMissionReport>> reports) noexcept
 {
     if (reports.empty())
         return {FleetMissionProgress::Waiting, {}};
 
-    const auto expectedLeg = static_cast<std::uint8_t>(phase);
     for (const auto& report : reports)
     {
         if (!report)
@@ -83,12 +82,12 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
             report->status == FleetDroneStatus::LowBatteryReturnComplete
             && report->mode == simulation::FlightMode::Grounded;
         if (returnedForLowBattery
-            && (phase == FleetMissionPhase::Reconnaissance
-                || phase == FleetMissionPhase::Returning))
+            && (leg == FleetMissionLeg::Reconnaissance
+                || leg == FleetMissionLeg::Returning))
             continue;
 
-        if (phase == FleetMissionPhase::Reconnaissance
-            && report->missionLeg == 3U)
+        if (leg == FleetMissionLeg::Reconnaissance
+            && report->leg == FleetMissionLeg::Relaying)
         {
             if (report->status == FleetDroneStatus::RelayFailed)
                 return {FleetMissionProgress::Failed,
@@ -100,12 +99,12 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
             continue;
         }
 
-        if (report->missionLeg != expectedLeg)
+        if (report->leg != leg)
             return {FleetMissionProgress::Waiting, {}};
 
-        switch (phase)
+        switch (leg)
         {
-        case FleetMissionPhase::Reconnaissance:
+        case FleetMissionLeg::Reconnaissance:
             if (report->status == FleetDroneStatus::RouteFailed
                 || report->status == FleetDroneStatus::OutsideTargetLanding)
                 return {FleetMissionProgress::Failed,
@@ -114,14 +113,14 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
                 || report->status != FleetDroneStatus::TargetReached)
                 return {FleetMissionProgress::Waiting, {}};
             break;
-        case FleetMissionPhase::Regrouping:
+        case FleetMissionLeg::Regrouping:
             if (report->status == FleetDroneStatus::RegroupFailed)
                 return {FleetMissionProgress::Failed,
                     "모든 기체가 집결하지 못해 임무를 중단했습니다."};
             if (report->status != FleetDroneStatus::RegroupComplete)
                 return {FleetMissionProgress::Waiting, {}};
             break;
-        case FleetMissionPhase::Returning:
+        case FleetMissionLeg::Returning:
             if (report->status == FleetDroneStatus::ReturnFailed)
                 return {FleetMissionProgress::Failed,
                     "복귀에 실패한 드론이 있습니다."};
@@ -129,10 +128,12 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
                 || report->status != FleetDroneStatus::ReturnComplete)
                 return {FleetMissionProgress::Waiting, {}};
             break;
+        case FleetMissionLeg::Relaying:
+            return {FleetMissionProgress::Waiting, {}};
         }
     }
 
-    return {phase == FleetMissionPhase::Returning
+    return {leg == FleetMissionLeg::Returning
             ? FleetMissionProgress::Complete : FleetMissionProgress::Advance,
         {}};
 }

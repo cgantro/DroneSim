@@ -2,6 +2,7 @@
 
 #include "SimulationBenchmark.h"
 #include "FleetTelemetry.h"
+#include "FleetMissionProgress.h"
 #include "FaultScenarioTimeline.h"
 #ifndef __EMSCRIPTEN__
 #include "EoVideoRecorder.h"
@@ -120,7 +121,6 @@ public:
 private:
     friend class AeroSimLabAppTestAccess;
 
-    enum class FleetMissionLeg;
 
     static constexpr double benchmarkWarmupDurationSeconds = 1.0;
 
@@ -507,13 +507,6 @@ private:
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     glm::dvec3 groundControlPositionMeters_{0.0};
-    enum class FleetMissionLeg
-    {
-        Reconnaissance,
-        Regrouping,
-        Returning,
-        Relaying
-    };
     struct FleetReconnaissanceState
     {
         std::size_t targetIndex = 0;
