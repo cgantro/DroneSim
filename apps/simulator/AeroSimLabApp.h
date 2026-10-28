@@ -189,8 +189,10 @@ private:
     [[nodiscard]] bool ResumeInspectionMission();
     [[nodiscard]] bool CancelInspectionMission();
     void AdvanceInspectionMission();
+    [[nodiscard]] bool FleetReconnaissanceCanStart() const;
     [[nodiscard]] bool StartFleetReconnaissance();
     void AdvanceFleetReconnaissance();
+    [[nodiscard]] std::string FleetReconnaissanceStatus() const;
     [[nodiscard]] bool StartFormationTransit(
         aerosimlab::simulation::FormationShape shape);
     void AdvanceFormationTransit();

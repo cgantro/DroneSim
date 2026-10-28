@@ -710,21 +710,8 @@ void AeroSimLabApp::RenderFrame()
             || inspectionMission_.stage == InspectionMissionStage::Saved
             || inspectionMission_.stage == InspectionMissionStage::GeometryOnly
             || inspectionMission_.stage == InspectionMissionStage::Failed;
-        const auto droneIds = simulation_.DroneIds();
-        const bool formationMissionCanStart = !formationTransit_.active
-            && !InspectionMissionIsActive()
-            && std::none_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
-                [](const auto& entry)
-                {
-                    return entry.second.status == "출발 준비"
-                        || entry.second.status == "이동 중"
-                        || entry.second.status == "착륙 중";
-                })
-            && std::all_of(droneIds.begin(), droneIds.end(), [this](auto id)
-                {
-                    return simulation_.State(id).mode
-                        == aerosimlab::simulation::FlightMode::Grounded;
-                });
+        const bool fleetReconnaissanceCanStart = FleetReconnaissanceCanStart();
+        const bool formationMissionCanStart = fleetReconnaissanceCanStart;
         const auto captureAssessment = AssessInspectionView();
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -733,8 +720,10 @@ void AeroSimLabApp::RenderFrame()
             camera.model.imageWidthPixels, camera.model.imageHeightPixels,
             missionDistanceMeters, inspectionMission_.targetDisplayName,
             InspectionMissionStatus(),
-            missionCanStart,
+            missionCanStart && fleetReconnaissanceCanStart,
             [this] { static_cast<void>(RequestInspectionMission()); },
+            FleetReconnaissanceStatus(), fleetReconnaissanceCanStart,
+            [this] { static_cast<void>(StartFleetReconnaissance()); },
             formationTransit_.status, formationMissionCanStart,
             formationTransit_.active,
             [this](aerosimlab::simulation::FormationShape shape)

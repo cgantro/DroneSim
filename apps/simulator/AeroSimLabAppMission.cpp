@@ -35,6 +35,11 @@ std::optional<glm::dvec3> DecodeWaypoint(const std::string& payload)
         return std::nullopt;
     return waypoint;
 }
+
+bool IsFleetReconnaissanceActive(const std::string& status)
+{
+    return status == "출발 준비" || status == "이동 중" || status == "착륙 중";
+}
 }
 
 bool AeroSimLabApp::InspectionMissionIsActive() const
@@ -61,9 +66,7 @@ bool AeroSimLabApp::RequestInspectionMission(
     if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [](const auto& entry)
         {
-            return entry.second.status == "출발 준비"
-                || entry.second.status == "이동 중"
-                || entry.second.status == "착륙 중";
+            return IsFleetReconnaissanceActive(entry.second.status);
         }))
     {
         inspectionMission_.error = "편대 정찰이 진행 중일 때는 주 드론 임무를 시작할 수 없습니다.";
@@ -128,46 +131,38 @@ bool AeroSimLabApp::RequestInspectionMission(
     return true;
 }
 
-bool AeroSimLabApp::StartFleetReconnaissance()
+bool AeroSimLabApp::FleetReconnaissanceCanStart() const
 {
-    if (InspectionMissionIsActive() || inspectionTargets_.empty())
+    if (InspectionMissionIsActive() || formationTransit_.active || inspectionTargets_.empty())
         return false;
     if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [](const auto& entry)
         {
-            return entry.second.status == "출발 준비"
-                || entry.second.status == "이동 중"
-                || entry.second.status == "착륙 중";
+            return IsFleetReconnaissanceActive(entry.second.status);
         }))
         return false;
 
     const auto droneIds = simulation_.DroneIds();
-    if (droneIds.empty() || std::any_of(droneIds.begin(), droneIds.end(),
+    return !droneIds.empty() && std::all_of(droneIds.begin(), droneIds.end(),
         [this](aerosimlab::simulation::DroneId id)
         {
-            return simulation_.State(id).mode != aerosimlab::simulation::FlightMode::Grounded;
-        }))
+            return simulation_.State(id).mode
+                == aerosimlab::simulation::FlightMode::Grounded;
+        });
+}
+
+bool AeroSimLabApp::StartFleetReconnaissance()
+{
+    if (!FleetReconnaissanceCanStart())
         return false;
 
-    std::vector<std::size_t> targetOrder{0U};
-    for (const std::string_view preferredName : {"탄천교 하부", "탄천 물길"})
-    {
-        const auto target = std::find_if(inspectionTargets_.begin(), inspectionTargets_.end(),
-            [preferredName](const InspectionTarget& item)
-            {
-                return item.displayName == preferredName;
-            });
-        if (target != inspectionTargets_.end())
-            targetOrder.push_back(static_cast<std::size_t>(
-                std::distance(inspectionTargets_.begin(), target)));
-    }
+    const auto droneIds = simulation_.DroneIds();
 
     std::vector<FleetReconnaissanceState> missions;
     missions.reserve(droneIds.size());
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
-        const std::size_t targetIndex = index < targetOrder.size()
-            ? targetOrder[index] : index % inspectionTargets_.size();
+        const std::size_t targetIndex = index % inspectionTargets_.size();
         const auto& target = inspectionTargets_[targetIndex];
         const auto& start = simulation_.State(droneIds[index]).positionMeters;
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
@@ -184,19 +179,49 @@ bool AeroSimLabApp::StartFleetReconnaissance()
         missions.push_back(std::move(mission));
     }
 
+    std::vector<aerosimlab::simulation::DroneId> takingOff;
+    takingOff.reserve(droneIds.size());
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
         const aerosimlab::simulation::DroneCommand takeoff{
             aerosimlab::simulation::DroneCommand::Kind::TakeOff};
         if (simulation_.Apply(droneIds[index], takeoff)
             != aerosimlab::simulation::CommandResult::Accepted)
+        {
+            const aerosimlab::simulation::DroneCommand land{
+                aerosimlab::simulation::DroneCommand::Kind::Land};
+            for (const auto airborneDrone : takingOff)
+                static_cast<void>(simulation_.Apply(airborneDrone, land));
             return false;
-        fleetReconnaissance_[droneIds[index]] = std::move(missions[index]);
+        }
+        takingOff.push_back(droneIds[index]);
     }
+    for (std::size_t index = 0; index < droneIds.size(); ++index)
+        fleetReconnaissance_[droneIds[index]] = std::move(missions[index]);
     externalControl_ = true;
     groundControlActive_ = true;
     window_->SetTitle("DroneSim | 편대 정찰 임무 진행 중");
     return true;
+}
+
+std::string AeroSimLabApp::FleetReconnaissanceStatus() const
+{
+    if (fleetReconnaissance_.empty())
+        return "대기 중";
+
+    std::ostringstream status;
+    for (const auto droneId : simulation_.DroneIds())
+    {
+        const auto mission = fleetReconnaissance_.find(droneId);
+        if (mission == fleetReconnaissance_.end())
+            continue;
+
+        const std::size_t targetIndex = mission->second.targetIndex;
+        const std::string& targetName = inspectionTargets_[targetIndex].displayName;
+        status << "드론 " << droneId << " · " << targetName
+            << " · " << mission->second.status << '\n';
+    }
+    return status.str();
 }
 
 void AeroSimLabApp::AdvanceFleetReconnaissance()

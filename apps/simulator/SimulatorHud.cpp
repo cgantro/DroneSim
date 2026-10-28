@@ -175,6 +175,9 @@ void DrawFlightStatusPanel(
     const std::string& inspectionMissionStatus,
     bool missionCanStart,
     const std::function<void()>& startInspectionMission,
+    const std::string& fleetReconnaissanceStatus,
+    bool fleetReconnaissanceCanStart,
+    const std::function<void()>& startFleetReconnaissance,
     const std::string& formationMissionStatus,
     bool formationMissionCanStart,
     bool formationMissionActive,
@@ -205,6 +208,13 @@ void DrawFlightStatusPanel(
         ImGui::Text("촬영 위치까지 %.1f m", missionDistanceMeters);
         if (missionCanStart && ImGui::Button("정찰 임무 시작"))
             startInspectionMission();
+        ImGui::Separator();
+        ImGui::Text("분산 정찰: %s", fleetReconnaissanceStatus.c_str());
+        if (fleetReconnaissanceCanStart
+            && ImGui::Button("여러 드론 정찰 시작"))
+            startFleetReconnaissance();
+        else if (!fleetReconnaissanceCanStart)
+            ImGui::TextDisabled("모든 드론이 지상에 있고 다른 임무가 없어야 합니다.");
         ImGui::Separator();
         ImGui::Text("편대 이동: %s", formationMissionStatus.c_str());
         const char* formationLabels[]{"V자", "일렬", "횡대"};
@@ -401,6 +411,9 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::string& inspectionTargetName,
     const std::string& inspectionMissionStatus, bool missionCanStart,
     const std::function<void()>& startInspectionMission,
+    const std::string& fleetReconnaissanceStatus,
+    bool fleetReconnaissanceCanStart,
+    const std::function<void()>& startFleetReconnaissance,
     const std::string& formationMissionStatus, bool formationMissionCanStart,
     bool formationMissionActive,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
@@ -429,7 +442,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
         missionDistanceMeters, inspectionTargetName,
         inspectionMissionStatus,
-        missionCanStart, startInspectionMission, formationMissionStatus,
+        missionCanStart, startInspectionMission, fleetReconnaissanceStatus,
+        fleetReconnaissanceCanStart, startFleetReconnaissance, formationMissionStatus,
         formationMissionCanStart, formationMissionActive, selectedFormationShape_,
         startFormationTransit, formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
