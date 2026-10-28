@@ -211,6 +211,13 @@ private:
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
+    void InitializeFleetLeadership();
+    void BeginFleetLeaderReplacement();
+    void SendFleetLeaderProbes();
+    void PromoteFleetLeader(aerosimlab::simulation::DroneId newLeaderId);
+    void FinishFleetLeaderReplacementIfReady();
+    void FailFleetLeaderReplacement();
+    void ReassignLostLeaderTarget();
     void AdvanceFleetNetwork();
     [[nodiscard]] bool SendFleetRouteAssignment(
         aerosimlab::simulation::DroneId droneId,
@@ -468,6 +475,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneCameraModel_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
+    glm::dvec3 groundControlPositionMeters_{0.0};
     enum class FleetMissionLeg
     {
         Reconnaissance,
@@ -493,6 +501,21 @@ private:
     };
     std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>
         fleetReconnaissance_;
+    aerosimlab::simulation::DroneId fleetLeaderId_ = 0;
+    std::vector<aerosimlab::simulation::DroneId> excludedFleetDroneIds_;
+    std::vector<aerosimlab::simulation::DroneId> leaderProbeAcknowledgements_;
+    std::uint64_t leaderReplacementStartedAtTick_ = 0;
+    std::uint64_t lastLeaderProbeSentAtTick_ = 0;
+    std::uint64_t lastLeaderHeartbeatSentAtTick_ = 0;
+    std::uint64_t lastLeaderHeartbeatTick_ = 0;
+    std::uint32_t fleetLeadershipEpoch_ = 0;
+    std::uint32_t leaderProbeSequence_ = 0;
+    std::uint32_t leaderProbeTransmissionCount_ = 0;
+    std::uint32_t leaderHeartbeatSequence_ = 0;
+    bool leaderReplacementPending_ = false;
+    bool leaderStateCollectionPending_ = false;
+    std::vector<std::size_t> pendingReassignedTargetIndices_;
+    std::string fleetLeadershipStatus_ = "리더 대기 중";
     struct ReceivedPeerTelemetry
     {
         aerosimlab::simulator::detail::PeerTelemetry state;

@@ -578,13 +578,6 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
             }
             return;
         }
-        if (packet.remainingHops == 0U)
-        {
-            ++metrics_.routeErrors;
-            return;
-        }
-        --packet.remainingHops;
-        ++packet.hopCount;
         ForwardRouteReply(receiver, std::move(packet));
         return;
     case Packet::Type::RouteError:
@@ -693,12 +686,16 @@ void VirtualMeshNetwork::ForwardRouteReply(NetworkNodeId node, Packet packet)
     if (packet.remainingHops == 0U)
     {
         ++metrics_.routeErrors;
+        RecordEvent(MeshEventKind::RouteError, node, packet.requestOrigin,
+            "경로 응답이 최대 홉 수를 넘었습니다.");
         return;
     }
     const auto route = routes_[node].find(packet.requestOrigin);
     if (route == routes_[node].end() || route->second.expiresAtTick <= currentTick_)
     {
         ++metrics_.routeErrors;
+        RecordEvent(MeshEventKind::RouteError, node, packet.requestOrigin,
+            "경로 응답을 보낼 역방향 경로가 없습니다.");
         return;
     }
     --packet.remainingHops;

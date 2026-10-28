@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <vector>
 
 namespace aerosimlab::communication
@@ -36,25 +37,47 @@ std::vector<DeliveredMeshMessage> AdvanceTicks(VirtualMeshNetwork& network,
 }
 }
 
-TEST(VirtualMeshNetworkTests, RoutesMessageAcrossFourNodes)
+TEST(VirtualMeshNetworkTests, RoutesProbeAndAcknowledgementAcrossMesh)
 {
     VirtualMeshNetwork network{QuickSettings()};
     const std::array nodes{
         NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
         NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}},
         NetworkNodeSnapshot{3, {120.0, 0.0, 10.0}},
-        NetworkNodeSnapshot{4, {180.0, 0.0, 10.0}}};
+        NetworkNodeSnapshot{4, {180.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{std::numeric_limits<NetworkNodeId>::max(),
+            {-60.0, 0.0, 10.0}}};
     network.UpdateNodes(nodes, {});
-    const auto messageId = network.Send(1, 4, 7, "waypoint", "x=180");
+    const NetworkNodeId groundControlId =
+        std::numeric_limits<NetworkNodeId>::max();
+    // 이웃 발견이 끝난 뒤 시험 메시지를 보내 실제 경로 탐색을 확인합니다.
+    static_cast<void>(AdvanceTicks(network, 0, 3));
+    const auto messageId = network.Send(groundControlId, 4,
+        7, "leader_probe", "epoch=1");
     ASSERT_TRUE(messageId.has_value());
-    const auto deliveredMessages = AdvanceTicks(network, 0, 20);
+    const auto deliveredMessages = AdvanceTicks(network, 4, 30);
 
-    ASSERT_EQ(deliveredMessages.size(), 1U);
+    ASSERT_EQ(deliveredMessages.size(), 1U)
+        << "RREQ=" << network.Metrics().routeRequests
+        << " RREP=" << network.Metrics().routeReplies
+        << " drop=" << network.Metrics().droppedMessages
+        << " error=" << network.Metrics().routeErrors
+        << " events=" << network.Events().size();
     const auto& delivered = deliveredMessages.front();
     EXPECT_EQ(delivered.message.id, *messageId);
-    EXPECT_EQ(delivered.message.route, (std::vector<NetworkNodeId>{1, 2, 3, 4}));
-    EXPECT_EQ(delivered.message.payload, "x=180");
+    EXPECT_EQ(delivered.message.route, (std::vector<NetworkNodeId>{
+        groundControlId, 1, 2, 3, 4}));
+    EXPECT_EQ(delivered.message.payload, "epoch=1");
     EXPECT_GE(network.Metrics().forwardedMessages, 2U);
+
+    ASSERT_TRUE(network.Send(4, groundControlId, 7,
+        "leader_probe_ack", delivered.message.payload));
+    const auto acknowledgements = AdvanceTicks(network, 31, 50);
+    ASSERT_EQ(acknowledgements.size(), 1U);
+    EXPECT_EQ(acknowledgements.front().message.kind, "leader_probe_ack");
+    EXPECT_EQ(acknowledgements.front().message.route, (std::vector<NetworkNodeId>{
+        4, 3, 2, 1, groundControlId}));
+
     const auto events = network.Events();
     EXPECT_TRUE(std::any_of(events.begin(), events.end(), [](const MeshEvent& event)
     {
