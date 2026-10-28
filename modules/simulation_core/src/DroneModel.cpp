@@ -122,10 +122,18 @@ CommandResult DroneModel::Apply(
         {
             return CommandResult::InvalidValue;
         }
+        if (command.targetYawRadians && !std::isfinite(*command.targetYawRadians))
+        {
+            return CommandResult::InvalidValue;
+        }
         control.waypointMeters = command.vector;
         const double offsetX = command.vector.x - state.positionMeters.x;
         const double offsetY = command.vector.y - state.positionMeters.y;
-        if (std::hypot(offsetX, offsetY) > waypointToleranceMeters)
+        if (command.targetYawRadians)
+        {
+            control.desiredYawRadians = *command.targetYawRadians;
+        }
+        else if (std::hypot(offsetX, offsetY) > waypointToleranceMeters)
         {
             control.desiredYawRadians = std::atan2(offsetY, offsetX);
         }

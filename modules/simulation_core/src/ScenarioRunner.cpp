@@ -645,8 +645,15 @@ void UpdateMissionCommands(
                 + task.droneName + " 드론이 '" + task.role + "' 임무를 시작했습니다.");
         }
 
-        const CommandResult moveResult = simulation.Apply(droneId,
-            {DroneCommand::Kind::SetWaypoint, CurrentWaypoint(task)});
+        DroneCommand moveCommand{DroneCommand::Kind::SetWaypoint, CurrentWaypoint(task)};
+        if (task.inspectionSurface)
+        {
+            const glm::dvec3 directionToSurface = task.inspectionSurface->centerMeters
+                - CurrentWaypoint(task);
+            moveCommand.targetYawRadians = std::atan2(
+                directionToSurface.y, directionToSurface.x);
+        }
+        const CommandResult moveResult = simulation.Apply(droneId, moveCommand);
         if (moveResult != CommandResult::Accepted)
         {
             task.failed = true;
