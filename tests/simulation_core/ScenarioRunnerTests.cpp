@@ -1309,9 +1309,9 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario, "\"dynamics\":\"kinematic\"",
         "\"dynamics\":\"rigid_body\""));
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
-        "\"ticks\":600", "\"ticks\":1800"));
+        "\"ticks\":600", "\"ticks\":3600"));
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
-        "\"deadline_tick\":580", "\"deadline_tick\":1790"));
+        "\"deadline_tick\":580", "\"deadline_tick\":3590"));
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
         "\"safety_distance_meters\":3",
         "\"safety_distance_meters\":8"));
@@ -1334,6 +1334,12 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
         "\"position_meters\":[-4,0,1.5]",
         "\"position_meters\":[-8,0,1.5]"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"initial_position_meters\":[-4,0,0]",
+        "\"initial_position_meters\":[-20,0,0]"));
+    ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
+        "\"initial_position_meters\":[4,0,0]",
+        "\"initial_position_meters\":[20,0,0]"));
     const ScenarioResult physicalAvoidanceResult = RunScenario(physicalAvoidanceScenario);
     ASSERT_TRUE(physicalAvoidanceResult.passed)
         << (physicalAvoidanceResult.issues.empty()
@@ -1354,8 +1360,8 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     EXPECT_EQ(physicalAvoidanceResult.mission->completedTaskCount, 2U);
     EXPECT_GT(physicalAvoidanceResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(physicalAvoidanceResult.minimumDroneSeparationMeters.has_value());
-    // 강체 응답 지연을 포함해도 X500 충돌 형상보다 넉넉한 간격을 유지해야 한다.
-    EXPECT_GE(*physicalAvoidanceResult.minimumDroneSeparationMeters, 5.0);
+    // 시작 간격을 안전거리보다 넉넉히 둬 회피 명령이 작동할 시간을 준다.
+    EXPECT_GE(*physicalAvoidanceResult.minimumDroneSeparationMeters, 8.0);
 #endif
 
     const std::string lowBatteryScenario = ReadScenarioFixture(
