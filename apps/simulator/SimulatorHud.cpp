@@ -63,6 +63,8 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
     {
     case communication::MeshEventKind::LinkDisabled: return "링크 장애";
     case communication::MeshEventKind::LinkRestored: return "링크 복구";
+    case communication::MeshEventKind::DirectedLinkDisabled: return "방향 링크 차단";
+    case communication::MeshEventKind::DirectedLinkRestored: return "방향 링크 복구";
     case communication::MeshEventKind::NodeRadioDisabled: return "드론 라디오 차단";
     case communication::MeshEventKind::NodeRadioRestored: return "드론 라디오 복구";
     case communication::MeshEventKind::NeighborDiscovered: return "이웃 발견";
@@ -345,6 +347,8 @@ void DrawFlightStatusPanel(
     int& selectedFaultDestination,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
+    const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
+        setFormationDirectedLinkDisabled,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
     simulation::CaptureAssessment captureAssessment,
@@ -484,6 +488,30 @@ void DrawFlightStatusPanel(
                         {
                             setFormationLinkDisabled(source, destination, true);
                         }
+
+                        ImGui::Separator();
+                        const bool forwardDisabled =
+                            formationNetwork->IsDirectedLinkDisabled(source, destination);
+                        const bool reverseDisabled =
+                            formationNetwork->IsDirectedLinkDisabled(destination, source);
+                        ImGui::Text("방향 장애: %s → %s %s · %s → %s %s",
+                            DroneName(source).c_str(), DroneName(destination).c_str(),
+                            forwardDisabled ? "차단" : "연결",
+                            DroneName(destination).c_str(), DroneName(source).c_str(),
+                            reverseDisabled ? "차단" : "연결");
+                        const std::string forwardLabel = DroneName(source)
+                            + (forwardDisabled ? " → 복구##ForwardLink"
+                                               : " → 차단##ForwardLink");
+                        if (ImGui::Button(forwardLabel.c_str()))
+                            setFormationDirectedLinkDisabled(
+                                source, destination, !forwardDisabled);
+                        ImGui::SameLine();
+                        const std::string reverseLabel = DroneName(destination)
+                            + (reverseDisabled ? " → 복구##ReverseLink"
+                                               : " → 차단##ReverseLink");
+                        if (ImGui::Button(reverseLabel.c_str()))
+                            setFormationDirectedLinkDisabled(
+                                destination, source, !reverseDisabled);
                     }
                 }
             }
@@ -705,6 +733,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const communication::VirtualMeshNetwork* formationNetwork,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
+    const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
+        setFormationDirectedLinkDisabled,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
     simulation::CaptureAssessment captureAssessment,
@@ -739,6 +769,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         setNetworkMode, packetLossPercent, setPacketLossPercent,
         formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
+        setFormationDirectedLinkDisabled,
         setFormationNodeRadioEnabled, captureAssessment, recordingControls);
 
     if (timings != nullptr)

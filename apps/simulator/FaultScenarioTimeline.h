@@ -21,6 +21,7 @@ public:
         {
             PacketLoss,
             LinkState,
+            DirectedLinkState,
             RadioState
         };
 
@@ -52,6 +53,8 @@ public:
     void RecordPacketLoss(std::uint64_t currentTick, double probability);
     void RecordLinkState(std::uint64_t currentTick, simulation::DroneId source,
         simulation::DroneId destination, bool disabled);
+    void RecordDirectedLinkState(std::uint64_t currentTick,
+        simulation::DroneId source, simulation::DroneId destination, bool disabled);
     void RecordRadioState(std::uint64_t currentTick,
         simulation::DroneId droneId, bool enabled);
 

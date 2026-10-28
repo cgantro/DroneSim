@@ -113,6 +113,10 @@ void AeroSimLabApp::ApplyDueFaultScenarioEvents()
             formationNetwork_->SetLinkDisabled(
                 event.source, event.destination, event.enabled);
             break;
+        case Kind::DirectedLinkState:
+            formationNetwork_->SetDirectedLinkDisabled(
+                event.source, event.destination, event.enabled);
+            break;
         case Kind::RadioState:
             formationNetwork_->SetNodeRadioEnabled(event.source, event.enabled);
             break;

@@ -99,6 +99,8 @@ public:
         const communication::VirtualMeshNetwork* formationNetwork,
         const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
             setFormationLinkDisabled,
+        const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
+            setFormationDirectedLinkDisabled,
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
         simulation::CaptureAssessment captureAssessment,

@@ -857,6 +857,17 @@ void AeroSimLabApp::RenderFrame()
                         simulation_.TickCount(), first, second, disabled);
                 }
             },
+            [this, formationNetworkActive](aerosimlab::simulation::DroneId source,
+                aerosimlab::simulation::DroneId destination, bool disabled)
+            {
+                if (formationNetwork_ && formationNetworkActive)
+                {
+                    formationNetwork_->SetDirectedLinkDisabled(
+                        source, destination, disabled);
+                    faultScenarioTimeline_.RecordDirectedLinkState(
+                        simulation_.TickCount(), source, destination, disabled);
+                }
+            },
             [this, formationNetworkActive](aerosimlab::simulation::DroneId droneId,
                 bool enabled)
             {

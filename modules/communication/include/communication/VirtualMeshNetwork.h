@@ -92,6 +92,8 @@ enum class MeshEventKind
 {
     LinkDisabled,
     LinkRestored,
+    DirectedLinkDisabled,
+    DirectedLinkRestored,
     NodeRadioDisabled,
     NodeRadioRestored,
     NeighborDiscovered,
@@ -132,12 +134,18 @@ public:
     /** @brief 지정한 두 노드 사이의 통신을 즉시 끊거나 복구한다. */
     void SetLinkDisabled(NetworkNodeId first, NetworkNodeId second, bool disabled);
 
+    /** @brief 한쪽 방향으로만 메시지를 보내지 못하게 하거나 복구한다. */
+    void SetDirectedLinkDisabled(
+        NetworkNodeId sender, NetworkNodeId receiver, bool disabled);
+
     /** @brief 전송할 때 적용할 패킷 손실 확률을 바꾼다. */
     void SetPacketLossProbability(double probability);
 
     /** @brief 두 노드 사이에 장애가 주입되어 있는지 확인한다. */
     [[nodiscard]] bool IsLinkDisabled(
         NetworkNodeId first, NetworkNodeId second) const noexcept;
+    [[nodiscard]] bool IsDirectedLinkDisabled(
+        NetworkNodeId sender, NetworkNodeId receiver) const noexcept;
 
     /** @brief 지정한 송수신 노드의 라디오 상태를 바꾼다. */
     void SetNodeRadioEnabled(NetworkNodeId node, bool enabled);
@@ -234,6 +242,7 @@ private:
     std::map<NodePair, std::uint64_t> activeRequests_;
     std::map<NodePair, std::uint64_t> activeRequestExpiryTicks_;
     std::set<NodePair> disabledLinks_;
+    std::set<NodePair> disabledDirectedLinks_;
     /** @brief 고정 다중 홉 방식에서 끊겨 재탐색하지 않을 출발지·목적지 쌍이다. */
     std::set<NodePair> unavailableRoutes_;
     std::set<NetworkNodeId> radioDisabledNodes_;

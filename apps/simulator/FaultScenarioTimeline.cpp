@@ -24,6 +24,7 @@ std::string_view EventName(FaultScenarioTimeline::Event::Kind kind)
     {
     case Kind::PacketLoss: return "packet_loss";
     case Kind::LinkState: return "link_state";
+    case Kind::DirectedLinkState: return "directed_link_state";
     case Kind::RadioState: return "radio_state";
     }
     return {};
@@ -34,6 +35,7 @@ FaultScenarioTimeline::Event::Kind ReadEventKind(const Json& value)
     const std::string name = value.get<std::string>();
     if (name == "packet_loss") return FaultScenarioTimeline::Event::Kind::PacketLoss;
     if (name == "link_state") return FaultScenarioTimeline::Event::Kind::LinkState;
+    if (name == "directed_link_state") return FaultScenarioTimeline::Event::Kind::DirectedLinkState;
     if (name == "radio_state") return FaultScenarioTimeline::Event::Kind::RadioState;
     throw std::invalid_argument("지원하지 않는 장애 종류입니다.");
 }
@@ -90,6 +92,7 @@ bool FaultScenarioTimeline::SaveRecording(const std::filesystem::path& path,
             encoded["probability"] = event.value;
             break;
         case Event::Kind::LinkState:
+        case Event::Kind::DirectedLinkState:
             encoded["source"] = event.source;
             encoded["destination"] = event.destination;
             encoded["disabled"] = event.enabled;
@@ -182,6 +185,7 @@ bool FaultScenarioTimeline::LoadRecording(const std::filesystem::path& path,
                     throw std::invalid_argument("패킷 손실률은 0부터 1 사이여야 합니다.");
                 break;
             case Event::Kind::LinkState:
+            case Event::Kind::DirectedLinkState:
                 event.source = ReadDroneId(encoded.at("source"));
                 event.destination = ReadDroneId(encoded.at("destination"));
                 event.enabled = encoded.at("disabled").get<bool>();
@@ -254,6 +258,17 @@ void FaultScenarioTimeline::RecordLinkState(std::uint64_t currentTick,
 {
     Event event;
     event.kind = Event::Kind::LinkState;
+    event.source = source;
+    event.destination = destination;
+    event.enabled = disabled;
+    Record(event, currentTick);
+}
+
+void FaultScenarioTimeline::RecordDirectedLinkState(std::uint64_t currentTick,
+    simulation::DroneId source, simulation::DroneId destination, bool disabled)
+{
+    Event event;
+    event.kind = Event::Kind::DirectedLinkState;
     event.source = source;
     event.destination = destination;
     event.enabled = disabled;

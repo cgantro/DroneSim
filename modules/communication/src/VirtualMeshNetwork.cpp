@@ -192,10 +192,55 @@ void VirtualMeshNetwork::SetLinkDisabled(
     }
     else
     {
-        if (disabledLinks_.empty() && radioDisabledNodes_.empty())
+        if (disabledLinks_.empty() && disabledDirectedLinks_.empty()
+            && radioDisabledNodes_.empty())
             unavailableRoutes_.clear();
         RecordEvent(MeshEventKind::LinkRestored, first, second, "링크를 복구했습니다.");
     }
+}
+
+void VirtualMeshNetwork::SetDirectedLinkDisabled(
+    NetworkNodeId sender, NetworkNodeId receiver, bool disabled)
+{
+    if (sender == receiver)
+        throw std::invalid_argument("한 노드와 자기 자신 사이에는 방향 장애를 설정할 수 없습니다.");
+
+    const NodePair direction{sender, receiver};
+    if (disabled)
+    {
+        if (!disabledDirectedLinks_.insert(direction).second)
+            return;
+
+        const auto routes = routes_.find(sender);
+        if (routes != routes_.end())
+        {
+            for (auto route = routes->second.begin(); route != routes->second.end();)
+            {
+                if (route->second.nextHop != receiver)
+                {
+                    ++route;
+                    continue;
+                }
+                if (settings_.mode == VirtualMeshMode::MultiHop)
+                    unavailableRoutes_.insert({sender, route->first});
+                route = routes->second.erase(route);
+            }
+        }
+        const auto neighbors = neighbors_.find(sender);
+        if (neighbors != neighbors_.end())
+            neighbors->second.erase(receiver);
+        RecordEvent(MeshEventKind::DirectedLinkDisabled, sender, receiver,
+            "선택한 방향의 통신을 끊었습니다.");
+        return;
+    }
+
+    if (disabledDirectedLinks_.erase(direction) == 0U)
+        return;
+    if (disabledLinks_.empty() && disabledDirectedLinks_.empty()
+        && radioDisabledNodes_.empty())
+        unavailableRoutes_.clear();
+    RecordEvent(MeshEventKind::DirectedLinkRestored, sender, receiver,
+        "선택한 방향의 통신을 복구했습니다.");
 }
 
 void VirtualMeshNetwork::SetPacketLossProbability(double probability)
@@ -209,6 +254,12 @@ bool VirtualMeshNetwork::IsLinkDisabled(
     NetworkNodeId first, NetworkNodeId second) const noexcept
 {
     return first != second && disabledLinks_.contains(MakePair(first, second));
+}
+
+bool VirtualMeshNetwork::IsDirectedLinkDisabled(
+    NetworkNodeId sender, NetworkNodeId receiver) const noexcept
+{
+    return sender != receiver && disabledDirectedLinks_.contains({sender, receiver});
 }
 
 void VirtualMeshNetwork::SetNodeRadioEnabled(NetworkNodeId node, bool enabled)
@@ -243,7 +294,8 @@ void VirtualMeshNetwork::SetNodeRadioEnabled(NetworkNodeId node, bool enabled)
             static_cast<void>(source);
         }
     }
-    else if (disabledLinks_.empty() && radioDisabledNodes_.empty())
+    else if (disabledLinks_.empty() && disabledDirectedLinks_.empty()
+        && radioDisabledNodes_.empty())
     {
         unavailableRoutes_.clear();
     }
@@ -393,7 +445,8 @@ bool VirtualMeshNetwork::LinkAvailable(
         || senderNode->second.powered == false || receiverNode->second.powered == false
         || !senderNode->second.canTransmit || !receiverNode->second.canReceive
         || radioDisabledNodes_.contains(sender) || radioDisabledNodes_.contains(receiver)
-        || disabledLinks_.contains(MakePair(sender, receiver)))
+        || disabledLinks_.contains(MakePair(sender, receiver))
+        || disabledDirectedLinks_.contains({sender, receiver}))
         return false;
     if (glm::distance(senderNode->second.positionMeters,
             receiverNode->second.positionMeters) > settings_.maximumLinkRangeMeters)

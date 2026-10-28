@@ -284,6 +284,35 @@ TEST(VirtualMeshNetworkTests, BuildingBlocksRadioLink)
     }));
 }
 
+TEST(VirtualMeshNetworkTests, BlocksOnlyTheSelectedDirection)
+{
+    VirtualMeshNetwork network{QuickSettings()};
+    const std::array nodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}}};
+    network.UpdateNodes(nodes, {});
+    static_cast<void>(AdvanceTicks(network, 0, 3));
+
+    ASSERT_TRUE(network.Send(1, 2, 1, "status", "prime-forward"));
+    ASSERT_TRUE(network.Send(2, 1, 1, "status", "prime-reverse"));
+    ASSERT_EQ(AdvanceTicks(network, 4, 20).size(), 2U);
+
+    network.SetDirectedLinkDisabled(1, 2, true);
+    EXPECT_TRUE(network.IsDirectedLinkDisabled(1, 2));
+    EXPECT_FALSE(network.IsDirectedLinkDisabled(2, 1));
+
+    ASSERT_TRUE(network.Send(1, 2, 2, "status", "blocked-forward"));
+    ASSERT_TRUE(network.Send(2, 1, 2, "status", "open-reverse"));
+    const auto delivered = AdvanceTicks(network, 21, 38);
+    ASSERT_EQ(delivered.size(), 1U);
+    EXPECT_EQ(delivered.front().message.source, 2U);
+    EXPECT_EQ(delivered.front().message.destination, 1U);
+    EXPECT_EQ(delivered.front().message.payload, "open-reverse");
+
+    network.SetDirectedLinkDisabled(1, 2, false);
+    EXPECT_FALSE(network.IsDirectedLinkDisabled(1, 2));
+}
+
 TEST(VirtualMeshNetworkTests, KeepsOnlyNewestStateWhileRouteIsMissing)
 {
     VirtualMeshNetwork network{QuickSettings()};

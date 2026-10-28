@@ -837,6 +837,7 @@ TEST(SimulatorSessionTests, CoreScenarios)
         recording.StartRecording(100U, {1U, 2U}, "complete");
         recording.RecordPacketLoss(100U, 0.25);
         recording.RecordLinkState(103U, 1U, 2U, true);
+        recording.RecordDirectedLinkState(103U, 2U, 1U, true);
         recording.RecordRadioState(103U, 2U, false);
         recording.StopRecording();
 
@@ -854,13 +855,18 @@ TEST(SimulatorSessionTests, CoreScenarios)
         EXPECT_DOUBLE_EQ(firstEvents.front().value, 0.25);
         EXPECT_TRUE(replay.TakeDueEvents(502U).empty());
         const auto laterEvents = replay.TakeDueEvents(503U);
-        ASSERT_EQ(laterEvents.size(), 2U);
+        ASSERT_EQ(laterEvents.size(), 3U);
         EXPECT_EQ(laterEvents[0].kind,
             simulator::FaultScenarioTimeline::Event::Kind::LinkState);
         EXPECT_TRUE(laterEvents[0].enabled);
         EXPECT_EQ(laterEvents[1].kind,
+            simulator::FaultScenarioTimeline::Event::Kind::DirectedLinkState);
+        EXPECT_EQ(laterEvents[1].source, 2U);
+        EXPECT_EQ(laterEvents[1].destination, 1U);
+        EXPECT_TRUE(laterEvents[1].enabled);
+        EXPECT_EQ(laterEvents[2].kind,
             simulator::FaultScenarioTimeline::Event::Kind::RadioState);
-        EXPECT_FALSE(laterEvents[1].enabled);
+        EXPECT_FALSE(laterEvents[2].enabled);
         EXPECT_TRUE(replay.ReplayFinished());
 
         std::filesystem::remove(path, filesystemError);
