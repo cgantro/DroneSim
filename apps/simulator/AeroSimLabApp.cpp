@@ -715,24 +715,10 @@ void AeroSimLabApp::RenderFrame()
         const bool groundControlConnected = lastGroundControlMessage_
             && std::chrono::steady_clock::now() - *lastGroundControlMessage_
                 < std::chrono::seconds(2);
-        const glm::dvec3& dronePosition = simulation_.State().positionMeters;
-        const glm::dvec3& capturePosition = inspectionTargets_[
-            inspectionMission_.activeTargetIndex].approachPositionMeters;
-        const double missionDistanceMeters = std::hypot(
-            capturePosition.x - dronePosition.x,
-            capturePosition.y - dronePosition.y);
-        const bool missionCanStart = inspectionMission_.stage
-                == InspectionMissionStage::Ready
-            || inspectionMission_.stage == InspectionMissionStage::Saved
-            || inspectionMission_.stage == InspectionMissionStage::GeometryOnly
-            || inspectionMission_.stage == InspectionMissionStage::Failed;
-        const bool fleetReconnaissanceCanStart = FleetReconnaissanceCanStart();
         const bool fleetReturnCanStart = FleetReturnCanStart();
         const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
-        const bool formationMissionCanStart = fleetReconnaissanceCanStart;
         const bool formationNetworkActive = formationTransit_.active
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
-        const auto captureAssessment = AssessInspectionView();
         const auto droneIds = simulation_.DroneIds();
         const bool everyDroneIsGrounded = !droneIds.empty()
             && std::all_of(droneIds.begin(), droneIds.end(), [this](auto id)
@@ -850,12 +836,6 @@ void AeroSimLabApp::RenderFrame()
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, gamepadConnected_, groundControlConnected,
-            missionDistanceMeters, inspectionMission_.targetDisplayName,
-            InspectionMissionStatus(),
-            missionCanStart && fleetReconnaissanceCanStart,
-            [this] { static_cast<void>(RequestInspectionMission()); },
-            FleetReconnaissanceStatus(), fleetReconnaissanceCanStart,
-            [this] { static_cast<void>(StartFleetReconnaissance()); },
             fleetReturnCanStart,
             [this] { static_cast<void>(StartFleetReturn()); },
             CompleteFleetMissionStatus(), completeFleetMissionCanStart,
@@ -863,12 +843,7 @@ void AeroSimLabApp::RenderFrame()
             {
                 static_cast<void>(StartCompleteFleetMission(shape));
             },
-            formationTransit_.status, formationMissionCanStart,
             formationNetworkActive,
-            [this](aerosimlab::simulation::FormationShape shape)
-            {
-                static_cast<void>(StartFormationTransit(shape));
-            },
             fleetNetworkMode_,
             [this](communication::VirtualMeshMode mode)
             {
@@ -939,7 +914,6 @@ void AeroSimLabApp::RenderFrame()
                     simulation_.TickCount(), droneId,
                     static_cast<std::uint32_t>(rotorIndex), faulted);
             },
-            captureAssessment,
             recordingControls,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this](aerosimlab::simulation::DroneId droneId)

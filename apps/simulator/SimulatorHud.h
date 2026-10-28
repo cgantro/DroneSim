@@ -93,21 +93,12 @@ public:
 
     void Render(const simulation::SimulationCore& simulation,
         bool gamepadConnected, bool groundControlConnected,
-        double missionDistanceMeters,
-        const std::string& inspectionTargetName,
-        const std::string& inspectionMissionStatus, bool missionCanStart,
-        const std::function<void()>& startInspectionMission,
-        const std::string& fleetReconnaissanceStatus,
-        bool fleetReconnaissanceCanStart,
-        const std::function<void()>& startFleetReconnaissance,
         bool fleetReturnCanStart,
         const std::function<void()>& startFleetReturn,
         const std::string& completeFleetMissionStatus,
         bool completeFleetMissionCanStart,
         const std::function<void(simulation::FormationShape)>& startCompleteFleetMission,
-        const std::string& formationMissionStatus, bool formationMissionCanStart,
         bool formationMissionActive,
-        const std::function<void(simulation::FormationShape)>& startFormationTransit,
         communication::VirtualMeshMode& selectedNetworkMode,
         const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
         float& packetLossPercent,
@@ -124,7 +115,6 @@ public:
         const std::function<void(simulation::DroneId, bool)>& setCameraFault,
         const std::function<void(simulation::DroneId, std::size_t, bool)>&
             setRotorMotorFault,
-        simulation::CaptureAssessment captureAssessment,
         const SessionRecordingControls& recordingControls,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
@@ -141,7 +131,6 @@ private:
     void CollectCompletedGpuTimings(HudRenderTimings* timings);
 
     bool initialized_ = false;
-    simulation::FormationShape selectedFormationShape_ = simulation::FormationShape::Vee;
     int selectedFaultSource_ = 0;
     int selectedFaultDestination_ = 1;
     int selectedFaultRotor_ = 0;

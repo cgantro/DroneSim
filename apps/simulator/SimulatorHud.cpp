@@ -44,23 +44,6 @@ std::string DroneName(simulation::DroneId id)
     return "드론 " + std::to_string(id);
 }
 
-const char* CaptureStatusLabel(simulation::CaptureAssessment assessment)
-{
-    switch (assessment)
-    {
-    case simulation::CaptureAssessment::Ready: return "목표가 카메라 화면에 보임";
-    case simulation::CaptureAssessment::CameraUnavailable: return "카메라 꺼짐 또는 장애";
-    case simulation::CaptureAssessment::NoNewFrame: return "새 영상 프레임 없음";
-    case simulation::CaptureAssessment::TooNear: return "목표에 너무 가까움";
-    case simulation::CaptureAssessment::TooFar: return "목표에서 너무 멂";
-    case simulation::CaptureAssessment::SurfaceFacingAway: return "카메라가 목표를 향하지 않음";
-    case simulation::CaptureAssessment::OutsideFrame: return "카메라 화면 밖";
-    case simulation::CaptureAssessment::ResolutionTooLow: return "화면에서 목표가 너무 작음";
-    case simulation::CaptureAssessment::Occluded: return "목표가 구조물에 가려짐";
-    }
-    return "판정할 수 없음";
-}
-
 const char* MeshEventLabel(communication::MeshEventKind kind)
 {
     switch (kind)
@@ -568,24 +551,12 @@ void DrawFlightStatusPanel(
     const simulation::SimulationCore& simulation,
     bool gamepadConnected,
     bool groundControlConnected,
-    double missionDistanceMeters,
-    const std::string& inspectionTargetName,
-    const std::string& inspectionMissionStatus,
-    bool missionCanStart,
-    const std::function<void()>& startInspectionMission,
-    const std::string& fleetReconnaissanceStatus,
-    bool fleetReconnaissanceCanStart,
-    const std::function<void()>& startFleetReconnaissance,
     bool fleetReturnCanStart,
     const std::function<void()>& startFleetReturn,
     const std::string& completeFleetMissionStatus,
     bool completeFleetMissionCanStart,
     const std::function<void(simulation::FormationShape)>& startCompleteFleetMission,
-    const std::string& formationMissionStatus,
-    bool formationMissionCanStart,
     bool formationMissionActive,
-    simulation::FormationShape& selectedFormationShape,
-    const std::function<void(simulation::FormationShape)>& startFormationTransit,
     communication::VirtualMeshMode& selectedNetworkMode,
     bool networkModeCanChange,
     const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
@@ -609,7 +580,6 @@ void DrawFlightStatusPanel(
     const std::function<void(simulation::DroneId, bool)>& setCameraFault,
     const std::function<void(simulation::DroneId, std::size_t, bool)>&
         setRotorMotorFault,
-    simulation::CaptureAssessment captureAssessment,
     const SessionRecordingControls& recordingControls)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
@@ -674,40 +644,14 @@ void DrawFlightStatusPanel(
             }
         }
         ImGui::Separator();
-        ImGui::Text("정찰 대상: %s", inspectionTargetName.c_str());
-        ImGui::Text("화면 확인: %s", CaptureStatusLabel(captureAssessment));
-        ImGui::TextDisabled("목표가 카메라 화면에 잡히는지 보여 줍니다. 파손 여부는 사람이 영상으로 확인합니다.");
-        ImGui::Text("정찰 임무: %s", inspectionMissionStatus.c_str());
-        ImGui::Text("촬영 위치까지 %.1f m", missionDistanceMeters);
-        if (missionCanStart && ImGui::Button("정찰 임무 시작"))
-            startInspectionMission();
-        ImGui::Separator();
-        ImGui::Text("분산 정찰: %s", fleetReconnaissanceStatus.c_str());
-        if (fleetReconnaissanceCanStart
-            && ImGui::Button("여러 드론 정찰 시작"))
-            startFleetReconnaissance();
-        else if (!fleetReconnaissanceCanStart)
+        ImGui::Text("임무: %s", completeFleetMissionStatus.c_str());
+        if (completeFleetMissionCanStart
+            && ImGui::Button("편대 정찰 임무 시작"))
+            startCompleteFleetMission(simulation::FormationShape::Vee);
+        else if (!completeFleetMissionCanStart)
             ImGui::TextDisabled("모든 드론이 지상에 있고 다른 임무가 없어야 합니다.");
         if (fleetReturnCanStart && ImGui::Button("출발 지점으로 복귀"))
             startFleetReturn();
-        ImGui::Separator();
-        ImGui::Text("전체 임무: %s", completeFleetMissionStatus.c_str());
-        if (completeFleetMissionCanStart
-            && ImGui::Button("전체 임무 시작 (M01 → M02 → M03)"))
-            startCompleteFleetMission(selectedFormationShape);
-        else if (!completeFleetMissionCanStart)
-            ImGui::TextDisabled("모든 드론이 지상에 있고 다른 임무가 없어야 합니다.");
-        ImGui::Separator();
-        ImGui::Text("편대 이동: %s", formationMissionStatus.c_str());
-        const char* formationLabels[]{"V자", "일렬", "횡대"};
-        int selectedShape = static_cast<int>(selectedFormationShape);
-        if (ImGui::Combo("편대 대형", &selectedShape,
-                formationLabels, IM_ARRAYSIZE(formationLabels)))
-            selectedFormationShape = static_cast<simulation::FormationShape>(selectedShape);
-        if (formationMissionCanStart && ImGui::Button("편대 이동 시작"))
-            startFormationTransit(selectedFormationShape);
-        else if (!formationMissionCanStart)
-            ImGui::TextDisabled("모든 드론이 지상에 있을 때 시작할 수 있습니다.");
 
         const char* networkModeLabels[]{
             "직접 통신", "리더 경유", "다중 홉 고정 경로", "장애 적응 다중 홉"};
@@ -1143,21 +1087,12 @@ void SimulatorHud::CollectCompletedGpuTimings(HudRenderTimings* timings)
 
 void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     bool gamepadConnected, bool groundControlConnected,
-    double missionDistanceMeters,
-    const std::string& inspectionTargetName,
-    const std::string& inspectionMissionStatus, bool missionCanStart,
-    const std::function<void()>& startInspectionMission,
-    const std::string& fleetReconnaissanceStatus,
-    bool fleetReconnaissanceCanStart,
-    const std::function<void()>& startFleetReconnaissance,
     bool fleetReturnCanStart,
     const std::function<void()>& startFleetReturn,
     const std::string& completeFleetMissionStatus,
     bool completeFleetMissionCanStart,
     const std::function<void(simulation::FormationShape)>& startCompleteFleetMission,
-    const std::string& formationMissionStatus, bool formationMissionCanStart,
     bool formationMissionActive,
-    const std::function<void(simulation::FormationShape)>& startFormationTransit,
     communication::VirtualMeshMode& selectedNetworkMode,
     const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
     float& packetLossPercent,
@@ -1174,7 +1109,6 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::function<void(simulation::DroneId, bool)>& setCameraFault,
     const std::function<void(simulation::DroneId, std::size_t, bool)>&
         setRotorMotorFault,
-    simulation::CaptureAssessment captureAssessment,
     const SessionRecordingControls& recordingControls,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
@@ -1195,14 +1129,10 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     DrawScenePanel(renderScene);
     DrawCameraPanel(simulation, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
-        missionDistanceMeters, inspectionTargetName,
-        inspectionMissionStatus,
-        missionCanStart, startInspectionMission, fleetReconnaissanceStatus,
-        fleetReconnaissanceCanStart, startFleetReconnaissance, fleetReturnCanStart,
-        startFleetReturn, completeFleetMissionStatus, completeFleetMissionCanStart,
-        startCompleteFleetMission, formationMissionStatus,
-        formationMissionCanStart, formationMissionActive, selectedFormationShape_,
-        startFormationTransit, selectedNetworkMode, formationMissionCanStart,
+        fleetReturnCanStart, startFleetReturn,
+        completeFleetMissionStatus, completeFleetMissionCanStart,
+        startCompleteFleetMission, formationMissionActive, selectedNetworkMode,
+        completeFleetMissionCanStart,
         setNetworkMode, packetLossPercent, setPacketLossPercent,
         latencyJitterTicks, setLatencyJitterTicks,
         formationNetwork, selectedFaultSource_,
@@ -1211,7 +1141,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         setFormationLinkDisabled,
         setFormationDirectedLinkDisabled,
         setFormationNodeRadioEnabled, setCameraFault, setRotorMotorFault,
-        captureAssessment, recordingControls);
+        recordingControls);
 
     if (timings != nullptr)
     {
