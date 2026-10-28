@@ -833,7 +833,7 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
         << " avoidance_events=" << physicalResult.collisionAvoidanceEvents;
     ASSERT_TRUE(physicalResult.minimumDroneSeparationMeters.has_value());
     EXPECT_GE(*physicalResult.minimumDroneSeparationMeters, 2.0);
-    EXPECT_GT(physicalResult.collisionAvoidanceEvents, 0U);
+    EXPECT_EQ(physicalResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(physicalResult.mission.has_value());
     EXPECT_EQ(physicalResult.mission->outcome, ScenarioResult::Outcome::Passed);
     for (const ScenarioResult::MissionTask& task : physicalResult.mission->tasks)

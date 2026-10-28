@@ -1,5 +1,6 @@
 #include "simulation_core/ScenarioRunner.h"
 #include "simulation_core/BatteryModel.h"
+#include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/SimulationCore.h"
 #include "ScenarioDefinition.h"
 
@@ -719,6 +720,160 @@ void UpdateFormationLinks(
     }
 }
 
+glm::dvec3 MissionWaypoint(
+    const DroneState& state,
+    const ScenarioResult::MissionTask* task,
+    const std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
+    bool includeAvoidanceTarget)
+{
+    if (!task)
+        return state.positionMeters;
+
+    const auto avoidanceTarget = activeAvoidanceTargets.find(task->droneName);
+    if (includeAvoidanceTarget && avoidanceTarget != activeAvoidanceTargets.end())
+        return avoidanceTarget->second;
+    return CurrentWaypoint(*task);
+}
+
+/** @brief 현재 임무 경유점을 향하는 목표 속도를 계산한다. */
+glm::dvec3 MissionVelocityIntent(
+    const DroneState& state,
+    const ScenarioResult::MissionTask* task,
+    const ScenarioDefinition& definition,
+    const std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
+    bool includeAvoidanceTarget)
+{
+    if (!task)
+        return state.velocityMetersPerSecond;
+
+    const glm::dvec3 waypoint = MissionWaypoint(
+        state, task, activeAvoidanceTargets, includeAvoidanceTarget);
+
+    glm::dvec3 targetVelocity{0.0};
+    if (definition.dynamics == SimulationDynamics::RigidBody)
+    {
+        targetVelocity = QuadrotorFlightController::WaypointVelocityTarget(
+            state, waypoint, definition.controllerParameters);
+    }
+    else
+    {
+        const glm::dvec3 offset = waypoint - state.positionMeters;
+        const double distance = glm::length(offset);
+        if (distance > 1.0e-9)
+            targetVelocity = offset
+                * (DroneModel::maximumSpeedMetersPerSecond / distance);
+    }
+
+    if (definition.windVelocity)
+        targetVelocity += *definition.windVelocity;
+    return targetVelocity;
+}
+
+/** @brief 경유점까지 남은 거리를 목표 속도로 나눠 도착 시각을 예상한다. */
+double TimeToMissionWaypoint(
+    const DroneState& state,
+    const ScenarioResult::MissionTask* task,
+    const glm::dvec3& velocity,
+    const ScenarioDefinition& definition,
+    const std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
+    bool includeAvoidanceTarget)
+{
+    const double horizon = definition.collisionAvoidance->predictionHorizonSeconds;
+    if (!task)
+        return horizon;
+
+    const double speed = glm::length(velocity);
+    if (speed <= 1.0e-9)
+        return 0.0;
+
+    const glm::dvec3 waypoint = MissionWaypoint(
+        state, task, activeAvoidanceTargets, includeAvoidanceTarget);
+    const double distance = glm::distance(state.positionMeters, waypoint);
+    return std::min(distance / speed, horizon);
+}
+
+struct PredictedApproach
+{
+    double distanceMeters;
+    double timeSeconds;
+};
+
+/** @brief 각 드론이 경유점에 도착하면 멈춘다고 보고 가장 가까운 거리를 구한다. */
+PredictedApproach ClosestApproachWithStops(
+    const glm::dvec3& firstPosition,
+    const glm::dvec3& firstVelocity,
+    double firstTravelSeconds,
+    const glm::dvec3& secondPosition,
+    const glm::dvec3& secondVelocity,
+    double secondTravelSeconds,
+    double predictionHorizonSeconds)
+{
+    std::array breakpoints{
+        0.0,
+        std::clamp(firstTravelSeconds, 0.0, predictionHorizonSeconds),
+        std::clamp(secondTravelSeconds, 0.0, predictionHorizonSeconds),
+        predictionHorizonSeconds};
+    std::sort(breakpoints.begin(), breakpoints.end());
+
+    PredictedApproach closest{
+        std::numeric_limits<double>::infinity(), 0.0};
+    for (std::size_t index = 0; index + 1 < breakpoints.size(); ++index)
+    {
+        const double intervalStart = breakpoints[index];
+        const double intervalEnd = breakpoints[index + 1];
+        if (intervalEnd <= intervalStart)
+            continue;
+
+        const glm::dvec3 firstAtStart = firstPosition + firstVelocity
+            * std::min(intervalStart, firstTravelSeconds);
+        const glm::dvec3 secondAtStart = secondPosition + secondVelocity
+            * std::min(intervalStart, secondTravelSeconds);
+        const glm::dvec3 firstIntervalVelocity = intervalStart < firstTravelSeconds
+            ? firstVelocity : glm::dvec3{0.0};
+        const glm::dvec3 secondIntervalVelocity = intervalStart < secondTravelSeconds
+            ? secondVelocity : glm::dvec3{0.0};
+        const glm::dvec3 relativePosition = secondAtStart - firstAtStart;
+        const glm::dvec3 relativeVelocity =
+            secondIntervalVelocity - firstIntervalVelocity;
+        const double intervalDuration = intervalEnd - intervalStart;
+        const double relativeSpeedSquared = glm::dot(
+            relativeVelocity, relativeVelocity);
+        const double timeWithinInterval = relativeSpeedSquared > 1.0e-9
+            ? std::clamp(-glm::dot(relativePosition, relativeVelocity)
+                / relativeSpeedSquared, 0.0, intervalDuration)
+            : 0.0;
+        const double distance = glm::length(
+            relativePosition + relativeVelocity * timeWithinInterval);
+        if (distance < closest.distanceMeters)
+            closest = {distance, intervalStart + timeWithinInterval};
+    }
+    return closest;
+}
+
+glm::dvec3 PositionAtPredictedTime(
+    const glm::dvec3& position,
+    const glm::dvec3& velocity,
+    double travelSeconds,
+    double timeSeconds)
+{
+    return position + velocity * std::clamp(timeSeconds, 0.0, travelSeconds);
+}
+
+glm::dvec3 PositionBeyondConflict(
+    const glm::dvec3& conflictPosition,
+    const glm::dvec3& currentPosition,
+    const glm::dvec3& velocityIntent,
+    double clearanceMeters)
+{
+    glm::dvec3 forward{velocityIntent.x, velocityIntent.y, 0.0};
+    if (glm::length(forward) < 1.0e-6)
+        forward = {conflictPosition.x - currentPosition.x,
+            conflictPosition.y - currentPosition.y, 0.0};
+    if (glm::length(forward) < 1.0e-6)
+        return conflictPosition;
+    return conflictPosition + glm::normalize(forward) * clearanceMeters;
+}
+
 void UpdateCollisionAvoidance(
     std::uint64_t tick,
     const ScenarioDefinition& definition,
@@ -735,7 +890,7 @@ void UpdateCollisionAvoidance(
         return;
 
     const CollisionAvoidanceSettings& settings = *definition.collisionAvoidance;
-    std::unordered_map<std::string, glm::dvec3> avoidanceDirections;
+    std::unordered_map<std::string, glm::dvec3> avoidanceTargets;
     DroneNameSet currentlyAvoiding;
     for (std::size_t firstIndex = 0; firstIndex < definition.drones.size(); ++firstIndex)
     {
@@ -762,15 +917,17 @@ void UpdateCollisionAvoidance(
                 });
             const bool secondHasTask = secondTask != mission->tasks.end()
                 && CanReceiveWaypoint(simulation.State(droneIds.at(secondName)).mode);
+            const bool bothDronesHaveTasks = firstConnected && secondConnected
+                && firstHasTask && secondHasTask;
             const std::string* yieldingDrone = nullptr;
             if (firstConnected && secondConnected)
             {
                 if (!firstHasTask && !secondHasTask)
                     continue;
                 // 임무가 없는 연결 드론도 장애물로 본다. 둘 다 임무 중이면
-                // 목록에서 뒤에 있는 드론이 양보해 결과를 반복할 수 있게 한다.
-                yieldingDrone = firstHasTask && !secondHasTask
-                    ? &firstName : &secondName;
+                // 서로 반대 방향으로 비켜서 충돌 지점을 함께 통과한다.
+                if (!bothDronesHaveTasks)
+                    yieldingDrone = firstHasTask ? &firstName : &secondName;
             }
             else if (firstConnected && firstHasTask)
             {
@@ -802,49 +959,126 @@ void UpdateCollisionAvoidance(
 
             const glm::dvec3 relativePosition =
                 secondState.positionMeters - firstState.positionMeters;
-            const glm::dvec3 relativeVelocity =
-                secondState.velocityMetersPerSecond - firstState.velocityMetersPerSecond;
-            const double relativeSpeedSquared = glm::dot(relativeVelocity, relativeVelocity);
-            const double closestTime = relativeSpeedSquared > 1e-9
-                ? std::clamp(-glm::dot(relativePosition, relativeVelocity)
-                    / relativeSpeedSquared, 0.0, settings.predictionHorizonSeconds)
-                : 0.0;
-            const double predictedDistance = glm::length(
-                relativePosition + relativeVelocity * closestTime);
+            const glm::dvec3 firstVelocityIntent = MissionVelocityIntent(
+                firstState, firstHasTask ? &*firstTask : nullptr, definition,
+                activeAvoidanceTargets, true);
+            const glm::dvec3 secondVelocityIntent = MissionVelocityIntent(
+                secondState, secondHasTask ? &*secondTask : nullptr, definition,
+                activeAvoidanceTargets, true);
+            const double firstIntentTravelSeconds = TimeToMissionWaypoint(
+                firstState, firstHasTask ? &*firstTask : nullptr,
+                firstVelocityIntent, definition, activeAvoidanceTargets, true);
+            const double secondIntentTravelSeconds = TimeToMissionWaypoint(
+                secondState, secondHasTask ? &*secondTask : nullptr,
+                secondVelocityIntent, definition, activeAvoidanceTargets, true);
+            const PredictedApproach intendedPath = ClosestApproachWithStops(
+                firstState.positionMeters, firstVelocityIntent,
+                firstIntentTravelSeconds, secondState.positionMeters,
+                secondVelocityIntent, secondIntentTravelSeconds,
+                settings.predictionHorizonSeconds);
+            const glm::dvec3 threatVelocity =
+                secondVelocityIntent - firstVelocityIntent;
+            const double predictedDistance = intendedPath.distanceMeters;
+            const glm::dvec3 firstRouteVelocity = MissionVelocityIntent(
+                firstState, firstHasTask ? &*firstTask : nullptr, definition,
+                activeAvoidanceTargets, false);
+            const glm::dvec3 secondRouteVelocity = MissionVelocityIntent(
+                secondState, secondHasTask ? &*secondTask : nullptr, definition,
+                activeAvoidanceTargets, false);
+            const double firstRouteTravelSeconds = TimeToMissionWaypoint(
+                firstState, firstHasTask ? &*firstTask : nullptr,
+                firstRouteVelocity, definition, activeAvoidanceTargets, false);
+            const double secondRouteTravelSeconds = TimeToMissionWaypoint(
+                secondState, secondHasTask ? &*secondTask : nullptr,
+                secondRouteVelocity, definition, activeAvoidanceTargets, false);
+            const PredictedApproach routeContinuation = ClosestApproachWithStops(
+                firstState.positionMeters, firstRouteVelocity,
+                firstRouteTravelSeconds, secondState.positionMeters,
+                secondRouteVelocity, secondRouteTravelSeconds,
+                settings.predictionHorizonSeconds);
+            const double routeContinuationDistance = routeContinuation.distanceMeters;
             if (!result.minimumPredictedDroneSeparationMeters
                 || predictedDistance < *result.minimumPredictedDroneSeparationMeters)
             {
                 result.minimumPredictedDroneSeparationMeters = predictedDistance;
             }
-            const bool alreadyAvoiding = activeAvoidanceDirections.contains(*yieldingDrone);
-            // 두 드론이 모두 임무 중일 때는 충분히 멀어진 뒤 회피를 풀어 떨림을 막는다.
-            // 한쪽이 정지 장애물이면 안전거리까지만 확보해도 회피를 풀어야
-            // 두 목표점 간격이 안전거리보다 좁은 경우 임무가 영원히 멈추지 않는다.
+            const bool alreadyAvoiding = bothDronesHaveTasks
+                ? activeAvoidanceDirections.contains(firstName)
+                    || activeAvoidanceDirections.contains(secondName)
+                : activeAvoidanceDirections.contains(*yieldingDrone);
+            // 회피 목표에 도착했더라도 원래 임무 경로가 다시 교차하면 회피를 유지한다.
+            // 한쪽이 정지 장애물이면 안전거리까지만 확보해도 회피를 풀 수 있다.
             const double releaseDistance = settings.safetyDistanceMeters
-                * (firstHasTask && secondHasTask ? 1.5 : 1.0);
-            const double avoidanceThreshold = alreadyAvoiding
-                ? releaseDistance : settings.safetyDistanceMeters;
-            if (predictedDistance > avoidanceThreshold)
+                * (bothDronesHaveTasks ? 1.5 : 1.0);
+            const double entryDistance = settings.safetyDistanceMeters;
+            const double lateralClearance = settings.lateralOffsetMeters
+                + settings.safetyDistanceMeters;
+            const bool shouldContinueAvoiding = alreadyAvoiding
+                ? routeContinuationDistance <= releaseDistance
+                : predictedDistance <= entryDistance;
+            if (!shouldContinueAvoiding)
                 continue;
 
-            // 입력 순서상 뒤에 있는 드론이 비켜서 결과를 반복 실행해도 같은 선택을 한다.
-            glm::dvec3 side(-relativeVelocity.y, relativeVelocity.x, 0.0);
+            glm::dvec3 side(-threatVelocity.y, threatVelocity.x, 0.0);
             if (glm::length(side) < 1e-6)
                 side = {-relativePosition.y, relativePosition.x, 0.0};
             if (glm::length(side) < 1e-6)
                 side = {0.0, 1.0, 0.0};
             side = glm::normalize(side);
-            if (*yieldingDrone == firstName)
-                side = -side;
-
-            const auto [activeDirection, directionInserted] =
-                activeAvoidanceDirections.try_emplace(*yieldingDrone, side);
-            if (!directionInserted)
-                side = activeDirection->second;
-            auto [direction, inserted] = avoidanceDirections.try_emplace(*yieldingDrone, side);
-            if (!inserted)
-                direction->second += side;
-            currentlyAvoiding.insert(*yieldingDrone);
+            if (bothDronesHaveTasks)
+            {
+                const auto [firstDirection, firstInserted] =
+                    activeAvoidanceDirections.try_emplace(firstName, side);
+                const glm::dvec3 firstSide = firstInserted
+                    ? side : firstDirection->second;
+                const auto [secondDirection, secondInserted] =
+                    activeAvoidanceDirections.try_emplace(secondName, -firstSide);
+                const glm::dvec3 secondSide = secondInserted
+                    ? -firstSide : secondDirection->second;
+                const glm::dvec3 firstConflictPosition = PositionAtPredictedTime(
+                    firstState.positionMeters, firstVelocityIntent,
+                    firstIntentTravelSeconds, intendedPath.timeSeconds);
+                const glm::dvec3 secondConflictPosition = PositionAtPredictedTime(
+                    secondState.positionMeters, secondVelocityIntent,
+                    secondIntentTravelSeconds, intendedPath.timeSeconds);
+                const double clearance = releaseDistance;
+                avoidanceTargets.try_emplace(firstName,
+                    PositionBeyondConflict(firstConflictPosition,
+                        firstState.positionMeters, firstVelocityIntent, clearance)
+                    + firstSide * lateralClearance);
+                avoidanceTargets.try_emplace(secondName,
+                    PositionBeyondConflict(secondConflictPosition,
+                        secondState.positionMeters, secondVelocityIntent, clearance)
+                    + secondSide * lateralClearance);
+                currentlyAvoiding.insert(firstName);
+                currentlyAvoiding.insert(secondName);
+            }
+            else
+            {
+                if (*yieldingDrone == firstName)
+                    side = -side;
+                const auto [activeDirection, directionInserted] =
+                    activeAvoidanceDirections.try_emplace(*yieldingDrone, side);
+                if (!directionInserted)
+                    side = activeDirection->second;
+                const glm::dvec3 conflictPosition = PositionAtPredictedTime(
+                    *yieldingDrone == firstName
+                        ? firstState.positionMeters : secondState.positionMeters,
+                    *yieldingDrone == firstName
+                        ? firstVelocityIntent : secondVelocityIntent,
+                    *yieldingDrone == firstName
+                        ? firstIntentTravelSeconds : secondIntentTravelSeconds,
+                    intendedPath.timeSeconds);
+                const glm::dvec3 currentPosition = *yieldingDrone == firstName
+                    ? firstState.positionMeters : secondState.positionMeters;
+                const glm::dvec3 velocityIntent = *yieldingDrone == firstName
+                    ? firstVelocityIntent : secondVelocityIntent;
+                avoidanceTargets.try_emplace(*yieldingDrone,
+                    PositionBeyondConflict(conflictPosition, currentPosition,
+                        velocityIntent, releaseDistance)
+                    + side * lateralClearance);
+                currentlyAvoiding.insert(*yieldingDrone);
+            }
         }
     }
 
@@ -859,15 +1093,9 @@ void UpdateCollisionAvoidance(
         if (task == mission->tasks.end())
             continue;
 
-        glm::dvec3 direction = avoidanceDirections.at(droneName);
-        if (glm::length(direction) < 1e-6)
-            direction = {0.0, 1.0, 0.0};
-        direction = glm::normalize(direction);
-        const glm::dvec3 currentPosition =
-            simulation.State(droneIds.at(droneName)).positionMeters;
-        // 피난 목표는 한 번 정한 뒤 위험 구간을 벗어날 때까지 유지한다.
+        // 충돌 지점을 지나서 비켜서도록 목표를 잡고, 위험이 끝날 때까지 유지한다.
         const auto avoidanceTarget = activeAvoidanceTargets.try_emplace(
-            droneName, currentPosition + direction * settings.lateralOffsetMeters).first;
+            droneName, avoidanceTargets.at(droneName)).first;
         const CommandResult commandResult = simulation.Apply(droneIds.at(droneName),
             {DroneCommand::Kind::SetWaypoint, avoidanceTarget->second});
         if (commandResult != CommandResult::Accepted)
