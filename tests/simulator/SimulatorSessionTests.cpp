@@ -12,6 +12,7 @@
 #include "GroundControlClient.h"
 #include "communication/Protocol.h"
 #include "communication/UdpSocket.h"
+#include "graphics/Camera.h"
 
 #include <glm/glm.hpp>
 #include <glm/geometric.hpp>
@@ -51,6 +52,17 @@ public:
         LeaderWithoutGroundControlRoute,
         LeaderWithGroundControlRoute
     };
+
+    static void VerifyObserverCameraKeepsAUsableFollowDistance()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        app.UpdateObserverCamera(1280, 720);
+
+        const auto distance = glm::distance(
+            app.observerCamera_->GetPosition(), app.observerCamera_->GetTarget());
+        EXPECT_GT(distance, 5.0F);
+    }
 
     static void VerifyGroundControlShowsOnlyDeliveredPeerPositions()
     {
@@ -1389,6 +1401,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::AeroSimLabAppTestAccess::VerifyRelayRecoveryUsesTheConfiguredRadioRange());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyGroundControlShowsOnlyDeliveredPeerPositions());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyObserverCameraKeepsAUsableFollowDistance());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLeaderLossWithoutCandidateSafelyLandsFleet());
     EXPECT_NO_FATAL_FAILURE(

@@ -967,19 +967,37 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
 {
     const auto& state = simulation_.State();
     const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
-    const float yaw = static_cast<float>(state.yawRadians);
-    const glm::vec3 forward{std::cos(yaw), 0.0F, -std::sin(yaw)};
     const glm::vec3 up{0.0F, 1.0F, 0.0F};
-    constexpr double followDistanceMeters = 0.40;
-    constexpr double followHeightMeters = 0.28;
+    const glm::dvec3 forwardMeters{
+        std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0};
+    constexpr double followDistanceMeters = 5.5;
+    constexpr double followHeightMeters = 2.0;
     glm::dvec3 observerPositionMeters = state.positionMeters
-        - glm::dvec3{std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0}
-            * followDistanceMeters
+        - forwardMeters * followDistanceMeters
         + glm::dvec3{0.0, 0.0, followHeightMeters};
-    // 카메라가 건물 안에 놓이면 선분을 따라 기체 쪽의 첫 안전 위치로 옮긴다.
-    if (const auto clearPosition = aerosimlab::terrain::FindFirstPointOutsideMapBuildings(
-        observerPositionMeters, state.positionMeters, routeBuildings_, 0.5))
-        observerPositionMeters = *clearPosition;
+    const auto isInsideMapBuilding = [this](const glm::dvec3& position)
+    {
+        return std::any_of(routeBuildings_.begin(), routeBuildings_.end(),
+            [&position](const aerosimlab::terrain::MapBuilding& building)
+            {
+                return aerosimlab::terrain::ContainsMapBuildingVolume(
+                    building, position);
+            });
+    };
+    // 건물 안에 걸리면 드론 쪽으로 당기지 않고, 시야가 열릴 때까지 뒤로 물러난다.
+    if (isInsideMapBuilding(observerPositionMeters))
+    {
+        for (double retreatMeters = 1.0; retreatMeters <= 24.0; retreatMeters += 1.0)
+        {
+            const glm::dvec3 candidate = observerPositionMeters
+                - forwardMeters * retreatMeters;
+            if (!isInsideMapBuilding(candidate))
+            {
+                observerPositionMeters = candidate;
+                break;
+            }
+        }
+    }
     observerCamera_->SetPosition(ToRenderPosition(observerPositionMeters));
     observerCamera_->SetTarget(dronePosition + up * 0.04F);
     observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
