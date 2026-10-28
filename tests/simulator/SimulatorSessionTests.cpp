@@ -27,10 +27,13 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 using namespace aerosimlab;
 
@@ -205,6 +208,131 @@ public:
         for (const auto droneId : droneIds)
             EXPECT_EQ(app.simulation_.State(droneId).mode,
                 simulation::FlightMode::Landing);
+    }
+
+    static void VerifyCompleteFleetMissionFinishesAndLands()
+    {
+        using Stage = AeroSimLabApp::CompleteFleetMissionState::Stage;
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        const auto droneIds = app.simulation_.DroneIds();
+
+        ASSERT_TRUE(app.StartCompleteFleetMission(
+            simulation::FormationShape::Vee)) << app.formationTransit_.status;
+        bool sawReconnaissance = false;
+        bool sawRegrouping = false;
+        bool sawReturning = false;
+        constexpr std::uint64_t maximumMissionTicks = 60000U;
+        std::map<simulation::DroneId, std::uint64_t> lastAssignmentVersions;
+        std::vector<std::string> assignmentHistory;
+        simulation::DroneId previousLeaderId = app.fleetLeaderId_;
+        for (std::uint64_t tick = 0U; tick < maximumMissionTicks; ++tick)
+        {
+            app.AdvanceSimulationTick();
+            if (previousLeaderId != app.fleetLeaderId_)
+            {
+                assignmentHistory.push_back("Tick "
+                    + std::to_string(app.simulation_.TickCount())
+                    + ": 리더 " + std::to_string(previousLeaderId) + " → "
+                    + std::to_string(app.fleetLeaderId_));
+                previousLeaderId = app.fleetLeaderId_;
+            }
+            for (const auto& [droneId, mission] : app.fleetReconnaissance_)
+            {
+                auto& lastVersion = lastAssignmentVersions[droneId];
+                if (mission.assignmentVersion == lastVersion)
+                    continue;
+                assignmentHistory.push_back("Tick "
+                    + std::to_string(app.simulation_.TickCount()) + ": 드론 "
+                    + std::to_string(droneId) + " 목표 "
+                    + std::to_string(mission.targetIndex) + " 버전 "
+                    + std::to_string(mission.assignmentVersion) + " 상태 "
+                    + mission.status);
+                lastVersion = mission.assignmentVersion;
+            }
+            sawReconnaissance = sawReconnaissance
+                || app.completeFleetMission_.stage == Stage::Reconnaissance;
+            sawRegrouping = sawRegrouping
+                || app.completeFleetMission_.stage == Stage::Regrouping;
+            sawReturning = sawReturning
+                || app.completeFleetMission_.stage == Stage::Returning;
+            if (app.completeFleetMission_.stage == Stage::Completed
+                || app.completeFleetMission_.stage == Stage::Failed)
+                break;
+        }
+
+        std::ostringstream failureContext;
+        failureContext << "전체 임무가 끝나지 않았습니다. 상태: "
+            << app.completeFleetMission_.status << ", Tick: "
+            << app.simulation_.TickCount();
+        if (app.completeFleetMission_.stage != Stage::Completed)
+        {
+            const auto& leader = app.simulation_.State(app.fleetLeaderId_);
+            failureContext << ", 리더 ID " << app.fleetLeaderId_ << " 위치: ("
+                << leader.positionMeters.x << ", "
+                << leader.positionMeters.y << ", " << leader.positionMeters.z
+                << "), GCS 위치: (" << app.groundControlPositionMeters_.x << ", "
+                << app.groundControlPositionMeters_.y << ", "
+                << app.groundControlPositionMeters_.z << "), 임무 단계 "
+                << static_cast<int>(app.completeFleetMission_.stage);
+            for (const auto droneId : droneIds)
+            {
+                const auto& drone = app.simulation_.State(droneId);
+                failureContext << "; 드론 " << droneId << " 위치 ("
+                    << drone.positionMeters.x << ", " << drone.positionMeters.y
+                    << ", " << drone.positionMeters.z << ")";
+                if (droneId != app.fleetLeaderId_)
+                {
+                    const auto report = app.peerTelemetryAtLeader_.find(droneId);
+                    failureContext << ", 리더와 거리 "
+                        << glm::distance(drone.positionMeters,
+                            leader.positionMeters) << "m, 보고 경과 ";
+                    if (report == app.peerTelemetryAtLeader_.end())
+                        failureContext << "없음";
+                    else
+                        failureContext << app.simulation_.TickCount()
+                            - report->second.receivedAtTick << " Tick";
+                }
+                const auto mission = app.fleetReconnaissance_.find(droneId);
+                if (mission != app.fleetReconnaissance_.end())
+                    failureContext << ", 목표 " << mission->second.targetIndex
+                        << ", 상태 " << mission->second.status;
+            }
+            const auto& metrics = app.formationNetwork_->Metrics();
+            failureContext << "; 통신 통계 전달 " << metrics.deliveredMessages
+                << ", 중계 " << metrics.forwardedMessages << ", 경로 탐색 "
+                << metrics.routeRequests << ", 경로 오류 " << metrics.routeErrors
+                << ", 폐기 " << metrics.droppedMessages;
+            const auto leaderHop = app.formationNetwork_->NextHop(
+                droneIds.back(), app.fleetLeaderId_);
+            failureContext << "; 리더 경로 다음 홉 "
+                << (leaderHop ? std::to_string(*leaderHop) : "없음");
+            const auto events = app.formationNetwork_->Events();
+            const std::size_t firstEvent = events.size() > 12U
+                ? events.size() - 12U : 0U;
+            for (std::size_t index = firstEvent; index < events.size(); ++index)
+            {
+                const auto& event = events[index];
+                failureContext << "; 사건 " << static_cast<int>(event.kind) << ' '
+                    << event.source << "->" << event.destination << ' '
+                    << event.detail;
+            }
+            const std::size_t firstAssignment = assignmentHistory.size() > 24U
+                ? assignmentHistory.size() - 24U : 0U;
+            for (std::size_t index = firstAssignment;
+                index < assignmentHistory.size(); ++index)
+                failureContext << "; 배정 이력 " << assignmentHistory[index];
+        }
+
+        EXPECT_EQ(app.completeFleetMission_.stage, Stage::Completed)
+            << failureContext.str();
+        EXPECT_TRUE(sawReconnaissance) << "M02 정찰 단계에 도달하지 못했습니다.";
+        EXPECT_TRUE(sawRegrouping) << "M03 재집결 단계에 도달하지 못했습니다.";
+        EXPECT_TRUE(sawReturning) << "기지 복귀 단계에 도달하지 못했습니다.";
+        for (const auto droneId : app.simulation_.DroneIds())
+            EXPECT_EQ(app.simulation_.State(droneId).mode,
+                simulation::FlightMode::Grounded)
+                << "전체 임무가 끝난 뒤 드론 " << droneId << "이 지상에 있지 않습니다.";
     }
 
     static void VerifyLostReconAssignmentWaitsForLeaseAndReassignsOnce()
@@ -877,6 +1005,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::AeroSimLabAppTestAccess::VerifyLeaderLossWithoutCandidateSafelyLandsFleet());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyCompleteFleetMissionFinishesAndLands());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLostReconAssignmentWaitsForLeaseAndReassignsOnce());
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());

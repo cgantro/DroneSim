@@ -1,5 +1,6 @@
 #include "AeroSimLabApp.h"
 #include "FleetMissionProgress.h"
+#include "TrainingRangeScene.h"
 #include "terrain/MapFlightRoute.h"
 #include "graphics/Window.h"
 #include <glm/geometric.hpp>
@@ -70,7 +71,7 @@ constexpr aerosimlab::communication::NetworkNodeId groundControlNodeId =
 constexpr std::uint64_t peerTelemetrySuspectAfterTicks = 30U;
 constexpr std::uint64_t peerTelemetryUnknownAfterTicks = 180U;
 constexpr std::uint64_t missionLeaseGraceTicks = 1800U;
-constexpr double missionLeasePlanningSpeedMetersPerSecond = 2.0;
+constexpr double missionLeasePlanningSpeedMetersPerSecond = 1.0;
 
 std::uint64_t EstimateMissionLeaseExpiry(
     std::uint64_t currentTick,
@@ -824,6 +825,14 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
             && simulation_.TickCount() >= mission.assignmentLeaseExpiresAtTick
             && IsFleetReconnaissanceActive(mission.status))
         {
+            const auto* report = droneId == fleetLeaderId_
+                ? nullptr : FreshPeerTelemetry(droneId);
+            const bool currentAssignmentIsReported = report != nullptr
+                && report->state.assignmentVersion == mission.assignmentVersion
+                && IsFleetReconnaissanceActive(report->state.missionStatus);
+            if (droneId == fleetLeaderId_ || currentAssignmentIsReported)
+                continue;
+
             const auto mode = simulation_.State(droneId).mode;
             if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
                 static_cast<void>(simulation_.Apply(droneId,
@@ -1079,7 +1088,12 @@ bool AeroSimLabApp::StartFormationTransit(
         }))
         return false;
 
-    const glm::dvec3 destination = inspectionTargets_.back().approachPositionMeters;
+    const glm::dvec2 stagingPosition =
+        trainingRangeScene_->FormationStagingPositionMeters();
+    const double stagingAltitude = std::max(
+        terrainGrid_.HeightAtLocalMeters(stagingPosition) + 15.0,
+        cameraTransitAltitudeMeters_);
+    const glm::dvec3 destination{stagingPosition, stagingAltitude};
     const auto route = PlanFormationRoute(terrainGrid_, routeBuildings_,
         simulation_.State(droneIds.front()).positionMeters, destination,
         droneIds.size(), shape, 8.0, 1.5, 2.0,
@@ -1393,12 +1407,15 @@ void AeroSimLabApp::ReassignLostLeaderTarget()
         const auto telemetry = peerTelemetryAtLeader_.find(droneId);
         if (mission == fleetReconnaissance_.end()
             || mission->second.leg != FleetMissionLeg::Reconnaissance
-            || mission->second.assignmentLeaseExpiresAtTick == 0U)
+            || mission->second.assignmentLeaseExpiresAtTick == 0U
+            || mission->second.pendingRouteSequence != 0U)
             continue;
 
         const ReceivedPeerTelemetry* report = telemetry == peerTelemetryAtLeader_.end()
             ? nullptr : &telemetry->second;
-        const std::uint64_t reportedLeaseExpiry = report == nullptr
+        const bool reportMatchesAssignment = report != nullptr
+            && report->state.assignmentVersion == mission->second.assignmentVersion;
+        const std::uint64_t reportedLeaseExpiry = !reportMatchesAssignment
             ? 0U : report->state.assignmentLeaseExpiresAtTick;
         const std::uint64_t safeTransferTick = std::max(
             mission->second.assignmentLeaseExpiresAtTick, reportedLeaseExpiry);
@@ -1407,10 +1424,9 @@ void AeroSimLabApp::ReassignLostLeaderTarget()
 
         const bool agentReleasedLease = mission->second.status
                 == "임무 권한 만료 · 안전 착륙"
-            || (report != nullptr
-                && report->state.assignmentVersion == mission->second.assignmentVersion
+            || (reportMatchesAssignment
                 && report->state.missionStatus == "임무 권한 만료 · 안전 착륙");
-        const bool telemetryIsUnknown = report != nullptr
+        const bool telemetryIsUnknown = reportMatchesAssignment
             && currentTick > report->receivedAtTick + peerTelemetryUnknownAfterTicks
             && IsFleetReconnaissanceActive(report->state.missionStatus);
         const bool excludedOwnerIsUnknown = excluded
@@ -1442,7 +1458,8 @@ void AeroSimLabApp::ReassignLostLeaderTarget()
     {
         const auto mission = fleetReconnaissance_.find(droneId);
         if (mission == fleetReconnaissance_.end()
-            || mission->second.leg != FleetMissionLeg::Reconnaissance)
+            || mission->second.leg != FleetMissionLeg::Reconnaissance
+            || mission->second.pendingRouteSequence != 0U)
             continue;
 
         glm::dvec3 position{0.0};
@@ -1705,9 +1722,19 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     }
 
     constexpr std::uint64_t leaderHeartbeatTimeoutTicks = 45U;
+    // 지상통제소와 끊긴 것만으로 리더 장애라 단정하지 않는다.
+    // 추종 기체의 최신 보고가 리더까지 도착하면 편대 안에서는 리더가 살아 있다.
+    const bool leaderStillReportsToFleet = std::any_of(
+        fleetDroneIds_.begin(), fleetDroneIds_.end(),
+        [this](DroneId droneId)
+        {
+            return droneId != fleetLeaderId_
+                && FreshPeerTelemetry(droneId) != nullptr;
+        });
     if (!leaderReplacementPending_ && !leaderStateCollectionPending_
         && fleetLeaderId_ != 0U
-        && currentTick > lastLeaderHeartbeatTick_ + leaderHeartbeatTimeoutTicks)
+        && currentTick > lastLeaderHeartbeatTick_ + leaderHeartbeatTimeoutTicks
+        && !leaderStillReportsToFleet)
         BeginFleetLeaderReplacement();
 
     formationNetwork_->Advance(currentTick);
@@ -1980,12 +2007,11 @@ void AeroSimLabApp::AdvanceFormationTransit()
     }
 
     constexpr std::uint64_t peerTelemetryTimeoutTicks = 30U;
+    constexpr std::uint64_t peerTelemetryRecoveryTimeoutTicks = 180U;
     for (std::size_t index = 1U; index < droneIds.size(); ++index)
     {
         const auto peer = peerTelemetryAtLeader_.find(droneIds[index]);
-        if (peer == peerTelemetryAtLeader_.end()
-            || simulation_.TickCount() > peer->second.receivedAtTick
-                + peerTelemetryTimeoutTicks)
+        if (peer == peerTelemetryAtLeader_.end())
         {
             formationTransit_.active = false;
             formationTransit_.status = "통신 끊김 · 편대 안전 착륙";
@@ -2007,6 +2033,43 @@ void AeroSimLabApp::AdvanceFormationTransit()
             }
             return;
         }
+
+        const std::uint64_t reportAgeTicks = simulation_.TickCount()
+            - peer->second.receivedAtTick;
+        if (reportAgeTicks <= peerTelemetryTimeoutTicks)
+            continue;
+
+        if (reportAgeTicks <= peerTelemetryTimeoutTicks
+                + peerTelemetryRecoveryTimeoutTicks)
+        {
+            // 편대원 보고가 잠깐 끊기면 리더를 멈춰 연결 회복을 기다린다.
+            DroneCommand holdLeader;
+            holdLeader.kind = DroneCommand::Kind::SetWaypoint;
+            holdLeader.vector = leader.positionMeters;
+            static_cast<void>(simulation_.Apply(leaderId, holdLeader));
+            formationTransit_.status = "추종 드론 통신 회복 대기 · 편대 이동 일시 정지";
+            return;
+        }
+
+        formationTransit_.active = false;
+        formationTransit_.status = "통신 끊김 · 편대 안전 착륙";
+        if (completeFleetMission_.stage
+            == CompleteFleetMissionState::Stage::FormationTransit)
+        {
+            FailCompleteFleetMission(
+                "추종 드론과 통신이 복구되지 않아 편대를 안전 착륙시킵니다.");
+        }
+        else
+        {
+            for (const DroneId fleetDroneId : droneIds)
+            {
+                const FlightMode mode = simulation_.State(fleetDroneId).mode;
+                if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
+                    static_cast<void>(simulation_.Apply(fleetDroneId,
+                        {DroneCommand::Kind::Land}));
+            }
+        }
+        return;
     }
 
     const auto& route = formationTransit_.route.leaderWaypointsMeters;

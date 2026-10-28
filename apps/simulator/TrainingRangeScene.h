@@ -43,6 +43,8 @@ public:
 
     [[nodiscard]] const std::vector<aerosimlab::terrain::MapBuilding>& Obstacles() const noexcept;
     [[nodiscard]] const std::vector<ReconPoint>& ReconPoints() const noexcept;
+    /** @brief M01 편대가 정찰을 시작하기 전에 모일 지점이다. */
+    [[nodiscard]] glm::dvec2 FormationStagingPositionMeters() const noexcept;
 
 private:
     struct ModelGroup

@@ -51,7 +51,8 @@ constexpr Placement placements[]{
 };
 
 constexpr glm::dvec2 reconLocations[]{
-    {-170.0, -116.0}, {-84.0, -112.0}, {4.0, -116.0}, {94.0, -116.0},
+    // 처음 네 지점은 GCS부터 정찰 끝점까지 다중 홉 연결을 유지하도록 간격을 둔다.
+    {-165.0, -116.0}, {-100.0, -116.0}, {-35.0, -116.0}, {30.0, -116.0},
     {172.0, -82.0}, {-170.0, -18.0}, {-80.0, 54.0}, {92.0, 52.0},
     {168.0, 64.0}, {-172.0, 150.0}, {70.0, 156.0}, {176.0, 148.0},
 };
@@ -139,5 +140,10 @@ const std::vector<TrainingRangeScene::ReconPoint>&
 TrainingRangeScene::ReconPoints() const noexcept
 {
     return reconPoints_;
+}
+
+glm::dvec2 TrainingRangeScene::FormationStagingPositionMeters() const noexcept
+{
+    return {0.0, -20.0};
 }
 }
