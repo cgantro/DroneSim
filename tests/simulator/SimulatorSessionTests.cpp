@@ -54,7 +54,10 @@ public:
 
     static void VerifyGroundControlShowsOnlyDeliveredPeerPositions()
     {
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({
+            .smokeTest = true,
+            .simulationDynamics = simulation::SimulationDynamics::Kinematic,
+            .networkEnabled = false});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
         UseConnectedNetworkForTest(app);
@@ -62,14 +65,21 @@ public:
 
         const auto droneIds = app.fleetDroneIds_;
         ASSERT_EQ(droneIds.size(), 4U);
-        for (int tick = 0; tick < 120; ++tick)
+        const auto disconnectedDroneId = droneIds[2U];
+        ASSERT_EQ(app.simulation_.Apply(disconnectedDroneId,
+            {simulation::DroneCommand::Kind::TakeOff}),
+            simulation::CommandResult::Accepted);
+        for (int tick = 0; tick < 240; ++tick)
         {
             app.AdvanceFleetNetwork();
             app.simulation_.AdvanceOneTick();
         }
         ASSERT_EQ(app.telemetryAtGroundControl_.size(), droneIds.size());
 
-        const auto disconnectedDroneId = droneIds[2U];
+        const auto mode = app.simulation_.State(disconnectedDroneId).mode;
+        ASSERT_TRUE(mode == simulation::FlightMode::Hovering
+            || mode == simulation::FlightMode::Flying
+            || mode == simulation::FlightMode::FollowingWaypoint);
         const auto originalReport = app.telemetryAtGroundControl_.at(
             disconnectedDroneId).state.positionMeters;
         const auto groundControlNodeId = std::numeric_limits<
@@ -78,10 +88,13 @@ public:
             app.formationNetwork_->SetDirectedLinkDisabled(
                 droneId, groundControlNodeId, true);
 
-        auto movedDrone = app.simulation_.State(disconnectedDroneId);
-        movedDrone.positionMeters += glm::dvec3{35.0, 0.0, 0.0};
-        app.simulation_.SetInitialState(disconnectedDroneId, movedDrone);
-        for (int tick = 0; tick < 60; ++tick)
+        simulation::DroneCommand waypoint;
+        waypoint.kind = simulation::DroneCommand::Kind::SetWaypoint;
+        waypoint.vector = app.simulation_.State(disconnectedDroneId).positionMeters
+            + glm::dvec3{35.0, 0.0, 0.0};
+        ASSERT_EQ(app.simulation_.Apply(disconnectedDroneId, waypoint),
+            simulation::CommandResult::Accepted);
+        for (int tick = 0; tick < 300; ++tick)
         {
             app.AdvanceFleetNetwork();
             app.simulation_.AdvanceOneTick();
@@ -1374,6 +1387,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::AeroSimLabAppTestAccess::VerifyGroundedRelayDroneTakesOffForAssignment());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyRelayRecoveryUsesTheConfiguredRadioRange());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyGroundControlShowsOnlyDeliveredPeerPositions());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLeaderLossWithoutCandidateSafelyLandsFleet());
     EXPECT_NO_FATAL_FAILURE(
