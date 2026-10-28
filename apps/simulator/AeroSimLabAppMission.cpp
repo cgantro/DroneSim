@@ -231,6 +231,174 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
     }
 }
 
+bool AeroSimLabApp::StartFormationTransit(
+    aerosimlab::simulation::FormationShape shape)
+{
+    using namespace aerosimlab::simulation;
+
+    if (formationTransit_.active || inspectionTargets_.empty()
+        || InspectionMissionIsActive())
+        return false;
+
+    const std::vector<DroneId> droneIds = simulation_.DroneIds();
+    if (droneIds.size() < 2U || std::any_of(droneIds.begin(), droneIds.end(),
+        [this](DroneId droneId)
+        {
+            return simulation_.State(droneId).mode != FlightMode::Grounded;
+        }))
+        return false;
+
+    const glm::dvec3 destination = inspectionTargets_.back().approachPositionMeters;
+    const auto route = PlanFormationRoute(terrainGrid_, routeBuildings_,
+        simulation_.State(droneIds.front()).positionMeters, destination,
+        droneIds.size(), shape, 8.0, 1.5, 2.0,
+        cameraTransitAltitudeMeters_);
+    if (!route)
+    {
+        formationTransit_.status = "목적지까지 편대 경로를 찾지 못했습니다.";
+        return false;
+    }
+
+    std::vector<DroneId> takingOff;
+    takingOff.reserve(droneIds.size());
+    for (const DroneId droneId : droneIds)
+    {
+        if (simulation_.Apply(droneId, {DroneCommand::Kind::TakeOff})
+            != CommandResult::Accepted)
+        {
+            for (const DroneId airborneId : takingOff)
+                static_cast<void>(simulation_.Apply(airborneId,
+                    {DroneCommand::Kind::Land}));
+            formationTransit_.status = "드론 이륙 명령을 적용하지 못했습니다.";
+            return false;
+        }
+        takingOff.push_back(droneId);
+    }
+
+    formationTransit_.route = *route;
+    formationTransit_.waypointIndex = 0U;
+    formationTransit_.active = true;
+    formationTransit_.status = route->shape == shape
+        ? std::string{"출발 준비 · "} + (shape == FormationShape::Vee ? "V자 대형"
+            : shape == FormationShape::Column ? "일렬 대형" : "횡대")
+                + " · " + inspectionTargets_.back().displayName
+        : std::string{"통로 폭에 맞춰 일렬 대형 · "}
+            + inspectionTargets_.back().displayName;
+    externalControl_ = true;
+    groundControlActive_ = true;
+    pendingControllerAction_.reset();
+    pendingPilotCommand_.reset();
+#ifdef __EMSCRIPTEN__
+    webPilotAxes_.reset();
+#endif
+    if (window_)
+        window_->SetTitle("DroneSim | 편대 이동 임무 진행 중");
+    return true;
+}
+
+void AeroSimLabApp::AdvanceFormationTransit()
+{
+    using namespace aerosimlab::simulation;
+    if (!formationTransit_.active)
+        return;
+
+    const std::vector<DroneId> droneIds = simulation_.DroneIds();
+    if (droneIds.size() < 2U || formationTransit_.route.leaderWaypointsMeters.empty())
+    {
+        formationTransit_.active = false;
+        formationTransit_.status = "편대 구성을 유지할 수 없어 임무를 멈췄습니다.";
+        return;
+    }
+
+    const DroneId leaderId = droneIds.front();
+    const DroneState& leader = simulation_.State(leaderId);
+    if (leader.mode == FlightMode::Grounded || leader.mode == FlightMode::TakingOff)
+        return;
+    if (leader.mode == FlightMode::Landing)
+    {
+        formationTransit_.active = false;
+        formationTransit_.status = "리더가 착륙해 편대 이동을 멈췄습니다.";
+        return;
+    }
+
+    const auto& route = formationTransit_.route.leaderWaypointsMeters;
+    formationTransit_.waypointIndex = std::min(
+        formationTransit_.waypointIndex, route.size() - 1U);
+    const glm::dvec3 waypoint = route[formationTransit_.waypointIndex];
+    if (glm::distance(leader.positionMeters, waypoint) <= 3.0
+        && formationTransit_.waypointIndex + 1U < route.size())
+        ++formationTransit_.waypointIndex;
+
+    const std::size_t nextIndex = formationTransit_.waypointIndex;
+    glm::dvec2 direction{0.0, 0.0};
+    if (nextIndex + 1U < route.size())
+        direction = {route[nextIndex + 1U].x - route[nextIndex].x,
+            route[nextIndex + 1U].y - route[nextIndex].y};
+    else if (nextIndex > 0U)
+        direction = {route[nextIndex].x - route[nextIndex - 1U].x,
+            route[nextIndex].y - route[nextIndex - 1U].y};
+    const double heading = glm::length(direction) > 1.0e-6
+        ? std::atan2(direction.y, direction.x) : leader.yawRadians;
+    const auto offsets = FormationOffsets(
+        formationTransit_.route.shape, droneIds.size(), 8.0, heading);
+
+    for (std::size_t index = 0; index < droneIds.size(); ++index)
+    {
+        const DroneId droneId = droneIds[index];
+        const DroneState& state = simulation_.State(droneId);
+        if (state.mode == FlightMode::Grounded || state.mode == FlightMode::TakingOff)
+            continue;
+        if (state.mode == FlightMode::Landing)
+        {
+            formationTransit_.active = false;
+            formationTransit_.status = "추종 드론이 착륙해 편대 이동을 멈췄습니다.";
+            return;
+        }
+
+        glm::dvec3 target = leader.positionMeters;
+        if (index == 0U)
+            target = route[nextIndex];
+        else
+        {
+            target.x += offsets[index].x;
+            target.y += offsets[index].y;
+        }
+        DroneCommand command;
+        command.kind = DroneCommand::Kind::SetWaypoint;
+        command.vector = target;
+        if (simulation_.Apply(droneId, command) != CommandResult::Accepted)
+        {
+            formationTransit_.active = false;
+            formationTransit_.status = "드론 " + std::to_string(droneId)
+                + "에게 편대 목표를 전달하지 못해 임무를 멈췄습니다.";
+            return;
+        }
+    }
+
+    const bool leaderArrived = formationTransit_.waypointIndex + 1U == route.size()
+        && glm::distance(leader.positionMeters, route.back()) <= 3.0;
+    bool followersArrived = true;
+    for (std::size_t index = 1U; index < droneIds.size(); ++index)
+    {
+        const glm::dvec3 target{leader.positionMeters.x + offsets[index].x,
+            leader.positionMeters.y + offsets[index].y, leader.positionMeters.z};
+        if (glm::distance(simulation_.State(droneIds[index]).positionMeters, target) > 4.0)
+        {
+            followersArrived = false;
+            break;
+        }
+    }
+    if (leaderArrived && followersArrived)
+    {
+        formationTransit_.active = false;
+        formationTransit_.status = "목적지 도착 · 편대 유지 중";
+        return;
+    }
+    formationTransit_.status = "이동 중 · 경유점 "
+        + std::to_string(formationTransit_.waypointIndex + 1U)
+        + "/" + std::to_string(route.size());
+}
+
 bool AeroSimLabApp::CancelInspectionMission()
 {
     if (!InspectionMissionIsActive())

@@ -10,6 +10,7 @@
 #include "sensor/RgbFrame.h"
 #include "simulation_core/CommandRecording.h"
 #include "simulation_core/EoCameraModel.h"
+#include "simulation_core/FormationPlanner.h"
 #include "terrain/MapBuildings.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
@@ -188,6 +189,9 @@ private:
     void AdvanceInspectionMission();
     [[nodiscard]] bool StartFleetReconnaissance();
     void AdvanceFleetReconnaissance();
+    [[nodiscard]] bool StartFormationTransit(
+        aerosimlab::simulation::FormationShape shape);
+    void AdvanceFormationTransit();
     void FailInspectionMission(const std::string& reason);
     [[nodiscard]] std::string InspectionMissionStatus() const;
     /** @brief 명령을 적용하고 성공한 명령만 입력 기록에 남긴다. */
@@ -429,6 +433,14 @@ private:
     };
     std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>
         fleetReconnaissance_;
+    struct FormationTransitState
+    {
+        aerosimlab::simulation::FormationRoutePlan route;
+        std::size_t waypointIndex = 0;
+        bool active = false;
+        std::string status = "대기";
+    };
+    FormationTransitState formationTransit_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{

@@ -159,6 +159,10 @@ void DrawFlightStatusPanel(
     const std::string& inspectionMissionStatus,
     bool missionCanStart,
     const std::function<void()>& startInspectionMission,
+    const std::string& formationMissionStatus,
+    bool formationMissionCanStart,
+    simulation::FormationShape& selectedFormationShape,
+    const std::function<void(simulation::FormationShape)>& startFormationTransit,
     simulation::CaptureAssessment captureAssessment)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
@@ -179,6 +183,17 @@ void DrawFlightStatusPanel(
         ImGui::Text("촬영 위치까지 %.1f m", missionDistanceMeters);
         if (missionCanStart && ImGui::Button("정찰 임무 시작"))
             startInspectionMission();
+        ImGui::Separator();
+        ImGui::Text("편대 이동: %s", formationMissionStatus.c_str());
+        const char* formationLabels[]{"V자", "일렬", "횡대"};
+        int selectedShape = static_cast<int>(selectedFormationShape);
+        if (ImGui::Combo("편대 대형", &selectedShape,
+                formationLabels, IM_ARRAYSIZE(formationLabels)))
+            selectedFormationShape = static_cast<simulation::FormationShape>(selectedShape);
+        if (formationMissionCanStart && ImGui::Button("편대 이동 시작"))
+            startFormationTransit(selectedFormationShape);
+        else if (!formationMissionCanStart)
+            ImGui::TextDisabled("모든 드론이 지상에 있을 때 시작할 수 있습니다.");
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();
         ImGui::Text("게임패드: %s   지상통제: %s",
@@ -291,6 +306,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::string& inspectionTargetName,
     const std::string& inspectionMissionStatus, bool missionCanStart,
     const std::function<void()>& startInspectionMission,
+    const std::string& formationMissionStatus, bool formationMissionCanStart,
+    const std::function<void(simulation::FormationShape)>& startFormationTransit,
     simulation::CaptureAssessment captureAssessment,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t()>& renderCamera,
@@ -313,7 +330,9 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
         missionDistanceMeters, inspectionTargetName,
         inspectionMissionStatus,
-        missionCanStart, startInspectionMission, captureAssessment);
+        missionCanStart, startInspectionMission, formationMissionStatus,
+        formationMissionCanStart, selectedFormationShape_, startFormationTransit,
+        captureAssessment);
 
     if (timings != nullptr)
     {

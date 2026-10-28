@@ -510,6 +510,7 @@ void AeroSimLabApp::AdvanceSimulationTick()
 {
     AdvanceAmbientWind();
     AdvanceFleetReconnaissance();
+    AdvanceFormationTransit();
     if (demoMode_ && !externalControl_
         && inspectionMission_.stage == InspectionMissionStage::Ready)
         static_cast<void>(RequestInspectionMission());
@@ -709,6 +710,21 @@ void AeroSimLabApp::RenderFrame()
             || inspectionMission_.stage == InspectionMissionStage::Saved
             || inspectionMission_.stage == InspectionMissionStage::GeometryOnly
             || inspectionMission_.stage == InspectionMissionStage::Failed;
+        const auto droneIds = simulation_.DroneIds();
+        const bool formationMissionCanStart = !formationTransit_.active
+            && !InspectionMissionIsActive()
+            && std::none_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
+                [](const auto& entry)
+                {
+                    return entry.second.status == "출발 준비"
+                        || entry.second.status == "이동 중"
+                        || entry.second.status == "착륙 중";
+                })
+            && std::all_of(droneIds.begin(), droneIds.end(), [this](auto id)
+                {
+                    return simulation_.State(id).mode
+                        == aerosimlab::simulation::FlightMode::Grounded;
+                });
         const auto captureAssessment = AssessInspectionView();
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -718,7 +734,12 @@ void AeroSimLabApp::RenderFrame()
             missionDistanceMeters, inspectionMission_.targetDisplayName,
             InspectionMissionStatus(),
             missionCanStart,
-            [this] { static_cast<void>(RequestInspectionMission()); }, captureAssessment,
+            [this] { static_cast<void>(RequestInspectionMission()); },
+            formationTransit_.status, formationMissionCanStart,
+            [this](aerosimlab::simulation::FormationShape shape)
+            {
+                static_cast<void>(StartFormationTransit(shape));
+            }, captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this] { return RenderCameraPanel(); },
             benchmarkMode_ ? &hudTimings : nullptr);

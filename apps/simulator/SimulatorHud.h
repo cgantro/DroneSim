@@ -4,6 +4,7 @@
 #include "SimulationBenchmark.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
+#include "simulation_core/FormationPlanner.h"
 
 #include <array>
 #include <cstddef>
@@ -48,6 +49,8 @@ public:
         const std::string& inspectionTargetName,
         const std::string& inspectionMissionStatus, bool missionCanStart,
         const std::function<void()>& startInspectionMission,
+        const std::string& formationMissionStatus, bool formationMissionCanStart,
+        const std::function<void(simulation::FormationShape)>& startFormationTransit,
         simulation::CaptureAssessment captureAssessment,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t()>& renderCamera,
@@ -64,6 +67,7 @@ private:
     void CollectCompletedGpuTimings(HudRenderTimings* timings);
 
     bool initialized_ = false;
+    simulation::FormationShape selectedFormationShape_ = simulation::FormationShape::Vee;
     std::string layoutFile_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };
