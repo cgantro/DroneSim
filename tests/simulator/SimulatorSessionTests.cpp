@@ -193,17 +193,19 @@ public:
             app.simulation_.SetInitialState(droneId, state);
         };
         const std::size_t disconnectedTargetIndex = 4U;
-        const glm::dvec3 disconnectedTarget = app.inspectionTargets_.at(
-            disconnectedTargetIndex).approachPositionMeters;
         const double leaderGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({0.0, 0.0});
         setState(droneIds[0], {0.0, 0.0, leaderGround + 10.0},
             simulation::FlightMode::Grounded);
-        setState(droneIds[1], {90.0, 0.0, leaderGround + 0.5},
+        setState(droneIds[1], {70.0, 80.0, leaderGround + 0.5},
             simulation::FlightMode::Grounded);
-        setState(droneIds[2], disconnectedTarget - glm::dvec3{8.0, 0.0, 0.0},
-            simulation::FlightMode::FollowingWaypoint);
+        setState(droneIds[2], {250.0, 0.0, leaderGround + 10.0},
+            simulation::FlightMode::Hovering);
         setState(droneIds[3], {20.0, 0.0, leaderGround + 10.0},
             simulation::FlightMode::Grounded);
+        const std::vector<glm::dvec3> scoutRoute{
+            {230.0, 0.0, leaderGround + 10.0},
+            {200.0, 0.0, leaderGround + 10.0},
+            {180.0, 0.0, leaderGround + 10.0}};
 
         for (std::size_t index = 0; index < droneIds.size(); ++index)
         {
@@ -213,12 +215,20 @@ public:
             mission.status = index == 2U ? "정찰 이동 중" : "정찰 위치 도착";
             mission.routeReceived = true;
             if (index == 2U)
-                mission.routeWaypointsMeters = {disconnectedTarget};
+            {
+                mission.routeWaypointsMeters = scoutRoute;
+                mission.waypointCommanded = true;
+            }
             app.fleetReconnaissance_.emplace(droneIds[index], std::move(mission));
         }
 
         for (std::uint64_t tick = 0U; tick < 200U; ++tick)
             app.simulation_.AdvanceOneTick();
+        simulation::DroneCommand scoutWaypoint;
+        scoutWaypoint.kind = simulation::DroneCommand::Kind::SetWaypoint;
+        scoutWaypoint.vector = scoutRoute.front();
+        ASSERT_EQ(app.simulation_.Apply(droneIds[2], scoutWaypoint),
+            simulation::CommandResult::Accepted);
         app.formationTransit_.lastNetworkNodeUpdateTick.reset();
         const auto leaderPosition = app.simulation_.State(droneIds[0]).positionMeters;
         const auto candidatePosition = app.simulation_.State(droneIds[1]).positionMeters;
@@ -265,6 +275,10 @@ public:
             disconnectedPosition));
 
         const auto recoveryStartedAtTick = app.fleetRelayRecovery_.startedAtTick;
+        const glm::dvec3 relayPositionAtRecoveryStart =
+            app.simulation_.State(relayDroneId).positionMeters;
+        const glm::dvec3 scoutPositionAtRecoveryStart =
+            app.simulation_.State(droneIds[2]).positionMeters;
         bool telemetryRecovered = false;
         bool telemetryRoutedViaRelay = false;
         constexpr std::uint64_t maximumRecoveryTicks = 5000U;
@@ -282,10 +296,21 @@ public:
                         != message.route.end())
                     telemetryRoutedViaRelay = true;
             }
+            const auto leaderPositionNow = app.simulation_.State(droneIds[0]).positionMeters;
+            const auto relayPositionNow = app.simulation_.State(relayDroneId).positionMeters;
+            const auto scoutPositionNow = app.simulation_.State(droneIds[2]).positionMeters;
+            const bool linksRestoredAtActualPositions =
+                !app.formationNetwork_->CanExchangeAtPositions(
+                    droneIds[0], droneIds[2], leaderPositionNow, scoutPositionNow)
+                && app.formationNetwork_->CanExchangeAtPositions(
+                    droneIds[0], relayDroneId, leaderPositionNow, relayPositionNow)
+                && app.formationNetwork_->CanExchangeAtPositions(
+                    relayDroneId, droneIds[2], relayPositionNow, scoutPositionNow);
             telemetryRecovered = telemetryRecovered
                 || (report != nullptr
                     && report->receivedAtTick > recoveryStartedAtTick
                     && telemetryRoutedViaRelay
+                    && linksRestoredAtActualPositions
                     && !app.fleetRelayRecovery_.waitingForTelemetry);
             if (telemetryRecovered)
                 break;
@@ -314,6 +339,15 @@ public:
             << ", 버림=" << app.formationNetwork_->Metrics().droppedMessages;
         EXPECT_TRUE(app.fleetReconnaissance_.at(droneIds[2]).waypointCommanded)
             << "통신이 끊긴 정찰 기체가 기존 경로를 실행하지 않았습니다.";
+        const auto& scoutState = app.simulation_.State(droneIds[2]);
+        EXPECT_GT(glm::distance(scoutPositionAtRecoveryStart,
+            scoutState.positionMeters), 0.001)
+            << "통신 복구 전 정찰 기체가 목표 방향으로 이동하지 않았습니다.";
+        EXPECT_EQ(scoutState.mode, simulation::FlightMode::FollowingWaypoint)
+            << "통신 복구 중 정찰 기체의 경로 추종 상태가 유지되지 않았습니다.";
+        EXPECT_GT(glm::distance(relayPositionAtRecoveryStart,
+            app.simulation_.State(relayDroneId).positionMeters), 1.0)
+            << "중계 기체가 실제 중계 위치로 이동하지 않았습니다.";
     }
 
     static void VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget()
