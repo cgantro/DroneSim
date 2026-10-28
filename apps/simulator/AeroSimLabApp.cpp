@@ -508,6 +508,9 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
 
 void AeroSimLabApp::AdvanceSimulationTick()
 {
+#ifndef __EMSCRIPTEN__
+    ApplyDueFaultScenarioEvents();
+#endif
     AdvanceAmbientWind();
     AdvanceFleetNetwork();
     AdvanceFleetReconnaissance();
@@ -764,6 +767,30 @@ void AeroSimLabApp::RenderFrame()
             ApplyHudSessionCommand(
                 aerosimlab::communication::SessionCommand::ReplayRecording);
         };
+        recordingControls.faultScenarioRecording = faultScenarioTimeline_.IsRecording();
+        recordingControls.faultScenarioReplaying = faultScenarioTimeline_.IsReplaying();
+        recordingControls.faultScenarioEventCount = faultScenarioTimeline_.EventCount();
+        recordingControls.canStartFaultScenarioRecording = formationNetworkActive
+            && !recordingControls.faultScenarioRecording
+            && !recordingControls.faultScenarioReplaying;
+        recordingControls.canStopFaultScenarioRecording =
+            recordingControls.faultScenarioRecording;
+        recordingControls.canReplayFaultScenario = formationNetworkActive
+            && !recordingControls.faultScenarioRecording
+            && !recordingControls.faultScenarioReplaying;
+        recordingControls.faultScenarioStatus = faultScenarioStatus_;
+        recordingControls.startFaultScenarioRecording = [this]
+        {
+            StartFaultScenarioRecording();
+        };
+        recordingControls.stopFaultScenarioRecording = [this]
+        {
+            StopFaultScenarioRecording();
+        };
+        recordingControls.replayFaultScenario = [this]
+        {
+            StartFaultScenarioReplay();
+        };
         recordingControls.videoRecording = videoIsRecording;
         recordingControls.canStartVideoRecording = simulation_.Camera().status
                 == aerosimlab::simulation::CameraStatus::Active
@@ -811,19 +838,29 @@ void AeroSimLabApp::RenderFrame()
                 if (formationNetwork_)
                     formationNetwork_->SetPacketLossProbability(
                         static_cast<double>(percentage) / 100.0);
+                faultScenarioTimeline_.RecordPacketLoss(simulation_.TickCount(),
+                    static_cast<double>(percentage) / 100.0);
             },
             formationNetwork_.get(),
             [this, formationNetworkActive](aerosimlab::simulation::DroneId first,
                 aerosimlab::simulation::DroneId second, bool disabled)
             {
                 if (formationNetwork_ && formationNetworkActive)
+                {
                     formationNetwork_->SetLinkDisabled(first, second, disabled);
+                    faultScenarioTimeline_.RecordLinkState(
+                        simulation_.TickCount(), first, second, disabled);
+                }
             },
             [this, formationNetworkActive](aerosimlab::simulation::DroneId droneId,
                 bool enabled)
             {
                 if (formationNetwork_ && formationNetworkActive)
+                {
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
+                    faultScenarioTimeline_.RecordRadioState(
+                        simulation_.TickCount(), droneId, enabled);
+                }
             },
             captureAssessment,
             recordingControls,

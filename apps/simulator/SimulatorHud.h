@@ -47,6 +47,16 @@ struct SessionRecordingControls
     std::function<void()> startCommandRecording;
     std::function<void()> stopCommandRecording;
     std::function<void()> replayCommands;
+    bool faultScenarioRecording = false;
+    bool faultScenarioReplaying = false;
+    bool canStartFaultScenarioRecording = false;
+    bool canStopFaultScenarioRecording = false;
+    bool canReplayFaultScenario = false;
+    std::size_t faultScenarioEventCount = 0;
+    std::string faultScenarioStatus;
+    std::function<void()> startFaultScenarioRecording;
+    std::function<void()> stopFaultScenarioRecording;
+    std::function<void()> replayFaultScenario;
     bool videoRecording = false;
     bool canStartVideoRecording = false;
     bool canStopVideoRecording = false;

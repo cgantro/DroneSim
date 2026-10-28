@@ -3,6 +3,7 @@
 #include "EoVideoRecorder.h"
 #include "FleetTelemetry.h"
 #include "FleetDroneSpawn.h"
+#include "FaultScenarioTimeline.h"
 
 #include "simulation_core/SimulationCore.h"
 #include "terrain/MapBuildings.h"
@@ -826,6 +827,44 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
 TEST(SimulatorSessionTests, CoreScenarios)
 {
+    {
+        const auto path = std::filesystem::temp_directory_path()
+            / "dronesim-fault-timeline-test.json";
+        std::error_code filesystemError;
+        std::filesystem::remove(path, filesystemError);
+
+        simulator::FaultScenarioTimeline recording;
+        recording.StartRecording(100U, {1U, 2U}, "complete");
+        recording.RecordPacketLoss(100U, 0.25);
+        recording.RecordLinkState(103U, 1U, 2U, true);
+        recording.RecordRadioState(103U, 2U, false);
+        recording.StopRecording();
+
+        std::string error;
+        ASSERT_TRUE(recording.SaveRecording(path, error)) << error;
+
+        simulator::FaultScenarioTimeline replay;
+        ASSERT_TRUE(replay.LoadRecording(path, error)) << error;
+        EXPECT_FALSE(replay.StartReplay(500U, {1U, 2U}, "formation", error));
+        ASSERT_TRUE(replay.StartReplay(500U, {1U, 2U}, "complete", error)) << error;
+        const auto firstEvents = replay.TakeDueEvents(500U);
+        ASSERT_EQ(firstEvents.size(), 1U);
+        EXPECT_EQ(firstEvents.front().kind,
+            simulator::FaultScenarioTimeline::Event::Kind::PacketLoss);
+        EXPECT_DOUBLE_EQ(firstEvents.front().value, 0.25);
+        EXPECT_TRUE(replay.TakeDueEvents(502U).empty());
+        const auto laterEvents = replay.TakeDueEvents(503U);
+        ASSERT_EQ(laterEvents.size(), 2U);
+        EXPECT_EQ(laterEvents[0].kind,
+            simulator::FaultScenarioTimeline::Event::Kind::LinkState);
+        EXPECT_TRUE(laterEvents[0].enabled);
+        EXPECT_EQ(laterEvents[1].kind,
+            simulator::FaultScenarioTimeline::Event::Kind::RadioState);
+        EXPECT_FALSE(laterEvents[1].enabled);
+        EXPECT_TRUE(replay.ReplayFinished());
+
+        std::filesystem::remove(path, filesystemError);
+    }
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget());
     EXPECT_NO_FATAL_FAILURE(

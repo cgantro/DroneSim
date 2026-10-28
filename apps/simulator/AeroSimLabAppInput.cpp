@@ -1,4 +1,5 @@
 #include "AeroSimLabApp.h"
+#include "ExecutableDirectory.h"
 
 #include "graphics/MultisampleFramebuffer.h"
 #include "FleetDroneSpawn.h"
@@ -11,6 +12,7 @@
 
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <string>
 #include <variant>
 
@@ -32,6 +34,107 @@ struct Overloaded : Callables...
 template <typename... Callables>
 Overloaded(Callables...) -> Overloaded<Callables...>;
 }
+
+#ifndef __EMSCRIPTEN__
+void AeroSimLabApp::StartFaultScenarioRecording()
+{
+    if (!formationNetwork_ || faultScenarioTimeline_.IsRecording()
+        || faultScenarioTimeline_.IsReplaying())
+        return;
+
+    faultScenarioTimeline_.StartRecording(
+        simulation_.TickCount(), simulation_.DroneIds(),
+        CurrentFaultScenarioMissionKind());
+    faultScenarioStatus_ = "현재 임무의 통신 장애 조작을 기록합니다.";
+}
+
+void AeroSimLabApp::StopFaultScenarioRecording()
+{
+    if (!faultScenarioTimeline_.IsRecording())
+        return;
+
+    faultScenarioTimeline_.StopRecording();
+    const std::filesystem::path path = detail::ExecutableDirectory()
+        / "output" / "scenarios" / "fault-timeline.json";
+    std::string error;
+    if (!faultScenarioTimeline_.SaveRecording(path, error))
+    {
+        faultScenarioStatus_ = "장애 기록 저장 실패: " + error;
+        return;
+    }
+    faultScenarioStatus_ = "장애 기록을 output/scenarios/fault-timeline.json에 저장했습니다.";
+}
+
+void AeroSimLabApp::StartFaultScenarioReplay()
+{
+    if (!formationNetwork_ || faultScenarioTimeline_.IsRecording()
+        || faultScenarioTimeline_.IsReplaying())
+        return;
+
+    const std::filesystem::path path = detail::ExecutableDirectory()
+        / "output" / "scenarios" / "fault-timeline.json";
+    std::string error;
+    if (!faultScenarioTimeline_.LoadRecording(path, error)
+        || !faultScenarioTimeline_.StartReplay(
+            simulation_.TickCount(), simulation_.DroneIds(),
+            CurrentFaultScenarioMissionKind(), error))
+    {
+        faultScenarioStatus_ = "장애 시나리오 재생 실패: " + error;
+        return;
+    }
+    faultScenarioStatus_ = "저장한 장애 순서를 현재 편대 임무에 적용합니다.";
+}
+
+void AeroSimLabApp::ApplyDueFaultScenarioEvents()
+{
+    if (!faultScenarioTimeline_.IsReplaying())
+        return;
+
+    const bool missionActive = formationTransit_.active
+        || FleetReconnaissanceIsActive() || CompleteFleetMissionIsActive();
+    if (!missionActive || !formationNetwork_)
+    {
+        faultScenarioTimeline_.StopReplay();
+        faultScenarioStatus_ = "편대 임무가 끝나 장애 재생을 멈췄습니다.";
+        return;
+    }
+
+    for (const FaultScenarioTimeline::Event& event
+         : faultScenarioTimeline_.TakeDueEvents(simulation_.TickCount()))
+    {
+        using Kind = FaultScenarioTimeline::Event::Kind;
+        switch (event.kind)
+        {
+        case Kind::PacketLoss:
+            fleetPacketLossPercent_ = static_cast<float>(event.value * 100.0);
+            formationNetwork_->SetPacketLossProbability(event.value);
+            break;
+        case Kind::LinkState:
+            formationNetwork_->SetLinkDisabled(
+                event.source, event.destination, event.enabled);
+            break;
+        case Kind::RadioState:
+            formationNetwork_->SetNodeRadioEnabled(event.source, event.enabled);
+            break;
+        }
+    }
+
+    if (faultScenarioTimeline_.ReplayFinished())
+    {
+        faultScenarioTimeline_.StopReplay();
+        faultScenarioStatus_ = "저장한 통신 장애 순서를 모두 적용했습니다.";
+    }
+}
+
+std::string AeroSimLabApp::CurrentFaultScenarioMissionKind() const
+{
+    if (CompleteFleetMissionIsActive())
+        return "complete";
+    if (formationTransit_.active)
+        return "formation";
+    return "reconnaissance";
+}
+#endif
 
 void AeroSimLabApp::PollGroundControl()
 {

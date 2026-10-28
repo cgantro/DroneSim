@@ -244,6 +244,36 @@ void DrawRecordingPanel(const SessionRecordingControls& controls)
         ImGui::TextWrapped("%s", controls.commandStatus.c_str());
 
     ImGui::Separator();
+    ImGui::Text("통신 장애 기록");
+    if (controls.faultScenarioRecording)
+    {
+        ImGui::Text("장애 기록 중 · %llu개",
+            static_cast<unsigned long long>(controls.faultScenarioEventCount));
+        if (controls.canStopFaultScenarioRecording
+            && ImGui::Button("장애 기록 저장"))
+            controls.stopFaultScenarioRecording();
+    }
+    else
+    {
+        if (controls.canStartFaultScenarioRecording
+            && ImGui::Button("장애 기록 시작"))
+            controls.startFaultScenarioRecording();
+        else if (!controls.canStartFaultScenarioRecording
+            && !controls.faultScenarioReplaying)
+            ImGui::TextDisabled("편대 임무가 실행 중일 때 기록할 수 있습니다.");
+
+        if (controls.canReplayFaultScenario
+            && ImGui::Button("저장한 장애 다시 적용"))
+            controls.replayFaultScenario();
+    }
+    if (controls.faultScenarioReplaying)
+        ImGui::Text("저장한 장애를 다시 적용하는 중");
+    ImGui::TextDisabled("현재 임무에서 누른 패킷 손실·링크·라디오 조작을 저장합니다.");
+    ImGui::TextDisabled("재생하려면 같은 드론 구성으로 편대 임무를 먼저 시작하세요.");
+    if (!controls.faultScenarioStatus.empty())
+        ImGui::TextWrapped("%s", controls.faultScenarioStatus.c_str());
+
+    ImGui::Separator();
     if (controls.videoRecording)
     {
         ImGui::Text("EO 영상 녹화 중");

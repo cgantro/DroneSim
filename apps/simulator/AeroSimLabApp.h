@@ -2,6 +2,7 @@
 
 #include "SimulationBenchmark.h"
 #include "FleetTelemetry.h"
+#include "FaultScenarioTimeline.h"
 #ifndef __EMSCRIPTEN__
 #include "EoVideoRecorder.h"
 #endif
@@ -181,6 +182,13 @@ private:
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
     void AdvanceSimulationTick();
     void AdvanceAmbientWind();
+#ifndef __EMSCRIPTEN__
+    void ApplyDueFaultScenarioEvents();
+    void StartFaultScenarioRecording();
+    void StopFaultScenarioRecording();
+    void StartFaultScenarioReplay();
+    [[nodiscard]] std::string CurrentFaultScenarioMissionKind() const;
+#endif
     /** @brief 현재 실행 경로에서 스모크 검사를 끝낼 조건이 충족됐는지 확인한다. */
     [[nodiscard]] bool SmokeTestIsComplete() const;
     /** @brief 스모크 검사에서 마지막으로 읽은 EO 영상과 카메라 Tick을 확인한다. */
@@ -432,6 +440,10 @@ private:
     aerosimlab::simulation::CommandRecording commandRecording_;
     std::string sessionControlStatus_;
     std::string videoControlStatus_;
+#ifndef __EMSCRIPTEN__
+    FaultScenarioTimeline faultScenarioTimeline_;
+    std::string faultScenarioStatus_;
+#endif
 #ifndef __EMSCRIPTEN__
     struct PendingGroundCommand
     {
