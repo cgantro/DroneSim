@@ -129,7 +129,11 @@ public:
         NetworkNodeId source, NetworkNodeId destination,
         std::uint32_t sequence, std::string kind, std::string payload);
 
-    /** @brief 경로가 없을 때 같은 종류의 오래된 대기 메시지를 새 내용으로 바꿔 보낸다. */
+    /**
+     * @brief 최신 값만 의미가 있는 보고를 보낸다.
+     * @details 경로를 기다리는 동안 같은 종류의 보고가 있으면 새 내용으로 바꿉니다.
+     *          이미 전송 중인 패킷은 취소하지 않으므로 순서 번호로 오래된 수신을 걸러야 합니다.
+     */
     [[nodiscard]] std::optional<std::uint64_t> SendLatest(
         NetworkNodeId source, NetworkNodeId destination,
         std::uint32_t sequence, std::string kind, std::string payload);
