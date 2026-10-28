@@ -96,6 +96,8 @@ public:
         const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
         float& packetLossPercent,
         const std::function<void(float)>& setPacketLossPercent,
+        std::uint32_t& latencyJitterTicks,
+        const std::function<void(std::uint32_t)>& setLatencyJitterTicks,
         const communication::VirtualMeshNetwork* formationNetwork,
         const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
             setFormationLinkDisabled,

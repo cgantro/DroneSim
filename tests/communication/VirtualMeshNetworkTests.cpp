@@ -96,7 +96,8 @@ TEST(VirtualMeshNetworkTests, AppliesSeededLatencyJitterAndRepeatsIt)
         auto settings = QuickSettings();
         settings.maximumLinkRangeMeters = 100.0;
         settings.linkLatencyTicks = 2U;
-        settings.linkLatencyJitterTicks = 4U;
+        settings.linkLatencyJitterTicks = 0U;
+        settings.routeLifetimeTicks = 1'000U;
         settings.randomSeed = 17U;
 
         VirtualMeshNetwork network{settings};
@@ -110,6 +111,7 @@ TEST(VirtualMeshNetworkTests, AppliesSeededLatencyJitterAndRepeatsIt)
         EXPECT_EQ(primingDelivery.size(), 1U);
         if (primingDelivery.size() != 1U)
             return std::vector<std::uint64_t>{};
+        network.SetLinkLatencyJitterTicks(4U);
 
         std::vector<std::uint64_t> latencies;
         std::uint64_t currentTick = 40U;
@@ -129,6 +131,8 @@ TEST(VirtualMeshNetworkTests, AppliesSeededLatencyJitterAndRepeatsIt)
                     EXPECT_EQ(network.DeliveredMessages().size(), 1U);
                     if (network.DeliveredMessages().size() != 1U)
                         return std::vector<std::uint64_t>{};
+                    EXPECT_EQ(network.DeliveredMessages().front().message.sequence,
+                        sequence);
                     latencies.push_back(
                         network.DeliveredMessages().front().deliveredAtTick - sentAtTick);
                     currentTick = tick;

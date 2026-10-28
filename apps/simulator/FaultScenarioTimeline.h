@@ -20,6 +20,7 @@ public:
         enum class Kind
         {
             PacketLoss,
+            LinkLatencyJitter,
             LinkState,
             DirectedLinkState,
             RadioState
@@ -30,6 +31,7 @@ public:
         simulation::DroneId source = 0;
         simulation::DroneId destination = 0;
         double value = 0.0;
+        std::uint32_t valueTicks = 0;
         bool enabled = false;
     };
 
@@ -51,6 +53,8 @@ public:
     void StopReplay() noexcept;
 
     void RecordPacketLoss(std::uint64_t currentTick, double probability);
+    void RecordLinkLatencyJitter(std::uint64_t currentTick,
+        std::uint32_t maximumExtraTicks);
     void RecordLinkState(std::uint64_t currentTick, simulation::DroneId source,
         simulation::DroneId destination, bool disabled);
     void RecordDirectedLinkState(std::uint64_t currentTick,

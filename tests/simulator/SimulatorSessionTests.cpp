@@ -964,6 +964,7 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::FaultScenarioTimeline recording;
         recording.StartRecording(100U, {1U, 2U}, "complete");
         recording.RecordPacketLoss(100U, 0.25);
+        recording.RecordLinkLatencyJitter(102U, 7U);
         recording.RecordLinkState(103U, 1U, 2U, true);
         recording.RecordDirectedLinkState(103U, 2U, 1U, true);
         recording.RecordRadioState(103U, 2U, false);
@@ -981,6 +982,11 @@ TEST(SimulatorSessionTests, CoreScenarios)
         EXPECT_EQ(firstEvents.front().kind,
             simulator::FaultScenarioTimeline::Event::Kind::PacketLoss);
         EXPECT_DOUBLE_EQ(firstEvents.front().value, 0.25);
+        const auto jitterEvents = replay.TakeDueEvents(502U);
+        ASSERT_EQ(jitterEvents.size(), 1U);
+        EXPECT_EQ(jitterEvents.front().kind,
+            simulator::FaultScenarioTimeline::Event::Kind::LinkLatencyJitter);
+        EXPECT_EQ(jitterEvents.front().valueTicks, 7U);
         EXPECT_TRUE(replay.TakeDueEvents(502U).empty());
         const auto laterEvents = replay.TakeDueEvents(503U);
         ASSERT_EQ(laterEvents.size(), 3U);

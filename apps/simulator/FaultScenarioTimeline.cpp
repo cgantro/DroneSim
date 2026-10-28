@@ -23,6 +23,7 @@ std::string_view EventName(FaultScenarioTimeline::Event::Kind kind)
     switch (kind)
     {
     case Kind::PacketLoss: return "packet_loss";
+    case Kind::LinkLatencyJitter: return "link_latency_jitter";
     case Kind::LinkState: return "link_state";
     case Kind::DirectedLinkState: return "directed_link_state";
     case Kind::RadioState: return "radio_state";
@@ -34,6 +35,7 @@ FaultScenarioTimeline::Event::Kind ReadEventKind(const Json& value)
 {
     const std::string name = value.get<std::string>();
     if (name == "packet_loss") return FaultScenarioTimeline::Event::Kind::PacketLoss;
+    if (name == "link_latency_jitter") return FaultScenarioTimeline::Event::Kind::LinkLatencyJitter;
     if (name == "link_state") return FaultScenarioTimeline::Event::Kind::LinkState;
     if (name == "directed_link_state") return FaultScenarioTimeline::Event::Kind::DirectedLinkState;
     if (name == "radio_state") return FaultScenarioTimeline::Event::Kind::RadioState;
@@ -47,6 +49,17 @@ std::uint64_t ReadDroneId(const Json& value)
     if (value.is_number_integer() && value.get<std::int64_t>() < 0)
         throw std::invalid_argument("드론 ID는 음수일 수 없습니다.");
     return value.get<std::uint64_t>();
+}
+
+std::uint32_t ReadTickCount(const Json& value)
+{
+    if (!value.is_number_unsigned() && !value.is_number_integer())
+        throw std::invalid_argument("지연 Tick 수는 0 이상의 정수여야 합니다.");
+
+    const std::uint64_t ticks = value.get<std::uint64_t>();
+    if (ticks > std::numeric_limits<std::uint32_t>::max())
+        throw std::invalid_argument("지연 Tick 수가 허용 범위를 넘었습니다.");
+    return static_cast<std::uint32_t>(ticks);
 }
 }
 
@@ -90,6 +103,9 @@ bool FaultScenarioTimeline::SaveRecording(const std::filesystem::path& path,
         {
         case Event::Kind::PacketLoss:
             encoded["probability"] = event.value;
+            break;
+        case Event::Kind::LinkLatencyJitter:
+            encoded["max_extra_ticks"] = event.valueTicks;
             break;
         case Event::Kind::LinkState:
         case Event::Kind::DirectedLinkState:
@@ -184,6 +200,9 @@ bool FaultScenarioTimeline::LoadRecording(const std::filesystem::path& path,
                 if (!std::isfinite(event.value) || event.value < 0.0 || event.value > 1.0)
                     throw std::invalid_argument("패킷 손실률은 0부터 1 사이여야 합니다.");
                 break;
+            case Event::Kind::LinkLatencyJitter:
+                event.valueTicks = ReadTickCount(encoded.at("max_extra_ticks"));
+                break;
             case Event::Kind::LinkState:
             case Event::Kind::DirectedLinkState:
                 event.source = ReadDroneId(encoded.at("source"));
@@ -250,6 +269,15 @@ void FaultScenarioTimeline::RecordPacketLoss(std::uint64_t currentTick,
     Event event;
     event.kind = Event::Kind::PacketLoss;
     event.value = probability;
+    Record(event, currentTick);
+}
+
+void FaultScenarioTimeline::RecordLinkLatencyJitter(
+    std::uint64_t currentTick, std::uint32_t maximumExtraTicks)
+{
+    Event event;
+    event.kind = Event::Kind::LinkLatencyJitter;
+    event.valueTicks = maximumExtraTicks;
     Record(event, currentTick);
 }
 

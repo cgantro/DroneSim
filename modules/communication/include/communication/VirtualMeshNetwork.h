@@ -143,6 +143,9 @@ public:
     /** @brief 전송할 때 적용할 패킷 손실 확률을 바꾼다. */
     void SetPacketLossProbability(double probability);
 
+    /** @brief 기본 전송 지연에 더할 최대 무작위 Tick 수를 바꾼다. */
+    void SetLinkLatencyJitterTicks(std::uint32_t maximumExtraTicks) noexcept;
+
     /** @brief 두 노드 사이에 장애가 주입되어 있는지 확인한다. */
     [[nodiscard]] bool IsLinkDisabled(
         NetworkNodeId first, NetworkNodeId second) const noexcept;

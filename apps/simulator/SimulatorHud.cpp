@@ -283,7 +283,7 @@ void DrawRecordingPanel(const SessionRecordingControls& controls)
     }
     if (controls.faultScenarioReplaying)
         ImGui::Text("저장한 장애를 다시 적용하는 중");
-    ImGui::TextDisabled("현재 임무에서 누른 패킷 손실·링크·라디오 조작을 저장합니다.");
+    ImGui::TextDisabled("패킷 손실·지연 흔들림·링크·라디오 조작을 저장합니다.");
     ImGui::TextDisabled("재생하려면 같은 드론 구성으로 편대 임무를 먼저 시작하세요.");
     if (!controls.faultScenarioStatus.empty())
         ImGui::TextWrapped("%s", controls.faultScenarioStatus.c_str());
@@ -342,6 +342,8 @@ void DrawFlightStatusPanel(
     const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
     float& packetLossPercent,
     const std::function<void(float)>& setPacketLossPercent,
+    std::uint32_t& latencyJitterTicks,
+    const std::function<void(std::uint32_t)>& setLatencyJitterTicks,
     const communication::VirtualMeshNetwork* formationNetwork,
     int& selectedFaultSource,
     int& selectedFaultDestination,
@@ -427,6 +429,13 @@ void DrawFlightStatusPanel(
                 if (ImGui::SliderFloat("패킷 손실률", &packetLossPercent,
                         0.0F, 100.0F, "%.0f%%"))
                     setPacketLossPercent(packetLossPercent);
+                constexpr std::uint32_t minimumJitterTicks = 0U;
+                constexpr std::uint32_t maximumJitterTicks = 12U;
+                if (ImGui::SliderScalar("지연 흔들림 상한", ImGuiDataType_U32,
+                        &latencyJitterTicks, &minimumJitterTicks,
+                        &maximumJitterTicks, "%u Tick"))
+                    setLatencyJitterTicks(latencyJitterTicks);
+                ImGui::TextDisabled("기본 지연에 0~상한 Tick을 더합니다. 1 Tick은 약 16.7ms입니다.");
                 ImGui::TextDisabled("확인 응답이 없으면 정찰 경로를 60 Tick마다 최대 10회 다시 보냅니다.");
                 const auto droneIds = simulation.DroneIds();
                 if (droneIds.size() >= 2U)
@@ -730,6 +739,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
     float& packetLossPercent,
     const std::function<void(float)>& setPacketLossPercent,
+    std::uint32_t& latencyJitterTicks,
+    const std::function<void(std::uint32_t)>& setLatencyJitterTicks,
     const communication::VirtualMeshNetwork* formationNetwork,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
@@ -767,6 +778,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         formationMissionCanStart, formationMissionActive, selectedFormationShape_,
         startFormationTransit, selectedNetworkMode, formationMissionCanStart,
         setNetworkMode, packetLossPercent, setPacketLossPercent,
+        latencyJitterTicks, setLatencyJitterTicks,
         formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
         setFormationDirectedLinkDisabled,

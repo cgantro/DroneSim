@@ -109,6 +109,10 @@ void AeroSimLabApp::ApplyDueFaultScenarioEvents()
             fleetPacketLossPercent_ = static_cast<float>(event.value * 100.0);
             formationNetwork_->SetPacketLossProbability(event.value);
             break;
+        case Kind::LinkLatencyJitter:
+            fleetLatencyJitterTicks_ = event.valueTicks;
+            formationNetwork_->SetLinkLatencyJitterTicks(event.valueTicks);
+            break;
         case Kind::LinkState:
             formationNetwork_->SetLinkDisabled(
                 event.source, event.destination, event.enabled);

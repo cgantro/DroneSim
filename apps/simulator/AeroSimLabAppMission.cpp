@@ -1174,6 +1174,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     settings.routeLifetimeTicks = 300;
     settings.maximumHops = 5;
     settings.packetLossProbability = static_cast<double>(fleetPacketLossPercent_) / 100.0;
+    settings.linkLatencyJitterTicks = fleetLatencyJitterTicks_;
     formationNetwork_ = std::make_unique<
         aerosimlab::communication::VirtualMeshNetwork>(settings);
 

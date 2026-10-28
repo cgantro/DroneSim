@@ -250,6 +250,12 @@ void VirtualMeshNetwork::SetPacketLossProbability(double probability)
     settings_.packetLossProbability = probability;
 }
 
+void VirtualMeshNetwork::SetLinkLatencyJitterTicks(
+    std::uint32_t maximumExtraTicks) noexcept
+{
+    settings_.linkLatencyJitterTicks = maximumExtraTicks;
+}
+
 bool VirtualMeshNetwork::IsLinkDisabled(
     NetworkNodeId first, NetworkNodeId second) const noexcept
 {

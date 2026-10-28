@@ -846,6 +846,15 @@ void AeroSimLabApp::RenderFrame()
                 faultScenarioTimeline_.RecordPacketLoss(simulation_.TickCount(),
                     static_cast<double>(percentage) / 100.0);
             },
+            fleetLatencyJitterTicks_,
+            [this](std::uint32_t maximumExtraTicks)
+            {
+                fleetLatencyJitterTicks_ = static_cast<int>(maximumExtraTicks);
+                if (formationNetwork_)
+                    formationNetwork_->SetLinkLatencyJitterTicks(maximumExtraTicks);
+                faultScenarioTimeline_.RecordLinkLatencyJitter(
+                    simulation_.TickCount(), maximumExtraTicks);
+            },
             formationNetwork_.get(),
             [this, formationNetworkActive](aerosimlab::simulation::DroneId first,
                 aerosimlab::simulation::DroneId second, bool disabled)

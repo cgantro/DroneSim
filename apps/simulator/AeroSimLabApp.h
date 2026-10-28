@@ -593,6 +593,7 @@ private:
         aerosimlab::communication::VirtualMeshMode::AdaptiveMesh;
     std::vector<aerosimlab::communication::RadioObstacle> formationRadioObstacles_;
     float fleetPacketLossPercent_ = 0.0F;
+    std::uint32_t fleetLatencyJitterTicks_ = 0U;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
