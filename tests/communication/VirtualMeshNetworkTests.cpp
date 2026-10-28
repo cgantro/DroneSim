@@ -382,6 +382,27 @@ TEST(VirtualMeshNetworkTests, BlocksOnlyTheSelectedDirection)
 
     network.SetDirectedLinkDisabled(1, 2, false);
     EXPECT_FALSE(network.IsDirectedLinkDisabled(1, 2));
+
+    VirtualMeshNetwork recoveryNetwork{QuickSettings()};
+    const std::array recoveryNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {200.0, 0.0, 10.0}}};
+    const std::array recoveryObstacle{
+        RadioObstacle{{{30.0, -10.0}, {40.0, -10.0},
+                          {40.0, 10.0}, {30.0, 10.0}}, 0.0, 20.0}};
+    recoveryNetwork.UpdateNodes(recoveryNodes, recoveryObstacle);
+
+    EXPECT_FALSE(recoveryNetwork.CanExchangeAtPositions(
+        1, 2, {0.0, 0.0, 10.0}, {70.0, 0.0, 10.0}));
+    EXPECT_TRUE(recoveryNetwork.CanExchangeAtPositions(
+        1, 2, {0.0, 0.0, 10.0}, {70.0, 0.0, 35.0}));
+    recoveryNetwork.SetDirectedLinkDisabled(2, 1, true);
+    EXPECT_FALSE(recoveryNetwork.CanExchangeAtPositions(
+        1, 2, {0.0, 0.0, 10.0}, {70.0, 0.0, 35.0}));
+    recoveryNetwork.SetDirectedLinkDisabled(2, 1, false);
+    recoveryNetwork.SetNodeRadioEnabled(2, false);
+    EXPECT_FALSE(recoveryNetwork.CanExchangeAtPositions(
+        1, 2, {0.0, 0.0, 10.0}, {70.0, 0.0, 35.0}));
 }
 
 TEST(VirtualMeshNetworkTests, KeepsOnlyNewestStateWhileRouteIsMissing)

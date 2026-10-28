@@ -530,6 +530,8 @@ void AeroSimLabApp::AdvanceSimulationTick()
             return entry.second.status == "경로 전달 대기"
                 || entry.second.status == "출발 준비"
                 || entry.second.status == "정찰 이동 중"
+                || entry.second.status == "중계 준비"
+                || entry.second.status == "중계 위치로 이동 중"
                 || entry.second.status == "집결 이동 중"
                 || entry.second.status == "재집결 준비"
                 || entry.second.status == "복귀 준비"

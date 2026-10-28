@@ -12,7 +12,23 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
     const auto expectedLeg = static_cast<std::uint8_t>(phase);
     for (const auto& report : reports)
     {
-        if (!report || report->missionLeg != expectedLeg)
+        if (!report)
+            return {FleetMissionProgress::Waiting, {}};
+
+        if (phase == FleetMissionPhase::Reconnaissance
+            && report->missionLeg == 3U)
+        {
+            if (report->status == "중계 실패 · 안전 착륙")
+                return {FleetMissionProgress::Failed,
+                    "통신 중계 위치를 확보하지 못했습니다."};
+            if (report->status != "중계 위치 확보"
+                || report->mode == simulation::FlightMode::Grounded
+                || report->mode == simulation::FlightMode::Landing)
+                return {FleetMissionProgress::Waiting, {}};
+            continue;
+        }
+
+        if (report->missionLeg != expectedLeg)
             return {FleetMissionProgress::Waiting, {}};
 
         switch (phase)

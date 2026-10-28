@@ -202,6 +202,12 @@ public:
     [[nodiscard]] std::optional<NetworkNodeId> NextHop(
         NetworkNodeId source, NetworkNodeId destination) const noexcept;
 
+    /** @brief 두 기체가 제시한 위치에서 서로 직접 통신할 수 있는지 확인한다. */
+    [[nodiscard]] bool CanExchangeAtPositions(
+        NetworkNodeId first, NetworkNodeId second,
+        const glm::dvec3& firstPositionMeters,
+        const glm::dvec3& secondPositionMeters) const;
+
 private:
     struct RouteEntry
     {
@@ -248,6 +254,10 @@ private:
 
     [[nodiscard]] bool LinkAvailable(NetworkNodeId sender,
         NetworkNodeId receiver) const;
+    [[nodiscard]] bool LinkAvailableAt(
+        NetworkNodeId sender, NetworkNodeId receiver,
+        const glm::dvec3& senderPositionMeters,
+        const glm::dvec3& receiverPositionMeters) const;
     [[nodiscard]] bool HasLineOfSight(const glm::dvec3& start,
         const glm::dvec3& end) const;
     void SendHelloMessages();

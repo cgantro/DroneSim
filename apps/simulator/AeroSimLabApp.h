@@ -229,6 +229,8 @@ private:
     void FinishFleetLeaderReplacementIfReady();
     void FailFleetLeaderReplacement();
     void ReassignLostLeaderTarget();
+    void AdvanceFleetRelayRecovery();
+    [[nodiscard]] bool TryStartFleetRelayRecovery();
     void AdvanceFleetNetwork();
     [[nodiscard]] bool SendFleetRouteAssignment(
         aerosimlab::simulation::DroneId droneId,
@@ -502,7 +504,8 @@ private:
     {
         Reconnaissance,
         Regrouping,
-        Returning
+        Returning,
+        Relaying
     };
     struct FleetReconnaissanceState
     {
@@ -553,6 +556,14 @@ private:
     std::uint32_t nextTelemetrySequence_ = 1;
     std::map<aerosimlab::simulation::DroneId, std::uint64_t>
         lastTelemetrySentAtTick_;
+    struct FleetRelayRecovery
+    {
+        aerosimlab::simulation::DroneId relayDroneId = 0U;
+        aerosimlab::simulation::DroneId disconnectedDroneId = 0U;
+        glm::dvec3 holdPositionMeters{0.0};
+        std::uint64_t startedAtTick = 0U;
+        bool waitingForTelemetry = false;
+    } fleetRelayRecovery_;
     std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
         peerTelemetryAtLeader_;
     struct FormationTransitState

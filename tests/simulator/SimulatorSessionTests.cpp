@@ -20,6 +20,7 @@
 
 #include <opencv2/videoio.hpp>
 
+#include <array>
 #include <chrono>
 #include <algorithm>
 #include <cstdint>
@@ -34,6 +35,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using namespace aerosimlab;
@@ -68,6 +70,126 @@ public:
             aerosimlab::communication::VirtualMeshNetwork>(settings);
         app.formationRadioObstacles_.clear();
         app.formationTransit_.lastNetworkNodeUpdateTick.reset();
+    }
+
+    static void VerifyGroundedRelayDroneTakesOffForAssignment()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+
+        const auto droneIds = app.fleetDroneIds_;
+        ASSERT_EQ(droneIds.size(), 4U);
+        const auto relayDroneId = droneIds.back();
+        auto& mission = app.fleetReconnaissance_[relayDroneId];
+        mission.targetIndex = 0U;
+        mission.leg = AeroSimLabApp::FleetMissionLeg::Reconnaissance;
+        mission.status = "정찰 위치 도착";
+        mission.routeReceived = true;
+
+        const auto currentPosition = app.simulation_.State(relayDroneId).positionMeters;
+        app.ApplyFleetRouteAssignment(relayDroneId,
+            AeroSimLabApp::FleetMissionLeg::Relaying, 0U,
+            {currentPosition + glm::dvec3{8.0, 0.0, 10.0}},
+            1U, 1U, 1000U);
+
+        EXPECT_EQ(app.simulation_.State(relayDroneId).mode,
+            simulation::FlightMode::TakingOff);
+        EXPECT_EQ(mission.status, "중계 준비");
+        EXPECT_EQ(mission.leg, AeroSimLabApp::FleetMissionLeg::Relaying);
+    }
+
+    static void VerifyRelayRecoveryUsesTheConfiguredRadioRange()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        app.fleetNetworkMode_ = communication::VirtualMeshMode::AdaptiveMesh;
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+
+        const auto droneIds = app.fleetDroneIds_;
+        ASSERT_EQ(droneIds.size(), 4U);
+        app.routeBuildings_.clear();
+        app.formationRadioObstacles_.clear();
+
+        const auto setState = [&app](simulation::DroneId droneId,
+            glm::dvec3 position, simulation::FlightMode mode)
+        {
+            simulation::DroneState state = app.simulation_.State(droneId);
+            state.positionMeters = position;
+            state.mode = mode;
+            app.simulation_.SetInitialState(droneId, state);
+        };
+        const double leaderGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({0.0, 0.0});
+        const double targetGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({180.0, 0.0});
+        setState(droneIds[0], {0.0, 0.0, leaderGround + 10.0},
+            simulation::FlightMode::Hovering);
+        setState(droneIds[1], {10.0, 0.0, leaderGround + 0.5},
+            simulation::FlightMode::Grounded);
+        setState(droneIds[2], {180.0, 0.0, targetGround + 10.0},
+            simulation::FlightMode::FollowingWaypoint);
+        setState(droneIds[3], {20.0, 0.0, leaderGround + 10.0},
+            simulation::FlightMode::Hovering);
+
+        for (std::size_t index = 0; index < droneIds.size(); ++index)
+        {
+            AeroSimLabApp::FleetReconnaissanceState mission;
+            mission.targetIndex = index;
+            mission.leg = AeroSimLabApp::FleetMissionLeg::Reconnaissance;
+            mission.status = index == 2U ? "정찰 이동 중"
+                : index == 1U ? "정찰 위치 도착" : "대기";
+            mission.routeReceived = true;
+            app.fleetReconnaissance_.emplace(droneIds[index], std::move(mission));
+        }
+
+        for (std::uint64_t tick = 0U; tick < 200U; ++tick)
+            app.simulation_.AdvanceOneTick();
+        app.formationTransit_.lastNetworkNodeUpdateTick.reset();
+        const auto leaderPosition = app.simulation_.State(droneIds[0]).positionMeters;
+        const auto candidatePosition = app.simulation_.State(droneIds[1]).positionMeters;
+        const auto disconnectedPosition = app.simulation_.State(droneIds[2]).positionMeters;
+        app.formationNetwork_->UpdateNodes(
+            std::array{
+                communication::NetworkNodeSnapshot{droneIds[0], leaderPosition},
+                communication::NetworkNodeSnapshot{droneIds[1], candidatePosition},
+                communication::NetworkNodeSnapshot{droneIds[2], disconnectedPosition},
+                communication::NetworkNodeSnapshot{droneIds[3],
+                    app.simulation_.State(droneIds[3]).positionMeters}}, {});
+
+        const auto makeTelemetry = [](glm::dvec3 position,
+            simulation::FlightMode mode, std::string status)
+        {
+            return simulator::detail::PeerTelemetry{
+                .positionMeters = position,
+                .mode = mode,
+                .missionLeg = 0U,
+                .missionStatus = std::move(status),
+                .assignmentVersion = 1U,
+                .assignmentLeaseExpiresAtTick = 1000U};
+        };
+        app.peerTelemetryAtLeader_[droneIds[1]] = {
+            makeTelemetry(candidatePosition, simulation::FlightMode::Grounded,
+                "정찰 위치 도착"), app.simulation_.TickCount(), 1U};
+        app.peerTelemetryAtLeader_[droneIds[2]] = {
+            makeTelemetry(disconnectedPosition,
+                simulation::FlightMode::FollowingWaypoint, "정찰 이동 중"),
+            1U, 1U};
+        app.peerTelemetryAtLeader_[droneIds[3]] = {
+            makeTelemetry(app.simulation_.State(droneIds[3]).positionMeters,
+                simulation::FlightMode::Hovering, "대기"),
+            app.simulation_.TickCount(), 1U};
+
+        EXPECT_TRUE(app.TryStartFleetRelayRecovery());
+        EXPECT_EQ(app.fleetRelayRecovery_.relayDroneId, droneIds[1]);
+        EXPECT_EQ(app.fleetRelayRecovery_.disconnectedDroneId, droneIds[2]);
+        EXPECT_GT(app.fleetReconnaissance_.at(droneIds[1]).pendingRouteSequence, 0U);
+        EXPECT_FALSE(app.formationNetwork_->CanExchangeAtPositions(
+            droneIds[0], droneIds[2], leaderPosition, disconnectedPosition));
+        EXPECT_TRUE(app.formationNetwork_->CanExchangeAtPositions(
+            droneIds[0], droneIds[1], leaderPosition,
+            app.fleetRelayRecovery_.holdPositionMeters));
+        EXPECT_TRUE(app.formationNetwork_->CanExchangeAtPositions(
+            droneIds[1], droneIds[2], app.fleetRelayRecovery_.holdPositionMeters,
+            disconnectedPosition));
     }
 
     static void VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget()
@@ -647,8 +769,15 @@ void Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg()
     EXPECT_EQ(telemetry->assignmentVersion, 17U);
     EXPECT_EQ(telemetry->assignmentLeaseExpiresAtTick, 2400U);
 
+    const auto relayTelemetry = simulator::detail::DecodePeerTelemetry(
+        simulator::detail::EncodePeerTelemetry(positionMeters,
+            simulation::FlightMode::Flying, 3U, "중계 위치 확보", 18U, 2500U));
+    ASSERT_TRUE(relayTelemetry.has_value());
+    EXPECT_EQ(relayTelemetry->missionLeg, 3U);
+    EXPECT_EQ(relayTelemetry->missionStatus, "중계 위치 확보");
+
     EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
-        "12.5 -7.25 31 Hovering 3 \"잘못된 단계\"").has_value());
+        "12.5 -7.25 31 Hovering 4 \"잘못된 단계\"").has_value());
 }
 
 void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
@@ -666,6 +795,21 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports).progress,
         FleetMissionProgress::Advance);
+
+    reports.back() = FleetMissionReport{FlightMode::Flying, 3U, "중계 위치 확보"};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Reconnaissance, reports).progress,
+        FleetMissionProgress::Advance);
+    reports.back() = FleetMissionReport{FlightMode::Grounded, 3U, "중계 위치 확보"};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Reconnaissance, reports).progress,
+        FleetMissionProgress::Waiting);
+    reports.back() = FleetMissionReport{
+        FlightMode::Landing, 3U, "중계 실패 · 안전 착륙"};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Reconnaissance, reports).progress,
+        FleetMissionProgress::Failed);
+    reports.back() = FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"};
 
     reports.back().reset();
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
@@ -1205,6 +1349,10 @@ TEST(SimulatorSessionTests, CoreScenarios)
     }
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyGroundedRelayDroneTakesOffForAssignment());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyRelayRecoveryUsesTheConfiguredRadioRange());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLeaderLossWithoutCandidateSafelyLandsFleet());
     EXPECT_NO_FATAL_FAILURE(

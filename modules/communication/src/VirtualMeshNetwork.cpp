@@ -536,23 +536,49 @@ std::optional<NetworkNodeId> VirtualMeshNetwork::NextHop(
     return route->second.nextHop;
 }
 
+bool VirtualMeshNetwork::CanExchangeAtPositions(
+    NetworkNodeId first, NetworkNodeId second,
+    const glm::dvec3& firstPositionMeters,
+    const glm::dvec3& secondPositionMeters) const
+{
+    return LinkAvailableAt(first, second, firstPositionMeters, secondPositionMeters)
+        && LinkAvailableAt(second, first, secondPositionMeters, firstPositionMeters);
+}
+
 bool VirtualMeshNetwork::LinkAvailable(
     NetworkNodeId sender, NetworkNodeId receiver) const
 {
     const auto senderNode = nodes_.find(sender);
     const auto receiverNode = nodes_.find(receiver);
+    if (senderNode == nodes_.end() || receiverNode == nodes_.end())
+        return false;
+    return LinkAvailableAt(sender, receiver,
+        senderNode->second.positionMeters, receiverNode->second.positionMeters);
+}
+
+bool VirtualMeshNetwork::LinkAvailableAt(
+    NetworkNodeId sender, NetworkNodeId receiver,
+    const glm::dvec3& senderPositionMeters,
+    const glm::dvec3& receiverPositionMeters) const
+{
+    const auto senderNode = nodes_.find(sender);
+    const auto receiverNode = nodes_.find(receiver);
     if (senderNode == nodes_.end() || receiverNode == nodes_.end()
-        || senderNode->second.powered == false || receiverNode->second.powered == false
+        || !senderNode->second.powered || !receiverNode->second.powered
         || !senderNode->second.canTransmit || !receiverNode->second.canReceive
         || radioDisabledNodes_.contains(sender) || radioDisabledNodes_.contains(receiver)
         || disabledLinks_.contains(MakePair(sender, receiver))
         || disabledDirectedLinks_.contains({sender, receiver}))
         return false;
-    if (glm::distance(senderNode->second.positionMeters,
-            receiverNode->second.positionMeters) > settings_.maximumLinkRangeMeters)
+    if (!std::isfinite(senderPositionMeters.x) || !std::isfinite(senderPositionMeters.y)
+        || !std::isfinite(senderPositionMeters.z)
+        || !std::isfinite(receiverPositionMeters.x)
+        || !std::isfinite(receiverPositionMeters.y)
+        || !std::isfinite(receiverPositionMeters.z)
+        || glm::distance(senderPositionMeters, receiverPositionMeters)
+            > settings_.maximumLinkRangeMeters)
         return false;
-    return HasLineOfSight(senderNode->second.positionMeters,
-        receiverNode->second.positionMeters);
+    return HasLineOfSight(senderPositionMeters, receiverPositionMeters);
 }
 
 bool VirtualMeshNetwork::HasLineOfSight(
