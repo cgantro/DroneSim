@@ -316,10 +316,16 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
                 packet.command = communication::FleetCommand::GetStatus;
             }, std::chrono::seconds(15));
             require(beforeStatus.accepted, "초기 상태 조회가 거부되었습니다.");
-            require(beforeStatus.telemetry.drones.size() == 1U,
-                "초기 상태 응답에 드론 한 대가 있어야 합니다.");
-            require(beforeStatus.telemetry.primaryDroneId
-                    == beforeStatus.telemetry.drones.front().id,
+            require(beforeStatus.telemetry.drones.size() == 4U,
+                "훈련장 시작 편대에 드론 네 대가 있어야 합니다.");
+            const auto primaryDrone = std::find_if(
+                beforeStatus.telemetry.drones.begin(),
+                beforeStatus.telemetry.drones.end(),
+                [&beforeStatus](const communication::DroneTelemetry& drone)
+                {
+                    return drone.id == beforeStatus.telemetry.primaryDroneId;
+                });
+            require(primaryDrone != beforeStatus.telemetry.drones.end(),
                 "주 드론 식별값이 편대 목록과 일치해야 합니다.");
             require(beforeStatus.appliedTick == beforeStatus.telemetry.tick,
                 "초기 상태 응답의 Tick 값이 서로 다릅니다.");
@@ -352,20 +358,23 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
                 packet.command = communication::FleetCommand::AddDrone;
             });
             require(added.accepted && added.status == "drone_added",
-                "두 번째 드론을 추가하지 못했습니다.");
-            require(added.telemetry.drones.size() == 2U,
-                "드론 추가 응답에 두 대가 있어야 합니다.");
-            require(added.telemetry.drones[1].name == "드론 2",
+                "다섯 번째 드론을 추가하지 못했습니다.");
+            require(added.telemetry.drones.size() == 5U,
+                "드론 추가 응답에 다섯 대가 있어야 합니다.");
+            const communication::DroneTelemetry& addedDrone =
+                added.telemetry.drones.back();
+            const auto addedDroneId = addedDrone.id;
+            require(addedDrone.name == "드론 5",
                 "추가된 드론 이름이 예상과 다릅니다.");
-            require(added.telemetry.drones[1].mode == simulation::FlightMode::Grounded,
+            require(addedDrone.mode == simulation::FlightMode::Grounded,
                 "추가된 드론이 지상 상태가 아닙니다.");
-            require(added.telemetry.drones[1].positionMeters.x
+            require(addedDrone.positionMeters.x
                     > added.telemetry.drones[0].positionMeters.x,
                 "추가된 드론이 기존 드론과 겹친 위치에 있습니다.");
             const auto unrecordedSecondaryTakeoff = send("기록 중 두 번째 드론 이륙",
-                [&](communication::CommandPacket& packet)
+                [&addedDroneId](communication::CommandPacket& packet)
             {
-                packet.droneId = added.telemetry.drones[1].id;
+                packet.droneId = addedDroneId;
                 packet.command = simulation::DroneCommand{
                     simulation::DroneCommand::Kind::TakeOff};
             });
@@ -381,15 +390,23 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
                 "기록을 종료하지 못했습니다.");
 
             const auto secondaryTakeoff = send("두 번째 드론 이륙",
-                [&](communication::CommandPacket& packet)
+                [&addedDroneId](communication::CommandPacket& packet)
             {
-                packet.droneId = added.telemetry.drones[1].id;
+                packet.droneId = addedDroneId;
                 packet.command = simulation::DroneCommand{
                     simulation::DroneCommand::Kind::TakeOff};
             });
             require(secondaryTakeoff.accepted,
-                "선택한 두 번째 드론에 이륙 명령을 보내지 못했습니다.");
-            require(secondaryTakeoff.telemetry.drones[1].mode
+                "선택한 추가 드론에 이륙 명령을 보내지 못했습니다.");
+            const auto selectedDrone = std::find_if(
+                secondaryTakeoff.telemetry.drones.begin(),
+                secondaryTakeoff.telemetry.drones.end(),
+                [&addedDroneId](const communication::DroneTelemetry& drone)
+                {
+                    return drone.id == addedDroneId;
+                });
+            require(selectedDrone != secondaryTakeoff.telemetry.drones.end()
+                    && selectedDrone->mode
                     == simulation::FlightMode::TakingOff,
                 "선택한 드론이 이륙 상태로 바뀌지 않았습니다.");
             require(secondaryTakeoff.telemetry.drone.mode
