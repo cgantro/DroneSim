@@ -159,4 +159,61 @@ TEST(VirtualMeshNetworkTests, RuntimePacketLossDropsMessages)
             && event.detail == "설정된 패킷 손실로 버렸습니다.";
     }));
 }
+
+TEST(VirtualMeshNetworkTests, RetriesRouteUntilDestinationAcknowledges)
+{
+    VirtualMeshNetwork network{QuickSettings()};
+    const std::array nodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}}};
+    network.UpdateNodes(nodes, {});
+    static_cast<void>(AdvanceTicks(network, 0, 5));
+    network.SetPacketLossProbability(1.0);
+
+    constexpr std::uint32_t routeSequence = 7U;
+    constexpr std::uint64_t retryIntervalTicks = 60U;
+    ASSERT_TRUE(network.Send(1, 2, routeSequence, "fleet_route", "route-data"));
+    network.Advance(6U);
+    EXPECT_TRUE(network.DeliveredMessages().empty());
+    EXPECT_GT(network.Metrics().droppedMessages, 0U);
+    network.SetPacketLossProbability(0.0);
+
+    std::uint64_t lastTransmissionTick = 5U;
+    std::uint32_t transmissions = 1U;
+    bool acknowledged = false;
+    std::uint32_t receivedRouteCount = 0U;
+
+    for (std::uint64_t tick = 7U; tick <= 100U && !acknowledged; ++tick)
+    {
+        network.Advance(tick);
+        for (const DeliveredMeshMessage& delivered : network.DeliveredMessages())
+        {
+            if (delivered.message.kind == "fleet_route"
+                && delivered.message.sequence == routeSequence)
+            {
+                ++receivedRouteCount;
+                static_cast<void>(network.Send(delivered.message.destination,
+                    delivered.message.source, routeSequence, "fleet_route_ack", {}));
+            }
+            else if (delivered.message.kind == "fleet_route_ack"
+                && delivered.message.sequence == routeSequence)
+            {
+                acknowledged = true;
+            }
+        }
+
+        if (!acknowledged && transmissions < 10U
+            && tick >= lastTransmissionTick + retryIntervalTicks)
+        {
+            ASSERT_TRUE(network.Send(1, 2, routeSequence,
+                "fleet_route", "route-data"));
+            lastTransmissionTick = tick;
+            ++transmissions;
+        }
+    }
+
+    EXPECT_TRUE(acknowledged);
+    EXPECT_GE(receivedRouteCount, 1U);
+    EXPECT_GT(transmissions, 1U);
+}
 }
