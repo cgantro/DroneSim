@@ -794,6 +794,44 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
 
     for (auto& [droneId, mission] : fleetReconnaissance_)
     {
+#ifndef __EMSCRIPTEN__
+        const bool missionIsActive = mission.leg == FleetMissionLeg::Reconnaissance
+            && IsFleetReconnaissanceActive(mission.status);
+        bool rotorFailure = false;
+        if (missionIsActive)
+        {
+            for (std::size_t rotorIndex = 0U; rotorIndex < 4U; ++rotorIndex)
+            {
+                if (simulation_.IsRotorMotorFaulted(droneId, rotorIndex))
+                {
+                    rotorFailure = true;
+                    break;
+                }
+            }
+        }
+        if (rotorFailure)
+        {
+            mission.status = "기체 고장 · 안전 착륙";
+            mission.assignmentLeaseExpiresAtTick = simulation_.TickCount();
+            mission.pendingRouteSequence = 0U;
+            mission.pendingRoutePayload.clear();
+            mission.routeTransmissionCount = 0U;
+            const auto mode = simulation_.State(droneId).mode;
+            if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
+                static_cast<void>(simulation_.Apply(droneId,
+                    {Command::Kind::Land}));
+
+            if (droneId == fleetLeaderId_)
+                BeginFleetLeaderReplacement();
+            else
+            {
+                excludedFleetDroneIds_.push_back(droneId);
+                std::erase(fleetDroneIds_, droneId);
+            }
+            fleetLeadershipStatus_ = "로터 고장 기체 착륙 · 정찰 목표 재배정 중";
+            continue;
+        }
+#endif
         if (std::find(excludedFleetDroneIds_.begin(), excludedFleetDroneIds_.end(), droneId)
             != excludedFleetDroneIds_.end())
         {
@@ -813,7 +851,9 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
 
         if ((mission.leg == FleetMissionLeg::Reconnaissance
                 && (mission.status == "정찰 위치 도착" || mission.status == "경로 오류"
-                    || mission.status == "목표 외 착륙"))
+                    || mission.status == "목표 외 착륙"
+                    || mission.status == "기체 고장 · 안전 착륙"
+                    || mission.status == "리더 통신 장애 · 기체 안전 착륙"))
             || (mission.leg == FleetMissionLeg::Regrouping
                 && (mission.status == "재집결 완료" || mission.status == "집결 실패"))
             || (mission.leg == FleetMissionLeg::Returning
@@ -1168,7 +1208,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     aerosimlab::communication::VirtualMeshSettings settings;
     settings.mode = fleetNetworkMode_;
     settings.leaderNodeId = fleetLeaderId_;
-    settings.maximumLinkRangeMeters = 90.0;
+    settings.maximumLinkRangeMeters = 130.0;
     settings.helloIntervalTicks = 15;
     settings.neighborTimeoutTicks = 90;
     settings.routeLifetimeTicks = 300;
@@ -1418,12 +1458,15 @@ void AeroSimLabApp::ReassignLostLeaderTarget()
             && report->state.assignmentVersion == mission->second.assignmentVersion;
         const std::uint64_t reportedLeaseExpiry = !reportMatchesAssignment
             ? 0U : report->state.assignmentLeaseExpiresAtTick;
+        const bool faultReleasedLease = mission->second.status
+                == "기체 고장 · 안전 착륙"
+            || mission->second.status == "리더 통신 장애 · 기체 안전 착륙";
         const std::uint64_t safeTransferTick = std::max(
             mission->second.assignmentLeaseExpiresAtTick, reportedLeaseExpiry);
-        if (currentTick < safeTransferTick)
+        if (!faultReleasedLease && currentTick < safeTransferTick)
             continue;
 
-        const bool agentReleasedLease = mission->second.status
+        const bool agentReleasedLease = faultReleasedLease || mission->second.status
                 == "임무 권한 만료 · 안전 착륙"
             || (reportMatchesAssignment
                 && report->state.missionStatus == "임무 권한 만료 · 안전 착륙");
@@ -1443,7 +1486,10 @@ void AeroSimLabApp::ReassignLostLeaderTarget()
                 pendingReassignedTargetIndices_.end(), mission->second.targetIndex)
             == pendingReassignedTargetIndices_.end())
             pendingReassignedTargetIndices_.push_back(mission->second.targetIndex);
-        mission->second.status = "임무 권한 만료 · 재배정 대기";
+        // 한 번 넘긴 임무 권한은 다시 만료된 것으로 보지 않아야 같은 목표가 반복 배정되지 않습니다.
+        mission->second.assignmentLeaseExpiresAtTick = 0U;
+        if (!faultReleasedLease)
+            mission->second.status = "임무 권한 만료 · 재배정 대기";
         fleetLeadershipStatus_ = "정찰 임무 권한이 끝나 재배정 중";
     }
 
@@ -1503,6 +1549,8 @@ void AeroSimLabApp::ReassignLostLeaderTarget()
                     {
                         return status == "정찰 위치 도착" || status == "경로 오류"
                             || status == "목표 외 착륙"
+                            || status == "기체 고장 · 안전 착륙"
+                            || status == "리더 통신 장애 · 기체 안전 착륙"
                             || status == "임무 권한 만료 · 안전 착륙"
                             || status == "임무 권한 만료 · 재배정 대기";
                     };
