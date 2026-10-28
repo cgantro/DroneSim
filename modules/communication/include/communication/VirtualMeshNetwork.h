@@ -129,6 +129,11 @@ public:
         NetworkNodeId source, NetworkNodeId destination,
         std::uint32_t sequence, std::string kind, std::string payload);
 
+    /** @brief 경로가 없을 때 같은 종류의 오래된 대기 메시지를 새 내용으로 바꿔 보낸다. */
+    [[nodiscard]] std::optional<std::uint64_t> SendLatest(
+        NetworkNodeId source, NetworkNodeId destination,
+        std::uint32_t sequence, std::string kind, std::string payload);
+
     /** @brief 시뮬레이션 시간을 진행하고 도착한 패킷을 처리한다. */
     void Advance(std::uint64_t tick);
 

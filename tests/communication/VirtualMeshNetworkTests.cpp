@@ -135,6 +135,29 @@ TEST(VirtualMeshNetworkTests, BuildingBlocksRadioLink)
     EXPECT_TRUE(network.DeliveredMessages().empty());
 }
 
+TEST(VirtualMeshNetworkTests, KeepsOnlyNewestStateWhileRouteIsMissing)
+{
+    VirtualMeshNetwork network{QuickSettings()};
+    const std::array separatedNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {200.0, 0.0, 10.0}}};
+    network.UpdateNodes(separatedNodes, {});
+
+    ASSERT_TRUE(network.SendLatest(1, 2, 1, "drone_telemetry", "old"));
+    ASSERT_TRUE(network.SendLatest(1, 2, 2, "drone_telemetry", "new"));
+    ASSERT_TRUE(network.SendLatest(1, 2, 3, "drone_telemetry", "newest"));
+
+    const std::array connectedNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}}};
+    network.UpdateNodes(connectedNodes, {});
+    const auto delivered = AdvanceTicks(network, 0, 20);
+
+    ASSERT_EQ(delivered.size(), 1U);
+    EXPECT_EQ(delivered.front().message.sequence, 3U);
+    EXPECT_EQ(delivered.front().message.payload, "newest");
+}
+
 TEST(VirtualMeshNetworkTests, RuntimePacketLossDropsMessages)
 {
     VirtualMeshNetwork network{QuickSettings()};

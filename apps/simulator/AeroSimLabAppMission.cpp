@@ -36,6 +36,44 @@ std::optional<glm::dvec3> DecodeWaypoint(const std::string& payload)
     return waypoint;
 }
 
+struct DronePeerTelemetry
+{
+    glm::dvec3 positionMeters{0.0};
+    aerosimlab::simulation::FlightMode mode =
+        aerosimlab::simulation::FlightMode::Grounded;
+};
+
+std::string EncodePeerTelemetry(const aerosimlab::simulation::DroneState& state)
+{
+    std::ostringstream payload;
+    payload << std::setprecision(17) << state.positionMeters.x << ' '
+        << state.positionMeters.y << ' ' << state.positionMeters.z << ' '
+        << aerosimlab::simulation::ToString(state.mode);
+    return payload.str();
+}
+
+std::optional<DronePeerTelemetry> DecodePeerTelemetry(const std::string& payload)
+{
+    std::istringstream values(payload);
+    DronePeerTelemetry telemetry;
+    std::string modeName;
+    if (!(values >> telemetry.positionMeters.x >> telemetry.positionMeters.y
+            >> telemetry.positionMeters.z >> modeName)
+        || !std::isfinite(telemetry.positionMeters.x)
+        || !std::isfinite(telemetry.positionMeters.y)
+        || !std::isfinite(telemetry.positionMeters.z))
+        return std::nullopt;
+
+    values >> std::ws;
+    if (!values.eof())
+        return std::nullopt;
+    const auto mode = aerosimlab::simulation::TryParseFlightMode(modeName);
+    if (!mode)
+        return std::nullopt;
+    telemetry.mode = *mode;
+    return telemetry;
+}
+
 struct FleetRouteMessage
 {
     std::uint8_t leg = 0;
@@ -832,9 +870,12 @@ bool AeroSimLabApp::StartFormationTransit(
     formationTransit_.route = *route;
     formationTransit_.waypointIndex = 0U;
     formationTransit_.nextMessageSequence = 1U;
+    formationTransit_.nextTelemetrySequence = 1U;
     formationTransit_.sentFollowerTargets.clear();
     formationTransit_.lastTargetSentAtTick.clear();
     formationTransit_.lastAppliedSequence.clear();
+    formationTransit_.lastTelemetrySentAtTick.clear();
+    formationTransit_.peerTelemetryAtLeader.clear();
     formationTransit_.lastNetworkNodeUpdateTick.reset();
     formationTransit_.active = true;
     formationTransit_.status = route->shape == shape
@@ -1011,6 +1052,21 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     for (const auto& delivered : formationNetwork_->DeliveredMessages())
     {
         const auto& message = delivered.message;
+        if (message.kind == "drone_telemetry"
+            && message.destination == leaderId && message.source != leaderId)
+        {
+            const auto telemetry = DecodePeerTelemetry(message.payload);
+            auto& latest = formationTransit_.peerTelemetryAtLeader[message.source];
+            if (telemetry && message.sequence > latest.sequence)
+            {
+                latest.positionMeters = telemetry->positionMeters;
+                latest.mode = telemetry->mode;
+                latest.receivedAtTick = delivered.deliveredAtTick;
+                latest.sequence = message.sequence;
+            }
+            continue;
+        }
+
         if (message.kind == "fleet_route_ack"
             && message.destination == leaderId)
         {
@@ -1085,6 +1141,22 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             message.sequence, "fleet_route_ack", {}));
     }
 
+    constexpr std::uint64_t telemetryIntervalTicks = 6U;
+    for (const DroneId droneId : droneIds)
+    {
+        if (droneId == leaderId)
+            continue;
+        const auto lastSent = formationTransit_.lastTelemetrySentAtTick.find(droneId);
+        if (lastSent != formationTransit_.lastTelemetrySentAtTick.end()
+            && currentTick < lastSent->second + telemetryIntervalTicks)
+            continue;
+
+        static_cast<void>(formationNetwork_->SendLatest(droneId, leaderId,
+            formationTransit_.nextTelemetrySequence++, "drone_telemetry",
+            EncodePeerTelemetry(simulation_.State(droneId))));
+        formationTransit_.lastTelemetrySentAtTick[droneId] = currentTick;
+    }
+
     constexpr std::uint64_t routeRetryIntervalTicks = 60U;
     constexpr std::uint32_t maximumRouteTransmissions = 10U;
     for (auto& [droneId, mission] : fleetReconnaissance_)
@@ -1130,6 +1202,19 @@ void AeroSimLabApp::AdvanceFormationTransit()
         return;
     }
 
+    constexpr std::uint64_t peerTelemetryTimeoutTicks = 30U;
+    for (std::size_t index = 1U; index < droneIds.size(); ++index)
+    {
+        const auto peer = formationTransit_.peerTelemetryAtLeader.find(droneIds[index]);
+        if (peer == formationTransit_.peerTelemetryAtLeader.end()
+            || simulation_.TickCount() > peer->second.receivedAtTick
+                + peerTelemetryTimeoutTicks)
+        {
+            formationTransit_.status = "추종 드론 상태 보고 대기 중";
+            return;
+        }
+    }
+
     const auto& route = formationTransit_.route.leaderWaypointsMeters;
     formationTransit_.waypointIndex = std::min(
         formationTransit_.waypointIndex, route.size() - 1U);
@@ -1154,10 +1239,13 @@ void AeroSimLabApp::AdvanceFormationTransit()
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
         const DroneId droneId = droneIds[index];
-        const DroneState& state = simulation_.State(droneId);
-        if (state.mode == FlightMode::Grounded || state.mode == FlightMode::TakingOff)
+        const FormationTransitState::PeerTelemetry* peerState = index == 0U
+            ? nullptr
+            : &formationTransit_.peerTelemetryAtLeader.at(droneId);
+        const FlightMode mode = index == 0U ? leader.mode : peerState->mode;
+        if (mode == FlightMode::Grounded || mode == FlightMode::TakingOff)
             continue;
-        if (state.mode == FlightMode::Landing)
+        if (mode == FlightMode::Landing)
         {
             formationTransit_.active = false;
             formationTransit_.status = "추종 드론이 착륙해 편대 이동을 멈췄습니다.";
@@ -1216,7 +1304,8 @@ void AeroSimLabApp::AdvanceFormationTransit()
     {
         const glm::dvec3 target{leader.positionMeters.x + offsets[index].x,
             leader.positionMeters.y + offsets[index].y, leader.positionMeters.z};
-        if (glm::distance(simulation_.State(droneIds[index]).positionMeters, target) > 4.0)
+        const auto& peer = formationTransit_.peerTelemetryAtLeader.at(droneIds[index]);
+        if (glm::distance(peer.positionMeters, target) > 4.0)
         {
             followersArrived = false;
             break;

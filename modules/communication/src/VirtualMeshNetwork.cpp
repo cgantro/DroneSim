@@ -235,6 +235,29 @@ std::optional<std::uint64_t> VirtualMeshNetwork::Send(
     return nextMessageId_ - 1U;
 }
 
+std::optional<std::uint64_t> VirtualMeshNetwork::SendLatest(
+    NetworkNodeId source, NetworkNodeId destination,
+    std::uint32_t sequence, std::string kind, std::string payload)
+{
+    if (!nodes_.contains(source) || !nodes_.contains(destination)
+        || source == destination || kind.empty())
+        return std::nullopt;
+
+    const NodePair pair{source, destination};
+    const auto pending = pendingMessages_.find(pair);
+    if (pending != pendingMessages_.end())
+    {
+        std::erase_if(pending->second, [&kind](const VirtualMeshMessage& message)
+        {
+            return message.kind == kind;
+        });
+        if (pending->second.empty())
+            pendingMessages_.erase(pending);
+    }
+
+    return Send(source, destination, sequence, std::move(kind), std::move(payload));
+}
+
 void VirtualMeshNetwork::Advance(std::uint64_t tick)
 {
     if (tick < currentTick_)
