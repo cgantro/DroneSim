@@ -225,7 +225,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "${aerosimlab_imgui_source_SOURCE_DIR}/backends"
     )
     target_compile_definitions(aerosimlab_imgui PRIVATE GLFW_INCLUDE_NONE)
-    target_link_libraries(aerosimlab_imgui PUBLIC glfw OpenGL::GL)
+    target_link_libraries(aerosimlab_imgui PRIVATE glfw OpenGL::GL)
   endif()
 
   set(AEROSIMLAB_GRAPHICS_SOURCES
@@ -251,15 +251,15 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   target_include_directories(aerosimlab_graphics PUBLIC
     modules/graphics/include
   )
-  target_link_libraries(aerosimlab_graphics PUBLIC glfw glm::glm
-    PRIVATE nlohmann_json::nlohmann_json aerosimlab_stb_image)
+  target_link_libraries(aerosimlab_graphics PUBLIC glm::glm
+    PRIVATE glfw nlohmann_json::nlohmann_json aerosimlab_stb_image)
   if(EMSCRIPTEN)
     target_link_libraries(aerosimlab_graphics PUBLIC OpenGL::GL)
     target_link_options(aerosimlab_graphics INTERFACE "-sUSE_GLFW=3" "-sFULL_ES3=1")
   else()
     target_link_libraries(aerosimlab_graphics PUBLIC aerosimlab_glad OpenGL::GL)
   endif()
-  target_compile_definitions(aerosimlab_graphics PUBLIC GLFW_INCLUDE_NONE)
+  target_compile_definitions(aerosimlab_graphics PRIVATE GLFW_INCLUDE_NONE)
 
   add_library(aerosimlab_simulator_app STATIC
     apps/simulator/AeroSimLabApp.cpp
@@ -385,13 +385,13 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     aerosimlab_manual_control
     aerosimlab_sensor
     aerosimlab_communication
+    nlohmann_json::nlohmann_json
   )
-  target_link_libraries(aerosimlab_simulator_app PRIVATE
-    nlohmann_json::nlohmann_json)
   if(NOT EMSCRIPTEN)
     target_link_libraries(aerosimlab_simulator_app PRIVATE
-      aerosimlab_vision aerosimlab_media aerosimlab_imgui opencv_videoio
+      aerosimlab_vision aerosimlab_media aerosimlab_imgui glfw opencv_videoio
       Threads::Threads)
+    target_compile_definitions(aerosimlab_simulator_app PRIVATE GLFW_INCLUDE_NONE)
   endif()
   target_compile_definitions(aerosimlab_simulator_app PRIVATE
     AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
