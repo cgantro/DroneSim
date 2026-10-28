@@ -159,7 +159,8 @@ if(NOT EMSCRIPTEN)
     modules/vision/src/RgbFrameQuality.cpp
   )
   target_include_directories(aerosimlab_vision PUBLIC modules/vision/include)
-  target_link_libraries(aerosimlab_vision PUBLIC aerosimlab_sensor ${OpenCV_LIBS})
+  target_link_libraries(aerosimlab_vision PUBLIC
+    aerosimlab_sensor opencv_core opencv_imgproc)
 endif()
 
 if(NOT EMSCRIPTEN)
@@ -198,7 +199,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     FetchContent_Declare(
       aerosimlab_imgui_source
       GIT_REPOSITORY https://github.com/ocornut/imgui.git
-      GIT_TAG d88f238d1d363ef387382b2e29ad12cf96f826ac
+      GIT_TAG v1.93.0-docking
       GIT_SHALLOW TRUE
     )
     FetchContent_GetProperties(aerosimlab_imgui_source)
