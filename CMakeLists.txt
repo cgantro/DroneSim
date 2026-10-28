@@ -25,11 +25,12 @@ endif()
 
 include(CTest)
 include(cmake/Dependencies.cmake)
+option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
 if(POLICY CMP0169)
   cmake_policy(SET CMP0169 OLD)
 endif()
 
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND (AEROSIMLAB_BUILD_GRAPHICS OR BUILD_TESTING))
   find_package(OpenCV REQUIRED COMPONENTS core imgproc videoio)
   find_package(Threads REQUIRED)
   if(WIN32 AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
@@ -66,7 +67,6 @@ if(NOT EMSCRIPTEN)
   endif()
 endif()
 
-option(AEROSIMLAB_BUILD_GRAPHICS "드론 화면을 함께 빌드합니다" ON)
 aerosimlab_add_common_dependencies()
 aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
@@ -139,7 +139,7 @@ target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_cor
 
 add_library(aerosimlab_sensor STATIC modules/sensor/src/RgbFrame.cpp)
 target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND (AEROSIMLAB_BUILD_GRAPHICS OR BUILD_TESTING))
   add_library(aerosimlab_media STATIC
     modules/media/src/RtpVideoStream.cpp
     modules/media/src/RecordedCaptureTransfer.cpp
@@ -646,7 +646,6 @@ if(BUILD_TESTING)
       target_link_libraries(aerosimlab_simulator_integration_tests PRIVATE
         aerosimlab_simulator_app
         aerosimlab_ground_control_client
-        opencv_videoio
         GTest::gtest_main
       )
       gtest_discover_tests(aerosimlab_simulator_integration_tests
