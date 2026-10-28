@@ -478,9 +478,12 @@ private:
         std::size_t targetIndex = 0;
         glm::dvec3 startPositionMeters{0.0};
         std::vector<glm::dvec3> routeWaypointsMeters;
+        std::string pendingRoutePayload;
         std::uint32_t routeSequence = 0;
         std::uint32_t pendingRouteSequence = 0;
+        std::uint32_t routeTransmissionCount = 0;
         std::uint64_t routeSentAtTick = 0;
+        std::uint64_t lastRouteTransmissionTick = 0;
         std::size_t nextWaypoint = 0;
         std::string status;
         bool routeReceived = false;

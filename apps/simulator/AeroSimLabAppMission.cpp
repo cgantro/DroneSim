@@ -549,7 +549,14 @@ std::string AeroSimLabApp::FleetReconnaissanceStatus() const
         const std::size_t targetIndex = mission->second.targetIndex;
         const std::string& targetName = inspectionTargets_[targetIndex].displayName;
         status << "드론 " << droneId << " · " << targetName
-            << " · " << mission->second.status << '\n';
+            << " · " << mission->second.status;
+        if (mission->second.pendingRouteSequence != 0U)
+        {
+            status << (mission->second.routeTransmissionCount >= 10U
+                    ? " · 경로 확인 응답 없음"
+                    : " · 경로 확인 대기");
+        }
+        status << '\n';
     }
     return status.str();
 }
@@ -900,13 +907,16 @@ bool AeroSimLabApp::SendFleetRouteAssignment(
     if (mission == fleetReconnaissance_.end() || droneIds.empty())
         return false;
 
-    const std::uint32_t sequence = mission->second.routeSequence + 1U;
+    const std::uint32_t sequence = std::max(mission->second.routeSequence,
+        mission->second.pendingRouteSequence) + 1U;
     const std::string payload = EncodeFleetRoute(
         static_cast<std::uint8_t>(leg), targetIndex, routeWaypointsMeters);
     if (droneId == droneIds.front())
     {
         ApplyFleetRouteAssignment(droneId, leg, targetIndex,
             std::move(routeWaypointsMeters), sequence);
+        mission->second.pendingRouteSequence = 0U;
+        mission->second.pendingRoutePayload.clear();
         return true;
     }
 
@@ -916,7 +926,10 @@ bool AeroSimLabApp::SendFleetRouteAssignment(
         return false;
 
     mission->second.pendingRouteSequence = sequence;
+    mission->second.pendingRoutePayload = payload;
     mission->second.routeSentAtTick = simulation_.TickCount();
+    mission->second.lastRouteTransmissionTick = simulation_.TickCount();
+    mission->second.routeTransmissionCount = 1U;
     mission->second.routeReceived = false;
     mission->second.routeWaypointsMeters.clear();
     mission->second.nextWaypoint = 0U;
@@ -939,7 +952,6 @@ void AeroSimLabApp::ApplyFleetRouteAssignment(
     mission->second.leg = leg;
     mission->second.targetIndex = targetIndex;
     mission->second.routeSequence = sequence;
-    mission->second.pendingRouteSequence = 0U;
     mission->second.routeSentAtTick = simulation_.TickCount();
     mission->second.routeWaypointsMeters = std::move(routeWaypointsMeters);
     mission->second.nextWaypoint = 0U;
@@ -999,6 +1011,21 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     for (const auto& delivered : formationNetwork_->DeliveredMessages())
     {
         const auto& message = delivered.message;
+        if (message.kind == "fleet_route_ack"
+            && message.destination == leaderId)
+        {
+            const auto mission = fleetReconnaissance_.find(message.source);
+            if (mission != fleetReconnaissance_.end()
+                && mission->second.pendingRouteSequence == message.sequence
+                && mission->second.routeSequence == message.sequence)
+            {
+                mission->second.pendingRouteSequence = 0U;
+                mission->second.pendingRoutePayload.clear();
+                mission->second.routeTransmissionCount = 0U;
+            }
+            continue;
+        }
+
         if (message.source != leaderId)
             continue;
 
@@ -1033,18 +1060,47 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         auto mission = fleetReconnaissance_.find(message.destination);
         const auto route = DecodeFleetRoute(message.payload);
         if (mission == fleetReconnaissance_.end() || !route
-            || route->targetIndex >= inspectionTargets_.size()
-            || message.sequence != mission->second.pendingRouteSequence
-            || message.sequence <= mission->second.routeSequence)
+            || route->targetIndex >= inspectionTargets_.size())
         {
             if (mission != fleetReconnaissance_.end())
                 mission->second.status = "경로 오류";
             continue;
         }
 
+        if (message.sequence == mission->second.routeSequence)
+        {
+            // 같은 경로가 다시 오면 비행 상태를 초기화하지 않고 확인 응답만 다시 보낸다.
+            static_cast<void>(formationNetwork_->Send(message.destination, leaderId,
+                message.sequence, "fleet_route_ack", {}));
+            continue;
+        }
+        if (message.sequence != mission->second.pendingRouteSequence
+            || message.sequence < mission->second.routeSequence)
+            continue;
+
         ApplyFleetRouteAssignment(message.destination,
             static_cast<FleetMissionLeg>(route->leg), route->targetIndex,
             route->waypointsMeters, message.sequence);
+        static_cast<void>(formationNetwork_->Send(message.destination, leaderId,
+            message.sequence, "fleet_route_ack", {}));
+    }
+
+    constexpr std::uint64_t routeRetryIntervalTicks = 60U;
+    constexpr std::uint32_t maximumRouteTransmissions = 10U;
+    for (auto& [droneId, mission] : fleetReconnaissance_)
+    {
+        if (droneId == leaderId || mission.pendingRouteSequence == 0U
+            || mission.routeTransmissionCount >= maximumRouteTransmissions
+            || currentTick < mission.lastRouteTransmissionTick + routeRetryIntervalTicks)
+            continue;
+
+        if (formationNetwork_->Send(leaderId, droneId,
+                mission.pendingRouteSequence, "fleet_route",
+                mission.pendingRoutePayload))
+        {
+            mission.lastRouteTransmissionTick = currentTick;
+            ++mission.routeTransmissionCount;
+        }
     }
 }
 
