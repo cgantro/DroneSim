@@ -556,8 +556,11 @@ private:
     [[nodiscard]] const ReceivedPeerTelemetry* FreshPeerTelemetry(
         aerosimlab::simulation::DroneId droneId) const noexcept;
     std::uint32_t nextTelemetrySequence_ = 1;
+    std::uint32_t nextGroundControlTelemetrySequence_ = 1;
     std::map<aerosimlab::simulation::DroneId, std::uint64_t>
         lastTelemetrySentAtTick_;
+    std::map<aerosimlab::simulation::DroneId, std::uint64_t>
+        lastGroundControlTelemetrySentAtTick_;
     struct FleetRelayRecovery
     {
         aerosimlab::simulation::DroneId relayDroneId = 0U;
@@ -568,6 +571,8 @@ private:
     } fleetRelayRecovery_;
     std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
         peerTelemetryAtLeader_;
+    std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
+        telemetryAtGroundControl_;
     struct FormationTransitState
     {
         aerosimlab::simulation::FormationRoutePlan route;

@@ -173,7 +173,7 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
        {"tick":0,"drone":"north","type":"takeoff"}],
      "mission":{"name":"bridge-inspection","tasks":[
        {"name":"east-face","role":"inspect","drone":"east",
-        "facility_id":"tancheon-bridge","inspection_zone_id":"deck-east",
+        "facility_id":"facility-bridge","inspection_zone_id":"deck-east",
         "target_position_meters":[0,0,1.5],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1,
         "inspection_surface":{
@@ -183,7 +183,7 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
           "maximum_incidence_angle_degrees":30,
           "minimum_pixel_width":100,"minimum_pixel_height":50}},
        {"name":"north-face","role":"inspect","drone":"north",
-        "facility_id":"tancheon-bridge","inspection_zone_id":"deck-north",
+        "facility_id":"facility-bridge","inspection_zone_id":"deck-north",
         "target_position_meters":[0,4,1.5],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1,
         "inspection_surface":{
@@ -206,7 +206,7 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
     EXPECT_TRUE(successful.mission->tasks[0].firstGeometryCaptureTick.has_value());
     EXPECT_EQ(successful.mission->tasks[0].lastCaptureAssessment,
         CaptureAssessment::Ready);
-    EXPECT_EQ(successful.mission->tasks[0].facilityId, "tancheon-bridge");
+    EXPECT_EQ(successful.mission->tasks[0].facilityId, "facility-bridge");
     EXPECT_EQ(successful.mission->tasks[0].inspectionZoneId, "deck-east");
     EXPECT_EQ(successful.drones[0].finalCamera.model.imageWidthPixels, 1280);
 

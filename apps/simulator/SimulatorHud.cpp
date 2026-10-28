@@ -459,6 +459,57 @@ void DrawFlightStatusPanel(
         ImGui::Text("모의 시간: %.2f초   진행 Tick: %llu",
             simulation.SimulationTimeSeconds(),
             static_cast<unsigned long long>(simulation.TickCount()));
+        if (ImGui::CollapsingHeader("실제 위치와 지상통제 수신 위치",
+                ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::TextDisabled(
+                "시뮬 위치는 현재 값이고, 지상통제 위치는 통신망으로 마지막에 받은 값입니다.");
+            if (ImGui::BeginTable("GroundControlPositions", 4,
+                    ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg
+                        | ImGuiTableFlags_SizingStretchSame))
+            {
+                ImGui::TableSetupColumn("드론");
+                ImGui::TableSetupColumn("시뮬 위치 [m]");
+                ImGui::TableSetupColumn("마지막 수신 [m]");
+                ImGui::TableSetupColumn("상태");
+                ImGui::TableHeadersRow();
+                const auto droneIds = simulation.DroneIds();
+                for (std::size_t index = 0; index < droneIds.size(); ++index)
+                {
+                    const simulation::DroneId droneId = droneIds[index];
+                    const auto& actual = simulation.State(droneId).positionMeters;
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    const std::string droneName = DroneName(droneId);
+                    ImGui::TextUnformatted(droneName.c_str());
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%.1f, %.1f, %.1f",
+                        actual.x, actual.y, actual.z);
+                    ImGui::TableNextColumn();
+                    if (index >= recordingControls.groundControlPositions.size()
+                        || !recordingControls.groundControlPositions[index].hasReport)
+                    {
+                        ImGui::TextDisabled("아직 받지 못함");
+                        ImGui::TableNextColumn();
+                        ImGui::TextDisabled("미수신");
+                        continue;
+                    }
+
+                    const auto& report = recordingControls.groundControlPositions[index];
+                    ImGui::Text("%.1f, %.1f, %.1f",
+                        report.lastReceivedPositionMeters.x,
+                        report.lastReceivedPositionMeters.y,
+                        report.lastReceivedPositionMeters.z);
+                    ImGui::TableNextColumn();
+                    const double ageSeconds = static_cast<double>(report.ageTicks)
+                        / 60.0;
+                    const char* reportState = report.ageTicks <= 30U ? "최신"
+                        : report.ageTicks <= 180U ? "지연" : "끊김";
+                    ImGui::Text("%s · %.2f초 전", reportState, ageSeconds);
+                }
+                ImGui::EndTable();
+            }
+        }
         ImGui::Separator();
         ImGui::Text("정찰 대상: %s", inspectionTargetName.c_str());
         ImGui::Text("화면 확인: %s", CaptureStatusLabel(captureAssessment));

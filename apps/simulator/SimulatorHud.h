@@ -35,9 +35,18 @@ struct HudRenderTimings
     std::size_t completedGpuFrameCount = 0;
 };
 
+struct GroundControlDronePosition
+{
+    simulation::DroneId droneId = 0U;
+    glm::dvec3 lastReceivedPositionMeters{0.0};
+    std::uint64_t ageTicks = 0U;
+    bool hasReport = false;
+};
+
 /** @brief 상태 패널에서 조작할 명령·영상 기록 기능이다. */
 struct SessionRecordingControls
 {
+    std::vector<GroundControlDronePosition> groundControlPositions;
     bool commandRecording = false;
     bool commandReplay = false;
     bool canStartCommandRecording = false;

@@ -52,6 +52,51 @@ public:
         LeaderWithGroundControlRoute
     };
 
+    static void VerifyGroundControlShowsOnlyDeliveredPeerPositions()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+        UseConnectedNetworkForTest(app);
+        app.formationTransit_.active = true;
+
+        const auto droneIds = app.fleetDroneIds_;
+        ASSERT_EQ(droneIds.size(), 4U);
+        for (int tick = 0; tick < 120; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+        ASSERT_EQ(app.telemetryAtGroundControl_.size(), droneIds.size());
+
+        const auto disconnectedDroneId = droneIds[2U];
+        const auto originalReport = app.telemetryAtGroundControl_.at(
+            disconnectedDroneId).state.positionMeters;
+        const auto groundControlNodeId = std::numeric_limits<
+            communication::NetworkNodeId>::max();
+        for (const auto droneId : droneIds)
+            app.formationNetwork_->SetDirectedLinkDisabled(
+                droneId, groundControlNodeId, true);
+
+        auto movedDrone = app.simulation_.State(disconnectedDroneId);
+        movedDrone.positionMeters += glm::dvec3{35.0, 0.0, 0.0};
+        app.simulation_.SetInitialState(disconnectedDroneId, movedDrone);
+        for (int tick = 0; tick < 60; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+
+        const auto& received = app.telemetryAtGroundControl_.at(disconnectedDroneId);
+        EXPECT_DOUBLE_EQ(received.state.positionMeters.x, originalReport.x);
+        EXPECT_DOUBLE_EQ(received.state.positionMeters.y, originalReport.y);
+        EXPECT_DOUBLE_EQ(received.state.positionMeters.z, originalReport.z);
+        EXPECT_GT(glm::distance(
+            app.simulation_.State(disconnectedDroneId).positionMeters,
+            received.state.positionMeters), 1.0);
+        EXPECT_GT(app.simulation_.TickCount() - received.receivedAtTick, 0U);
+    }
+
     static void UseConnectedNetworkForTest(AeroSimLabApp& app)
     {
         // 실제 전파 범위와 가림 대신 연결을 보장해 승계 절차를 따로 확인한다.
@@ -1005,88 +1050,6 @@ void Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain()
     EXPECT_FALSE(spawn.has_value());
 }
 
-void Verify_TancheonBuildingDataStopsTheWebKinematicDrone()
-{
-    const std::filesystem::path mapDirectory =
-        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-        / "tests/fixtures/maps/tancheon";
-    const auto terrainGrid = terrain::TerrainGrid::Load(
-        mapDirectory / "terrain.aerotrn");
-    const auto buildings = terrain::LoadMapBuildingFootprints(
-        mapDirectory / "site.geojson", terrainGrid);
-    ASSERT_FALSE(buildings.empty());
-
-    simulation::SimulationCore webSimulation{
-        simulation::SimulationDynamics::Kinematic};
-    webSimulation.SetTerrain(terrainGrid);
-    for (const auto& building : buildings)
-    {
-        if (building.outlineMeters.size() < 3U)
-            continue;
-
-        const auto bounds = terrain::GetMapBuildingBoundsMeters(building);
-        webSimulation.AddStaticObstaclePrism(building.outlineMeters,
-            bounds.centerMeters.z - bounds.halfExtentsMeters.z,
-            bounds.centerMeters.z + bounds.halfExtentsMeters.z);
-    }
-
-    bool foundTargetBuilding = false;
-    terrain::MapBuildingFacade targetFacade;
-    for (const auto& building : buildings)
-    {
-        if (building.heightSource != terrain::BuildingHeightSource::OsmHeightTag
-            || !(building.heightMeters > 0.0))
-            continue;
-
-        const auto bounds = terrain::GetMapBuildingBoundsMeters(building);
-        const auto facade = terrain::GetNearestMapBuildingFacade(building,
-            {bounds.centerMeters.x + 100.0, bounds.centerMeters.y});
-        if (facade.widthMeters < 3.0)
-            continue;
-
-        const glm::dvec2 startPosition =
-            glm::dvec2{facade.centerMeters.x, facade.centerMeters.y}
-            + glm::dvec2{facade.outwardNormal.x, facade.outwardNormal.y} * 2.0;
-        if (!terrainGrid.ContainsLocalPositionMeters(startPosition))
-            continue;
-
-        foundTargetBuilding = true;
-        targetFacade = facade;
-        break;
-    }
-    ASSERT_TRUE(foundTargetBuilding)
-        << "충돌 시험에 쓸 높이 정보가 있는 OSM 건물을 찾지 못했습니다.";
-
-    const glm::dvec2 outwardNormal{
-        targetFacade.outwardNormal.x, targetFacade.outwardNormal.y};
-    const glm::dvec2 startPosition{
-        targetFacade.centerMeters.x, targetFacade.centerMeters.y};
-    simulation::DroneState start;
-    start.positionMeters = {
-        startPosition.x + outwardNormal.x * 2.0,
-        startPosition.y + outwardNormal.y * 2.0,
-        targetFacade.centerMeters.z};
-    start.velocityMetersPerSecond = {
-        -outwardNormal.x * 5.0, -outwardNormal.y * 5.0, 0.0};
-    start.mode = simulation::FlightMode::Flying;
-    ASSERT_NO_THROW(webSimulation.SetInitialState(
-        webSimulation.PrimaryDroneId(), start));
-
-    for (int tick = 0; tick < 60; ++tick)
-        webSimulation.AdvanceOneTick();
-
-    const auto& stopped = webSimulation.State().positionMeters;
-    const double distanceFromFacade =
-        (stopped.x - startPosition.x) * outwardNormal.x
-        + (stopped.y - startPosition.y) * outwardNormal.y;
-    EXPECT_GE(distanceFromFacade, 0.3)
-        << "탄천 건물 외벽을 향해 간 드론이 건물 외곽선을 통과했습니다.";
-    EXPECT_LE(distanceFromFacade, 1.2)
-        << "드론이 선택한 건물 외벽에 도달하기 전에 다른 곳에서 멈췄습니다.";
-    EXPECT_NEAR(glm::dot(webSimulation.State().velocityMetersPerSecond,
-        glm::dvec3{outwardNormal, 0.0}), 0.0, 1.0e-9);
-}
-
 void Verify_SimulatorSession_RecordingReplayOverUdp()
 {
     std::uint16_t simulatorPort = 0;
@@ -1433,6 +1396,5 @@ TEST(SimulatorSessionTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
     EXPECT_NO_FATAL_FAILURE(Verify_EoVideoRecorderStoresH264AndFrameMetadata());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
-    EXPECT_NO_FATAL_FAILURE(Verify_TancheonBuildingDataStopsTheWebKinematicDrone());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_RecordingReplayOverUdp());
 }

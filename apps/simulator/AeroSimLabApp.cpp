@@ -743,6 +743,24 @@ void AeroSimLabApp::RenderFrame()
         const bool videoIsRecording = eoVideoRecorder_
             && eoVideoRecorder_->IsRecording();
         SessionRecordingControls recordingControls;
+        recordingControls.groundControlPositions.reserve(droneIds.size());
+        for (const aerosimlab::simulation::DroneId droneId : droneIds)
+        {
+            const auto report = telemetryAtGroundControl_.find(droneId);
+            if (report == telemetryAtGroundControl_.end())
+            {
+                recordingControls.groundControlPositions.push_back({
+                    .droneId = droneId});
+                continue;
+            }
+
+            recordingControls.groundControlPositions.push_back({
+                .droneId = droneId,
+                .lastReceivedPositionMeters = report->second.state.positionMeters,
+                .ageTicks = simulation_.TickCount() >= report->second.receivedAtTick
+                    ? simulation_.TickCount() - report->second.receivedAtTick : 0U,
+                .hasReport = true});
+        }
         recordingControls.commandRecording = commandRecording_.IsRecording();
         recordingControls.commandReplay = commandRecording_.IsReplaying();
         recordingControls.recordedTicks = commandRecording_.TickCount();

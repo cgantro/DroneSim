@@ -1246,8 +1246,11 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     InitializeFleetLeadership();
 
     nextTelemetrySequence_ = 1U;
+    nextGroundControlTelemetrySequence_ = 1U;
     lastTelemetrySentAtTick_.clear();
+    lastGroundControlTelemetrySentAtTick_.clear();
     peerTelemetryAtLeader_.clear();
+    telemetryAtGroundControl_.clear();
 
     aerosimlab::communication::VirtualMeshSettings settings;
     settings.mode = fleetNetworkMode_;
@@ -2045,6 +2048,33 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             lastLeaderHeartbeatTick_ = delivered.deliveredAtTick;
             continue;
         }
+        constexpr std::string_view groundControlTelemetryPrefix =
+            "ground_control_telemetry_";
+        if (message.destination == groundControlNodeId
+            && message.source == leaderId
+            && message.kind.starts_with(groundControlTelemetryPrefix))
+        {
+            const std::string droneIdText = message.kind.substr(
+                groundControlTelemetryPrefix.size());
+            std::istringstream droneIdInput(droneIdText);
+            DroneId droneId = 0U;
+            std::string extraText;
+            const auto telemetry = detail::DecodePeerTelemetry(message.payload);
+            if (!(droneIdInput >> droneId) || (droneIdInput >> extraText)
+                || std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), droneId)
+                    == fleetDroneIds_.end()
+                || !telemetry)
+                continue;
+
+            auto& latest = telemetryAtGroundControl_[droneId];
+            if (message.sequence > latest.sequence)
+            {
+                latest.state = *telemetry;
+                latest.receivedAtTick = delivered.deliveredAtTick;
+                latest.sequence = message.sequence;
+            }
+            continue;
+        }
         if (message.kind == "drone_telemetry"
             && message.destination == leaderId && message.source != leaderId)
         {
@@ -2058,6 +2088,11 @@ void AeroSimLabApp::AdvanceFleetNetwork()
                 latest.state = *telemetry;
                 latest.receivedAtTick = delivered.deliveredAtTick;
                 latest.sequence = message.sequence;
+                static_cast<void>(formationNetwork_->SendLatest(leaderId,
+                    groundControlNodeId,
+                    nextGroundControlTelemetrySequence_++,
+                    "ground_control_telemetry_"
+                        + std::to_string(message.source), message.payload));
             }
             continue;
         }
@@ -2199,6 +2234,28 @@ void AeroSimLabApp::AdvanceFleetNetwork()
                 ++leaderHeartbeatSequence_, "leader_heartbeat",
                 std::to_string(fleetLeadershipEpoch_)))
             lastLeaderHeartbeatSentAtTick_ = currentTick;
+    }
+
+    if (leaderId != 0U)
+    {
+        const auto lastSent = lastGroundControlTelemetrySentAtTick_.find(leaderId);
+        if (lastSent == lastGroundControlTelemetrySentAtTick_.end()
+            || currentTick >= lastSent->second + telemetryIntervalTicks)
+        {
+            const auto& state = simulation_.State(leaderId);
+            const std::string missionStatus = fleetReconnaissance_.contains(leaderId)
+                ? fleetReconnaissance_.at(leaderId).status : std::string{};
+            const std::uint8_t missionLeg = fleetReconnaissance_.contains(leaderId)
+                ? static_cast<std::uint8_t>(fleetReconnaissance_.at(leaderId).leg)
+                : 0U;
+            const std::string kind = "ground_control_telemetry_"
+                + std::to_string(leaderId);
+            if (formationNetwork_->SendLatest(leaderId, groundControlNodeId,
+                    nextGroundControlTelemetrySequence_++, kind,
+                    detail::EncodePeerTelemetry(state.positionMeters, state.mode,
+                        missionLeg, missionStatus, 0U, 0U)))
+                lastGroundControlTelemetrySentAtTick_[leaderId] = currentTick;
+        }
     }
 
     for (const DroneId droneId : droneIds)
