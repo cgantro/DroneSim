@@ -29,6 +29,14 @@ class QuadrotorFlightController
 public:
     /** @brief PX4 X500 모델 기준점은 지면에서 0.24m 높이에 놓인다. */
     static constexpr double groundedModelOriginHeightMeters = 0.24;
+    /** @brief 강체 비행에서 경유점을 향해 이동할 때의 최고 속도다. */
+    static constexpr double maximumWaypointSpeedMetersPerSecond = 2.0;
+
+    /** @brief 위치 제어기가 경유점을 향해 만들려는 속도를 돌려준다. */
+    [[nodiscard]] static glm::dvec3 WaypointVelocityTarget(
+        const DroneState& state,
+        const glm::dvec3& targetPosition,
+        const QuadrotorControllerParameters& controller = defaultQuadrotorControllerParameters);
 
     /**
      * @brief 현재 비행 목표를 로터별 목표 회전 속도로 바꾼다.

@@ -15,7 +15,6 @@ namespace
 constexpr double gravityMetersPerSecondSquared = 9.81;
 constexpr double maximumAccelerationMetersPerSecondSquared = 4.0;
 constexpr double maximumTorqueNewtonMeters = 0.5;
-constexpr double maximumWaypointSpeedMetersPerSecond = 2.0;
 
 struct DesiredWrench
 {
@@ -42,19 +41,9 @@ glm::dvec3 PositionControlAcceleration(
     const glm::dvec3& targetPosition,
     const QuadrotorControllerParameters& controller)
 {
-    const glm::dvec3 offset = targetPosition - state.positionMeters;
-    const double distance = glm::length(offset);
-    if (distance <= 1.0e-9)
-        return -controller.velocityGain * state.velocityMetersPerSecond;
-
-    // 정찰 경유점은 촬영에 맞춰 초속 2m를 넘지 않도록 천천히 접근한다.
-    const double brakingSpeed = std::sqrt(
-        2.0 * maximumAccelerationMetersPerSecondSquared * distance);
-    const double approachSpeed = controller.positionGain * 0.2 * distance;
-    const double targetSpeed = std::min(
-        maximumWaypointSpeedMetersPerSecond,
-        std::min(brakingSpeed, approachSpeed));
-    const glm::dvec3 targetVelocity = offset * (targetSpeed / distance);
+    const glm::dvec3 targetVelocity =
+        QuadrotorFlightController::WaypointVelocityTarget(
+            state, targetPosition, controller);
     return controller.velocityGain
         * (targetVelocity - state.velocityMetersPerSecond);
 }
@@ -158,6 +147,26 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
         thrusts[rotor] = std::max(0.0, equation[rotor][rotorCount]);
     return thrusts;
 }
+}
+
+glm::dvec3 QuadrotorFlightController::WaypointVelocityTarget(
+    const DroneState& state,
+    const glm::dvec3& targetPosition,
+    const QuadrotorControllerParameters& controller)
+{
+    const glm::dvec3 offset = targetPosition - state.positionMeters;
+    const double distance = glm::length(offset);
+    if (distance <= 1.0e-9)
+        return glm::dvec3{0.0};
+
+    // 경유점 가까이에서는 제동 거리와 위치 이득에 맞춰 목표 속도를 낮춘다.
+    const double brakingSpeed = std::sqrt(
+        2.0 * maximumAccelerationMetersPerSecondSquared * distance);
+    const double approachSpeed = controller.positionGain * 0.2 * distance;
+    const double targetSpeed = std::min(
+        maximumWaypointSpeedMetersPerSecond,
+        std::min(brakingSpeed, approachSpeed));
+    return offset * (targetSpeed / distance);
 }
 
 std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::MotorTargets(

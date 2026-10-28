@@ -1336,10 +1336,10 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
         "\"position_meters\":[-8,0,1.5]"));
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
         "\"initial_position_meters\":[-4,0,0]",
-        "\"initial_position_meters\":[-20,0,0]"));
+        "\"initial_position_meters\":[-8,0,0]"));
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
         "\"initial_position_meters\":[4,0,0]",
-        "\"initial_position_meters\":[20,0,0]"));
+        "\"initial_position_meters\":[8,0,0]"));
     const ScenarioResult physicalAvoidanceResult = RunScenario(physicalAvoidanceScenario);
     ASSERT_TRUE(physicalAvoidanceResult.passed)
         << (physicalAvoidanceResult.issues.empty()
