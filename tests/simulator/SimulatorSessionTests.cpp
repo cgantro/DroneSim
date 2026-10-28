@@ -788,18 +788,14 @@ public:
         EXPECT_EQ(mission.status, "저전력 복귀 완료");
         EXPECT_LE(glm::distance(app.simulation_.State(lowBatteryDroneId).positionMeters,
             mission.startPositionMeters), 5.0);
-        const bool targetStillQueued = std::find(
-            app.pendingReassignedTargetIndices_.begin(),
-            app.pendingReassignedTargetIndices_.end(), unfinishedTargetIndex)
-            != app.pendingReassignedTargetIndices_.end();
-        const bool targetWasTransferred = std::any_of(app.fleetDroneIds_.begin(),
+        const bool targetWasReassigned = std::any_of(app.fleetDroneIds_.begin(),
             app.fleetDroneIds_.end(), [&app, lowBatteryDroneId, unfinishedTargetIndex](auto id)
             {
                 return id != lowBatteryDroneId
                     && app.fleetReconnaissance_.at(id).targetIndex
                         == unfinishedTargetIndex;
             });
-        EXPECT_TRUE(targetStillQueued || targetWasTransferred);
+        EXPECT_FALSE(targetWasReassigned);
     }
 
     static void VerifyCompleteFleetMissionReassignsAfterRotorFailure(

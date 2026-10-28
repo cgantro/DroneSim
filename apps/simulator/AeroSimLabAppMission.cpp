@@ -533,8 +533,6 @@ bool AeroSimLabApp::FleetReturnCanStart() const
     const auto& droneIds = fleetDroneIds_;
     if (droneIds.empty())
         return false;
-    if (!pendingReassignedTargetIndices_.empty())
-        return false;
     const auto leaderId = fleetLeaderId_;
 
     return std::all_of(droneIds.begin(), droneIds.end(), [this, leaderId](auto droneId)
@@ -944,10 +942,9 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
 
     for (auto& [droneId, mission] : fleetReconnaissance_)
     {
-        const bool reconnaissanceCanBeReassigned =
-            mission.leg == FleetMissionLeg::Reconnaissance
-            && detail::IsFleetMissionInProgress(mission.status);
-        const bool returningFromTarget = reconnaissanceCanBeReassigned
+        const bool returningFromTarget =
+            (mission.leg == FleetMissionLeg::Reconnaissance
+                && detail::IsFleetMissionInProgress(mission.status))
             || (mission.leg == FleetMissionLeg::Reconnaissance
                 && detail::ParseFleetDroneStatus(mission.status)
                     == detail::FleetDroneStatus::TargetReached);
@@ -958,11 +955,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                 && battery.ShouldReturnForLowBattery())
             {
                 battery.MarkReturningForLowBattery();
-                if (reconnaissanceCanBeReassigned
-                    && std::find(pendingReassignedTargetIndices_.begin(),
-                        pendingReassignedTargetIndices_.end(), mission.targetIndex)
-                        == pendingReassignedTargetIndices_.end())
-                    pendingReassignedTargetIndices_.push_back(mission.targetIndex);
 
                 glm::dvec3 returnApproach = mission.startPositionMeters;
                 returnApproach.z += 5.0;
@@ -991,13 +983,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                     if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
                         static_cast<void>(simulation_.Apply(droneId,
                             {Command::Kind::Land}));
-                    if (droneId == fleetLeaderId_)
-                        BeginFleetLeaderReplacement();
-                    else
-                    {
-                        excludedFleetDroneIds_.push_back(droneId);
-                        std::erase(fleetDroneIds_, droneId);
-                    }
                 }
                 else
                 {
@@ -1006,63 +991,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                 }
                 continue;
             }
-        }
-
-#ifndef __EMSCRIPTEN__
-        const bool missionIsActive = (mission.leg == FleetMissionLeg::Reconnaissance
-                || mission.leg == FleetMissionLeg::Relaying)
-            && detail::IsFleetMissionInProgress(mission.status);
-        bool rotorFailure = false;
-        if (missionIsActive
-            && simulation_.Dynamics() == aerosimlab::simulation::SimulationDynamics::RigidBody)
-        {
-            for (std::size_t rotorIndex = 0U; rotorIndex < 4U; ++rotorIndex)
-            {
-                if (simulation_.IsRotorMotorFaulted(droneId, rotorIndex))
-                {
-                    rotorFailure = true;
-                    break;
-                }
-            }
-        }
-        if (rotorFailure)
-        {
-            mission.status = "기체 고장 · 안전 착륙";
-            mission.assignmentLeaseExpiresAtTick = simulation_.TickCount();
-            mission.pendingRouteSequence = 0U;
-            mission.pendingRoutePayload.clear();
-            mission.routeTransmissionCount = 0U;
-            const auto mode = simulation_.State(droneId).mode;
-            if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
-                static_cast<void>(simulation_.Apply(droneId,
-                    {Command::Kind::Land}));
-
-            if (droneId == fleetLeaderId_)
-                BeginFleetLeaderReplacement();
-            else
-            {
-                excludedFleetDroneIds_.push_back(droneId);
-                std::erase(fleetDroneIds_, droneId);
-            }
-            fleetLeadershipStatus_ = "로터 고장 기체 착륙 · 정찰 목표 재배정 중";
-            continue;
-        }
-#endif
-        if (std::find(excludedFleetDroneIds_.begin(), excludedFleetDroneIds_.end(), droneId)
-            != excludedFleetDroneIds_.end())
-        {
-            if (mission.leg == FleetMissionLeg::Reconnaissance
-                && mission.assignmentLeaseExpiresAtTick != 0U
-                && simulation_.TickCount() >= mission.assignmentLeaseExpiresAtTick
-                && detail::IsFleetMissionInProgress(mission.status))
-            {
-                const auto mode = simulation_.State(droneId).mode;
-                if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
-                    static_cast<void>(simulation_.Apply(droneId,
-                        {Command::Kind::Land}));
-                mission.status = "임무 권한 만료 · 안전 착륙";
-            }
-            continue;
         }
 
         const auto droneStatus = detail::ParseFleetDroneStatus(mission.status);
@@ -1095,27 +1023,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
         }
         if (legIsFinished)
             continue;
-
-        if (mission.leg == FleetMissionLeg::Reconnaissance
-            && mission.assignmentLeaseExpiresAtTick != 0U
-            && simulation_.TickCount() >= mission.assignmentLeaseExpiresAtTick
-            && detail::IsFleetMissionInProgress(mission.status))
-        {
-            const auto* report = droneId == fleetLeaderId_
-                ? nullptr : FreshPeerTelemetry(droneId);
-            const bool currentAssignmentIsReported = report != nullptr
-                && report->state.assignmentVersion == mission.assignmentVersion
-                && detail::IsFleetMissionInProgress(report->state.missionStatus);
-            if (droneId == fleetLeaderId_ || currentAssignmentIsReported)
-                continue;
-
-            const auto mode = simulation_.State(droneId).mode;
-            if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
-                static_cast<void>(simulation_.Apply(droneId,
-                    {Command::Kind::Land}));
-            mission.status = "임무 권한 만료 · 안전 착륙";
-            continue;
-        }
 
         if (!mission.routeReceived)
         {
@@ -1235,10 +1142,6 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
     if (completeFleetMission_.stage == Stage::Idle
         || completeFleetMission_.stage == Stage::Completed
         || completeFleetMission_.stage == Stage::Failed)
-        return;
-
-    if (leaderReplacementPending_ || leaderStateCollectionPending_
-        || !pendingReassignedTargetIndices_.empty())
         return;
 
     if (completeFleetMission_.stage == Stage::FormationTransit)
