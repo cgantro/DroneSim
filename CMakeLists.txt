@@ -639,6 +639,7 @@ if(BUILD_TESTING)
       )
       target_include_directories(aerosimlab_simulator_integration_tests PRIVATE
         modules/graphics/src/graphics
+        ${OpenCV_INCLUDE_DIRS}
       )
       target_compile_definitions(aerosimlab_simulator_integration_tests PRIVATE
         AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
