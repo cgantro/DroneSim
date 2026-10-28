@@ -539,6 +539,28 @@ std::vector<FaultScenarioTimeline::Event> FaultScenarioTimeline::TakeDueEvents(
     return due;
 }
 
+std::vector<FaultScenarioTimeline::Event> FaultScenarioTimeline::PendingEvents(
+    std::uint64_t currentTick, std::size_t maximumCount) const
+{
+    std::vector<Event> pending;
+    if (!replaying_ || currentTick < replayStartTick_ || maximumCount == 0U)
+        return pending;
+
+    const std::uint64_t elapsedTicks = currentTick - replayStartTick_;
+    const std::size_t remainingCount = events_.size() - replayEventIndex_;
+    const std::size_t endIndex = replayEventIndex_
+        + std::min(maximumCount, remainingCount);
+    pending.reserve(endIndex - replayEventIndex_);
+    for (std::size_t index = replayEventIndex_; index < endIndex; ++index)
+    {
+        Event event = events_[index];
+        event.tickOffset = event.tickOffset > elapsedTicks
+            ? event.tickOffset - elapsedTicks : 0U;
+        pending.push_back(event);
+    }
+    return pending;
+}
+
 bool FaultScenarioTimeline::IsRecording() const noexcept { return recording_; }
 bool FaultScenarioTimeline::IsReplaying() const noexcept { return replaying_; }
 bool FaultScenarioTimeline::ReplayFinished() const noexcept

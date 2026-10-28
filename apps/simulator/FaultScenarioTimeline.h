@@ -76,6 +76,9 @@ public:
 
     /** @brief 재생 시각에 도달한 이벤트를 돌려주고 다음 이벤트로 이동한다. */
     [[nodiscard]] std::vector<Event> TakeDueEvents(std::uint64_t currentTick);
+    /** @brief 아직 적용되지 않은 이벤트 중 앞의 몇 개를 남은 Tick 순서로 돌려준다. */
+    [[nodiscard]] std::vector<Event> PendingEvents(std::uint64_t currentTick,
+        std::size_t maximumCount = 8U) const;
     [[nodiscard]] bool IsRecording() const noexcept;
     [[nodiscard]] bool IsReplaying() const noexcept;
     [[nodiscard]] bool ReplayFinished() const noexcept;

@@ -1370,6 +1370,9 @@ TEST(SimulatorSessionTests, CoreScenarios)
             1000U, {1U, 2U}, "complete", 60U, 60U, cameraFault, error))
             << error;
         EXPECT_EQ(scheduled.ScheduledFaultCount(), 2U);
+        const auto pending = scheduled.PendingEvents(1000U);
+        ASSERT_EQ(pending.size(), 4U);
+        EXPECT_EQ(pending.front().tickOffset, 60U);
         EXPECT_TRUE(scheduled.TakeDueEvents(1059U).empty());
 
         const auto starts = scheduled.TakeDueEvents(1060U);

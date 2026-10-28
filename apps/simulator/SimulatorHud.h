@@ -57,6 +57,7 @@ struct SessionRecordingControls
     bool canScheduleFault = false;
     std::size_t faultScenarioEventCount = 0;
     std::size_t scheduledFaultCount = 0;
+    std::vector<FaultScenarioTimeline::Event> pendingFaultEvents;
     std::string faultScenarioStatus;
     std::function<void()> startFaultScenarioRecording;
     std::function<void()> stopFaultScenarioRecording;

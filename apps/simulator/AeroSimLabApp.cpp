@@ -783,6 +783,8 @@ void AeroSimLabApp::RenderFrame()
             && !recordingControls.faultScenarioRecording;
         recordingControls.scheduledFaultCount =
             faultScenarioTimeline_.ScheduledFaultCount();
+        recordingControls.pendingFaultEvents =
+            faultScenarioTimeline_.PendingEvents(simulation_.TickCount());
         recordingControls.canReplayFaultScenario = formationNetworkActive
             && !recordingControls.faultScenarioRecording
             && !recordingControls.faultScenarioReplaying;
