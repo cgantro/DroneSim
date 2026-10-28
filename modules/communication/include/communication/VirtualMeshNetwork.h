@@ -92,6 +92,10 @@ public:
     /** @brief 지정한 두 노드 사이의 통신을 즉시 끊거나 복구한다. */
     void SetLinkDisabled(NetworkNodeId first, NetworkNodeId second, bool disabled);
 
+    /** @brief 두 노드 사이에 장애가 주입되어 있는지 확인한다. */
+    [[nodiscard]] bool IsLinkDisabled(
+        NetworkNodeId first, NetworkNodeId second) const noexcept;
+
     /** @brief 지정한 송수신 노드의 라디오 상태를 바꾼다. */
     void SetNodeRadioEnabled(NetworkNodeId node, bool enabled);
 

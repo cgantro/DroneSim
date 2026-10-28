@@ -74,6 +74,7 @@ TEST(VirtualMeshNetworkTests, FindsAlternateRouteAfterLinkFailure)
     ASSERT_TRUE(firstHop.has_value());
 
     network.SetLinkDisabled(1, *firstHop, true);
+    EXPECT_TRUE(network.IsLinkDisabled(1, *firstHop));
     EXPECT_FALSE(network.NextHop(1, 4).has_value());
     ASSERT_TRUE(network.Send(1, 4, 2, "waypoint", "after-failure"));
     const auto secondDelivery = AdvanceTicks(network, 21, 45);
@@ -94,6 +95,8 @@ TEST(VirtualMeshNetworkTests, FindsAlternateRouteAfterLinkFailure)
         const NetworkNodeId failedEnd = std::max(NetworkNodeId{1}, *firstHop);
         EXPECT_FALSE(linkStart == failedStart && linkEnd == failedEnd);
     }
+    network.SetLinkDisabled(1, *firstHop, false);
+    EXPECT_FALSE(network.IsLinkDisabled(1, *firstHop));
 }
 
 TEST(VirtualMeshNetworkTests, BuildingBlocksRadioLink)

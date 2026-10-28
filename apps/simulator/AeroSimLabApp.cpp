@@ -736,10 +736,24 @@ void AeroSimLabApp::RenderFrame()
             missionCanStart,
             [this] { static_cast<void>(RequestInspectionMission()); },
             formationTransit_.status, formationMissionCanStart,
+            formationTransit_.active,
             [this](aerosimlab::simulation::FormationShape shape)
             {
                 static_cast<void>(StartFormationTransit(shape));
-            }, captureAssessment,
+            },
+            [this](aerosimlab::simulation::DroneId first,
+                aerosimlab::simulation::DroneId second, bool disabled)
+            {
+                if (formationNetwork_ && formationTransit_.active)
+                    formationNetwork_->SetLinkDisabled(first, second, disabled);
+            },
+            [this](aerosimlab::simulation::DroneId first,
+                aerosimlab::simulation::DroneId second)
+            {
+                return formationNetwork_
+                    && formationNetwork_->IsLinkDisabled(first, second);
+            },
+            captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this] { return RenderCameraPanel(); },
             benchmarkMode_ ? &hudTimings : nullptr);

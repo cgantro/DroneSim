@@ -50,7 +50,12 @@ public:
         const std::string& inspectionMissionStatus, bool missionCanStart,
         const std::function<void()>& startInspectionMission,
         const std::string& formationMissionStatus, bool formationMissionCanStart,
+        bool formationMissionActive,
         const std::function<void(simulation::FormationShape)>& startFormationTransit,
+        const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
+            setFormationLinkDisabled,
+        const std::function<bool(simulation::DroneId, simulation::DroneId)>&
+            isFormationLinkDisabled,
         simulation::CaptureAssessment captureAssessment,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t()>& renderCamera,
@@ -68,6 +73,8 @@ private:
 
     bool initialized_ = false;
     simulation::FormationShape selectedFormationShape_ = simulation::FormationShape::Vee;
+    int selectedFaultSource_ = 0;
+    int selectedFaultDestination_ = 1;
     std::string layoutFile_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };

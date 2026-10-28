@@ -155,6 +155,12 @@ void VirtualMeshNetwork::SetLinkDisabled(
     }
 }
 
+bool VirtualMeshNetwork::IsLinkDisabled(
+    NetworkNodeId first, NetworkNodeId second) const noexcept
+{
+    return first != second && disabledLinks_.contains(MakePair(first, second));
+}
+
 void VirtualMeshNetwork::SetNodeRadioEnabled(NetworkNodeId node, bool enabled)
 {
     if (enabled)
