@@ -7,8 +7,6 @@ endif()
 
 project(AeroSimLab VERSION 0.1.0 LANGUAGES C CXX)
 
-find_package(Git QUIET)
-
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -34,7 +32,11 @@ if(POLICY CMP0169)
 endif()
 
 if(NOT EMSCRIPTEN AND (AEROSIMLAB_BUILD_GRAPHICS OR BUILD_TESTING))
-  find_package(OpenCV REQUIRED COMPONENTS core imgproc videoio)
+  set(_aerosimlab_opencv_components core imgproc)
+  if(AEROSIMLAB_BUILD_GRAPHICS)
+    list(APPEND _aerosimlab_opencv_components videoio)
+  endif()
+  find_package(OpenCV REQUIRED COMPONENTS ${_aerosimlab_opencv_components})
   find_package(Threads REQUIRED)
   if(WIN32 AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
     set(_gstreamer_root "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
@@ -193,6 +195,7 @@ if(EMSCRIPTEN)
 endif()
 
 if(AEROSIMLAB_BUILD_GRAPHICS)
+  find_package(Git QUIET)
   aerosimlab_add_graphics_dependencies()
 
   if(NOT EMSCRIPTEN)
