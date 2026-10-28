@@ -826,32 +826,11 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     ASSERT_TRUE(ReplaceAll(physicalScenario,
         "\"tolerance_meters\": 0.01", "\"tolerance_meters\": 1000"));
     const ScenarioResult physicalResult = RunScenario(physicalScenario);
-    const auto failedCaptureTask = std::find_if(
-        physicalResult.mission->tasks.begin(), physicalResult.mission->tasks.end(),
-        [](const ScenarioResult::MissionTask& task)
-        {
-            return !task.completed && task.inspectionSurface.has_value();
-        });
-    const auto failedCaptureDrone = failedCaptureTask == physicalResult.mission->tasks.end()
-        ? physicalResult.drones.end()
-        : std::find_if(physicalResult.drones.begin(), physicalResult.drones.end(),
-            [&failedCaptureTask](const ScenarioResult::Drone& drone)
-            {
-                return drone.name == failedCaptureTask->droneName;
-            });
     EXPECT_EQ(physicalResult.outcome, ScenarioResult::Outcome::Passed)
         << (physicalResult.issues.empty() ? "" : physicalResult.issues.front())
         << " minimum=" << physicalResult.minimumDroneSeparationMeters.value_or(-1.0)
         << " predicted=" << physicalResult.minimumPredictedDroneSeparationMeters.value_or(-1.0)
-        << " avoidance_events=" << physicalResult.collisionAvoidanceEvents
-        << (failedCaptureTask == physicalResult.mission->tasks.end() ? ""
-            : " task=" + failedCaptureTask->name + " assessment="
-                + std::string(simulation::ToString(failedCaptureTask->lastCaptureAssessment)))
-        << (failedCaptureDrone == physicalResult.drones.end() ? ""
-            : " position=" + std::to_string(failedCaptureDrone->finalState.positionMeters.x)
-                + "," + std::to_string(failedCaptureDrone->finalState.positionMeters.y)
-                + "," + std::to_string(failedCaptureDrone->finalState.positionMeters.z)
-                + " yaw=" + std::to_string(failedCaptureDrone->finalState.yawRadians));
+        << " avoidance_events=" << physicalResult.collisionAvoidanceEvents;
     ASSERT_TRUE(physicalResult.minimumDroneSeparationMeters.has_value());
     EXPECT_GE(*physicalResult.minimumDroneSeparationMeters, 2.0);
     EXPECT_GT(physicalResult.collisionAvoidanceEvents, 0U);
