@@ -490,6 +490,8 @@ public:
             app.excludedFleetDroneIds_.end());
         EXPECT_EQ(app.fleetReconnaissance_.at(failedDroneId).status,
             "기체 고장 · 안전 착륙");
+        EXPECT_EQ(app.simulation_.State(failedDroneId).mode,
+            simulation::FlightMode::Grounded);
         for (const auto droneId : app.fleetDroneIds_)
             EXPECT_EQ(app.simulation_.State(droneId).mode,
                 simulation::FlightMode::Grounded);
