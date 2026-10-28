@@ -304,6 +304,60 @@ TEST(VirtualMeshNetworkTests, FindsAlternateRouteAfterLinkFailure)
     }));
 }
 
+TEST(VirtualMeshNetworkTests, QueuedTelemetryReachesLeaderAfterRelayMovesIntoRange)
+{
+    auto settings = QuickSettings();
+    settings.mode = VirtualMeshMode::AdaptiveMesh;
+    settings.maximumLinkRangeMeters = 130.0;
+    settings.helloIntervalTicks = 15U;
+    settings.neighborTimeoutTicks = 90U;
+    settings.routeLifetimeTicks = 300U;
+    settings.maximumHops = 5U;
+    VirtualMeshNetwork network{settings};
+
+    std::array nodes{
+        NetworkNodeSnapshot{1U, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2U, {90.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{3U, {238.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{4U, {20.0, 0.0, 10.0}}};
+    network.UpdateNodes(nodes, {});
+
+    for (std::uint64_t tick = 0U; tick < 700U; ++tick)
+    {
+        if (tick == 120U)
+            nodes[1].positionMeters.x = 119.0;
+        if (tick % 6U == 0U)
+            network.UpdateNodes(nodes, {});
+
+        network.Advance(tick);
+        if (tick % 6U == 0U)
+            static_cast<void>(network.SendLatest(3U, 1U,
+                static_cast<std::uint32_t>(tick / 6U), "drone_telemetry",
+                "reconnaissance-active"));
+
+        const auto messages = network.DeliveredMessages();
+        const auto telemetry = std::find_if(messages.begin(), messages.end(),
+            [](const auto& delivered)
+            {
+                return delivered.message.kind == "drone_telemetry"
+                    && delivered.message.source == 3U
+                    && delivered.message.destination == 1U;
+            });
+        if (telemetry != messages.end())
+        {
+            EXPECT_EQ(telemetry->message.route,
+                (std::vector<NetworkNodeId>{3U, 2U, 1U}));
+            return;
+        }
+    }
+
+    FAIL() << "중계 위치의 두 직접 링크가 열려도 정찰 보고가 오지 않았습니다. "
+           << "요청/응답=" << network.Metrics().routeRequests << '/'
+           << network.Metrics().routeReplies << ", 경로 오류="
+           << network.Metrics().routeErrors << ", 대기="
+           << network.Metrics().queuedMessages;
+}
+
 TEST(VirtualMeshNetworkTests, BuildingBlocksRadioLink)
 {
     VirtualMeshNetwork network{QuickSettings()};
