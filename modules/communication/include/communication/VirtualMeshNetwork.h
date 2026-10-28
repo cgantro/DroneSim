@@ -79,6 +79,8 @@ enum class MeshEventKind
 {
     LinkDisabled,
     LinkRestored,
+    NodeRadioDisabled,
+    NodeRadioRestored,
     NeighborDiscovered,
     RouteSearchStarted,
     RouteFound,
@@ -123,6 +125,9 @@ public:
 
     /** @brief 지정한 송수신 노드의 라디오 상태를 바꾼다. */
     void SetNodeRadioEnabled(NetworkNodeId node, bool enabled);
+
+    /** @brief 지정한 노드가 통신을 주고받을 수 있는지 확인한다. */
+    [[nodiscard]] bool IsNodeRadioEnabled(NetworkNodeId node) const noexcept;
 
     /** @brief 새 메시지를 보내고, 경로가 없으면 경로 탐색을 시작한다. */
     [[nodiscard]] std::optional<std::uint64_t> Send(

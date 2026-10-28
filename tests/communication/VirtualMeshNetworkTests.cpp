@@ -133,6 +133,40 @@ TEST(VirtualMeshNetworkTests, BuildingBlocksRadioLink)
     ASSERT_TRUE(network.Send(1, 2, 1, "status", "blocked"));
     static_cast<void>(AdvanceTicks(network, 21, 30));
     EXPECT_TRUE(network.DeliveredMessages().empty());
+
+    network.SetNodeRadioEnabled(1, false);
+    EXPECT_FALSE(network.IsNodeRadioEnabled(1));
+    EXPECT_TRUE(network.IsNodeRadioEnabled(2));
+    network.SetNodeRadioEnabled(1, true);
+    EXPECT_TRUE(network.IsNodeRadioEnabled(1));
+
+    VirtualMeshNetwork radioNetwork{QuickSettings()};
+    const std::array radioNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}}};
+    radioNetwork.UpdateNodes(radioNodes, {});
+    static_cast<void>(AdvanceTicks(radioNetwork, 0, 3));
+    ASSERT_TRUE(radioNetwork.Send(1, 2, 1, "status", "before-radio-failure"));
+    ASSERT_EQ(AdvanceTicks(radioNetwork, 4, 12).size(), 1U);
+
+    radioNetwork.SetNodeRadioEnabled(1, false);
+    ASSERT_TRUE(radioNetwork.Send(1, 2, 2, "status", "radio-disabled"));
+    EXPECT_TRUE(AdvanceTicks(radioNetwork, 13, 20).empty());
+    EXPECT_FALSE(radioNetwork.IsNodeRadioEnabled(1));
+    EXPECT_TRUE(std::any_of(radioNetwork.Events().begin(), radioNetwork.Events().end(),
+        [](const MeshEvent& event)
+        {
+            return event.kind == MeshEventKind::NodeRadioDisabled;
+        }));
+
+    radioNetwork.SetNodeRadioEnabled(1, true);
+    static_cast<void>(AdvanceTicks(radioNetwork, 21, 25));
+    ASSERT_TRUE(radioNetwork.Send(1, 2, 3, "status", "radio-restored"));
+    const auto recovered = AdvanceTicks(radioNetwork, 26, 40);
+    EXPECT_TRUE(std::any_of(recovered.begin(), recovered.end(), [](const auto& delivery)
+    {
+        return delivery.message.payload == "radio-restored";
+    }));
 }
 
 TEST(VirtualMeshNetworkTests, KeepsOnlyNewestStateWhileRouteIsMissing)

@@ -176,6 +176,9 @@ bool VirtualMeshNetwork::IsLinkDisabled(
 
 void VirtualMeshNetwork::SetNodeRadioEnabled(NetworkNodeId node, bool enabled)
 {
+    if (!nodes_.contains(node) || IsNodeRadioEnabled(node) == enabled)
+        return;
+
     if (enabled)
         radioDisabledNodes_.erase(node);
     else
@@ -197,6 +200,14 @@ void VirtualMeshNetwork::SetNodeRadioEnabled(NetworkNodeId node, bool enabled)
             static_cast<void>(source);
         }
     }
+    RecordEvent(enabled ? MeshEventKind::NodeRadioRestored
+                        : MeshEventKind::NodeRadioDisabled,
+        node, node, enabled ? "드론 라디오를 복구했습니다." : "드론 송수신을 차단했습니다.");
+}
+
+bool VirtualMeshNetwork::IsNodeRadioEnabled(NetworkNodeId node) const noexcept
+{
+    return nodes_.contains(node) && !radioDisabledNodes_.contains(node);
 }
 
 std::optional<std::uint64_t> VirtualMeshNetwork::Send(

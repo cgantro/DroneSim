@@ -760,6 +760,12 @@ void AeroSimLabApp::RenderFrame()
                 if (formationNetwork_ && formationNetworkActive)
                     formationNetwork_->SetLinkDisabled(first, second, disabled);
             },
+            [this, formationNetworkActive](aerosimlab::simulation::DroneId droneId,
+                bool enabled)
+            {
+                if (formationNetwork_ && formationNetworkActive)
+                    formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
+            },
             captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this](aerosimlab::simulation::DroneId droneId)

@@ -63,6 +63,8 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
     {
     case communication::MeshEventKind::LinkDisabled: return "링크 장애";
     case communication::MeshEventKind::LinkRestored: return "링크 복구";
+    case communication::MeshEventKind::NodeRadioDisabled: return "드론 라디오 차단";
+    case communication::MeshEventKind::NodeRadioRestored: return "드론 라디오 복구";
     case communication::MeshEventKind::NeighborDiscovered: return "이웃 발견";
     case communication::MeshEventKind::RouteSearchStarted: return "경로 탐색";
     case communication::MeshEventKind::RouteFound: return "경로 복구";
@@ -212,6 +214,8 @@ void DrawFlightStatusPanel(
     int& selectedFaultDestination,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
+    const std::function<void(simulation::DroneId, bool)>&
+        setFormationNodeRadioEnabled,
     simulation::CaptureAssessment captureAssessment)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
@@ -268,7 +272,7 @@ void DrawFlightStatusPanel(
                 if (ImGui::SliderFloat("패킷 손실률", &packetLossPercent,
                         0.0F, 100.0F, "%.0f%%"))
                     setPacketLossPercent(packetLossPercent);
-                ImGui::TextDisabled("메시지를 무작위로 버립니다. 임무 메시지 재전송은 아직 없습니다.");
+                ImGui::TextDisabled("확인 응답이 없으면 정찰 경로를 60 Tick마다 최대 10회 다시 보냅니다.");
                 const auto droneIds = simulation.DroneIds();
                 if (droneIds.size() >= 2U)
                 {
@@ -294,6 +298,19 @@ void DrawFlightStatusPanel(
                         static_cast<std::size_t>(selectedFaultSource)];
                     const simulation::DroneId destination = droneIds[
                         static_cast<std::size_t>(selectedFaultDestination)];
+                    const bool radioEnabled = formationNetwork->IsNodeRadioEnabled(source);
+                    ImGui::Text("선택 드론 라디오: %s",
+                        radioEnabled ? "송수신 가능" : "차단됨");
+                    if (radioEnabled)
+                    {
+                        if (ImGui::Button("선택 드론 송수신 차단"))
+                            setFormationNodeRadioEnabled(source, false);
+                    }
+                    else if (ImGui::Button("선택 드론 라디오 복구"))
+                    {
+                        setFormationNodeRadioEnabled(source, true);
+                    }
+
                     if (source == destination)
                     {
                         ImGui::TextDisabled("서로 다른 드론을 골라 주세요.");
@@ -463,6 +480,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const communication::VirtualMeshNetwork* formationNetwork,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
+    const std::function<void(simulation::DroneId, bool)>&
+        setFormationNodeRadioEnabled,
     simulation::CaptureAssessment captureAssessment,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
@@ -493,7 +512,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         startFormationTransit, packetLossPercent, setPacketLossPercent,
         formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
-        captureAssessment);
+        setFormationNodeRadioEnabled, captureAssessment);
 
     if (timings != nullptr)
     {
