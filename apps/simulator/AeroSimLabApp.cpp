@@ -73,6 +73,9 @@ constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 기지와 편대 출발 위치를 시험장 남서쪽에 둔다.
 constexpr glm::dvec2 demoDroneStartMeters{-205.0, -155.0};
+// 전력값은 임무 흐름을 시험하기 위한 가정이며 실제 X500 배터리 사양이 아니다.
+constexpr aerosimlab::simulation::BatteryModelParameters trainingBatteryModel{
+    100.0, 40.0, 120.0, 25.0};
 // GLB 원점은 장착 브래킷이고 렌즈 중심은 그 원점에서 앞·위로 떨어져 있다.
 constexpr glm::vec3 cameraLensCenterInModelMeters{0.015F, 0.048F, 0.030F};
 constexpr double trainingRangeCameraTransitAltitudeMeters = 48.0;
@@ -447,17 +450,25 @@ void AeroSimLabApp::InitializeStartingState()
         startElevation +
             aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
         initialYawRadians);
+    ConfigureTrainingBattery(simulation_.PrimaryDroneId());
     for (const glm::dvec2 offset : std::array<glm::dvec2, 3>{
              glm::dvec2{10.0, 0.0}, glm::dvec2{0.0, 10.0}, glm::dvec2{10.0, 10.0}})
     {
         const glm::dvec2 position = demoDroneStartMeters + offset;
         const double groundMeters = terrainGrid_.HeightAtLocalMeters(position);
-        static_cast<void>(simulation_.AddDrone(
+        const auto droneId = simulation_.AddDrone(
             {position, groundMeters
                 + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
-            initialYawRadians, groundMeters));
+            initialYawRadians, groundMeters);
+        ConfigureTrainingBattery(droneId);
     }
     fleetDroneIds_ = simulation_.DroneIds();
+}
+
+void AeroSimLabApp::ConfigureTrainingBattery(
+    aerosimlab::simulation::DroneId droneId)
+{
+    simulation_.ConfigureBattery(droneId, trainingBatteryModel);
 }
 
 aerosimlab::simulation::CaptureAssessment AeroSimLabApp::AssessInspectionView() const
@@ -538,6 +549,8 @@ void AeroSimLabApp::AdvanceSimulationTick()
                 || entry.second.status == "재집결 준비"
                 || entry.second.status == "복귀 준비"
                 || entry.second.status == "복귀 중"
+                || entry.second.status == "저전력 복귀 중"
+                || entry.second.status == "저전력 착륙 중"
                 || entry.second.status == "착륙 중"
                 || entry.second.status == "복귀 착륙 중";
         });

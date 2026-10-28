@@ -844,6 +844,11 @@ std::size_t SimulationCore::DroneCount() const noexcept
     return ecs_->drones.size();
 }
 
+SimulationDynamics SimulationCore::Dynamics() const noexcept
+{
+    return ecs_->dynamics;
+}
+
 std::vector<DroneId> SimulationCore::DroneIds() const
 {
     std::vector<DroneId> ids;

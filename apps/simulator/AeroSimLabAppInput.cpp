@@ -699,6 +699,7 @@ void AeroSimLabApp::ApplyAddDroneCommand(
 
     const auto id = simulation_.AddDrone(
         spawn->positionMeters, 0.0, spawn->groundElevationMeters);
+    ConfigureTrainingBattery(id);
     fleetDroneIds_.push_back(id);
     reply.accepted = true;
     reply.status = "drone_added";

@@ -757,6 +757,51 @@ public:
                 << "전체 임무가 끝난 뒤 드론 " << droneId << "이 지상에 있지 않습니다.";
     }
 
+    static void VerifyFleetDroneReturnsWhenBatteryReachesReserve()
+    {
+        AeroSimLabApp app({
+            .smokeTest = true,
+            .simulationDynamics = simulation::SimulationDynamics::Kinematic,
+            .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.StartFleetReconnaissance());
+        const auto lowBatteryDroneId = app.fleetDroneIds_.at(1U);
+        const std::size_t unfinishedTargetIndex =
+            app.fleetReconnaissance_.at(lowBatteryDroneId).targetIndex;
+        app.simulation_.ConfigureBattery(lowBatteryDroneId,
+            {10.0, 40.0, 120.0, 99.9});
+
+        for (std::uint64_t tick = 0U; tick < 30000U; ++tick)
+        {
+            app.AdvanceSimulationTick();
+            const auto& mission = app.fleetReconnaissance_.at(lowBatteryDroneId);
+            if (mission.lowBatteryReturn
+                && mission.status == "저전력 복귀 완료")
+                break;
+        }
+
+        const auto& mission = app.fleetReconnaissance_.at(lowBatteryDroneId);
+        EXPECT_TRUE(app.simulation_.Battery(lowBatteryDroneId)
+            .IsReturningForLowBattery());
+        EXPECT_TRUE(mission.lowBatteryReturn);
+        EXPECT_EQ(mission.leg, AeroSimLabApp::FleetMissionLeg::Returning);
+        EXPECT_EQ(mission.status, "저전력 복귀 완료");
+        EXPECT_LE(glm::distance(app.simulation_.State(lowBatteryDroneId).positionMeters,
+            mission.startPositionMeters), 5.0);
+        const bool targetStillQueued = std::find(
+            app.pendingReassignedTargetIndices_.begin(),
+            app.pendingReassignedTargetIndices_.end(), unfinishedTargetIndex)
+            != app.pendingReassignedTargetIndices_.end();
+        const bool targetWasTransferred = std::any_of(app.fleetDroneIds_.begin(),
+            app.fleetDroneIds_.end(), [&app, lowBatteryDroneId, unfinishedTargetIndex](auto id)
+            {
+                return id != lowBatteryDroneId
+                    && app.fleetReconnaissance_.at(id).targetIndex
+                        == unfinishedTargetIndex;
+            });
+        EXPECT_TRUE(targetStillQueued || targetWasTransferred);
+    }
+
     static void VerifyCompleteFleetMissionReassignsAfterRotorFailure(
         RotorFailureScenario scenario)
     {
@@ -1126,6 +1171,17 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
         FleetMissionPhase::Returning, reports).progress,
         FleetMissionProgress::Waiting);
     reports.back() = FleetMissionReport{FlightMode::Grounded, 2U, "복귀 완료"};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Returning, reports).progress,
+        FleetMissionProgress::Complete);
+
+    reports = {
+        FleetMissionReport{FlightMode::Grounded, 2U, "저전력 복귀 완료"},
+        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"}};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Reconnaissance, reports).progress,
+        FleetMissionProgress::Advance);
+    reports.back() = FleetMissionReport{FlightMode::Grounded, 2U, "저전력 복귀 완료"};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Returning, reports).progress,
         FleetMissionProgress::Complete);
@@ -1631,4 +1687,9 @@ TEST(SimulatorSessionTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_EoVideoRecorderStoresH264AndFrameMetadata());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_RecordingReplayOverUdp());
+}
+
+TEST(SimulatorSessionTests, FleetDroneReturnsWhenBatteryReachesReserve)
+{
+    simulator::AeroSimLabAppTestAccess::VerifyFleetDroneReturnsWhenBatteryReachesReserve();
 }

@@ -15,6 +15,14 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
         if (!report)
             return {FleetMissionProgress::Waiting, {}};
 
+        const bool returnedForLowBattery =
+            report->status == "저전력 복귀 완료"
+            && report->mode == simulation::FlightMode::Grounded;
+        if (returnedForLowBattery
+            && (phase == FleetMissionPhase::Reconnaissance
+                || phase == FleetMissionPhase::Returning))
+            continue;
+
         if (phase == FleetMissionPhase::Reconnaissance
             && report->missionLeg == 3U)
         {

@@ -176,6 +176,7 @@ private:
     void LoadTerrain();
     void LoadMapFeatures();
     void InitializeStartingState();
+    void ConfigureTrainingBattery(aerosimlab::simulation::DroneId droneId);
     /** @brief 카메라가 가상 점검면을 담을 수 있는지 공통 센서 판정으로 확인한다. */
     [[nodiscard]] aerosimlab::simulation::CaptureAssessment AssessInspectionView() const;
     void SetActiveInspectionTarget(std::size_t index);
@@ -529,6 +530,7 @@ private:
         std::string status;
         bool routeReceived = false;
         bool waypointCommanded = false;
+        bool lowBatteryReturn = false;
         FleetMissionLeg leg = FleetMissionLeg::Reconnaissance;
     };
     std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>

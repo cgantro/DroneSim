@@ -117,6 +117,9 @@ public:
     /** @brief 현재 시뮬레이션에 있는 드론 수를 반환한다. */
     [[nodiscard]] std::size_t DroneCount() const noexcept;
 
+    /** @brief 현재 시뮬레이션의 물리 계산 방식을 반환한다. */
+    [[nodiscard]] SimulationDynamics Dynamics() const noexcept;
+
     /** @brief 현재 드론 식별값을 오름차순으로 돌려준다. */
     [[nodiscard]] std::vector<DroneId> DroneIds() const;
 
