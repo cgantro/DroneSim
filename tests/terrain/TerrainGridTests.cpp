@@ -172,11 +172,11 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/tancheon/terrain.aerotrn");
+        root / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const auto buildings = LoadMapBuildingFootprints(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
     const auto visibleBuildings = LoadMapBuildings(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
     ASSERT_GT(buildings.size(), visibleBuildings.size());
     const auto estimatedFootprint = std::find_if(buildings.begin(), buildings.end(),
         [](const MapBuilding& building)
@@ -230,7 +230,7 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
     }
 
     const auto bridges = LoadMapBridgeFootprints(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
     const auto tancheonBridge = std::find_if(bridges.begin(), bridges.end(),
         [](const MapBridgeFootprint& bridge) { return bridge.name == "탄천교"; });
     ASSERT_NE(tancheonBridge, bridges.end());
@@ -348,7 +348,7 @@ void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
     missionRouteStart = bridgeApproach;
 
     const auto waterBodies = LoadMapWaterBodies(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
     glm::dvec2 riverPosition = bridgeCenter;
     double nearestWaterDistance = std::numeric_limits<double>::max();
     for (const auto& water : waterBodies)
@@ -419,9 +419,9 @@ void Verify_TancheonTreeLocationsStayInsideTheMappedScene()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/tancheon/terrain.aerotrn");
+        root / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const auto trees = LoadMapTrees(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
 
     EXPECT_GT(trees.size(), 100U);
     EXPECT_TRUE(std::all_of(trees.begin(), trees.end(), [&terrain](const MapTree& tree)
@@ -454,7 +454,7 @@ void Verify_MapFlightRouteReportsABuildingWallWithoutAnOpening()
 void Verify_TancheonTerrainAssetLoadsAtTheRecordedOrigin()
 {
     const auto path = std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-        / "assets/maps/tancheon/terrain.aerotrn";
+        / "tests/fixtures/maps/tancheon/terrain.aerotrn";
     const TerrainGrid terrain = TerrainGrid::Load(path);
 
     EXPECT_EQ(terrain.sampleCount, 241U);
@@ -471,9 +471,9 @@ void Verify_TancheonBuildingsUseMappedFootprintsAndMarkedHeightEstimates()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/tancheon/terrain.aerotrn");
+        root / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const std::vector<MapBuilding> buildings = LoadMapBuildings(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
 
     std::size_t taggedHeightCount = 0U;
     std::size_t estimatedHeightCount = 0U;
@@ -502,9 +502,9 @@ void Verify_TancheonBuildingBoundsBlockCameraViewThroughTheMappedBuilding()
 
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/tancheon/terrain.aerotrn");
+        root / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const std::vector<MapBuilding> buildings = LoadMapBuildings(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
     ASSERT_FALSE(buildings.empty());
 
     const MapBuildingBoundsMeters bounds = GetMapBuildingBoundsMeters(buildings.front());
@@ -540,9 +540,9 @@ void Verify_TancheonBuildingFacadeFacesTheNearestApproachSide()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/tancheon/terrain.aerotrn");
+        root / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const std::vector<MapBuilding> buildings = LoadMapBuildings(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
     ASSERT_FALSE(buildings.empty());
 
     const MapBuilding& building = buildings.front();
@@ -601,9 +601,9 @@ void Verify_TancheonRoadsKeepBridgeTagsAndMarkEstimatedWidths()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/tancheon/terrain.aerotrn");
+        root / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const std::vector<MapRoad> roads = LoadMapRoads(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
 
     std::size_t bridgeCount = 0U;
     bool foundTancheonBridge = false;
@@ -631,9 +631,9 @@ void Verify_TancheonRiverUsesOSMWaterBoundaryAndKeepsItsIslands()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/tancheon/terrain.aerotrn");
+        root / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const auto waterBodies = LoadMapWaterBodies(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
 
     ASSERT_EQ(waterBodies.size(), 1U);
     EXPECT_GT(waterBodies.front().outerBoundaryMeters.size(), 1000U);
@@ -646,9 +646,9 @@ void Verify_TancheonBridgeFootprintsKeepNamesAndGroundProjection()
 {
     const auto root = std::filesystem::path{AEROSIMLAB_SOURCE_DIR};
     const TerrainGrid terrain = TerrainGrid::Load(
-        root / "assets/maps/tancheon/terrain.aerotrn");
+        root / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const std::vector<MapBridgeFootprint> bridges = LoadMapBridgeFootprints(
-        root / "assets/maps/tancheon/site.geojson", terrain);
+        root / "tests/fixtures/maps/tancheon/site.geojson", terrain);
 
     std::vector<std::string> names;
     for (const MapBridgeFootprint& bridge : bridges)

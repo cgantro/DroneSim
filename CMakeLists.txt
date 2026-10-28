@@ -279,6 +279,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     apps/simulator/AeroSimLabAppInput.cpp
     apps/simulator/AeroSimLabAppMission.cpp
     apps/simulator/FleetDroneSpawn.cpp
+    apps/simulator/TrainingRangeScene.cpp
     apps/simulator/SimulationBenchmark.cpp
   )
   if(NOT EMSCRIPTEN)
@@ -411,6 +412,30 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     add_executable(aerosimlab_simulator apps/simulator/main.cpp)
     target_link_libraries(aerosimlab_simulator PRIVATE aerosimlab_simulator_app)
   endif()
+
+  set(training_range_models
+    "models/environment/industrial/building-a.glb"
+    "models/environment/industrial/building-c.glb"
+    "models/environment/industrial/building-f.glb"
+    "models/environment/industrial/building-j.glb"
+    "models/environment/industrial/building-m.glb"
+    "models/environment/industrial/building-q.glb"
+    "models/environment/industrial/building-t.glb"
+    "models/environment/industrial/shipping-container-a.glb"
+    "models/environment/industrial/shipping-container-b.glb"
+    "models/environment/industrial/shipping-container-c.glb"
+    "models/environment/industrial/detail-tank.glb"
+    "models/environment/industrial/detail-tank-large.glb"
+    "models/environment/industrial/chimney-large.glb"
+    "models/environment/industrial/water-tower.glb"
+    "models/environment/industrial/windmill.glb"
+    "models/environment/industrial/Textures/colormap.png"
+    "models/environment/nature/tree_oak.glb"
+    "models/environment/nature/tree_pineTallA_detailed.glb"
+    "models/environment/nature/rock_largeA.glb"
+    "models/environment/nature/rock_largeC.glb"
+    "models/environment/nature/rock_tallB.glb"
+  )
   if(EMSCRIPTEN)
     set_target_properties(aerosimlab_simulator PROPERTIES SUFFIX ".html")
     # Flecs 월드 초기화에 필요한 스택을 확보한다. Emscripten 기본 64KB로는 부족하다.
@@ -419,34 +444,18 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "-sALLOW_MEMORY_GROWTH=1"
       "-sSTACK_SIZE=1mb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn@maps/tancheon/terrain.aerotrn"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson@maps/tancheon/site.geojson"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json@maps/tancheon/demo-inspection-plan.json"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/apartment-facade.png@maps/tancheon/apartment-facade.png"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/roof-concrete.jpg@maps/tancheon/roof-concrete.jpg"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb@models/drones/x500/visual.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb@models/drones/x500/action-camera.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE@models/drones/x500/LICENSE"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-oak.glb@models/environment/trees/mature-oak.glb"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-scots-pine.glb@models/environment/trees/mature-scots-pine.glb"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-sycamore.glb@models/environment/trees/mature-sycamore.glb"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/industrial/LICENSE.txt@models/environment/industrial/LICENSE.txt"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/nature/LICENSE.txt@models/environment/nature/LICENSE.txt"
     )
-    foreach(terrain_texture_extension IN ITEMS png jpg jpeg ppm)
-      set(terrain_texture_path
-        "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.${terrain_texture_extension}")
-      if(EXISTS "${terrain_texture_path}")
-        target_link_options(aerosimlab_simulator PRIVATE
-          "--embed-file=${terrain_texture_path}@maps/tancheon/terrain.${terrain_texture_extension}"
-        )
-        break()
-      endif()
-    endforeach()
-    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb")
+    foreach(model IN LISTS training_range_models)
       target_link_options(aerosimlab_simulator PRIVATE
-        "--embed-file=${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb@maps/tancheon/terrain.glb"
+        "--embed-file=${CMAKE_SOURCE_DIR}/assets/${model}@${model}"
       )
-    endif()
+    endforeach()
   else()
     set(simulator_runtime_assets
       "${CMAKE_SOURCE_DIR}/assets/shaders/Scene.glsl"
@@ -454,27 +463,11 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE"
-      "${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-oak.glb"
-      "${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-scots-pine.glb"
-      "${CMAKE_SOURCE_DIR}/assets/models/environment/trees/mature-sycamore.glb"
-      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.aerotrn"
-      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/site.geojson"
-      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/demo-inspection-plan.json"
-      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/apartment-facade.png"
-      "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/roof-concrete.jpg")
-
-    foreach(terrain_texture_extension IN ITEMS png jpg jpeg ppm)
-      set(terrain_texture_path
-        "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.${terrain_texture_extension}")
-      if(EXISTS "${terrain_texture_path}")
-        list(APPEND simulator_runtime_assets "${terrain_texture_path}")
-        break()
-      endif()
+      "${CMAKE_SOURCE_DIR}/assets/models/environment/industrial/LICENSE.txt"
+      "${CMAKE_SOURCE_DIR}/assets/models/environment/nature/LICENSE.txt")
+    foreach(model IN LISTS training_range_models)
+      list(APPEND simulator_runtime_assets "${CMAKE_SOURCE_DIR}/assets/${model}")
     endforeach()
-    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb")
-      list(APPEND simulator_runtime_assets
-        "${CMAKE_SOURCE_DIR}/assets/maps/tancheon/terrain.glb")
-    endif()
 
     set(simulator_asset_copy_commands)
     set(simulator_runtime_outputs)

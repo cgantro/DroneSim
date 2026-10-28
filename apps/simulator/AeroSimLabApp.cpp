@@ -1,5 +1,6 @@
 #include "AeroSimLabApp.h"
 #include "ExecutableDirectory.h"
+#include "TrainingRangeScene.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -20,14 +21,10 @@
 #include "media/RtpVideoStream.h"
 #endif
 #include "simulation_core/QuadrotorFlightController.h"
-#include "simulation_core/InspectionSurfaceJson.h"
 #include "simulation_core/ScopedDuration.h"
-#include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
-#include "terrain/MapFlightRoute.h"
-#include "terrain/MapRoads.h"
-#include "terrain/MapWaterBodies.h"
 #include "terrain/TerrainGrid.h"
+#include "terrain/TrainingRangeTerrain.h"
 #include <glm/geometric.hpp>
 #include <glm/gtc/quaternion.hpp>
 #ifdef __EMSCRIPTEN__
@@ -37,27 +34,21 @@
 #include "vision/RgbFrameQuality.h"
 #endif
 #include <glm/gtc/matrix_transform.hpp>
-#include <nlohmann/json.hpp>
-
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <ctime>
 #include <cmath>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -80,16 +71,11 @@ void SetStartupDetail(std::string_view message)
 
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
-// 탄천유수지 체육시설 주소 지점에 둔 시뮬레이션용 출발 위치다.
-constexpr glm::dvec2 demoDroneStartMeters{-410.0, 457.0};
+// 기지와 편대 출발 위치를 시험장 남서쪽에 둔다.
+constexpr glm::dvec2 demoDroneStartMeters{-205.0, -155.0};
 // GLB 원점은 장착 브래킷이고 렌즈 중심은 그 원점에서 앞·위로 떨어져 있다.
 constexpr glm::vec3 cameraLensCenterInModelMeters{0.015F, 0.048F, 0.030F};
-constexpr double bridgeDeckUndersideHeightMeters = 6.0;
-constexpr double bridgeDeckThicknessMeters = 0.8;
-// 나무 GLB 중 가장 높은 모델에 최대 배율을 적용한 높이다.
-constexpr double tallestTreeModelHeightMeters = 25.5;
-// 전방 카메라 시야가 수관에 막히지 않도록 통과 고도에 더하는 여유다.
-constexpr double cameraClearanceAboveCanopyMeters = 14.0;
+constexpr double trainingRangeCameraTransitAltitudeMeters = 48.0;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -111,22 +97,6 @@ glm::vec3 ToRenderDirection(const glm::dvec3& direction)
         static_cast<float>(-direction.y)};
 }
 
-glm::dvec3 ReadPlanVector(const nlohmann::json& value, std::string_view field)
-{
-    if (!value.is_array() || value.size() != 3)
-        throw std::runtime_error(std::string(field) + "은 숫자 세 개가 필요합니다.");
-    glm::dvec3 result;
-    for (int axis = 0; axis < 3; ++axis)
-    {
-        if (!value[axis].is_number())
-            throw std::runtime_error(std::string(field) + "에 숫자가 아닌 값이 있습니다.");
-        result[axis] = value[axis].get<double>();
-        if (!std::isfinite(result[axis]))
-            throw std::runtime_error(std::string(field) + "에 유효하지 않은 값이 있습니다.");
-    }
-    return result;
-}
-
 glm::quat ToRenderOrientation(const glm::dquat& orientation)
 {
     constexpr float halfPi = 1.57079632679F;
@@ -140,417 +110,6 @@ glm::quat ToRenderOrientation(const glm::dquat& orientation)
     return glm::normalize(
         simulationToRender * simulationOrientation * glm::inverse(simulationToRender));
 }
-
-glm::mat4 CubeTransform(const glm::vec3& position, const glm::vec3& size)
-{
-    return glm::translate(glm::mat4{1.0F}, position) * glm::scale(glm::mat4{1.0F}, size);
-}
-
-double Cross2D(const glm::dvec2& a, const glm::dvec2& b, const glm::dvec2& c)
-{
-    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-}
-
-double PolygonArea(const std::vector<glm::dvec2>& outline)
-{
-    double twiceArea = 0.0;
-    for (std::size_t i = 0; i < outline.size(); ++i)
-    {
-        const glm::dvec2& current = outline[i];
-        const glm::dvec2& next = outline[(i + 1U) % outline.size()];
-        twiceArea += current.x * next.y - next.x * current.y;
-    }
-    return twiceArea * 0.5;
-}
-
-bool IsInsideTriangle(const glm::dvec2& point,
-    const glm::dvec2& a, const glm::dvec2& b, const glm::dvec2& c,
-    double winding)
-{
-    constexpr double tolerance = 1.0e-9;
-    return winding * Cross2D(a, b, point) >= -tolerance
-        && winding * Cross2D(b, c, point) >= -tolerance
-        && winding * Cross2D(c, a, point) >= -tolerance;
-}
-
-std::vector<std::array<std::uint32_t, 3>> TriangulateFootprint(
-    const std::vector<glm::dvec2>& outline)
-{
-    const double area = PolygonArea(outline);
-    if (std::abs(area) < 1.0e-8)
-        return {};
-
-    const double winding = area > 0.0 ? 1.0 : -1.0;
-    std::vector<std::uint32_t> remaining;
-    std::vector<std::array<std::uint32_t, 3>> triangles;
-    remaining.reserve(outline.size());
-    triangles.reserve(outline.size() - 2U);
-    for (std::uint32_t i = 0; i < outline.size(); ++i)
-        remaining.push_back(i);
-
-    while (remaining.size() > 3U)
-    {
-        bool removedEar = false;
-        for (std::size_t i = 0; i < remaining.size(); ++i)
-        {
-            const std::uint32_t previous = remaining[(i + remaining.size() - 1U)
-                % remaining.size()];
-            const std::uint32_t current = remaining[i];
-            const std::uint32_t next = remaining[(i + 1U) % remaining.size()];
-            if (winding * Cross2D(outline[previous], outline[current], outline[next])
-                <= 1.0e-9)
-                continue;
-
-            bool containsVertex = false;
-            for (const std::uint32_t candidate : remaining)
-            {
-                if (candidate == previous || candidate == current || candidate == next)
-                    continue;
-                if (IsInsideTriangle(outline[candidate], outline[previous],
-                    outline[current], outline[next], winding))
-                {
-                    containsVertex = true;
-                    break;
-                }
-            }
-            if (containsVertex)
-                continue;
-
-            triangles.push_back({previous, current, next});
-            remaining.erase(remaining.begin() + static_cast<std::ptrdiff_t>(i));
-            removedEar = true;
-            break;
-        }
-        if (!removedEar)
-            return {};
-    }
-    triangles.push_back({remaining[0], remaining[1], remaining[2]});
-    return triangles;
-}
-
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateBuildingMesh(
-    const std::vector<aerosimlab::terrain::MapBuilding>& buildings,
-    const aerosimlab::terrain::TerrainGrid& terrain,
-    aerosimlab::terrain::BuildingHeightSource heightSource,
-    bool createWalls,
-    bool useOrthophoto)
-{
-    std::vector<aerosimlab::graphics::Vertex> vertices;
-    std::vector<std::uint32_t> indices;
-    for (const auto& building : buildings)
-    {
-        if (building.heightSource != heightSource)
-            continue;
-        const auto triangles = TriangulateFootprint(building.outlineMeters);
-        if (triangles.empty())
-            continue;
-
-        // 충돌체와 같은 바닥·지붕 높이를 써 화면과 충돌 범위를 맞춘다.
-        const auto buildingBounds =
-            aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-        const double bottomElevation = buildingBounds.centerMeters.z
-            - buildingBounds.halfExtentsMeters.z;
-        const double roofElevation = buildingBounds.centerMeters.z
-            + buildingBounds.halfExtentsMeters.z;
-
-        const double winding = PolygonArea(building.outlineMeters) > 0.0 ? 1.0 : -1.0;
-        if (!createWalls)
-        {
-            const std::uint32_t roofStart = static_cast<std::uint32_t>(vertices.size());
-            const double halfWidth = terrain.HalfWidthMeters();
-            const double halfDepth = terrain.HalfDepthMeters();
-            constexpr double roofTextureTileSizeMeters = 2.1;
-            for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
-            {
-                const auto& point = building.outlineMeters[i];
-                // 정사영상이 있으면 위치를 그대로 따라가고, 없으면 콘크리트 무늬를 반복한다.
-                const glm::vec2 textureCoordinate = useOrthophoto
-                    ? glm::vec2{
-                        static_cast<float>((point.x + halfWidth) / (2.0 * halfWidth)),
-                        static_cast<float>((halfDepth - point.y) / (2.0 * halfDepth))}
-                    : glm::vec2{
-                        static_cast<float>(point.x / roofTextureTileSizeMeters),
-                        static_cast<float>(-point.y / roofTextureTileSizeMeters)};
-                vertices.push_back({ToRenderPosition({point.x, point.y, roofElevation}),
-                    {0.0F, 1.0F, 0.0F}, textureCoordinate});
-            }
-            for (const auto& triangle : triangles)
-            {
-                if (winding > 0.0)
-                    indices.insert(indices.end(), {roofStart + triangle[0],
-                        roofStart + triangle[2], roofStart + triangle[1]});
-                else
-                    indices.insert(indices.end(), {roofStart + triangle[0],
-                        roofStart + triangle[1], roofStart + triangle[2]});
-            }
-        }
-
-        if (!createWalls)
-            continue;
-        for (std::size_t i = 0; i < building.outlineMeters.size(); ++i)
-        {
-            const std::size_t next = (i + 1U) % building.outlineMeters.size();
-            const auto& firstPoint = building.outlineMeters[i];
-            const auto& secondPoint = building.outlineMeters[next];
-            const glm::dvec2 edge = secondPoint - firstPoint;
-            glm::dvec3 outward{edge.y, 0.0, edge.x};
-            outward *= winding;
-            const glm::vec3 normal = glm::normalize(ToRenderDirection(outward));
-            const float edgeLength = static_cast<float>(glm::length(edge));
-            const float wallHeight = static_cast<float>(roofElevation - bottomElevation);
-            constexpr float facadeTileWidthMeters = 5.0F;
-            constexpr float facadeTileHeightMeters = 3.0F;
-            const auto bottomFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
-                bottomElevation});
-            const auto bottomSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
-                bottomElevation});
-            const auto topFirst = ToRenderPosition({firstPoint.x, firstPoint.y,
-                roofElevation});
-            const auto topSecond = ToRenderPosition({secondPoint.x, secondPoint.y,
-                roofElevation});
-            const std::uint32_t wallStart = static_cast<std::uint32_t>(vertices.size());
-            vertices.insert(vertices.end(), {
-                {bottomFirst, normal, {0.0F, wallHeight / facadeTileHeightMeters}},
-                {bottomSecond, normal, {edgeLength / facadeTileWidthMeters,
-                    wallHeight / facadeTileHeightMeters}},
-                {topSecond, normal, {edgeLength / facadeTileWidthMeters, 0.0F}},
-                {topFirst, normal, {0.0F, 0.0F}}});
-            indices.insert(indices.end(), {wallStart, wallStart + 1U, wallStart + 2U,
-                wallStart, wallStart + 2U, wallStart + 3U});
-        }
-    }
-
-    if (indices.empty())
-        return {};
-    return std::make_unique<aerosimlab::graphics::Mesh>(
-        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
-        indices.data(), static_cast<std::uint32_t>(indices.size()));
-}
-
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateRoadMesh(
-    const std::vector<aerosimlab::terrain::MapRoad>& roads,
-    bool bridgeOnly)
-{
-    std::vector<aerosimlab::graphics::Vertex> vertices;
-    std::vector<std::uint32_t> indices;
-    for (const auto& road : roads)
-    {
-        if (road.bridge != bridgeOnly || road.centerlineMeters.size() < 2U)
-            continue;
-
-        for (std::size_t pointIndex = 1;
-            pointIndex < road.centerlineMeters.size(); ++pointIndex)
-        {
-            const glm::dvec3& first = road.centerlineMeters[pointIndex - 1U];
-            const glm::dvec3& second = road.centerlineMeters[pointIndex];
-            const glm::dvec2 direction{second.x - first.x, second.y - first.y};
-            const double length = glm::length(direction);
-            if (!(length > 1.0e-6))
-                continue;
-
-            const glm::dvec2 halfWidth{-direction.y, direction.x};
-            const glm::dvec2 lateralOffset = halfWidth
-                * (road.widthMeters / (2.0 * length));
-            constexpr double surfaceOffsetMeters = 0.15;
-            const auto toSurface = [surfaceOffsetMeters](
-                const glm::dvec3& center, const glm::dvec2& offset)
-            {
-                return ToRenderPosition({center.x + offset.x,
-                    center.y + offset.y, center.z + surfaceOffsetMeters});
-            };
-            const glm::vec3 firstLeft = toSurface(first, lateralOffset);
-            const glm::vec3 firstRight = toSurface(first, -lateralOffset);
-            const glm::vec3 secondLeft = toSurface(second, lateralOffset);
-            const glm::vec3 secondRight = toSurface(second, -lateralOffset);
-            const glm::vec3 normal = glm::normalize(glm::cross(
-                firstRight - firstLeft, secondRight - firstLeft));
-            const auto firstVertex = static_cast<std::uint32_t>(vertices.size());
-            vertices.insert(vertices.end(), {
-                {firstLeft, normal, {0.0F, 0.0F}},
-                {firstRight, normal, {0.0F, 1.0F}},
-                {secondRight, normal, {1.0F, 1.0F}},
-                {secondLeft, normal, {1.0F, 0.0F}}});
-            indices.insert(indices.end(), {firstVertex, firstVertex + 1U,
-                firstVertex + 2U, firstVertex, firstVertex + 2U,
-                firstVertex + 3U});
-        }
-    }
-
-    if (indices.empty())
-        return {};
-    return std::make_unique<aerosimlab::graphics::Mesh>(
-        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
-        indices.data(), static_cast<std::uint32_t>(indices.size()));
-}
-
-enum class BridgeMeshPart
-{
-    DeckSurface,
-    DeckStructure
-};
-
-/** @brief 교량 외곽선으로 영상이 이어지는 상판과 충돌 두께를 그린다. */
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgeFootprintMesh(
-    const std::vector<aerosimlab::terrain::MapBridgeFootprint>& bridges,
-    const aerosimlab::terrain::TerrainGrid& terrain,
-    BridgeMeshPart meshPart)
-{
-    std::vector<aerosimlab::graphics::Vertex> vertices;
-    std::vector<std::uint32_t> indices;
-
-    for (const auto& bridge : bridges)
-    {
-        if (bridge.outlineMeters.size() < 3U
-            || bridge.outlineMeters.size() != bridge.groundElevationsMeters.size())
-            continue;
-
-        glm::dvec2 center{0.0};
-        double groundElevation = 0.0;
-        for (std::size_t index = 0; index < bridge.outlineMeters.size(); ++index)
-        {
-            center += bridge.outlineMeters[index];
-            groundElevation += bridge.groundElevationsMeters[index];
-        }
-        center /= static_cast<double>(bridge.outlineMeters.size());
-        groundElevation /= static_cast<double>(bridge.groundElevationsMeters.size());
-        const double deckBottom = groundElevation + bridgeDeckUndersideHeightMeters;
-        const double deckTop = deckBottom + bridgeDeckThicknessMeters;
-        if (meshPart == BridgeMeshPart::DeckSurface)
-        {
-            const std::uint32_t centerIndex = static_cast<std::uint32_t>(vertices.size());
-            const double halfWidth = terrain.HalfWidthMeters();
-            const double halfDepth = terrain.HalfDepthMeters();
-            const auto addSurfaceVertex = [&](const glm::dvec2& point)
-            {
-                const glm::vec2 uv{
-                    static_cast<float>((point.x + halfWidth) / (2.0 * halfWidth)),
-                    static_cast<float>((halfDepth - point.y) / (2.0 * halfDepth))};
-                vertices.push_back({ToRenderPosition({point.x, point.y, deckTop}),
-                    {0.0F, 1.0F, 0.0F}, uv});
-            };
-            addSurfaceVertex(center);
-            for (const glm::dvec2& point : bridge.outlineMeters)
-                addSurfaceVertex(point);
-            for (std::uint32_t index = 0; index < bridge.outlineMeters.size(); ++index)
-            {
-                const std::uint32_t first = centerIndex + 1U + index;
-                const std::uint32_t second = centerIndex + 1U
-                    + (index + 1U)
-                        % static_cast<std::uint32_t>(bridge.outlineMeters.size());
-                indices.insert(indices.end(), {centerIndex, first, second});
-            }
-            continue;
-        }
-
-        const std::uint32_t undersideCenter = static_cast<std::uint32_t>(vertices.size());
-        vertices.push_back({ToRenderPosition({center.x, center.y, deckBottom}),
-            {0.0F, -1.0F, 0.0F}, {0.5F, 0.5F}});
-        for (const glm::dvec2& point : bridge.outlineMeters)
-            vertices.push_back({ToRenderPosition({point.x, point.y, deckBottom}),
-                {0.0F, -1.0F, 0.0F},
-                {static_cast<float>(point.x), static_cast<float>(point.y)}});
-        for (std::uint32_t index = 0; index < bridge.outlineMeters.size(); ++index)
-        {
-            const std::uint32_t first = undersideCenter + 1U + index;
-            const std::uint32_t second = undersideCenter + 1U
-                + (index + 1U) % static_cast<std::uint32_t>(bridge.outlineMeters.size());
-            indices.insert(indices.end(), {undersideCenter, second, first});
-        }
-
-        for (std::size_t index = 0; index < bridge.outlineMeters.size(); ++index)
-        {
-            const std::size_t next = (index + 1U) % bridge.outlineMeters.size();
-            const glm::dvec2& first = bridge.outlineMeters[index];
-            const glm::dvec2& second = bridge.outlineMeters[next];
-            const glm::vec3 normal = glm::normalize(glm::vec3{
-                static_cast<float>(second.y - first.y), 0.0F,
-                static_cast<float>(second.x - first.x)});
-            const std::uint32_t quadStart = static_cast<std::uint32_t>(vertices.size());
-            vertices.insert(vertices.end(), {
-                {ToRenderPosition({first.x, first.y, deckBottom}), normal, {0.0F, 0.0F}},
-                {ToRenderPosition({second.x, second.y, deckBottom}), normal, {1.0F, 0.0F}},
-                {ToRenderPosition({second.x, second.y, deckTop}), normal, {1.0F, 1.0F}},
-                {ToRenderPosition({first.x, first.y, deckTop}), normal, {0.0F, 1.0F}}});
-            indices.insert(indices.end(), {quadStart, quadStart + 1U, quadStart + 2U,
-                quadStart, quadStart + 2U, quadStart + 3U});
-        }
-    }
-
-    if (indices.empty())
-        return {};
-    return std::make_unique<aerosimlab::graphics::Mesh>(
-        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
-        indices.data(), static_cast<std::uint32_t>(indices.size()));
-}
-
-/** @brief 같은 교각 발자국으로 화면에 보일 기둥 메시를 만든다. */
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateBridgePierMesh(
-    const std::vector<aerosimlab::terrain::MapBridgePier>& piers)
-{
-    std::vector<aerosimlab::graphics::Vertex> vertices;
-    std::vector<std::uint32_t> indices;
-    for (const auto& pier : piers)
-    {
-        const auto triangles = TriangulateFootprint(pier.outlineMeters);
-        if (triangles.empty())
-            continue;
-
-        const double winding = PolygonArea(pier.outlineMeters) > 0.0 ? 1.0 : -1.0;
-        const std::uint32_t topStart = static_cast<std::uint32_t>(vertices.size());
-        for (const auto& point : pier.outlineMeters)
-        {
-            vertices.push_back({ToRenderPosition(
-                {point.x, point.y, pier.topElevationMeters}),
-                {0.0F, 1.0F, 0.0F}, {static_cast<float>(point.x),
-                    static_cast<float>(point.y)}});
-        }
-        for (const auto& triangle : triangles)
-        {
-            if (winding > 0.0)
-                indices.insert(indices.end(), {topStart + triangle[0],
-                    topStart + triangle[2], topStart + triangle[1]});
-            else
-                indices.insert(indices.end(), {topStart + triangle[0],
-                    topStart + triangle[1], topStart + triangle[2]});
-        }
-
-        for (std::size_t index = 0; index < pier.outlineMeters.size(); ++index)
-        {
-            const std::size_t next = (index + 1U) % pier.outlineMeters.size();
-            const glm::dvec2& first = pier.outlineMeters[index];
-            const glm::dvec2& second = pier.outlineMeters[next];
-            const glm::dvec2 edge = second - first;
-            glm::dvec3 outward{edge.y, 0.0, edge.x};
-            outward *= winding;
-            const glm::vec3 normal = glm::normalize(ToRenderDirection(outward));
-            const float edgeLength = static_cast<float>(glm::length(edge));
-            const float pierHeight = static_cast<float>(
-                pier.topElevationMeters - pier.bottomElevationMeters);
-            constexpr float concreteTileWidthMeters = 5.0F;
-            constexpr float concreteTileHeightMeters = 3.0F;
-            const std::uint32_t wallStart = static_cast<std::uint32_t>(vertices.size());
-            vertices.insert(vertices.end(), {
-                {ToRenderPosition({first.x, first.y, pier.bottomElevationMeters}),
-                    normal, {0.0F, pierHeight / concreteTileHeightMeters}},
-                {ToRenderPosition({second.x, second.y, pier.bottomElevationMeters}),
-                    normal, {edgeLength / concreteTileWidthMeters,
-                        pierHeight / concreteTileHeightMeters}},
-                {ToRenderPosition({second.x, second.y, pier.topElevationMeters}),
-                    normal, {edgeLength / concreteTileWidthMeters, 0.0F}},
-                {ToRenderPosition({first.x, first.y, pier.topElevationMeters}),
-                    normal, {0.0F, 0.0F}}});
-            indices.insert(indices.end(), {wallStart, wallStart + 1U, wallStart + 2U,
-                wallStart, wallStart + 2U, wallStart + 3U});
-        }
-    }
-
-    if (indices.empty())
-        return {};
-    return std::make_unique<aerosimlab::graphics::Mesh>(
-        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
-        indices.data(), static_cast<std::uint32_t>(indices.size()));
-}
-
 std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
     const aerosimlab::terrain::TerrainGrid& terrain)
 {
@@ -610,257 +169,6 @@ std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
         indices.data(), static_cast<std::uint32_t>(indices.size()));
 }
 
-/** @brief 물 안에 있는 지형 삼각형을 수면으로 덮어 지형과 틈이 생기지 않게 한다. */
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateWaterMesh(
-    const std::vector<aerosimlab::terrain::MapWaterBody>& waterBodies,
-    const aerosimlab::terrain::TerrainGrid& terrain)
-{
-    constexpr double surfaceOffsetMeters = 0.25;
-    constexpr double waterBoundaryBucketSizeMeters = 1.0;
-    const double halfX = terrain.HalfWidthMeters();
-    const double halfY = terrain.HalfDepthMeters();
-    const auto subdivisions = static_cast<std::uint32_t>(std::max(1.0, std::ceil(
-        std::max(static_cast<double>(terrain.spacingXMeters),
-            static_cast<double>(terrain.spacingYMeters)))));
-    std::vector<aerosimlab::graphics::Vertex> vertices;
-    std::vector<std::uint32_t> indices;
-
-    struct WaterSurfacePoint
-    {
-        glm::dvec2 position;
-        double elevation;
-    };
-
-    for (const auto& body : waterBodies)
-    {
-        if (body.outerBoundaryMeters.empty())
-            continue;
-
-        double minimumX = body.outerBoundaryMeters.front().x;
-        double maximumX = minimumX;
-        double minimumY = body.outerBoundaryMeters.front().y;
-        double maximumY = minimumY;
-        for (const glm::dvec2& point : body.outerBoundaryMeters)
-        {
-            minimumX = std::min(minimumX, point.x);
-            maximumX = std::max(maximumX, point.x);
-            minimumY = std::min(minimumY, point.y);
-            maximumY = std::max(maximumY, point.y);
-        }
-
-        struct BoundarySegment
-        {
-            glm::dvec2 first;
-            glm::dvec2 second;
-        };
-        const std::size_t bucketCount = static_cast<std::size_t>(
-            std::ceil((maximumY - minimumY) / waterBoundaryBucketSizeMeters)) + 1U;
-        std::vector<std::vector<BoundarySegment>> boundaryBuckets(bucketCount);
-        const auto addRing = [&](const std::vector<glm::dvec2>& ring)
-        {
-            for (std::size_t index = 0U; index < ring.size(); ++index)
-            {
-                const glm::dvec2 first = ring[index];
-                const glm::dvec2 second = ring[(index + 1U) % ring.size()];
-                if (first.y == second.y)
-                    continue;
-                const std::size_t firstBucket = std::min(
-                    static_cast<std::size_t>(std::floor(
-                        (std::min(first.y, second.y) - minimumY)
-                        / waterBoundaryBucketSizeMeters)),
-                    boundaryBuckets.size() - 1U);
-                const std::size_t lastBucket = std::min(
-                    static_cast<std::size_t>(std::floor(
-                        (std::max(first.y, second.y) - minimumY)
-                        / waterBoundaryBucketSizeMeters)),
-                    boundaryBuckets.size() - 1U);
-                for (std::size_t bucket = firstBucket; bucket <= lastBucket; ++bucket)
-                    boundaryBuckets[bucket].push_back({first, second});
-            }
-        };
-        addRing(body.outerBoundaryMeters);
-        for (const auto& inner : body.innerBoundariesMeters)
-            addRing(inner);
-
-        const auto containsWater = [&](const glm::dvec2& point)
-        {
-            if (point.x < minimumX || point.x > maximumX
-                || point.y < minimumY || point.y > maximumY)
-                return false;
-            const std::size_t bucket = std::min(
-                static_cast<std::size_t>(std::floor(
-                    (point.y - minimumY) / waterBoundaryBucketSizeMeters)),
-                boundaryBuckets.size() - 1U);
-            bool inside = false;
-            for (const auto& segment : boundaryBuckets[bucket])
-            {
-                if ((segment.first.y > point.y) == (segment.second.y > point.y))
-                    continue;
-                const double intersectionX = segment.first.x
-                    + (point.y - segment.first.y)
-                        * (segment.second.x - segment.first.x)
-                        / (segment.second.y - segment.first.y);
-                if (point.x < intersectionX)
-                    inside = !inside;
-            }
-            return inside;
-        };
-
-        if (maximumX < -halfX || minimumX > halfX
-            || maximumY < -halfY || minimumY > halfY)
-            continue;
-
-        const auto gridIndex = [](double position, double origin, double spacing,
-                                   std::uint32_t sampleCount)
-        {
-            const double cell = std::floor((position - origin) / spacing);
-            return static_cast<std::uint32_t>(std::clamp(
-                cell, 0.0, static_cast<double>(sampleCount - 2U)));
-        };
-        const std::uint32_t firstColumn = gridIndex(
-            minimumX, -halfX, terrain.spacingXMeters, terrain.sampleCount);
-        const std::uint32_t lastColumn = gridIndex(
-            maximumX, -halfX, terrain.spacingXMeters, terrain.sampleCount);
-        const std::uint32_t firstRow = gridIndex(
-            -maximumY, -halfY, terrain.spacingYMeters, terrain.sampleCount);
-        const std::uint32_t lastRow = gridIndex(
-            -minimumY, -halfY, terrain.spacingYMeters, terrain.sampleCount);
-
-        for (std::uint32_t row = firstRow; row <= lastRow; ++row)
-        {
-            const double north = halfY - static_cast<double>(row) * terrain.spacingYMeters;
-            const double south = north - terrain.spacingYMeters;
-            for (std::uint32_t column = firstColumn; column <= lastColumn; ++column)
-            {
-                const double west = -halfX + static_cast<double>(column)
-                    * terrain.spacingXMeters;
-                const double east = west + terrain.spacingXMeters;
-                const glm::dvec2 northWest{west, north};
-                const glm::dvec2 northEast{east, north};
-                const glm::dvec2 southWest{west, south};
-                const glm::dvec2 southEast{east, south};
-                const auto addTriangle = [&](const glm::dvec2& firstPoint,
-                                             const glm::dvec2& secondPoint,
-                                             const glm::dvec2& thirdPoint,
-                                             std::uint32_t firstRow,
-                                             std::uint32_t firstColumn,
-                                             std::uint32_t secondRow,
-                                             std::uint32_t secondColumn,
-                                             std::uint32_t thirdRow,
-                                             std::uint32_t thirdColumn)
-                {
-                    const auto makePoint = [&](const glm::dvec2& point,
-                                               std::uint32_t vertexRow,
-                                               std::uint32_t vertexColumn)
-                    {
-                        const double elevation = terrain.referenceElevationMeters
-                            + terrain.HeightAt(vertexRow, vertexColumn)
-                            + surfaceOffsetMeters;
-                        return WaterSurfacePoint{point, elevation};
-                    };
-                    const std::array<WaterSurfacePoint, 3> triangle{
-                        makePoint(firstPoint, firstRow, firstColumn),
-                        makePoint(secondPoint, secondRow, secondColumn),
-                        makePoint(thirdPoint, thirdRow, thirdColumn)};
-                    const auto append = [&](const WaterSurfacePoint& first,
-                                            const WaterSurfacePoint& second,
-                                            const WaterSurfacePoint& third)
-                    {
-                        const glm::dvec2 center =
-                            (first.position + second.position + third.position) / 3.0;
-                        if (!containsWater(center))
-                            return;
-                        const std::uint32_t triangleStart =
-                            static_cast<std::uint32_t>(vertices.size());
-                        const auto addVertex = [&](const WaterSurfacePoint& point)
-                        {
-                            vertices.push_back({ToRenderPosition({point.position.x,
-                                point.position.y, point.elevation}),
-                                {0.0F, 1.0F, 0.0F}, {0.0F, 0.0F}});
-                        };
-                        addVertex(first);
-                        addVertex(second);
-                        addVertex(third);
-                        indices.insert(indices.end(), {triangleStart,
-                            triangleStart + 1U, triangleStart + 2U});
-                    };
-
-                    const glm::dvec2 center =
-                        (firstPoint + secondPoint + thirdPoint) / 3.0;
-                    const bool firstInside = containsWater(firstPoint);
-                    const bool secondInside = containsWater(secondPoint);
-                    const bool thirdInside = containsWater(thirdPoint);
-                    const bool centerInside = containsWater(center);
-                    if (firstInside && secondInside && thirdInside && centerInside)
-                    {
-                        append(triangle[0], triangle[1], triangle[2]);
-                        return;
-                    }
-
-                    const glm::dvec2 firstMidpoint = (firstPoint + secondPoint) * 0.5;
-                    const glm::dvec2 secondMidpoint = (secondPoint + thirdPoint) * 0.5;
-                    const glm::dvec2 thirdMidpoint = (thirdPoint + firstPoint) * 0.5;
-                    if (!firstInside && !secondInside && !thirdInside && !centerInside
-                        && !containsWater(firstMidpoint) && !containsWater(secondMidpoint)
-                        && !containsWater(thirdMidpoint))
-                        return;
-
-                    const auto interpolate = [&](std::uint32_t eastSteps,
-                                                  std::uint32_t southSteps)
-                    {
-                        const double firstWeight = 1.0
-                            - static_cast<double>(eastSteps + southSteps) / subdivisions;
-                        const double secondWeight =
-                            static_cast<double>(eastSteps) / subdivisions;
-                        const double thirdWeight =
-                            static_cast<double>(southSteps) / subdivisions;
-                        return WaterSurfacePoint{
-                            triangle[0].position * firstWeight
-                                + triangle[1].position * secondWeight
-                                + triangle[2].position * thirdWeight,
-                            triangle[0].elevation * firstWeight
-                                + triangle[1].elevation * secondWeight
-                                + triangle[2].elevation * thirdWeight};
-                    };
-                    for (std::uint32_t eastStep = 0U; eastStep < subdivisions; ++eastStep)
-                    {
-                        for (std::uint32_t southStep = 0U;
-                             southStep + eastStep < subdivisions; ++southStep)
-                        {
-                            const WaterSurfacePoint first =
-                                interpolate(eastStep, southStep);
-                            const WaterSurfacePoint east =
-                                interpolate(eastStep + 1U, southStep);
-                            const WaterSurfacePoint south =
-                                interpolate(eastStep, southStep + 1U);
-                            append(first, east, south);
-
-                            if (eastStep + southStep + 1U < subdivisions)
-                            {
-                                const WaterSurfacePoint eastSouth =
-                                    interpolate(eastStep + 1U, southStep + 1U);
-                                append(east, eastSouth, south);
-                            }
-                        }
-                    }
-                };
-
-                // 지형 메시와 같은 대각선으로 나눠 수면과 지면이 서로 교차하지 않게 한다.
-                addTriangle(northWest, southWest, northEast,
-                    row, column, row + 1U, column, row, column + 1U);
-                addTriangle(northEast, southWest, southEast,
-                    row, column + 1U, row + 1U, column,
-                    row + 1U, column + 1U);
-            }
-        }
-    }
-
-    if (indices.empty())
-        return {};
-    return std::make_unique<aerosimlab::graphics::Mesh>(
-        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
-        indices.data(), static_cast<std::uint32_t>(indices.size()));
-}
 }
 
 AeroSimLabApp::AeroSimLabApp(Options options)
@@ -1019,7 +327,7 @@ void AeroSimLabApp::InitializeRendererAndCameras()
         framebufferWidth_, framebufferHeight_);
 #endif
     observerCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
-        glm::vec3{0.0F, 320.0F, 700.0F}, glm::vec3{0.0F, 18.0F, 0.0F}, 1.0F,
+        glm::vec3{0.0F, 145.0F, 285.0F}, glm::vec3{0.0F, 12.0F, 0.0F}, 1.0F,
         45.0F, 0.1F, 2000.0F);
     eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F,
@@ -1053,528 +361,60 @@ void AeroSimLabApp::LoadSceneModels()
         AssetPath("models/drones/x500/action-camera.glb").string());
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
-    buildingFacadeTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
-        AssetPath("maps/tancheon/apartment-facade.png"), true);
-    buildingRoofTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
-        AssetPath("maps/tancheon/roof-concrete.jpg"), true);
-    constexpr std::array<const char*, 4> terrainTextureExtensions{
-        "png", "jpg", "jpeg", "ppm"};
-    for (const char* extension : terrainTextureExtensions)
-    {
-        const auto terrainTexturePath = AssetPath(
-            "maps/tancheon/terrain." + std::string(extension));
-        if (!std::filesystem::exists(terrainTexturePath))
-            continue;
-
-        terrainSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
-            terrainTexturePath);
-        break;
-    }
 }
 
 void AeroSimLabApp::LoadTerrain()
 {
-    terrainGrid_ = aerosimlab::terrain::TerrainGrid::Load(
-        AssetPath("maps/tancheon/terrain.aerotrn"));
+    terrainGrid_ = aerosimlab::terrain::CreateTrainingRangeTerrain();
     simulation_.SetTerrain(terrainGrid_);
-
-    const auto terrainModelPath = AssetPath("maps/tancheon/terrain.glb");
-    if (std::filesystem::exists(terrainModelPath))
-        terrainMesh_ = aerosimlab::graphics::Mesh::LoadGlb(
-            terrainModelPath.string());
-    else
-        terrainMesh_ = CreateTerrainMesh(terrainGrid_);
+    terrainMesh_ = CreateTerrainMesh(terrainGrid_);
 }
-
 void AeroSimLabApp::LoadMapFeatures()
 {
-    SetStartupDetail("건물·교량·하천 윤곽을 읽고 있습니다.");
-    routeBuildings_ = aerosimlab::terrain::LoadMapBuildingFootprints(
-        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
-    const auto& buildings = routeBuildings_;
-    const auto bridges = aerosimlab::terrain::LoadMapBridgeFootprints(
-        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
-    const auto waterBodies = aerosimlab::terrain::LoadMapWaterBodies(
-        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
-    const auto trees = aerosimlab::terrain::LoadMapTrees(
-        AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
-    constexpr std::array<std::string_view, 3> treeAssets{
-        "models/environment/trees/mature-oak.glb",
-        "models/environment/trees/mature-scots-pine.glb",
-        "models/environment/trees/mature-sycamore.glb"};
-    std::array<std::vector<glm::mat4>, 3> treeTransforms;
-    cameraTransitAltitudeMeters_ = 0.0;
-    for (const auto& tree : trees)
-    {
-        const auto east = static_cast<std::int64_t>(std::llround(tree.positionMeters.x * 10.0));
-        const auto north = static_cast<std::int64_t>(std::llround(tree.positionMeters.y * 10.0));
-        const std::uint64_t key = static_cast<std::uint64_t>(east) * 0x9E3779B185EBCA87ULL
-            ^ static_cast<std::uint64_t>(north) * 0xC2B2AE3D27D4EB4FULL;
-        const std::size_t species = static_cast<std::size_t>(key % treeTransforms.size());
-        const float yaw = static_cast<float>((key >> 8U) % 6284U) * 0.001F;
-        const float scale = 0.82F + static_cast<float>((key >> 20U) % 37U) * 0.01F;
-        const float ground = static_cast<float>(terrainGrid_.HeightAtLocalMeters(
-            tree.positionMeters));
-        cameraTransitAltitudeMeters_ = std::max(cameraTransitAltitudeMeters_,
-            static_cast<double>(ground) + tallestTreeModelHeightMeters
-                + cameraClearanceAboveCanopyMeters);
-        glm::mat4 transform = glm::translate(glm::mat4(1.0F), ToRenderPosition(
-            {tree.positionMeters.x, tree.positionMeters.y, ground}));
-        transform = glm::rotate(transform, yaw, glm::vec3{0.0F, 1.0F, 0.0F});
-        transform = glm::scale(transform, glm::vec3{scale});
-        treeTransforms[species].push_back(transform);
-    }
-    for (std::size_t species = 0; species < treeAssets.size(); ++species)
-    {
-        if (treeTransforms[species].empty())
-            continue;
-        treeModels_[species] = aerosimlab::graphics::GlbModel::Load(
-            AssetPath(treeAssets[species]).string());
-        treeModels_[species]->SetInstances(treeTransforms[species]);
-    }
-    std::vector<aerosimlab::terrain::MapBridgePier> bridgePiers;
-    std::vector<aerosimlab::terrain::MapBridgePier> mainBridgePiers;
-    for (const auto& bridge : bridges)
-    {
-        if (bridge.outlineMeters.size() < 3U || bridge.groundElevationsMeters.empty())
-            continue;
+    SetStartupDetail("훈련장 시설물과 충돌 모양을 준비하고 있습니다.");
+    trainingRangeScene_ = std::make_unique<TrainingRangeScene>();
+    trainingRangeScene_->Load(AssetPath(""), terrainGrid_, simulation_);
+    routeBuildings_ = trainingRangeScene_->Obstacles();
+    cameraTransitAltitudeMeters_ = trainingRangeCameraTransitAltitudeMeters;
+    inspectionTargets_.clear();
+    inspectionOccluders_.clear();
 
-        double ground = 0.0;
-        for (std::size_t index = 0; index < bridge.outlineMeters.size(); ++index)
-        {
-            ground += bridge.groundElevationsMeters[index];
-        }
-        ground /= static_cast<double>(bridge.groundElevationsMeters.size());
-        // OSM에 교량 높이가 없어 지면에서 6m 위에 두께 0.8m의 임시 상판을 놓는다.
-        simulation_.AddStaticObstaclePrism(
-            bridge.outlineMeters, ground + bridgeDeckUndersideHeightMeters,
-            ground + bridgeDeckUndersideHeightMeters + bridgeDeckThicknessMeters);
-        auto estimatedPiers = aerosimlab::terrain::EstimateMapBridgePiers(
-            bridge, terrainGrid_, ground + bridgeDeckUndersideHeightMeters);
-        if (bridge.name == "탄천교")
-            mainBridgePiers = estimatedPiers;
-        for (const auto& pier : estimatedPiers)
-        {
-            simulation_.AddStaticObstaclePrism(pier.outlineMeters,
-                pier.bottomElevationMeters, pier.topElevationMeters);
-        }
-        bridgePiers.insert(bridgePiers.end(),
-            estimatedPiers.begin(), estimatedPiers.end());
-    }
-    if (terrainSurfaceTexture_ == nullptr)
+    for (const auto& obstacle : routeBuildings_)
     {
-        const auto roads = aerosimlab::terrain::LoadMapRoads(
-            AssetPath("maps/tancheon/site.geojson"), terrainGrid_);
-        roadMesh_ = CreateRoadMesh(roads, false);
-        bridgeMesh_ = CreateRoadMesh(roads, true);
-    }
-    bridgeFootprintMesh_ = CreateBridgeFootprintMesh(
-        bridges, terrainGrid_, BridgeMeshPart::DeckSurface);
-    bridgeStructureMesh_ = CreateBridgeFootprintMesh(
-        bridges, terrainGrid_, BridgeMeshPart::DeckStructure);
-    bridgePierMesh_ = CreateBridgePierMesh(bridgePiers);
-    waterMesh_ = CreateWaterMesh(waterBodies, terrainGrid_);
-    taggedBuildingMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
-        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, false,
-        terrainSurfaceTexture_ != nullptr);
-    SetStartupDetail("높이가 확인된 건물의 벽을 만들고 있습니다.");
-    taggedBuildingWallMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
-        aerosimlab::terrain::BuildingHeightSource::OsmHeightTag, true,
-        terrainSurfaceTexture_ != nullptr);
-    SetStartupDetail("층수로 높이를 추정한 건물 지붕을 만들고 있습니다.");
-    estimatedBuildingMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
-        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, false,
-        terrainSurfaceTexture_ != nullptr);
-    SetStartupDetail("층수로 높이를 추정한 건물 벽을 만들고 있습니다.");
-    estimatedBuildingWallMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
-        aerosimlab::terrain::BuildingHeightSource::EstimatedFromLevels, true,
-        terrainSurfaceTexture_ != nullptr);
-    SetStartupDetail("높이를 알 수 없는 건물 외곽을 임시 높이로 표시합니다.");
-    footprintBuildingMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
-        aerosimlab::terrain::BuildingHeightSource::EstimatedFromFootprint,
-        false, terrainSurfaceTexture_ != nullptr);
-    footprintBuildingWallMesh_ = CreateBuildingMesh(buildings, terrainGrid_,
-        aerosimlab::terrain::BuildingHeightSource::EstimatedFromFootprint,
-        true, terrainSurfaceTexture_ != nullptr);
-    SetStartupDetail("건물 충돌 구역을 준비하고 있습니다.");
-    inspectionOccluders_.reserve(buildings.size());
-    std::unordered_map<std::string, const aerosimlab::terrain::MapBuilding*> buildingsById;
-    for (const auto& building : buildings)
-    {
-        SetStartupDetail(std::string("건물 충돌 구역: ") + building.osmId);
-        const auto bounds =
-            aerosimlab::terrain::GetMapBuildingBoundsMeters(building);
-        if (building.heightMeters > 0.0)
-        {
-            // 층수·외곽선에서 추정한 높이도 출처를 구분해 유한한 충돌 상자로 쓴다.
-            simulation_.AddStaticObstaclePrism(building.outlineMeters,
-                bounds.centerMeters.z - bounds.halfExtentsMeters.z,
-                bounds.centerMeters.z + bounds.halfExtentsMeters.z);
-        }
-        else
-        {
-            simulation_.AddStaticObstacleFootprint(building.outlineMeters);
-        }
-        inspectionOccluders_.push_back({building.outlineMeters,
-            bounds.centerMeters.z - bounds.halfExtentsMeters.z,
-            bounds.centerMeters.z + bounds.halfExtentsMeters.z});
-        if (building.heightSource
-            == aerosimlab::terrain::BuildingHeightSource::OsmHeightTag)
-            buildingsById.emplace(building.osmId, &building);
+        double bottomMeters = obstacle.groundElevationsMeters.front();
+        for (const double height : obstacle.groundElevationsMeters)
+            bottomMeters = std::min(bottomMeters, height);
+        inspectionOccluders_.push_back({
+            obstacle.outlineMeters, bottomMeters, bottomMeters + obstacle.heightMeters});
     }
 
-    SetStartupDetail("시험용 정찰 위치와 경로를 읽고 있습니다.");
-    std::ifstream planFile(AssetPath("maps/tancheon/demo-inspection-plan.json"));
-    if (!planFile)
-        throw std::runtime_error("시험용 시설물 점검 계획을 열지 못했습니다.");
-
-    using Json = nlohmann::json;
-    Json plan;
-    try
+    for (const auto& point : trainingRangeScene_->ReconPoints())
     {
-        planFile >> plan;
-    }
-    catch (const Json::exception&)
-    {
-        throw std::runtime_error("시험용 시설물 점검 계획의 JSON을 읽지 못했습니다.");
-    }
-    if (!plan.contains("targets") || !plan.at("targets").is_array()
-        || plan.at("targets").empty())
-        throw std::runtime_error("시험용 점검 계획에 구역이 없습니다.");
-
-    const bool hasExplicitGeometry = std::any_of(
-        plan.at("targets").begin(), plan.at("targets").end(),
-        [](const Json& target) {
-            return target.contains("inspection_surface")
-                || target.contains("waypoints_meters");
-        });
-    if (hasExplicitGeometry
-        && (!plan.contains("coordinate_frame")
-            || plan.at("coordinate_frame") != "tancheon_local_enu"))
-        throw std::runtime_error(
-            "좌표로 지정한 점검면과 경유점에는 tancheon_local_enu 기준을 적어야 합니다.");
-
-    std::unordered_set<std::string> zoneIds;
-    for (const Json& target : plan.at("targets"))
-    {
-        const std::string facilityId = target.at("facility_id").get<std::string>();
-        const std::string zoneId = target.at("zone_id").get<std::string>();
-        std::string displayName = target.value("name", std::string{});
-        if (!zoneIds.insert(zoneId).second)
-            throw std::runtime_error("점검 계획에 같은 구역 ID가 두 번 있습니다: " + zoneId);
-
-        aerosimlab::simulation::InspectionSurface surface;
-        std::vector<glm::dvec3> routeWaypoints;
-        glm::dvec3 approachPosition{0.0};
-        std::string buildingOsmId;
-        if (target.contains("waypoints_meters"))
-        {
-            routeWaypoints = aerosimlab::simulation::ParseInspectionWaypointsJson(
-                target.at("waypoints_meters").dump());
-            for (glm::dvec3& waypoint : routeWaypoints)
-            {
-                if (!terrainGrid_.ContainsLocalPositionMeters({waypoint.x, waypoint.y}))
-                    throw std::runtime_error("점검 경유점이 지형 범위를 벗어났습니다: "
-                        + zoneId);
-                waypoint = terrainGrid_.ToSimulationPositionMeters(waypoint);
-            }
-        }
-        if (target.contains("inspection_surface"))
-        {
-            surface = aerosimlab::simulation::ParseInspectionSurfaceJson(
-                target.at("inspection_surface").dump());
-            approachPosition = ReadPlanVector(
-                target.at("approach_position_meters"), "approach_position_meters");
-            surface.centerMeters = terrainGrid_.ToSimulationPositionMeters(
-                surface.centerMeters);
-            approachPosition = terrainGrid_.ToSimulationPositionMeters(approachPosition);
-        }
-        else
-        {
-            buildingOsmId =
-                target.at("building_osm_id").get<std::string>();
-            const auto building = buildingsById.find(buildingOsmId);
-            if (building == buildingsById.end())
-                throw std::runtime_error("점검 계획에서 지정한 건물 자료를 찾지 못했습니다: "
-                    + buildingOsmId);
-            if (displayName.empty())
-                displayName = building->second->name;
-            if (displayName.empty())
-                displayName = "이름 없는 건물";
-
-            const Json& capture = target.at("capture");
-            const double approachDistance =
-                target.at("approach_distance_meters").get<double>();
-            const auto facade = aerosimlab::terrain::GetNearestMapBuildingFacade(
-                *building->second, demoDroneStartMeters);
-            if (facade.widthMeters < 3.0 || facade.heightMeters < 2.0
-                || approachDistance <= 0.0)
-                throw std::runtime_error(
-                    "점검 계획의 외벽 시험면이나 접근 거리를 확인해 주세요: " + zoneId);
-
-            approachPosition = facade.centerMeters
-                + facade.outwardNormal * approachDistance;
-            surface.centerMeters = facade.centerMeters;
-            surface.normal = facade.outwardNormal;
-            surface.widthAxis = facade.widthAxis;
-            surface.widthMeters = std::min(facade.widthMeters,
-                capture.at("width_meters").get<double>());
-            surface.heightMeters = std::min(facade.heightMeters,
-                capture.at("height_meters").get<double>());
-            surface.minimumDistanceMeters =
-                capture.at("minimum_distance_meters").get<double>();
-            surface.maximumDistanceMeters =
-                capture.at("maximum_distance_meters").get<double>();
-            surface.maximumIncidenceAngleDegrees =
-                capture.at("maximum_incidence_angle_degrees").get<double>();
-            surface.minimumPixelWidth = capture.at("minimum_pixel_width").get<int>();
-            surface.minimumPixelHeight = capture.at("minimum_pixel_height").get<int>();
-        }
-
-        if (!terrainGrid_.ContainsLocalPositionMeters(
-            {approachPosition.x, approachPosition.y}))
-            throw std::runtime_error("점검 구역 접근 위치가 지형 범위를 벗어났습니다: "
-                + zoneId);
-        const bool routeAutomaticallyPlanned = routeWaypoints.empty();
-        inspectionTargets_.push_back({
-            .facilityId = facilityId,
-            .displayName = displayName.empty() ? "점검 대상" : displayName,
-            .zoneId = zoneId,
-            .buildingOsmId = std::move(buildingOsmId),
-            .surface = surface,
-            .routeWaypointsMeters = std::move(routeWaypoints),
-            .approachPositionMeters = approachPosition,
-            .routeAutomaticallyPlanned = routeAutomaticallyPlanned});
+        const double groundMeters = terrainGrid_.HeightAtLocalMeters(point.positionMeters);
+        InspectionTarget target;
+        target.facilityId = "industrial-training-range";
+        target.displayName = point.id;
+        target.zoneId = point.id;
+        target.buildingOsmId = point.id;
+        target.surface = {
+            .centerMeters = {point.positionMeters, groundMeters + 2.0},
+            .normal = {0.0, 0.0, 1.0},
+            .widthAxis = {1.0, 0.0, 0.0},
+            .widthMeters = 8.0,
+            .heightMeters = 6.0,
+            .minimumDistanceMeters = 7.0,
+            .maximumDistanceMeters = 35.0,
+            .maximumIncidenceAngleDegrees = 65.0,
+            .minimumPixelWidth = 32,
+            .minimumPixelHeight = 24};
+        target.routeStartMeters = {demoDroneStartMeters,
+            terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters) + 4.0};
+        target.approachPositionMeters = {point.positionMeters,
+            groundMeters + 15.0};
+        target.routeAutomaticallyPlanned = true;
+        inspectionTargets_.push_back(std::move(target));
     }
 
-    const auto mainBridge = std::find_if(bridges.begin(), bridges.end(),
-        [](const auto& bridge) { return bridge.name == "탄천교"; });
-    if (mainBridge != bridges.end())
-    {
-        glm::dvec2 bridgeCenter{0.0};
-        for (std::size_t index = 0; index < mainBridge->outlineMeters.size(); ++index)
-        {
-            bridgeCenter += mainBridge->outlineMeters[index];
-        }
-        bridgeCenter /= static_cast<double>(mainBridge->outlineMeters.size());
-        const double centerGround = terrainGrid_.HeightAtLocalMeters({0.0, 0.0});
-
-        if (mainBridgePiers.empty())
-            throw std::runtime_error("탄천교 아래 촬영에 필요한 교각 형상을 만들지 못했습니다.");
-
-        const auto pierCenter = [](const aerosimlab::terrain::MapBridgePier& pier)
-        {
-            glm::dvec2 center{0.0};
-            for (const auto& point : pier.outlineMeters)
-                center += point;
-            return center / static_cast<double>(pier.outlineMeters.size());
-        };
-        const auto nearestPier = std::min_element(mainBridgePiers.begin(),
-            mainBridgePiers.end(), [&pierCenter](const auto& left, const auto& right)
-            {
-                return glm::length(pierCenter(left) - demoDroneStartMeters)
-                    < glm::length(pierCenter(right) - demoDroneStartMeters);
-            });
-        const glm::dvec2 pierMiddle = pierCenter(*nearestPier);
-        std::size_t nearestFace = 0U;
-        double nearestFaceDistance = std::numeric_limits<double>::max();
-        for (std::size_t index = 0; index < nearestPier->outlineMeters.size(); ++index)
-        {
-            const glm::dvec2 midpoint = (nearestPier->outlineMeters[index]
-                + nearestPier->outlineMeters[(index + 1U)
-                    % nearestPier->outlineMeters.size()]) * 0.5;
-            const double distance = glm::length(midpoint - demoDroneStartMeters);
-            if (distance < nearestFaceDistance)
-            {
-                nearestFaceDistance = distance;
-                nearestFace = index;
-            }
-        }
-        const glm::dvec2 faceStart = nearestPier->outlineMeters[nearestFace];
-        const glm::dvec2 faceEnd = nearestPier->outlineMeters[
-            (nearestFace + 1U) % nearestPier->outlineMeters.size()];
-        const glm::dvec2 faceMidpoint = (faceStart + faceEnd) * 0.5;
-        const glm::dvec2 faceDirection = glm::normalize(faceEnd - faceStart);
-        const glm::dvec2 faceNormal = glm::normalize(faceMidpoint - pierMiddle);
-        aerosimlab::simulation::InspectionSurface pierSide;
-        pierSide.centerMeters = terrainGrid_.ToSimulationPositionMeters({
-            faceMidpoint.x, faceMidpoint.y,
-            (nearestPier->bottomElevationMeters + nearestPier->topElevationMeters)
-                * 0.5});
-        pierSide.normal = {faceNormal.x, faceNormal.y, 0.0};
-        pierSide.widthAxis = {faceDirection.x, faceDirection.y, 0.0};
-        pierSide.widthMeters = std::min(2.0, glm::length(faceEnd - faceStart));
-        pierSide.heightMeters = 1.5;
-        pierSide.minimumDistanceMeters = 4.0;
-        pierSide.maximumDistanceMeters = 16.0;
-        pierSide.maximumIncidenceAngleDegrees = 25.0;
-        inspectionTargets_.push_back({
-            .facilityId = "osm-bridge-" + mainBridge->osmId,
-            .displayName = "탄천교 아래 교각 정찰",
-            .zoneId = "bridge-underside",
-            .surface = pierSide,
-            .approachPositionMeters = pierSide.centerMeters
-                + glm::dvec3{faceNormal.x * 12.0, faceNormal.y * 12.0, 1.2},
-            .routeAutomaticallyPlanned = true});
-
-        glm::dvec2 riverPosition = bridgeCenter;
-        double nearestWaterDistance = std::numeric_limits<double>::max();
-        for (const auto& water : waterBodies)
-        {
-            for (int northStep = -12; northStep <= 12; ++northStep)
-            {
-                for (int eastStep = -12; eastStep <= 12; ++eastStep)
-                {
-                    const glm::dvec2 point = bridgeCenter
-                        + glm::dvec2{eastStep * 5.0, northStep * 5.0};
-                    if (!aerosimlab::terrain::ContainsWater(water, point))
-                        continue;
-                    const double distance = glm::length(point - bridgeCenter);
-                    if (distance < nearestWaterDistance)
-                    {
-                        nearestWaterDistance = distance;
-                        riverPosition = point;
-                    }
-                }
-            }
-        }
-        const double riverGround = terrainGrid_.HeightAtLocalMeters(riverPosition);
-        aerosimlab::simulation::InspectionSurface riverSurface;
-        riverSurface.centerMeters = terrainGrid_.ToSimulationPositionMeters(
-            {riverPosition.x, riverPosition.y, riverGround - centerGround + 0.25});
-        riverSurface.normal = {0.0, 0.0, 1.0};
-        const glm::dvec2 riverApproachDirection = glm::normalize(
-            demoDroneStartMeters - riverPosition);
-        riverSurface.widthAxis = {
-            -riverApproachDirection.y, riverApproachDirection.x, 0.0};
-        riverSurface.widthMeters = 20.0;
-        riverSurface.heightMeters = 8.0;
-        riverSurface.minimumDistanceMeters = 15.0;
-        riverSurface.maximumDistanceMeters = 40.0;
-        riverSurface.maximumIncidenceAngleDegrees = 88.0;
-        inspectionTargets_.push_back({
-            .facilityId = "tancheon-waterway",
-            .displayName = "탄천 물길",
-            .zoneId = "river-channel",
-            .surface = riverSurface,
-            .approachPositionMeters = terrainGrid_.ToSimulationPositionMeters(
-                {riverPosition.x + riverApproachDirection.x * 30.0,
-                    riverPosition.y + riverApproachDirection.y * 30.0,
-                    riverGround - centerGround + 3.2}),
-            .routeAutomaticallyPlanned = true});
-    }
-
-    // 기본 임무는 아파트 외벽보다 탄천교와 물길을 먼저 지나도록 순서를 정한다.
-    const auto targetPriority = [](const InspectionTarget& target)
-    {
-        if (target.zoneId == "bridge-underside")
-            return 0;
-        if (target.zoneId == "river-channel")
-            return 1;
-        return 2;
-    };
-    std::stable_sort(inspectionTargets_.begin(), inspectionTargets_.end(),
-        [&targetPriority](const InspectionTarget& left, const InspectionTarget& right)
-        {
-            return targetPriority(left) < targetPriority(right);
-        });
-
-    glm::dvec3 routeStart{
-        demoDroneStartMeters.x,
-        demoDroneStartMeters.y,
-        terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters)
-            + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters};
-    for (InspectionTarget& target : inspectionTargets_)
-    {
-        target.routeStartMeters = routeStart;
-        if (target.routeAutomaticallyPlanned)
-        {
-            if (!target.buildingOsmId.empty())
-            {
-                const auto building = std::find_if(routeBuildings_.begin(),
-                    routeBuildings_.end(), [&target](const auto& candidate)
-                    {
-                        return candidate.osmId == target.buildingOsmId;
-                    });
-                if (building == routeBuildings_.end())
-                    throw std::runtime_error("점검 경로에 필요한 건물 외곽선을 찾지 못했습니다: "
-                        + target.buildingOsmId);
-
-                const double preferredDistance = glm::length(
-                    target.approachPositionMeters - target.surface.centerMeters);
-                const auto facadeRoute =
-                    aerosimlab::terrain::PlanMapFlightRouteToFacade(
-                        terrainGrid_, routeBuildings_, *building, routeStart,
-                        preferredDistance, target.surface.maximumDistanceMeters,
-                        2.0, 3.0, cameraTransitAltitudeMeters_);
-                if (!facadeRoute)
-                    throw std::runtime_error("점검 구역까지 도달할 수 있는 외벽 경로를 찾지 못했습니다: "
-                        + target.displayName);
-
-                target.surface.centerMeters = facadeRoute->facade.centerMeters;
-                target.surface.normal = facadeRoute->facade.outwardNormal;
-                target.surface.widthAxis = facadeRoute->facade.widthAxis;
-                target.surface.widthMeters = std::min(target.surface.widthMeters,
-                    facadeRoute->facade.widthMeters);
-                target.surface.heightMeters = std::min(target.surface.heightMeters,
-                    facadeRoute->facade.heightMeters);
-                target.approachPositionMeters = facadeRoute->approachPositionMeters;
-                target.routeWaypointsMeters.assign(facadeRoute->waypointsMeters.begin(),
-                    facadeRoute->waypointsMeters.end() - 1);
-            }
-            else
-            {
-                std::optional<std::vector<glm::dvec3>> route;
-                if (target.zoneId == "bridge-underside"
-                    && mainBridge != bridges.end())
-                {
-                    double bridgeGround = 0.0;
-                    for (const double elevation : mainBridge->groundElevationsMeters)
-                        bridgeGround += elevation;
-                    bridgeGround /= static_cast<double>(
-                        mainBridge->groundElevationsMeters.size());
-                    const double deckBottom =
-                        bridgeGround + bridgeDeckUndersideHeightMeters;
-                    route = aerosimlab::terrain::PlanMapFlightRouteUnderBridge(
-                        terrainGrid_, routeBuildings_, *mainBridge, bridgePiers,
-                        routeStart, target.approachPositionMeters, deckBottom,
-                        deckBottom + bridgeDeckThicknessMeters, 3.0,
-                        cameraTransitAltitudeMeters_);
-                }
-                else
-                {
-                    route = aerosimlab::terrain::PlanMapFlightRoute(
-                        terrainGrid_, routeBuildings_, routeStart,
-                        target.approachPositionMeters, 3.0,
-                        cameraTransitAltitudeMeters_);
-                }
-                // 접근점이 이웃 건물과 너무 가까우면 촬영 가능한 거리 안에서 바깥으로 옮긴다.
-                const double currentDistance = glm::length(
-                    target.approachPositionMeters - target.surface.centerMeters);
-                constexpr double approachStepMeters = 2.0;
-                for (double distance = currentDistance + approachStepMeters;
-                     !route && distance <= target.surface.maximumDistanceMeters;
-                     distance += approachStepMeters)
-                {
-                    const glm::dvec3 candidate = target.surface.centerMeters
-                        + target.surface.normal * distance;
-                    route = aerosimlab::terrain::PlanMapFlightRoute(
-                        terrainGrid_, routeBuildings_, routeStart, candidate, 3.0,
-                        cameraTransitAltitudeMeters_);
-                    if (route)
-                        target.approachPositionMeters = candidate;
-                }
-                if (!route)
-                    throw std::runtime_error(
-                        "점검 구역까지 건물을 피해 갈 경로를 찾지 못했습니다: "
-                        + target.displayName);
-                target.routeWaypointsMeters.assign(route->begin(), route->end() - 1);
-            }
-        }
-        routeStart = target.approachPositionMeters;
-    }
-
-    SetActiveInspectionTarget(0U);
 #ifdef __EMSCRIPTEN__
     EM_ASM({
         if (window.clearDroneSimInspectionTargets)
@@ -1592,9 +432,10 @@ void AeroSimLabApp::LoadMapFeatures()
     }
 #endif
 }
-
 void AeroSimLabApp::InitializeStartingState()
 {
+    if (inspectionTargets_.empty())
+        throw std::runtime_error("훈련장 정찰 지점을 준비하지 못했습니다.");
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
     const glm::dvec2 toFirstTarget = glm::dvec2{
         inspectionTargets_.front().surface.centerMeters.x,
@@ -1604,6 +445,16 @@ void AeroSimLabApp::InitializeStartingState()
         startElevation +
             aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
         initialYawRadians);
+    for (const glm::dvec2 offset : std::array<glm::dvec2, 3>{
+             glm::dvec2{10.0, 0.0}, glm::dvec2{0.0, 10.0}, glm::dvec2{10.0, 10.0}})
+    {
+        const glm::dvec2 position = demoDroneStartMeters + offset;
+        const double groundMeters = terrainGrid_.HeightAtLocalMeters(position);
+        static_cast<void>(simulation_.AddDrone(
+            {position, groundMeters
+                + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
+            initialYawRadians, groundMeters));
+    }
     fleetDroneIds_ = simulation_.DroneIds();
 }
 
@@ -1934,64 +785,11 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     const glm::vec3& cameraPosition, bool showMissionGuides,
     std::optional<aerosimlab::simulation::DroneId> hiddenDroneId)
 {
-    static const aerosimlab::graphics::Material orthophotoMaterial{
-        glm::vec4{1.0F}, 0.0F, 0.92F};
     renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
-    const bool hasOrthophoto = terrainSurfaceTexture_ != nullptr;
-    const auto& terrainMaterial = hasOrthophoto
-        ? orthophotoMaterial : groundMaterial_;
-    renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, terrainMaterial, *shader_,
-        view, projection, cameraPosition, terrainSurfaceTexture_.get(), false,
-        hasOrthophoto);
-    if (waterMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *waterMesh_, waterMaterial_, *shader_,
-            view, projection, cameraPosition);
-    for (const auto& treeModel : treeModels_)
-    {
-        if (treeModel)
-            treeModel->Draw(glm::mat4{1.0F}, *renderer_, *shader_, view,
-                projection, cameraPosition);
-    }
-    // 정사영상에는 도로가 이미 찍혀 있어 같은 자리에 단색 메시를 덧그리지 않는다.
-    if (roadMesh_ && !hasOrthophoto)
-        renderer_->Draw(glm::mat4{1.0F}, *roadMesh_, roadMaterial_, *shader_,
-            view, projection, cameraPosition);
-    if (bridgeMesh_ && !hasOrthophoto)
-        renderer_->Draw(glm::mat4{1.0F}, *bridgeMesh_, bridgeMaterial_, *shader_,
-            view, projection, cameraPosition);
-    if (bridgeStructureMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *bridgeStructureMesh_,
-            bridgeMaterial_, *shader_, view, projection, cameraPosition);
-    if (bridgePierMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *bridgePierMesh_,
-            bridgePierMaterial_, *shader_, view, projection, cameraPosition);
-    if (bridgeFootprintMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *bridgeFootprintMesh_, orthophotoMaterial,
-            *shader_, view, projection, cameraPosition, terrainSurfaceTexture_.get());
-    const auto drawBuildingRoof = [&](const auto& mesh)
-    {
-        if (mesh)
-        {
-            renderer_->Draw(glm::mat4{1.0F}, *mesh, buildingRoofMaterial_,
-                *shader_, view, projection, cameraPosition,
-                terrainSurfaceTexture_ ? terrainSurfaceTexture_.get()
-                                       : buildingRoofTexture_.get());
-        }
-    };
-    drawBuildingRoof(taggedBuildingMesh_);
-    if (taggedBuildingWallMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *taggedBuildingWallMesh_, buildingMaterial_,
-            *shader_, view, projection, cameraPosition, buildingFacadeTexture_.get());
-    drawBuildingRoof(estimatedBuildingMesh_);
-    if (estimatedBuildingWallMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *estimatedBuildingWallMesh_,
-            estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,
-            buildingFacadeTexture_.get());
-    drawBuildingRoof(footprintBuildingMesh_);
-    if (footprintBuildingWallMesh_)
-        renderer_->Draw(glm::mat4{1.0F}, *footprintBuildingWallMesh_,
-            estimatedBuildingMaterial_, *shader_, view, projection, cameraPosition,
-            buildingFacadeTexture_.get());
+    renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
+        view, projection, cameraPosition);
+    if (trainingRangeScene_)
+        trainingRangeScene_->Draw(*renderer_, *shader_, view, projection, cameraPosition);
 
     const auto drawRouteSegment = [this, &view, &projection, &cameraPosition](
         const glm::dvec3& startMeters, const glm::dvec3& endMeters,

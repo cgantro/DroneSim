@@ -182,7 +182,9 @@ void Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain()
 
 void Verify_TancheonBuildingDataStopsTheWebKinematicDrone()
 {
-    const std::filesystem::path mapDirectory{"maps/tancheon"};
+    const std::filesystem::path mapDirectory =
+        std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+        / "tests/fixtures/maps/tancheon";
     const auto terrainGrid = terrain::TerrainGrid::Load(
         mapDirectory / "terrain.aerotrn");
     const auto buildings = terrain::LoadMapBuildingFootprints(

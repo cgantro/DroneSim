@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <functional>
 #include <limits>
 #include <stdexcept>
@@ -122,7 +123,7 @@ glm::vec4 ReadBaseColorFactor(const Json& pbr)
 
 std::unique_ptr<Texture2D> LoadBaseColorTexture(const Json& document,
     const Json& pbr, const std::vector<std::uint8_t>& binary,
-    bool hasTextureCoordinates)
+    bool hasTextureCoordinates, const std::filesystem::path& modelDirectory)
 {
     if (!pbr.contains("baseColorTexture"))
         return nullptr;
@@ -155,7 +156,15 @@ std::unique_ptr<Texture2D> LoadBaseColorTexture(const Json& document,
     const std::size_t imageIndex = texture.at("source").get<std::size_t>();
     const Json& image = document.at("images").at(imageIndex);
     if (image.contains("uri"))
-        throw std::runtime_error("GLB 기본색 이미지가 파일 안에 들어 있지 않습니다. 외부·data URI는 지원하지 않습니다.");
+    {
+        const std::string uri = image.at("uri").get<std::string>();
+        if (uri.starts_with("data:"))
+            throw std::runtime_error("GLB data URI 이미지는 지원하지 않습니다.");
+        const std::filesystem::path imagePath{uri};
+        if (imagePath.is_absolute())
+            throw std::runtime_error("GLB 이미지는 모델 폴더 안의 상대 경로여야 합니다.");
+        return Texture2D::LoadFromFile(modelDirectory / imagePath, repeat);
+    }
     if (!image.contains("bufferView") || !image.contains("mimeType"))
         throw std::runtime_error("GLB 이미지에는 내부 bufferView와 PNG/JPEG 형식 정보가 필요합니다.");
 
@@ -213,6 +222,7 @@ GlbModel::~GlbModel() = default;
 std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
 {
     glb_detail::Document source = glb_detail::ReadDocument(path);
+    const std::filesystem::path modelDirectory = std::filesystem::path{path}.parent_path();
     const Json& document = source.json;
     const Json& nodes = document.at("nodes");
     const Json& meshes = document.at("meshes");
@@ -256,7 +266,7 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
                     ReadFactor(pbr, "metallicFactor", 1.0F),
                     ReadFactor(pbr, "roughnessFactor", 1.0F));
                 part->texture = LoadBaseColorTexture(document, pbr, source.binary,
-                    primitive.at("attributes").contains("TEXCOORD_0"));
+                    primitive.at("attributes").contains("TEXCOORD_0"), modelDirectory);
                 part->hasMaterial = true;
             }
             model->parts_.push_back(std::move(part));

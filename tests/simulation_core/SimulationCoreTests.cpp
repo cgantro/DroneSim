@@ -42,13 +42,13 @@ void Verify_RigidBodyTakeoffFromTancheonDemoStart()
 {
     const auto terrainGrid = terrain::TerrainGrid::Load(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-            / "assets/maps/tancheon/terrain.aerotrn");
+            / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     const auto buildings = terrain::LoadMapBuildingFootprints(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-            / "assets/maps/tancheon/site.geojson", terrainGrid);
+            / "tests/fixtures/maps/tancheon/site.geojson", terrainGrid);
     const auto inspectionBuildings = terrain::LoadMapBuildings(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-            / "assets/maps/tancheon/site.geojson", terrainGrid);
+            / "tests/fixtures/maps/tancheon/site.geojson", terrainGrid);
     const auto firstTarget = std::find_if(inspectionBuildings.begin(),
         inspectionBuildings.end(), [](const terrain::MapBuilding& building)
         {
@@ -158,7 +158,7 @@ void Verify_RigidBodyTakeoffWithDemoWind()
 {
     const auto terrain = terrain::TerrainGrid::Load(
         std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
-            / "assets/maps/tancheon/terrain.aerotrn");
+            / "tests/fixtures/maps/tancheon/terrain.aerotrn");
     constexpr glm::dvec2 startMeters{-410.0, 457.0};
     const double groundHeight = terrain.HeightAtLocalMeters(startMeters);
 

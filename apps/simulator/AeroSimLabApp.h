@@ -10,9 +10,7 @@
 #include "sensor/RgbFrame.h"
 #include "simulation_core/CommandRecording.h"
 #include "simulation_core/EoCameraModel.h"
-#include "terrain/MapBridges.h"
 #include "terrain/MapBuildings.h"
-#include "terrain/MapTrees.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
 #endif
@@ -62,6 +60,7 @@ class RtpVideoSender;
 namespace aerosimlab::simulator
 {
 class SimulatorHud;
+class TrainingRangeScene;
 
 /**
  * @brief 드론 모의를 진행하고 탄천 지형·건물·도로·교량 선형과 카메라 영상을 그린다.
@@ -414,24 +413,10 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
-    std::array<std::unique_ptr<aerosimlab::graphics::GlbModel>, 3> treeModels_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> waterMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> roadMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> bridgeMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> bridgeFootprintMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> bridgeStructureMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> bridgePierMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> taggedBuildingWallMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> estimatedBuildingWallMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> footprintBuildingMesh_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> footprintBuildingWallMesh_;
+    std::unique_ptr<TrainingRangeScene> trainingRangeScene_;
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneModel_;
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneCameraModel_;
-    std::unique_ptr<aerosimlab::graphics::Texture2D> terrainSurfaceTexture_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
-    std::unique_ptr<aerosimlab::graphics::Texture2D> buildingRoofTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     struct FleetReconnaissanceState
     {
@@ -450,22 +435,6 @@ private:
         glm::vec4{1.0F}, 0.16F, 0.40F};
     aerosimlab::graphics::Material groundMaterial_{
         glm::vec4{0.25F, 0.40F, 0.25F, 1.0F}, 0.0F, 0.92F};
-    aerosimlab::graphics::Material waterMaterial_{
-        glm::vec4{0.08F, 0.35F, 0.55F, 1.0F}, 0.0F, 0.38F,
-        aerosimlab::graphics::Material::SurfaceEffect::FlowingWater};
-    aerosimlab::graphics::Material roadMaterial_{
-        glm::vec4{0.22F, 0.25F, 0.27F, 1.0F}, 0.0F, 0.95F};
-    aerosimlab::graphics::Material bridgeMaterial_{
-        glm::vec4{0.60F, 0.62F, 0.64F, 1.0F}, 0.0F, 0.88F};
-    aerosimlab::graphics::Material bridgePierMaterial_{
-        glm::vec4{0.42F, 0.44F, 0.46F, 1.0F}, 0.0F, 0.92F};
-    aerosimlab::graphics::Material buildingMaterial_{
-        glm::vec4{0.57F, 0.61F, 0.65F, 1.0F}, 0.0F, 0.9F};
-    aerosimlab::graphics::Material buildingRoofMaterial_{
-        glm::vec4{0.86F, 0.86F, 0.86F, 1.0F}, 0.0F, 0.96F};
-    aerosimlab::graphics::Material estimatedBuildingMaterial_{
-        glm::vec4{0.66F, 0.54F, 0.36F, 1.0F}, 0.0F, 0.9F};
-    std::unique_ptr<aerosimlab::graphics::Texture2D> buildingFacadeTexture_;
     aerosimlab::graphics::Material missionRouteMaterial_{
         glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
     aerosimlab::graphics::Material inspectionTargetMaterial_{
