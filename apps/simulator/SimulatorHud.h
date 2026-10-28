@@ -53,6 +53,8 @@ public:
         const std::string& fleetReconnaissanceStatus,
         bool fleetReconnaissanceCanStart,
         const std::function<void()>& startFleetReconnaissance,
+        bool fleetReturnCanStart,
+        const std::function<void()>& startFleetReturn,
         const std::string& formationMissionStatus, bool formationMissionCanStart,
         bool formationMissionActive,
         const std::function<void(simulation::FormationShape)>& startFormationTransit,

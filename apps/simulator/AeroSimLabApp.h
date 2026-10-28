@@ -192,6 +192,8 @@ private:
     [[nodiscard]] bool FleetReconnaissanceCanStart() const;
     [[nodiscard]] bool StartFleetReconnaissance();
     void AdvanceFleetReconnaissance();
+    [[nodiscard]] bool FleetReturnCanStart() const;
+    [[nodiscard]] bool StartFleetReturn();
     [[nodiscard]] std::string FleetReconnaissanceStatus() const;
     [[nodiscard]] bool StartFormationTransit(
         aerosimlab::simulation::FormationShape shape);
@@ -434,6 +436,7 @@ private:
         std::size_t nextWaypoint = 0;
         std::string status;
         bool waypointCommanded = false;
+        bool returningToBase = false;
     };
     std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>
         fleetReconnaissance_;

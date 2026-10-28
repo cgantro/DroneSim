@@ -711,6 +711,7 @@ void AeroSimLabApp::RenderFrame()
             || inspectionMission_.stage == InspectionMissionStage::GeometryOnly
             || inspectionMission_.stage == InspectionMissionStage::Failed;
         const bool fleetReconnaissanceCanStart = FleetReconnaissanceCanStart();
+        const bool fleetReturnCanStart = FleetReturnCanStart();
         const bool formationMissionCanStart = fleetReconnaissanceCanStart;
         const auto captureAssessment = AssessInspectionView();
         HudRenderTimings hudTimings;
@@ -724,6 +725,8 @@ void AeroSimLabApp::RenderFrame()
             [this] { static_cast<void>(RequestInspectionMission()); },
             FleetReconnaissanceStatus(), fleetReconnaissanceCanStart,
             [this] { static_cast<void>(StartFleetReconnaissance()); },
+            fleetReturnCanStart,
+            [this] { static_cast<void>(StartFleetReturn()); },
             formationTransit_.status, formationMissionCanStart,
             formationTransit_.active,
             [this](aerosimlab::simulation::FormationShape shape)

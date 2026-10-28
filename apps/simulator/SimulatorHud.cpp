@@ -178,6 +178,8 @@ void DrawFlightStatusPanel(
     const std::string& fleetReconnaissanceStatus,
     bool fleetReconnaissanceCanStart,
     const std::function<void()>& startFleetReconnaissance,
+    bool fleetReturnCanStart,
+    const std::function<void()>& startFleetReturn,
     const std::string& formationMissionStatus,
     bool formationMissionCanStart,
     bool formationMissionActive,
@@ -215,6 +217,8 @@ void DrawFlightStatusPanel(
             startFleetReconnaissance();
         else if (!fleetReconnaissanceCanStart)
             ImGui::TextDisabled("모든 드론이 지상에 있고 다른 임무가 없어야 합니다.");
+        if (fleetReturnCanStart && ImGui::Button("출발 지점으로 복귀"))
+            startFleetReturn();
         ImGui::Separator();
         ImGui::Text("편대 이동: %s", formationMissionStatus.c_str());
         const char* formationLabels[]{"V자", "일렬", "횡대"};
@@ -414,6 +418,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::string& fleetReconnaissanceStatus,
     bool fleetReconnaissanceCanStart,
     const std::function<void()>& startFleetReconnaissance,
+    bool fleetReturnCanStart,
+    const std::function<void()>& startFleetReturn,
     const std::string& formationMissionStatus, bool formationMissionCanStart,
     bool formationMissionActive,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
@@ -443,7 +449,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         missionDistanceMeters, inspectionTargetName,
         inspectionMissionStatus,
         missionCanStart, startInspectionMission, fleetReconnaissanceStatus,
-        fleetReconnaissanceCanStart, startFleetReconnaissance, formationMissionStatus,
+        fleetReconnaissanceCanStart, startFleetReconnaissance, fleetReturnCanStart,
+        startFleetReturn, formationMissionStatus,
         formationMissionCanStart, formationMissionActive, selectedFormationShape_,
         startFormationTransit, formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
