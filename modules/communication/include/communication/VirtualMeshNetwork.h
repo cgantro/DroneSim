@@ -202,6 +202,10 @@ public:
     [[nodiscard]] std::optional<NetworkNodeId> NextHop(
         NetworkNodeId source, NetworkNodeId destination) const noexcept;
 
+    /** @brief 이웃 알림으로 알게 된 직접 연결인지 확인한다. */
+    [[nodiscard]] bool HasRecentNeighbor(
+        NetworkNodeId node, NetworkNodeId neighbor) const noexcept;
+
     /** @brief 두 기체가 제시한 위치에서 서로 직접 통신할 수 있는지 확인한다. */
     [[nodiscard]] bool CanExchangeAtPositions(
         NetworkNodeId first, NetworkNodeId second,

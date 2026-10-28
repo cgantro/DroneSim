@@ -10,11 +10,14 @@
 #include "simulation_core/ScenarioRunner.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <chrono>
+#include <vector>
 
 namespace aerosimlab::simulator
 {
@@ -158,6 +161,166 @@ std::string FormatRoute(const std::vector<communication::NetworkNodeId>& route)
         result += DroneName(node);
     }
     return result.empty() ? "경로 정보 없음" : result;
+}
+
+void DrawArrow(ImDrawList& drawList, ImVec2 start, ImVec2 end,
+    ImU32 color, float thickness)
+{
+    const ImVec2 delta{end.x - start.x, end.y - start.y};
+    const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+    if (length <= 0.001F)
+        return;
+
+    const ImVec2 direction{delta.x / length, delta.y / length};
+    constexpr float nodeRadius = 16.0F;
+    constexpr float arrowLength = 7.0F;
+    const ImVec2 lineStart{
+        start.x + direction.x * nodeRadius,
+        start.y + direction.y * nodeRadius};
+    const ImVec2 lineEnd{
+        end.x - direction.x * (nodeRadius + 2.0F),
+        end.y - direction.y * (nodeRadius + 2.0F)};
+    drawList.AddLine(lineStart, lineEnd, color, thickness);
+
+    const ImVec2 perpendicular{-direction.y, direction.x};
+    const ImVec2 arrowBase{
+        lineEnd.x - direction.x * arrowLength,
+        lineEnd.y - direction.y * arrowLength};
+    drawList.AddTriangleFilled(lineEnd,
+        {arrowBase.x + perpendicular.x * arrowLength * 0.6F,
+            arrowBase.y + perpendicular.y * arrowLength * 0.6F},
+        {arrowBase.x - perpendicular.x * arrowLength * 0.6F,
+            arrowBase.y - perpendicular.y * arrowLength * 0.6F}, color);
+}
+
+void DrawMeshGraph(const simulation::SimulationCore& simulation,
+    const communication::VirtualMeshNetwork& network)
+{
+    if (!ImGui::CollapsingHeader("가상망 연결 그래프",
+            ImGuiTreeNodeFlags_DefaultOpen))
+        return;
+
+    struct NodePosition
+    {
+        communication::NetworkNodeId id;
+        ImVec2 center;
+        bool groundControl;
+    };
+
+    constexpr communication::NetworkNodeId groundControlId =
+        std::numeric_limits<communication::NetworkNodeId>::max();
+    std::vector<communication::NetworkNodeId> nodeIds = simulation.DroneIds();
+    nodeIds.push_back(groundControlId);
+
+    const ImVec2 available = ImGui::GetContentRegionAvail();
+    const ImVec2 canvasSize{std::max(220.0F, available.x), 170.0F};
+    const ImVec2 canvasTopLeft = ImGui::GetCursorScreenPos();
+    ImGui::InvisibleButton("가상망 연결 그래프 영역", canvasSize);
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(canvasTopLeft,
+        {canvasTopLeft.x + canvasSize.x, canvasTopLeft.y + canvasSize.y},
+        IM_COL32(22, 29, 38, 255), 5.0F);
+
+    const ImVec2 center{canvasTopLeft.x + canvasSize.x * 0.5F,
+        canvasTopLeft.y + canvasSize.y * 0.5F};
+    const float radius = std::min(canvasSize.x * 0.37F,
+        canvasSize.y * 0.34F);
+    std::vector<NodePosition> nodes;
+    nodes.reserve(nodeIds.size());
+    constexpr float fullTurn = 6.28318530718F;
+    for (std::size_t index = 0; index < nodeIds.size(); ++index)
+    {
+        const float angle = -1.57079632679F
+            + fullTurn * static_cast<float>(index)
+                / static_cast<float>(nodeIds.size());
+        nodes.push_back({nodeIds[index],
+            {center.x + std::cos(angle) * radius,
+                center.y + std::sin(angle) * radius},
+            nodeIds[index] == groundControlId});
+    }
+
+    const auto findNode = [&nodes](communication::NetworkNodeId id)
+        -> const NodePosition*
+    {
+        const auto found = std::find_if(nodes.begin(), nodes.end(),
+            [id](const NodePosition& node) { return node.id == id; });
+        return found == nodes.end() ? nullptr : &*found;
+    };
+
+    for (std::size_t firstIndex = 0; firstIndex < nodes.size(); ++firstIndex)
+    {
+        for (std::size_t secondIndex = firstIndex + 1U;
+             secondIndex < nodes.size(); ++secondIndex)
+        {
+            const auto& first = nodes[firstIndex];
+            const auto& second = nodes[secondIndex];
+            const bool firstKnowsSecond = network.HasRecentNeighbor(
+                first.id, second.id);
+            const bool secondKnowsFirst = network.HasRecentNeighbor(
+                second.id, first.id);
+            const bool disabled = network.IsLinkDisabled(first.id, second.id);
+            if (!firstKnowsSecond && !secondKnowsFirst && !disabled)
+                continue;
+
+            const ImU32 color = disabled ? IM_COL32(224, 76, 76, 255)
+                : firstKnowsSecond && secondKnowsFirst
+                    ? IM_COL32(105, 190, 130, 255)
+                    : IM_COL32(235, 164, 74, 255);
+            if (firstKnowsSecond != secondKnowsFirst)
+            {
+                DrawArrow(*drawList,
+                    firstKnowsSecond ? first.center : second.center,
+                    firstKnowsSecond ? second.center : first.center,
+                    color, 1.5F);
+            }
+            else
+            {
+                const ImVec2 direction{second.center.x - first.center.x,
+                    second.center.y - first.center.y};
+                const float length = std::sqrt(
+                    direction.x * direction.x + direction.y * direction.y);
+                if (length > 0.001F)
+                {
+                    const ImVec2 inset{direction.x / length * 16.0F,
+                        direction.y / length * 16.0F};
+                    drawList->AddLine(
+                        {first.center.x + inset.x, first.center.y + inset.y},
+                        {second.center.x - inset.x, second.center.y - inset.y},
+                        color, disabled ? 2.0F : 1.5F);
+                }
+            }
+        }
+    }
+
+    for (const simulation::DroneId droneId : simulation.DroneIds())
+    {
+        const auto nextHop = network.NextHop(droneId, groundControlId);
+        const NodePosition* source = findNode(droneId);
+        const NodePosition* destination = nextHop ? findNode(*nextHop) : nullptr;
+        if (source != nullptr && destination != nullptr)
+            DrawArrow(*drawList, source->center, destination->center,
+                IM_COL32(82, 166, 245, 255), 3.0F);
+    }
+
+    for (const auto& node : nodes)
+    {
+        const bool radioEnabled = network.IsNodeRadioEnabled(node.id);
+        const ImU32 fill = !radioEnabled ? IM_COL32(174, 63, 63, 255)
+            : node.groundControl ? IM_COL32(57, 105, 170, 255)
+                : IM_COL32(57, 75, 95, 255);
+        drawList->AddCircleFilled(node.center, 16.0F, fill);
+        drawList->AddCircle(node.center, 16.0F,
+            IM_COL32(215, 224, 234, 255), 0, 1.5F);
+        const std::string label = node.groundControl
+            ? "GCS" : "D" + std::to_string(node.id);
+        const ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
+        drawList->AddText(
+            {node.center.x - textSize.x * 0.5F,
+                node.center.y - textSize.y * 0.5F},
+            IM_COL32(255, 255, 255, 255), label.c_str());
+    }
+
+    ImGui::TextDisabled("초록·주황 선: 최근 직접 이웃 · 빨간 선: 장애 · 파란 화살표: GCS까지 다음 홉");
 }
 
 void CreateDefaultDockspace(ImGuiViewport* viewport)
@@ -788,6 +951,7 @@ void DrawFlightStatusPanel(
                 static_cast<unsigned long long>(metrics.deliveredMessages),
                 static_cast<unsigned long long>(metrics.forwardedMessages),
                 static_cast<unsigned long long>(metrics.droppedMessages));
+            DrawMeshGraph(simulation, *formationNetwork);
             if (ImGui::CollapsingHeader("현재 라우팅 경로"))
             {
                 const auto droneIds = simulation.DroneIds();

@@ -536,6 +536,12 @@ std::optional<NetworkNodeId> VirtualMeshNetwork::NextHop(
     return route->second.nextHop;
 }
 
+bool VirtualMeshNetwork::HasRecentNeighbor(
+    NetworkNodeId node, NetworkNodeId neighbor) const noexcept
+{
+    return IsKnownNeighbor(node, neighbor);
+}
+
 bool VirtualMeshNetwork::CanExchangeAtPositions(
     NetworkNodeId first, NetworkNodeId second,
     const glm::dvec3& firstPositionMeters,

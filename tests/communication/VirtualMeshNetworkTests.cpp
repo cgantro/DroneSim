@@ -52,6 +52,10 @@ TEST(VirtualMeshNetworkTests, RoutesProbeAndAcknowledgementAcrossMesh)
         std::numeric_limits<NetworkNodeId>::max();
     // 이웃 발견이 끝난 뒤 시험 메시지를 보내 실제 경로 탐색을 확인합니다.
     static_cast<void>(AdvanceTicks(network, 0, 3));
+    EXPECT_TRUE(network.HasRecentNeighbor(groundControlId, 1U));
+    EXPECT_TRUE(network.HasRecentNeighbor(1U, groundControlId));
+    EXPECT_TRUE(network.HasRecentNeighbor(1U, 2U));
+    EXPECT_FALSE(network.HasRecentNeighbor(groundControlId, 2U));
     const auto messageId = network.Send(groundControlId, 4,
         7, "leader_probe", "epoch=1");
     ASSERT_TRUE(messageId.has_value());
