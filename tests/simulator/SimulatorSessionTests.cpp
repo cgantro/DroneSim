@@ -141,6 +141,42 @@ public:
                 << "드론 " << droneId << "이 안전 착륙 상태가 아닙니다.";
         }
     }
+
+    static void VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+
+        const auto droneIds = app.fleetDroneIds_;
+        ASSERT_EQ(droneIds.size(), 4U);
+        for (const auto droneId : droneIds)
+        {
+            auto state = app.simulation_.State(droneId);
+            state.positionMeters.z = 10.0;
+            state.mode = simulation::FlightMode::Hovering;
+            app.simulation_.SetInitialState(droneId, state);
+        }
+
+        app.formationTransit_.active = true;
+        app.formationTransit_.route.leaderStartMeters =
+            app.simulation_.State(droneIds.front()).positionMeters;
+        app.formationTransit_.route.leaderWaypointsMeters.push_back(
+            app.formationTransit_.route.leaderStartMeters + glm::dvec3{10.0, 0.0, 0.0});
+        app.completeFleetMission_.stage =
+            AeroSimLabApp::CompleteFleetMissionState::Stage::FormationTransit;
+
+        app.AdvanceFormationTransit();
+
+        EXPECT_FALSE(app.formationTransit_.active);
+        EXPECT_EQ(app.completeFleetMission_.stage,
+            AeroSimLabApp::CompleteFleetMissionState::Stage::Failed);
+        EXPECT_EQ(app.completeFleetMission_.status,
+            "추종 드론 상태 보고가 끊겨 편대를 안전 착륙시킵니다.");
+        for (const auto droneId : droneIds)
+            EXPECT_EQ(app.simulation_.State(droneId).mode,
+                simulation::FlightMode::Landing);
+    }
 };
 }
 
@@ -655,6 +691,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::AeroSimLabAppTestAccess::VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLeaderLossWithoutCandidateSafelyLandsFleet());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());

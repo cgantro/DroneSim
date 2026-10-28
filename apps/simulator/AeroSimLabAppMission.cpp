@@ -1767,7 +1767,24 @@ void AeroSimLabApp::AdvanceFormationTransit()
             || simulation_.TickCount() > peer->second.receivedAtTick
                 + peerTelemetryTimeoutTicks)
         {
-            formationTransit_.status = "추종 드론 상태 보고 대기 중";
+            formationTransit_.active = false;
+            formationTransit_.status = "통신 끊김 · 편대 안전 착륙";
+            if (completeFleetMission_.stage
+                == CompleteFleetMissionState::Stage::FormationTransit)
+            {
+                FailCompleteFleetMission(
+                    "추종 드론 상태 보고가 끊겨 편대를 안전 착륙시킵니다.");
+            }
+            else
+            {
+                for (const DroneId fleetDroneId : droneIds)
+                {
+                    const FlightMode mode = simulation_.State(fleetDroneId).mode;
+                    if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
+                        static_cast<void>(simulation_.Apply(fleetDroneId,
+                            {DroneCommand::Kind::Land}));
+                }
+            }
             return;
         }
     }
