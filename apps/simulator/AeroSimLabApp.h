@@ -113,6 +113,8 @@ public:
 #endif
 
 private:
+    friend class AeroSimLabAppTestAccess;
+
     enum class FleetMissionLeg;
 
     static constexpr double benchmarkWarmupDurationSeconds = 1.0;

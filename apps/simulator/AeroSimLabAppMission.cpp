@@ -1442,7 +1442,9 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     using aerosimlab::simulation::DroneId;
 
     if (!formationNetwork_ || (!formationTransit_.active
-        && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()))
+        && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
+        && !leaderReplacementPending_ && !leaderStateCollectionPending_
+        && pendingReassignedTargetIndices_.empty()))
         return;
 
     const std::vector<DroneId>& droneIds = fleetDroneIds_;

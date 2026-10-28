@@ -33,6 +33,63 @@
 
 using namespace aerosimlab;
 
+namespace aerosimlab::simulator
+{
+class AeroSimLabAppTestAccess
+{
+public:
+    static void VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+
+        const auto droneIds = app.fleetDroneIds_;
+        ASSERT_EQ(droneIds.size(), 4U);
+        for (std::size_t index = 0; index < droneIds.size(); ++index)
+        {
+            AeroSimLabApp::FleetReconnaissanceState mission;
+            mission.targetIndex = index;
+            mission.leg = AeroSimLabApp::FleetMissionLeg::Reconnaissance;
+            mission.status = index == 0U ? "정찰 이동 중" : "정찰 위치 도착";
+            app.fleetReconnaissance_.emplace(droneIds[index], std::move(mission));
+        }
+
+        for (std::uint64_t tick = 0; tick < 60U; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+        ASSERT_GT(app.lastLeaderHeartbeatTick_, 0U);
+
+        app.formationNetwork_->SetNodeRadioEnabled(droneIds.front(), false);
+        for (std::uint64_t tick = 0; tick < 240U; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.ReassignLostLeaderTarget();
+            app.simulation_.AdvanceOneTick();
+            if (app.fleetLeaderId_ != droneIds.front()
+                && !app.leaderStateCollectionPending_
+                && app.pendingReassignedTargetIndices_.empty())
+                break;
+        }
+
+        EXPECT_EQ(app.fleetLeaderId_, droneIds[1]);
+        EXPECT_EQ(app.fleetDroneIds_.front(), droneIds[1]);
+        EXPECT_EQ(app.excludedFleetDroneIds_,
+            (std::vector<simulation::DroneId>{droneIds.front()}));
+        EXPECT_FALSE(app.leaderStateCollectionPending_);
+        EXPECT_TRUE(app.pendingReassignedTargetIndices_.empty());
+        EXPECT_NE(app.fleetLeadershipStatus_.find("리더 교체 완료"), std::string::npos);
+        EXPECT_EQ(app.fleetReconnaissance_.at(droneIds.front()).status,
+            "리더 통신 장애 · 기체 안전 착륙");
+        EXPECT_TRUE(app.fleetReconnaissance_.at(droneIds[1]).targetIndex == 0U
+            || app.fleetReconnaissance_.at(droneIds[2]).targetIndex == 0U
+            || app.fleetReconnaissance_.at(droneIds[3]).targetIndex == 0U);
+    }
+};
+}
+
 void Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg()
 {
     const glm::dvec3 positionMeters{12.5, -7.25, 31.0};
@@ -540,6 +597,8 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
 TEST(SimulatorSessionTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget());
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
