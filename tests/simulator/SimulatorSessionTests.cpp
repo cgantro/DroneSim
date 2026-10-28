@@ -192,25 +192,28 @@ public:
             state.mode = mode;
             app.simulation_.SetInitialState(droneId, state);
         };
+        const std::size_t disconnectedTargetIndex = 4U;
+        const glm::dvec3 disconnectedTarget = app.inspectionTargets_.at(
+            disconnectedTargetIndex).approachPositionMeters;
         const double leaderGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({0.0, 0.0});
-        const double targetGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({238.0, 0.0});
         setState(droneIds[0], {0.0, 0.0, leaderGround + 10.0},
-            simulation::FlightMode::Hovering);
+            simulation::FlightMode::Grounded);
         setState(droneIds[1], {90.0, 0.0, leaderGround + 0.5},
             simulation::FlightMode::Grounded);
-        setState(droneIds[2], {238.0, 0.0, targetGround + 10.0},
+        setState(droneIds[2], disconnectedTarget - glm::dvec3{8.0, 0.0, 0.0},
             simulation::FlightMode::FollowingWaypoint);
         setState(droneIds[3], {20.0, 0.0, leaderGround + 10.0},
-            simulation::FlightMode::Hovering);
+            simulation::FlightMode::Grounded);
 
         for (std::size_t index = 0; index < droneIds.size(); ++index)
         {
             AeroSimLabApp::FleetReconnaissanceState mission;
-            mission.targetIndex = index;
+            mission.targetIndex = index == 2U ? disconnectedTargetIndex : index;
             mission.leg = AeroSimLabApp::FleetMissionLeg::Reconnaissance;
-            mission.status = index == 2U ? "정찰 이동 중"
-                : index == 1U ? "정찰 위치 도착" : "대기";
+            mission.status = index == 2U ? "정찰 이동 중" : "정찰 위치 도착";
             mission.routeReceived = true;
+            if (index == 2U)
+                mission.routeWaypointsMeters = {disconnectedTarget};
             app.fleetReconnaissance_.emplace(droneIds[index], std::move(mission));
         }
 
@@ -246,28 +249,21 @@ public:
             makeTelemetry(disconnectedPosition,
                 simulation::FlightMode::FollowingWaypoint, "정찰 이동 중"),
             1U, 1U};
-        app.peerTelemetryAtLeader_[droneIds[3]] = {
-            makeTelemetry(app.simulation_.State(droneIds[3]).positionMeters,
-                simulation::FlightMode::Hovering, "대기"),
-            app.simulation_.TickCount(), 1U};
-
-        auto& disconnectedMission = app.fleetReconnaissance_.at(droneIds[2]);
-        disconnectedMission.routeReceived = false;
-        disconnectedMission.routeSentAtTick = 10000U;
         EXPECT_TRUE(app.TryStartFleetRelayRecovery());
-        EXPECT_EQ(app.fleetRelayRecovery_.relayDroneId, droneIds[1]);
+        const auto relayDroneId = app.fleetRelayRecovery_.relayDroneId;
+        EXPECT_NE(relayDroneId, droneIds[0]);
+        EXPECT_NE(relayDroneId, droneIds[2]);
         EXPECT_EQ(app.fleetRelayRecovery_.disconnectedDroneId, droneIds[2]);
-        EXPECT_GT(app.fleetReconnaissance_.at(droneIds[1]).pendingRouteSequence, 0U);
+        EXPECT_GT(app.fleetReconnaissance_.at(relayDroneId).pendingRouteSequence, 0U);
         EXPECT_FALSE(app.formationNetwork_->CanExchangeAtPositions(
             droneIds[0], droneIds[2], leaderPosition, disconnectedPosition));
         EXPECT_TRUE(app.formationNetwork_->CanExchangeAtPositions(
-            droneIds[0], droneIds[1], leaderPosition,
+            droneIds[0], relayDroneId, leaderPosition,
             app.fleetRelayRecovery_.holdPositionMeters));
         EXPECT_TRUE(app.formationNetwork_->CanExchangeAtPositions(
-            droneIds[1], droneIds[2], app.fleetRelayRecovery_.holdPositionMeters,
+            relayDroneId, droneIds[2], app.fleetRelayRecovery_.holdPositionMeters,
             disconnectedPosition));
 
-        const auto relayDroneId = app.fleetRelayRecovery_.relayDroneId;
         const auto recoveryStartedAtTick = app.fleetRelayRecovery_.startedAtTick;
         bool telemetryRecovered = false;
         bool telemetryRoutedViaRelay = false;
@@ -316,6 +312,8 @@ public:
             << app.formationNetwork_->Metrics().routeReplies
             << ", 대기=" << app.formationNetwork_->Metrics().queuedMessages
             << ", 버림=" << app.formationNetwork_->Metrics().droppedMessages;
+        EXPECT_TRUE(app.fleetReconnaissance_.at(droneIds[2]).waypointCommanded)
+            << "통신이 끊긴 정찰 기체가 기존 경로를 실행하지 않았습니다.";
     }
 
     static void VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget()
