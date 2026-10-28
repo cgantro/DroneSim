@@ -12,7 +12,7 @@ DroneSim은 네 대의 드론이 편대 이동, 지점 정찰, 재집결과 복�
 
 ## 바로 시작하기
 
-Windows에서 Visual Studio로 저장소를 열고 `ninja-release` 구성을 선택한 뒤, `aerosimlab_simulator` 대상을 빌드해 실행합니다. 화면 조작과 기본 임무 실행 순서는 [실행 안내](docs/public/시작하기.md)에 있습니다.
+Windows에서는 Visual Studio에서 `ninja-release` 구성을 선택하고 `aerosimlab_simulator` 대상을 빌드합니다. 실행 파일 이름은 `DroneSim.exe`입니다. 화면 조작과 기본 임무 실행 순서는 [실행 안내](docs/public/시작하기.md)에 있습니다.
 
 ## 필요한 문서
 

@@ -168,24 +168,6 @@ if(NOT EMSCRIPTEN)
   )
   target_include_directories(aerosimlab_ground_control_client PUBLIC apps/ground_control)
   target_link_libraries(aerosimlab_ground_control_client PUBLIC aerosimlab_communication)
-
-  if(WIN32)
-    add_executable(aerosimlab_ground_control WIN32
-      apps/ground_control/WindowsGroundControlApp.cpp
-    )
-    target_link_libraries(aerosimlab_ground_control PRIVATE
-      aerosimlab_ground_control_client
-      aerosimlab_media
-      user32
-      gdi32
-    )
-
-    add_executable(aerosimlab_ground_control_cli apps/ground_control/main.cpp)
-    target_link_libraries(aerosimlab_ground_control_cli PRIVATE aerosimlab_ground_control_client)
-  else()
-    add_executable(aerosimlab_ground_control apps/ground_control/main.cpp)
-    target_link_libraries(aerosimlab_ground_control PRIVATE aerosimlab_ground_control_client)
-  endif()
 endif()
 
 add_executable(aerosimlab_headless apps/headless/main.cpp)
@@ -415,6 +397,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     add_executable(aerosimlab_simulator apps/simulator/main.cpp)
     target_link_libraries(aerosimlab_simulator PRIVATE aerosimlab_simulator_app)
   endif()
+  set_target_properties(aerosimlab_simulator PROPERTIES OUTPUT_NAME "DroneSim")
 
   set(training_range_models
     "models/environment/industrial/building-a.glb"
