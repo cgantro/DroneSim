@@ -1017,7 +1017,8 @@ bool AeroSimLabApp::StartFormationTransit(
         ? std::string{"출발 준비 · "} + (shape == FormationShape::Vee ? "V자 대형"
             : shape == FormationShape::Column ? "일렬 대형" : "횡대")
                 + " · " + inspectionTargets_.back().displayName
-        : std::string{"통로 폭에 맞춰 일렬 대형 · "}
+        : std::string{"통로 폭에 맞춰 일렬 대형 · 간격 "}
+            + std::to_string(static_cast<int>(route->spacingMeters)) + "m · "
             + inspectionTargets_.back().displayName;
     externalControl_ = true;
     groundControlActive_ = true;
@@ -1213,7 +1214,8 @@ void AeroSimLabApp::FinishFleetLeaderReplacementIfReady()
             simulation_.State(fleetLeaderId_).positionMeters,
             formationTransit_.route.leaderWaypointsMeters.back(),
             fleetDroneIds_.size(), formationTransit_.route.shape,
-            8.0, 1.5, 2.0, cameraTransitAltitudeMeters_);
+            formationTransit_.route.spacingMeters, 1.5, 2.0,
+            cameraTransitAltitudeMeters_);
         if (!route)
         {
             FailFleetLeaderReplacement();
@@ -1757,7 +1759,8 @@ void AeroSimLabApp::AdvanceFormationTransit()
     const double heading = glm::length(direction) > 1.0e-6
         ? std::atan2(direction.y, direction.x) : leader.yawRadians;
     const auto offsets = FormationOffsets(
-        formationTransit_.route.shape, droneIds.size(), 8.0, heading);
+        formationTransit_.route.shape, droneIds.size(),
+        formationTransit_.route.spacingMeters, heading);
 
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {

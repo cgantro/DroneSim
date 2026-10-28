@@ -20,12 +20,13 @@ enum class FormationShape
     Line
 };
 
-/** @brief 리더가 따라갈 장애물 회피 경로와 그때 선택한 편대 대형이다. */
+/** @brief 리더가 따라갈 경로와 경로에 맞춰 고른 대형·드론 간격이다. */
 struct FormationRoutePlan
 {
     FormationShape shape = FormationShape::Vee;
     std::vector<glm::dvec3> leaderWaypointsMeters;
     double requiredClearanceMeters = 0.0;
+    double spacingMeters = 8.0;
 };
 
 /**
@@ -41,8 +42,9 @@ struct FormationRoutePlan
 
 /**
  * @brief 편대 전체가 통과할 수 있도록 장애물 여유를 넓혀 리더의 2.5D 경로를 찾는다.
- * @details 요청한 V자 경로를 찾지 못하면 폭이 좁은 일렬 대형으로 다시 찾는다.
- *          반환 경로에는 시작 위치와 목적지가 모두 들어간다.
+ * @details 요청한 대형의 경로를 찾지 못하면, 드론 사이 간격을 기체 반지름과
+ *          안전 여유를 반영한 최소값 이상으로 줄인 일렬 대형을 시도한다.
+ *          반환 경로는 시작점을 빼고 목적지를 포함하며, 반환값에 실제 대형과 간격이 들어간다.
  */
 [[nodiscard]] std::optional<FormationRoutePlan> PlanFormationRoute(
     const terrain::TerrainGrid& terrain,

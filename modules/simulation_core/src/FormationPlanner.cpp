@@ -13,6 +13,8 @@ namespace aerosimlab::simulation
 {
 namespace
 {
+constexpr double compactColumnSpacingMeters = 4.0;
+
 std::vector<glm::dvec2> LocalOffsets(
     FormationShape shape, std::size_t droneCount, double spacingMeters)
 {
@@ -100,23 +102,35 @@ std::optional<FormationRoutePlan> PlanFormationRoute(
         || !std::isfinite(safetyMarginMeters) || safetyMarginMeters < 0.0)
         throw std::invalid_argument("편대 경로의 드론 수와 간격·여유 값이 올바르지 않습니다.");
 
-    const auto tryShape = [&](FormationShape shape)
+    const auto tryShape = [&](FormationShape shape, double formationSpacingMeters)
         -> std::optional<FormationRoutePlan>
     {
         const double clearance = RequiredClearance(shape, droneCount,
-            spacingMeters, droneRadiusMeters, safetyMarginMeters);
+            formationSpacingMeters, droneRadiusMeters, safetyMarginMeters);
         const auto route = terrain::PlanMapFlightRoute(terrain, obstacles,
             leaderStartMeters, destinationMeters, clearance,
             minimumTransitAltitudeMeters);
         if (!route)
             return std::nullopt;
-        return FormationRoutePlan{shape, *route, clearance};
+        return FormationRoutePlan{shape, *route, clearance, formationSpacingMeters};
     };
 
-    if (auto route = tryShape(requestedShape))
+    if (auto route = tryShape(requestedShape, spacingMeters))
         return route;
     if (requestedShape != FormationShape::Column)
-        return tryShape(FormationShape::Column);
+    {
+        const double compactSpacingMeters = std::min(
+            spacingMeters, compactColumnSpacingMeters);
+        const double minimumSafeSpacingMeters = droneRadiusMeters * 2.0
+            + safetyMarginMeters * 0.5;
+        const double requestedClearance = RequiredClearance(requestedShape,
+            droneCount, spacingMeters, droneRadiusMeters, safetyMarginMeters);
+        const double compactClearance = RequiredClearance(FormationShape::Column,
+            droneCount, compactSpacingMeters, droneRadiusMeters, safetyMarginMeters);
+        if (compactSpacingMeters >= minimumSafeSpacingMeters
+            && compactClearance < requestedClearance)
+            return tryShape(FormationShape::Column, compactSpacingMeters);
+    }
     return std::nullopt;
 }
 }
