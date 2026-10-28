@@ -1,5 +1,6 @@
 #include "AeroSimLabApp.h"
 #include "EoVideoRecorder.h"
+#include "FleetTelemetry.h"
 #include "FleetDroneSpawn.h"
 
 #include "simulation_core/SimulationCore.h"
@@ -30,6 +31,22 @@
 #include <thread>
 
 using namespace aerosimlab;
+
+void Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg()
+{
+    const glm::dvec3 positionMeters{12.5, -7.25, 31.0};
+    const std::string payload = simulator::detail::EncodePeerTelemetry(
+        positionMeters, simulation::FlightMode::Hovering, 2U, "복귀 착륙 중");
+    const auto telemetry = simulator::detail::DecodePeerTelemetry(payload);
+    ASSERT_TRUE(telemetry.has_value());
+    EXPECT_EQ(telemetry->positionMeters, positionMeters);
+    EXPECT_EQ(telemetry->mode, simulation::FlightMode::Hovering);
+    EXPECT_EQ(telemetry->missionLeg, 2U);
+    EXPECT_EQ(telemetry->missionStatus, "복귀 착륙 중");
+
+    EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
+        "12.5 -7.25 31 Hovering 3 \"잘못된 단계\"").has_value());
+}
 
 void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
 {
@@ -461,6 +478,7 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
 TEST(SimulatorSessionTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());
     EXPECT_NO_FATAL_FAILURE(Verify_EoVideoRecorderStoresH264AndFrameMetadata());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
     EXPECT_NO_FATAL_FAILURE(Verify_TancheonBuildingDataStopsTheWebKinematicDrone());

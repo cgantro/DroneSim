@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SimulationBenchmark.h"
+#include "FleetTelemetry.h"
 #ifndef __EMSCRIPTEN__
 #include "EoVideoRecorder.h"
 #endif
@@ -492,28 +493,27 @@ private:
     };
     std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>
         fleetReconnaissance_;
+    struct ReceivedPeerTelemetry
+    {
+        aerosimlab::simulator::detail::PeerTelemetry state;
+        std::uint64_t receivedAtTick = 0;
+        std::uint32_t sequence = 0;
+    };
+    [[nodiscard]] const ReceivedPeerTelemetry* FreshPeerTelemetry(
+        aerosimlab::simulation::DroneId droneId) const noexcept;
+    std::uint32_t nextTelemetrySequence_ = 1;
+    std::map<aerosimlab::simulation::DroneId, std::uint64_t>
+        lastTelemetrySentAtTick_;
+    std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
+        peerTelemetryAtLeader_;
     struct FormationTransitState
     {
-        struct PeerTelemetry
-        {
-            glm::dvec3 positionMeters{0.0};
-            aerosimlab::simulation::FlightMode mode =
-                aerosimlab::simulation::FlightMode::Grounded;
-            std::uint64_t receivedAtTick = 0;
-            std::uint32_t sequence = 0;
-        };
-
         aerosimlab::simulation::FormationRoutePlan route;
         std::size_t waypointIndex = 0;
         std::uint32_t nextMessageSequence = 1;
-        std::uint32_t nextTelemetrySequence = 1;
         std::map<aerosimlab::simulation::DroneId, glm::dvec3> sentFollowerTargets;
         std::map<aerosimlab::simulation::DroneId, std::uint64_t> lastTargetSentAtTick;
         std::map<aerosimlab::simulation::DroneId, std::uint32_t> lastAppliedSequence;
-        std::map<aerosimlab::simulation::DroneId, std::uint64_t>
-            lastTelemetrySentAtTick;
-        std::map<aerosimlab::simulation::DroneId, PeerTelemetry>
-            peerTelemetryAtLeader;
         std::optional<std::uint64_t> lastNetworkNodeUpdateTick;
         bool active = false;
         std::string status = "대기";
