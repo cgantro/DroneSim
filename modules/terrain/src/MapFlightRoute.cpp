@@ -386,11 +386,18 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
             ? traveledDistance / totalDistance : 1.0;
         const double plannedAltitude = std::lerp(startMeters.z, goalMeters.z, fraction);
         const double groundAltitude = terrain.HeightAtLocalMeters(horizontalPath[index]);
-        const double altitude = isGoal
-            ? goalMeters.z
-            : std::max({plannedAltitude,
-                groundAltitude + minimumGroundClearanceMeters,
-                transitAltitude});
+        if (isGoal)
+        {
+            const double approachAltitude = std::max({goalMeters.z,
+                groundAltitude + minimumGroundClearanceMeters, transitAltitude});
+            if (approachAltitude > goalMeters.z + 1.0e-6)
+                route.emplace_back(goalMeters.x, goalMeters.y, approachAltitude);
+            route.push_back(goalMeters);
+            continue;
+        }
+
+        const double altitude = std::max({plannedAltitude,
+            groundAltitude + minimumGroundClearanceMeters, transitAltitude});
         if (altitude < groundAltitude + minimumGroundClearanceMeters)
             return std::nullopt;
         route.emplace_back(horizontalPath[index].x, horizontalPath[index].y, altitude);

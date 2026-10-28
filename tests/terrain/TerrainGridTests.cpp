@@ -166,6 +166,38 @@ void Verify_MapFlightRouteGoesAroundBuildingFootprints()
     {
         return std::abs(point.y) > 22.0;
     }));
+
+    MapBuilding estimatedBuilding{
+        .osmId = "estimated-building",
+        .outlineMeters = {{-5.0, -20.0}, {5.0, -20.0},
+            {5.0, 20.0}, {-5.0, 20.0}},
+        .groundElevationsMeters = {0.0, 0.0, 0.0, 0.0},
+        .heightMeters = 28.0,
+        .heightSource = BuildingHeightSource::EstimatedFromFootprint};
+    const auto descendingRoute = PlanMapFlightRoute(
+        terrain, {estimatedBuilding}, {-40.0, 0.0, 48.0},
+        {40.0, 0.0, 5.0}, 3.0, 48.0);
+
+    ASSERT_TRUE(descendingRoute.has_value());
+    ASSERT_GE(descendingRoute->size(), 2U);
+    EXPECT_EQ((*descendingRoute)[descendingRoute->size() - 2U],
+        glm::dvec3(40.0, 0.0, 48.0));
+    for (std::size_t segment = 1; segment < descendingRoute->size(); ++segment)
+    {
+        const glm::dvec3 start = (*descendingRoute)[segment - 1U];
+        const glm::dvec3 end = (*descendingRoute)[segment];
+        const std::size_t sampleCount = static_cast<std::size_t>(
+            std::ceil(glm::length(end - start) / 0.25));
+        for (std::size_t sample = 0; sample <= sampleCount; ++sample)
+        {
+            const double fraction = sampleCount > 0U
+                ? static_cast<double>(sample) / static_cast<double>(sampleCount)
+                : 0.0;
+            EXPECT_FALSE(ContainsMapBuildingVolume(estimatedBuilding,
+                glm::mix(start, end, fraction)))
+                << "segment=" << segment << " sample=" << sample;
+        }
+    }
 }
 
 void Verify_TancheonInspectionRouteAvoidsAllMappedBuildingFootprints()
