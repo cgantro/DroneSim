@@ -117,6 +117,7 @@ endif()
 
 add_library(aerosimlab_communication STATIC
   modules/communication/src/Protocol.cpp
+  modules/communication/src/VirtualMeshNetwork.cpp
 )
 if(NOT EMSCRIPTEN)
   target_sources(aerosimlab_communication PRIVATE modules/communication/src/UdpSocket.cpp)
@@ -546,6 +547,7 @@ if(BUILD_TESTING)
 
   add_executable(aerosimlab_communication_tests
     tests/communication/ProtocolTests.cpp
+    tests/communication/VirtualMeshNetworkTests.cpp
   )
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_communication_tests PRIVATE
