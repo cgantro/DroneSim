@@ -777,6 +777,12 @@ void AeroSimLabApp::RenderFrame()
             && !recordingControls.faultScenarioReplaying;
         recordingControls.canStopFaultScenarioRecording =
             recordingControls.faultScenarioRecording;
+        recordingControls.canSaveFaultScenario = !recordingControls.faultScenarioRecording
+            && recordingControls.faultScenarioEventCount > 0U;
+        recordingControls.canScheduleFault = formationNetworkActive
+            && !recordingControls.faultScenarioRecording;
+        recordingControls.scheduledFaultCount =
+            faultScenarioTimeline_.ScheduledFaultCount();
         recordingControls.canReplayFaultScenario = formationNetworkActive
             && !recordingControls.faultScenarioRecording
             && !recordingControls.faultScenarioReplaying;
@@ -792,6 +798,12 @@ void AeroSimLabApp::RenderFrame()
         recordingControls.replayFaultScenario = [this]
         {
             StartFaultScenarioReplay();
+        };
+        recordingControls.scheduleFault = [this](
+            FaultScenarioTimeline::Event event, std::uint32_t delayTicks,
+            std::uint32_t durationTicks)
+        {
+            ScheduleFaultScenarioEvent(event, delayTicks, durationTicks);
         };
         recordingControls.videoRecording = videoIsRecording;
         recordingControls.canStartVideoRecording = simulation_.Camera().status

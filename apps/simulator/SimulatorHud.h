@@ -3,6 +3,7 @@
 #include "communication/Protocol.h"
 #include "communication/VirtualMeshNetwork.h"
 #include "SimulationBenchmark.h"
+#include "FaultScenarioTimeline.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
 #include "simulation_core/FormationPlanner.h"
@@ -51,12 +52,17 @@ struct SessionRecordingControls
     bool faultScenarioReplaying = false;
     bool canStartFaultScenarioRecording = false;
     bool canStopFaultScenarioRecording = false;
+    bool canSaveFaultScenario = false;
     bool canReplayFaultScenario = false;
+    bool canScheduleFault = false;
     std::size_t faultScenarioEventCount = 0;
+    std::size_t scheduledFaultCount = 0;
     std::string faultScenarioStatus;
     std::function<void()> startFaultScenarioRecording;
     std::function<void()> stopFaultScenarioRecording;
     std::function<void()> replayFaultScenario;
+    std::function<void(FaultScenarioTimeline::Event, std::uint32_t,
+        std::uint32_t)> scheduleFault;
     bool videoRecording = false;
     bool canStartVideoRecording = false;
     bool canStopVideoRecording = false;
@@ -129,6 +135,9 @@ private:
     int selectedFaultSource_ = 0;
     int selectedFaultDestination_ = 1;
     int selectedFaultRotor_ = 0;
+    int selectedScheduleFaultKind_ = 0;
+    int scheduleDelaySeconds_ = 2;
+    int scheduleDurationSeconds_ = 5;
     std::string layoutFile_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };

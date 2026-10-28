@@ -53,6 +53,11 @@ public:
     [[nodiscard]] bool StartReplay(std::uint64_t currentTick,
         const std::vector<simulation::DroneId>& droneIds,
         std::string_view missionKind, std::string& error);
+    /** @brief 진행 중인 임무에 시작·복구 시각이 있는 장애를 예약한다. */
+    [[nodiscard]] bool ScheduleEvent(std::uint64_t currentTick,
+        const std::vector<simulation::DroneId>& droneIds,
+        std::string_view missionKind, std::uint32_t delayTicks,
+        std::uint32_t durationTicks, Event event, std::string& error);
     void StopReplay() noexcept;
 
     void RecordPacketLoss(std::uint64_t currentTick, double probability);
@@ -75,6 +80,7 @@ public:
     [[nodiscard]] bool IsReplaying() const noexcept;
     [[nodiscard]] bool ReplayFinished() const noexcept;
     [[nodiscard]] std::size_t EventCount() const noexcept;
+    [[nodiscard]] std::size_t ScheduledFaultCount() const noexcept;
 
 private:
     void Record(Event event, std::uint64_t currentTick);
@@ -85,6 +91,7 @@ private:
     std::uint64_t recordingStartTick_ = 0;
     std::uint64_t replayStartTick_ = 0;
     std::size_t replayEventIndex_ = 0;
+    std::size_t scheduledFaultCount_ = 0;
     bool recording_ = false;
     bool replaying_ = false;
 };

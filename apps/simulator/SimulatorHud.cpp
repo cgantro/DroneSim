@@ -275,6 +275,9 @@ void DrawRecordingPanel(const SessionRecordingControls& controls)
     }
     else
     {
+        if (controls.canSaveFaultScenario
+            && ImGui::Button("장애 시나리오 저장"))
+            controls.stopFaultScenarioRecording();
         if (controls.canStartFaultScenarioRecording
             && ImGui::Button("장애 기록 시작"))
             controls.startFaultScenarioRecording();
@@ -287,7 +290,8 @@ void DrawRecordingPanel(const SessionRecordingControls& controls)
             controls.replayFaultScenario();
     }
     if (controls.faultScenarioReplaying)
-        ImGui::Text("저장한 장애를 다시 적용하는 중");
+        ImGui::Text("장애 일정을 적용하는 중 · 예약 %zu개",
+            controls.scheduledFaultCount);
     ImGui::TextDisabled("패킷 손실·지연·링크·라디오·카메라·로터 고장을 저장합니다.");
     ImGui::TextDisabled("재생하려면 같은 드론 구성으로 편대 임무를 먼저 시작하세요.");
     if (!controls.faultScenarioStatus.empty())
@@ -353,6 +357,9 @@ void DrawFlightStatusPanel(
     int& selectedFaultSource,
     int& selectedFaultDestination,
     int& selectedFaultRotor,
+    int& selectedScheduleFaultKind,
+    int& scheduleDelaySeconds,
+    int& scheduleDurationSeconds,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
@@ -471,6 +478,83 @@ void DrawFlightStatusPanel(
                         static_cast<std::size_t>(selectedFaultSource)];
                     const simulation::DroneId destination = droneIds[
                         static_cast<std::size_t>(selectedFaultDestination)];
+
+                    ImGui::Separator();
+                    ImGui::Text("장애 예약");
+                    using FaultKind = FaultScenarioTimeline::Event::Kind;
+                    constexpr std::array<FaultKind, 7> scheduleKinds{
+                        FaultKind::PacketLoss,
+                        FaultKind::LinkLatencyJitter,
+                        FaultKind::CameraFault,
+                        FaultKind::RotorMotorFault,
+                        FaultKind::LinkState,
+                        FaultKind::DirectedLinkState,
+                        FaultKind::RadioState};
+                    constexpr const char* scheduleLabels[]{
+                        "패킷 손실", "지연 흔들림", "카메라 고장", "로터 고장",
+                        "양방향 링크 단절", "한 방향 링크 단절", "라디오 차단"};
+                    selectedScheduleFaultKind = std::clamp(selectedScheduleFaultKind,
+                        0, static_cast<int>(scheduleKinds.size() - 1U));
+                    ImGui::SetNextItemWidth(-1.0F);
+                    ImGui::Combo("장애 종류", &selectedScheduleFaultKind,
+                        scheduleLabels, IM_ARRAYSIZE(scheduleLabels));
+                    ImGui::InputInt("시작까지 (초)", &scheduleDelaySeconds);
+                    ImGui::InputInt("지속 시간 (초)", &scheduleDurationSeconds);
+                    scheduleDelaySeconds = std::clamp(scheduleDelaySeconds, 0, 600);
+                    scheduleDurationSeconds = std::clamp(
+                        scheduleDurationSeconds, 1, 3600);
+                    ImGui::TextDisabled(
+                        "현재 선택한 드론·장애 값을 지정 시각에 적용하고 시간이 지나면 기본 상태로 돌립니다.");
+
+                    FaultScenarioTimeline::Event scheduledFault;
+                    scheduledFault.kind = scheduleKinds[
+                        static_cast<std::size_t>(selectedScheduleFaultKind)];
+                    scheduledFault.source = source;
+                    scheduledFault.destination = destination;
+                    scheduledFault.enabled = true;
+                    switch (scheduledFault.kind)
+                    {
+                    case FaultKind::PacketLoss:
+                        scheduledFault.value = static_cast<double>(packetLossPercent)
+                            / 100.0;
+                        break;
+                    case FaultKind::LinkLatencyJitter:
+                        scheduledFault.valueTicks = latencyJitterTicks;
+                        break;
+                    case FaultKind::RotorMotorFault:
+                        scheduledFault.rotorIndex = static_cast<std::uint32_t>(
+                            selectedFaultRotor);
+                        break;
+                    case FaultKind::RadioState:
+                        scheduledFault.enabled = false;
+                        break;
+                    case FaultKind::CameraFault:
+                    case FaultKind::LinkState:
+                    case FaultKind::DirectedLinkState:
+                        break;
+                    }
+                    if (recordingControls.canScheduleFault
+                        && recordingControls.scheduleFault
+                        && ImGui::Button("장애 예약"))
+                    {
+                        constexpr std::uint32_t ticksPerSecond = 60U;
+                        recordingControls.scheduleFault(scheduledFault,
+                            static_cast<std::uint32_t>(scheduleDelaySeconds)
+                                * ticksPerSecond,
+                            static_cast<std::uint32_t>(scheduleDurationSeconds)
+                                * ticksPerSecond);
+                    }
+                    else if (!recordingControls.canScheduleFault)
+                    {
+                        ImGui::TextDisabled("편대 임무 중, 장애 기록을 멈춘 상태에서 예약하세요.");
+                    }
+                    if (recordingControls.scheduledFaultCount > 0U)
+                    {
+                        ImGui::Text("현재 예약: %zu개",
+                            recordingControls.scheduledFaultCount);
+                    }
+
+                    ImGui::Separator();
                     const bool radioEnabled = formationNetwork->IsNodeRadioEnabled(source);
                     ImGui::Text("선택 드론 라디오: %s",
                         radioEnabled ? "송수신 가능" : "차단됨");
@@ -830,7 +914,9 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         setNetworkMode, packetLossPercent, setPacketLossPercent,
         latencyJitterTicks, setLatencyJitterTicks,
         formationNetwork, selectedFaultSource_,
-        selectedFaultDestination_, selectedFaultRotor_, setFormationLinkDisabled,
+        selectedFaultDestination_, selectedFaultRotor_,
+        selectedScheduleFaultKind_, scheduleDelaySeconds_, scheduleDurationSeconds_,
+        setFormationLinkDisabled,
         setFormationDirectedLinkDisabled,
         setFormationNodeRadioEnabled, setCameraFault, setRotorMotorFault,
         captureAssessment, recordingControls);

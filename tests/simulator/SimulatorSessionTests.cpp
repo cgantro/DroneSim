@@ -1347,6 +1347,61 @@ TEST(SimulatorSessionTests, CoreScenarios)
 
         std::filesystem::remove(path, filesystemError);
     }
+    {
+        simulator::FaultScenarioTimeline scheduled;
+        simulator::FaultScenarioTimeline::Event linkFault;
+        linkFault.kind = simulator::FaultScenarioTimeline::Event::Kind::LinkState;
+        linkFault.source = 1U;
+        linkFault.destination = 2U;
+        linkFault.enabled = true;
+        std::string error;
+        EXPECT_FALSE(scheduled.ScheduleEvent(
+            1000U, {1U, 2U}, "complete", 60U, 0U, linkFault, error));
+        EXPECT_FALSE(scheduled.IsReplaying());
+
+        ASSERT_TRUE(scheduled.ScheduleEvent(
+            1000U, {1U, 2U}, "complete", 60U, 120U, linkFault, error))
+            << error;
+        simulator::FaultScenarioTimeline::Event cameraFault;
+        cameraFault.kind = simulator::FaultScenarioTimeline::Event::Kind::CameraFault;
+        cameraFault.source = 2U;
+        cameraFault.enabled = true;
+        ASSERT_TRUE(scheduled.ScheduleEvent(
+            1000U, {1U, 2U}, "complete", 60U, 60U, cameraFault, error))
+            << error;
+        EXPECT_EQ(scheduled.ScheduledFaultCount(), 2U);
+        EXPECT_TRUE(scheduled.TakeDueEvents(1059U).empty());
+
+        const auto starts = scheduled.TakeDueEvents(1060U);
+        ASSERT_EQ(starts.size(), 2U);
+        EXPECT_TRUE(starts[0].enabled);
+        EXPECT_TRUE(starts[1].enabled);
+        const auto cameraRestore = scheduled.TakeDueEvents(1120U);
+        ASSERT_EQ(cameraRestore.size(), 1U);
+        EXPECT_EQ(cameraRestore.front().kind,
+            simulator::FaultScenarioTimeline::Event::Kind::CameraFault);
+        EXPECT_FALSE(cameraRestore.front().enabled);
+        const auto linkRestore = scheduled.TakeDueEvents(1180U);
+        ASSERT_EQ(linkRestore.size(), 1U);
+        EXPECT_EQ(linkRestore.front().kind,
+            simulator::FaultScenarioTimeline::Event::Kind::LinkState);
+        EXPECT_FALSE(linkRestore.front().enabled);
+        EXPECT_TRUE(scheduled.ReplayFinished());
+
+        const auto scheduledPath = std::filesystem::temp_directory_path()
+            / "dronesim-scheduled-faults-test.json";
+        ASSERT_TRUE(scheduled.SaveRecording(scheduledPath, error)) << error;
+        simulator::FaultScenarioTimeline reloaded;
+        ASSERT_TRUE(reloaded.LoadRecording(scheduledPath, error)) << error;
+        EXPECT_EQ(reloaded.ScheduledFaultCount(), 2U);
+        EXPECT_EQ(reloaded.EventCount(), 4U);
+        ASSERT_TRUE(reloaded.StartReplay(2000U, {1U, 2U}, "complete", error))
+            << error;
+        EXPECT_TRUE(reloaded.TakeDueEvents(2059U).empty());
+        EXPECT_EQ(reloaded.TakeDueEvents(2060U).size(), 2U);
+        std::error_code removeError;
+        std::filesystem::remove(scheduledPath, removeError);
+    }
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget());
     EXPECT_NO_FATAL_FAILURE(

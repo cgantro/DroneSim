@@ -187,6 +187,8 @@ private:
     void StartFaultScenarioRecording();
     void StopFaultScenarioRecording();
     void StartFaultScenarioReplay();
+    void ScheduleFaultScenarioEvent(FaultScenarioTimeline::Event event,
+        std::uint32_t delayTicks, std::uint32_t durationTicks);
     [[nodiscard]] std::string CurrentFaultScenarioMissionKind() const;
 #endif
     /** @brief 현재 실행 경로에서 스모크 검사를 끝낼 조건이 충족됐는지 확인한다. */

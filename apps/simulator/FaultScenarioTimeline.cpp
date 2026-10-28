@@ -86,6 +86,31 @@ std::uint32_t ReadRotorIndex(const Json& value)
     }
     throw std::invalid_argument("로터 번호는 0부터 3 사이의 정수여야 합니다.");
 }
+
+FaultScenarioTimeline::Event RestoreEvent(
+    FaultScenarioTimeline::Event event)
+{
+    using Kind = FaultScenarioTimeline::Event::Kind;
+    switch (event.kind)
+    {
+    case Kind::PacketLoss:
+        event.value = 0.0;
+        break;
+    case Kind::LinkLatencyJitter:
+        event.valueTicks = 0U;
+        break;
+    case Kind::CameraFault:
+    case Kind::RotorMotorFault:
+    case Kind::LinkState:
+    case Kind::DirectedLinkState:
+        event.enabled = false;
+        break;
+    case Kind::RadioState:
+        event.enabled = true;
+        break;
+    }
+    return event;
+}
 }
 
 void FaultScenarioTimeline::StartRecording(std::uint64_t currentTick,
@@ -96,6 +121,7 @@ void FaultScenarioTimeline::StartRecording(std::uint64_t currentTick,
     missionKind_ = std::move(missionKind);
     recordingStartTick_ = currentTick;
     replayEventIndex_ = 0;
+    scheduledFaultCount_ = 0U;
     recording_ = true;
     replaying_ = false;
 }
@@ -118,6 +144,7 @@ bool FaultScenarioTimeline::SaveRecording(const std::filesystem::path& path,
         {"version", 1},
         {"mission", missionKind_},
         {"drones", droneIds_},
+        {"scheduled_faults", scheduledFaultCount_},
         {"events", Json::array()}};
     for (const Event& event : events_)
     {
@@ -275,6 +302,7 @@ bool FaultScenarioTimeline::LoadRecording(const std::filesystem::path& path,
         droneIds_ = std::move(droneIds);
         missionKind_ = document.at("mission").get<std::string>();
         events_ = std::move(events);
+        scheduledFaultCount_ = document.value("scheduled_faults", 0U);
         recording_ = false;
         replaying_ = false;
         replayEventIndex_ = 0;
@@ -301,6 +329,119 @@ bool FaultScenarioTimeline::StartReplay(std::uint64_t currentTick,
     replayStartTick_ = currentTick;
     replayEventIndex_ = 0;
     replaying_ = true;
+    error.clear();
+    return true;
+}
+
+bool FaultScenarioTimeline::ScheduleEvent(std::uint64_t currentTick,
+    const std::vector<simulation::DroneId>& droneIds,
+    std::string_view missionKind, std::uint32_t delayTicks,
+    std::uint32_t durationTicks, Event event, std::string& error)
+{
+    using Kind = Event::Kind;
+    const bool startingSchedule = !replaying_;
+    if (recording_ || droneIds.empty() || missionKind.empty()
+        || durationTicks == 0U)
+    {
+        error = "임무가 실행 중인지, 장애 지속 시간이 0보다 큰지 확인하세요.";
+        return false;
+    }
+
+    if (!startingSchedule && (currentTick < replayStartTick_
+        || droneIds != droneIds_ || missionKind != missionKind_))
+    {
+        error = "현재 임무나 드론 구성이 예약한 장애 조건과 다릅니다.";
+        return false;
+    }
+
+    const auto hasDrone = [&droneIds](simulation::DroneId id)
+    {
+        return std::find(droneIds.begin(), droneIds.end(), id) != droneIds.end();
+    };
+    switch (event.kind)
+    {
+    case Kind::PacketLoss:
+        if (!std::isfinite(event.value) || event.value < 0.0 || event.value > 1.0)
+        {
+            error = "패킷 손실률은 0부터 1 사이여야 합니다.";
+            return false;
+        }
+        break;
+    case Kind::LinkLatencyJitter:
+        break;
+    case Kind::CameraFault:
+        if (!hasDrone(event.source) || !event.enabled)
+        {
+            error = "카메라 고장 예약 대상이 올바르지 않습니다.";
+            return false;
+        }
+        break;
+    case Kind::RotorMotorFault:
+        if (!hasDrone(event.source) || !event.enabled
+            || event.rotorIndex >= simulation::QuadrotorParameters::rotorCount)
+        {
+            error = "로터 고장 예약 대상이나 번호가 올바르지 않습니다.";
+            return false;
+        }
+        break;
+    case Kind::LinkState:
+    case Kind::DirectedLinkState:
+        if (!hasDrone(event.source) || !hasDrone(event.destination)
+            || event.source == event.destination || !event.enabled)
+        {
+            error = "링크 장애에는 서로 다른 두 드론이 필요합니다.";
+            return false;
+        }
+        break;
+    case Kind::RadioState:
+        if (!hasDrone(event.source) || event.enabled)
+        {
+            error = "라디오 차단 예약 대상이 올바르지 않습니다.";
+            return false;
+        }
+        break;
+    }
+
+    const std::uint64_t elapsedTicks = startingSchedule
+        ? 0U : currentTick - replayStartTick_;
+    const std::uint64_t startOffset = elapsedTicks + delayTicks;
+    if (startOffset < elapsedTicks
+        || durationTicks > std::numeric_limits<std::uint64_t>::max() - startOffset)
+    {
+        error = "장애 예약 시각이 허용 범위를 넘었습니다.";
+        return false;
+    }
+    const std::uint64_t endOffset = startOffset + durationTicks;
+    Event restore = RestoreEvent(event);
+    event.tickOffset = startOffset;
+    restore.tickOffset = endOffset;
+
+    if (startingSchedule)
+    {
+        events_.clear();
+        droneIds_ = droneIds;
+        missionKind_ = std::string(missionKind);
+        replayStartTick_ = currentTick;
+        replayEventIndex_ = 0U;
+        scheduledFaultCount_ = 0U;
+        replaying_ = true;
+    }
+
+    const auto insertFutureEvent = [this](Event scheduled)
+    {
+        const auto firstPending = events_.begin()
+            + static_cast<std::ptrdiff_t>(replayEventIndex_);
+        const auto position = std::upper_bound(firstPending, events_.end(),
+            scheduled.tickOffset,
+            [](std::uint64_t tick, const Event& candidate)
+            {
+                return tick < candidate.tickOffset;
+            });
+        events_.insert(position, scheduled);
+    };
+    insertFutureEvent(event);
+    insertFutureEvent(restore);
+    ++scheduledFaultCount_;
     error.clear();
     return true;
 }
@@ -405,6 +546,10 @@ bool FaultScenarioTimeline::ReplayFinished() const noexcept
     return replaying_ && replayEventIndex_ >= events_.size();
 }
 std::size_t FaultScenarioTimeline::EventCount() const noexcept { return events_.size(); }
+std::size_t FaultScenarioTimeline::ScheduledFaultCount() const noexcept
+{
+    return scheduledFaultCount_;
+}
 
 void FaultScenarioTimeline::Record(Event event, std::uint64_t currentTick)
 {

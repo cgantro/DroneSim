@@ -50,10 +50,10 @@ void AeroSimLabApp::StartFaultScenarioRecording()
 
 void AeroSimLabApp::StopFaultScenarioRecording()
 {
-    if (!faultScenarioTimeline_.IsRecording())
+    if (faultScenarioTimeline_.IsRecording())
+        faultScenarioTimeline_.StopRecording();
+    else if (faultScenarioTimeline_.EventCount() == 0U)
         return;
-
-    faultScenarioTimeline_.StopRecording();
     const std::filesystem::path path = detail::ExecutableDirectory()
         / "output" / "scenarios" / "fault-timeline.json";
     std::string error;
@@ -83,6 +83,33 @@ void AeroSimLabApp::StartFaultScenarioReplay()
         return;
     }
     faultScenarioStatus_ = "저장한 장애 순서를 현재 편대 임무에 적용합니다.";
+}
+
+void AeroSimLabApp::ScheduleFaultScenarioEvent(
+    FaultScenarioTimeline::Event event, std::uint32_t delayTicks,
+    std::uint32_t durationTicks)
+{
+    const bool missionActive = formationTransit_.active
+        || FleetReconnaissanceIsActive() || CompleteFleetMissionIsActive();
+    if (!missionActive || !formationNetwork_)
+    {
+        faultScenarioStatus_ = "편대 임무가 실행 중일 때 장애를 예약할 수 있습니다.";
+        return;
+    }
+
+    std::string error;
+    if (!faultScenarioTimeline_.ScheduleEvent(simulation_.TickCount(),
+            simulation_.DroneIds(), CurrentFaultScenarioMissionKind(),
+            delayTicks, durationTicks, event, error))
+    {
+        faultScenarioStatus_ = "장애 예약 실패: " + error;
+        return;
+    }
+
+    faultScenarioStatus_ = "장애 " + std::to_string(
+        faultScenarioTimeline_.ScheduledFaultCount()) + "개 예약 · "
+        + std::to_string(delayTicks / 60U) + "초 뒤 시작, "
+        + std::to_string(durationTicks / 60U) + "초 뒤 자동 해제";
 }
 
 void AeroSimLabApp::ApplyDueFaultScenarioEvents()
@@ -136,8 +163,11 @@ void AeroSimLabApp::ApplyDueFaultScenarioEvents()
 
     if (faultScenarioTimeline_.ReplayFinished())
     {
+        const bool wasScheduled = faultScenarioTimeline_.ScheduledFaultCount() > 0U;
         faultScenarioTimeline_.StopReplay();
-        faultScenarioStatus_ = "저장한 통신 장애 순서를 모두 적용했습니다.";
+        faultScenarioStatus_ = wasScheduled
+            ? "예약한 장애와 자동 복구를 모두 적용했습니다."
+            : "저장한 통신 장애 순서를 모두 적용했습니다.";
     }
 }
 
