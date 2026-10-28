@@ -790,17 +790,17 @@ void AeroSimLabApp::RenderFrame()
         recordingControls.startCommandRecording = [this]
         {
             ApplyHudSessionCommand(
-                aerosimlab::communication::SessionCommand::StartRecording);
+                communication::SessionCommand::StartRecording);
         };
         recordingControls.stopCommandRecording = [this]
         {
             ApplyHudSessionCommand(
-                aerosimlab::communication::SessionCommand::StopRecording);
+                communication::SessionCommand::StopRecording);
         };
         recordingControls.replayCommands = [this]
         {
             ApplyHudSessionCommand(
-                aerosimlab::communication::SessionCommand::ReplayRecording);
+                communication::SessionCommand::ReplayRecording);
         };
         recordingControls.faultScenarioRecording = faultScenarioTimeline_.IsRecording();
         recordingControls.faultScenarioReplaying = faultScenarioTimeline_.IsReplaying();
@@ -850,12 +850,12 @@ void AeroSimLabApp::RenderFrame()
         recordingControls.startVideoRecording = [this]
         {
             ApplyHudVideoRecordingCommand(
-                aerosimlab::communication::VideoRecordingCommand::Start);
+                communication::VideoRecordingCommand::Start);
         };
         recordingControls.stopVideoRecording = [this]
         {
             ApplyHudVideoRecordingCommand(
-                aerosimlab::communication::VideoRecordingCommand::Stop);
+                communication::VideoRecordingCommand::Stop);
         };
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -881,7 +881,7 @@ void AeroSimLabApp::RenderFrame()
                 static_cast<void>(StartFormationTransit(shape));
             },
             fleetNetworkMode_,
-            [this](aerosimlab::communication::VirtualMeshMode mode)
+            [this](communication::VirtualMeshMode mode)
             {
                 SetFleetNetworkMode(mode);
             },

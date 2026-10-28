@@ -191,7 +191,7 @@ void AeroSimLabApp::PollGroundControl()
 
     for (int receivedCount = 0; receivedCount < 16; ++receivedCount)
     {
-        aerosimlab::communication::UdpPeer peer;
+        communication::UdpPeer peer;
         const auto datagram = udpSocket_->Receive(peer);
         if (!datagram)
             return;
@@ -203,16 +203,16 @@ void AeroSimLabApp::PollGroundControl()
 
 #ifndef __EMSCRIPTEN__
 void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
-    const aerosimlab::communication::UdpPeer& peer)
+    const communication::UdpPeer& peer)
 {
-    aerosimlab::communication::CommandPacket packet;
+    communication::CommandPacket packet;
     try
     {
-        packet = aerosimlab::communication::DecodeCommand(datagram);
+        packet = communication::DecodeCommand(datagram);
     }
     catch (const std::exception& error)
     {
-        udpSocket_->Send(aerosimlab::communication::EncodeError(error.what()), peer);
+        udpSocket_->Send(communication::EncodeError(error.what()), peer);
         return;
     }
 
@@ -233,7 +233,7 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     const auto decision = sequenceGuard_.Inspect(packet);
     const auto makeReply = [this, &packet]
     {
-        aerosimlab::communication::CommandReply reply;
+        communication::CommandReply reply;
         reply.commandId = packet.commandId;
         reply.sequence = packet.sequence;
         reply.telemetry = CurrentTelemetry();
@@ -243,10 +243,10 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         return;
 
     sequenceGuard_.Commit(packet);
-    const auto* fleetCommand = std::get_if<aerosimlab::communication::FleetCommand>(
+    const auto* fleetCommand = std::get_if<communication::FleetCommand>(
         &packet.command);
     if (fleetCommand
-        && *fleetCommand == aerosimlab::communication::FleetCommand::GetStatus)
+        && *fleetCommand == communication::FleetCommand::GetStatus)
     {
         StartEoVideoStream(peer);
         if (!captureTransferPending_.load()
@@ -293,13 +293,13 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         reply.status = "fleet_status";
         reply.appliedTick = simulation_.TickCount();
         lastReply_ = reply;
-        udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+        udpSocket_->Send(communication::EncodeReply(reply), peer);
         return;
     }
 
     externalControl_ = true;
-    if (!std::holds_alternative<aerosimlab::communication::SessionCommand>(packet.command)
-        && !std::holds_alternative<aerosimlab::communication::FleetCommand>(packet.command))
+    if (!std::holds_alternative<communication::SessionCommand>(packet.command)
+        && !std::holds_alternative<communication::FleetCommand>(packet.command))
     {
         groundControlActive_ = true;
         window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
@@ -313,7 +313,7 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
 }
 
 void AeroSimLabApp::StartEoVideoStream(
-    const aerosimlab::communication::UdpPeer& peer)
+    const communication::UdpPeer& peer)
 {
     const std::string destination = peer.AddressIpv4();
     if (eoVideoStartPending_.load())
@@ -363,15 +363,15 @@ void AeroSimLabApp::StartEoVideoStream(
 }
 
 bool AeroSimLabApp::ReplyToUnqueueableGroundCommand(
-    const aerosimlab::communication::CommandPacket& packet,
-    const aerosimlab::communication::UdpPeer& peer,
-    aerosimlab::communication::SequenceGuard::Decision decision)
+    const communication::CommandPacket& packet,
+    const communication::UdpPeer& peer,
+    communication::SequenceGuard::Decision decision)
 {
-    using Decision = aerosimlab::communication::SequenceGuard::Decision;
+    using Decision = communication::SequenceGuard::Decision;
     if (decision == Decision::Duplicate)
     {
         if (lastReply_)
-            udpSocket_->Send(aerosimlab::communication::EncodeReply(*lastReply_), peer);
+            udpSocket_->Send(communication::EncodeReply(*lastReply_), peer);
         return true;
     }
 
@@ -383,21 +383,21 @@ bool AeroSimLabApp::ReplyToUnqueueableGroundCommand(
     else
         return false;
 
-    aerosimlab::communication::CommandReply reply;
+    communication::CommandReply reply;
     reply.commandId = packet.commandId;
     reply.sequence = packet.sequence;
     reply.status = status;
     reply.telemetry = CurrentTelemetry();
-    udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), peer);
+    udpSocket_->Send(communication::EncodeReply(reply), peer);
     return true;
 }
 #endif
 
 bool AeroSimLabApp::ApplySessionCommand(
-    aerosimlab::communication::SessionCommand command,
-    aerosimlab::communication::CommandReply& reply)
+    communication::SessionCommand command,
+    communication::CommandReply& reply)
 {
-    using Command = aerosimlab::communication::SessionCommand;
+    using Command = communication::SessionCommand;
     using FlightMode = aerosimlab::simulation::FlightMode;
     const auto resetSimulationState = [this]
     {
@@ -481,22 +481,22 @@ bool AeroSimLabApp::ApplySessionCommand(
 }
 
 void AeroSimLabApp::ApplyHudSessionCommand(
-    aerosimlab::communication::SessionCommand command)
+    communication::SessionCommand command)
 {
-    aerosimlab::communication::CommandReply reply;
+    communication::CommandReply reply;
     static_cast<void>(ApplySessionCommand(command, reply));
 
     if (reply.accepted)
     {
         switch (command)
         {
-        case aerosimlab::communication::SessionCommand::StartRecording:
+        case communication::SessionCommand::StartRecording:
             sessionControlStatus_ = "조종 입력을 기록하고 있습니다.";
             break;
-        case aerosimlab::communication::SessionCommand::StopRecording:
+        case communication::SessionCommand::StopRecording:
             sessionControlStatus_ = "조종 입력 기록을 마쳤습니다.";
             break;
-        case aerosimlab::communication::SessionCommand::ReplayRecording:
+        case communication::SessionCommand::ReplayRecording:
             sessionControlStatus_ = "조종 입력을 처음부터 다시 재생합니다.";
             break;
         }
@@ -512,9 +512,9 @@ void AeroSimLabApp::ApplyHudSessionCommand(
 }
 
 void AeroSimLabApp::ApplyHudVideoRecordingCommand(
-    aerosimlab::communication::VideoRecordingCommand command)
+    communication::VideoRecordingCommand command)
 {
-    aerosimlab::communication::CommandReply reply;
+    communication::CommandReply reply;
     ApplyVideoRecordingCommand(command, reply);
     if (!reply.accepted)
     {
@@ -524,7 +524,7 @@ void AeroSimLabApp::ApplyHudVideoRecordingCommand(
         return;
     }
 
-    if (command == aerosimlab::communication::VideoRecordingCommand::Start)
+    if (command == communication::VideoRecordingCommand::Start)
     {
         const std::string filename = eoVideoRecorder_
             ? eoVideoRecorder_->VideoPath().filename().string() : std::string{};
@@ -544,14 +544,14 @@ void AeroSimLabApp::ApplyHudVideoRecordingCommand(
 }
 
 void AeroSimLabApp::ApplyVideoRecordingCommand(
-    aerosimlab::communication::VideoRecordingCommand command,
-    aerosimlab::communication::CommandReply& reply)
+    communication::VideoRecordingCommand command,
+    communication::CommandReply& reply)
 {
 #ifdef __EMSCRIPTEN__
     static_cast<void>(command);
     reply.status = "video_recording_requires_native";
 #else
-    using Command = aerosimlab::communication::VideoRecordingCommand;
+    using Command = communication::VideoRecordingCommand;
     if (command == Command::Start)
     {
         if (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
@@ -613,7 +613,7 @@ void AeroSimLabApp::ApplyVideoRecordingCommand(
 void AeroSimLabApp::ApplyDroneCommand(
     aerosimlab::simulation::DroneId droneId,
     const aerosimlab::simulation::DroneCommand& command,
-    aerosimlab::communication::CommandReply& reply)
+    communication::CommandReply& reply)
 {
     if (commandRecording_.IsReplaying())
     {
@@ -661,10 +661,10 @@ void AeroSimLabApp::ApplyDroneCommand(
 }
 
 void AeroSimLabApp::ApplyCameraCommand(
-    aerosimlab::communication::CameraCommand command,
-    aerosimlab::communication::CommandReply& reply)
+    communication::CameraCommand command,
+    communication::CommandReply& reply)
 {
-    using Command = aerosimlab::communication::CameraCommand;
+    using Command = communication::CameraCommand;
     switch (command)
     {
     case Command::Enable: simulation_.SetCameraEnabled(true); break;
@@ -678,9 +678,9 @@ void AeroSimLabApp::ApplyCameraCommand(
 }
 
 void AeroSimLabApp::ApplyAddDroneCommand(
-    aerosimlab::communication::CommandReply& reply)
+    communication::CommandReply& reply)
 {
-    if (simulation_.DroneCount() >= aerosimlab::communication::maximumFleetDroneCount)
+    if (simulation_.DroneCount() >= communication::maximumFleetDroneCount)
     {
         reply.accepted = false;
         reply.status = "fleet_limit_reached";
@@ -733,7 +733,7 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         return false;
 
     const auto& pending = *pendingCommand_;
-    aerosimlab::communication::CommandReply reply;
+    communication::CommandReply reply;
     reply.commandId = pending.packet.commandId;
     reply.sequence = pending.packet.sequence;
     reply.receivedAtMilliseconds = pending.receivedAtMilliseconds;
@@ -748,22 +748,22 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
                 .value_or(simulation_.PrimaryDroneId());
             ApplyDroneCommand(droneId, command, reply);
         },
-        [this, &reply](aerosimlab::communication::CameraCommand command)
+        [this, &reply](communication::CameraCommand command)
         {
             ApplyCameraCommand(command, reply);
         },
         [this, &reply, &replayTickAdvanced](
-            aerosimlab::communication::SessionCommand command)
+            communication::SessionCommand command)
         {
             replayTickAdvanced = ApplySessionCommand(command, reply);
         },
-        [this, &reply](aerosimlab::communication::VideoRecordingCommand command)
+        [this, &reply](communication::VideoRecordingCommand command)
         {
             ApplyVideoRecordingCommand(command, reply);
         },
-        [this, &reply](aerosimlab::communication::InspectionCommand command)
+        [this, &reply](communication::InspectionCommand command)
         {
-            if (command == aerosimlab::communication::InspectionCommand::Start)
+            if (command == communication::InspectionCommand::Start)
             {
                 reply.accepted = RequestInspectionMission();
                 reply.status = reply.accepted
@@ -771,7 +771,7 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
                 return;
             }
 
-            if (command == aerosimlab::communication::InspectionCommand::Pause)
+            if (command == communication::InspectionCommand::Pause)
             {
                 reply.accepted = PauseInspectionMission();
                 reply.status = reply.accepted
@@ -779,7 +779,7 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
                 return;
             }
 
-            if (command == aerosimlab::communication::InspectionCommand::Resume)
+            if (command == communication::InspectionCommand::Resume)
             {
                 reply.accepted = ResumeInspectionMission();
                 reply.status = reply.accepted
@@ -791,11 +791,11 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
             reply.status = reply.accepted
                 ? "inspection_mission_cancelled" : "no_active_inspection_mission";
         },
-        [this, &reply](aerosimlab::communication::FleetCommand command)
+        [this, &reply](communication::FleetCommand command)
         {
-            if (command == aerosimlab::communication::FleetCommand::AddDrone)
+            if (command == communication::FleetCommand::AddDrone)
                 ApplyAddDroneCommand(reply);
-            else if (command == aerosimlab::communication::FleetCommand::DispatchReconnaissance)
+            else if (command == communication::FleetCommand::DispatchReconnaissance)
             {
                 reply.accepted = StartFleetReconnaissance();
                 reply.status = reply.accepted
@@ -813,7 +813,7 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
     lastReply_ = reply;
     try
     {
-        udpSocket_->Send(aerosimlab::communication::EncodeReply(reply), pending.peer);
+        udpSocket_->Send(communication::EncodeReply(reply), pending.peer);
     }
     catch (const std::exception& error)
     {
@@ -837,9 +837,9 @@ void AeroSimLabApp::ApplyRecordedCommands()
     }
 }
 
-aerosimlab::communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
+communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
 {
-    aerosimlab::communication::Telemetry telemetry;
+    communication::Telemetry telemetry;
     telemetry.tick = simulation_.TickCount();
     telemetry.simulationTimeSeconds = simulation_.SimulationTimeSeconds();
     telemetry.primaryDroneId = simulation_.PrimaryDroneId();

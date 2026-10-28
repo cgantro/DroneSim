@@ -64,6 +64,8 @@ class RtpVideoSender;
 
 namespace aerosimlab::simulator
 {
+namespace communication = ::aerosimlab::communication;
+
 class SimulatorHud;
 class TrainingRangeScene;
 
@@ -84,7 +86,7 @@ public:
         bool smokeTest = false;
         /** @brief 별도 지정이 없으면 플랫폼 기본 비행 계산을 사용한다. */
         std::optional<aerosimlab::simulation::SimulationDynamics> simulationDynamics;
-        std::uint16_t udpPort = aerosimlab::communication::defaultPort;
+        std::uint16_t udpPort = communication::defaultPort;
         bool demoMode = false;
         bool networkEnabled = true;
         bool benchmarkMode = false;
@@ -226,7 +228,7 @@ private:
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
-    void SetFleetNetworkMode(aerosimlab::communication::VirtualMeshMode mode);
+    void SetFleetNetworkMode(communication::VirtualMeshMode mode);
     void InitializeFleetLeadership();
     void BeginFleetLeaderReplacement();
     void SendFleetLeaderProbes();
@@ -265,13 +267,13 @@ private:
     void PollGroundControl();
 #ifndef __EMSCRIPTEN__
     void ProcessGroundDatagram(const std::string& datagram,
-        const aerosimlab::communication::UdpPeer& peer);
-    void StartEoVideoStream(const aerosimlab::communication::UdpPeer& peer);
+        const communication::UdpPeer& peer);
+    void StartEoVideoStream(const communication::UdpPeer& peer);
     /** @brief 중복·역순·처리 중인 명령에 응답하고 새 명령 접수 여부를 돌려준다. */
     [[nodiscard]] bool ReplyToUnqueueableGroundCommand(
-        const aerosimlab::communication::CommandPacket& packet,
-        const aerosimlab::communication::UdpPeer& peer,
-        aerosimlab::communication::SequenceGuard::Decision decision);
+        const communication::CommandPacket& packet,
+        const communication::UdpPeer& peer,
+        communication::SequenceGuard::Decision decision);
 #endif
     void PollGamepad();
     /** @brief 연결이 끊긴 뒤 남은 조종 입력을 지우고 필요한 정지 명령을 예약한다. */
@@ -287,27 +289,27 @@ private:
      * @return true면 재생 시작 과정에서 첫 Tick까지 진행했으므로 바깥에서 한 번 더 진행하지 않는다.
      */
     [[nodiscard]] bool ApplySessionCommand(
-        aerosimlab::communication::SessionCommand command,
-        aerosimlab::communication::CommandReply& reply);
+        communication::SessionCommand command,
+        communication::CommandReply& reply);
     void ApplyVideoRecordingCommand(
-        aerosimlab::communication::VideoRecordingCommand command,
-        aerosimlab::communication::CommandReply& reply);
-    void ApplyHudSessionCommand(aerosimlab::communication::SessionCommand command);
+        communication::VideoRecordingCommand command,
+        communication::CommandReply& reply);
+    void ApplyHudSessionCommand(communication::SessionCommand command);
     void ApplyHudVideoRecordingCommand(
-        aerosimlab::communication::VideoRecordingCommand command);
+        communication::VideoRecordingCommand command);
     void ApplyDroneCommand(aerosimlab::simulation::DroneId droneId,
         const aerosimlab::simulation::DroneCommand& command,
-        aerosimlab::communication::CommandReply& reply);
-    void ApplyCameraCommand(aerosimlab::communication::CameraCommand command,
-        aerosimlab::communication::CommandReply& reply);
+        communication::CommandReply& reply);
+    void ApplyCameraCommand(communication::CameraCommand command,
+        communication::CommandReply& reply);
     /** @brief 새 드론의 지면 위치를 정하고 편대에 추가한 결과를 응답에 담는다. */
-    void ApplyAddDroneCommand(aerosimlab::communication::CommandReply& reply);
+    void ApplyAddDroneCommand(communication::CommandReply& reply);
     /** @brief 대기 중인 지상통제 요청을 처리하고 이번 Tick을 진행했는지 반환한다. */
     [[nodiscard]] bool ProcessPendingGroundCommand();
     void ExpireGroundControlCommand();
     void ApplyRecordedCommands();
     void WriteBenchmarkReport(double elapsedSeconds) const;
-    [[nodiscard]] aerosimlab::communication::Telemetry CurrentTelemetry() const;
+    [[nodiscard]] communication::Telemetry CurrentTelemetry() const;
     void RenderFrame();
     /** @brief 화면 크기에 맞춰 관찰 카메라의 시야 비율을 갱신한다. */
     void UpdateObserverCamera(int width, int height);
@@ -455,15 +457,15 @@ private:
 #ifndef __EMSCRIPTEN__
     struct PendingGroundCommand
     {
-        aerosimlab::communication::CommandPacket packet;
-        aerosimlab::communication::UdpPeer peer;
+        communication::CommandPacket packet;
+        communication::UdpPeer peer;
         std::uint64_t receivedAtMilliseconds = 0;
     };
     std::optional<PendingGroundCommand> pendingCommand_;
-    std::optional<aerosimlab::communication::UdpPeer> activePeer_;
-    std::optional<aerosimlab::communication::CommandReply> lastReply_;
-    aerosimlab::communication::SequenceGuard sequenceGuard_;
-    std::unique_ptr<aerosimlab::communication::UdpSocket> udpSocket_;
+    std::optional<communication::UdpPeer> activePeer_;
+    std::optional<communication::CommandReply> lastReply_;
+    communication::SequenceGuard sequenceGuard_;
+    std::unique_ptr<communication::UdpSocket> udpSocket_;
 #endif
     std::unique_ptr<aerosimlab::graphics::Window> window_;
 #ifndef __EMSCRIPTEN__
@@ -614,10 +616,10 @@ private:
         std::string status = "대기";
     };
     CompleteFleetMissionState completeFleetMission_;
-    std::unique_ptr<aerosimlab::communication::VirtualMeshNetwork> formationNetwork_;
-    aerosimlab::communication::VirtualMeshMode fleetNetworkMode_ =
-        aerosimlab::communication::VirtualMeshMode::AdaptiveMesh;
-    std::vector<aerosimlab::communication::RadioObstacle> formationRadioObstacles_;
+    std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
+    communication::VirtualMeshMode fleetNetworkMode_ =
+        communication::VirtualMeshMode::AdaptiveMesh;
+    std::vector<communication::RadioObstacle> formationRadioObstacles_;
     float fleetPacketLossPercent_ = 0.0F;
     std::uint32_t fleetLatencyJitterTicks_ = 0U;
     aerosimlab::terrain::TerrainGrid terrainGrid_;

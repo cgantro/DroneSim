@@ -30,7 +30,7 @@ int AeroSimLabApp::Run()
 #ifndef __EMSCRIPTEN__
     if (networkEnabled_)
     {
-        udpSocket_ = std::make_unique<aerosimlab::communication::UdpSocket>(udpPort_);
+        udpSocket_ = std::make_unique<communication::UdpSocket>(udpPort_);
     }
 #endif
 #ifndef __EMSCRIPTEN__

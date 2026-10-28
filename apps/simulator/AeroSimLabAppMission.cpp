@@ -67,8 +67,8 @@ std::optional<PeerTelemetry> DecodePeerTelemetry(const std::string& payload)
 
 namespace
 {
-constexpr aerosimlab::communication::NetworkNodeId groundControlNodeId =
-    std::numeric_limits<aerosimlab::communication::NetworkNodeId>::max();
+constexpr communication::NetworkNodeId groundControlNodeId =
+    std::numeric_limits<communication::NetworkNodeId>::max();
 constexpr std::uint64_t peerTelemetrySuspectAfterTicks = 30U;
 constexpr std::uint64_t peerTelemetryUnknownAfterTicks = 180U;
 constexpr std::uint64_t missionLeaseGraceTicks = 1800U;
@@ -1534,7 +1534,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     peerTelemetryAtLeader_.clear();
     telemetryAtGroundControl_.clear();
 
-    aerosimlab::communication::VirtualMeshSettings settings;
+    communication::VirtualMeshSettings settings;
     settings.mode = fleetNetworkMode_;
     settings.leaderNodeId = fleetLeaderId_;
     settings.maximumLinkRangeMeters = 130.0;
@@ -1545,7 +1545,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     settings.packetLossProbability = static_cast<double>(fleetPacketLossPercent_) / 100.0;
     settings.linkLatencyJitterTicks = fleetLatencyJitterTicks_;
     formationNetwork_ = std::make_unique<
-        aerosimlab::communication::VirtualMeshNetwork>(settings);
+        communication::VirtualMeshNetwork>(settings);
 
     formationRadioObstacles_.clear();
     formationRadioObstacles_.reserve(routeBuildings_.size());
@@ -1561,7 +1561,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
             building.outlineMeters, groundHeight, groundHeight + building.heightMeters});
     }
 
-    std::vector<aerosimlab::communication::NetworkNodeSnapshot> nodes;
+    std::vector<communication::NetworkNodeSnapshot> nodes;
     for (const auto droneId : simulation_.DroneIds())
         nodes.push_back({droneId, simulation_.State(droneId).positionMeters});
     nodes.push_back({groundControlNodeId, groundControlPositionMeters_});
@@ -1571,7 +1571,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
 }
 
 void AeroSimLabApp::SetFleetNetworkMode(
-    aerosimlab::communication::VirtualMeshMode mode)
+    communication::VirtualMeshMode mode)
 {
     fleetNetworkMode_ = mode;
     if (formationNetwork_)
@@ -1963,7 +1963,7 @@ bool AeroSimLabApp::TryStartFleetRelayRecovery()
     using FlightMode = aerosimlab::simulation::FlightMode;
 
     if (!formationNetwork_ || fleetNetworkMode_
-            != aerosimlab::communication::VirtualMeshMode::AdaptiveMesh
+            != communication::VirtualMeshMode::AdaptiveMesh
         || fleetRelayRecovery_.relayDroneId != 0U || fleetLeaderId_ == 0U
         || leaderReplacementPending_ || leaderStateCollectionPending_)
         return false;
@@ -2274,7 +2274,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             + networkPositionRefreshTicks;
     if (refreshNetworkPositions)
     {
-        std::vector<aerosimlab::communication::NetworkNodeSnapshot> nodes;
+        std::vector<communication::NetworkNodeSnapshot> nodes;
         const auto allDroneIds = simulation_.DroneIds();
         nodes.reserve(allDroneIds.size() + 1U);
         for (const DroneId droneId : allDroneIds)
@@ -2871,9 +2871,9 @@ void AeroSimLabApp::AdvanceInspectionMission()
     if (inspectionMission_.stage == Stage::StartRequested)
     {
 #ifndef __EMSCRIPTEN__
-        aerosimlab::communication::CommandReply recordingReply;
+        communication::CommandReply recordingReply;
         ApplyVideoRecordingCommand(
-            aerosimlab::communication::VideoRecordingCommand::Start, recordingReply);
+            communication::VideoRecordingCommand::Start, recordingReply);
         if (!recordingReply.accepted)
         {
             FailInspectionMission(recordingReply.status);
@@ -3074,9 +3074,9 @@ void AeroSimLabApp::AdvanceInspectionMission()
         if (eoVideoRecorder_)
             eoVideoRecorder_->SetMissionOutcome(
                 EoVideoRecorder::MissionOutcome::Completed);
-        aerosimlab::communication::CommandReply recordingReply;
+        communication::CommandReply recordingReply;
         ApplyVideoRecordingCommand(
-            aerosimlab::communication::VideoRecordingCommand::Stop, recordingReply);
+            communication::VideoRecordingCommand::Stop, recordingReply);
         if (!recordingReply.accepted)
         {
             FailInspectionMission(recordingReply.status);
@@ -3104,9 +3104,9 @@ void AeroSimLabApp::FailInspectionMission(const std::string& reason)
     {
         eoVideoRecorder_->SetMissionOutcome(
             EoVideoRecorder::MissionOutcome::Failed, reason);
-        aerosimlab::communication::CommandReply recordingReply;
+        communication::CommandReply recordingReply;
         ApplyVideoRecordingCommand(
-            aerosimlab::communication::VideoRecordingCommand::Stop, recordingReply);
+            communication::VideoRecordingCommand::Stop, recordingReply);
     }
 #endif
 }
