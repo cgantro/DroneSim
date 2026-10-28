@@ -353,6 +353,7 @@ void DrawFlightStatusPanel(
         setFormationDirectedLinkDisabled,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
+    const std::function<void(simulation::DroneId, bool)>& setCameraFault,
     simulation::CaptureAssessment captureAssessment,
     const SessionRecordingControls& recordingControls)
 {
@@ -473,6 +474,23 @@ void DrawFlightStatusPanel(
                     else if (ImGui::Button("선택 드론 라디오 복구"))
                     {
                         setFormationNodeRadioEnabled(source, true);
+                    }
+
+                    const auto cameraStatus = simulation.Camera(source).status;
+                    const bool cameraFaulted = cameraStatus
+                        == simulation::CameraStatus::Fault;
+                    ImGui::Text("선택 드론 카메라: %s",
+                        cameraFaulted ? "고장"
+                            : cameraStatus == simulation::CameraStatus::Active
+                                ? "켜짐" : "꺼짐");
+                    if (cameraFaulted)
+                    {
+                        if (ImGui::Button("선택 드론 카메라 복구"))
+                            setCameraFault(source, false);
+                    }
+                    else if (ImGui::Button("선택 드론 카메라 고장 주입"))
+                    {
+                        setCameraFault(source, true);
                     }
 
                     if (source == destination)
@@ -748,6 +766,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         setFormationDirectedLinkDisabled,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
+    const std::function<void(simulation::DroneId, bool)>& setCameraFault,
     simulation::CaptureAssessment captureAssessment,
     const SessionRecordingControls& recordingControls,
     const std::function<std::uint32_t(int, int)>& renderScene,
@@ -782,7 +801,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
         setFormationDirectedLinkDisabled,
-        setFormationNodeRadioEnabled, captureAssessment, recordingControls);
+        setFormationNodeRadioEnabled, setCameraFault,
+        captureAssessment, recordingControls);
 
     if (timings != nullptr)
     {

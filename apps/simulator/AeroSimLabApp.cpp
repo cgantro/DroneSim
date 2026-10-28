@@ -887,6 +887,12 @@ void AeroSimLabApp::RenderFrame()
                         simulation_.TickCount(), droneId, enabled);
                 }
             },
+            [this](aerosimlab::simulation::DroneId droneId, bool faulted)
+            {
+                simulation_.SetCameraFault(droneId, faulted);
+                faultScenarioTimeline_.RecordCameraFault(
+                    simulation_.TickCount(), droneId, faulted);
+            },
             captureAssessment,
             recordingControls,
             [this](int width, int height) { return RenderScenePanel(width, height); },

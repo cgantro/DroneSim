@@ -105,6 +105,7 @@ public:
             setFormationDirectedLinkDisabled,
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
+        const std::function<void(simulation::DroneId, bool)>& setCameraFault,
         simulation::CaptureAssessment captureAssessment,
         const SessionRecordingControls& recordingControls,
         const std::function<std::uint32_t(int, int)>& renderScene,

@@ -24,6 +24,7 @@ std::string_view EventName(FaultScenarioTimeline::Event::Kind kind)
     {
     case Kind::PacketLoss: return "packet_loss";
     case Kind::LinkLatencyJitter: return "link_latency_jitter";
+    case Kind::CameraFault: return "camera_fault";
     case Kind::LinkState: return "link_state";
     case Kind::DirectedLinkState: return "directed_link_state";
     case Kind::RadioState: return "radio_state";
@@ -36,6 +37,7 @@ FaultScenarioTimeline::Event::Kind ReadEventKind(const Json& value)
     const std::string name = value.get<std::string>();
     if (name == "packet_loss") return FaultScenarioTimeline::Event::Kind::PacketLoss;
     if (name == "link_latency_jitter") return FaultScenarioTimeline::Event::Kind::LinkLatencyJitter;
+    if (name == "camera_fault") return FaultScenarioTimeline::Event::Kind::CameraFault;
     if (name == "link_state") return FaultScenarioTimeline::Event::Kind::LinkState;
     if (name == "directed_link_state") return FaultScenarioTimeline::Event::Kind::DirectedLinkState;
     if (name == "radio_state") return FaultScenarioTimeline::Event::Kind::RadioState;
@@ -106,6 +108,10 @@ bool FaultScenarioTimeline::SaveRecording(const std::filesystem::path& path,
             break;
         case Event::Kind::LinkLatencyJitter:
             encoded["max_extra_ticks"] = event.valueTicks;
+            break;
+        case Event::Kind::CameraFault:
+            encoded["drone"] = event.source;
+            encoded["faulted"] = event.enabled;
             break;
         case Event::Kind::LinkState:
         case Event::Kind::DirectedLinkState:
@@ -203,6 +209,12 @@ bool FaultScenarioTimeline::LoadRecording(const std::filesystem::path& path,
             case Event::Kind::LinkLatencyJitter:
                 event.valueTicks = ReadTickCount(encoded.at("max_extra_ticks"));
                 break;
+            case Event::Kind::CameraFault:
+                event.source = ReadDroneId(encoded.at("drone"));
+                event.enabled = encoded.at("faulted").get<bool>();
+                if (!uniqueDroneIds.contains(event.source))
+                    throw std::invalid_argument("카메라 장애 대상이 드론 목록에 없습니다.");
+                break;
             case Event::Kind::LinkState:
             case Event::Kind::DirectedLinkState:
                 event.source = ReadDroneId(encoded.at("source"));
@@ -278,6 +290,16 @@ void FaultScenarioTimeline::RecordLinkLatencyJitter(
     Event event;
     event.kind = Event::Kind::LinkLatencyJitter;
     event.valueTicks = maximumExtraTicks;
+    Record(event, currentTick);
+}
+
+void FaultScenarioTimeline::RecordCameraFault(std::uint64_t currentTick,
+    simulation::DroneId droneId, bool faulted)
+{
+    Event event;
+    event.kind = Event::Kind::CameraFault;
+    event.source = droneId;
+    event.enabled = faulted;
     Record(event, currentTick);
 }
 

@@ -113,6 +113,9 @@ void AeroSimLabApp::ApplyDueFaultScenarioEvents()
             fleetLatencyJitterTicks_ = event.valueTicks;
             formationNetwork_->SetLinkLatencyJitterTicks(event.valueTicks);
             break;
+        case Kind::CameraFault:
+            simulation_.SetCameraFault(event.source, event.enabled);
+            break;
         case Kind::LinkState:
             formationNetwork_->SetLinkDisabled(
                 event.source, event.destination, event.enabled);
