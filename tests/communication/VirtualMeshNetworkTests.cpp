@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <vector>
 
@@ -54,6 +55,15 @@ TEST(VirtualMeshNetworkTests, RoutesMessageAcrossFourNodes)
     EXPECT_EQ(delivered.message.route, (std::vector<NetworkNodeId>{1, 2, 3, 4}));
     EXPECT_EQ(delivered.message.payload, "x=180");
     EXPECT_GE(network.Metrics().forwardedMessages, 2U);
+    const auto events = network.Events();
+    EXPECT_TRUE(std::any_of(events.begin(), events.end(), [](const MeshEvent& event)
+    {
+        return event.kind == MeshEventKind::RouteFound;
+    }));
+    EXPECT_TRUE(std::any_of(events.begin(), events.end(), [](const MeshEvent& event)
+    {
+        return event.kind == MeshEventKind::MessageDelivered;
+    }));
 }
 
 TEST(VirtualMeshNetworkTests, FindsAlternateRouteAfterLinkFailure)
@@ -97,6 +107,15 @@ TEST(VirtualMeshNetworkTests, FindsAlternateRouteAfterLinkFailure)
     }
     network.SetLinkDisabled(1, *firstHop, false);
     EXPECT_FALSE(network.IsLinkDisabled(1, *firstHop));
+    const auto events = network.Events();
+    EXPECT_TRUE(std::any_of(events.begin(), events.end(), [](const MeshEvent& event)
+    {
+        return event.kind == MeshEventKind::LinkDisabled;
+    }));
+    EXPECT_TRUE(std::any_of(events.begin(), events.end(), [](const MeshEvent& event)
+    {
+        return event.kind == MeshEventKind::RouteFound;
+    }));
 }
 
 TEST(VirtualMeshNetworkTests, BuildingBlocksRadioLink)

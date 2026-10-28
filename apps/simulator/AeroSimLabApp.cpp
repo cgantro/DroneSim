@@ -741,17 +741,12 @@ void AeroSimLabApp::RenderFrame()
             {
                 static_cast<void>(StartFormationTransit(shape));
             },
+            formationNetwork_.get(),
             [this](aerosimlab::simulation::DroneId first,
                 aerosimlab::simulation::DroneId second, bool disabled)
             {
                 if (formationNetwork_ && formationTransit_.active)
                     formationNetwork_->SetLinkDisabled(first, second, disabled);
-            },
-            [this](aerosimlab::simulation::DroneId first,
-                aerosimlab::simulation::DroneId second)
-            {
-                return formationNetwork_
-                    && formationNetwork_->IsLinkDisabled(first, second);
             },
             captureAssessment,
             [this](int width, int height) { return RenderScenePanel(width, height); },

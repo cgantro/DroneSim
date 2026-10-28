@@ -57,6 +57,22 @@ const char* CaptureStatusLabel(simulation::CaptureAssessment assessment)
     return "판정할 수 없음";
 }
 
+const char* MeshEventLabel(communication::MeshEventKind kind)
+{
+    switch (kind)
+    {
+    case communication::MeshEventKind::LinkDisabled: return "링크 장애";
+    case communication::MeshEventKind::LinkRestored: return "링크 복구";
+    case communication::MeshEventKind::NeighborDiscovered: return "이웃 발견";
+    case communication::MeshEventKind::RouteSearchStarted: return "경로 탐색";
+    case communication::MeshEventKind::RouteFound: return "경로 복구";
+    case communication::MeshEventKind::MessageDelivered: return "메시지 전달";
+    case communication::MeshEventKind::PacketDropped: return "패킷 폐기";
+    case communication::MeshEventKind::RouteError: return "경로 오류";
+    }
+    return "통신 사건";
+}
+
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
     const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspaceV3");
@@ -164,12 +180,11 @@ void DrawFlightStatusPanel(
     bool formationMissionActive,
     simulation::FormationShape& selectedFormationShape,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
+    const communication::VirtualMeshNetwork* formationNetwork,
     int& selectedFaultSource,
     int& selectedFaultDestination,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
-    const std::function<bool(simulation::DroneId, simulation::DroneId)>&
-        isFormationLinkDisabled,
     simulation::CaptureAssessment captureAssessment)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
@@ -201,53 +216,77 @@ void DrawFlightStatusPanel(
             startFormationTransit(selectedFormationShape);
         else if (!formationMissionCanStart)
             ImGui::TextDisabled("모든 드론이 지상에 있을 때 시작할 수 있습니다.");
-        if (formationMissionActive)
+        if (formationNetwork != nullptr)
         {
             ImGui::Separator();
-            ImGui::Text("통신 장애 시험");
-            const auto droneIds = simulation.DroneIds();
-            if (droneIds.size() >= 2U)
+            if (formationMissionActive)
             {
-                const int lastDroneIndex = static_cast<int>(droneIds.size() - 1U);
-                selectedFaultSource = std::clamp(selectedFaultSource, 0, lastDroneIndex);
-                selectedFaultDestination = std::clamp(
-                    selectedFaultDestination, 0, lastDroneIndex);
-                std::array<std::string, communication::maximumFleetDroneCount> names;
-                std::array<const char*, communication::maximumFleetDroneCount> namePointers{};
-                for (std::size_t index = 0; index < droneIds.size(); ++index)
+                ImGui::Text("통신 장애 시험");
+                const auto droneIds = simulation.DroneIds();
+                if (droneIds.size() >= 2U)
                 {
-                    names[index] = DroneName(droneIds[index]);
-                    namePointers[index] = names[index].c_str();
-                }
+                    const int lastDroneIndex = static_cast<int>(droneIds.size() - 1U);
+                    selectedFaultSource = std::clamp(selectedFaultSource, 0, lastDroneIndex);
+                    selectedFaultDestination = std::clamp(
+                        selectedFaultDestination, 0, lastDroneIndex);
+                    std::array<std::string, communication::maximumFleetDroneCount> names;
+                    std::array<const char*, communication::maximumFleetDroneCount> namePointers{};
+                    for (std::size_t index = 0; index < droneIds.size(); ++index)
+                    {
+                        names[index] = DroneName(droneIds[index]);
+                        namePointers[index] = names[index].c_str();
+                    }
 
-                ImGui::SetNextItemWidth(-1.0F);
-                ImGui::Combo("송신 드론", &selectedFaultSource,
-                    namePointers.data(), static_cast<int>(droneIds.size()));
-                ImGui::SetNextItemWidth(-1.0F);
-                ImGui::Combo("상대 드론", &selectedFaultDestination,
-                    namePointers.data(), static_cast<int>(droneIds.size()));
-                const simulation::DroneId source = droneIds[
-                    static_cast<std::size_t>(selectedFaultSource)];
-                const simulation::DroneId destination = droneIds[
-                    static_cast<std::size_t>(selectedFaultDestination)];
-                if (source == destination)
-                {
-                    ImGui::TextDisabled("서로 다른 드론을 골라 주세요.");
-                }
-                else
-                {
-                    const bool disabled = isFormationLinkDisabled(source, destination);
-                    ImGui::Text("강제 장애: %s", disabled ? "설정됨" : "해제됨");
-                    if (disabled)
+                    ImGui::SetNextItemWidth(-1.0F);
+                    ImGui::Combo("송신 드론", &selectedFaultSource,
+                        namePointers.data(), static_cast<int>(droneIds.size()));
+                    ImGui::SetNextItemWidth(-1.0F);
+                    ImGui::Combo("상대 드론", &selectedFaultDestination,
+                        namePointers.data(), static_cast<int>(droneIds.size()));
+                    const simulation::DroneId source = droneIds[
+                        static_cast<std::size_t>(selectedFaultSource)];
+                    const simulation::DroneId destination = droneIds[
+                        static_cast<std::size_t>(selectedFaultDestination)];
+                    if (source == destination)
                     {
-                        if (ImGui::Button("링크 복구"))
-                            setFormationLinkDisabled(source, destination, false);
+                        ImGui::TextDisabled("서로 다른 드론을 골라 주세요.");
                     }
-                    else if (ImGui::Button("링크 끊기"))
+                    else
                     {
-                        setFormationLinkDisabled(source, destination, true);
+                        const bool disabled = formationNetwork->IsLinkDisabled(source, destination);
+                        ImGui::Text("강제 장애: %s", disabled ? "설정됨" : "해제됨");
+                        const auto nextHop = formationNetwork->NextHop(source, destination);
+                        if (nextHop)
+                            ImGui::Text("현재 다음 드론: %s", DroneName(*nextHop).c_str());
+                        else
+                            ImGui::TextDisabled("현재 경로: 찾는 중 또는 연결 안 됨");
+                        if (disabled)
+                        {
+                            if (ImGui::Button("링크 복구"))
+                                setFormationLinkDisabled(source, destination, false);
+                        }
+                        else if (ImGui::Button("링크 끊기"))
+                        {
+                            setFormationLinkDisabled(source, destination, true);
+                        }
                     }
                 }
+            }
+            const auto& metrics = formationNetwork->Metrics();
+            ImGui::Text("전달 %llu · 중계 %llu · 폐기 %llu",
+                static_cast<unsigned long long>(metrics.deliveredMessages),
+                static_cast<unsigned long long>(metrics.forwardedMessages),
+                static_cast<unsigned long long>(metrics.droppedMessages));
+            const auto events = formationNetwork->Events();
+            const std::size_t visibleEvents = std::min<std::size_t>(events.size(), 4U);
+            for (std::size_t offset = 0; offset < visibleEvents; ++offset)
+            {
+                const auto& event = events[events.size() - 1U - offset];
+                ImGui::Text("%.2f초  %s  %s → %s",
+                    static_cast<double>(event.tick) / 60.0,
+                    MeshEventLabel(event.kind), DroneName(event.source).c_str(),
+                    DroneName(event.destination).c_str());
+                ImGui::TextDisabled("  %s", event.detail.c_str());
             }
         }
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
@@ -365,10 +404,9 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::string& formationMissionStatus, bool formationMissionCanStart,
     bool formationMissionActive,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
+    const communication::VirtualMeshNetwork* formationNetwork,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
-    const std::function<bool(simulation::DroneId, simulation::DroneId)>&
-        isFormationLinkDisabled,
     simulation::CaptureAssessment captureAssessment,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t()>& renderCamera,
@@ -393,8 +431,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         inspectionMissionStatus,
         missionCanStart, startInspectionMission, formationMissionStatus,
         formationMissionCanStart, formationMissionActive, selectedFormationShape_,
-        startFormationTransit, selectedFaultSource_, selectedFaultDestination_,
-        setFormationLinkDisabled, isFormationLinkDisabled,
+        startFormationTransit, formationNetwork, selectedFaultSource_,
+        selectedFaultDestination_, setFormationLinkDisabled,
         captureAssessment);
 
     if (timings != nullptr)

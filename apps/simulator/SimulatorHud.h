@@ -1,6 +1,7 @@
 #pragma once
 
 #include "communication/Protocol.h"
+#include "communication/VirtualMeshNetwork.h"
 #include "SimulationBenchmark.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
@@ -52,10 +53,9 @@ public:
         const std::string& formationMissionStatus, bool formationMissionCanStart,
         bool formationMissionActive,
         const std::function<void(simulation::FormationShape)>& startFormationTransit,
+        const communication::VirtualMeshNetwork* formationNetwork,
         const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
             setFormationLinkDisabled,
-        const std::function<bool(simulation::DroneId, simulation::DroneId)>&
-            isFormationLinkDisabled,
         simulation::CaptureAssessment captureAssessment,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t()>& renderCamera,

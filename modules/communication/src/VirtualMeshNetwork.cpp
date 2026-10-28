@@ -13,6 +13,7 @@ namespace aerosimlab::communication
 namespace
 {
 constexpr double geometryTolerance = 1.0e-9;
+constexpr std::size_t maximumRecordedEvents = 64U;
 
 std::pair<NetworkNodeId, NetworkNodeId> MakePair(
     NetworkNodeId first, NetworkNodeId second)
@@ -138,6 +139,7 @@ void VirtualMeshNetwork::SetLinkDisabled(
 
     if (disabled)
     {
+        RecordEvent(MeshEventKind::LinkDisabled, first, second, "링크를 끊었습니다.");
         for (auto& [node, table] : routes_)
         {
             std::erase_if(table, [pair, node](const auto& entry)
@@ -152,6 +154,10 @@ void VirtualMeshNetwork::SetLinkDisabled(
             else if (node == second)
                 static_cast<void>(knownNeighbors.erase(first));
         }
+    }
+    else
+    {
+        RecordEvent(MeshEventKind::LinkRestored, first, second, "링크를 복구했습니다.");
     }
 }
 
@@ -256,6 +262,11 @@ std::span<const DeliveredMeshMessage>
 VirtualMeshNetwork::DeliveredMessages() const noexcept
 {
     return deliveredMessages_;
+}
+
+std::span<const MeshEvent> VirtualMeshNetwork::Events() const noexcept
+{
+    return events_;
 }
 
 const VirtualMeshMetrics& VirtualMeshNetwork::Metrics() const noexcept
@@ -370,6 +381,8 @@ void VirtualMeshNetwork::Transmit(
             && !IsKnownNeighbor(sender, receiver)))
     {
         ++metrics_.droppedMessages;
+        RecordEvent(MeshEventKind::PacketDropped, sender, receiver,
+            "메시지를 보낼 이웃 링크가 없습니다.");
         return;
     }
 
@@ -381,6 +394,8 @@ void VirtualMeshNetwork::Transmit(
     if (randomValue < settings_.packetLossProbability)
     {
         ++metrics_.droppedMessages;
+        RecordEvent(MeshEventKind::PacketDropped, sender, receiver,
+            "설정된 패킷 손실로 버렸습니다.");
         return;
     }
 
@@ -395,6 +410,8 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
     if (!LinkAvailable(transmission.sender, transmission.receiver))
     {
         ++metrics_.droppedMessages;
+        RecordEvent(MeshEventKind::PacketDropped,
+            transmission.sender, transmission.receiver, "전송 중 링크가 끊겼습니다.");
         auto sourceRoutes = routes_.find(transmission.sender);
         if (sourceRoutes != routes_.end())
         {
@@ -440,6 +457,9 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
     switch (packet.type)
     {
     case Packet::Type::Hello:
+        if (!neighbors_[receiver].contains(transmission.sender))
+            RecordEvent(MeshEventKind::NeighborDiscovered,
+                receiver, transmission.sender, "새 이웃을 찾았습니다.");
         neighbors_[receiver][transmission.sender] = {currentTick_};
         {
             std::vector<NetworkNodeId> pendingDestinations;
@@ -496,6 +516,9 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
             const NodePair pair{packet.requestOrigin, packet.requestDestination};
             activeRequests_.erase(pair);
             activeRequestExpiryTicks_.erase(pair);
+            RecordEvent(MeshEventKind::RouteFound, packet.requestOrigin,
+                packet.requestDestination,
+                "경로를 찾았습니다. 홉 수 " + std::to_string(packet.hopCount) + ".");
             auto pending = pendingMessages_.find(pair);
             if (pending != pendingMessages_.end())
             {
@@ -548,6 +571,9 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
         packet.message.route.push_back(receiver);
         if (receiver == packet.message.destination)
         {
+            RecordEvent(MeshEventKind::MessageDelivered,
+                packet.message.source, packet.message.destination,
+                packet.message.kind + " 메시지가 도착했습니다.");
             deliveredMessages_.push_back({std::move(packet.message), currentTick_});
             ++metrics_.deliveredMessages;
             return;
@@ -576,6 +602,8 @@ void VirtualMeshNetwork::StartRouteDiscovery(
     request.remainingHops = settings_.maximumHops;
     request.hopCount = 0U;
     ++metrics_.routeRequests;
+    RecordEvent(MeshEventKind::RouteSearchStarted,
+        source, destination, "새 경로를 찾기 시작했습니다.");
     for (const auto& [neighbor, details] : knownNeighbors->second)
     {
         static_cast<void>(details);
@@ -588,6 +616,8 @@ void VirtualMeshNetwork::ForwardData(NetworkNodeId node, Packet packet)
     if (packet.remainingHops == 0U)
     {
         ++metrics_.routeErrors;
+        RecordEvent(MeshEventKind::RouteError, node, packet.message.destination,
+            "최대 홉 수를 넘었습니다.");
         return;
     }
     const auto routes = routes_.find(node);
@@ -604,6 +634,8 @@ void VirtualMeshNetwork::ForwardData(NetworkNodeId node, Packet packet)
         const NodePair pair{node, packet.message.destination};
         pendingMessages_[pair].push_back(std::move(packet.message));
         ++metrics_.routeErrors;
+        RecordEvent(MeshEventKind::RouteError, node, packet.message.destination,
+            "사용할 경로가 없어 다시 찾습니다.");
         if (!activeRequests_.contains(pair))
             StartRouteDiscovery(pair.first, pair.second);
         return;
@@ -682,6 +714,14 @@ void VirtualMeshNetwork::ExpireOldState()
         if (pendingMessages_.contains(pair))
             StartRouteDiscovery(pair.first, pair.second);
     }
+}
+
+void VirtualMeshNetwork::RecordEvent(MeshEventKind kind,
+    NetworkNodeId source, NetworkNodeId destination, std::string detail)
+{
+    if (events_.size() == maximumRecordedEvents)
+        events_.erase(events_.begin());
+    events_.push_back({currentTick_, kind, source, destination, std::move(detail)});
 }
 
 bool VirtualMeshNetwork::IsKnownNeighbor(

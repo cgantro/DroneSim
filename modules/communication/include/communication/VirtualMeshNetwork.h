@@ -75,6 +75,28 @@ struct VirtualMeshMetrics
     std::uint64_t routeErrors = 0;
 };
 
+enum class MeshEventKind
+{
+    LinkDisabled,
+    LinkRestored,
+    NeighborDiscovered,
+    RouteSearchStarted,
+    RouteFound,
+    MessageDelivered,
+    PacketDropped,
+    RouteError
+};
+
+/** @brief 화면과 시험 기록에 보여 줄 최근 통신 사건이다. */
+struct MeshEvent
+{
+    std::uint64_t tick = 0;
+    MeshEventKind kind = MeshEventKind::PacketDropped;
+    NetworkNodeId source = 0;
+    NetworkNodeId destination = 0;
+    std::string detail;
+};
+
 /**
  * @brief 거리와 장애물을 고려해 이웃을 찾고, AODV 원리를 따른 다중 홉 전달을 모의한다.
  * @details 노드의 실제 위치는 링크 가능성을 계산할 때만 사용합니다. 노드는 HELLO를 받고
@@ -108,6 +130,7 @@ public:
     void Advance(std::uint64_t tick);
 
     [[nodiscard]] std::span<const DeliveredMeshMessage> DeliveredMessages() const noexcept;
+    [[nodiscard]] std::span<const MeshEvent> Events() const noexcept;
     [[nodiscard]] const VirtualMeshMetrics& Metrics() const noexcept;
     [[nodiscard]] std::optional<NetworkNodeId> NextHop(
         NetworkNodeId source, NetworkNodeId destination) const noexcept;
@@ -161,6 +184,8 @@ private:
     void ForwardRouteReply(NetworkNodeId node, Packet packet);
     void InvalidateRoute(NetworkNodeId node, NetworkNodeId destination);
     void ExpireOldState();
+    void RecordEvent(MeshEventKind kind, NetworkNodeId source,
+        NetworkNodeId destination, std::string detail);
     [[nodiscard]] bool IsKnownNeighbor(NetworkNodeId node,
         NetworkNodeId neighbor) const noexcept;
 
@@ -177,6 +202,7 @@ private:
     std::set<NetworkNodeId> radioDisabledNodes_;
     std::vector<Transmission> transmissions_;
     std::vector<DeliveredMeshMessage> deliveredMessages_;
+    std::vector<MeshEvent> events_;
     VirtualMeshMetrics metrics_;
     std::uint64_t currentTick_ = 0;
     std::uint64_t nextHelloTick_ = 0;
