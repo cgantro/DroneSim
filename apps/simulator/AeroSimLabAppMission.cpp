@@ -1318,7 +1318,8 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
         {
             reports.emplace_back(detail::FleetMissionReport{
                 simulation_.State(droneId).mode,
-                static_cast<std::uint8_t>(mission->second.leg), mission->second.status});
+                static_cast<std::uint8_t>(mission->second.leg),
+                detail::ParseFleetDroneStatus(mission->second.status)});
             continue;
         }
 
@@ -1351,7 +1352,8 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
             continue;
         }
         reports.emplace_back(detail::FleetMissionReport{telemetry->state.mode,
-            telemetry->state.missionLeg, telemetry->state.missionStatus});
+            telemetry->state.missionLeg,
+            detail::ParseFleetDroneStatus(telemetry->state.missionStatus)});
     }
 
     const auto missionPhase = completeFleetMission_.stage == Stage::Reconnaissance

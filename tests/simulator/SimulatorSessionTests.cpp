@@ -1105,6 +1105,7 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     using simulator::detail::FleetMissionPhase;
     using simulator::detail::FleetMissionProgress;
     using simulator::detail::FleetMissionReport;
+    using simulator::detail::FleetDroneStatus;
     using simulation::FlightMode;
 
     EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress("정찰 이동 중"));
@@ -1113,50 +1114,55 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress("전체 임무 완료"));
 
     std::vector<std::optional<FleetMissionReport>> reports{
-        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"},
-        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"},
-        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"},
-        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"}};
+        FleetMissionReport{FlightMode::Grounded, 0U, FleetDroneStatus::TargetReached},
+        FleetMissionReport{FlightMode::Grounded, 0U, FleetDroneStatus::TargetReached},
+        FleetMissionReport{FlightMode::Grounded, 0U, FleetDroneStatus::TargetReached},
+        FleetMissionReport{FlightMode::Grounded, 0U, FleetDroneStatus::TargetReached}};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports).progress,
         FleetMissionProgress::Advance);
 
-    reports.back() = FleetMissionReport{FlightMode::Flying, 3U, "중계 위치 확보"};
+    reports.back() = FleetMissionReport{
+        FlightMode::Flying, 3U, FleetDroneStatus::RelayPositionSecured};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports).progress,
         FleetMissionProgress::Advance);
-    reports.back() = FleetMissionReport{FlightMode::Grounded, 3U, "중계 위치 확보"};
+    reports.back() = FleetMissionReport{
+        FlightMode::Grounded, 3U, FleetDroneStatus::RelayPositionSecured};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports).progress,
         FleetMissionProgress::Waiting);
     reports.back() = FleetMissionReport{
-        FlightMode::Landing, 3U, "중계 실패 · 안전 착륙"};
+        FlightMode::Landing, 3U, FleetDroneStatus::RelayFailed};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports).progress,
         FleetMissionProgress::Failed);
-    reports.back() = FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"};
+    reports.back() = FleetMissionReport{
+        FlightMode::Grounded, 0U, FleetDroneStatus::TargetReached};
 
     reports.back().reset();
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports).progress,
         FleetMissionProgress::Waiting);
-    reports.back() = FleetMissionReport{FlightMode::Grounded, 1U, "재집결 완료"};
+    reports.back() = FleetMissionReport{
+        FlightMode::Grounded, 1U, FleetDroneStatus::RegroupComplete};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports).progress,
         FleetMissionProgress::Waiting);
 
-    reports.back() = FleetMissionReport{FlightMode::Grounded, 0U, "경로 오류"};
+    reports.back() = FleetMissionReport{FlightMode::Grounded, 0U, FleetDroneStatus::RouteFailed};
     const auto failed = simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports);
     EXPECT_EQ(failed.progress, FleetMissionProgress::Failed);
     EXPECT_FALSE(failed.failureReason.empty());
 
     reports.assign(4U, FleetMissionReport{
-        FlightMode::Hovering, 1U, "재집결 완료"});
+        FlightMode::Hovering, 1U, FleetDroneStatus::RegroupComplete});
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Regrouping, reports).progress,
         FleetMissionProgress::Advance);
-    reports.back() = FleetMissionReport{FlightMode::Hovering, 1U, "집결 실패"};
+    reports.back() = FleetMissionReport{
+        FlightMode::Hovering, 1U, FleetDroneStatus::RegroupFailed};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Regrouping, reports).progress,
         FleetMissionProgress::Failed);
@@ -1167,26 +1173,30 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
     using simulator::detail::FleetMissionPhase;
     using simulator::detail::FleetMissionProgress;
     using simulator::detail::FleetMissionReport;
+    using simulator::detail::FleetDroneStatus;
     using simulation::FlightMode;
 
     std::vector<std::optional<FleetMissionReport>> reports{
-        FleetMissionReport{FlightMode::Grounded, 2U, "복귀 완료"},
-        FleetMissionReport{FlightMode::Hovering, 2U, "복귀 완료"}};
+        FleetMissionReport{FlightMode::Grounded, 2U, FleetDroneStatus::ReturnComplete},
+        FleetMissionReport{FlightMode::Hovering, 2U, FleetDroneStatus::ReturnComplete}};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Returning, reports).progress,
         FleetMissionProgress::Waiting);
-    reports.back() = FleetMissionReport{FlightMode::Grounded, 2U, "복귀 완료"};
+    reports.back() = FleetMissionReport{
+        FlightMode::Grounded, 2U, FleetDroneStatus::ReturnComplete};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Returning, reports).progress,
         FleetMissionProgress::Complete);
 
     reports = {
-        FleetMissionReport{FlightMode::Grounded, 2U, "저전력 복귀 완료"},
-        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"}};
+        FleetMissionReport{
+            FlightMode::Grounded, 2U, FleetDroneStatus::LowBatteryReturnComplete},
+        FleetMissionReport{FlightMode::Grounded, 0U, FleetDroneStatus::TargetReached}};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Reconnaissance, reports).progress,
         FleetMissionProgress::Advance);
-    reports.back() = FleetMissionReport{FlightMode::Grounded, 2U, "저전력 복귀 완료"};
+    reports.back() = FleetMissionReport{
+        FlightMode::Grounded, 2U, FleetDroneStatus::LowBatteryReturnComplete};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionPhase::Returning, reports).progress,
         FleetMissionProgress::Complete);

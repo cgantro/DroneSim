@@ -9,6 +9,39 @@
 
 namespace aerosimlab::simulator::detail
 {
+/** @brief 화면 문구와 분리해 임무 판정에 사용하는 드론 상태다. */
+enum class FleetDroneStatus : std::uint8_t
+{
+    Other,
+    RoutePending,
+    TakeoffReady,
+    Reconnaissance,
+    RelayPreparing,
+    MovingToRelay,
+    RegroupPreparing,
+    Regrouping,
+    ReturnPreparing,
+    Returning,
+    LowBatteryReturning,
+    LowBatteryLanding,
+    Landing,
+    ReturnLanding,
+    TargetReached,
+    RelayPositionSecured,
+    RegroupComplete,
+    ReturnComplete,
+    LowBatteryReturnComplete,
+    RouteFailed,
+    OutsideTargetLanding,
+    RegroupFailed,
+    ReturnFailed,
+    RelayFailed
+};
+
+/** @brief 통신으로 받은 표시 문구를 내부 판정 상태로 바꾼다. */
+[[nodiscard]] FleetDroneStatus ParseFleetDroneStatus(
+    std::string_view status) noexcept;
+
 /** @brief 표시 상태가 진행 중인 드론 임무인지 확인한다. */
 [[nodiscard]] bool IsFleetMissionInProgress(std::string_view status) noexcept;
 
@@ -17,7 +50,7 @@ struct FleetMissionReport
 {
     simulation::FlightMode mode;
     std::uint8_t missionLeg;
-    std::string_view status;
+    FleetDroneStatus status;
 };
 
 /** @brief 전체 임무에서 확인 중인 단계다. */
