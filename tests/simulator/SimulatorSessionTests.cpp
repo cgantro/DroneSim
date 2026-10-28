@@ -7,6 +7,7 @@
 
 #include "simulation_core/SimulationCore.h"
 #include "terrain/MapBuildings.h"
+#include "terrain/MapFlightRoute.h"
 #include "terrain/TerrainGrid.h"
 
 #include "GroundControlClient.h"
@@ -193,34 +194,55 @@ public:
             app.simulation_.SetInitialState(droneId, state);
         };
         const std::size_t disconnectedTargetIndex = 4U;
-        const double leaderGround = app.terrainGrid_.HeightAtRenderedSurfaceMeters({0.0, 0.0});
-        setState(droneIds[0], {0.0, 0.0, leaderGround + 10.0},
+        const glm::dvec3 leaderPosition =
+            app.inspectionTargets_.at(3U).approachPositionMeters;
+        glm::dvec3 firstCandidatePosition =
+            app.inspectionTargets_.at(1U).approachPositionMeters;
+        firstCandidatePosition.x += 10.0;
+        const glm::dvec3 scoutStartPosition{250.0, -20.0,
+            app.terrainGrid_.HeightAtLocalMeters({250.0, -20.0}) + 15.0};
+        const glm::dvec3 secondCandidatePosition = leaderPosition
+            + glm::dvec3{0.0, 20.0, 0.0};
+        setState(droneIds[0], leaderPosition,
             simulation::FlightMode::Grounded);
-        setState(droneIds[1], {70.0, 80.0, leaderGround + 0.5},
+        setState(droneIds[1], firstCandidatePosition,
             simulation::FlightMode::Grounded);
-        setState(droneIds[2], {250.0, 0.0, leaderGround + 10.0},
+        setState(droneIds[2], scoutStartPosition,
             simulation::FlightMode::Hovering);
-        setState(droneIds[3], {20.0, 0.0, leaderGround + 10.0},
+        setState(droneIds[3], secondCandidatePosition,
             simulation::FlightMode::Grounded);
-        const std::vector<glm::dvec3> scoutRoute{
-            {230.0, 0.0, leaderGround + 10.0},
-            {200.0, 0.0, leaderGround + 10.0},
-            {180.0, 0.0, leaderGround + 10.0}};
+        const auto plannedScoutRoute = aerosimlab::terrain::PlanMapFlightRoute(
+            app.terrainGrid_, app.routeBuildings_, scoutStartPosition,
+            app.inspectionTargets_.at(disconnectedTargetIndex).approachPositionMeters,
+            3.0, app.cameraTransitAltitudeMeters_);
+        ASSERT_TRUE(plannedScoutRoute);
+        const std::vector<glm::dvec3> scoutRoute(
+            plannedScoutRoute->begin() + 1, plannedScoutRoute->end());
+        ASSERT_FALSE(scoutRoute.empty());
 
         for (std::size_t index = 0; index < droneIds.size(); ++index)
         {
             AeroSimLabApp::FleetReconnaissanceState mission;
-            mission.targetIndex = index == 2U ? disconnectedTargetIndex : index;
+            mission.targetIndex = index == 0U ? 3U
+                : index == 1U ? 1U
+                : index == 2U ? disconnectedTargetIndex : 2U;
             mission.leg = AeroSimLabApp::FleetMissionLeg::Reconnaissance;
             mission.status = index == 2U ? "정찰 이동 중" : "정찰 위치 도착";
             mission.routeReceived = true;
+            mission.startPositionMeters = app.simulation_.State(
+                droneIds[index]).positionMeters;
             if (index == 2U)
             {
                 mission.routeWaypointsMeters = scoutRoute;
                 mission.waypointCommanded = true;
             }
             app.fleetReconnaissance_.emplace(droneIds[index], std::move(mission));
+            app.completeFleetMission_.homePositionsMeters.emplace(
+                droneIds[index], app.simulation_.State(droneIds[index]).positionMeters);
         }
+        app.completeFleetMission_.stage =
+            AeroSimLabApp::CompleteFleetMissionState::Stage::Reconnaissance;
+        app.completeFleetMission_.status = "시험에서 M02 정찰 복구 검증 중";
 
         for (std::uint64_t tick = 0U; tick < 200U; ++tick)
             app.simulation_.AdvanceOneTick();
@@ -230,7 +252,8 @@ public:
         ASSERT_EQ(app.simulation_.Apply(droneIds[2], scoutWaypoint),
             simulation::CommandResult::Accepted);
         app.formationTransit_.lastNetworkNodeUpdateTick.reset();
-        const auto leaderPosition = app.simulation_.State(droneIds[0]).positionMeters;
+        const auto leaderPositionAfterWarmup =
+            app.simulation_.State(droneIds[0]).positionMeters;
         const auto candidatePosition = app.simulation_.State(droneIds[1]).positionMeters;
         const auto disconnectedPosition = app.simulation_.State(droneIds[2]).positionMeters;
         app.formationNetwork_->UpdateNodes(
@@ -240,6 +263,7 @@ public:
                 communication::NetworkNodeSnapshot{droneIds[2], disconnectedPosition},
                 communication::NetworkNodeSnapshot{droneIds[3],
                     app.simulation_.State(droneIds[3]).positionMeters}}, {});
+        app.formationNetwork_->Advance(app.simulation_.TickCount());
 
         const auto makeTelemetry = [](glm::dvec3 position,
             simulation::FlightMode mode, std::string status)
@@ -247,7 +271,8 @@ public:
             return simulator::detail::PeerTelemetry{
                 .positionMeters = position,
                 .mode = mode,
-                .missionLeg = 0U,
+                .missionLeg = static_cast<std::uint8_t>(
+                    AeroSimLabApp::FleetMissionLeg::Reconnaissance),
                 .missionStatus = std::move(status),
                 .assignmentVersion = 1U,
                 .assignmentLeaseExpiresAtTick = 1000U};
@@ -259,6 +284,10 @@ public:
             makeTelemetry(disconnectedPosition,
                 simulation::FlightMode::FollowingWaypoint, "정찰 이동 중"),
             1U, 1U};
+        app.peerTelemetryAtLeader_[droneIds[3]] = {
+            makeTelemetry(app.simulation_.State(droneIds[3]).positionMeters,
+                simulation::FlightMode::Grounded, "정찰 위치 도착"),
+            app.simulation_.TickCount(), 1U};
         EXPECT_TRUE(app.TryStartFleetRelayRecovery());
         const auto relayDroneId = app.fleetRelayRecovery_.relayDroneId;
         EXPECT_NE(relayDroneId, droneIds[0]);
@@ -281,10 +310,21 @@ public:
             app.simulation_.State(droneIds[2]).positionMeters;
         bool telemetryRecovered = false;
         bool telemetryRoutedViaRelay = false;
-        constexpr std::uint64_t maximumRecoveryTicks = 5000U;
+        using MissionStage = AeroSimLabApp::CompleteFleetMissionState::Stage;
+        bool relayReachedAssignedPosition = false;
+        bool relayLinksRecoveredAtActualPositions = false;
+        bool scoutContinuedFollowingDuringRecovery = false;
+        bool sawRegrouping = false;
+        bool sawReturning = false;
+        double maximumRelayTravelMeters = 0.0;
+        constexpr std::uint64_t maximumRecoveryTicks = 60000U;
         for (std::uint64_t tick = 0U; tick < maximumRecoveryTicks; ++tick)
         {
             app.AdvanceSimulationTick();
+            sawRegrouping = sawRegrouping
+                || app.completeFleetMission_.stage == MissionStage::Regrouping;
+            sawReturning = sawReturning
+                || app.completeFleetMission_.stage == MissionStage::Returning;
             const auto* report = app.FreshPeerTelemetry(droneIds[2]);
             for (const auto& delivered : app.formationNetwork_->DeliveredMessages())
             {
@@ -299,6 +339,8 @@ public:
             const auto leaderPositionNow = app.simulation_.State(droneIds[0]).positionMeters;
             const auto relayPositionNow = app.simulation_.State(relayDroneId).positionMeters;
             const auto scoutPositionNow = app.simulation_.State(droneIds[2]).positionMeters;
+            maximumRelayTravelMeters = std::max(maximumRelayTravelMeters,
+                glm::distance(relayPositionAtRecoveryStart, relayPositionNow));
             const bool linksRestoredAtActualPositions =
                 !app.formationNetwork_->CanExchangeAtPositions(
                     droneIds[0], droneIds[2], leaderPositionNow, scoutPositionNow)
@@ -306,13 +348,31 @@ public:
                     droneIds[0], relayDroneId, leaderPositionNow, relayPositionNow)
                 && app.formationNetwork_->CanExchangeAtPositions(
                     relayDroneId, droneIds[2], relayPositionNow, scoutPositionNow);
+            const bool atAssignedRelayPosition = glm::distance(relayPositionNow,
+                app.fleetRelayRecovery_.holdPositionMeters) <= 3.0;
+            const bool relayIsHoldingAtAssignedPosition =
+                app.fleetReconnaissance_.at(relayDroneId).status == "중계 위치 확보"
+                && atAssignedRelayPosition;
+            relayReachedAssignedPosition = relayReachedAssignedPosition
+                || relayIsHoldingAtAssignedPosition;
+            relayLinksRecoveredAtActualPositions = relayLinksRecoveredAtActualPositions
+                || (relayIsHoldingAtAssignedPosition && telemetryRoutedViaRelay
+                    && !app.fleetRelayRecovery_.waitingForTelemetry
+                    && linksRestoredAtActualPositions);
             telemetryRecovered = telemetryRecovered
                 || (report != nullptr
                     && report->receivedAtTick > recoveryStartedAtTick
                     && telemetryRoutedViaRelay
                     && linksRestoredAtActualPositions
                     && !app.fleetRelayRecovery_.waitingForTelemetry);
-            if (telemetryRecovered)
+            scoutContinuedFollowingDuringRecovery = scoutContinuedFollowingDuringRecovery
+                || (report != nullptr
+                    && report->receivedAtTick > recoveryStartedAtTick
+                    && telemetryRoutedViaRelay
+                    && app.simulation_.State(droneIds[2]).mode
+                        == simulation::FlightMode::FollowingWaypoint);
+            if (app.completeFleetMission_.stage == MissionStage::Completed
+                || app.completeFleetMission_.stage == MissionStage::Failed)
                 break;
         }
         EXPECT_TRUE(telemetryRecovered)
@@ -343,11 +403,65 @@ public:
         EXPECT_GT(glm::distance(scoutPositionAtRecoveryStart,
             scoutState.positionMeters), 0.001)
             << "통신 복구 전 정찰 기체가 목표 방향으로 이동하지 않았습니다.";
-        EXPECT_EQ(scoutState.mode, simulation::FlightMode::FollowingWaypoint)
-            << "통신 복구 중 정찰 기체의 경로 추종 상태가 유지되지 않았습니다.";
-        EXPECT_GT(glm::distance(relayPositionAtRecoveryStart,
-            app.simulation_.State(relayDroneId).positionMeters), 1.0)
-            << "중계 기체가 실제 중계 위치로 이동하지 않았습니다.";
+        EXPECT_TRUE(scoutContinuedFollowingDuringRecovery)
+            << "새 정찰 보고가 중계된 시점에 정찰 기체가 경로를 추종하지 않았습니다.";
+        EXPECT_GT(maximumRelayTravelMeters, 1.0)
+            << "중계 기체가 실제 중계 위치로 이동하지 않았습니다."
+            << " 비행 상태=" << static_cast<int>(
+                app.simulation_.State(relayDroneId).mode)
+            << ", 수직 속도="
+            << app.simulation_.State(relayDroneId).velocityMetersPerSecond.z
+            << ", 경유점 전달="
+            << app.fleetReconnaissance_.at(relayDroneId).waypointCommanded
+            << ", 다음 경유점="
+            << app.fleetReconnaissance_.at(relayDroneId).nextWaypoint
+            << " 경로 수신=" << app.fleetReconnaissance_.at(relayDroneId).routeReceived
+            << ", 경로 지점 수="
+            << app.fleetReconnaissance_.at(relayDroneId).routeWaypointsMeters.size()
+            << ", 명령 대기="
+            << app.fleetReconnaissance_.at(relayDroneId).pendingRouteSequence
+            << ", 재전송="
+            << app.fleetReconnaissance_.at(relayDroneId).routeTransmissionCount
+            << ", 신뢰 전송 실패="
+            << app.formationNetwork_->Metrics().reliableFailures
+            << ", 중계 ID=" << relayDroneId
+            << ", 최대 이동거리=" << maximumRelayTravelMeters
+            << ", 시작 위치=(" << relayPositionAtRecoveryStart.x << ", "
+            << relayPositionAtRecoveryStart.y << ", "
+            << relayPositionAtRecoveryStart.z << "), 목표 위치=("
+            << app.fleetRelayRecovery_.holdPositionMeters.x << ", "
+            << app.fleetRelayRecovery_.holdPositionMeters.y << ", "
+            << app.fleetRelayRecovery_.holdPositionMeters.z << ')';
+        EXPECT_TRUE(relayReachedAssignedPosition)
+            << "중계 기체가 지정한 중계 위치에 도착하지 않았습니다."
+            << " 상태: " << app.fleetReconnaissance_.at(relayDroneId).status
+            << ", 거리: " << glm::distance(
+                app.simulation_.State(relayDroneId).positionMeters,
+                app.fleetRelayRecovery_.holdPositionMeters);
+        EXPECT_TRUE(relayLinksRecoveredAtActualPositions)
+            << "중계 기체 도착 후 두 구간의 링크가 실제 위치에서 복구되지 않았습니다.";
+        EXPECT_TRUE(sawRegrouping)
+            << "복구 뒤 M03 재집결 단계에 도달하지 못했습니다.";
+        EXPECT_TRUE(sawReturning)
+            << "복구 뒤 M03 기지 복귀 단계에 도달하지 못했습니다.";
+        EXPECT_EQ(app.completeFleetMission_.stage, MissionStage::Completed)
+            << "복구 뒤 전체 임무가 끝나지 않았습니다. 상태: "
+            << app.completeFleetMission_.status;
+        EXPECT_EQ(app.fleetRelayRecovery_.recoveredDroneId, droneIds[2]);
+        EXPECT_TRUE(app.fleetRelayRecovery_.returnRoutesAssigned);
+        EXPECT_TRUE(app.fleetRelayRecovery_.relayReturnAssignmentSent);
+        EXPECT_TRUE(app.formationNetwork_->CanExchangeAtPositions(
+            droneIds[0], relayDroneId,
+            app.completeFleetMission_.homePositionsMeters.at(droneIds[0]),
+            app.fleetRelayRecovery_.holdPositionMeters));
+        EXPECT_TRUE(app.formationNetwork_->CanExchangeAtPositions(
+            relayDroneId, droneIds[2],
+            app.fleetRelayRecovery_.holdPositionMeters,
+            app.completeFleetMission_.homePositionsMeters.at(droneIds[2])));
+        for (const auto droneId : droneIds)
+            EXPECT_EQ(app.simulation_.State(droneId).mode,
+                simulation::FlightMode::Grounded)
+                << "임무 완료 뒤 드론 " << droneId << "이 착륙하지 않았습니다.";
     }
 
     static void VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget()
@@ -652,7 +766,10 @@ public:
             == RotorFailureScenario::LeaderWithGroundControlRoute;
         const bool expectMissionRecovery = scenario
             != RotorFailureScenario::LeaderWithoutGroundControlRoute;
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({
+            .smokeTest = true,
+            .simulationDynamics = simulation::SimulationDynamics::RigidBody,
+            .networkEnabled = false});
         app.InitializeGraphics();
         const auto droneIds = app.simulation_.DroneIds();
         ASSERT_EQ(droneIds.size(), 4U);

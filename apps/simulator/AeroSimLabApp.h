@@ -567,9 +567,13 @@ private:
     {
         aerosimlab::simulation::DroneId relayDroneId = 0U;
         aerosimlab::simulation::DroneId disconnectedDroneId = 0U;
+        aerosimlab::simulation::DroneId recoveredDroneId = 0U;
         glm::dvec3 holdPositionMeters{0.0};
         std::uint64_t startedAtTick = 0U;
+        std::uint64_t movementTimeoutAtTick = 0U;
         bool waitingForTelemetry = false;
+        bool returnRoutesAssigned = false;
+        bool relayReturnAssignmentSent = false;
     } fleetRelayRecovery_;
     std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
         peerTelemetryAtLeader_;
