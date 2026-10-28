@@ -657,7 +657,9 @@ if(BUILD_TESTING)
           WORKING_DIRECTORY "$<TARGET_FILE_DIR:aerosimlab_simulator>"
           TIMEOUT 40
           RUN_SERIAL TRUE)
-      add_dependencies(aerosimlab_simulator_integration_tests aerosimlab_simulator)
+      # 통합 시험은 실행 파일이 아니라 화면 자료만 필요하므로, 실행 파일을 다시 연결하지 않는다.
+      add_dependencies(aerosimlab_simulator_integration_tests
+        aerosimlab_simulator_runtime_assets)
     endif()
   endif()
 endif()
