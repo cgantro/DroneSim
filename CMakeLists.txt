@@ -385,8 +385,9 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     aerosimlab_manual_control
     aerosimlab_sensor
     aerosimlab_communication
-    nlohmann_json::nlohmann_json
   )
+  target_link_libraries(aerosimlab_simulator_app PRIVATE
+    nlohmann_json::nlohmann_json)
   if(NOT EMSCRIPTEN)
     target_link_libraries(aerosimlab_simulator_app PRIVATE
       aerosimlab_vision aerosimlab_media aerosimlab_imgui opencv_videoio
