@@ -94,6 +94,46 @@ void Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand()
     EXPECT_NEAR(speedAfterSecondDownStep, expectedDownResponse, 0.5);
 }
 
+void Verify_AirSimPhysics_FailedRotorSpinsDownAndTiltsTheAircraft()
+{
+    constexpr double stepSeconds = 1.0 / 60.0;
+    constexpr std::size_t failedRotor = 0;
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    PhysicsWorld world;
+    RigidBodyDefinition definition;
+    definition.positionMeters.z = 10.0;
+    const RigidBodyHandle drone = world.CreateQuadrotor(definition, parameters);
+    const double hoverSpeed = std::sqrt(parameters.massKilograms * 9.81
+        / (static_cast<double>(parameters.rotors.size())
+            * parameters.thrustCoefficientNewtonsPerSpeedSquared));
+    std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
+    motorTargets.fill(hoverSpeed);
+    world.SetMotorTargets(drone, motorTargets);
+    for (int tick = 0; tick < 90; ++tick)
+        world.Step(stepSeconds);
+
+    world.SetRotorMotorFault(drone, failedRotor, true);
+    for (int tick = 0; tick < 12; ++tick)
+    {
+        world.SetMotorTargets(drone, motorTargets);
+        world.Step(stepSeconds);
+    }
+
+    const auto speeds = world.MotorSpeedsRadiansPerSecond(drone);
+    const auto thrusts = world.MotorThrustsNewtons(drone);
+    EXPECT_LT(speeds[failedRotor], hoverSpeed * 0.01);
+    EXPECT_LT(thrusts[failedRotor], thrusts[1] * 0.01);
+    EXPECT_GT(glm::length(world.State(drone).angularVelocityRadiansPerSecond), 0.1);
+
+    world.SetRotorMotorFault(drone, failedRotor, false);
+    for (int tick = 0; tick < 3; ++tick)
+    {
+        world.SetMotorTargets(drone, motorTargets);
+        world.Step(stepSeconds);
+    }
+    EXPECT_GT(world.MotorSpeedsRadiansPerSecond(drone)[failedRotor], speeds[failedRotor]);
+}
+
 void Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp()
 {
     constexpr double stepSeconds = 1.0 / 60.0;
@@ -813,6 +853,8 @@ void Verify_AirSimBoundary_RejectsValuesItCannotRepresent()
 TEST(PhysicsWorldTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_RotorSpeedChangesGraduallyAfterACommand());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_AirSimPhysics_FailedRotorSpinsDownAndTiltsTheAircraft());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_EqualHoverThrustBalancesGravityAfterMotorSpinUp());
     EXPECT_NO_FATAL_FAILURE(

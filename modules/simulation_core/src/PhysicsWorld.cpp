@@ -197,7 +197,15 @@ public:
         double maximumSpeed)
     {
         for (std::size_t index = 0; index < signals_.size(); ++index)
-            targetSpeeds_[index] = std::clamp(speeds[index], 0.0, maximumSpeed);
+            targetSpeeds_[index] = motorFaults_[index]
+                ? 0.0 : std::clamp(speeds[index], 0.0, maximumSpeed);
+    }
+
+    void SetRotorMotorFault(std::size_t rotorIndex, bool faulted)
+    {
+        motorFaults_.at(rotorIndex) = faulted;
+        if (faulted)
+            targetSpeeds_.at(rotorIndex) = 0.0;
     }
 
     void SetInitialMotorSpeeds(
@@ -250,6 +258,7 @@ protected:
         signals_.fill(0.0F);
         targetSpeeds_.fill(0.0);
         filteredSpeeds_.fill(0.0);
+        motorFaults_.fill(false);
         apiControlEnabled_ = false;
         armed_ = false;
     }
@@ -260,6 +269,7 @@ private:
     std::array<float, QuadrotorParameters::rotorCount> signals_{};
     std::array<double, QuadrotorParameters::rotorCount> targetSpeeds_{};
     std::array<double, QuadrotorParameters::rotorCount> filteredSpeeds_{};
+    std::array<bool, QuadrotorParameters::rotorCount> motorFaults_{};
     msr::airlib::GeoPoint home_{0.0, 0.0, 0.0F};
     bool apiControlEnabled_ = false;
     bool armed_ = false;
@@ -1057,6 +1067,12 @@ void PhysicsWorld::SetMotorTargets(
         throw std::invalid_argument("로터 목표 속도는 유한한 값이어야 합니다.");
     }
     body.actuation.SetMotorTargets(speeds, body.maximumMotorSpeed);
+}
+
+void PhysicsWorld::SetRotorMotorFault(
+    RigidBodyHandle handle, std::size_t rotorIndex, bool faulted)
+{
+    impl_->GetBody(handle).actuation.SetRotorMotorFault(rotorIndex, faulted);
 }
 
 void PhysicsWorld::SetInitialMotorSpeeds(

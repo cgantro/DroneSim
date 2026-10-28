@@ -172,6 +172,9 @@ public:
     /** @brief 지정한 드론의 카메라 장애를 주입하거나 해제한다. */
     void SetCameraFault(DroneId droneId, bool faulted);
 
+    /** @brief AirSim 강체 모의에서 지정한 드론 로터의 전원을 끊거나 복구한다. 로터 번호는 0부터 시작한다. */
+    void SetRotorMotorFault(DroneId droneId, std::size_t rotorIndex, bool faulted);
+
     /** @brief 강체 모드에서 사용할 월드 기준 바람 속도를 설정한다. */
     void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity);
 

@@ -7,6 +7,7 @@
 #include "terrain/TerrainGrid.h"
 
 #include <cstdint>
+#include <cstddef>
 #include <array>
 #include <memory>
 #include <vector>
@@ -95,6 +96,10 @@ public:
     void SetMotorTargets(
         RigidBodyHandle body,
         const std::array<double, 4>& speedRadiansPerSecond);
+
+    /** @brief 로터 하나의 전원을 끊거나 복구한다. 고장 로터는 기존 감속 시간에 따라 멈춘다. */
+    void SetRotorMotorFault(
+        RigidBodyHandle body, std::size_t rotorIndex, bool faulted);
 
     /** @brief 첫 물리 Tick 전에 로터의 현재 속도를 설정한다. */
     void SetInitialMotorSpeeds(
