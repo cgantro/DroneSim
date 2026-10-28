@@ -82,6 +82,7 @@ add_library(aerosimlab_terrain STATIC
   modules/terrain/src/MapTrees.cpp
   modules/terrain/src/MapWaterBodies.cpp
   modules/terrain/src/TerrainGrid.cpp
+  modules/terrain/src/TrainingRangeTerrain.cpp
 )
 target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
 target_link_libraries(aerosimlab_terrain PUBLIC glm::glm PRIVATE nlohmann_json::nlohmann_json)

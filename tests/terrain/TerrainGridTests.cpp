@@ -5,6 +5,7 @@
 #include "terrain/MapTrees.h"
 #include "terrain/MapWaterBodies.h"
 #include "terrain/TerrainGrid.h"
+#include "terrain/TrainingRangeTerrain.h"
 #include "simulation_core/EoCameraModel.h"
 
 #include <algorithm>
@@ -22,6 +23,20 @@
 
 namespace aerosimlab::terrain
 {
+void Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief()
+{
+    const TerrainGrid terrain = CreateTrainingRangeTerrain();
+
+    EXPECT_EQ(terrain.sampleCount, 101U);
+    EXPECT_DOUBLE_EQ(terrain.HalfWidthMeters(), 250.0);
+    EXPECT_DOUBLE_EQ(terrain.HalfDepthMeters(), 200.0);
+    EXPECT_EQ(terrain.heightOffsetsMeters.size(), 101U * 101U);
+    EXPECT_NEAR(*std::min_element(terrain.heightOffsetsMeters.begin(),
+        terrain.heightOffsetsMeters.end()), 0.0F, 1.0e-5F);
+    EXPECT_GT(*std::max_element(terrain.heightOffsetsMeters.begin(),
+        terrain.heightOffsetsMeters.end()), 30.0F);
+}
+
 void Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight()
 {
     TerrainGrid terrain;
@@ -712,6 +727,8 @@ void Verify_BridgeOutsideTerrainIsSkipped()
 
 TEST(TerrainGridTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight());
     EXPECT_NO_FATAL_FAILURE(Verify_RenderedTerrainHeightUsesTheSameTriangleAsTheMesh());
