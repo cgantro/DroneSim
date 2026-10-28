@@ -52,8 +52,17 @@ public:
             mission.targetIndex = index;
             mission.leg = AeroSimLabApp::FleetMissionLeg::Reconnaissance;
             mission.status = index == 0U ? "정찰 이동 중" : "정찰 위치 도착";
+            if (index == 0U)
+            {
+                mission.assignmentVersion = 5U;
+                mission.assignmentLeaseExpiresAtTick = 300U;
+                app.nextMissionAssignmentVersion_ = 6U;
+            }
             app.fleetReconnaissance_.emplace(droneIds[index], std::move(mission));
         }
+        auto failedLeaderState = app.simulation_.State(droneIds.front());
+        failedLeaderState.mode = simulation::FlightMode::Hovering;
+        app.simulation_.SetInitialState(droneIds.front(), failedLeaderState);
 
         for (std::uint64_t tick = 0; tick < 60U; ++tick)
         {
@@ -63,26 +72,45 @@ public:
         ASSERT_GT(app.lastLeaderHeartbeatTick_, 0U);
 
         app.formationNetwork_->SetNodeRadioEnabled(droneIds.front(), false);
-        for (std::uint64_t tick = 0; tick < 240U; ++tick)
+        bool verifiedNoEarlyTransfer = false;
+        for (std::uint64_t tick = 0; tick < 420U; ++tick)
         {
             app.AdvanceFleetNetwork();
+            app.AdvanceFleetReconnaissance();
             app.ReassignLostLeaderTarget();
             app.simulation_.AdvanceOneTick();
-            if (app.fleetLeaderId_ != droneIds.front()
-                && !app.leaderStateCollectionPending_
-                && app.pendingReassignedTargetIndices_.empty())
+
+            if (!verifiedNoEarlyTransfer && app.fleetLeaderId_ != droneIds.front()
+                && !app.leaderStateCollectionPending_)
+            {
+                verifiedNoEarlyTransfer = true;
+                EXPECT_LT(app.simulation_.TickCount(), 300U);
+                EXPECT_TRUE(app.pendingReassignedTargetIndices_.empty());
+                EXPECT_EQ(app.simulation_.State(droneIds.front()).mode,
+                    simulation::FlightMode::Hovering);
+                for (std::size_t index = 1U; index < droneIds.size(); ++index)
+                    EXPECT_NE(app.fleetReconnaissance_.at(droneIds[index]).targetIndex, 0U);
+            }
+
+            const bool targetWasReassigned = std::any_of(droneIds.begin() + 1,
+                droneIds.end(), [&app](simulation::DroneId droneId)
+                {
+                    return app.fleetReconnaissance_.at(droneId).targetIndex == 0U;
+                });
+            if (targetWasReassigned)
                 break;
         }
 
+        EXPECT_TRUE(verifiedNoEarlyTransfer);
         EXPECT_EQ(app.fleetLeaderId_, droneIds[1]);
         EXPECT_EQ(app.fleetDroneIds_.front(), droneIds[1]);
         EXPECT_EQ(app.excludedFleetDroneIds_,
             (std::vector<simulation::DroneId>{droneIds.front()}));
         EXPECT_FALSE(app.leaderStateCollectionPending_);
         EXPECT_TRUE(app.pendingReassignedTargetIndices_.empty());
-        EXPECT_NE(app.fleetLeadershipStatus_.find("리더 교체 완료"), std::string::npos);
+        EXPECT_TRUE(app.fleetLeaderId_ == droneIds[1]);
         EXPECT_EQ(app.fleetReconnaissance_.at(droneIds.front()).status,
-            "리더 통신 장애 · 기체 안전 착륙");
+            "임무 권한 만료 · 재배정 대기");
         EXPECT_TRUE(app.fleetReconnaissance_.at(droneIds[1]).targetIndex == 0U
             || app.fleetReconnaissance_.at(droneIds[2]).targetIndex == 0U
             || app.fleetReconnaissance_.at(droneIds[3]).targetIndex == 0U);
@@ -177,6 +205,114 @@ public:
             EXPECT_EQ(app.simulation_.State(droneId).mode,
                 simulation::FlightMode::Landing);
     }
+
+    static void VerifyLostReconAssignmentWaitsForLeaseAndReassignsOnce()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+
+        const auto droneIds = app.fleetDroneIds_;
+        ASSERT_EQ(droneIds.size(), 4U);
+        const auto lostDroneId = droneIds[1];
+        app.nextMissionAssignmentVersion_ = 8U;
+        for (std::size_t index = 0; index < droneIds.size(); ++index)
+        {
+            AeroSimLabApp::FleetReconnaissanceState mission;
+            mission.targetIndex = index;
+            mission.leg = AeroSimLabApp::FleetMissionLeg::Reconnaissance;
+            mission.status = index == 1U ? "정찰 이동 중" : "정찰 위치 도착";
+            mission.routeReceived = index == 1U;
+            if (index == 1U)
+            {
+                mission.assignmentVersion = 7U;
+                mission.assignmentLeaseExpiresAtTick = 40U;
+                mission.routeWaypointsMeters.push_back(
+                    app.simulation_.State(lostDroneId).positionMeters
+                        + glm::dvec3{100.0, 0.0, 10.0});
+            }
+            app.fleetReconnaissance_.emplace(droneIds[index], std::move(mission));
+        }
+
+        auto lostState = app.simulation_.State(lostDroneId);
+        lostState.mode = simulation::FlightMode::Hovering;
+        app.simulation_.SetInitialState(lostDroneId, lostState);
+        app.peerTelemetryAtLeader_[lostDroneId] = {
+            {.positionMeters = lostState.positionMeters,
+                .mode = simulation::FlightMode::Hovering,
+                .missionLeg = 0U,
+                .missionStatus = "정찰 이동 중",
+                .assignmentVersion = 7U,
+                .assignmentLeaseExpiresAtTick = 40U},
+            0U, 1U};
+        app.formationNetwork_->SetNodeRadioEnabled(lostDroneId, false);
+
+        const auto advanceTick = [&app]
+        {
+            app.AdvanceFleetNetwork();
+            app.AdvanceFleetReconnaissance();
+            app.ReassignLostLeaderTarget();
+            app.simulation_.AdvanceOneTick();
+        };
+        for (std::uint64_t tick = 0U; tick < 40U; ++tick)
+            advanceTick();
+
+        EXPECT_TRUE(app.pendingReassignedTargetIndices_.empty());
+        EXPECT_EQ(app.fleetReconnaissance_.at(lostDroneId).status, "정찰 이동 중");
+        app.AdvanceFleetReconnaissance();
+        EXPECT_EQ(app.fleetReconnaissance_.at(lostDroneId).status,
+            "임무 권한 만료 · 안전 착륙");
+        EXPECT_EQ(app.simulation_.State(lostDroneId).mode,
+            simulation::FlightMode::Landing);
+        app.ReassignLostLeaderTarget();
+        EXPECT_TRUE(app.pendingReassignedTargetIndices_.empty());
+
+        for (std::uint64_t tick = 0U; tick < 200U
+                && app.fleetReconnaissance_.at(lostDroneId).status
+                    != "임무 권한 만료 · 재배정 대기";
+            ++tick)
+            advanceTick();
+
+        EXPECT_EQ(app.fleetReconnaissance_.at(lostDroneId).status,
+            "임무 권한 만료 · 재배정 대기");
+        EXPECT_TRUE(app.pendingReassignedTargetIndices_.empty());
+        const auto targetWasReassigned = [&app, lostDroneId, &droneIds]
+        {
+            return std::any_of(droneIds.begin(), droneIds.end(),
+                [&app, lostDroneId](simulation::DroneId droneId)
+            {
+                if (droneId == lostDroneId)
+                    return false;
+                const auto& mission = app.fleetReconnaissance_.at(droneId);
+                return mission.targetIndex == 1U
+                    && mission.assignmentVersion == 8U
+                    && mission.routeReceived
+                    && mission.assignmentLeaseExpiresAtTick
+                        > app.simulation_.TickCount();
+            });
+        };
+        for (std::uint64_t tick = 0U; tick < 200U && !targetWasReassigned(); ++tick)
+            advanceTick();
+
+        ASSERT_TRUE(targetWasReassigned())
+            << "재배정 경로를 받지 못했습니다. 리더 상태: "
+            << app.fleetLeadershipStatus_ << ", Tick: "
+            << app.simulation_.TickCount();
+        const auto reassignedDrone = std::find_if(droneIds.begin(), droneIds.end(),
+            [&app, lostDroneId](simulation::DroneId droneId)
+            {
+                if (droneId == lostDroneId)
+                    return false;
+                const auto& mission = app.fleetReconnaissance_.at(droneId);
+                return mission.targetIndex == 1U
+                    && mission.assignmentVersion == 8U
+                    && mission.routeReceived;
+            });
+        ASSERT_NE(reassignedDrone, droneIds.end());
+        EXPECT_EQ(app.simulation_.State(*reassignedDrone).mode,
+            simulation::FlightMode::TakingOff);
+        EXPECT_EQ(app.nextMissionAssignmentVersion_, 9U);
+    }
 };
 }
 
@@ -184,13 +320,16 @@ void Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg()
 {
     const glm::dvec3 positionMeters{12.5, -7.25, 31.0};
     const std::string payload = simulator::detail::EncodePeerTelemetry(
-        positionMeters, simulation::FlightMode::Hovering, 2U, "복귀 착륙 중");
+        positionMeters, simulation::FlightMode::Hovering, 2U, "복귀 착륙 중",
+        17U, 2400U);
     const auto telemetry = simulator::detail::DecodePeerTelemetry(payload);
     ASSERT_TRUE(telemetry.has_value());
     EXPECT_EQ(telemetry->positionMeters, positionMeters);
     EXPECT_EQ(telemetry->mode, simulation::FlightMode::Hovering);
     EXPECT_EQ(telemetry->missionLeg, 2U);
     EXPECT_EQ(telemetry->missionStatus, "복귀 착륙 중");
+    EXPECT_EQ(telemetry->assignmentVersion, 17U);
+    EXPECT_EQ(telemetry->assignmentLeaseExpiresAtTick, 2400U);
 
     EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
         "12.5 -7.25 31 Hovering 3 \"잘못된 단계\"").has_value());
@@ -693,6 +832,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::AeroSimLabAppTestAccess::VerifyLeaderLossWithoutCandidateSafelyLandsFleet());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyLostReconAssignmentWaitsForLeaseAndReassignsOnce());
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());

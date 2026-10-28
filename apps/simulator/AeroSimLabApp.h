@@ -231,7 +231,9 @@ private:
         FleetMissionLeg leg,
         std::size_t targetIndex,
         std::vector<glm::dvec3> routeWaypointsMeters,
-        std::uint32_t sequence);
+        std::uint32_t sequence,
+        std::uint64_t assignmentVersion,
+        std::uint64_t assignmentLeaseExpiresAtTick);
     [[nodiscard]] bool StartFleetRally();
     [[nodiscard]] bool StartFleetReturn(bool takeOffDrones);
     void FailCompleteFleetMission(const std::string& reason);
@@ -492,6 +494,9 @@ private:
         std::string pendingRoutePayload;
         std::uint32_t routeSequence = 0;
         std::uint32_t pendingRouteSequence = 0;
+        std::uint64_t assignmentVersion = 0;
+        std::uint64_t assignmentLeaseExpiresAtTick = 0;
+        std::uint64_t communicationLostAtTick = 0;
         std::uint32_t routeTransmissionCount = 0;
         std::uint64_t routeSentAtTick = 0;
         std::uint64_t lastRouteTransmissionTick = 0;
@@ -514,6 +519,7 @@ private:
     std::uint32_t leaderProbeSequence_ = 0;
     std::uint32_t leaderProbeTransmissionCount_ = 0;
     std::uint32_t leaderHeartbeatSequence_ = 0;
+    std::uint64_t nextMissionAssignmentVersion_ = 1;
     bool leaderReplacementPending_ = false;
     bool leaderStateCollectionPending_ = false;
     std::vector<std::size_t> pendingReassignedTargetIndices_;

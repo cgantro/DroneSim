@@ -16,13 +16,17 @@ struct PeerTelemetry
     simulation::FlightMode mode = simulation::FlightMode::Grounded;
     std::uint8_t missionLeg = 0;
     std::string missionStatus;
+    std::uint64_t assignmentVersion = 0;
+    std::uint64_t assignmentLeaseExpiresAtTick = 0;
 };
 
 [[nodiscard]] std::string EncodePeerTelemetry(
     const glm::dvec3& positionMeters,
     simulation::FlightMode mode,
     std::uint8_t missionLeg,
-    const std::string& missionStatus);
+    const std::string& missionStatus,
+    std::uint64_t assignmentVersion,
+    std::uint64_t assignmentLeaseExpiresAtTick);
 
 [[nodiscard]] std::optional<PeerTelemetry> DecodePeerTelemetry(
     const std::string& payload);
