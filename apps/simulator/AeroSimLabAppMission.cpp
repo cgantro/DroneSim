@@ -1,4 +1,5 @@
 #include "AeroSimLabApp.h"
+#include "FleetMissionProgress.h"
 #include "terrain/MapFlightRoute.h"
 #include "graphics/Window.h"
 #include <glm/geometric.hpp>
@@ -777,7 +778,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
 void AeroSimLabApp::AdvanceCompleteFleetMission()
 {
     using Stage = CompleteFleetMissionState::Stage;
-    using FlightMode = aerosimlab::simulation::FlightMode;
     if (completeFleetMission_.stage == Stage::Idle
         || completeFleetMission_.stage == Stage::Completed
         || completeFleetMission_.stage == Stage::Failed)
@@ -806,60 +806,73 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
     if (droneIds.empty())
         return;
     const auto leaderId = droneIds.front();
-    struct MissionReport
+    std::vector<std::optional<detail::FleetMissionReport>> reports;
+    reports.reserve(droneIds.size());
+    for (const auto droneId : droneIds)
     {
-        FlightMode mode;
-        std::uint8_t leg;
-        std::string status;
-    };
-    const auto latestMissionReport = [this, leaderId](
-        aerosimlab::simulation::DroneId droneId)
-        -> std::optional<MissionReport>
-    {
+        const auto mission = fleetReconnaissance_.find(droneId);
+        if (mission == fleetReconnaissance_.end())
+        {
+            if (completeFleetMission_.stage == Stage::Returning)
+            {
+                completeFleetMission_.stage = Stage::Failed;
+                completeFleetMission_.status = "복귀에 실패한 드론이 있습니다.";
+            }
+            else
+            {
+                FailCompleteFleetMission(completeFleetMission_.stage
+                        == Stage::Reconnaissance
+                    ? "드론별 정찰 상태를 찾지 못해 임무를 중단했습니다."
+                    : "모든 기체가 집결하지 못해 임무를 중단했습니다.");
+            }
+            return;
+        }
+
         if (droneId == leaderId)
         {
-            const auto mission = fleetReconnaissance_.find(droneId);
-            if (mission == fleetReconnaissance_.end())
-                return std::nullopt;
-            return MissionReport{simulation_.State(droneId).mode,
-                static_cast<std::uint8_t>(mission->second.leg), mission->second.status};
+            reports.emplace_back(detail::FleetMissionReport{
+                simulation_.State(droneId).mode,
+                static_cast<std::uint8_t>(mission->second.leg), mission->second.status});
+            continue;
         }
 
         const ReceivedPeerTelemetry* telemetry = FreshPeerTelemetry(droneId);
         if (telemetry == nullptr)
-            return std::nullopt;
-        return MissionReport{telemetry->state.mode, telemetry->state.missionLeg,
-            telemetry->state.missionStatus};
-    };
+        {
+            reports.emplace_back(std::nullopt);
+            continue;
+        }
+        reports.emplace_back(detail::FleetMissionReport{telemetry->state.mode,
+            telemetry->state.missionLeg, telemetry->state.missionStatus});
+    }
+
+    const auto missionPhase = completeFleetMission_.stage == Stage::Reconnaissance
+        ? detail::FleetMissionPhase::Reconnaissance
+        : completeFleetMission_.stage == Stage::Regrouping
+            ? detail::FleetMissionPhase::Regrouping
+            : detail::FleetMissionPhase::Returning;
+    const auto decision = detail::EvaluateFleetMissionProgress(missionPhase, reports);
+    if (decision.progress == detail::FleetMissionProgress::Failed)
+    {
+        if (completeFleetMission_.stage == Stage::Returning)
+        {
+            completeFleetMission_.stage = Stage::Failed;
+            completeFleetMission_.status = decision.failureReason;
+        }
+        else
+        {
+            FailCompleteFleetMission(std::string{decision.failureReason});
+        }
+        return;
+    }
+    if (decision.progress == detail::FleetMissionProgress::Waiting)
+    {
+        completeFleetMission_.status = "드론 상태 보고를 기다리는 중";
+        return;
+    }
+
     if (completeFleetMission_.stage == Stage::Reconnaissance)
     {
-        for (const auto droneId : droneIds)
-        {
-            const auto mission = fleetReconnaissance_.find(droneId);
-            if (mission == fleetReconnaissance_.end())
-            {
-                FailCompleteFleetMission("드론별 정찰 상태를 찾지 못해 임무를 중단했습니다.");
-                return;
-            }
-            const auto report = latestMissionReport(droneId);
-            if (!report)
-            {
-                completeFleetMission_.status = "드론 상태 보고를 기다리는 중";
-                return;
-            }
-            if (report->leg != static_cast<std::uint8_t>(FleetMissionLeg::Reconnaissance))
-                return;
-            if (report->status == "경로 오류"
-                || report->status == "목표 외 착륙")
-            {
-                FailCompleteFleetMission("정찰 목표에 도착하지 못해 임무를 중단했습니다.");
-                return;
-            }
-            if (report->mode != FlightMode::Grounded
-                || report->status != "정찰 위치 도착")
-                return;
-        }
-
         if (!StartFleetRally())
         {
             FailCompleteFleetMission("공통 집결 경로를 만들지 못해 임무를 중단했습니다.");
@@ -870,31 +883,6 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
 
     if (completeFleetMission_.stage == Stage::Regrouping)
     {
-        for (const auto droneId : droneIds)
-        {
-            const auto mission = fleetReconnaissance_.find(droneId);
-            if (mission == fleetReconnaissance_.end())
-            {
-                FailCompleteFleetMission("모든 기체가 집결하지 못해 임무를 중단했습니다.");
-                return;
-            }
-            const auto report = latestMissionReport(droneId);
-            if (!report)
-            {
-                completeFleetMission_.status = "드론 상태 보고를 기다리는 중";
-                return;
-            }
-            if (report->leg != static_cast<std::uint8_t>(FleetMissionLeg::Regrouping))
-                return;
-            if (report->status == "집결 실패")
-            {
-                FailCompleteFleetMission("모든 기체가 집결하지 못해 임무를 중단했습니다.");
-                return;
-            }
-            if (report->status != "재집결 완료")
-                return;
-        }
-
         if (!StartFleetReturn(false))
         {
             FailCompleteFleetMission("집결지에서 기지까지 복귀 경로를 만들지 못했습니다.");
@@ -907,33 +895,6 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
 
     if (completeFleetMission_.stage == Stage::Returning)
     {
-        for (const auto droneId : droneIds)
-        {
-            const auto mission = fleetReconnaissance_.find(droneId);
-            if (mission == fleetReconnaissance_.end())
-            {
-                completeFleetMission_.stage = Stage::Failed;
-                completeFleetMission_.status = "복귀에 실패한 드론이 있습니다.";
-                return;
-            }
-            const auto report = latestMissionReport(droneId);
-            if (!report)
-            {
-                completeFleetMission_.status = "드론 상태 보고를 기다리는 중";
-                return;
-            }
-            if (report->leg != static_cast<std::uint8_t>(FleetMissionLeg::Returning))
-                return;
-            if (report->status == "복귀 실패")
-            {
-                completeFleetMission_.stage = Stage::Failed;
-                completeFleetMission_.status = "복귀에 실패한 드론이 있습니다.";
-                return;
-            }
-            if (report->mode != FlightMode::Grounded
-                || report->status != "복귀 완료")
-                return;
-        }
         completeFleetMission_.stage = Stage::Completed;
         completeFleetMission_.status = "전체 임무 완료";
         return;

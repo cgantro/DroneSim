@@ -1,4 +1,5 @@
 #include "AeroSimLabApp.h"
+#include "FleetMissionProgress.h"
 #include "EoVideoRecorder.h"
 #include "FleetTelemetry.h"
 #include "FleetDroneSpawn.h"
@@ -46,6 +47,67 @@ void Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg()
 
     EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
         "12.5 -7.25 31 Hovering 3 \"잘못된 단계\"").has_value());
+}
+
+void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
+{
+    using simulator::detail::FleetMissionPhase;
+    using simulator::detail::FleetMissionProgress;
+    using simulator::detail::FleetMissionReport;
+    using simulation::FlightMode;
+
+    std::vector<std::optional<FleetMissionReport>> reports{
+        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"},
+        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"},
+        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"},
+        FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"}};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Reconnaissance, reports).progress,
+        FleetMissionProgress::Advance);
+
+    reports.back().reset();
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Reconnaissance, reports).progress,
+        FleetMissionProgress::Waiting);
+    reports.back() = FleetMissionReport{FlightMode::Grounded, 1U, "재집결 완료"};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Reconnaissance, reports).progress,
+        FleetMissionProgress::Waiting);
+
+    reports.back() = FleetMissionReport{FlightMode::Grounded, 0U, "경로 오류"};
+    const auto failed = simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Reconnaissance, reports);
+    EXPECT_EQ(failed.progress, FleetMissionProgress::Failed);
+    EXPECT_FALSE(failed.failureReason.empty());
+
+    reports.assign(4U, FleetMissionReport{
+        FlightMode::Hovering, 1U, "재집결 완료"});
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Regrouping, reports).progress,
+        FleetMissionProgress::Advance);
+    reports.back() = FleetMissionReport{FlightMode::Hovering, 1U, "집결 실패"};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Regrouping, reports).progress,
+        FleetMissionProgress::Failed);
+}
+
+void Verify_FleetMissionProgressRequiresLandedReturnReports()
+{
+    using simulator::detail::FleetMissionPhase;
+    using simulator::detail::FleetMissionProgress;
+    using simulator::detail::FleetMissionReport;
+    using simulation::FlightMode;
+
+    std::vector<std::optional<FleetMissionReport>> reports{
+        FleetMissionReport{FlightMode::Grounded, 2U, "복귀 완료"},
+        FleetMissionReport{FlightMode::Hovering, 2U, "복귀 완료"}};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Returning, reports).progress,
+        FleetMissionProgress::Waiting);
+    reports.back() = FleetMissionReport{FlightMode::Grounded, 2U, "복귀 완료"};
+    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+        FleetMissionPhase::Returning, reports).progress,
+        FleetMissionProgress::Complete);
 }
 
 void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
@@ -479,6 +541,8 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 TEST(SimulatorSessionTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());
+    EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
+    EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
     EXPECT_NO_FATAL_FAILURE(Verify_EoVideoRecorderStoresH264AndFrameMetadata());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
     EXPECT_NO_FATAL_FAILURE(Verify_TancheonBuildingDataStopsTheWebKinematicDrone());
