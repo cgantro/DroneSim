@@ -1107,6 +1107,11 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     using simulator::detail::FleetMissionReport;
     using simulation::FlightMode;
 
+    EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress("정찰 이동 중"));
+    EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress("저전력 복귀 중"));
+    EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress("정찰 위치 도착"));
+    EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress("전체 임무 완료"));
+
     std::vector<std::optional<FleetMissionReport>> reports{
         FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"},
         FleetMissionReport{FlightMode::Grounded, 0U, "정찰 위치 도착"},

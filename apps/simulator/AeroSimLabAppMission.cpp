@@ -201,15 +201,6 @@ std::optional<FleetRouteMessage> DecodeFleetRoute(const std::string& payload)
     return route;
 }
 
-bool IsFleetReconnaissanceActive(const std::string& status)
-{
-    return status == "경로 전달 대기" || status == "출발 준비"
-        || status == "정찰 이동 중"
-        || status == "중계 준비" || status == "중계 위치로 이동 중"
-        || status == "집결 이동 중" || status == "재집결 준비"
-        || status == "복귀 준비" || status == "복귀 중"
-        || status == "착륙 중" || status == "복귀 착륙 중";
-}
 }
 
 bool AeroSimLabApp::InspectionMissionIsActive() const
@@ -236,7 +227,7 @@ bool AeroSimLabApp::RequestInspectionMission(
     if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [this](const auto& entry)
         {
-            return IsFleetReconnaissanceActive(entry.second.status)
+            return detail::IsFleetMissionInProgress(entry.second.status)
                 && std::find(excludedFleetDroneIds_.begin(),
                     excludedFleetDroneIds_.end(), entry.first)
                     == excludedFleetDroneIds_.end();
@@ -317,7 +308,7 @@ bool AeroSimLabApp::FleetReconnaissanceCanStart() const
     if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [](const auto& entry)
         {
-            return IsFleetReconnaissanceActive(entry.second.status);
+            return detail::IsFleetMissionInProgress(entry.second.status);
         }))
         return false;
 
@@ -376,7 +367,7 @@ bool AeroSimLabApp::FleetReconnaissanceIsActive() const
     return std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [this](const auto& entry)
         {
-            return IsFleetReconnaissanceActive(entry.second.status)
+            return detail::IsFleetMissionInProgress(entry.second.status)
                 && std::find(excludedFleetDroneIds_.begin(),
                     excludedFleetDroneIds_.end(), entry.first)
                     == excludedFleetDroneIds_.end();
@@ -555,7 +546,7 @@ bool AeroSimLabApp::FleetReturnCanStart() const
             return (simulation_.State(droneId).mode
                     == aerosimlab::simulation::FlightMode::Grounded
                 && mission->second.leg == FleetMissionLeg::Reconnaissance
-                && !IsFleetReconnaissanceActive(mission->second.status))
+                && !detail::IsFleetMissionInProgress(mission->second.status))
                 || (mission->second.lowBatteryReturn
                     && mission->second.status == "저전력 복귀 완료"
                     && simulation_.State(droneId).mode
@@ -572,7 +563,7 @@ bool AeroSimLabApp::FleetReturnCanStart() const
                 == aerosimlab::simulation::FlightMode::Grounded
             && report->state.missionLeg
                 == static_cast<std::uint8_t>(FleetMissionLeg::Reconnaissance)
-            && !IsFleetReconnaissanceActive(report->state.missionStatus);
+            && !detail::IsFleetMissionInProgress(report->state.missionStatus);
         const bool holdingRelayPosition = report->state.mode
                 != aerosimlab::simulation::FlightMode::Grounded
             && report->state.missionLeg
@@ -943,7 +934,7 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
     {
         const bool reconnaissanceCanBeReassigned =
             mission.leg == FleetMissionLeg::Reconnaissance
-            && IsFleetReconnaissanceActive(mission.status);
+            && detail::IsFleetMissionInProgress(mission.status);
         const bool returningFromTarget = reconnaissanceCanBeReassigned
             || (mission.leg == FleetMissionLeg::Reconnaissance
                 && mission.status == "정찰 위치 도착");
@@ -1007,7 +998,7 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
 #ifndef __EMSCRIPTEN__
         const bool missionIsActive = (mission.leg == FleetMissionLeg::Reconnaissance
                 || mission.leg == FleetMissionLeg::Relaying)
-            && IsFleetReconnaissanceActive(mission.status);
+            && detail::IsFleetMissionInProgress(mission.status);
         bool rotorFailure = false;
         if (missionIsActive
             && simulation_.Dynamics() == aerosimlab::simulation::SimulationDynamics::RigidBody)
@@ -1050,7 +1041,7 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
             if (mission.leg == FleetMissionLeg::Reconnaissance
                 && mission.assignmentLeaseExpiresAtTick != 0U
                 && simulation_.TickCount() >= mission.assignmentLeaseExpiresAtTick
-                && IsFleetReconnaissanceActive(mission.status))
+                && detail::IsFleetMissionInProgress(mission.status))
             {
                 const auto mode = simulation_.State(droneId).mode;
                 if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
@@ -1079,13 +1070,13 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
         if (mission.leg == FleetMissionLeg::Reconnaissance
             && mission.assignmentLeaseExpiresAtTick != 0U
             && simulation_.TickCount() >= mission.assignmentLeaseExpiresAtTick
-            && IsFleetReconnaissanceActive(mission.status))
+            && detail::IsFleetMissionInProgress(mission.status))
         {
             const auto* report = droneId == fleetLeaderId_
                 ? nullptr : FreshPeerTelemetry(droneId);
             const bool currentAssignmentIsReported = report != nullptr
                 && report->state.assignmentVersion == mission.assignmentVersion
-                && IsFleetReconnaissanceActive(report->state.missionStatus);
+                && detail::IsFleetMissionInProgress(report->state.missionStatus);
             if (droneId == fleetLeaderId_ || currentAssignmentIsReported)
                 continue;
 
@@ -1650,7 +1641,7 @@ void AeroSimLabApp::PromoteFleetLeader(
     const auto failedMission = fleetReconnaissance_.find(failedLeaderId);
     const bool leaderHasReconAssignment = failedMission != fleetReconnaissance_.end()
         && failedMission->second.leg == FleetMissionLeg::Reconnaissance
-        && IsFleetReconnaissanceActive(failedMission->second.status)
+        && detail::IsFleetMissionInProgress(failedMission->second.status)
         && failedMission->second.assignmentLeaseExpiresAtTick
             > simulation_.TickCount();
     if (leaderHasReconAssignment)
@@ -1806,12 +1797,12 @@ void AeroSimLabApp::ReassignLostLeaderTarget()
                 && report->state.missionStatus == "임무 권한 만료 · 안전 착륙");
         const bool telemetryIsUnknown = reportMatchesAssignment
             && currentTick > report->receivedAtTick + peerTelemetryUnknownAfterTicks
-            && IsFleetReconnaissanceActive(report->state.missionStatus);
+            && detail::IsFleetMissionInProgress(report->state.missionStatus);
         const bool excludedOwnerIsUnknown = excluded
             && mission->second.communicationLostAtTick != 0U
             && currentTick > mission->second.communicationLostAtTick
                 + peerTelemetryUnknownAfterTicks
-            && IsFleetReconnaissanceActive(mission->second.status);
+            && detail::IsFleetMissionInProgress(mission->second.status);
         const bool agentIsUnknown = telemetryIsUnknown || excludedOwnerIsUnknown;
         if (!agentReleasedLease && !agentIsUnknown)
             continue;
@@ -1981,7 +1972,7 @@ bool AeroSimLabApp::TryStartFleetRelayRecovery()
         if (disconnectedReport == peerTelemetryAtLeader_.end()
             || disconnectedMission == fleetReconnaissance_.end()
             || disconnectedMission->second.leg != FleetMissionLeg::Reconnaissance
-            || !IsFleetReconnaissanceActive(disconnectedReport->second.state.missionStatus)
+            || !detail::IsFleetMissionInProgress(disconnectedReport->second.state.missionStatus)
             || simulation_.TickCount() <= disconnectedReport->second.receivedAtTick
                 + peerTelemetryUnknownAfterTicks
             || !formationNetwork_->IsNodeRadioEnabled(disconnectedDroneId))

@@ -1,5 +1,6 @@
 #include "AeroSimLabApp.h"
 #include "ExecutableDirectory.h"
+#include "FleetMissionProgress.h"
 #include "TrainingRangeScene.h"
 
 #ifdef _WIN32
@@ -540,19 +541,7 @@ void AeroSimLabApp::AdvanceSimulationTick()
         fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [](const auto& entry)
         {
-            return entry.second.status == "경로 전달 대기"
-                || entry.second.status == "출발 준비"
-                || entry.second.status == "정찰 이동 중"
-                || entry.second.status == "중계 준비"
-                || entry.second.status == "중계 위치로 이동 중"
-                || entry.second.status == "집결 이동 중"
-                || entry.second.status == "재집결 준비"
-                || entry.second.status == "복귀 준비"
-                || entry.second.status == "복귀 중"
-                || entry.second.status == "저전력 복귀 중"
-                || entry.second.status == "저전력 착륙 중"
-                || entry.second.status == "착륙 중"
-                || entry.second.status == "복귀 착륙 중";
+            return detail::IsFleetMissionInProgress(entry.second.status);
         });
     if (!groundControlTickAdvanced
         && groundControlCommandExpiresAtTick_.empty()

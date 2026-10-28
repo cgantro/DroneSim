@@ -9,6 +9,9 @@
 
 namespace aerosimlab::simulator::detail
 {
+/** @brief 표시 상태가 진행 중인 드론 임무인지 확인한다. */
+[[nodiscard]] bool IsFleetMissionInProgress(std::string_view status) noexcept;
+
 /** @brief 한 드론이 리더에게 보고한 임무 진행 정보다. */
 struct FleetMissionReport
 {

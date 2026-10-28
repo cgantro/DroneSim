@@ -1,7 +1,31 @@
 #include "FleetMissionProgress.h"
 
+#include <algorithm>
+#include <array>
+
 namespace aerosimlab::simulator::detail
 {
+bool IsFleetMissionInProgress(std::string_view status) noexcept
+{
+    // 상태 문구는 화면과 원격 보고에 쓰고, 진행 여부는 이 목록에서만 판단한다.
+    constexpr std::array<std::string_view, 13> activeStatuses{
+        "경로 전달 대기",
+        "출발 준비",
+        "정찰 이동 중",
+        "중계 준비",
+        "중계 위치로 이동 중",
+        "집결 이동 중",
+        "재집결 준비",
+        "복귀 준비",
+        "복귀 중",
+        "저전력 복귀 중",
+        "저전력 착륙 중",
+        "착륙 중",
+        "복귀 착륙 중"};
+    return std::find(activeStatuses.begin(), activeStatuses.end(), status)
+        != activeStatuses.end();
+}
+
 FleetMissionProgressDecision EvaluateFleetMissionProgress(
     FleetMissionPhase phase,
     std::span<const std::optional<FleetMissionReport>> reports) noexcept
