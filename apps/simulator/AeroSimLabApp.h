@@ -112,6 +112,8 @@ public:
 #endif
 
 private:
+    enum class FleetMissionLeg;
+
     static constexpr double benchmarkWarmupDurationSeconds = 1.0;
 
     /** @brief 입력부터 화면 출력까지 현재 프레임에서만 쓰는 측정값이다. */
@@ -206,6 +208,19 @@ private:
     [[nodiscard]] bool StartFleetReconnaissance(
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
+    [[nodiscard]] bool PrepareFleetNetwork(bool reset);
+    void AdvanceFleetNetwork();
+    [[nodiscard]] bool SendFleetRouteAssignment(
+        aerosimlab::simulation::DroneId droneId,
+        FleetMissionLeg leg,
+        std::size_t targetIndex,
+        std::vector<glm::dvec3> routeWaypointsMeters);
+    void ApplyFleetRouteAssignment(
+        aerosimlab::simulation::DroneId droneId,
+        FleetMissionLeg leg,
+        std::size_t targetIndex,
+        std::vector<glm::dvec3> routeWaypointsMeters,
+        std::uint32_t sequence);
     [[nodiscard]] bool StartFleetRally();
     [[nodiscard]] bool StartFleetReturn(bool takeOffDrones);
     void FailCompleteFleetMission(const std::string& reason);
@@ -451,8 +466,12 @@ private:
         std::size_t targetIndex = 0;
         glm::dvec3 startPositionMeters{0.0};
         std::vector<glm::dvec3> routeWaypointsMeters;
+        std::uint32_t routeSequence = 0;
+        std::uint32_t pendingRouteSequence = 0;
+        std::uint64_t routeSentAtTick = 0;
         std::size_t nextWaypoint = 0;
         std::string status;
+        bool routeReceived = false;
         bool waypointCommanded = false;
         FleetMissionLeg leg = FleetMissionLeg::Reconnaissance;
     };

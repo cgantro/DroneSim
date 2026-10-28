@@ -509,6 +509,7 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
 void AeroSimLabApp::AdvanceSimulationTick()
 {
     AdvanceAmbientWind();
+    AdvanceFleetNetwork();
     AdvanceFleetReconnaissance();
     AdvanceFormationTransit();
     AdvanceCompleteFleetMission();
@@ -522,7 +523,8 @@ void AeroSimLabApp::AdvanceSimulationTick()
         fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [](const auto& entry)
         {
-            return entry.second.status == "출발 준비"
+            return entry.second.status == "경로 전달 대기"
+                || entry.second.status == "출발 준비"
                 || entry.second.status == "정찰 이동 중"
                 || entry.second.status == "집결 이동 중"
                 || entry.second.status == "재집결 준비"
