@@ -276,6 +276,9 @@ private:
     void ApplyVideoRecordingCommand(
         aerosimlab::communication::VideoRecordingCommand command,
         aerosimlab::communication::CommandReply& reply);
+    void ApplyHudSessionCommand(aerosimlab::communication::SessionCommand command);
+    void ApplyHudVideoRecordingCommand(
+        aerosimlab::communication::VideoRecordingCommand command);
     void ApplyDroneCommand(aerosimlab::simulation::DroneId droneId,
         const aerosimlab::simulation::DroneCommand& command,
         aerosimlab::communication::CommandReply& reply);
@@ -427,6 +430,8 @@ private:
 #endif
     std::uint16_t udpPort_ = 0;
     aerosimlab::simulation::CommandRecording commandRecording_;
+    std::string sessionControlStatus_;
+    std::string videoControlStatus_;
 #ifndef __EMSCRIPTEN__
     struct PendingGroundCommand
     {

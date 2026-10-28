@@ -332,6 +332,69 @@ bool AeroSimLabApp::ApplySessionCommand(
     return false;
 }
 
+void AeroSimLabApp::ApplyHudSessionCommand(
+    aerosimlab::communication::SessionCommand command)
+{
+    aerosimlab::communication::CommandReply reply;
+    static_cast<void>(ApplySessionCommand(command, reply));
+
+    if (reply.accepted)
+    {
+        switch (command)
+        {
+        case aerosimlab::communication::SessionCommand::StartRecording:
+            sessionControlStatus_ = "조종 입력을 기록하고 있습니다.";
+            break;
+        case aerosimlab::communication::SessionCommand::StopRecording:
+            sessionControlStatus_ = "조종 입력 기록을 마쳤습니다.";
+            break;
+        case aerosimlab::communication::SessionCommand::ReplayRecording:
+            sessionControlStatus_ = "조종 입력을 처음부터 다시 재생합니다.";
+            break;
+        }
+        return;
+    }
+
+    if (reply.status == "recording_requires_grounded")
+        sessionControlStatus_ = "기록은 모든 드론이 지상에 있을 때 시작할 수 있습니다.";
+    else if (reply.status == "recording_empty")
+        sessionControlStatus_ = "다시 재생할 조종 입력이 없습니다.";
+    else
+        sessionControlStatus_ = "다른 기록이나 재생 작업이 진행 중입니다.";
+}
+
+void AeroSimLabApp::ApplyHudVideoRecordingCommand(
+    aerosimlab::communication::VideoRecordingCommand command)
+{
+    aerosimlab::communication::CommandReply reply;
+    ApplyVideoRecordingCommand(command, reply);
+    if (!reply.accepted)
+    {
+        videoControlStatus_ = reply.status == "video_recording_camera_unavailable"
+            ? "카메라 화면을 켠 뒤 녹화를 시작하세요."
+            : "영상 녹화 요청을 처리하지 못했습니다.";
+        return;
+    }
+
+    if (command == aerosimlab::communication::VideoRecordingCommand::Start)
+    {
+        const std::string filename = eoVideoRecorder_
+            ? eoVideoRecorder_->VideoPath().filename().string() : std::string{};
+        videoControlStatus_ = "영상 녹화 중: " + filename;
+        return;
+    }
+
+    const std::size_t firstSeparator = reply.status.find(':');
+    const std::size_t secondSeparator = firstSeparator == std::string::npos
+        ? std::string::npos : reply.status.find(':', firstSeparator + 1U);
+    std::string filename = secondSeparator == std::string::npos
+        ? std::string{} : reply.status.substr(secondSeparator + 1U);
+    const std::size_t pathSeparator = filename.find_last_of("/\\");
+    if (pathSeparator != std::string::npos)
+        filename.erase(0, pathSeparator + 1U);
+    videoControlStatus_ = "영상 저장 완료: " + filename;
+}
+
 void AeroSimLabApp::ApplyVideoRecordingCommand(
     aerosimlab::communication::VideoRecordingCommand command,
     aerosimlab::communication::CommandReply& reply)

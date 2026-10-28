@@ -197,6 +197,79 @@ void DrawCameraPanel(
     ImGui::End();
 }
 
+void DrawRecordingPanel(const SessionRecordingControls& controls)
+{
+    if (!ImGui::CollapsingHeader("기록과 다시 보기"))
+        return;
+
+    if (controls.commandRecording)
+    {
+        ImGui::Text("명령 기록 중 · %llu Tick",
+            static_cast<unsigned long long>(controls.recordedTicks));
+        if (ImGui::Button("명령 기록 마치기"))
+            controls.stopCommandRecording();
+    }
+    else if (controls.commandReplay)
+    {
+        ImGui::Text("명령 기록 재생 중 · %llu Tick",
+            static_cast<unsigned long long>(controls.recordedTicks));
+    }
+    else if (controls.canStartCommandRecording
+        && ImGui::Button("조종 입력 기록 시작"))
+    {
+        controls.startCommandRecording();
+    }
+    else
+    {
+        ImGui::TextDisabled("모든 드론이 지상에 있고 다른 기록·임무가 없을 때 시작할 수 있습니다.");
+    }
+
+    if (controls.hasRecordedCommands)
+    {
+        ImGui::Text("기록된 입력: %llu Tick",
+            static_cast<unsigned long long>(controls.recordedTicks));
+        if (!controls.commandRecording && !controls.commandReplay
+            && controls.canReplayCommands
+            && ImGui::Button("처음부터 다시 재생"))
+        {
+            controls.replayCommands();
+        }
+    }
+    else
+    {
+        ImGui::TextDisabled("기록된 조종 입력이 없습니다.");
+    }
+    ImGui::TextDisabled("조종 기록은 프로그램을 닫으면 사라집니다.");
+    if (!controls.commandStatus.empty())
+        ImGui::TextWrapped("%s", controls.commandStatus.c_str());
+
+    ImGui::Separator();
+    if (controls.videoRecording)
+    {
+        ImGui::Text("EO 영상 녹화 중");
+        if (controls.canStopVideoRecording
+            && ImGui::Button("영상 녹화 마치기"))
+        {
+            controls.stopVideoRecording();
+        }
+        else if (!controls.canStopVideoRecording)
+        {
+            ImGui::TextDisabled("자동 정찰 녹화는 임무가 마무리할 때 저장합니다.");
+        }
+    }
+    else if (controls.canStartVideoRecording
+        && ImGui::Button("EO 영상 녹화 시작"))
+    {
+        controls.startVideoRecording();
+    }
+    else
+    {
+        ImGui::TextDisabled("카메라가 켜져 있고 다른 기록·임무가 없을 때 녹화할 수 있습니다.");
+    }
+    if (!controls.videoStatus.empty())
+        ImGui::TextWrapped("%s", controls.videoStatus.c_str());
+}
+
 void DrawFlightStatusPanel(
     const simulation::SimulationCore& simulation,
     bool gamepadConnected,
@@ -228,7 +301,8 @@ void DrawFlightStatusPanel(
         setFormationLinkDisabled,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-    simulation::CaptureAssessment captureAssessment)
+    simulation::CaptureAssessment captureAssessment,
+    const SessionRecordingControls& recordingControls)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
     {
@@ -435,6 +509,8 @@ void DrawFlightStatusPanel(
                 ImGui::TextDisabled("  %s", event.detail.c_str());
             }
         }
+        ImGui::Separator();
+        DrawRecordingPanel(recordingControls);
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();
         ImGui::Text("게임패드: %s   지상통제: %s",
@@ -565,6 +641,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
     simulation::CaptureAssessment captureAssessment,
+    const SessionRecordingControls& recordingControls,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
     HudRenderTimings* timings)
@@ -594,7 +671,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         startFormationTransit, packetLossPercent, setPacketLossPercent,
         formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
-        setFormationNodeRadioEnabled, captureAssessment);
+        setFormationNodeRadioEnabled, captureAssessment, recordingControls);
 
     if (timings != nullptr)
     {

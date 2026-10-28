@@ -583,6 +583,7 @@ void AeroSimLabApp::AdvanceReplayTick()
     if (commandRecording_.ReplayFinished())
     {
         commandRecording_.StopReplay();
+        sessionControlStatus_ = "조종 입력 재생을 마쳤습니다.";
         window_->SetTitle("AeroSimLab | 기록 재생 완료");
     }
 }
@@ -723,6 +724,63 @@ void AeroSimLabApp::RenderFrame()
         const bool formationNetworkActive = formationTransit_.active
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
         const auto captureAssessment = AssessInspectionView();
+        const auto droneIds = simulation_.DroneIds();
+        const bool everyDroneIsGrounded = !droneIds.empty()
+            && std::all_of(droneIds.begin(), droneIds.end(), [this](auto id)
+            {
+                return simulation_.State(id).mode
+                    == aerosimlab::simulation::FlightMode::Grounded;
+            });
+        const bool noMissionIsActive = !InspectionMissionIsActive()
+            && !FleetReconnaissanceIsActive()
+            && !CompleteFleetMissionIsActive()
+            && !formationTransit_.active;
+        const bool videoIsRecording = eoVideoRecorder_
+            && eoVideoRecorder_->IsRecording();
+        SessionRecordingControls recordingControls;
+        recordingControls.commandRecording = commandRecording_.IsRecording();
+        recordingControls.commandReplay = commandRecording_.IsReplaying();
+        recordingControls.recordedTicks = commandRecording_.TickCount();
+        recordingControls.hasRecordedCommands = recordingControls.recordedTicks > 0U;
+        recordingControls.canStartCommandRecording = everyDroneIsGrounded
+            && noMissionIsActive && !recordingControls.commandRecording
+            && !recordingControls.commandReplay && !videoIsRecording;
+        recordingControls.canReplayCommands = noMissionIsActive
+            && !recordingControls.commandRecording && !recordingControls.commandReplay
+            && !videoIsRecording;
+        recordingControls.commandStatus = sessionControlStatus_;
+        recordingControls.startCommandRecording = [this]
+        {
+            ApplyHudSessionCommand(
+                aerosimlab::communication::SessionCommand::StartRecording);
+        };
+        recordingControls.stopCommandRecording = [this]
+        {
+            ApplyHudSessionCommand(
+                aerosimlab::communication::SessionCommand::StopRecording);
+        };
+        recordingControls.replayCommands = [this]
+        {
+            ApplyHudSessionCommand(
+                aerosimlab::communication::SessionCommand::ReplayRecording);
+        };
+        recordingControls.videoRecording = videoIsRecording;
+        recordingControls.canStartVideoRecording = simulation_.Camera().status
+                == aerosimlab::simulation::CameraStatus::Active
+            && noMissionIsActive && !recordingControls.commandRecording
+            && !recordingControls.commandReplay && !videoIsRecording;
+        recordingControls.canStopVideoRecording = videoIsRecording && noMissionIsActive;
+        recordingControls.videoStatus = videoControlStatus_;
+        recordingControls.startVideoRecording = [this]
+        {
+            ApplyHudVideoRecordingCommand(
+                aerosimlab::communication::VideoRecordingCommand::Start);
+        };
+        recordingControls.stopVideoRecording = [this]
+        {
+            ApplyHudVideoRecordingCommand(
+                aerosimlab::communication::VideoRecordingCommand::Stop);
+        };
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
@@ -768,6 +826,7 @@ void AeroSimLabApp::RenderFrame()
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
             },
             captureAssessment,
+            recordingControls,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this](aerosimlab::simulation::DroneId droneId)
             {
