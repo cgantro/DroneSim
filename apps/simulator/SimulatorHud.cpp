@@ -75,6 +75,18 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
     return "통신 사건";
 }
 
+std::string FormatRoute(const std::vector<communication::NetworkNodeId>& route)
+{
+    std::string result;
+    for (const communication::NetworkNodeId node : route)
+    {
+        if (!result.empty())
+            result += " → ";
+        result += DroneName(node);
+    }
+    return result.empty() ? "경로 정보 없음" : result;
+}
+
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
     const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspaceV3");
@@ -379,6 +391,36 @@ void DrawFlightStatusPanel(
                         }
                     }
                     ImGui::EndTable();
+                }
+            }
+            if (ImGui::CollapsingHeader("최근 도착 패킷"))
+            {
+                const auto messages = formationNetwork->DeliveredMessages();
+                const std::size_t firstVisibleMessage = messages.size() > 8U
+                    ? messages.size() - 8U : 0U;
+                if (firstVisibleMessage == messages.size())
+                {
+                    ImGui::TextDisabled("아직 도착한 패킷이 없습니다.");
+                }
+                for (std::size_t index = firstVisibleMessage;
+                     index < messages.size(); ++index)
+                {
+                    const communication::DeliveredMeshMessage& delivered = messages[index];
+                    const communication::VirtualMeshMessage& message = delivered.message;
+                    const std::string label = "Tick "
+                        + std::to_string(delivered.deliveredAtTick) + " · "
+                        + message.kind + " · #" + std::to_string(message.sequence);
+                    if (ImGui::TreeNode(label.c_str()))
+                    {
+                        ImGui::Text("보낸 드론: %s",
+                            DroneName(message.source).c_str());
+                        ImGui::Text("받은 드론: %s",
+                            DroneName(message.destination).c_str());
+                        const std::string route = FormatRoute(message.route);
+                        ImGui::Text("전달 경로: %s", route.c_str());
+                        ImGui::TextWrapped("내용: %s", message.payload.c_str());
+                        ImGui::TreePop();
+                    }
                 }
             }
             const auto events = formationNetwork->Events();
