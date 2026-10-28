@@ -1690,32 +1690,13 @@ TEST(SimulatorSessionTests, CoreScenarios)
         std::filesystem::remove(scheduledPath, removeError);
     }
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget());
-    EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyGroundedRelayDroneTakesOffForAssignment());
-    EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyRelayRecoveryUsesTheConfiguredRadioRange());
-    EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyGroundControlShowsOnlyDeliveredPeerPositions());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyObserverCameraKeepsAUsableFollowDistance());
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyLeaderLossWithoutCandidateSafelyLandsFleet());
-    EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyCompleteFleetMissionFinishesAndLands());
-    EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyCompleteFleetMissionReassignsAfterRotorFailure(
-            simulator::AeroSimLabAppTestAccess::RotorFailureScenario::Follower));
-    EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyCompleteFleetMissionReassignsAfterRotorFailure(
-            simulator::AeroSimLabAppTestAccess::RotorFailureScenario::LeaderWithoutGroundControlRoute));
-    EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyCompleteFleetMissionReassignsAfterRotorFailure(
-            simulator::AeroSimLabAppTestAccess::RotorFailureScenario::LeaderWithGroundControlRoute));
-    EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyLostReconAssignmentWaitsForLeaseAndReassignsOnce());
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());

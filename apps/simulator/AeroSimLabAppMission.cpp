@@ -2332,58 +2332,11 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         formationTransit_.lastNetworkNodeUpdateTick = currentTick;
     }
 
-    constexpr std::uint64_t leaderHeartbeatTimeoutTicks = 45U;
-    // 지상통제소와 끊긴 것만으로 리더 장애라 단정하지 않는다.
-    // 추종 기체의 최신 보고가 리더까지 도착하면 편대 안에서는 리더가 살아 있다.
-    const bool leaderStillReportsToFleet = std::any_of(
-        fleetDroneIds_.begin(), fleetDroneIds_.end(),
-        [this](DroneId droneId)
-        {
-            return droneId != fleetLeaderId_
-                && FreshPeerTelemetry(droneId) != nullptr;
-        });
-    if (!leaderReplacementPending_ && !leaderStateCollectionPending_
-        && fleetLeaderId_ != 0U
-        && currentTick > lastLeaderHeartbeatTick_ + leaderHeartbeatTimeoutTicks
-        && !leaderStillReportsToFleet)
-        BeginFleetLeaderReplacement();
-
     formationNetwork_->Advance(currentTick);
     DroneId leaderId = fleetLeaderId_;
     for (const auto& delivered : formationNetwork_->DeliveredMessages())
     {
         const auto& message = delivered.message;
-        if (message.kind == "leader_probe"
-            && message.source == groundControlNodeId
-            && std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), message.destination)
-                != fleetDroneIds_.end()
-            && formationNetwork_->IsNodeRadioEnabled(message.destination))
-        {
-            static_cast<void>(formationNetwork_->Send(message.destination,
-                groundControlNodeId, message.sequence, "leader_probe_ack",
-                message.payload));
-            continue;
-        }
-        if (message.kind == "leader_probe_ack"
-            && message.destination == groundControlNodeId
-            && leaderReplacementPending_
-            && message.sequence == leaderProbeSequence_
-            && message.payload == std::to_string(fleetLeadershipEpoch_ + 1U)
-            && std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), message.source)
-                != fleetDroneIds_.end()
-            && formationNetwork_->IsNodeRadioEnabled(message.source))
-        {
-            leaderProbeAcknowledgements_.push_back(message.source);
-            continue;
-        }
-        if (message.kind == "leader_heartbeat"
-            && message.destination == groundControlNodeId
-            && message.source == leaderId
-            && message.payload == std::to_string(fleetLeadershipEpoch_))
-        {
-            lastLeaderHeartbeatTick_ = delivered.deliveredAtTick;
-            continue;
-        }
         constexpr std::string_view groundControlTelemetryPrefix =
             "ground_control_telemetry_";
         if (message.destination == groundControlNodeId
@@ -2527,50 +2480,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             message.sequence, "fleet_route_ack", {}));
     }
 
-    if (leaderReplacementPending_)
-    {
-        const auto candidate = std::find_if(fleetDroneIds_.begin(), fleetDroneIds_.end(),
-            [this](DroneId droneId)
-            {
-                return droneId != fleetLeaderId_
-                    && std::find(leaderProbeAcknowledgements_.begin(),
-                        leaderProbeAcknowledgements_.end(), droneId)
-                        != leaderProbeAcknowledgements_.end();
-            });
-        if (candidate != fleetDroneIds_.end())
-        {
-            PromoteFleetLeader(*candidate);
-            leaderId = fleetLeaderId_;
-        }
-        else
-        {
-            constexpr std::uint64_t leaderProbeRetryIntervalTicks = 15U;
-            constexpr std::uint32_t maximumLeaderProbeTransmissions = 10U;
-            if (leaderProbeTransmissionCount_ < maximumLeaderProbeTransmissions
-                && currentTick >= lastLeaderProbeSentAtTick_
-                    + leaderProbeRetryIntervalTicks)
-                SendFleetLeaderProbes();
-
-            constexpr std::uint64_t leaderProbeTimeoutTicks = 180U;
-            if (currentTick >= leaderReplacementStartedAtTick_
-                    + leaderProbeTimeoutTicks)
-            {
-                FailFleetLeaderReplacement();
-                return;
-            }
-        }
-    }
-
     constexpr std::uint64_t telemetryIntervalTicks = 6U;
-    constexpr std::uint64_t leaderHeartbeatIntervalTicks = 15U;
-    if (fleetLeaderId_ != 0U
-        && currentTick >= lastLeaderHeartbeatSentAtTick_ + leaderHeartbeatIntervalTicks)
-    {
-        if (formationNetwork_->SendLatest(fleetLeaderId_, groundControlNodeId,
-                ++leaderHeartbeatSequence_, "leader_heartbeat",
-                std::to_string(fleetLeadershipEpoch_)))
-            lastLeaderHeartbeatSentAtTick_ = currentTick;
-    }
 
     if (leaderId != 0U)
     {
@@ -2641,8 +2551,6 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         }
     }
 
-    FinishFleetLeaderReplacementIfReady();
-    AdvanceFleetRelayRecovery();
 }
 
 void AeroSimLabApp::AdvanceFormationTransit()

@@ -528,7 +528,6 @@ void AeroSimLabApp::AdvanceSimulationTick()
     AdvanceAmbientWind();
     AdvanceFleetNetwork();
     AdvanceFleetReconnaissance();
-    ReassignLostLeaderTarget();
     AdvanceFormationTransit();
     AdvanceCompleteFleetMission();
     if (demoMode_ && !externalControl_
