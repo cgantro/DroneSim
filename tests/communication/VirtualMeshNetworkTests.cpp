@@ -44,11 +44,9 @@ TEST(VirtualMeshNetworkTests, RoutesMessageAcrossFourNodes)
         NetworkNodeSnapshot{3, {120.0, 0.0, 10.0}},
         NetworkNodeSnapshot{4, {180.0, 0.0, 10.0}}};
     network.UpdateNodes(nodes, {});
-    static_cast<void>(AdvanceTicks(network, 0, 3));
-
     const auto messageId = network.Send(1, 4, 7, "waypoint", "x=180");
     ASSERT_TRUE(messageId.has_value());
-    const auto deliveredMessages = AdvanceTicks(network, 4, 20);
+    const auto deliveredMessages = AdvanceTicks(network, 0, 20);
 
     ASSERT_EQ(deliveredMessages.size(), 1U);
     const auto& delivered = deliveredMessages.front();

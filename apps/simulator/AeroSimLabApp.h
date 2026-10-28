@@ -5,6 +5,7 @@
 #include "EoVideoRecorder.h"
 #endif
 #include "communication/Protocol.h"
+#include "communication/VirtualMeshNetwork.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "sensor/RgbFrame.h"
@@ -25,6 +26,7 @@
 #include <cstdint>
 #include <ctime>
 #include <memory>
+#include <map>
 #include <optional>
 #include <random>
 #include <string>
@@ -437,10 +439,17 @@ private:
     {
         aerosimlab::simulation::FormationRoutePlan route;
         std::size_t waypointIndex = 0;
+        std::uint32_t nextMessageSequence = 1;
+        std::map<aerosimlab::simulation::DroneId, glm::dvec3> sentFollowerTargets;
+        std::map<aerosimlab::simulation::DroneId, std::uint64_t> lastTargetSentAtTick;
+        std::map<aerosimlab::simulation::DroneId, std::uint32_t> lastAppliedSequence;
+        std::optional<std::uint64_t> lastNetworkNodeUpdateTick;
         bool active = false;
         std::string status = "대기";
     };
     FormationTransitState formationTransit_;
+    std::unique_ptr<aerosimlab::communication::VirtualMeshNetwork> formationNetwork_;
+    std::vector<aerosimlab::communication::RadioObstacle> formationRadioObstacles_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{

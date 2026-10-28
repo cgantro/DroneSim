@@ -435,6 +435,18 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
     {
     case Packet::Type::Hello:
         neighbors_[receiver][transmission.sender] = {currentTick_};
+        {
+            std::vector<NetworkNodeId> pendingDestinations;
+            for (const auto& [endpoints, messages] : pendingMessages_)
+            {
+                static_cast<void>(messages);
+                if (endpoints.first == receiver
+                    && !activeRequests_.contains(endpoints))
+                    pendingDestinations.push_back(endpoints.second);
+            }
+            for (const NetworkNodeId destination : pendingDestinations)
+                StartRouteDiscovery(receiver, destination);
+        }
         return;
     case Packet::Type::RouteRequest:
     {
@@ -542,6 +554,10 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
 void VirtualMeshNetwork::StartRouteDiscovery(
     NetworkNodeId source, NetworkNodeId destination)
 {
+    const auto knownNeighbors = neighbors_.find(source);
+    if (knownNeighbors == neighbors_.end() || knownNeighbors->second.empty())
+        return;
+
     const NodePair pair{source, destination};
     const std::uint64_t requestId = nextRequestId_++;
     activeRequests_[pair] = requestId;
@@ -554,7 +570,7 @@ void VirtualMeshNetwork::StartRouteDiscovery(
     request.remainingHops = settings_.maximumHops;
     request.hopCount = 0U;
     ++metrics_.routeRequests;
-    for (const auto& [neighbor, details] : neighbors_[source])
+    for (const auto& [neighbor, details] : knownNeighbors->second)
     {
         static_cast<void>(details);
         Transmit(source, neighbor, request);

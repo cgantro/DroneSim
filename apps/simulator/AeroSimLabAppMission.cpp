@@ -4,12 +4,39 @@
 #include <glm/geometric.hpp>
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
 
 namespace aerosimlab::simulator
 {
+namespace
+{
+std::string EncodeWaypoint(const glm::dvec3& waypoint)
+{
+    std::ostringstream payload;
+    payload << std::setprecision(17)
+        << waypoint.x << ' ' << waypoint.y << ' ' << waypoint.z;
+    return payload.str();
+}
+
+std::optional<glm::dvec3> DecodeWaypoint(const std::string& payload)
+{
+    std::istringstream values(payload);
+    glm::dvec3 waypoint{0.0};
+    if (!(values >> waypoint.x >> waypoint.y >> waypoint.z))
+        return std::nullopt;
+
+    values >> std::ws;
+    if (!values.eof() || !std::isfinite(waypoint.x)
+        || !std::isfinite(waypoint.y) || !std::isfinite(waypoint.z))
+        return std::nullopt;
+    return waypoint;
+}
+}
+
 bool AeroSimLabApp::InspectionMissionIsActive() const
 {
     using Stage = InspectionMissionStage;
@@ -259,6 +286,28 @@ bool AeroSimLabApp::StartFormationTransit(
         return false;
     }
 
+    aerosimlab::communication::VirtualMeshSettings networkSettings;
+    networkSettings.maximumLinkRangeMeters = 90.0;
+    networkSettings.helloIntervalTicks = 15;
+    networkSettings.neighborTimeoutTicks = 90;
+    networkSettings.routeLifetimeTicks = 300;
+    networkSettings.maximumHops = 5;
+    formationNetwork_ = std::make_unique<
+        aerosimlab::communication::VirtualMeshNetwork>(networkSettings);
+    formationRadioObstacles_.clear();
+    formationRadioObstacles_.reserve(routeBuildings_.size());
+    for (const aerosimlab::terrain::MapBuilding& building : routeBuildings_)
+    {
+        if (building.outlineMeters.size() < 3U || building.heightMeters <= 0.0)
+            continue;
+        double groundHeight = 0.0;
+        if (!building.groundElevationsMeters.empty())
+            groundHeight = *std::min_element(building.groundElevationsMeters.begin(),
+                building.groundElevationsMeters.end());
+        formationRadioObstacles_.push_back({
+            building.outlineMeters, groundHeight, groundHeight + building.heightMeters});
+    }
+
     std::vector<DroneId> takingOff;
     takingOff.reserve(droneIds.size());
     for (const DroneId droneId : droneIds)
@@ -277,6 +326,11 @@ bool AeroSimLabApp::StartFormationTransit(
 
     formationTransit_.route = *route;
     formationTransit_.waypointIndex = 0U;
+    formationTransit_.nextMessageSequence = 1U;
+    formationTransit_.sentFollowerTargets.clear();
+    formationTransit_.lastTargetSentAtTick.clear();
+    formationTransit_.lastAppliedSequence.clear();
+    formationTransit_.lastNetworkNodeUpdateTick.reset();
     formationTransit_.active = true;
     formationTransit_.status = route->shape == shape
         ? std::string{"출발 준비 · "} + (shape == FormationShape::Vee ? "V자 대형"
@@ -308,6 +362,59 @@ void AeroSimLabApp::AdvanceFormationTransit()
         formationTransit_.active = false;
         formationTransit_.status = "편대 구성을 유지할 수 없어 임무를 멈췄습니다.";
         return;
+    }
+
+    if (!formationNetwork_)
+    {
+        formationTransit_.active = false;
+        formationTransit_.status = "편대 통신망을 시작하지 못했습니다.";
+        return;
+    }
+
+    constexpr std::uint64_t networkPositionRefreshTicks = 6U;
+    const std::uint64_t currentTick = simulation_.TickCount();
+    const bool refreshNetworkPositions = !formationTransit_.lastNetworkNodeUpdateTick
+        || currentTick >= *formationTransit_.lastNetworkNodeUpdateTick
+            + networkPositionRefreshTicks;
+    if (refreshNetworkPositions)
+    {
+        std::vector<aerosimlab::communication::NetworkNodeSnapshot> nodes;
+        nodes.reserve(droneIds.size());
+        for (const DroneId droneId : droneIds)
+        {
+            const DroneState& drone = simulation_.State(droneId);
+            nodes.push_back({droneId, drone.positionMeters});
+        }
+        formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
+        formationTransit_.lastNetworkNodeUpdateTick = currentTick;
+    }
+    formationNetwork_->Advance(currentTick);
+    for (const auto& delivered : formationNetwork_->DeliveredMessages())
+    {
+        if (delivered.message.kind != "formation_waypoint"
+            || delivered.message.source != droneIds.front())
+            continue;
+        const auto waypoint = DecodeWaypoint(delivered.message.payload);
+        if (!waypoint)
+            continue;
+        const auto lastSequence = formationTransit_.lastAppliedSequence.find(
+            delivered.message.destination);
+        if (lastSequence != formationTransit_.lastAppliedSequence.end()
+            && delivered.message.sequence <= lastSequence->second)
+            continue;
+
+        DroneCommand command;
+        command.kind = DroneCommand::Kind::SetWaypoint;
+        command.vector = *waypoint;
+        if (simulation_.Apply(delivered.message.destination, command)
+            != CommandResult::Accepted)
+        {
+            formationTransit_.active = false;
+            formationTransit_.status = "통신으로 받은 편대 목표를 적용하지 못했습니다.";
+            return;
+        }
+        formationTransit_.lastAppliedSequence[delivered.message.destination]
+            = delivered.message.sequence;
     }
 
     const DroneId leaderId = droneIds.front();
@@ -366,12 +473,37 @@ void AeroSimLabApp::AdvanceFormationTransit()
         DroneCommand command;
         command.kind = DroneCommand::Kind::SetWaypoint;
         command.vector = target;
-        if (simulation_.Apply(droneId, command) != CommandResult::Accepted)
+        if (index == 0U)
         {
-            formationTransit_.active = false;
-            formationTransit_.status = "드론 " + std::to_string(droneId)
-                + "에게 편대 목표를 전달하지 못해 임무를 멈췄습니다.";
-            return;
+            if (simulation_.Apply(droneId, command) != CommandResult::Accepted)
+            {
+                formationTransit_.active = false;
+                formationTransit_.status = "리더 목표를 적용하지 못해 임무를 멈췄습니다.";
+                return;
+            }
+            continue;
+        }
+
+        constexpr std::uint64_t targetRefreshTicks = 6U;
+        const auto previousTarget = formationTransit_.sentFollowerTargets.find(droneId);
+        const auto lastSentTick = formationTransit_.lastTargetSentAtTick.find(droneId);
+        const bool targetChanged = previousTarget == formationTransit_.sentFollowerTargets.end()
+            || glm::distance(previousTarget->second, target) >= 0.75;
+        const bool refreshDue = lastSentTick == formationTransit_.lastTargetSentAtTick.end()
+            || simulation_.TickCount() >= lastSentTick->second + targetRefreshTicks;
+        if (targetChanged || refreshDue)
+        {
+            const auto messageId = formationNetwork_->Send(leaderId, droneId,
+                formationTransit_.nextMessageSequence++, "formation_waypoint",
+                EncodeWaypoint(target));
+            if (!messageId)
+            {
+                formationTransit_.active = false;
+                formationTransit_.status = "추종 드론에게 편대 목표를 보내지 못했습니다.";
+                return;
+            }
+            formationTransit_.sentFollowerTargets[droneId] = target;
+            formationTransit_.lastTargetSentAtTick[droneId] = simulation_.TickCount();
         }
     }
 
