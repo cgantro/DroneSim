@@ -92,6 +92,8 @@ public:
         const std::string& formationMissionStatus, bool formationMissionCanStart,
         bool formationMissionActive,
         const std::function<void(simulation::FormationShape)>& startFormationTransit,
+        communication::VirtualMeshMode& selectedNetworkMode,
+        const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
         float& packetLossPercent,
         const std::function<void(float)>& setPacketLossPercent,
         const communication::VirtualMeshNetwork* formationNetwork,

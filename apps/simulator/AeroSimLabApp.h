@@ -221,6 +221,7 @@ private:
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
+    void SetFleetNetworkMode(aerosimlab::communication::VirtualMeshMode mode);
     void InitializeFleetLeadership();
     void BeginFleetLeaderReplacement();
     void SendFleetLeaderProbes();
@@ -588,6 +589,8 @@ private:
     };
     CompleteFleetMissionState completeFleetMission_;
     std::unique_ptr<aerosimlab::communication::VirtualMeshNetwork> formationNetwork_;
+    aerosimlab::communication::VirtualMeshMode fleetNetworkMode_ =
+        aerosimlab::communication::VirtualMeshMode::AdaptiveMesh;
     std::vector<aerosimlab::communication::RadioObstacle> formationRadioObstacles_;
     float fleetPacketLossPercent_ = 0.0F;
     aerosimlab::terrain::TerrainGrid terrainGrid_;

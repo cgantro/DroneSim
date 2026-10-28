@@ -15,6 +15,15 @@ namespace aerosimlab::communication
 {
 using NetworkNodeId = std::uint64_t;
 
+/** @brief 시험에서 비교할 메시지 전달 경로 정책이다. */
+enum class VirtualMeshMode
+{
+    Direct,
+    LeaderCentric,
+    MultiHop,
+    AdaptiveMesh
+};
+
 /** @brief 한 드론이나 지상통제 노드의 이번 Tick 상태다. */
 struct NetworkNodeSnapshot
 {
@@ -35,6 +44,10 @@ struct RadioObstacle
 
 struct VirtualMeshSettings
 {
+    /** @brief 직접·리더 경유·고정 다중 홉·장애 적응 경로 중 하나를 고른다. */
+    VirtualMeshMode mode = VirtualMeshMode::AdaptiveMesh;
+    /** @brief 리더 경유 방식에서 사용할 현재 리더의 노드 ID다. */
+    NetworkNodeId leaderNodeId = 0;
     double maximumLinkRangeMeters = 90.0;
     std::uint64_t helloIntervalTicks = 60;
     std::uint64_t neighborTimeoutTicks = 180;
@@ -112,6 +125,9 @@ public:
     /** @brief 현재 위치와 전파 장애물을 갱신한다. */
     void UpdateNodes(std::span<const NetworkNodeSnapshot> nodes,
         std::span<const RadioObstacle> obstacles);
+
+    /** @brief 리더가 바뀌면 기존 경로를 비우고 새 리더를 기준으로 찾는다. */
+    void SetLeaderNodeId(NetworkNodeId leaderNodeId);
 
     /** @brief 지정한 두 노드 사이의 통신을 즉시 끊거나 복구한다. */
     void SetLinkDisabled(NetworkNodeId first, NetworkNodeId second, bool disabled);
@@ -205,6 +221,8 @@ private:
         NetworkNodeId destination, std::string detail);
     [[nodiscard]] bool IsKnownNeighbor(NetworkNodeId node,
         NetworkNodeId neighbor) const noexcept;
+    [[nodiscard]] bool IsAllowedNextHop(NetworkNodeId node,
+        NetworkNodeId destination, NetworkNodeId nextHop) const noexcept;
 
     VirtualMeshSettings settings_;
     std::map<NetworkNodeId, NetworkNodeSnapshot> nodes_;
@@ -216,6 +234,8 @@ private:
     std::map<NodePair, std::uint64_t> activeRequests_;
     std::map<NodePair, std::uint64_t> activeRequestExpiryTicks_;
     std::set<NodePair> disabledLinks_;
+    /** @brief 고정 다중 홉 방식에서 끊겨 재탐색하지 않을 출발지·목적지 쌍이다. */
+    std::set<NodePair> unavailableRoutes_;
     std::set<NetworkNodeId> radioDisabledNodes_;
     std::vector<Transmission> transmissions_;
     std::vector<DeliveredMeshMessage> deliveredMessages_;

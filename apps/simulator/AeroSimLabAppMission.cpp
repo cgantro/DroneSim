@@ -1152,6 +1152,8 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     peerTelemetryAtLeader_.clear();
 
     aerosimlab::communication::VirtualMeshSettings settings;
+    settings.mode = fleetNetworkMode_;
+    settings.leaderNodeId = fleetLeaderId_;
     settings.maximumLinkRangeMeters = 90.0;
     settings.helloIntervalTicks = 15;
     settings.neighborTimeoutTicks = 90;
@@ -1182,6 +1184,14 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
     formationTransit_.lastNetworkNodeUpdateTick = simulation_.TickCount();
     return !nodes.empty();
+}
+
+void AeroSimLabApp::SetFleetNetworkMode(
+    aerosimlab::communication::VirtualMeshMode mode)
+{
+    fleetNetworkMode_ = mode;
+    if (formationNetwork_)
+        static_cast<void>(PrepareFleetNetwork(true));
 }
 
 void AeroSimLabApp::InitializeFleetLeadership()
@@ -1266,6 +1276,8 @@ void AeroSimLabApp::PromoteFleetLeader(
     const auto promoted = std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), newLeaderId);
     std::rotate(fleetDroneIds_.begin(), promoted, promoted + 1);
     fleetLeaderId_ = newLeaderId;
+    if (formationNetwork_)
+        formationNetwork_->SetLeaderNodeId(newLeaderId);
     ++fleetLeadershipEpoch_;
     leaderReplacementPending_ = false;
     leaderStateCollectionPending_ = true;

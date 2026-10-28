@@ -93,6 +93,9 @@ void VirtualMeshNetwork::UpdateNodes(
         if (!updated.emplace(node.id, node).second)
             throw std::invalid_argument("통신 노드 ID가 중복되었습니다.");
     }
+    if (settings_.mode == VirtualMeshMode::LeaderCentric
+        && !updated.contains(settings_.leaderNodeId))
+        throw std::invalid_argument("리더 중심 통신 모드에 지정한 리더가 없습니다.");
 
     nodes_ = std::move(updated);
     obstacles_.assign(obstacles.begin(), obstacles.end());
@@ -126,6 +129,31 @@ void VirtualMeshNetwork::UpdateNodes(
     }
 }
 
+void VirtualMeshNetwork::SetLeaderNodeId(NetworkNodeId leaderNodeId)
+{
+    if (!nodes_.contains(leaderNodeId))
+        throw std::invalid_argument("새 리더가 통신망에 없습니다.");
+    if (settings_.leaderNodeId == leaderNodeId)
+        return;
+
+    settings_.leaderNodeId = leaderNodeId;
+    routes_.clear();
+    activeRequests_.clear();
+    activeRequestExpiryTicks_.clear();
+    seenRequests_.clear();
+    unavailableRoutes_.clear();
+
+    std::vector<NodePair> pendingRoutes;
+    pendingRoutes.reserve(pendingMessages_.size());
+    for (const auto& [endpoints, messages] : pendingMessages_)
+    {
+        static_cast<void>(messages);
+        pendingRoutes.push_back(endpoints);
+    }
+    for (const NodePair& endpoints : pendingRoutes)
+        StartRouteDiscovery(endpoints.first, endpoints.second);
+}
+
 void VirtualMeshNetwork::SetLinkDisabled(
     NetworkNodeId first, NetworkNodeId second, bool disabled)
 {
@@ -142,10 +170,17 @@ void VirtualMeshNetwork::SetLinkDisabled(
         RecordEvent(MeshEventKind::LinkDisabled, first, second, "링크를 끊었습니다.");
         for (auto& [node, table] : routes_)
         {
-            std::erase_if(table, [pair, node](const auto& entry)
+            for (auto route = table.begin(); route != table.end();)
             {
-                return MakePair(node, entry.second.nextHop) == pair;
-            });
+                if (MakePair(node, route->second.nextHop) != pair)
+                {
+                    ++route;
+                    continue;
+                }
+                if (settings_.mode == VirtualMeshMode::MultiHop)
+                    unavailableRoutes_.insert({node, route->first});
+                route = table.erase(route);
+            }
         }
         for (auto& [node, knownNeighbors] : neighbors_)
         {
@@ -157,6 +192,8 @@ void VirtualMeshNetwork::SetLinkDisabled(
     }
     else
     {
+        if (disabledLinks_.empty() && radioDisabledNodes_.empty())
+            unavailableRoutes_.clear();
         RecordEvent(MeshEventKind::LinkRestored, first, second, "링크를 복구했습니다.");
     }
 }
@@ -185,11 +222,17 @@ void VirtualMeshNetwork::SetNodeRadioEnabled(NetworkNodeId node, bool enabled)
         radioDisabledNodes_.insert(node);
     for (auto& [source, table] : routes_)
     {
-        static_cast<void>(source);
-        std::erase_if(table, [node](const auto& entry)
+        for (auto route = table.begin(); route != table.end();)
         {
-            return entry.first == node || entry.second.nextHop == node;
-        });
+            if (route->first != node && route->second.nextHop != node)
+            {
+                ++route;
+                continue;
+            }
+            if (!enabled && settings_.mode == VirtualMeshMode::MultiHop)
+                unavailableRoutes_.insert({source, route->first});
+            route = table.erase(route);
+        }
     }
     if (!enabled)
     {
@@ -199,6 +242,10 @@ void VirtualMeshNetwork::SetNodeRadioEnabled(NetworkNodeId node, bool enabled)
             static_cast<void>(table.erase(node));
             static_cast<void>(source);
         }
+    }
+    else if (disabledLinks_.empty() && radioDisabledNodes_.empty())
+    {
+        unavailableRoutes_.clear();
     }
     RecordEvent(enabled ? MeshEventKind::NodeRadioRestored
                         : MeshEventKind::NodeRadioDisabled,
@@ -225,9 +272,20 @@ std::optional<std::uint64_t> VirtualMeshNetwork::Send(
         .sequence = sequence,
         .kind = std::move(kind),
         .payload = std::move(payload)};
+    const NodePair pair{source, destination};
+    if (settings_.mode == VirtualMeshMode::MultiHop
+        && unavailableRoutes_.contains(pair))
+    {
+        ++metrics_.routeErrors;
+        ++metrics_.droppedMessages;
+        RecordEvent(MeshEventKind::RouteError, source, destination,
+            "고정 다중 홉 경로가 끊겨 재탐색하지 않았습니다.");
+        return std::nullopt;
+    }
     const auto route = routes_[source].find(destination);
     if (route != routes_[source].end() && route->second.expiresAtTick > currentTick_
-        && IsKnownNeighbor(source, route->second.nextHop))
+        && IsKnownNeighbor(source, route->second.nextHop)
+        && IsAllowedNextHop(source, destination, route->second.nextHop))
     {
         Packet packet;
         packet.type = Packet::Type::Data;
@@ -239,7 +297,6 @@ std::optional<std::uint64_t> VirtualMeshNetwork::Send(
     else
     {
         pendingMessages_[{source, destination}].push_back(std::move(message));
-        const NodePair pair{source, destination};
         if (!activeRequests_.contains(pair))
             StartRouteDiscovery(source, destination);
     }
@@ -537,14 +594,24 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
             ForwardRouteReply(receiver, std::move(reply));
             return;
         }
+        if (settings_.mode == VirtualMeshMode::Direct)
+            return;
+        if (settings_.mode == VirtualMeshMode::LeaderCentric
+            && receiver != settings_.leaderNodeId)
+            return;
         --packet.remainingHops;
         ++packet.hopCount;
+        if (settings_.mode == VirtualMeshMode::LeaderCentric)
+        {
+            if (IsKnownNeighbor(receiver, packet.requestDestination))
+                Transmit(receiver, packet.requestDestination, packet);
+            return;
+        }
         for (const auto& [neighbor, details] : neighbors_[receiver])
         {
             static_cast<void>(details);
-            if (neighbor == transmission.sender)
-                continue;
-            Transmit(receiver, neighbor, packet);
+            if (neighbor != transmission.sender)
+                Transmit(receiver, neighbor, packet);
         }
         return;
     }
@@ -620,11 +687,14 @@ void VirtualMeshNetwork::ProcessTransmission(Transmission transmission)
 void VirtualMeshNetwork::StartRouteDiscovery(
     NetworkNodeId source, NetworkNodeId destination)
 {
+    const NodePair pair{source, destination};
+    if (settings_.mode == VirtualMeshMode::MultiHop
+        && unavailableRoutes_.contains(pair))
+        return;
     const auto knownNeighbors = neighbors_.find(source);
     if (knownNeighbors == neighbors_.end() || knownNeighbors->second.empty())
         return;
 
-    const NodePair pair{source, destination};
     const std::uint64_t requestId = nextRequestId_++;
     activeRequests_[pair] = requestId;
     activeRequestExpiryTicks_[pair] = currentTick_ + settings_.routeLifetimeTicks;
@@ -638,10 +708,29 @@ void VirtualMeshNetwork::StartRouteDiscovery(
     ++metrics_.routeRequests;
     RecordEvent(MeshEventKind::RouteSearchStarted,
         source, destination, "새 경로를 찾기 시작했습니다.");
+    const auto transmitTo = [this, source, &request](NetworkNodeId neighbor)
+    {
+        Transmit(source, neighbor, request);
+    };
+    if (settings_.mode == VirtualMeshMode::Direct)
+    {
+        if (knownNeighbors->second.contains(destination))
+            transmitTo(destination);
+        return;
+    }
+    if (settings_.mode == VirtualMeshMode::LeaderCentric)
+    {
+        const NetworkNodeId nextNode = source == settings_.leaderNodeId
+            || destination == settings_.leaderNodeId
+            ? destination : settings_.leaderNodeId;
+        if (knownNeighbors->second.contains(nextNode))
+            transmitTo(nextNode);
+        return;
+    }
     for (const auto& [neighbor, details] : knownNeighbors->second)
     {
         static_cast<void>(details);
-        Transmit(source, neighbor, request);
+        transmitTo(neighbor);
     }
 }
 
@@ -662,10 +751,21 @@ void VirtualMeshNetwork::ForwardData(NetworkNodeId node, Packet packet)
     }
     const auto route = routes->second.find(packet.message.destination);
     if (route == routes->second.end() || route->second.expiresAtTick <= currentTick_
-        || !IsKnownNeighbor(node, route->second.nextHop))
+        || !IsKnownNeighbor(node, route->second.nextHop)
+        || !IsAllowedNextHop(node, packet.message.destination,
+            route->second.nextHop))
     {
         InvalidateRoute(node, packet.message.destination);
         const NodePair pair{node, packet.message.destination};
+        if (settings_.mode == VirtualMeshMode::MultiHop)
+        {
+            unavailableRoutes_.insert(pair);
+            ++metrics_.routeErrors;
+            ++metrics_.droppedMessages;
+            RecordEvent(MeshEventKind::RouteError, node, packet.message.destination,
+                "고정 다중 홉 경로가 끊겨 재탐색하지 않았습니다.");
+            return;
+        }
         pendingMessages_[pair].push_back(std::move(packet.message));
         ++metrics_.routeErrors;
         RecordEvent(MeshEventKind::RouteError, node, packet.message.destination,
@@ -771,5 +871,23 @@ bool VirtualMeshNetwork::IsKnownNeighbor(
     const auto entry = neighbors->second.find(neighbor);
     return entry != neighbors->second.end()
         && currentTick_ - entry->second.lastHeardTick <= settings_.neighborTimeoutTicks;
+}
+
+bool VirtualMeshNetwork::IsAllowedNextHop(NetworkNodeId node,
+    NetworkNodeId destination, NetworkNodeId nextHop) const noexcept
+{
+    switch (settings_.mode)
+    {
+    case VirtualMeshMode::Direct:
+        return nextHop == destination;
+    case VirtualMeshMode::LeaderCentric:
+        if (node == settings_.leaderNodeId || destination == settings_.leaderNodeId)
+            return nextHop == destination;
+        return nextHop == settings_.leaderNodeId;
+    case VirtualMeshMode::MultiHop:
+    case VirtualMeshMode::AdaptiveMesh:
+        return true;
+    }
+    return false;
 }
 }

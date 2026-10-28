@@ -89,6 +89,98 @@ TEST(VirtualMeshNetworkTests, RoutesProbeAndAcknowledgementAcrossMesh)
     }));
 }
 
+TEST(VirtualMeshNetworkTests, ComparesDirectLeaderAndAdaptiveMeshRouting)
+{
+    const std::array lineNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{3, {120.0, 0.0, 10.0}}};
+
+    auto directSettings = QuickSettings();
+    directSettings.mode = VirtualMeshMode::Direct;
+    VirtualMeshNetwork directNetwork{directSettings};
+    directNetwork.UpdateNodes(lineNodes, {});
+    static_cast<void>(AdvanceTicks(directNetwork, 0, 3));
+    ASSERT_TRUE(directNetwork.Send(1, 3, 1, "status", "direct-only"));
+    EXPECT_TRUE(AdvanceTicks(directNetwork, 4, 24).empty());
+
+    auto leaderSettings = QuickSettings();
+    leaderSettings.mode = VirtualMeshMode::LeaderCentric;
+    leaderSettings.leaderNodeId = 1;
+    VirtualMeshNetwork leaderNetwork{leaderSettings};
+    const std::array leaderCentricNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {-60.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{3, {60.0, 0.0, 10.0}}};
+    leaderNetwork.UpdateNodes(leaderCentricNodes, {});
+    static_cast<void>(AdvanceTicks(leaderNetwork, 0, 3));
+    ASSERT_TRUE(leaderNetwork.Send(2, 3, 1, "status", "through-leader"));
+    const auto leaderDelivery = AdvanceTicks(leaderNetwork, 4, 24);
+    ASSERT_EQ(leaderDelivery.size(), 1U);
+    EXPECT_EQ(leaderDelivery.front().message.route,
+        (std::vector<NetworkNodeId>{2, 1, 3}));
+
+    const std::array leaderChangeNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {30.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{3, {0.0, 30.0, 10.0}},
+        NetworkNodeSnapshot{4, {30.0, 30.0, 10.0}}};
+    VirtualMeshNetwork leaderChangeNetwork{leaderSettings};
+    leaderChangeNetwork.UpdateNodes(leaderChangeNodes, {});
+    static_cast<void>(AdvanceTicks(leaderChangeNetwork, 0, 3));
+    ASSERT_TRUE(leaderChangeNetwork.Send(2, 3, 1,
+        "status", "before-leader-change"));
+    ASSERT_EQ(AdvanceTicks(leaderChangeNetwork, 4, 18).size(), 1U);
+    leaderChangeNetwork.SetLeaderNodeId(2);
+    ASSERT_TRUE(leaderChangeNetwork.Send(3, 4, 2,
+        "status", "after-leader-change"));
+    const auto afterLeaderChange = AdvanceTicks(leaderChangeNetwork, 19, 35);
+    ASSERT_EQ(afterLeaderChange.size(), 1U);
+    EXPECT_EQ(afterLeaderChange.front().message.route,
+        (std::vector<NetworkNodeId>{3, 2, 4}));
+
+    const std::array alternateRouteNodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {50.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{3, {100.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{4, {50.0, 50.0, 10.0}}};
+    auto checkLinkRecovery = [&alternateRouteNodes](VirtualMeshMode mode,
+                                 bool shouldRecover)
+    {
+        auto settings = QuickSettings();
+        settings.mode = mode;
+        VirtualMeshNetwork network{settings};
+        network.UpdateNodes(alternateRouteNodes, {});
+        static_cast<void>(AdvanceTicks(network, 0, 3));
+        ASSERT_TRUE(network.Send(1, 3, 1, "status", "before-failure"));
+        ASSERT_EQ(AdvanceTicks(network, 4, 24).size(), 1U);
+        const auto firstHop = network.NextHop(1, 3);
+        ASSERT_TRUE(firstHop.has_value());
+
+        network.SetLinkDisabled(1, *firstHop, true);
+        const auto messageId = network.Send(1, 3, 2, "status", "after-failure");
+        EXPECT_EQ(messageId.has_value(), shouldRecover);
+        if (!shouldRecover)
+        {
+            network.SetLinkDisabled(1, *firstHop, false);
+            static_cast<void>(AdvanceTicks(network, 25, 30));
+            ASSERT_TRUE(network.Send(1, 3, 3, "status", "after-restoration"));
+            const auto restored = AdvanceTicks(network, 31, 50);
+            ASSERT_EQ(restored.size(), 1U);
+            EXPECT_EQ(restored.front().message.payload, "after-restoration");
+            return;
+        }
+
+        const auto recovered = AdvanceTicks(network, 25, 60);
+        ASSERT_EQ(recovered.size(), 1U);
+        EXPECT_EQ(recovered.front().message.payload, "after-failure");
+        EXPECT_NE(recovered.front().message.route[1], *firstHop);
+    };
+
+    checkLinkRecovery(VirtualMeshMode::MultiHop, false);
+    checkLinkRecovery(VirtualMeshMode::AdaptiveMesh, true);
+}
+
 TEST(VirtualMeshNetworkTests, FindsAlternateRouteAfterLinkFailure)
 {
     VirtualMeshNetwork network{QuickSettings()};

@@ -75,6 +75,19 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
     return "통신 사건";
 }
 
+const char* NetworkModeLabel(communication::VirtualMeshMode mode)
+{
+    using Mode = communication::VirtualMeshMode;
+    switch (mode)
+    {
+    case Mode::Direct: return "직접 통신";
+    case Mode::LeaderCentric: return "리더 경유";
+    case Mode::MultiHop: return "다중 홉 고정 경로";
+    case Mode::AdaptiveMesh: return "장애 적응 다중 홉";
+    }
+    return "알 수 없는 방식";
+}
+
 std::string FormatRoute(const std::vector<communication::NetworkNodeId>& route)
 {
     std::string result;
@@ -322,6 +335,9 @@ void DrawFlightStatusPanel(
     bool formationMissionActive,
     simulation::FormationShape& selectedFormationShape,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
+    communication::VirtualMeshMode& selectedNetworkMode,
+    bool networkModeCanChange,
+    const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
     float& packetLossPercent,
     const std::function<void(float)>& setPacketLossPercent,
     const communication::VirtualMeshNetwork* formationNetwork,
@@ -379,9 +395,28 @@ void DrawFlightStatusPanel(
             startFormationTransit(selectedFormationShape);
         else if (!formationMissionCanStart)
             ImGui::TextDisabled("모든 드론이 지상에 있을 때 시작할 수 있습니다.");
+
+        const char* networkModeLabels[]{
+            "직접 통신", "리더 경유", "다중 홉 고정 경로", "장애 적응 다중 홉"};
+        int networkModeIndex = static_cast<int>(selectedNetworkMode);
+        if (networkModeCanChange
+            && ImGui::Combo("통신 방식", &networkModeIndex,
+                networkModeLabels, IM_ARRAYSIZE(networkModeLabels)))
+        {
+            selectedNetworkMode = static_cast<communication::VirtualMeshMode>(
+                networkModeIndex);
+            setNetworkMode(selectedNetworkMode);
+        }
+        else if (!networkModeCanChange)
+        {
+            ImGui::Text("다음 임무 통신 방식: %s",
+                NetworkModeLabel(selectedNetworkMode));
+            ImGui::TextDisabled("통신 방식을 바꾸려면 모든 드론을 지상에 두세요.");
+        }
         if (formationNetwork != nullptr)
         {
             ImGui::Separator();
+            ImGui::Text("현재 통신 방식: %s", NetworkModeLabel(selectedNetworkMode));
             if (formationMissionActive)
             {
                 ImGui::Text("통신 장애 시험");
@@ -663,6 +698,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::string& formationMissionStatus, bool formationMissionCanStart,
     bool formationMissionActive,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
+    communication::VirtualMeshMode& selectedNetworkMode,
+    const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
     float& packetLossPercent,
     const std::function<void(float)>& setPacketLossPercent,
     const communication::VirtualMeshNetwork* formationNetwork,
@@ -698,7 +735,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         startFleetReturn, completeFleetMissionStatus, completeFleetMissionCanStart,
         startCompleteFleetMission, formationMissionStatus,
         formationMissionCanStart, formationMissionActive, selectedFormationShape_,
-        startFormationTransit, packetLossPercent, setPacketLossPercent,
+        startFormationTransit, selectedNetworkMode, formationMissionCanStart,
+        setNetworkMode, packetLossPercent, setPacketLossPercent,
         formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
         setFormationNodeRadioEnabled, captureAssessment, recordingControls);
