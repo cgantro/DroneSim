@@ -31,6 +31,13 @@ struct MapBuildingFacadeRoute
     double buildingClearanceMeters = 3.0,
     double minimumTransitAltitudeMeters = 0.0);
 
+/** @brief 편대 중심이 지형·건물과 필요한 간격을 두고 있는지 확인한다. */
+[[nodiscard]] bool IsMapFlightPositionClear(
+    const TerrainGrid& terrain,
+    const std::vector<MapBuilding>& buildings,
+    const glm::dvec3& positionMeters,
+    double buildingClearanceMeters);
+
 /** @brief 교량 상판을 피해 하부 접근 위치까지 이어지는 경로를 만든다. */
 [[nodiscard]] std::optional<std::vector<glm::dvec3>> PlanMapFlightRouteUnderBridge(
     const TerrainGrid& terrain,

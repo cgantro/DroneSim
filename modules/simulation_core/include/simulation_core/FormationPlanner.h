@@ -24,9 +24,19 @@ enum class FormationShape
 struct FormationRoutePlan
 {
     FormationShape shape = FormationShape::Vee;
+    glm::dvec3 leaderStartMeters{0.0};
     std::vector<glm::dvec3> leaderWaypointsMeters;
     double requiredClearanceMeters = 0.0;
     double spacingMeters = 8.0;
+    FormationShape requestedShape = FormationShape::Vee;
+    double requestedSpacingMeters = 8.0;
+    struct ProfilePoint
+    {
+        double distanceMeters = 0.0;
+        FormationShape shape = FormationShape::Vee;
+        double spacingMeters = 8.0;
+    };
+    std::vector<ProfilePoint> profile;
 };
 
 /**
@@ -39,6 +49,18 @@ struct FormationRoutePlan
 [[nodiscard]] std::vector<glm::dvec2> FormationOffsets(
     FormationShape shape, std::size_t droneCount,
     double spacingMeters, double headingRadians);
+
+/** @brief 경로 진행 거리에 맞춰 대형을 부드럽게 바꾼 드론 위치를 계산한다. */
+[[nodiscard]] std::vector<glm::dvec2> FormationOffsetsAlongRoute(
+    const FormationRoutePlan& route,
+    std::size_t droneCount,
+    double headingRadians,
+    double distanceAlongRouteMeters);
+
+/** @brief 지정한 경로 위치에서 대형 간 전환 중인지 알려준다. */
+[[nodiscard]] bool IsFormationTransitionAtDistance(
+    const FormationRoutePlan& route,
+    double distanceAlongRouteMeters);
 
 /**
  * @brief 편대 전체가 통과할 수 있도록 장애물 여유를 넓혀 리더의 2.5D 경로를 찾는다.

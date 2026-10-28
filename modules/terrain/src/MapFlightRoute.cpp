@@ -398,6 +398,28 @@ std::optional<std::vector<glm::dvec3>> PlanMapFlightRoute(
     return route;
 }
 
+bool IsMapFlightPositionClear(
+    const TerrainGrid& terrain,
+    const std::vector<MapBuilding>& buildings,
+    const glm::dvec3& positionMeters,
+    double buildingClearanceMeters)
+{
+    if (!std::isfinite(positionMeters.x) || !std::isfinite(positionMeters.y)
+        || !std::isfinite(positionMeters.z)
+        || !std::isfinite(buildingClearanceMeters)
+        || buildingClearanceMeters <= 0.0
+        || !terrain.ContainsLocalPositionMeters(positionMeters))
+        return false;
+
+    const glm::dvec2 horizontalPosition{positionMeters.x, positionMeters.y};
+    if (positionMeters.z < terrain.HeightAtLocalMeters(horizontalPosition)
+            + minimumGroundClearanceMeters)
+        return false;
+
+    return !IsBlockedAtAltitude(horizontalPosition, positionMeters.z,
+        buildings, buildingClearanceMeters * buildingClearanceMeters);
+}
+
 std::optional<std::vector<glm::dvec3>> PlanMapFlightRouteUnderBridge(
     const TerrainGrid& terrain,
     const std::vector<MapBuilding>& buildings,
