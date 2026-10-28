@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -27,8 +28,11 @@ class UdpSocket
 public:
     explicit UdpSocket(std::uint16_t localPort);
     ~UdpSocket();
+
     UdpSocket(const UdpSocket&) = delete;
     UdpSocket& operator=(const UdpSocket&) = delete;
+    UdpSocket(UdpSocket&&) = delete;
+    UdpSocket& operator=(UdpSocket&&) = delete;
 
     [[nodiscard]] std::optional<std::string> Receive(UdpPeer& peer);
     void Send(std::string_view datagram, const UdpPeer& peer) const;
@@ -36,7 +40,8 @@ public:
     [[nodiscard]] static UdpPeer Resolve(std::string_view host, std::uint16_t port);
 
 private:
-    std::uintptr_t handle_ = static_cast<std::uintptr_t>(-1);
-    bool winsockStarted_ = false;
+    /** @brief 운영체제 소켓의 수명과 호출을 맡는 구현체다. */
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
 }

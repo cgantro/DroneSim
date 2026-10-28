@@ -125,7 +125,18 @@ add_library(aerosimlab_communication STATIC
   modules/communication/src/VirtualMeshNetwork.cpp
 )
 if(NOT EMSCRIPTEN)
-  target_sources(aerosimlab_communication PRIVATE modules/communication/src/UdpSocket.cpp)
+  target_sources(aerosimlab_communication PRIVATE
+    modules/communication/src/UdpSocket.cpp
+  )
+  if(WIN32)
+    target_sources(aerosimlab_communication PRIVATE
+      modules/communication/src/UdpSocketWindows.cpp
+    )
+  else()
+    target_sources(aerosimlab_communication PRIVATE
+      modules/communication/src/UdpSocketPosix.cpp
+    )
+  endif()
 endif()
 target_include_directories(aerosimlab_communication PUBLIC modules/communication/include)
 target_link_libraries(aerosimlab_communication PUBLIC aerosimlab_simulation_core)
