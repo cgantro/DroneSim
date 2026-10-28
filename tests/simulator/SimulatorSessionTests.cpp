@@ -87,6 +87,60 @@ public:
             || app.fleetReconnaissance_.at(droneIds[2]).targetIndex == 0U
             || app.fleetReconnaissance_.at(droneIds[3]).targetIndex == 0U);
     }
+
+    static void VerifyLeaderLossWithoutCandidateSafelyLandsFleet()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+
+        const auto droneIds = app.fleetDroneIds_;
+        ASSERT_EQ(droneIds.size(), 4U);
+        for (std::size_t index = 0; index < droneIds.size(); ++index)
+        {
+            AeroSimLabApp::FleetReconnaissanceState mission;
+            mission.targetIndex = index;
+            mission.leg = AeroSimLabApp::FleetMissionLeg::Reconnaissance;
+            mission.status = "정찰 이동 중";
+            app.fleetReconnaissance_.emplace(droneIds[index], std::move(mission));
+
+            EXPECT_EQ(app.simulation_.Apply(droneIds[index],
+                {simulation::DroneCommand::Kind::TakeOff}),
+                simulation::CommandResult::Accepted);
+        }
+
+        for (std::uint64_t tick = 0; tick < 120U; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+        for (const auto droneId : droneIds)
+            ASSERT_NE(app.simulation_.State(droneId).mode,
+                simulation::FlightMode::Grounded);
+
+        for (const auto droneId : droneIds)
+            app.formationNetwork_->SetNodeRadioEnabled(droneId, false);
+
+        for (std::uint64_t tick = 0; tick < 300U; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+            if (app.fleetLeadershipStatus_.find("안전 착륙") != std::string::npos)
+                break;
+        }
+
+        EXPECT_EQ(app.fleetLeadershipStatus_,
+            "통신 가능한 새 리더를 찾지 못해 안전 착륙합니다");
+        EXPECT_FALSE(app.leaderReplacementPending_);
+        EXPECT_FALSE(app.leaderStateCollectionPending_);
+        for (const auto droneId : droneIds)
+        {
+            const auto mode = app.simulation_.State(droneId).mode;
+            EXPECT_TRUE(mode == simulation::FlightMode::Landing
+                || mode == simulation::FlightMode::Grounded)
+                << "드론 " << droneId << "이 안전 착륙 상태가 아닙니다.";
+        }
+    }
 };
 }
 
@@ -599,6 +653,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyLeaderRadioLossPromotesCandidateAndReassignsTarget());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyLeaderLossWithoutCandidateSafelyLandsFleet());
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
