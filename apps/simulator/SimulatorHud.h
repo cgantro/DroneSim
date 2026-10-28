@@ -61,6 +61,8 @@ public:
         const std::string& formationMissionStatus, bool formationMissionCanStart,
         bool formationMissionActive,
         const std::function<void(simulation::FormationShape)>& startFormationTransit,
+        float& packetLossPercent,
+        const std::function<void(float)>& setPacketLossPercent,
         const communication::VirtualMeshNetwork* formationNetwork,
         const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
             setFormationLinkDisabled,

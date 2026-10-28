@@ -238,6 +238,15 @@ bool AeroSimLabApp::CompleteFleetMissionIsActive() const
         || completeFleetMission_.stage == Stage::Returning;
 }
 
+bool AeroSimLabApp::FleetReconnaissanceIsActive() const
+{
+    return std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
+        [](const auto& entry)
+        {
+            return IsFleetReconnaissanceActive(entry.second.status);
+        });
+}
+
 bool AeroSimLabApp::StartCompleteFleetMission(
     aerosimlab::simulation::FormationShape shape)
 {
@@ -850,6 +859,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     settings.neighborTimeoutTicks = 90;
     settings.routeLifetimeTicks = 300;
     settings.maximumHops = 5;
+    settings.packetLossProbability = static_cast<double>(fleetPacketLossPercent_) / 100.0;
     formationNetwork_ = std::make_unique<
         aerosimlab::communication::VirtualMeshNetwork>(settings);
 
@@ -958,14 +968,8 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     using aerosimlab::simulation::DroneCommand;
     using aerosimlab::simulation::DroneId;
 
-    const bool reconnaissanceActive = std::any_of(
-        fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
-        [](const auto& entry)
-        {
-            return IsFleetReconnaissanceActive(entry.second.status);
-        });
     if (!formationNetwork_ || (!formationTransit_.active
-        && !CompleteFleetMissionIsActive() && !reconnaissanceActive))
+        && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()))
         return;
 
     const std::vector<DroneId> droneIds = simulation_.DroneIds();

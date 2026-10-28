@@ -134,4 +134,29 @@ TEST(VirtualMeshNetworkTests, BuildingBlocksRadioLink)
     static_cast<void>(AdvanceTicks(network, 21, 30));
     EXPECT_TRUE(network.DeliveredMessages().empty());
 }
+
+TEST(VirtualMeshNetworkTests, RuntimePacketLossDropsMessages)
+{
+    VirtualMeshNetwork network{QuickSettings()};
+    const std::array nodes{
+        NetworkNodeSnapshot{1, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2, {60.0, 0.0, 10.0}}};
+    network.UpdateNodes(nodes, {});
+    static_cast<void>(AdvanceTicks(network, 0, 3));
+    ASSERT_TRUE(network.Send(1, 2, 1, "status", "route-setup"));
+    ASSERT_EQ(AdvanceTicks(network, 4, 12).size(), 1U);
+
+    network.SetPacketLossProbability(1.0);
+    ASSERT_TRUE(network.Send(1, 2, 2, "fleet_route", "route"));
+    static_cast<void>(AdvanceTicks(network, 13, 20));
+
+    EXPECT_TRUE(network.DeliveredMessages().empty());
+    EXPECT_GT(network.Metrics().droppedMessages, 0U);
+    const auto events = network.Events();
+    EXPECT_TRUE(std::any_of(events.begin(), events.end(), [](const MeshEvent& event)
+    {
+        return event.kind == MeshEventKind::PacketDropped
+            && event.detail == "설정된 패킷 손실로 버렸습니다.";
+    }));
+}
 }

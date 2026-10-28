@@ -192,6 +192,7 @@ private:
     [[nodiscard]] bool CancelInspectionMission();
     void AdvanceInspectionMission();
     [[nodiscard]] bool FleetReconnaissanceCanStart() const;
+    [[nodiscard]] bool FleetReconnaissanceIsActive() const;
     [[nodiscard]] bool CompleteFleetMissionCanStart() const;
     [[nodiscard]] bool CompleteFleetMissionIsActive() const;
     [[nodiscard]] bool StartCompleteFleetMission(
@@ -512,6 +513,7 @@ private:
     CompleteFleetMissionState completeFleetMission_;
     std::unique_ptr<aerosimlab::communication::VirtualMeshNetwork> formationNetwork_;
     std::vector<aerosimlab::communication::RadioObstacle> formationRadioObstacles_;
+    float fleetPacketLossPercent_ = 0.0F;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{

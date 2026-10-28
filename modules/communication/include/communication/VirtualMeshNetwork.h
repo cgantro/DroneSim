@@ -114,6 +114,9 @@ public:
     /** @brief 지정한 두 노드 사이의 통신을 즉시 끊거나 복구한다. */
     void SetLinkDisabled(NetworkNodeId first, NetworkNodeId second, bool disabled);
 
+    /** @brief 전송할 때 적용할 패킷 손실 확률을 바꾼다. */
+    void SetPacketLossProbability(double probability);
+
     /** @brief 두 노드 사이에 장애가 주입되어 있는지 확인한다. */
     [[nodiscard]] bool IsLinkDisabled(
         NetworkNodeId first, NetworkNodeId second) const noexcept;

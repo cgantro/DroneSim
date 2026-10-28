@@ -188,6 +188,8 @@ void DrawFlightStatusPanel(
     bool formationMissionActive,
     simulation::FormationShape& selectedFormationShape,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
+    float& packetLossPercent,
+    const std::function<void(float)>& setPacketLossPercent,
     const communication::VirtualMeshNetwork* formationNetwork,
     int& selectedFaultSource,
     int& selectedFaultDestination,
@@ -246,6 +248,10 @@ void DrawFlightStatusPanel(
             if (formationMissionActive)
             {
                 ImGui::Text("통신 장애 시험");
+                if (ImGui::SliderFloat("패킷 손실률", &packetLossPercent,
+                        0.0F, 100.0F, "%.0f%%"))
+                    setPacketLossPercent(packetLossPercent);
+                ImGui::TextDisabled("메시지를 무작위로 버립니다. 임무 메시지 재전송은 아직 없습니다.");
                 const auto droneIds = simulation.DroneIds();
                 if (droneIds.size() >= 2U)
                 {
@@ -436,6 +442,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::string& formationMissionStatus, bool formationMissionCanStart,
     bool formationMissionActive,
     const std::function<void(simulation::FormationShape)>& startFormationTransit,
+    float& packetLossPercent,
+    const std::function<void(float)>& setPacketLossPercent,
     const communication::VirtualMeshNetwork* formationNetwork,
     const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
         setFormationLinkDisabled,
@@ -466,7 +474,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         startFleetReturn, completeFleetMissionStatus, completeFleetMissionCanStart,
         startCompleteFleetMission, formationMissionStatus,
         formationMissionCanStart, formationMissionActive, selectedFormationShape_,
-        startFormationTransit, formationNetwork, selectedFaultSource_,
+        startFormationTransit, packetLossPercent, setPacketLossPercent,
+        formationNetwork, selectedFaultSource_,
         selectedFaultDestination_, setFormationLinkDisabled,
         captureAssessment);
 

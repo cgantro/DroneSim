@@ -723,7 +723,7 @@ void AeroSimLabApp::RenderFrame()
         const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
         const bool formationMissionCanStart = fleetReconnaissanceCanStart;
         const bool formationNetworkActive = formationTransit_.active
-            || CompleteFleetMissionIsActive();
+            || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
         const auto captureAssessment = AssessInspectionView();
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -748,6 +748,14 @@ void AeroSimLabApp::RenderFrame()
             [this](aerosimlab::simulation::FormationShape shape)
             {
                 static_cast<void>(StartFormationTransit(shape));
+            },
+            fleetPacketLossPercent_,
+            [this](float percentage)
+            {
+                fleetPacketLossPercent_ = percentage;
+                if (formationNetwork_)
+                    formationNetwork_->SetPacketLossProbability(
+                        static_cast<double>(percentage) / 100.0);
             },
             formationNetwork_.get(),
             [this, formationNetworkActive](aerosimlab::simulation::DroneId first,

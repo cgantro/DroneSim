@@ -161,6 +161,13 @@ void VirtualMeshNetwork::SetLinkDisabled(
     }
 }
 
+void VirtualMeshNetwork::SetPacketLossProbability(double probability)
+{
+    if (!std::isfinite(probability) || probability < 0.0 || probability > 1.0)
+        throw std::invalid_argument("패킷 손실 확률은 0에서 1 사이여야 합니다.");
+    settings_.packetLossProbability = probability;
+}
+
 bool VirtualMeshNetwork::IsLinkDisabled(
     NetworkNodeId first, NetworkNodeId second) const noexcept
 {
