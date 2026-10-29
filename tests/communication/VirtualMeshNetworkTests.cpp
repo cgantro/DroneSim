@@ -81,6 +81,8 @@ TEST(VirtualMeshNetworkTests, BuildingBlocksDirectConnection)
     EXPECT_FALSE(network.Send(1U, 2U, 1U, "state", "blocked by building"));
     EXPECT_TRUE(network.CanExchangeAtPositions(1U, 2U,
         {0.0, 0.0, 30.0}, {60.0, 0.0, 30.0}));
+    EXPECT_FALSE(network.CanExchangeAtPositions(1U, 3U,
+        {0.0, 0.0, 30.0}, {60.0, 0.0, 30.0}));
 }
 
 TEST(VirtualMeshNetworkTests, ReportsDirectConnectionAndLosesItWhenBlocked)

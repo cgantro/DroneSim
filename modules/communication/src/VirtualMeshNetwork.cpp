@@ -186,6 +186,8 @@ bool VirtualMeshNetwork::CanExchangeAtPositions(
     const glm::dvec3& firstPositionMeters,
     const glm::dvec3& secondPositionMeters) const
 {
+    if (!nodes_.contains(first) || !nodes_.contains(second))
+        return false;
     return LinkAvailableAt(first, second, firstPositionMeters, secondPositionMeters);
 }
 
@@ -204,10 +206,7 @@ bool VirtualMeshNetwork::LinkAvailableAt(NetworkNodeId sender,
     NetworkNodeId receiver, const glm::dvec3& senderPositionMeters,
     const glm::dvec3& receiverPositionMeters) const
 {
-    const auto senderNode = nodes_.find(sender);
-    const auto receiverNode = nodes_.find(receiver);
-    if (senderNode == nodes_.end() || receiverNode == nodes_.end()
-        || radioDisabledNodes_.contains(sender) || radioDisabledNodes_.contains(receiver))
+    if (radioDisabledNodes_.contains(sender) || radioDisabledNodes_.contains(receiver))
         return false;
     if (!std::isfinite(senderPositionMeters.x) || !std::isfinite(senderPositionMeters.y)
         || !std::isfinite(senderPositionMeters.z)
