@@ -134,7 +134,7 @@ public:
         ASSERT_EQ(app.simulation_.Apply(disconnectedDroneId,
             {simulation::DroneCommand::Kind::TakeOff}),
             simulation::CommandResult::Accepted);
-        for (int tick = 0; tick < 240; ++tick)
+        for (int tick = 0; tick < 360; ++tick)
         {
             app.AdvanceFleetNetwork();
             app.simulation_.AdvanceOneTick();

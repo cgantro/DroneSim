@@ -854,7 +854,8 @@ void CheckExpectedDroneResults(
             result.issues.push_back(dronePrefix + "최종 자세가 허용 각도 오차를 벗어났습니다.");
         }
     }
-    if (definition.expectedDrones.size() != result.drones.size())
+    if (!definition.expectedDrones.empty()
+        && definition.expectedDrones.size() != result.drones.size())
     {
         result.issues.push_back("expected.drones 개수가 시나리오 드론 수와 다릅니다.");
     }

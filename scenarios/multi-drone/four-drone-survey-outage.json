@@ -17,7 +17,7 @@
   "communication_outages": [
     {
       "drone": "scout-2",
-      "start_tick": 95,
+      "start_tick": 450,
       "end_tick": 1100,
       "heartbeat_timeout_ticks": 3
     }

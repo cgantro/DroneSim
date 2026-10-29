@@ -284,8 +284,8 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         const auto motorSpeeds = item.find(
             "initial_motor_speeds_radians_per_second");
         const auto mode = item.find("initial_mode");
-        // 운동학 모델이 위치·방향만 사용하는지, 강체 모델의 전체 초기 상태를
-        // 입력했는지 검증 단계에서 구분할 수 있도록 표시한다.
+        // 기본 위치·방향만 지정한 경우와 속도·자세·모터까지 직접 지정한
+        // 경우를 구분해, 전체 초기 상태가 있을 때만 물리 상태로 덮어쓴다.
         const bool hasExtendedInitialState = velocity != item.end()
             || orientation != item.end() || angularVelocity != item.end()
             || motorSpeeds != item.end() || mode != item.end();
@@ -664,11 +664,19 @@ void ReadExpectedLimitsAndCamera(const Json& expected, ScenarioDefinition& defin
 
 void ReadExpectedResults(const Json& document, ScenarioDefinition& definition)
 {
-    const Json& expected = Required(document, "expected");
+    const auto expectedEntry = document.find("expected");
+    if (expectedEntry == document.end())
+        return;
+
+    const Json& expected = *expectedEntry;
     if (!expected.is_object())
         throw std::invalid_argument("expected는 JSON 객체여야 합니다.");
 
-    definition.expectedDrones = ReadExpectedDrones(Required(expected, "drones"));
+    if (const auto drones = expected.find("drones"); drones != expected.end())
+        definition.expectedDrones = ReadExpectedDrones(*drones);
+    else if (expected.contains("mode") || expected.contains("position_meters"))
+        throw std::invalid_argument(
+            "expected의 드론 상태는 drones 배열 안에 적어야 합니다.");
     ReadExpectedLimitsAndCamera(expected, definition);
 }
 
