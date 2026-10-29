@@ -185,5 +185,5 @@
 
 - `AdvanceOneTick()`은 드론 ID 맵을 순회하며 배터리 유무를 검사하지 않는다. `BatteryModel`과 `DroneState`가 함께 붙은 엔티티만 Flecs 조회로 찾아 잔량을 갱신한다.
 - 갱신 시점은 기존과 같이 물리 계산 뒤다. 따라서 배터리는 해당 Tick의 비행 상태를 반영한다.
-- Windows Release에서 시뮬레이션 시험 실행 파일을 빌드했고, 시뮬레이션·편대·물리 관련 CTest 6/6 통과.
+- Windows Release 전체 빌드 성공. 시뮬레이션·편대·물리 관련 CTest 6/6, 전체 CTest 29/29 통과.
 - 다음 확인: 드론 ID→엔티티 맵이 외부 `DroneId` API에 필요한지 살핀다. 모든 자료를 ECS로 옮기지는 않는다.

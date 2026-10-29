@@ -177,6 +177,6 @@
 
 ## 배터리 ECS 조회 정리 — 2026-10-29
 
-- Release 빌드 성공: `aerosimlab_simulation_tests`.
-- CTest 6/6 통과: SimulationCore, 편대 배치와 좁은 경로, 기체 모델, 지형 격자, PhysicsWorld.
-- 전체 CTest와 웹 빌드는 이번 변경에서 실행하지 않았다.
+- Windows Release 전체 빌드 성공.
+- 관련 CTest 6/6, 전체 CTest 29/29 통과.
+- 웹 빌드는 이번 변경에서 실행하지 않았다.
