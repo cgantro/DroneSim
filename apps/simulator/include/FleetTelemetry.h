@@ -18,7 +18,6 @@ struct PeerTelemetry
     std::uint8_t missionLeg = 0;
     FleetDroneStatus missionStatus = FleetDroneStatus::Other;
     std::uint64_t assignmentVersion = 0;
-    std::uint64_t assignmentLeaseExpiresAtTick = 0;
 };
 
 [[nodiscard]] std::string EncodePeerTelemetry(
@@ -26,8 +25,7 @@ struct PeerTelemetry
     simulation::FlightMode mode,
     std::uint8_t missionLeg,
     FleetDroneStatus missionStatus,
-    std::uint64_t assignmentVersion,
-    std::uint64_t assignmentLeaseExpiresAtTick);
+    std::uint64_t assignmentVersion);
 
 [[nodiscard]] std::optional<PeerTelemetry> DecodePeerTelemetry(
     const std::string& payload);

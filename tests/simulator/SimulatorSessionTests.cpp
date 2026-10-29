@@ -501,7 +501,7 @@ void Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues()
     const std::string payload = simulator::detail::EncodePeerTelemetry(
         positionMeters, simulation::FlightMode::Hovering, 2U,
         FleetDroneStatus::ReturnLanding,
-        17U, 2400U);
+        17U);
     const auto telemetry = simulator::detail::DecodePeerTelemetry(payload);
     ASSERT_TRUE(telemetry.has_value());
     EXPECT_EQ(telemetry->positionMeters, positionMeters);
@@ -509,16 +509,16 @@ void Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues()
     EXPECT_EQ(telemetry->missionLeg, 2U);
     EXPECT_EQ(telemetry->missionStatus, FleetDroneStatus::ReturnLanding);
     EXPECT_EQ(telemetry->assignmentVersion, 17U);
-    EXPECT_EQ(telemetry->assignmentLeaseExpiresAtTick, 2400U);
+    EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(payload + " 2400").has_value());
 
     EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
         simulator::detail::EncodePeerTelemetry(positionMeters,
             simulation::FlightMode::Hovering, 3U, FleetDroneStatus::Other,
-            17U, 2400U)).has_value());
+            17U)).has_value());
     EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
         simulator::detail::EncodePeerTelemetry(positionMeters,
             simulation::FlightMode::Hovering, 2U,
-            static_cast<FleetDroneStatus>(255U), 17U, 2400U)).has_value());
+            static_cast<FleetDroneStatus>(255U), 17U)).has_value());
 }
 
 void Verify_FleetMissionProgressWaitsForEveryCurrentReport()

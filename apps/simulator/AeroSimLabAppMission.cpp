@@ -23,8 +23,7 @@ std::string EncodePeerTelemetry(
     aerosimlab::simulation::FlightMode mode,
     std::uint8_t missionLeg,
     FleetDroneStatus missionStatus,
-    std::uint64_t assignmentVersion,
-    std::uint64_t assignmentLeaseExpiresAtTick)
+    std::uint64_t assignmentVersion)
 {
     std::ostringstream payload;
     payload << std::setprecision(17) << positionMeters.x << ' '
@@ -32,7 +31,7 @@ std::string EncodePeerTelemetry(
         << aerosimlab::simulation::ToString(mode) << ' '
         << static_cast<unsigned int>(missionLeg) << ' '
         << static_cast<unsigned int>(missionStatus) << ' '
-        << assignmentVersion << ' ' << assignmentLeaseExpiresAtTick;
+        << assignmentVersion;
     return payload.str();
 }
 
@@ -46,8 +45,7 @@ std::optional<PeerTelemetry> DecodePeerTelemetry(const std::string& payload)
     if (!(values >> telemetry.positionMeters.x >> telemetry.positionMeters.y
             >> telemetry.positionMeters.z >> modeName >> missionLeg
             >> missionStatus
-            >> telemetry.assignmentVersion
-            >> telemetry.assignmentLeaseExpiresAtTick)
+            >> telemetry.assignmentVersion)
         || missionLeg > 2U
         || missionStatus > static_cast<unsigned int>(FleetDroneStatus::ReturnFailed)
         || !std::isfinite(telemetry.positionMeters.x)
@@ -1417,7 +1415,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         if (formationNetwork_->Send(droneId, groundControlNodeId,
                 nextGroundControlTelemetrySequence_++, "ground_control_telemetry",
                 detail::EncodePeerTelemetry(state.positionMeters, state.mode,
-                    leg, status, 0U, 0U)))
+                    leg, status, 0U)))
             lastGroundControlTelemetrySentAtTick_[droneId] = currentTick;
     }
 
@@ -1438,13 +1436,11 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             ? detail::FleetDroneStatus::Other : mission->second.status;
         const std::uint64_t assignmentVersion = mission == fleetReconnaissance_.end()
             ? 0U : mission->second.assignmentVersion;
-        const std::uint64_t leaseExpiresAtTick = mission == fleetReconnaissance_.end()
-            ? 0U : mission->second.assignmentLeaseExpiresAtTick;
         static_cast<void>(formationNetwork_->Send(droneId, leaderId,
             nextTelemetrySequence_++, "drone_telemetry",
             detail::EncodePeerTelemetry(simulation_.State(droneId).positionMeters,
                 simulation_.State(droneId).mode, missionLeg, missionStatus,
-                assignmentVersion, leaseExpiresAtTick)));
+                assignmentVersion)));
         lastTelemetrySentAtTick_[droneId] = currentTick;
     }
 
