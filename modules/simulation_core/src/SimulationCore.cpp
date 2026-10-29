@@ -900,7 +900,7 @@ void SimulationCore::Reset()
 
 const DroneState& SimulationCore::State() const noexcept
 {
-    return ecs_->drones.at(ecs_->primaryDroneId).get<DroneState>();
+    return State(ecs_->primaryDroneId);
 }
 
 const DroneState& SimulationCore::State(DroneId droneId) const
@@ -910,7 +910,7 @@ const DroneState& SimulationCore::State(DroneId droneId) const
 
 const CameraState& SimulationCore::Camera() const noexcept
 {
-    return ecs_->drones.at(ecs_->primaryDroneId).get<CameraState>();
+    return Camera(ecs_->primaryDroneId);
 }
 
 const CameraState& SimulationCore::Camera(DroneId droneId) const
@@ -927,8 +927,7 @@ void SimulationCore::SetCameraModel(DroneId droneId, const CameraModel& model)
 
 void SimulationCore::SetCameraEnabled(bool enabled) noexcept
 {
-    EoCameraModel::SetEnabled(
-        ecs_->drones.at(ecs_->primaryDroneId).get_mut<CameraState>(), enabled);
+    SetCameraEnabled(ecs_->primaryDroneId, enabled);
 }
 
 void SimulationCore::SetCameraEnabled(DroneId droneId, bool enabled)
