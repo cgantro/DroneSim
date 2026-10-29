@@ -12,10 +12,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <memory>
 #include <optional>
 #include <stdexcept>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -112,7 +112,7 @@ struct SimulationCore::EcsStorage
     std::unique_ptr<PhysicsWorld> physics;
 #endif
     flecs::world world;
-    std::unordered_map<DroneId, flecs::entity> drones;
+    std::map<DroneId, flecs::entity> drones;
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
     std::vector<StaticObstacleBox> kinematicObstacles;
@@ -510,15 +510,7 @@ struct SimulationCore::EcsStorage
         const bool removedPrimary = id == primaryDroneId;
         drones.erase(found);
         if (removedPrimary)
-        {
-            const auto nextPrimary = std::min_element(
-                drones.begin(), drones.end(),
-                [](const auto& first, const auto& second)
-                {
-                    return first.first < second.first;
-                });
-            primaryDroneId = nextPrimary->first;
-        }
+            primaryDroneId = drones.begin()->first;
         return true;
     }
 
@@ -843,7 +835,6 @@ std::vector<DroneId> SimulationCore::DroneIds() const
         (void)drone;
         ids.push_back(id);
     }
-    std::sort(ids.begin(), ids.end());
     return ids;
 }
 

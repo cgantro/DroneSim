@@ -434,6 +434,11 @@ void Verify_SimulationCore_AddsAndRemovesEcsAndPhysicsDronesTogether()
         const DroneId third = simulation.AddDrone({8.0, 0.0, 5.0}, -0.2);
 
         ASSERT_EQ(simulation.DroneCount(), 3U);
+        const auto droneIds = simulation.DroneIds();
+        ASSERT_EQ(droneIds.size(), 3U);
+        EXPECT_EQ(droneIds[0], first);
+        EXPECT_EQ(droneIds[1], second);
+        EXPECT_EQ(droneIds[2], third);
         EXPECT_TRUE(simulation.RemoveDrone(first));
         EXPECT_EQ(simulation.PrimaryDroneId(), second);
         EXPECT_EQ(simulation.DroneCount(), 2U);
