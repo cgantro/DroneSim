@@ -1,5 +1,10 @@
 # 빌드와 시험 기록
 
+## 시나리오 임무 입력 형식 통일 — 2026-10-30
+
+- 단일 목표와 경유점 목록의 중복 입력 형식을 없애고 모든 임무가 한 점 이상을 담은 `waypoints_meters` 목록을 사용하게 했다. 기존 단일 목표 입력이 거부되는지도 확인했다. Headless 결과 JSON의 목표 좌표 항목은 유지했다.
+- 확인: Windows, MSVC Release, Ninja. `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공, 전체 CTest 28/28 통과. Headless 임무 연기 시험 3개도 전체 CTest에 포함됐다.
+
 ## 임무 판정 계산 — 2026-10-30
 
 - `Mission`의 결과 열거형은 완료·실패 작업 상태에서 계산할 수 있었다. 별도 필드를 제거하고 `GetOutcome()`에서 작업 목록으로 판정하도록 바꿨다. Headless JSON의 `outcome`과 `passed` 키는 유지한다.

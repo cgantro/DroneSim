@@ -426,20 +426,12 @@ ScenarioResult::MissionTask ReadMissionTask(
         throw std::invalid_argument("임무 이름은 고유해야 하며 등록된 드론을 지정해야 합니다.");
     }
 
-    const auto waypoints = taskValue.find("waypoints_meters");
-    if (waypoints != taskValue.end())
-    {
-        if (!waypoints->is_array() || waypoints->empty())
-            throw std::invalid_argument("waypoints_meters는 한 점 이상을 담은 배열이어야 합니다.");
-        task.waypointsMeters.reserve(waypoints->size());
-        for (const Json& waypoint : *waypoints)
-            task.waypointsMeters.push_back(ReadVector(waypoint, "waypoints_meters 항목"));
-    }
-    else
-    {
-        task.waypointsMeters.push_back(ReadVector(
-            Required(taskValue, "target_position_meters"), "target_position_meters"));
-    }
+    const Json& waypoints = Required(taskValue, "waypoints_meters");
+    if (!waypoints.is_array() || waypoints.empty())
+        throw std::invalid_argument("waypoints_meters는 한 점 이상을 담은 배열이어야 합니다.");
+    task.waypointsMeters.reserve(waypoints.size());
+    for (const Json& waypoint : waypoints)
+        task.waypointsMeters.push_back(ReadVector(waypoint, "waypoints_meters 항목"));
     task.startTick = ReadUnsigned(Required(taskValue, "start_tick"), "start_tick");
     task.deadlineTick = ReadUnsigned(
         Required(taskValue, "deadline_tick"), "deadline_tick");

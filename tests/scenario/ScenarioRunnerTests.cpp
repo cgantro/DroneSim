@@ -178,11 +178,11 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
      "mission":{"name":"bridge-survey","tasks":[
        {"name":"east-face","role":"survey","drone":"east",
         "facility_id":"facility-bridge","inspection_zone_id":"deck-east",
-        "target_position_meters":[0,0,1.5],"start_tick":110,
+        "waypoints_meters":[[0,0,1.5]],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1},
        {"name":"north-face","role":"survey","drone":"north",
         "facility_id":"facility-bridge","inspection_zone_id":"deck-north",
-        "target_position_meters":[0,4,1.5],"start_tick":110,
+        "waypoints_meters":[[0,4,1.5]],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1}]},
      "expected":{"drones":[
        {"name":"east","mode":"hovering","position_meters":[0,0,1.5]},
@@ -782,10 +782,10 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
        {"drone":"relay","start_tick":122,"end_tick":145,"heartbeat_timeout_ticks":2}],
      "mission":{"name":"unconfirmed-survey","tasks":[
        {"name":"sector-1","role":"survey","drone":"scout",
-        "target_position_meters":[100,0,1.5],"start_tick":120,
+        "waypoints_meters":[[100,0,1.5]],"start_tick":120,
         "deadline_tick":144,"tolerance_meters":0.1},
        {"name":"sector-2","role":"survey","drone":"relay",
-        "target_position_meters":[105,0,1.5],"start_tick":120,
+        "waypoints_meters":[[105,0,1.5]],"start_tick":120,
         "deadline_tick":144,"tolerance_meters":0.1}]},
      "expected":{"tolerance_meters":1000,"drones":[
        {"name":"scout","mode":"following_waypoint","position_meters":[0,0,1.5]},
@@ -818,10 +818,10 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
        {"tick":0,"drone":"relay","type":"takeoff"}],
      "mission":{"name":"missed-survey","tasks":[
        {"name":"sector-1","role":"survey","drone":"scout",
-        "target_position_meters":[100,0,1.5],"start_tick":120,
+        "waypoints_meters":[[100,0,1.5]],"start_tick":120,
         "deadline_tick":121,"tolerance_meters":0.1},
        {"name":"sector-2","role":"survey","drone":"relay",
-        "target_position_meters":[105,0,1.5],"start_tick":120,
+        "waypoints_meters":[[105,0,1.5]],"start_tick":120,
         "deadline_tick":121,"tolerance_meters":0.1}]},
      "expected":{"tolerance_meters":1000,"drones":[
        {"name":"scout","mode":"following_waypoint","position_meters":[0,0,1.5]},
@@ -888,9 +888,9 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
        "prediction_horizon_seconds":2,"lateral_offset_meters":10},
      "mission":{"name":"crossing-flight","tasks":[
        {"name":"west-to-east","role":"cross","drone":"west",
-        "target_position_meters":[4,0,1.5],"start_tick":100,"deadline_tick":580,"tolerance_meters":0.2},
+        "waypoints_meters":[[4,0,1.5]],"start_tick":100,"deadline_tick":580,"tolerance_meters":0.2},
        {"name":"east-to-west","role":"cross","drone":"east",
-        "target_position_meters":[-4,0,1.5],"start_tick":100,"deadline_tick":580,"tolerance_meters":0.2}]},
+        "waypoints_meters":[[-4,0,1.5]],"start_tick":100,"deadline_tick":580,"tolerance_meters":0.2}]},
      "expected":{"tolerance_meters":0.5,"minimum_drone_separation_meters":2.5,
        "drones":[
          {"name":"west","mode":"hovering","position_meters":[4,0,1.5]},
@@ -923,10 +923,10 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
        "prediction_horizon_seconds":2,"lateral_offset_meters":5},
      "mission":{"name":"pass-the-hovering-drone","tasks":[
        {"name":"cross","role":"survey","drone":"worker",
-        "target_position_meters":[4,0,1.5],"start_tick":100,
+        "waypoints_meters":[[4,0,1.5]],"start_tick":100,
         "deadline_tick":590,"tolerance_meters":0.2},
        {"name":"support","role":"survey","drone":"support",
-        "target_position_meters":[21,0,1.5],"start_tick":100,
+        "waypoints_meters":[[21,0,1.5]],"start_tick":100,
         "deadline_tick":590,"tolerance_meters":0.2}]},
      "expected":{"tolerance_meters":0.5,
        "minimum_drone_separation_meters":2.5,
@@ -968,11 +968,11 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
         "\"tolerance_meters\":0.5"));
     // 완료한 드론과 목표 간격을 안전거리보다 멀리 둬 임무 자체도 도달 가능하게 한다.
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
-        "\"target_position_meters\":[4,0,1.5]",
-        "\"target_position_meters\":[8,0,1.5]"));
+        "\"waypoints_meters\":[[4,0,1.5]]",
+        "\"waypoints_meters\":[[8,0,1.5]]"));
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
-        "\"target_position_meters\":[-4,0,1.5]",
-        "\"target_position_meters\":[-8,0,1.5]"));
+        "\"waypoints_meters\":[[-4,0,1.5]]",
+        "\"waypoints_meters\":[[-8,0,1.5]]"));
     ASSERT_TRUE(ReplaceAll(physicalAvoidanceScenario,
         "\"position_meters\":[4,0,1.5]",
         "\"position_meters\":[8,0,1.5]"));
@@ -1088,11 +1088,21 @@ TEST(ScenarioRunnerTests, CoreScenarios)
      "drones":[{"name":"lead"},{"name":"wing"}],
      "mission":{"name":"survey","tasks":[
        {"name":"first","role":"scan","drone":"lead",
-        "target_position_meters":[0,0,1],"start_tick":0,"deadline_tick":1,"tolerance_meters":0},
+        "waypoints_meters":[[0,0,1]],"start_tick":0,"deadline_tick":1,"tolerance_meters":0},
        {"name":"second","role":"guard","drone":"lead",
-        "target_position_meters":[1,0,1],"start_tick":0,"deadline_tick":1,"tolerance_meters":0}]}}
+        "waypoints_meters":[[1,0,1]],"start_tick":0,"deadline_tick":1,"tolerance_meters":0}]}}
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(duplicateMissionAssignment)), std::invalid_argument);
+
+    constexpr std::string_view targetPositionAlias = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":2,
+     "drones":[{"name":"lead"}],"commands":[],
+     "mission":{"name":"survey","tasks":[
+       {"name":"first","role":"scan","drone":"lead",
+        "target_position_meters":[0,0,1],"start_tick":0,
+        "deadline_tick":1,"tolerance_meters":0}]}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(targetPositionAlias)), std::invalid_argument);
 }
 
 }

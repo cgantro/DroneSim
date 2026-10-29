@@ -37,7 +37,7 @@
         "drone": "scout-1",
         "facility_id": "synthetic-test-facility",
         "inspection_zone_id": "test-zone-1",
-        "target_position_meters": [4, 0, 1.5],
+        "waypoints_meters": [[4, 0, 1.5]],
         "start_tick": 90,
         "deadline_tick": 310,
         "tolerance_meters": 0.1
@@ -48,7 +48,7 @@
         "drone": "scout-2",
         "facility_id": "synthetic-test-facility",
         "inspection_zone_id": "test-zone-2",
-        "target_position_meters": [14, 0, 1.5],
+        "waypoints_meters": [[14, 0, 1.5]],
         "start_tick": 90,
         "deadline_tick": 310,
         "tolerance_meters": 0.1
@@ -59,7 +59,7 @@
         "drone": "scout-3",
         "facility_id": "synthetic-test-facility",
         "inspection_zone_id": "test-zone-3",
-        "target_position_meters": [24, 0, 1.5],
+        "waypoints_meters": [[24, 0, 1.5]],
         "start_tick": 90,
         "deadline_tick": 310,
         "tolerance_meters": 0.1
@@ -70,7 +70,7 @@
         "drone": "scout-4",
         "facility_id": "synthetic-test-facility",
         "inspection_zone_id": "test-zone-4",
-        "target_position_meters": [34, 0, 1.5],
+        "waypoints_meters": [[34, 0, 1.5]],
         "start_tick": 90,
         "deadline_tick": 310,
         "tolerance_meters": 0.1
