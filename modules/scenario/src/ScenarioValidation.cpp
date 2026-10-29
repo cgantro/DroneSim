@@ -71,7 +71,7 @@ void ValidateMission(const ScenarioDefinition& definition,
 
     std::unordered_set<std::string> taskNames;
     std::unordered_set<std::string> zoneIds;
-    for (const ScenarioResult::MissionTask& task : definition.mission->tasks)
+    for (const ScenarioMissionTask& task : definition.mission->tasks)
     {
         const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
             task.waypointsMeters.end(),

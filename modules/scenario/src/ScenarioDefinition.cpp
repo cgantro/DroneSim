@@ -368,7 +368,7 @@ std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
 }
 
 /** @brief 임무 항목의 JSON 값을 실행 결과 구조체로 옮긴다. */
-ScenarioResult::MissionTask ReadMissionTask(
+ScenarioMissionTask ReadMissionTask(
     const Json& taskValue)
 {
     if (!taskValue.is_object())
@@ -383,7 +383,7 @@ ScenarioResult::MissionTask ReadMissionTask(
         throw std::invalid_argument("임무 name과 role은 문자열이어야 하고 drone을 지정해야 합니다.");
     }
 
-    ScenarioResult::MissionTask task;
+    ScenarioMissionTask task;
     task.name = taskNameValue.get<std::string>();
     task.role = roleValue.get<std::string>();
     task.droneName = droneValue.get<std::string>();
@@ -414,7 +414,7 @@ ScenarioResult::MissionTask ReadMissionTask(
     return task;
 }
 
-std::optional<ScenarioResult::Mission> ReadMission(
+std::optional<ScenarioMission> ReadMission(
     const Json& document)
 {
     const auto found = document.find("mission");
@@ -431,7 +431,7 @@ std::optional<ScenarioResult::Mission> ReadMission(
     if (!tasks.is_array() || tasks.empty())
         throw std::invalid_argument("mission.tasks에는 한 개 이상의 작업이 필요합니다.");
 
-    ScenarioResult::Mission mission;
+    ScenarioMission mission;
     mission.name = nameValue.get<std::string>();
     mission.tasks.reserve(tasks.size());
     for (const Json& taskValue : tasks)

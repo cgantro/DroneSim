@@ -29,6 +29,8 @@ using detail::ScenarioDefinition;
 using detail::ScenarioDrone;
 using detail::CollisionAvoidanceSettings;
 using detail::EnergyModelSettings;
+using detail::ScenarioMission;
+using detail::ScenarioMissionTask;
 using detail::TickCommand;
 using detail::DroneCommunicationOutage;
 using DroneCommunicationStatus = ScenarioResult::Drone::CommunicationStatus;
@@ -248,6 +250,28 @@ ScenarioDrones CreateScenarioDrones(
     if (!definition.usesExistingPrimaryDrone && !simulation.RemoveDrone(defaultDrone))
         throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
     return drones;
+}
+
+ScenarioResult::Mission CreateMissionResult(ScenarioMission definition)
+{
+    ScenarioResult::Mission result;
+    result.name = definition.name;
+    result.tasks.reserve(definition.tasks.size());
+    for (ScenarioMissionTask& task : definition.tasks)
+    {
+        ScenarioResult::MissionTask runtimeTask;
+        runtimeTask.name = std::move(task.name);
+        runtimeTask.role = std::move(task.role);
+        runtimeTask.facilityId = std::move(task.facilityId);
+        runtimeTask.inspectionZoneId = std::move(task.inspectionZoneId);
+        runtimeTask.droneName = std::move(task.droneName);
+        runtimeTask.waypointsMeters = std::move(task.waypointsMeters);
+        runtimeTask.startTick = task.startTick;
+        runtimeTask.deadlineTick = task.deadlineTick;
+        runtimeTask.toleranceMeters = task.toleranceMeters;
+        result.tasks.push_back(std::move(runtimeTask));
+    }
+    return result;
 }
 
 double OrientationErrorRadians(
@@ -961,7 +985,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
 
     ScenarioResult result;
-    result.mission = std::move(definition.mission);
+    if (definition.mission)
+        result.mission = CreateMissionResult(std::move(*definition.mission));
     if (definition.trajectorySampleEveryTicks)
     {
         const std::uint64_t periodicSamples =

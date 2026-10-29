@@ -469,3 +469,9 @@
 - Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공.
 - 전체 Release CTest 28/28 통과. 잘못된 명령·통신 단절·임무 입력을 포함한 기존 시나리오 시험을 그대로 실행했다.
 - `git diff --check` 통과. 웹 브라우저는 확인하지 않았다.
+
+## 임무 입력과 실행 결과 분리 — 2026-10-30
+
+- Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공.
+- 전체 Release CTest 28/28 통과. 임무 완료·실패·미확정 결과를 포함한 시나리오 시험을 기존 입력으로 확인했다.
+- 실행 결과의 외부 형식은 바꾸지 않았다. 웹 브라우저는 확인하지 않았다.

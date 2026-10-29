@@ -1,9 +1,9 @@
 #pragma once
 
 #include "simulation_core/BatteryModel.h"
+#include "simulation_core/EoCameraModel.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
-#include "scenario/ScenarioRunner.h"
 #include "simulation_core/SimulationCore.h"
 
 #include <cstdint>
@@ -59,6 +59,27 @@ struct CollisionAvoidanceSettings
 
 using EnergyModelSettings = BatteryModelParameters;
 
+/** @brief JSON 임무 한 건에 적힌 입력값이다. 실행 중 진행 상태는 담지 않는다. */
+struct ScenarioMissionTask
+{
+    std::string name;
+    std::string role;
+    std::string facilityId;
+    std::string inspectionZoneId;
+    std::string droneName;
+    std::vector<glm::dvec3> waypointsMeters;
+    std::uint64_t startTick = 0;
+    std::uint64_t deadlineTick = 0;
+    double toleranceMeters = 0.0;
+};
+
+/** @brief JSON에 적힌 임무 이름과 작업 목록이다. */
+struct ScenarioMission
+{
+    std::string name;
+    std::vector<ScenarioMissionTask> tasks;
+};
+
 /** @brief JSON 시나리오를 실행하기 전에 읽고 검증한 값이다. */
 struct ScenarioDefinition
 {
@@ -71,7 +92,7 @@ struct ScenarioDefinition
     std::vector<DroneCommunicationOutage> communicationOutages;
     std::optional<CollisionAvoidanceSettings> collisionAvoidance;
     std::optional<EnergyModelSettings> energyModel;
-    std::optional<ScenarioResult::Mission> mission;
+    std::optional<ScenarioMission> mission;
     SimulationDynamics dynamics = defaultSimulationDynamics;
     QuadrotorParameters quadrotorParameters =
         QuadrotorParameters::X500MotorTableEstimate();
