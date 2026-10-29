@@ -936,38 +936,6 @@ void CheckExpectedResults(
     const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
-    if (result.mission)
-    {
-        std::size_t totalWaypointCount = 0;
-        std::size_t visitedWaypointCount = 0;
-        std::optional<std::uint64_t> latestTaskCompletionTick;
-        for (const ScenarioResult::MissionTask& task : result.mission->tasks)
-        {
-            totalWaypointCount += task.waypointsMeters.size();
-            if (task.IsCompleted())
-            {
-                visitedWaypointCount += task.waypointsMeters.size();
-                ++result.mission->completedTaskCount;
-                if (!latestTaskCompletionTick
-                    || *task.completedTick > *latestTaskCompletionTick)
-                    latestTaskCompletionTick = task.completedTick;
-            }
-            else
-            {
-                visitedWaypointCount += task.currentWaypointIndex;
-            }
-        }
-        result.mission->completionPercent = 100.0
-            * static_cast<double>(result.mission->completedTaskCount)
-            / static_cast<double>(result.mission->tasks.size());
-        result.mission->coveragePercent = totalWaypointCount == 0 ? 0.0
-            : 100.0 * static_cast<double>(visitedWaypointCount)
-                / static_cast<double>(totalWaypointCount);
-        result.mission->completedTick = result.mission->completedTaskCount
-                == result.mission->tasks.size()
-            ? latestTaskCompletionTick : std::nullopt;
-    }
-
     CheckExpectedDroneResults(definition, result);
     CheckExpectedSeparation(definition, result);
     CheckExpectedCamera(definition, result);

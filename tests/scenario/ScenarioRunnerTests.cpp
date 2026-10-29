@@ -157,6 +157,9 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
     ASSERT_EQ(result.mission->tasks.size(), 2U);
     EXPECT_TRUE(result.mission->tasks[0].IsCompleted());
     EXPECT_TRUE(result.mission->tasks[1].IsCompleted());
+    EXPECT_EQ(result.mission->CompletedTaskCount(), 2U);
+    EXPECT_DOUBLE_EQ(result.mission->CompletionPercent(), 100.0);
+    EXPECT_TRUE(result.mission->CompletedTick().has_value());
     EXPECT_EQ(result.mission->tasks[0].facilityId, "facility-bridge");
     EXPECT_EQ(result.mission->tasks[0].inspectionZoneId, "deck-east");
     EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Active);
@@ -617,8 +620,8 @@ void Verify_ScenarioRunner_ContinuesTaskDuringHeartbeatLoss()
     ASSERT_TRUE(result.mission.has_value());
     EXPECT_FALSE(result.mission->IsPassed());
     EXPECT_EQ(result.mission->GetOutcome(), ScenarioResult::Outcome::Inconclusive);
-    EXPECT_EQ(result.mission->completedTaskCount, 3U);
-    EXPECT_FALSE(result.mission->completedTick.has_value());
+    EXPECT_EQ(result.mission->CompletedTaskCount(), 3U);
+    EXPECT_FALSE(result.mission->CompletedTick().has_value());
     ASSERT_TRUE(result.mission->startedTick.has_value());
     EXPECT_EQ(*result.mission->startedTick, 90U);
     for (const ScenarioResult::MissionTask& task : result.mission->tasks)
@@ -852,7 +855,7 @@ void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
         << (surveyResult.issues.empty() ? "" : surveyResult.issues.front());
     ASSERT_TRUE(surveyResult.mission.has_value());
     EXPECT_TRUE(surveyResult.mission->IsPassed());
-    EXPECT_DOUBLE_EQ(surveyResult.mission->coveragePercent, 100.0);
+    EXPECT_DOUBLE_EQ(surveyResult.mission->CoveragePercent(), 100.0);
     ASSERT_EQ(surveyResult.mission->tasks.size(), 4);
     for (std::size_t index = 0; index < surveyResult.mission->tasks.size(); ++index)
     {
@@ -932,7 +935,7 @@ void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
         << " avoidance_events=" << stationaryDroneResult.collisionAvoidanceEvents;
     ASSERT_TRUE(stationaryDroneResult.mission.has_value());
     EXPECT_TRUE(stationaryDroneResult.mission->IsPassed());
-    EXPECT_EQ(stationaryDroneResult.mission->completedTaskCount, 2U);
+    EXPECT_EQ(stationaryDroneResult.mission->CompletedTaskCount(), 2U);
     EXPECT_GT(stationaryDroneResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(stationaryDroneResult.minimumDroneSeparationMeters.has_value());
     EXPECT_GE(*stationaryDroneResult.minimumDroneSeparationMeters, 2.5);
@@ -990,7 +993,7 @@ void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
             ? static_cast<int>(physicalAvoidanceResult.mission->GetOutcome()) : -1);
     ASSERT_TRUE(physicalAvoidanceResult.mission.has_value());
     EXPECT_TRUE(physicalAvoidanceResult.mission->IsPassed());
-    EXPECT_EQ(physicalAvoidanceResult.mission->completedTaskCount, 2U);
+    EXPECT_EQ(physicalAvoidanceResult.mission->CompletedTaskCount(), 2U);
     EXPECT_GT(physicalAvoidanceResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(physicalAvoidanceResult.minimumDroneSeparationMeters.has_value());
     // 시작 간격을 안전거리보다 넉넉히 둬 회피 명령이 작동할 시간을 준다.

@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -91,6 +92,8 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
     nlohmann::json mission = nullptr;
     if (result.mission)
     {
+        const std::optional<std::uint64_t> completedTick =
+            result.mission->CompletedTick();
         nlohmann::json tasks = nlohmann::json::array();
         for (const auto& task : result.mission->tasks)
         {
@@ -119,15 +122,15 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
         mission = {{"name", result.mission->name},
             {"outcome", aerosimlab::scenario::ToString(result.mission->GetOutcome())},
             {"passed", result.mission->IsPassed()},
-            {"completed_task_count", result.mission->completedTaskCount},
+            {"completed_task_count", result.mission->CompletedTaskCount()},
             {"task_count", result.mission->tasks.size()},
-            {"completion_percent", result.mission->completionPercent},
-            {"coverage_percent", result.mission->coveragePercent},
+            {"completion_percent", result.mission->CompletionPercent()},
+            {"coverage_percent", result.mission->CoveragePercent()},
             {"started_tick", result.mission->startedTick},
-            {"completed_tick", result.mission->completedTick},
-            {"completion_time_seconds", result.mission->completedTick
+            {"completed_tick", completedTick},
+            {"completion_time_seconds", completedTick
                     && result.mission->startedTick
-                ? nlohmann::json(static_cast<double>(*result.mission->completedTick
+                ? nlohmann::json(static_cast<double>(*completedTick
                     - *result.mission->startedTick)
                     * aerosimlab::simulation::DroneModel::fixedStepSeconds)
                 : nlohmann::json(nullptr)},

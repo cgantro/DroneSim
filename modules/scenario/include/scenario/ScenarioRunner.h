@@ -128,14 +128,55 @@ struct ScenarioResult
         {
             return GetOutcome() == Outcome::Passed;
         }
-        /** @brief 완료한 작업 수와 전체 작업 중 완료한 비율이다. */
-        std::size_t completedTaskCount = 0;
-        double completionPercent = 0.0;
-        /** @brief 방문한 경유점 수를 전체 경유점 수로 나눈 비율이다. */
-        double coveragePercent = 0.0;
-        /** @brief 첫 임무를 실제로 시작한 Tick과 모든 임무를 끝낸 Tick이다. */
+        /** @brief 완료한 작업 수를 작업 상태에서 계산한다. */
+        [[nodiscard]] std::size_t CompletedTaskCount() const noexcept
+        {
+            std::size_t count = 0;
+            for (const MissionTask& task : tasks)
+            {
+                if (task.IsCompleted())
+                    ++count;
+            }
+            return count;
+        }
+        /** @brief 완료한 작업의 비율을 백분율로 돌려준다. */
+        [[nodiscard]] double CompletionPercent() const noexcept
+        {
+            return tasks.empty() ? 0.0
+                : 100.0 * static_cast<double>(CompletedTaskCount())
+                    / static_cast<double>(tasks.size());
+        }
+        /** @brief 방문한 경유점 비율을 작업별 진행 상태에서 계산한다. */
+        [[nodiscard]] double CoveragePercent() const noexcept
+        {
+            std::size_t total = 0;
+            std::size_t visited = 0;
+            for (const MissionTask& task : tasks)
+            {
+                total += task.waypointsMeters.size();
+                visited += task.IsCompleted()
+                    ? task.waypointsMeters.size() : task.currentWaypointIndex;
+            }
+            return total == 0 ? 0.0
+                : 100.0 * static_cast<double>(visited) / static_cast<double>(total);
+        }
+        /** @brief 모든 작업이 끝났을 때 가장 늦게 완료한 Tick을 돌려준다. */
+        [[nodiscard]] std::optional<std::uint64_t> CompletedTick() const noexcept
+        {
+            if (tasks.empty())
+                return std::nullopt;
+            std::optional<std::uint64_t> latestTick;
+            for (const MissionTask& task : tasks)
+            {
+                if (!task.completedTick)
+                    return std::nullopt;
+                if (!latestTick || *task.completedTick > *latestTick)
+                    latestTick = task.completedTick;
+            }
+            return latestTick;
+        }
+        /** @brief 첫 임무가 시작된 Tick이다. */
         std::optional<std::uint64_t> startedTick;
-        std::optional<std::uint64_t> completedTick;
         std::vector<MissionTask> tasks;
     };
     /** @brief mission을 지정한 시나리오에만 결과가 들어간다. */
