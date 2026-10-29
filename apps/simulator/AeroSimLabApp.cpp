@@ -564,15 +564,7 @@ void AeroSimLabApp::AdvanceAmbientWind()
 
 void AeroSimLabApp::AdvanceManualControlTick()
 {
-    const bool inspectionMissionActive =
-        inspectionMission_.stage == InspectionMissionStage::StartRequested
-        || inspectionMission_.stage == InspectionMissionStage::Paused
-        || inspectionMission_.stage == InspectionMissionStage::TakingOff
-        || inspectionMission_.stage == InspectionMissionStage::Approaching
-        || inspectionMission_.stage == InspectionMissionStage::AligningCamera
-        || inspectionMission_.stage == InspectionMissionStage::Capturing
-        || inspectionMission_.stage == InspectionMissionStage::Landing;
-    if (inspectionMissionActive)
+    if (InspectionMissionIsActive())
     {
         simulation_.AdvanceOneTick();
         return;

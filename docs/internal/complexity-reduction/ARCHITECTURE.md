@@ -63,7 +63,7 @@ TrainingRangeScene 배치 목록
 | 드론의 위치·자세·비행 모드 | Flecs의 `DroneState` | 네트워크 노드 위치, 관제 상태 | 링크 판정 시점의 위치 및 실제 전달된 과거 상태를 표현한다. |
 | 드론 카메라 자세 | Flecs의 `CameraState` | 비동기 GPU 픽셀과 맞추는 Tick별 상태 | 픽셀 생성 당시의 자세로 촬영 가능 여부를 평가한다. 처리 후 Tick 항목을 지운다. |
 | 배터리 | `EcsStorage::batteries` 맵 | 앱 임무 표시·복귀 판단 | 현재는 ECS 드론 컴포넌트와 별도 관리한다. 정리 전 API 사용처 확인이 필요하다. |
-| 카메라 픽셀 | GPU 프레임버퍼/PBO, 완료 후 앱의 `eoFrame_` | OpenCV 분석용 빌린 화면, 송신 버퍼 | GPU 비동기 읽기와 실시간 전송을 이어간다. 저장 기능은 없다. |
+| 카메라 픽셀 | GPU 프레임버퍼/PBO, 완료 후 앱의 `eoFrame_` | OpenCV 분석용 빌린 화면 | GPU에서 읽은 화면을 앱에 전달해 로컬 표시와 품질 계산에 쓴다. 영상 전송과 파일 저장은 제거했다. |
 | 임무 진행 | 앱의 `inspectionMission_`, `fleetReconnaissance_`, `completeFleetMission_`, `formationTransit_` | 화면 표시 상태 | 단일 카메라 정찰, 드론별 정찰, 전체 임무, 편대 이동을 각각 나타낸다. 목적은 다르지만 앱 클래스의 멤버에 함께 있어 어느 값이 기준인지 찾기 어렵다. |
 | 건물·정찰 환경 | `TrainingRangeScene` 배치와 생성한 `obstacles_` | `inspectionOccluders_`, `formationRadioObstacles_`, `inspectionTargets_`, SimulationCore 장애물 | 경로는 장면의 건물 목록을 직접 읽는다. 가림·통신·충돌은 목적별 모양의 파생 자료다. |
 | 네트워크 노드 위치 | Simulation Core의 현재 위치 | `VirtualMeshNetwork::nodes_` | 약 6 Tick마다 전달한 위치로 링크 거리·가림을 판정한다. 갱신 주기만큼 오래된 샘플일 수 있다. |
@@ -84,7 +84,7 @@ TrainingRangeScene 배치 목록
 | 화면 배치 | Windows의 `%LOCALAPPDATA%/AeroSimLab/imgui.ini` | ImGui가 패널 위치와 크기를 저장한다. 사용자 설정이므로 빌드 폴더와 분리되어 있다. |
 | 성능 측정 결과 | Windows는 실행 파일 옆의 `benchmark-latest.json`, 그 외에는 현재 실행 폴더의 같은 이름 파일 | 벤치마크가 결과를 쓴다. `AEROSIMLAB_BENCHMARK_OUTPUT` 환경 변수로 저장 경로를 바꿀 수도 있다. |
 | 변환한 지형 격자 | 변환 도구를 실행할 때 지정한 출력 경로 | `terrain_grid_converter`가 ASCII 격자를 `.aerotrn`으로 바꿔 저장한다. 앱은 준비된 지형 파일을 읽고, 변환 도구와 시험만 파일을 쓴다. |
-| 명령 녹화·재생 | 메모리 안 | 현재 앱을 종료하면 사라진다. 파일로 저장하지 않는다. |
+| 수동 조종 명령 | 실행 중 입력 큐와 명령 패킷 | 통신 응답·드론 상태 | 입력은 적용 후 버린다. 앱 내 기록·재생 기능은 제거했다. 반복 시험은 JSON 시나리오가 맡는다. |
 
 사용자가 직접 위치를 정하는 출력은 지형 변환 결과다. 화면 배치는 사용자 설정으로 따로 보관하고, 성능 결과는 기본 경로가 실행 파일 위치를 따라간다. 서로 다른 파일을 한 폴더에 강제로 모으기보다, **입력 자산·시험 자료·실행 중 사용자 설정·생성 결과**를 구분하고 각 쓰기 위치를 한곳에서 찾을 수 있게 유지한다. 벤치마크 결과가 빌드 폴더에 쌓이는 점은 출력 위치가 실행 파일 위치에 따라 달라질 수 있으므로, 이후 빌드·결과 정리를 다룰 때 고정된 저장 위치를 선택할 후보로 남긴다.
 
