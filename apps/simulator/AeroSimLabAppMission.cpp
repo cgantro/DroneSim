@@ -1266,14 +1266,6 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     return !nodes.empty();
 }
 
-void AeroSimLabApp::SetFleetNetworkMode(
-    communication::VirtualMeshMode mode)
-{
-    fleetNetworkMode_ = mode;
-    if (formationNetwork_)
-        static_cast<void>(PrepareFleetNetwork(true));
-}
-
 void AeroSimLabApp::InitializeFleetLeadership()
 {
     fleetDroneIds_ = simulation_.DroneIds();

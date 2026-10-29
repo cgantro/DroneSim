@@ -216,7 +216,6 @@ private:
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
-    void SetFleetNetworkMode(communication::VirtualMeshMode mode);
     void InitializeFleetLeadership();
     void AdvanceFleetNetwork();
     [[nodiscard]] bool SendFleetRouteAssignment(
@@ -560,7 +559,7 @@ private:
     CompleteFleetMissionState completeFleetMission_;
     std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
     communication::VirtualMeshMode fleetNetworkMode_ =
-        communication::VirtualMeshMode::AdaptiveMesh;
+        communication::VirtualMeshMode::Direct;
     std::vector<communication::RadioObstacle> formationRadioObstacles_;
     float fleetPacketLossPercent_ = 0.0F;
     std::uint32_t fleetLatencyJitterTicks_ = 0U;

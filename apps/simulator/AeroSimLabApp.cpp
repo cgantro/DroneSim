@@ -802,11 +802,6 @@ void AeroSimLabApp::RenderFrame()
                 static_cast<void>(StartCompleteFleetMission());
             },
             formationNetworkActive,
-            fleetNetworkMode_,
-            [this](communication::VirtualMeshMode mode)
-            {
-                SetFleetNetworkMode(mode);
-            },
             fleetPacketLossPercent_,
             [this](float percentage)
             {

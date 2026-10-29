@@ -82,8 +82,6 @@ public:
         bool completeFleetMissionCanStart,
         const std::function<void()>& startCompleteFleetMission,
         bool formationMissionActive,
-        communication::VirtualMeshMode& selectedNetworkMode,
-        const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,
         float& packetLossPercent,
         const std::function<void(float)>& setPacketLossPercent,
         std::uint32_t& latencyJitterTicks,
