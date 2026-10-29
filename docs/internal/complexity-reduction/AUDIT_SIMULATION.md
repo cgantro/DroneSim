@@ -60,18 +60,18 @@
 - `modules/terrain/include/terrain/MapBridges.h`: SIMPLIFY — 확인 1–46; 남은 줄 없음. GeoJSON 경로·지형을 받아 교량 외곽 값을 반환하고 교각을 추정한다(33–45). 반환 vector가 형상을 소유. 교량 점검이 MVP 범위 밖이면 시각화·충돌 호출처를 확인 후 제거 후보; 오류 세부는 구현 미확인.
 - `modules/terrain/include/terrain/MapBuildings.h`: KEEP — 확인 1–87; 남은 줄 없음. 건물 외곽·높이와 출처를 값으로 소유하며 로딩·범위·충돌·외벽 계산 API를 제공한다. 경로·충돌용 건물은 유지, 시설 외벽 함수(76–85)는 사용처 확인 후 축소 후보. 로더 오류는 구현 미확인.
 - `modules/terrain/include/terrain/MapFlightRoute.h`: SIMPLIFY — 확인 1–65; 남은 줄 없음. PlanMapFlightRoute(26)는 지형·장애물·시작·목표를 받아 경유점 또는 nullopt를 반환한다. 고정 V 및 조사·복귀 경로에 필요한 안전 경로는 유지하고 교량 하부·외벽 경로(43–64)는 시설 점검 범위 확인 후 축소 후보.
-- `modules/terrain/include/terrain/MapRoads.h`: KEEP — 확인 1–39; 남은 줄 없음. GeoJSON 경로·지형에서 도로 중심선과 추정 폭 vector를 반환한다. 도로 형상은 값 소유이며 시각화용이고 충돌 형상은 아니다. 오류와 실제 필요성은 구현·호출처 확인 필요.
-- `modules/terrain/include/terrain/MapTrees.h`: KEEP — 확인 1–21; 남은 줄 없음. 지도 경로·지형을 받아 나무 위치 vector를 반환한다. 값 소유, 오류는 구현 미확인. 시각화 사용처 확인 후 단순화 판단.
-- `modules/terrain/include/terrain/MapWaterBodies.h`: KEEP — 확인 1–25; 남은 줄 없음. GeoJSON 경로·지형에서 물 외곽과 섬 경계 vector를 값으로 반환하고 ContainsWater로 포함 여부를 판정한다. 표시 사용처와 오류 처리는 구현 확인.
+- `modules/terrain/include/terrain/MapRoads.h`: REMOVED — 현재 장면과 임무에서 사용하지 않는 Tancheon 지도용 도로 GeoJSON 로더다. 렌더링·충돌·경로에 연결되지 않아 제거했다.
+- `modules/terrain/include/terrain/MapTrees.h`: REMOVED — 현재 나무는 장면의 GLB 배치로 그린다. 호출처가 없는 지도용 나무 로더를 제거했다.
+- `modules/terrain/include/terrain/MapWaterBodies.h`: REMOVED — 현재 장면에서 수계 GeoJSON을 읽거나 물 경계를 판정하지 않는다. 호출처가 없는 지도 전용 코드를 제거했다.
 - `modules/terrain/include/terrain/TerrainGrid.h`: KEEP — 확인 1–67; 남은 줄 없음. 높이 vector를 소유하며 로드·저장, 고도 보간, WGS84와 ENU 변환을 제공한다. 지형·경로·충돌의 공통 기준; 구현의 입력 오류 확인 필요.
 - `modules/terrain/include/terrain/TrainingRangeTerrain.h`: KEEP — 확인 1–9; 남은 줄 없음. 500×400m 시험 지형을 값으로 반환하는 무인수 함수. 사용처 및 실제 범위는 구현 확인.
 - `modules/terrain/src/MapBridges.cpp`: SIMPLIFY — 확인 1–200, 201–215; 남은 줄 없음. LoadMapBridgeFootprints(99)는 GeoJSON과 지형에서 이름 있는 교량을 값으로 만들고 파일·JSON·features 오류는 예외, 부적합 개별 형상은 건너뛴다. EstimateMapBridgePiers(150)는 간격 기준으로 추정 교각을 반환한다. 시설 점검 확장과 표시·충돌의 공유 소비자를 확인 후 축소.
 - `modules/terrain/src/MapBuildings.cpp`: KEEP — 확인 1–200, 201–336; 남은 줄 없음. LoadMapBuildings(68)는 GeoJSON과 지형을 읽고 높이 또는 층수를 적용하며 오류는 예외. ContainsMapBuildingVolume(175), FindFirstPointOutsideMapBuildings(204)는 건물 검사, GetMapBuildingFacades(245)는 점검면을 반환한다. GetMapBuildingBoundsMeters(151)는 비어 있지 않고 높이 배열이 대응하는 입력을 전제하므로 호출 계약 확인. 건물 회피는 유지하고 외벽 점검은 별도 축소 후보.
 - `modules/terrain/src/MapFlightRoute.cpp`: SIMPLIFY — 확인 1–200, 201–400, 401–595; 남은 줄 없음. FindGridPath(152)는 5m 격자 8방향 A*와 대각선 코너 차단을 적용하고 SimplifyPath(238)는 선분 검사를 사용한다. PlanMapFlightRoute(281)는 입력 오류에 예외, 경로 없음에 nullopt를 반환하고 지형·건물로 경로를 생성한다. 높이는 경유점에서 확인하므로 긴 간소화 선분의 중간 지형 여유는 별도 검증 필요. 교량 하부·외벽 경로(430,544)는 시설 점검 사용처 확인 후 축소 후보.
 - `modules/terrain/src/MapGeometry.h`: KEEP — 확인 1–164; 남은 줄 없음. ContainsPointInRing(21), ClipPolygonToTerrain(44), ReadTerrainFootprint(108)가 지도 형상 포함·경계 절단·좌표 변환을 수행한다. 결과 vector는 값 소유 또는 호출자 출력 참조, 부적합 형상은 false. 충돌·EO의 다른 경계 판정과 목적이 달라 무조건 합치지 않는다.
-- `modules/terrain/src/MapRoads.cpp`: KEEP — 확인 1–200, 201–213; 남은 줄 없음. LoadMapRoads(171)는 GeoJSON과 지형에서 도로 구간을 값으로 반환하며 파일·JSON 오류는 예외, 범위 밖·잘못된 점에서 구간을 나눈다. RoadWidth(53)는 폭·차선·종류 순으로 추정한다. 건물 높이 숫자 파싱과 유사하지만 상한·의미가 달라 통합 전 검토.
-- `modules/terrain/src/MapTrees.cpp`: KEEP — 확인 1–60; 남은 줄 없음. LoadMapTrees(11)는 GeoJSON의 나무 점을 지형 로컬 좌표로 변환해 값 vector 반환. 파일·JSON·features 오류는 예외, 형식이 다른 개별 항목은 건너뜀. 지도 표시 호출처 확인.
-- `modules/terrain/src/MapWaterBodies.cpp`: KEEP — 확인 1–132; 남은 줄 없음. LoadMapWaterBodies(67)는 GeoJSON 물 외곽·섬 경계를 값으로 소유해 반환하며 파일·JSON·features 오류는 예외. ContainsWater(122)는 MapGeometry 포함 계산을 재사용해 섬을 제외. IntersectsTerrain(41)은 경계 상자 교차만 확인한다.
+- `modules/terrain/src/MapRoads.cpp`: REMOVED — 현재 장면과 임무에서 사용하지 않는 Tancheon 지도용 도로 GeoJSON 변환 코드다. 호출처와 자료가 없어 함께 제거했다.
+- `modules/terrain/src/MapTrees.cpp`: REMOVED — 현재 장면은 GLB 나무 배치를 사용하며 이 지도 위치 변환기는 호출되지 않는다. 함께 제거했다.
+- `modules/terrain/src/MapWaterBodies.cpp`: REMOVED — 현재 장면에 연결되지 않은 수계 GeoJSON 로더와 경계 판정 코드다. 함께 제거했다.
 - `modules/terrain/src/TerrainGrid.cpp`: KEEP — 확인 1–200, 201–400, 401–430; 남은 줄 없음. Load/LoadAsciiGrid(115,185)는 파일 형식·수·유효 숫자를 검사해 지형 값을 반환하고 Save(282)는 파일을 쓴다. HeightAtLocalMeters(353)는 쌍선형, HeightAtRenderedSurfaceMeters(367)는 메시 삼각형 보간으로 값이 다를 수 있다. FindTerrainCell은 범위·구조 오류를 던진다. HeightAt(315)은 행·열만 검사하므로 직접 구성한 높이 vector의 길이 계약에 주의.
 - `modules/terrain/src/TrainingRangeTerrain.cpp`: KEEP — 확인 1–53; 남은 줄 없음. CreateTrainingRangeTerrain(8)은 101×101 높이 vector에 언덕·능선 값을 채우고 최솟값을 0으로 조정해 반환한다. 외부 입력·상태 없음. 시험 지형 소비자를 확인해 실제 사용 범위에 맞춰 유지.
 - `tests/simulation_core/CommandRecordingTests.cpp`: REMOVED — 명령 기록·재생 전용 시험이다. 제품 기능 삭제와 함께 삭제했으며, JSON 시나리오 시험은 유지한다.

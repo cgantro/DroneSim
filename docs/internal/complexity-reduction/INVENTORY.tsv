@@ -183,18 +183,18 @@ modules/simulation_core/src/SimulationCore.cpp	43880	1179	simulation	REVIEWED	KE
 modules/terrain/include/terrain/MapBridges.h	1538	46	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/terrain/include/terrain/MapBuildings.h	3186	87	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/terrain/include/terrain/MapFlightRoute.h	2624	65	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/terrain/include/terrain/MapRoads.h	1115	39	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/terrain/include/terrain/MapTrees.h	520	21	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/terrain/include/terrain/MapWaterBodies.h	866	25	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapRoads.h	1115	39	simulation	REVIEWED	REMOVED	d6515b6e	no	현재 실행 경로 미사용; Tancheon 지도 전용 코드 제거	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapTrees.h	520	21	simulation	REVIEWED	REMOVED	d6515b6e	no	현재 실행 경로 미사용; Tancheon 지도 전용 코드 제거	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapWaterBodies.h	866	25	simulation	REVIEWED	REMOVED	d6515b6e	no	현재 실행 경로 미사용; Tancheon 지도 전용 코드 제거	정적 감사, 실행 시험은 별도
 modules/terrain/include/terrain/TerrainGrid.h	2931	67	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/terrain/include/terrain/TrainingRangeTerrain.h	238	9	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/terrain/src/MapBridges.cpp	7539	215	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/terrain/src/MapBuildings.cpp	12723	336	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/terrain/src/MapFlightRoute.cpp	22850	595	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/terrain/src/MapGeometry.h	5565	164	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/terrain/src/MapRoads.cpp	6601	213	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/terrain/src/MapTrees.cpp	1998	60	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/terrain/src/MapWaterBodies.cpp	4453	132	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapRoads.cpp	6601	213	simulation	REVIEWED	REMOVED	d6515b6e	no	현재 실행 경로 미사용; Tancheon 지도 전용 코드 제거	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapTrees.cpp	1998	60	simulation	REVIEWED	REMOVED	d6515b6e	no	현재 실행 경로 미사용; Tancheon 지도 전용 코드 제거	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapWaterBodies.cpp	4453	132	simulation	REVIEWED	REMOVED	d6515b6e	no	현재 실행 경로 미사용; Tancheon 지도 전용 코드 제거	정적 감사, 실행 시험은 별도
 modules/terrain/src/TerrainGrid.cpp	18424	430	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/terrain/src/TrainingRangeTerrain.cpp	1948	53	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/vision/include/vision/RgbFrameQuality.h	1897	42	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도

@@ -46,9 +46,6 @@ add_library(aerosimlab_terrain STATIC
   modules/terrain/src/MapBridges.cpp
   modules/terrain/src/MapBuildings.cpp
   modules/terrain/src/MapFlightRoute.cpp
-  modules/terrain/src/MapRoads.cpp
-  modules/terrain/src/MapTrees.cpp
-  modules/terrain/src/MapWaterBodies.cpp
   modules/terrain/src/TerrainGrid.cpp
   modules/terrain/src/TrainingRangeTerrain.cpp
 )
