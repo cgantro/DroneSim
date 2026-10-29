@@ -65,7 +65,6 @@ struct DroneObservation
     std::uint64_t lastHeartbeatTick = 0;
     DroneState lastKnownState;
     std::optional<double> lastKnownBatteryPercent;
-    bool holdPositionApplied = false;
 };
 
 using DroneObservations = std::unordered_map<std::string, DroneObservation>;
@@ -191,7 +190,6 @@ void UpdateDroneObservations(
             observation.status = DroneCommunicationStatus::Connected;
             observation.lastHeartbeatTick = tick;
             observation.lastKnownState = simulation.State(droneId);
-            observation.holdPositionApplied = false;
             observation.lastKnownBatteryPercent = simulation.HasBattery(droneId)
                 ? std::optional<double>{simulation.Battery(droneId).RemainingPercent()}
                 : std::nullopt;
@@ -213,29 +211,6 @@ void UpdateDroneObservations(
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + droneName + " 드론의 상태를 확인할 수 없어 임무 정보를 미확정으로 바꿨습니다.");
-        }
-        if (newStatus == DroneCommunicationStatus::Unknown
-            && outage->onTimeout == DroneCommunicationOutage::OnTimeout::HoldPosition
-            && !observation.holdPositionApplied)
-        {
-            // 이륙 중에는 위치 명령을 받을 수 없으므로, 가능한 비행 상태가 될 때까지 재시도한다.
-            const DroneState& state = simulation.State(droneId);
-            if (CanReceiveWaypoint(state.mode))
-            {
-                const CommandResult holdResult = simulation.Apply(droneId,
-                    {DroneCommand::Kind::SetWaypoint, state.positionMeters});
-                if (holdResult == CommandResult::Accepted)
-                {
-                    observation.holdPositionApplied = true;
-                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                        + droneName + " 드론이 통신 단절 안전 동작으로 현재 위치를 유지합니다.");
-                }
-                else
-                {
-                    result.issues.push_back(droneName
-                        + " 드론에 통신 단절 안전 동작을 적용하지 못했습니다.");
-                }
-            }
         }
         observation.status = newStatus;
     };

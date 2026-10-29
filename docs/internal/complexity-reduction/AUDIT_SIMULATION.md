@@ -89,7 +89,7 @@
 | 파일 | 확인된 역할과 연결 | 구조상 확인 사항 |
 |---|---|---|
 | `modules/scenario/include/scenario/ScenarioRunner.h` (153줄) | `RunScenario(JSON 문자열)` 공개 함수와 최종 결과 형식을 선언한다. 결과에 드론·카메라·통신 상태·배터리·비행 거리·에너지·임무·궤적·충돌 간격이 함께 들어간다. | 결과 형식이 시나리오의 모든 선택 기능을 한 공개 자료형에 담는다. 카메라·에너지·임무·궤적 중 실제 목표에 남길 기능을 먼저 정해야 결과 계약도 줄일 수 있다. |
-| `modules/scenario/src/ScenarioDefinition.h` (현재 내부 자료 구조) | JSON을 실행 가능한 값으로 읽는 내부 구조다. 드론 시작 상태, 명령, 직접 통신 단절, 충돌 회피, 배터리, 임무 작업, 물리·제어기 설정, 바람, 궤적, 카메라 이벤트와 기대 결과를 보관한다. | 여러 선택 기능이 한 구조에 함께 있다. 실제로 남길 시험 범위를 정한 뒤 관련 필드와 파서를 같이 줄이는 편이 낫다. |
+| `modules/scenario/src/ScenarioDefinition.h` (현재 내부 자료 구조) | JSON을 실행 가능한 값으로 읽는 내부 구조다. 드론 시작 상태, 명령, 직접 통신 단절, 충돌 회피, 배터리, 임무 작업, 물리·제어기 설정, 바람, 궤적, 카메라 이벤트와 기대 결과를 보관한다. | 통신 장애 뒤 별도 안전 동작은 없다. 끊기기 전 받은 경로를 계속 따르고 상태 보고만 끊는다. |
 | `modules/scenario/src/ScenarioDefinition.cpp` (1,027줄) | JSON 설정을 읽고 검증한다. 임무는 드론별 `tasks` 목록과 한 개 이상의 `waypoints_meters`만 받는다. | 입력 파서는 여전히 물리 설정·배터리·카메라·통신·충돌·임무를 모두 다룬다. `survey_area` 자동 분할은 사용처가 시험 하나뿐이라 제거했다. |
 | `modules/scenario/src/ScenarioRunner.cpp` (1,308줄) | 설정에서 `SimulationCore`를 만들고, 각 Tick마다 관측·명령·에너지 정책·임무 이동·충돌 회피·카메라 이벤트를 처리한 뒤 기대 결과와 비교한다. | 시뮬레이션 실행, 임무, 에너지, 회피, 결과 판정이 한 파일에 모여 있다. 앱 임무와도 별도로 동작한다. |
 | `apps/headless/main.cpp` (258줄) | `--scenario <JSON>` 파일을 최대 16 MiB까지 읽어 `RunScenario`에 넘기고 결과 JSON을 출력한다. 성공·실패·실행 오류에 서로 다른 종료 코드를 쓴다. | 얇은 CLI 경계다. 시뮬레이션 정책은 없고 결과 직렬화만 맡으므로 우선 축소 대상이 아니다. |
@@ -102,6 +102,7 @@
 - Runner의 통신 장애도 시뮬레이터가 쓰는 가상 통신망과 다른 코드다. 한쪽의 단절·복구 시험이 다른 쪽의 동작을 보증하지 않는다.
 - 감사 뒤 `formation_links` 기능과 전용 사례를 제거했다. 현재 `scenarios/`에는 JSON 8개가 있고, CMake headless 연기 시험은 `rigid-body-flight`, `communication-outage`, `independent-flight`, `two-point-survey` 4개를 실행한다. `physical-model-override`, `four-drone-survey-outage`, `low-battery-return`은 GoogleTest에서 자료 파일로 읽는다. `normal-flight`는 코드나 CMake에서 참조를 찾지 못했다. 수동 예제로 쓰는지는 확인되지 않아 삭제 대상으로 단정하지 않는다.
 - `survey_area`는 기존 자료 파일이나 앱에서 사용하지 않고 하나의 시험에서만 사용했다. 자동 영역 분할 코드를 제거하고 그 시험은 동일한 분할 결과를 `tasks`의 경유점으로 직접 적는다. 임무 실행과 완료율 계산은 계속 시험한다.
+- 통신 장애의 `on_timeout` 옵션은 제자리 정지와 마지막 명령 지속 중 하나를 선택했다. 시나리오의 드론은 받은 경로를 계속 따르므로 이 선택지와 정지 코드를 제거했다. 상태가 끊기면 임무 완료 여부는 GCS에서 확인할 수 없게 둔다.
 
 ### Sol 판단
 

@@ -14,13 +14,13 @@
     {"tick": 0, "drone": "scout-3", "type": "takeoff"},
     {"tick": 0, "drone": "scout-4", "type": "takeoff"}
   ],
+  "record_trajectory": {"sample_every_ticks": 30},
   "communication_outages": [
     {
       "drone": "scout-2",
       "start_tick": 95,
       "end_tick": 320,
-      "heartbeat_timeout_ticks": 3,
-      "on_timeout": "hold_position"
+      "heartbeat_timeout_ticks": 3
     }
   ],
   "collision_avoidance": {

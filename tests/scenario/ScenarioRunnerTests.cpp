@@ -640,7 +640,7 @@ void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
         - calm.drones.front().finalState.positionMeters.x), 0.01);
 }
 
-void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
+void Verify_ScenarioRunner_ContinuesTaskDuringHeartbeatLoss()
 {
     const ScenarioResult result = RunScenario(
         ReadScenarioFixture("scenarios/multi-drone/four-drone-survey-outage.json"));
@@ -673,10 +673,13 @@ void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
     ASSERT_NE(disconnectedDrone, result.drones.end());
     EXPECT_EQ(disconnectedDrone->communicationStatus,
         ScenarioResult::Drone::CommunicationStatus::Unknown);
+    EXPECT_DOUBLE_EQ(disconnectedDrone->finalState.positionMeters.x,
+        10.333333333333336);
     EXPECT_TRUE(std::any_of(result.eventLog.begin(), result.eventLog.end(),
         [](const std::string& event)
         {
-            return event.find("현재 위치를 유지합니다") != std::string::npos;
+            return event.find("상태를 확인할 수 없어 임무 정보를 미확정으로 바꿨습니다")
+                != std::string::npos;
         }));
 
     const auto assignedTask = std::find_if(result.mission->tasks.begin(),
@@ -684,6 +687,15 @@ void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
         [](const ScenarioResult::MissionTask& task) { return task.name == "sector-2"; });
     ASSERT_NE(assignedTask, result.mission->tasks.end());
     EXPECT_FALSE(assignedTask->failed);
+
+    ASSERT_FALSE(result.trajectory.empty());
+    const ScenarioResult::TrajectorySample& lastSample = result.trajectory.back();
+    EXPECT_EQ(lastSample.tick, 320U);
+    const auto actualDrone = std::find_if(lastSample.drones.begin(), lastSample.drones.end(),
+        [](const auto& entry) { return entry.first == "scout-2"; });
+    ASSERT_NE(actualDrone, lastSample.drones.end());
+    EXPECT_EQ(actualDrone->second.mode, FlightMode::Hovering);
+    EXPECT_DOUBLE_EQ(actualDrone->second.positionMeters.x, 14.0);
 }
 }
 
@@ -1072,7 +1084,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath());
     EXPECT_NO_FATAL_FAILURE(
-        Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss());
+        Verify_ScenarioRunner_ContinuesTaskDuringHeartbeatLoss());
     constexpr std::array flightModes{
         FlightMode::Grounded,
         FlightMode::TakingOff,

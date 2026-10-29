@@ -15,8 +15,7 @@
       "drone": "scout",
       "start_tick": 80,
       "end_tick": 100,
-      "heartbeat_timeout_ticks": 60,
-      "on_timeout": "continue_last_command"
+      "heartbeat_timeout_ticks": 60
     }
   ],
   "expected": {

@@ -367,18 +367,6 @@ std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
             Required(item, "end_tick"), "end_tick");
         const std::uint64_t heartbeatTimeoutTicks = ReadUnsigned(
             Required(item, "heartbeat_timeout_ticks"), "heartbeat_timeout_ticks");
-        auto onTimeout = DroneCommunicationOutage::OnTimeout::ContinueLastCommand;
-        if (item.contains("on_timeout"))
-        {
-            const Json& action = item["on_timeout"];
-            if (!action.is_string())
-                throw std::invalid_argument("통신 장애 on_timeout은 문자열이어야 합니다.");
-            const std::string actionName = action.get<std::string>();
-            if (actionName == "hold_position")
-                onTimeout = DroneCommunicationOutage::OnTimeout::HoldPosition;
-            else if (actionName != "continue_last_command")
-                throw std::invalid_argument("지원하지 않는 통신 장애 on_timeout 동작입니다.");
-        }
         const auto previousEnd = previousEndByDrone.find(droneName);
         if (!droneNames.contains(droneName) || startTick >= endTick
             || endTick > tickCount || heartbeatTimeoutTicks == 0
@@ -390,7 +378,7 @@ std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
         }
         previousEndByDrone[droneName] = endTick;
         outages.push_back({std::move(droneName), startTick, endTick,
-            heartbeatTimeoutTicks, onTimeout});
+            heartbeatTimeoutTicks});
     }
     return outages;
 }
