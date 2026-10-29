@@ -80,7 +80,8 @@ void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
             sum += speed;
         return sum / static_cast<double>(state.motorSpeedsRadiansPerSecond.size());
     };
-    EXPECT_GT(meanMotorSpeed(result.finalState), meanMotorSpeed(baselineResult.finalState));
+    EXPECT_GT(meanMotorSpeed(result.drones.front().finalState),
+        meanMotorSpeed(baselineResult.drones.front().finalState));
 
     constexpr std::string_view kinematicOverride = R"json(
     {"version":1,"dynamics":"kinematic","ticks":1,"commands":[],
@@ -153,7 +154,6 @@ void Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone()
     EXPECT_EQ(result.drones[1].name, "north");
     EXPECT_EQ(result.drones[1].finalCamera.status, CameraStatus::Active);
     EXPECT_EQ(result.drones[1].finalCamera.frameCount, 2U);
-    EXPECT_EQ(result.finalCamera.status, result.drones[0].finalCamera.status);
     EXPECT_EQ(result.eventLog.size(), 3U);
 
     constexpr std::string_view unknownDrone = R"json(
@@ -549,11 +549,12 @@ void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
     EXPECT_DOUBLE_EQ(lowGain.controllerSettings->attitudeGain, 25.0);
     EXPECT_DOUBLE_EQ(lowGain.controllerSettings->angularRateGain, 8.5);
     EXPECT_DOUBLE_EQ(highGain.controllerSettings->positionGain, 3.0);
-    EXPECT_GT(highGain.finalState.positionMeters.x, lowGain.finalState.positionMeters.x);
+    EXPECT_GT(highGain.drones.front().finalState.positionMeters.x,
+        lowGain.drones.front().finalState.positionMeters.x);
     ASSERT_TRUE(implicitDefault.controllerSettings.has_value());
     EXPECT_FALSE(implicitDefault.controllerSettings->customized);
-    EXPECT_EQ(explicitDefault.finalState.positionMeters,
-        implicitDefault.finalState.positionMeters);
+    EXPECT_EQ(explicitDefault.drones.front().finalState.positionMeters,
+        implicitDefault.drones.front().finalState.positionMeters);
 
     constexpr std::string_view unsupportedMode = R"json(
     {"version":1,"dynamics":"kinematic","ticks":1,"commands":[],
@@ -635,8 +636,8 @@ void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
     ASSERT_TRUE(wind.IsPassed());
     ASSERT_TRUE(calm.windVelocityMetersPerSecond == std::nullopt);
     ASSERT_EQ(wind.windVelocityMetersPerSecond, (glm::dvec3{2.0, 0.0, 0.0}));
-    EXPECT_GT(std::abs(wind.finalState.positionMeters.x
-        - calm.finalState.positionMeters.x), 0.01);
+    EXPECT_GT(std::abs(wind.drones.front().finalState.positionMeters.x
+        - calm.drones.front().finalState.positionMeters.x), 0.01);
 }
 
 void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
@@ -722,7 +723,6 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommands()
     EXPECT_NEAR(result.drones[1].flightDistanceMeters, 3.5, 1.0e-9);
     EXPECT_NEAR(result.drones[0].flightTimeSeconds, 3.0, 1.0e-12);
     EXPECT_NEAR(result.drones[1].flightTimeSeconds, 3.0, 1.0e-12);
-    EXPECT_EQ(result.finalState.positionMeters, result.drones[0].finalState.positionMeters);
     EXPECT_TRUE(result.eventLog.empty());
     ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
     EXPECT_NEAR(*result.minimumDroneSeparationMeters, 10.0, 1.0e-12);

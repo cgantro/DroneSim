@@ -1,5 +1,11 @@
 # 빌드와 시험 기록
 
+## 최상위 기본 드론 상태 중복 제거 — 2026-10-30
+
+- `ScenarioResult`의 최상위 비행·카메라 복사본을 제거했다. 시나리오는 기본 드론을 포함해 적어도 한 대를 결과에 담으므로, Headless JSON은 첫 드론 상태를 최상위 `final_state`·`camera` 항목으로 출력한다.
+- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- `two-point-survey.json` 출력에서 최상위 비행 위치와 첫 드론 위치가 같고 카메라 상태도 둘 다 `active`인 것을 확인했다.
+
 ## 시나리오 목표 좌표 중복 제거 — 2026-10-29
 
 - `MissionTask`에서 첫 경유점과 같은 값을 따로 저장하던 목표 위치를 제거했다. Headless JSON은 기존 `target_position_meters` 형식을 유지하고 첫 경유점 값을 출력한다.

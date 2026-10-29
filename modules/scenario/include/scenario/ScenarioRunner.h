@@ -28,8 +28,6 @@ struct ScenarioResult
     double simulationTimeSeconds = 0.0;
     /** @brief 시나리오에서 강체 물리에 적용한 ENU 기준 바람 속도다. */
     std::optional<glm::dvec3> windVelocityMetersPerSecond;
-    simulation::DroneState finalState;
-    simulation::CameraState finalCamera;
     std::vector<std::string> issues;
     std::vector<std::string> eventLog;
     /** @brief 기준을 요청한 시나리오에서 잰 최소 3차원 중심 간 거리다. */
@@ -94,7 +92,7 @@ struct ScenarioResult
         /** @brief Grounded가 아닌 비행 상태였던 누적 모의 시간이다. 단위는 초다. */
         double flightTimeSeconds = 0.0;
     };
-    /** @brief 시나리오에 등장한 드론의 마지막 상태를 입력 순서대로 보관한다. */
+    /** @brief 시나리오에 등장한 드론의 마지막 상태를 입력 순서대로 보관한다. 기본 드론도 포함한다. */
     std::vector<Drone> drones;
 
     /** @brief 시나리오에서 맡은 임무 하나와 완료 결과다. */

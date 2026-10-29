@@ -1010,8 +1010,6 @@ void PopulateFinalSnapshot(
         for (const ScenarioDrone& drone : definition.drones)
             appendDrone(drone.name);
 
-    result.finalState = result.drones.front().finalState;
-    result.finalCamera = simulation.Camera();
 }
 
 /** @brief 단일 드론 형식과 이름별 형식에 맞는 비행 상태 오류 문구를 만든다. */
@@ -1095,13 +1093,14 @@ void CheckExpectedCamera(
     const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
+    const simulation::CameraState& primaryCamera = result.drones.front().finalCamera;
     if (definition.expectedCameraStatus
-        && result.finalCamera.status != *definition.expectedCameraStatus)
+        && primaryCamera.status != *definition.expectedCameraStatus)
     {
         result.issues.push_back("최종 카메라 상태가 예상값과 다릅니다.");
     }
     if (definition.expectedFrameCount
-        && result.finalCamera.frameCount != *definition.expectedFrameCount)
+        && primaryCamera.frameCount != *definition.expectedFrameCount)
     {
         result.issues.push_back("카메라 프레임 수가 예상값과 다릅니다.");
     }
