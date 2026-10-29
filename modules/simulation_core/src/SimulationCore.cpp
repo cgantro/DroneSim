@@ -454,12 +454,11 @@ struct SimulationCore::EcsStorage
 
     void SynchronizeCameraPose()
     {
-        for (auto& [id, drone] : drones)
-        {
-            (void)id;
-            EoCameraModel::UpdatePose(
-                drone.get_mut<CameraState>(), drone.get<DroneState>());
-        }
+        world.each(
+            [](CameraState& camera, const DroneState& state)
+            {
+                EoCameraModel::UpdatePose(camera, state);
+            });
     }
 
     bool RemoveDrone(DroneId id)
