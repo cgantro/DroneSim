@@ -546,10 +546,8 @@ void UpdateCollisionAvoidance(
             {
                 if (!firstHasTask && !secondHasTask)
                     continue;
-                // 둘 다 임무 중이면 두 번째 드론만 비켜 한쪽 경로를 유지한다.
-                yieldingDrone = bothDronesHaveTasks
-                    ? &secondName
-                    : (firstHasTask ? &firstName : &secondName);
+                if (!bothDronesHaveTasks)
+                    yieldingDrone = firstHasTask ? &firstName : &secondName;
             }
             else if (firstConnected && firstHasTask)
             {
