@@ -113,8 +113,9 @@ glm::dvec3 ToProjectVector(JPH::Vec3Arg jolt) {
 }
 
 const glm::dquat &ProjectToJoltRotation() {
+  // 벡터 변환 (동, 북, 위) → (동, 위, 남)은 X축 -90도 회전과 같다.
   static const glm::dquat rotation =
-      glm::angleAxis(glm::half_pi<double>(), glm::dvec3{1.0, 0.0, 0.0});
+      glm::angleAxis(-glm::half_pi<double>(), glm::dvec3{1.0, 0.0, 0.0});
   return rotation;
 }
 
@@ -709,11 +710,13 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds) {
           position + orientation * parameters.rotors[rotor].positionMeters;
       bodyInterface.AddForce(body.id, ToJoltVector(force),
                              ToJoltVector(rotorPosition));
-      const double spinSign =
+      // 기체 반작용 토크는 프로펠러 회전 방향과 반대다.
+      const double reactionSign =
           parameters.rotors[rotor].rotation == RotorRotation::CounterClockwise
-              ? 1.0
-              : -1.0;
-      reactionTorqueBody += spinSign * parameters.momentToThrustRatio * thrust;
+              ? -1.0
+              : 1.0;
+      reactionTorqueBody +=
+          reactionSign * parameters.momentToThrustRatio * thrust;
     }
 
     const glm::dvec3 reactionTorque =

@@ -1,4 +1,5 @@
 #include "simulation_core/JoltPhysicsWorld.h"
+#include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "terrain/TerrainGrid.h"
 
@@ -41,9 +42,11 @@ TEST(JoltPhysicsWorldTests, RigidBodyBasics) {
 
   JoltRigidBodyState resetState = restingState;
   resetState.positionMeters = {1.0, 2.0, 3.0};
-  resetState.orientation = glm::angleAxis(0.4, glm::dvec3{0.0, 0.0, 1.0});
+  resetState.orientation =
+      glm::normalize(glm::angleAxis(0.4, glm::dvec3{0.0, 1.0, 0.0}) *
+                     glm::angleAxis(0.2, glm::dvec3{0.0, 0.0, 1.0}));
   resetState.linearVelocityMetersPerSecond = {0.0, 0.0, 0.0};
-  resetState.angularVelocityRadiansPerSecond = {0.0, 0.0, 0.0};
+  resetState.angularVelocityRadiansPerSecond = {0.1, 0.2, 0.3};
   world.SetState(fallingBox, resetState);
   const JoltRigidBodyState restoredState = world.State(fallingBox);
   EXPECT_NEAR(restoredState.positionMeters.x, 1.0, 1e-5);
@@ -51,6 +54,9 @@ TEST(JoltPhysicsWorldTests, RigidBodyBasics) {
   EXPECT_NEAR(restoredState.positionMeters.z, 3.0, 1e-5);
   EXPECT_NEAR(glm::dot(restoredState.orientation, resetState.orientation), 1.0,
               1e-5);
+  EXPECT_NEAR(restoredState.angularVelocityRadiansPerSecond.x, 0.1, 1e-5);
+  EXPECT_NEAR(restoredState.angularVelocityRadiansPerSecond.y, 0.2, 1e-5);
+  EXPECT_NEAR(restoredState.angularVelocityRadiansPerSecond.z, 0.3, 1e-5);
 
   EXPECT_TRUE(world.DestroyBody(fallingBox));
   EXPECT_FALSE(world.DestroyBody(fallingBox));
@@ -168,7 +174,88 @@ TEST(JoltPhysicsWorldTests, X500RotorsProduceHoverAndClimbForces) {
   world.SetMotorTargets(climbingDrone, {900.0, 900.0, 700.0, 700.0});
   for (int step = 0; step < 60; ++step)
     world.StepFixed();
-  EXPECT_GT(world.State(climbingDrone).angularVelocityRadiansPerSecond.z, 0.0);
+  EXPECT_LT(world.State(climbingDrone).angularVelocityRadiansPerSecond.z, 0.0);
+}
+
+TEST(JoltPhysicsWorldTests, FlightControllerFliesTakeoffWaypointAndLanding) {
+  JoltPhysicsWorld world;
+  static_cast<void>(world.AddStaticBox({0.0, 0.0, -0.25}, {20.0, 20.0, 0.25}));
+
+  const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+  JoltBoxDefinition body;
+  body.positionMeters.z =
+      QuadrotorFlightController::groundedModelOriginHeightMeters;
+  body.halfExtentsMeters = parameters.bodySizeMeters * 0.5;
+  const JoltRigidBodyHandle drone = world.CreateQuadrotor(body, parameters);
+
+  DroneState state;
+  state.positionMeters = body.positionMeters;
+  DroneControlState control;
+  control.groundElevationMeters = 0.0;
+
+  const auto tick = [&] {
+    world.SetMotorTargets(drone, QuadrotorFlightController::MotorTargets(
+                                     state, control, parameters));
+    world.StepFixed();
+    const JoltRigidBodyState physicsState = world.State(drone);
+    state.positionMeters = physicsState.positionMeters;
+    state.velocityMetersPerSecond = physicsState.linearVelocityMetersPerSecond;
+    state.orientation = physicsState.orientation;
+    state.angularVelocityRadiansPerSecond =
+        physicsState.angularVelocityRadiansPerSecond;
+    state.motorSpeedsRadiansPerSecond =
+        world.MotorSpeedsRadiansPerSecond(drone);
+    state.yawRadians = DroneModel::YawRadians(state);
+  };
+
+  state.mode = FlightMode::TakingOff;
+  for (int step = 0; step < 360; ++step)
+    tick();
+  EXPECT_NEAR(state.positionMeters.x, 0.0, 0.15);
+  EXPECT_NEAR(state.positionMeters.y, 0.0, 0.15);
+  EXPECT_GT(state.positionMeters.z, 1.0);
+  EXPECT_LT(std::abs(state.positionMeters.z - 1.5), 0.25);
+
+  state.mode = FlightMode::FollowingWaypoint;
+  control.waypointMeters = {2.0, 0.0, 1.5};
+  const auto waypointTargets =
+      QuadrotorFlightController::MotorTargets(state, control, parameters);
+  EXPECT_GT(waypointTargets[1] * waypointTargets[1] +
+                waypointTargets[3] * waypointTargets[3],
+            waypointTargets[0] * waypointTargets[0] +
+                waypointTargets[2] * waypointTargets[2]);
+  tick();
+  EXPECT_GT(state.orientation.y, 0.0);
+  for (int step = 1; step < 60; ++step)
+    tick();
+  EXPECT_GT(state.positionMeters.x, 0.0);
+  EXPECT_GT(state.orientation.y, 0.0);
+  for (int step = 60; step < 900; ++step)
+    tick();
+  EXPECT_NEAR(state.positionMeters.x, control.waypointMeters.x, 0.3);
+  EXPECT_NEAR(state.positionMeters.y, control.waypointMeters.y, 0.3);
+  EXPECT_NEAR(state.positionMeters.z, control.waypointMeters.z, 0.3);
+  EXPECT_LT(glm::length(control.waypointMeters - state.positionMeters), 0.3);
+
+  state.mode = FlightMode::Landing;
+  for (int step = 0; step < 480; ++step)
+    tick();
+  EXPECT_NEAR(state.positionMeters.z,
+              QuadrotorFlightController::groundedModelOriginHeightMeters, 0.15);
+}
+
+TEST(JoltPhysicsWorldTests, RotorDifferentialTiltsTowardPositiveEast) {
+  JoltPhysicsWorld world;
+  const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+  JoltBoxDefinition body;
+  body.positionMeters.z = 20.0;
+  body.halfExtentsMeters = parameters.bodySizeMeters * 0.5;
+  const auto drone = world.CreateQuadrotor(body, parameters);
+  world.SetInitialMotorSpeeds(drone, {500.0, 600.0, 500.0, 600.0});
+  world.StepFixed();
+  const JoltRigidBodyState state = world.State(drone);
+  EXPECT_GT(state.angularVelocityRadiansPerSecond.y, 0.0);
+  EXPECT_GT(state.orientation.y, 0.0);
 }
 
 TEST(JoltPhysicsWorldTests, RejectsInvalidOrInapplicableOperations) {
