@@ -851,7 +851,7 @@ void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
         << (surveyResult.issues.empty() ? "" : surveyResult.issues.front());
     ASSERT_TRUE(surveyResult.mission.has_value());
     EXPECT_TRUE(surveyResult.mission->IsPassed());
-    EXPECT_DOUBLE_EQ(surveyResult.mission->CoveragePercent(), 100.0);
+    EXPECT_DOUBLE_EQ(surveyResult.mission->WaypointProgressPercent(), 100.0);
     ASSERT_EQ(surveyResult.mission->tasks.size(), 4);
     for (std::size_t index = 0; index < surveyResult.mission->tasks.size(); ++index)
     {

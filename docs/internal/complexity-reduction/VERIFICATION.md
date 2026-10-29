@@ -494,3 +494,9 @@
 - Windows Release headless·시나리오 시험 빌드 성공, 전체 CTest 28/28 통과.
 - `two-point-survey.json` headless 실행에서 `passed: true`, 작업 2개 결과 확인.
 - 시나리오 입력·결과·예시·시험 코드에 남은 `role` 참조가 없음을 검색으로 확인했다.
+
+## 경유점 진행률 이름 정리 — 2026-10-30
+
+- Windows Release headless·시나리오 시험 빌드 성공, 전체 CTest 28/28 통과.
+- 두 지점 headless 실행에서 `outcome: passed`, `waypoint_progress_percent: 100` 확인.
+- 기존의 모호한 `coverage_percent` 출력은 제거했다.

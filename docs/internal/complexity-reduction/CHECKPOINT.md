@@ -422,3 +422,8 @@
 
 - 실행에 쓰이지 않던 `role` 입력값을 없앴다. 시작·완료 로그는 별도 역할 대신 이미 필수인 작업 이름을 표시한다.
 - Windows Release 빌드, 전체 CTest 28/28, 두 지점 headless 정상 임무 통과.
+
+## 경유점 진행률 이름 바로잡기 — 2026-10-30
+
+- 결과값은 실제 영상·표면 촬영 범위가 아니라 방문한 경유점 비율이었다. 계산은 유지하고 메서드와 headless JSON 항목을 `waypoint_progress_percent`로 바꿨다.
+- Windows Release 빌드, 전체 CTest 28/28, 두 지점 headless 임무의 진행률 100% 확인.

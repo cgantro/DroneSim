@@ -120,7 +120,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
             {"completed_task_count", result.mission->CompletedTaskCount()},
             {"task_count", result.mission->tasks.size()},
             {"completion_percent", result.mission->CompletionPercent()},
-            {"coverage_percent", result.mission->CoveragePercent()},
+            {"waypoint_progress_percent", result.mission->WaypointProgressPercent()},
             {"started_tick", result.mission->startedTick},
             {"completed_tick", completedTick},
             {"completion_time_seconds", completedTick
