@@ -30,6 +30,17 @@ double Percentile(const std::vector<double>& sortedDurations, double fraction)
     return sortedDurations[std::min(index, sortedDurations.size() - 1U)];
 }
 
+nlohmann::json SummarizeDurations(std::vector<double> durations)
+{
+    std::sort(durations.begin(), durations.end());
+    return {
+        {"p50", Percentile(durations, 0.50)},
+        {"p95", Percentile(durations, 0.95)},
+        {"p99", Percentile(durations, 0.99)},
+        {"maximum", durations.empty() ? 0.0 : durations.back()},
+        {"samples", durations.size()}};
+}
+
 std::filesystem::path DefaultBenchmarkOutputPath()
 {
     if (const char* outputPath = std::getenv("AEROSIMLAB_BENCHMARK_OUTPUT");
@@ -47,17 +58,6 @@ std::filesystem::path DefaultBenchmarkOutputPath()
 
 }
 
-nlohmann::json SummarizeDurations(std::vector<double> durations)
-{
-    std::sort(durations.begin(), durations.end());
-    return {
-        {"p50", Percentile(durations, 0.50)},
-        {"p95", Percentile(durations, 0.95)},
-        {"p99", Percentile(durations, 0.99)},
-        {"maximum", durations.empty() ? 0.0 : durations.back()},
-        {"samples", durations.size()}};
-}
-
 nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measurements)
 {
     const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
@@ -68,10 +68,6 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
         }));
 
     nlohmann::json report{
-        {"configuration", std::string(measurements.windowVisible
-            ? "visible OpenGL window with VSync off; "
-            : "hidden OpenGL window with VSync off; ")
-            + "one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes"},
         {"source_revision", measurements.sourceRevision},
         {"window_visible", measurements.windowVisible},
         {"framebuffer", {

@@ -22,6 +22,9 @@ namespace aerosimlab::simulator
 {
 namespace
 {
+constexpr communication::NetworkNodeId groundControlNodeId =
+    std::numeric_limits<communication::NetworkNodeId>::max();
+
 void LoadWindowsKoreanFont()
 {
     const char* windowsDirectory = std::getenv("WINDIR");
@@ -41,6 +44,13 @@ void LoadWindowsKoreanFont()
 std::string DroneName(simulation::DroneId id)
 {
     return "드론 " + std::to_string(id);
+}
+
+std::string NetworkNodeName(communication::NetworkNodeId id)
+{
+    if (id == groundControlNodeId)
+        return "지상통제소";
+    return DroneName(id);
 }
 
 const char* MeshEventLabel(communication::MeshEventKind kind)
@@ -306,8 +316,8 @@ void DrawFlightStatusPanel(
                 const simulation::DroneId droneId = droneIds[
                     static_cast<std::size_t>(selectedFaultSource)];
                 const bool radioEnabled = formationNetwork->IsNodeRadioEnabled(droneId);
-                const bool linked = formationNetwork->HasDirectLink(droneId,
-                    std::numeric_limits<communication::NetworkNodeId>::max());
+                const bool linked = formationNetwork->HasDirectLink(
+                    droneId, groundControlNodeId);
                 ImGui::Text("지상통제 연결: %s",
                     radioEnabled && linked ? "직접 연결" : "끊김");
                 if (radioEnabled)
@@ -331,8 +341,8 @@ void DrawFlightStatusPanel(
                 const auto& event = events[events.size() - 1U - offset];
                 ImGui::Text("%.2f초  %s  %s → %s",
                     static_cast<double>(event.tick) / 60.0,
-                    MeshEventLabel(event.kind), DroneName(event.source).c_str(),
-                    DroneName(event.destination).c_str());
+                    MeshEventLabel(event.kind), NetworkNodeName(event.source).c_str(),
+                    NetworkNodeName(event.destination).c_str());
             }
         }
         ImGui::Separator();

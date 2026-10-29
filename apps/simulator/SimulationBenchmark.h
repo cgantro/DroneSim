@@ -17,9 +17,6 @@ struct HudGpuTiming
     double executionMicroseconds = 0.0;
 };
 
-/** @brief 실행 시간 표본에서 p50·p95·p99와 표본 수를 계산한다. */
-nlohmann::json SummarizeDurations(std::vector<double> durations);
-
 /** @brief 화면 성능 기록에 들어갈 한 번의 실행 측정값이다. */
 struct ViewerBenchmarkMeasurements
 {
