@@ -406,3 +406,8 @@
 
 - 진행 중인 작업을 찾는 조건을 공통 함수로 모았다. 드론 쌍의 위험 계산과 회피 명령 적용이 같은 작업 기준을 사용한다.
 - Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+
+## 드론별 회피 입력 재사용 — 2026-10-30
+
+- 충돌 회피에서 드론 쌍을 검사할 때마다 연결 상태와 현재 임무를 다시 검색하던 처리를 없앴다. 회피 갱신 시작 때 드론별 정보를 한 번만 모아 쌍별 계산과 회피 명령에서 재사용한다.
+- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.

@@ -535,23 +535,34 @@ void UpdateCollisionAvoidance(
     const CollisionAvoidanceSettings& settings = *definition.collisionAvoidance;
     std::unordered_map<std::string, glm::dvec3> avoidanceTargets;
     DroneNameSet currentlyAvoiding;
+    std::vector<bool> droneConnected;
+    std::vector<const ScenarioResult::MissionTask*> activeTasks;
+    droneConnected.reserve(definition.drones.size());
+    activeTasks.reserve(definition.drones.size());
+    for (const ScenarioDrone& drone : definition.drones)
+    {
+        const bool connected = IsConnected(observations, drone.name);
+        droneConnected.push_back(connected);
+        const ScenarioResult::MissionTask* task = connected
+            ? FindActiveMissionTask(*mission, drone.name) : nullptr;
+        if (task && !CanReceiveWaypoint(simulation.State(droneIds.at(drone.name)).mode))
+            task = nullptr;
+        activeTasks.push_back(task);
+    }
+
     for (std::size_t firstIndex = 0; firstIndex < definition.drones.size(); ++firstIndex)
     {
         const std::string& firstName = definition.drones[firstIndex].name;
-        const bool firstConnected = IsConnected(observations, firstName);
-        const ScenarioResult::MissionTask* firstTask = firstConnected
-            ? FindActiveMissionTask(*mission, firstName) : nullptr;
-        const bool firstHasTask = firstTask != nullptr
-            && CanReceiveWaypoint(simulation.State(droneIds.at(firstName)).mode);
+        const bool firstConnected = droneConnected[firstIndex];
+        const ScenarioResult::MissionTask* firstTask = activeTasks[firstIndex];
+        const bool firstHasTask = firstTask != nullptr;
         for (std::size_t secondIndex = firstIndex + 1;
             secondIndex < definition.drones.size(); ++secondIndex)
         {
             const std::string& secondName = definition.drones[secondIndex].name;
-            const bool secondConnected = IsConnected(observations, secondName);
-            const ScenarioResult::MissionTask* secondTask = secondConnected
-                ? FindActiveMissionTask(*mission, secondName) : nullptr;
-            const bool secondHasTask = secondTask != nullptr
-                && CanReceiveWaypoint(simulation.State(droneIds.at(secondName)).mode);
+            const bool secondConnected = droneConnected[secondIndex];
+            const ScenarioResult::MissionTask* secondTask = activeTasks[secondIndex];
+            const bool secondHasTask = secondTask != nullptr;
             const bool bothDronesHaveTasks = firstConnected && secondConnected
                 && firstHasTask && secondHasTask;
             const std::string* yieldingDrone = nullptr;
@@ -699,9 +710,10 @@ void UpdateCollisionAvoidance(
         }
     }
 
-    for (const std::string& droneName : currentlyAvoiding)
+    for (std::size_t droneIndex = 0; droneIndex < definition.drones.size(); ++droneIndex)
     {
-        if (!FindActiveMissionTask(*mission, droneName))
+        const std::string& droneName = definition.drones[droneIndex].name;
+        if (!currentlyAvoiding.contains(droneName) || activeTasks[droneIndex] == nullptr)
             continue;
 
         // 충돌 지점을 지나서 비켜서도록 목표를 잡고, 위험이 끝날 때까지 유지한다.
