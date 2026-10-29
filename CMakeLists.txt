@@ -598,12 +598,6 @@ if(BUILD_TESTING)
     LABELS "INTEGRATION;simulation"
     PASS_REGULAR_EXPRESSION "lead.*scout")
 
-  add_test(NAME HeadlessFormationOutageSmoke
-    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/leader-following-outage.json")
-  set_tests_properties(HeadlessFormationOutageSmoke PROPERTIES
-    LABELS "INTEGRATION;simulation"
-    PASS_REGULAR_EXPRESSION "위치 공유가 끊겼습니다")
-
   add_test(NAME HeadlessCooperativeMissionSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/two-point-survey.json")
   set_tests_properties(HeadlessCooperativeMissionSmoke PROPERTIES

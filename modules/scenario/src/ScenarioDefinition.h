@@ -53,20 +53,6 @@ struct ScenarioDrone
     std::optional<CameraModel> cameraModel;
 };
 
-struct FormationOutage
-{
-    std::uint64_t startTick;
-    std::uint64_t endTick;
-};
-
-struct FormationLink
-{
-    std::string leaderName;
-    std::string followerName;
-    glm::dvec3 offsetMeters;
-    std::vector<FormationOutage> outages;
-};
-
 struct DroneCommunicationOutage
 {
     enum class OnTimeout
@@ -116,7 +102,6 @@ struct ScenarioDefinition
     std::string primaryDroneName;
     CameraModel defaultCameraModel;
     std::vector<ScheduledCommand> commands;
-    std::vector<FormationLink> formationLinks;
     std::vector<DroneCommunicationOutage> communicationOutages;
     std::optional<CollisionAvoidanceSettings> collisionAvoidance;
     std::optional<EnergyModelSettings> energyModel;

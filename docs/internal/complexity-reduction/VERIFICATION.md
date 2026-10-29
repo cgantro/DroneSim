@@ -1,5 +1,11 @@
 # 빌드와 시험 기록
 
+## 시나리오의 리더 추종 링크 모의 제거 — 2026-10-29
+
+- JSON 파서·실행기의 리더 추종 링크와 별도 단절 구간, 전용 사례를 제거했다. 직접 통신 장애와 화면 앱의 편대 경로에는 손대지 않았다.
+- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과. 기존 ViewerSmoke도 포함됐다.
+- 처음에는 Visual Studio 개발자 환경을 불러오지 않은 셸에서 MSVC 표준 헤더를 찾지 못했다. 개발자 명령 환경을 불러온 뒤 다시 빌드해 성공했다.
+
 ## 편대 임무 시작 조건 통합 — 2026-10-29
 
 - 두 임무 시작 함수에 반복되던 진행 단계·정찰 지점·진행 중 정찰·드론 착륙 검사를 `FleetIsReadyForMission()`으로 모았다. 전체 임무의 드론 4대 조건은 별도 검사로 남겼다. 복귀 가능 여부의 중복 단계 검사는 `CompleteFleetMissionIsActive()` 호출로 통합했다.

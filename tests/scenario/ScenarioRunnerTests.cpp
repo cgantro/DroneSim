@@ -767,35 +767,6 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
     EXPECT_EQ(communicationFaults.finalState.mode, FlightMode::Hovering);
 }
 
-void Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward()
-{
-    constexpr std::string_view scenario = R"json(
-    {"version":1,"dynamics":"kinematic","ticks":300,
-     "drones":[
-       {"name":"lead","initial_position_meters":[0,0,0]},
-       {"name":"wing","initial_position_meters":[-2,0,0]}],
-     "formation_links":[
-       {"leader":"lead","follower":"wing","offset_meters":[-2,0,0],
-        "outages":[{"start_tick":120,"end_tick":180}]}],
-     "commands":[
-       {"tick":0,"drone":"lead","type":"takeoff"},
-       {"tick":0,"drone":"wing","type":"takeoff"},
-       {"tick":90,"drone":"lead","type":"set_waypoint","position_meters":[4,0,1.5]}],
-     "expected":{"tolerance_meters":0.05,"minimum_drone_separation_meters":1.9,
-       "drones":[
-         {"name":"lead","mode":"hovering","position_meters":[4,0,1.5]},
-         {"name":"wing","mode":"hovering","position_meters":[2,0,1.5]}]}}
-    )json";
-
-    const ScenarioResult result = RunScenario(scenario);
-    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
-    ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
-    EXPECT_GT(*result.minimumDroneSeparationMeters, 1.9);
-    ASSERT_EQ(result.eventLog.size(), 5);
-    EXPECT_NE(result.eventLog[3].find("위치 공유가 끊겼습니다"), std::string::npos);
-    EXPECT_NE(result.eventLog[4].find("위치 공유가 복구됐습니다"), std::string::npos);
-}
-
 void Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones()
 {
     constexpr std::string_view scenario = R"json(
@@ -1128,7 +1099,6 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_FALSE(TryParseFlightMode("unknown_mode").has_value());
 
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder());
-    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios());

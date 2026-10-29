@@ -26,8 +26,6 @@ using namespace aerosimlab::simulation;
 namespace
 {
 using detail::ExpectedDrone;
-using detail::FormationLink;
-using detail::FormationOutage;
 using detail::ScenarioDefinition;
 using detail::ScenarioDrone;
 using detail::CollisionAvoidanceSettings;
@@ -532,63 +530,6 @@ void UpdateMissionCommands(
             task.failed = true;
             result.issues.push_back(task.droneName + " 드론에 임무 목표를 전달하지 못했습니다.");
         }
-    }
-}
-
-/** @brief 연결 단절·복구 시점을 기록하고 해당 Tick의 위치 공유 가능 여부를 반환한다. */
-bool UpdateFormationOutageState(
-    std::uint64_t tick,
-    const FormationLink& link,
-    ScenarioResult& result)
-{
-    bool linkAvailable = true;
-    for (const FormationOutage& outage : link.outages)
-    {
-        if (tick == outage.startTick)
-        {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + link.leaderName + " 드론과 " + link.followerName
-                + " 드론 사이의 위치 공유가 끊겼습니다.");
-        }
-        if (tick == outage.endTick)
-        {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + link.leaderName + " 드론과 " + link.followerName
-                + " 드론 사이의 위치 공유가 복구됐습니다.");
-        }
-        if (tick >= outage.startTick && tick < outage.endTick)
-            linkAvailable = false;
-    }
-    return linkAvailable;
-}
-
-void UpdateFormationLinks(
-    std::uint64_t tick,
-    const std::vector<FormationLink>& formationLinks,
-    SimulationCore& simulation,
-    const DroneIds& droneIds,
-    const DroneObservations& observations,
-    ScenarioResult& result)
-{
-    for (const FormationLink& link : formationLinks)
-    {
-        if (!UpdateFormationOutageState(tick, link, result))
-            continue;
-        if (!IsConnected(observations, link.leaderName)
-            || !IsConnected(observations, link.followerName))
-            continue;
-        const DroneState& leaderState = simulation.State(droneIds.at(link.leaderName));
-        const DroneState& followerState = simulation.State(droneIds.at(link.followerName));
-        if (!CanReceiveWaypoint(leaderState.mode)
-            || !CanReceiveWaypoint(followerState.mode))
-            continue;
-
-        const CommandResult followResult = simulation.Apply(
-            droneIds.at(link.followerName),
-            {DroneCommand::Kind::SetWaypoint, leaderState.positionMeters + link.offsetMeters});
-        if (followResult != CommandResult::Accepted)
-            result.issues.push_back(link.followerName
-                + " 드론이 공유 위치를 따라가지 못했습니다.");
     }
 }
 
@@ -1384,8 +1325,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 simulation, droneIds, homePositions, definition, result);
         }
         UpdateMissionCommands(tick, result.mission, simulation, droneIds,
-            observations, result);
-        UpdateFormationLinks(tick, definition.formationLinks, simulation, droneIds,
             observations, result);
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
             droneIds, observations, dronesAvoiding, activeAvoidanceDirections,

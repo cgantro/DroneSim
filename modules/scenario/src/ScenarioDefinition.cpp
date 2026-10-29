@@ -338,94 +338,6 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
     return drones;
 }
 
-std::vector<FormationOutage> ReadFormationOutages(
-    const Json& link, std::uint64_t tickCount)
-{
-    const auto outages = link.find("outages");
-    if (outages == link.end())
-        return {};
-    if (!outages->is_array())
-        throw std::invalid_argument("formation link의 outages는 배열이어야 합니다.");
-
-    std::vector<FormationOutage> result;
-    std::uint64_t previousEndTick = 0;
-    bool hasPreviousOutage = false;
-    for (const Json& outage : *outages)
-    {
-        if (!outage.is_object())
-            throw std::invalid_argument("각 통신 장애 구간은 JSON 객체여야 합니다.");
-        const std::uint64_t startTick = ReadUnsigned(
-            Required(outage, "start_tick"), "start_tick");
-        const std::uint64_t endTick = ReadUnsigned(
-            Required(outage, "end_tick"), "end_tick");
-        if (startTick >= endTick || endTick > tickCount
-            || (hasPreviousOutage && startTick < previousEndTick))
-        {
-            throw std::invalid_argument(
-                "통신 장애 구간은 겹치지 않는 오름차순 범위이며 시나리오 안에 있어야 합니다.");
-        }
-        result.push_back({startTick, endTick});
-        previousEndTick = endTick;
-        hasPreviousOutage = true;
-    }
-    return result;
-}
-
-FormationLink ReadFormationLink(
-    const Json& item,
-    std::uint64_t tickCount,
-    const std::unordered_set<std::string>& droneNames)
-{
-    if (!item.is_object())
-        throw std::invalid_argument("각 formation link는 JSON 객체여야 합니다.");
-    const Json& leaderValue = Required(item, "leader");
-    const Json& followerValue = Required(item, "follower");
-    if (!leaderValue.is_string() || !followerValue.is_string())
-        throw std::invalid_argument("formation link의 leader와 follower는 이름 문자열이어야 합니다.");
-
-    std::string leader = leaderValue.get<std::string>();
-    std::string follower = followerValue.get<std::string>();
-    if (!droneNames.contains(leader) || !droneNames.contains(follower)
-        || leader == follower)
-    {
-        throw std::invalid_argument(
-            "formation link는 서로 다른 드론을 지정하고, follower마다 하나만 설정해야 합니다.");
-    }
-
-    return {
-        std::move(leader),
-        std::move(follower),
-        ReadVector(Required(item, "offset_meters"), "offset_meters"),
-        ReadFormationOutages(item, tickCount)};
-}
-
-std::vector<FormationLink> ReadFormationLinks(
-    const Json& document,
-    std::uint64_t tickCount,
-    const std::unordered_set<std::string>& droneNames)
-{
-    const auto found = document.find("formation_links");
-    if (found == document.end())
-        return {};
-    if (!found->is_array() || found->empty())
-        throw std::invalid_argument("formation_links는 한 개 이상의 링크를 적은 배열이어야 합니다.");
-
-    std::vector<FormationLink> links;
-    std::unordered_set<std::string> followers;
-    links.reserve(found->size());
-    for (const Json& item : *found)
-    {
-        FormationLink link = ReadFormationLink(item, tickCount, droneNames);
-        if (!followers.insert(link.followerName).second)
-        {
-            throw std::invalid_argument(
-                "formation link는 서로 다른 드론을 지정하고, follower마다 하나만 설정해야 합니다.");
-        }
-        links.push_back(std::move(link));
-    }
-    return links;
-}
-
 std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
     const Json& document,
     std::uint64_t tickCount,
@@ -853,31 +765,6 @@ Json ParseScenarioDocument(std::string_view jsonText)
     return document;
 }
 
-void ValidateFormationLinkCount(const ScenarioDefinition& definition)
-{
-    if (!definition.formationLinks.empty() && definition.drones.size() < 2)
-        throw std::invalid_argument("formation_links를 쓰려면 drones에 두 대 이상을 적어야 합니다.");
-}
-
-void ValidateFormationMissionAssignment(const ScenarioDefinition& definition)
-{
-    if (!definition.mission)
-        return;
-
-    for (const FormationLink& link : definition.formationLinks)
-    {
-        const bool followerHasMission = std::any_of(
-            definition.mission->tasks.begin(), definition.mission->tasks.end(),
-            [&link](const ScenarioResult::MissionTask& task)
-            {
-                return task.droneName == link.followerName;
-            });
-        if (followerHasMission)
-            throw std::invalid_argument(
-                "같은 드론에 formation link와 mission 목표를 함께 지정할 수 없습니다.");
-    }
-}
-
 void ReadEnvironmentSettings(const Json& document, ScenarioDefinition& definition)
 {
     definition.dynamics = ReadDynamics(document);
@@ -1229,11 +1116,8 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     definition.commands = ReadCommands(
         Required(document, "commands"), definition.tickCount,
         definition.primaryDroneName, droneNames);
-    definition.formationLinks = ReadFormationLinks(
-        document, definition.tickCount, droneNames);
     definition.communicationOutages = ReadDroneCommunicationOutages(
         document, definition.tickCount, droneNames);
-    ValidateFormationLinkCount(definition);
 
     std::vector<std::string> droneOrder;
     if (definition.drones.empty())
@@ -1248,7 +1132,6 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     ReadTrajectorySettings(document, definition);
     definition.mission = ReadMission(
         document, definition.tickCount, droneNames, droneOrder);
-    ValidateFormationMissionAssignment(definition);
 
     ReadEnvironmentSettings(document, definition);
     for (const ScenarioDrone& drone : definition.drones)

@@ -145,7 +145,7 @@ struct ScenarioResult
 /**
  * @brief JSON 문자열에 적힌 명령을 고정 tick에 적용하고 예상 결과와 비교한다.
  * @details 형식 버전은 1이다. 선택한 드론 목록이 있으면 이름별 위치와 명령을 시험하고, 없으면 기본 드론 한 대를 실행한다.
- * formation_links는 위치 공유 장애를, mission은 드론별 역할·목표·기한과 완료 판정을 다룬다.
+ * communication_outages는 상태 보고 단절을, mission은 드론별 역할·목표·기한과 완료 판정을 다룬다.
  * 잘못된 문법이나 빠진 필수 값은 std::invalid_argument로 알린다.
  */
 [[nodiscard]] ScenarioResult RunScenario(std::string_view jsonText);

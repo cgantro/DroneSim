@@ -100,7 +100,7 @@
 - `RunScenario`의 제품 실행 호출자는 `apps/headless/main.cpp`다. 자동 시험은 `tests/scenario/ScenarioRunnerTests.cpp`에서 직접 부른다. 검색상 `apps/simulator`는 이 실행기를 부르지 않는다.
 - 시뮬레이터의 M01·M02·M03 임무 흐름은 `apps/simulator/AeroSimLabAppMission.cpp`에서 별도로 시작·진행한다. 따라서 JSON Runner의 임무 시험이 화면에서 쓰는 임무 실행 코드를 검증하지 않는다.
 - Runner의 통신 장애도 시뮬레이터가 쓰는 가상 통신망과 다른 코드다. 한쪽의 단절·복구 시험이 다른 쪽의 동작을 보증하지 않는다.
-- 현재 `scenarios/`에는 JSON 9개가 있다. CMake의 headless 연기 시험은 `rigid-body-flight`, `fault-injection`, `independent-flight`, `leader-following-outage`, `two-point-survey` 5개를 실행한다. `physical-model-override`, `four-drone-survey-outage`, `low-battery-return`은 GoogleTest에서 자료 파일로 읽는다. `normal-flight`는 코드나 CMake에서 참조를 찾지 못했다. 수동 예제로 쓰는지는 확인되지 않아 삭제 대상으로 단정하지 않는다.
+- 감사 뒤 `formation_links` 기능과 전용 사례를 제거했다. 현재 `scenarios/`에는 JSON 8개가 있고, CMake headless 연기 시험은 `rigid-body-flight`, `fault-injection`, `independent-flight`, `two-point-survey` 4개를 실행한다. `physical-model-override`, `four-drone-survey-outage`, `low-battery-return`은 GoogleTest에서 자료 파일로 읽는다. `normal-flight`는 코드나 CMake에서 참조를 찾지 못했다. 수동 예제로 쓰는지는 확인되지 않아 삭제 대상으로 단정하지 않는다.
 
 ### Sol 판단
 
@@ -110,7 +110,13 @@
 
 1. 제품 목표에서 남긴 정상 4대 임무와 직접 링크 차단/복구에 필요한 JSON 항목만 따로 표시한다.
 2. 그 항목이 앱과 Runner에서 각각 어떤 구현을 타는지 구분한다. 공통 코드로 묶을 수 있는지는 실제 같은 규칙인지 확인한 뒤 판단한다.
-3. 카메라 이벤트와 리더-추종자 위치 공유는 기본 임무에 필요한지 따로 판정한다. 저배터리 귀환은 현재 프로젝트 범위에 배터리 모델이 남아 있으므로 즉시 제거하지 않는다. 범위에서 제외하기로 한 항목은 관련 JSON·검증·출력까지 함께 정리하고, 물리 검증용 설정은 보존한다.
+3. 카메라 이벤트가 기본 임무에 필요한지 따로 판정한다. 저배터리 귀환은 현재 프로젝트 범위에 배터리 모델이 남아 있으므로 즉시 제거하지 않는다. 범위에서 제외하기로 한 항목은 관련 JSON·검증·출력까지 함께 정리하고, 물리 검증용 설정은 보존한다.
 4. 테스트는 개수를 늘리지 않고 현재 `CoreScenarios`를 물리·임무·통신 핵심 묶음으로 나눠 실패 지점을 알아볼 수 있게 한다.
 
 `ScenarioRunner`와 앱 임무 코드를 지금 한 엔진으로 합치는 것은 권하지 않는다. Runner의 통신 모델은 앱과 다르고, 앱 경로는 실시간 입력·UI·실제 가상망 상태를 사용한다. 먼저 공통으로 검증할 임무 규칙을 정해야 불필요한 범용 계층 없이 중복을 줄일 수 있다.
+
+## 리더 추종 링크 모의 제거 — 2026-10-29
+
+- JSON의 `formation_links`는 leader 위치에 오프셋을 더해 follower에게 매 Tick 새 경유점을 주고, 별도 링크 단절 구간을 적용했다. 시뮬레이터 앱이나 다른 시나리오가 이 기능을 부르지 않았고, 직접 통신 단절 모의도 따로 있었다.
+- 정의 구조, JSON 파서·검증, Tick 처리, 전용 시험, headless 연기 시험과 `leader-following-outage.json`을 함께 제거했다. 총 268줄을 덜었다. 직접 상태 보고 장애(`communication_outages`)와 앱의 V자 편대 경로는 변경하지 않았다.
+- Release의 `aerosimlab_headless`, `aerosimlab_scenario_tests` 타깃 빌드 성공. 전체 CTest 28/28 통과. 시나리오와 앱 임무가 별도 구현이라는 기존 경계는 그대로라서, 앱 임무 동작이 이 시험으로 검증된다고 볼 수 없다.
