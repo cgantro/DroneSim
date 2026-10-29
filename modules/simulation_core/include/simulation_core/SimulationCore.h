@@ -86,13 +86,9 @@ public:
     /** @brief 지정한 드론에 명령을 보내고 적용 결과를 반환한다. */
     [[nodiscard]] CommandResult Apply(DroneId droneId, const DroneCommand& command) noexcept;
 
-    /** @brief 시작 위치와 방향을 지정해 드론 하나를 추가한다. 방향은 월드 Z축 기준 라디안이다. */
-    [[nodiscard]] DroneId AddDrone(
-        const glm::dvec3& positionMeters, double yawRadians = 0.0);
-
-    /** @brief 지형 높이가 있는 환경에서 지면 높이까지 정해 드론을 추가한다. */
+    /** @brief 드론을 추가한다. 방향과 지면 높이는 월드 Z축 기준 라디안과 미터 단위다. */
     [[nodiscard]] DroneId AddDrone(const glm::dvec3& positionMeters,
-        double yawRadians, double groundElevationMeters);
+        double yawRadians = 0.0, double groundElevationMeters = 0.0);
 
     /** @brief 첫 Tick 전에 주 드론의 시작 위치와 방향을 지정한다. */
     void SetInitialPose(const glm::dvec3& positionMeters, double yawRadians = 0.0);

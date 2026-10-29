@@ -702,11 +702,6 @@ CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command
     return result;
 }
 
-DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters, double yawRadians)
-{
-    return AddDrone(positionMeters, yawRadians, 0.0);
-}
-
 DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters,
     double yawRadians, double groundElevationMeters)
 {
