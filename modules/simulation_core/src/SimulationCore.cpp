@@ -146,7 +146,8 @@ struct SimulationCore::EcsStorage
                     for (const std::size_t row : iterator)
                     {
                         const glm::dvec3 previousPosition = states[row].positionMeters;
-                        DroneModel::AdvanceOneTick(states[row], controls[row]);
+                        DroneModel::AdvanceOneTick(
+                            states[row], controls[row], windVelocityMetersPerSecond);
                         ResolveKinematicContacts(
                             states[row], controls[row], previousPosition);
                     }
@@ -394,7 +395,6 @@ struct SimulationCore::EcsStorage
         const InitialPose initialPose{positionMeters, yawRadians, groundElevationMeters};
         DroneState initialState;
         DroneControlState initialControl;
-        initialControl.windVelocityMetersPerSecond = windVelocityMetersPerSecond;
         ApplyInitialPose(initialState, initialControl, initialPose);
         flecs::entity drone = world.entity();
 #if !defined(__EMSCRIPTEN__)
@@ -513,8 +513,6 @@ struct SimulationCore::EcsStorage
             drone.get_mut<DroneState>(),
             drone.get_mut<DroneControlState>(),
             initialPose);
-        drone.get_mut<DroneControlState>().windVelocityMetersPerSecond =
-            windVelocityMetersPerSecond;
 #if !defined(__EMSCRIPTEN__)
         if (dynamics == SimulationDynamics::RigidBody)
             ResetPhysicsBody(drone);
@@ -1007,11 +1005,6 @@ void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
         ecs_->physics->SetWindVelocityMetersPerSecond(velocity);
 #endif
     ecs_->windVelocityMetersPerSecond = velocity;
-    for (auto& [id, drone] : ecs_->drones)
-    {
-        (void)id;
-        drone.get_mut<DroneControlState>().windVelocityMetersPerSecond = velocity;
-    }
 }
 
 void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept

@@ -182,11 +182,12 @@ CommandResult DroneModel::Apply(
     return CommandResult::InvalidValue;
 }
 
-void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control) noexcept
+void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control,
+    const glm::dvec3& windVelocityMetersPerSecond) noexcept
 {
     constexpr double step = fixedStepSeconds;
     constexpr double windInfluence = 0.18;
-    const glm::dvec3 windDrift = control.windVelocityMetersPerSecond * windInfluence;
+    const glm::dvec3 windDrift = windVelocityMetersPerSecond * windInfluence;
     const bool wasAirborne = state.mode != FlightMode::Grounded;
     const double groundElevation = control.groundElevationMeters;
     const double takeoffTarget = groundElevation + takeoffHeightMeters;

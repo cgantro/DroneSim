@@ -95,6 +95,26 @@ void Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick()
     EXPECT_FALSE(simulation.Battery(droneId).IsReturningForLowBattery());
 }
 
+void Verify_KinematicWindIsAppliedFromTheSimulationEnvironment()
+{
+    SimulationCore calm{SimulationDynamics::Kinematic};
+    SimulationCore windy{SimulationDynamics::Kinematic};
+    DroneState initialState;
+    initialState.mode = FlightMode::Flying;
+    calm.SetInitialState(calm.PrimaryDroneId(), initialState);
+    windy.SetInitialState(windy.PrimaryDroneId(), initialState);
+    windy.SetWindVelocityMetersPerSecond({2.0, 0.0, 0.0});
+
+    for (int tick = 0; tick < 60; ++tick)
+    {
+        calm.AdvanceOneTick();
+        windy.AdvanceOneTick();
+    }
+
+    EXPECT_DOUBLE_EQ(calm.State().positionMeters.x, 0.0);
+    EXPECT_GT(windy.State().positionMeters.x, 0.1);
+}
+
 }
 
 void Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks()
@@ -472,6 +492,7 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_ConsumesOnlyWhileFlyingAndClampsAtZero());
     EXPECT_NO_FATAL_FAILURE(Verify_BatteryModel_RejectsInvalidSettings());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick());
+    EXPECT_NO_FATAL_FAILURE(Verify_KinematicWindIsAppliedFromTheSimulationEnvironment());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks());
     EXPECT_NO_FATAL_FAILURE(Verify_KinematicDroneStopsAtStaticBuildings());
     EXPECT_NO_FATAL_FAILURE(Verify_KinematicDroneKeepsItsBodyAboveTerrain());
