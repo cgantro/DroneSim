@@ -514,7 +514,6 @@ void UpdateCollisionAvoidance(
     SimulationCore& simulation,
     const ScenarioDrones& drones,
     DroneNameSet& dronesAvoiding,
-    std::unordered_map<std::string, glm::dvec3>& activeAvoidanceDirections,
     std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
     ScenarioResult& result)
 {
@@ -559,10 +558,10 @@ void UpdateCollisionAvoidance(
             {
                 if (!firstHasTask && !secondHasTask)
                     continue;
-                // 임무가 없는 연결 드론도 장애물로 본다. 둘 다 임무 중이면
-                // 서로 반대 방향으로 비켜서 충돌 지점을 함께 통과한다.
-                if (!bothDronesHaveTasks)
-                    yieldingDrone = firstHasTask ? &firstName : &secondName;
+                // 둘 다 임무 중이면 두 번째 드론만 비켜 한쪽 경로를 유지한다.
+                yieldingDrone = bothDronesHaveTasks
+                    ? &secondName
+                    : (firstHasTask ? &firstName : &secondName);
             }
             else if (firstConnected && firstHasTask)
             {
@@ -624,9 +623,9 @@ void UpdateCollisionAvoidance(
                 result.minimumPredictedDroneSeparationMeters = predictedDistance;
             }
             const bool alreadyAvoiding = bothDronesHaveTasks
-                ? activeAvoidanceDirections.contains(firstName)
-                    || activeAvoidanceDirections.contains(secondName)
-                : activeAvoidanceDirections.contains(*yieldingDrone);
+                ? activeAvoidanceTargets.contains(firstName)
+                    || activeAvoidanceTargets.contains(secondName)
+                : activeAvoidanceTargets.contains(*yieldingDrone);
             // 회피 목표에 도착했더라도 원래 임무 경로가 다시 교차하면 회피를 유지한다.
             // 한쪽이 정지 장애물이면 안전거리까지만 확보해도 회피를 풀 수 있다.
             const double releaseDistance = settings.safetyDistanceMeters
@@ -646,31 +645,22 @@ void UpdateCollisionAvoidance(
             if (glm::length(side) < 1e-6)
                 side = {0.0, 1.0, 0.0};
             side = glm::normalize(side);
+            const auto makeTarget = [&](const DroneState& state,
+                                        const glm::dvec3& velocity,
+                                        const glm::dvec3& offset)
+            {
+                const glm::dvec3 conflictPosition = PositionAtPredictedTime(
+                    state.positionMeters, velocity, intendedPath.timeSeconds);
+                return PositionBeyondConflict(conflictPosition,
+                    state.positionMeters, velocity, releaseDistance)
+                    + offset * lateralClearance;
+            };
             if (bothDronesHaveTasks)
             {
-                const auto [firstDirection, firstInserted] =
-                    activeAvoidanceDirections.try_emplace(firstName, side);
-                const glm::dvec3 firstSide = firstInserted
-                    ? side : firstDirection->second;
-                const auto [secondDirection, secondInserted] =
-                    activeAvoidanceDirections.try_emplace(secondName, -firstSide);
-                const glm::dvec3 secondSide = secondInserted
-                    ? -firstSide : secondDirection->second;
-                const auto makeTarget = [intendedPath, releaseDistance, lateralClearance](
-                    const DroneState& state,
-                    const glm::dvec3& velocity,
-                    const glm::dvec3& side)
-                {
-                    const glm::dvec3 conflictPosition = PositionAtPredictedTime(
-                        state.positionMeters, velocity, intendedPath.timeSeconds);
-                    return PositionBeyondConflict(conflictPosition,
-                        state.positionMeters, velocity, releaseDistance)
-                        + side * lateralClearance;
-                };
                 avoidanceTargets.try_emplace(firstName,
-                    makeTarget(firstState, firstVelocityIntent, firstSide));
+                    makeTarget(firstState, firstVelocityIntent, side));
                 avoidanceTargets.try_emplace(secondName,
-                    makeTarget(secondState, secondVelocityIntent, secondSide));
+                    makeTarget(secondState, secondVelocityIntent, -side));
                 currentlyAvoiding.insert(firstName);
                 currentlyAvoiding.insert(secondName);
             }
@@ -681,19 +671,9 @@ void UpdateCollisionAvoidance(
                     ? firstState : secondState;
                 const glm::dvec3& yieldingVelocity = yieldingIsFirst
                     ? firstVelocityIntent : secondVelocityIntent;
-                if (yieldingIsFirst)
-                    side = -side;
-                const auto [activeDirection, directionInserted] =
-                    activeAvoidanceDirections.try_emplace(*yieldingDrone, side);
-                if (!directionInserted)
-                    side = activeDirection->second;
-                const glm::dvec3 conflictPosition = PositionAtPredictedTime(
-                    yieldingState.positionMeters, yieldingVelocity,
-                    intendedPath.timeSeconds);
                 avoidanceTargets.try_emplace(*yieldingDrone,
-                    PositionBeyondConflict(conflictPosition,
-                        yieldingState.positionMeters, yieldingVelocity, releaseDistance)
-                    + side * lateralClearance);
+                    makeTarget(yieldingState, yieldingVelocity,
+                        yieldingIsFirst ? -side : side));
                 currentlyAvoiding.insert(*yieldingDrone);
             }
         }
@@ -731,11 +711,6 @@ void UpdateCollisionAvoidance(
                 + droneName + " 드론이 위험 구간을 벗어나 조사 경로로 돌아갑니다.");
         }
     }
-    std::erase_if(activeAvoidanceDirections,
-        [&currentlyAvoiding](const auto& entry)
-        {
-            return !currentlyAvoiding.contains(entry.first);
-        });
     std::erase_if(activeAvoidanceTargets,
         [&currentlyAvoiding](const auto& entry)
         {
@@ -1011,7 +986,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
     std::size_t nextCommand = 0;
     DroneNameSet dronesAvoiding;
-    std::unordered_map<std::string, glm::dvec3> activeAvoidanceDirections;
     std::unordered_map<std::string, glm::dvec3> activeAvoidanceTargets;
     std::vector<glm::dvec3> dronePositionsMeters;
     if (definition.minimumDroneSeparationMeters)
@@ -1033,8 +1007,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         }
         UpdateMissionCommands(tick, result.mission, simulation, drones, result);
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
-            drones, dronesAvoiding, activeAvoidanceDirections,
-            activeAvoidanceTargets, result);
+            drones, dronesAvoiding, activeAvoidanceTargets, result);
         for (auto& [droneName, drone] : drones)
         {
             if (simulation.State(drone.id).mode != FlightMode::Grounded)
