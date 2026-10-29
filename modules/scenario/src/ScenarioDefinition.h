@@ -91,4 +91,7 @@ struct ScenarioDefinition
 
 /** @brief JSON 설정을 읽고, 실행에 필요한 값만 묶어 돌려준다. */
 [[nodiscard]] ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText);
+
+/** @brief 다 읽은 시나리오 설정끼리 함께 지켜야 할 조건을 확인한다. */
+void ValidateScenarioDefinition(const ScenarioDefinition& definition);
 }

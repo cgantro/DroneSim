@@ -432,3 +432,9 @@
 - 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
 - 시험: 전체 Release CTest 28/28 통과.
 - 범위: 기존 JSON 문법과 기본 드론 동작을 유지했다. 시뮬레이터 앱의 별도 임무 처리는 바꾸지 않았다.
+## 시나리오 설정 검사 분리 — 2026-10-30
+
+- Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공.
+- 전체 CTest 28/28 통과.
+- `git diff --check` 통과.
+- 이 변경은 JSON 시나리오의 설정 조합 검사 위치만 옮겼다. 앱 화면이나 웹 브라우저 동작은 이번 확인 범위가 아니다.

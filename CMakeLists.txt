@@ -92,6 +92,7 @@ endif()
 add_library(aerosimlab_scenario STATIC
   modules/scenario/src/ScenarioRunner.cpp
   modules/scenario/src/ScenarioDefinition.cpp
+  modules/scenario/src/ScenarioValidation.cpp
 )
 target_include_directories(aerosimlab_scenario PUBLIC modules/scenario/include)
 target_link_libraries(aerosimlab_scenario
