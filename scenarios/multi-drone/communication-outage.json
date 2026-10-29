@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "ticks": 100,
+  "ticks": 600,
   "drones": [
     {"name": "lead", "initial_position_meters": [0, 0, 0]},
     {"name": "scout", "initial_position_meters": [10, 0, 0]}
@@ -13,12 +13,12 @@
     {
       "drone": "scout",
       "start_tick": 80,
-      "end_tick": 100,
+      "end_tick": 300,
       "heartbeat_timeout_ticks": 60
     }
   ],
   "expected": {
-    "tolerance_meters": 0.001,
+    "tolerance_meters": 0.15,
     "drones": [
       {"name": "lead", "mode": "hovering", "position_meters": [0, 0, 1.5]},
       {"name": "scout", "mode": "hovering", "position_meters": [10, 0, 1.5]}

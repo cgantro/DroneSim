@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "ticks": 1100,
+  "drones": [
+    {"name": "scout-1", "initial_position_meters": [0, 0, 0]},
+    {"name": "scout-2", "initial_position_meters": [10, 0, 0]},
+    {"name": "scout-3", "initial_position_meters": [20, 0, 0]},
+    {"name": "scout-4", "initial_position_meters": [30, 0, 0]}
+  ],
+  "commands": [
+    {"tick": 0, "drone": "scout-1", "type": "takeoff"},
+    {"tick": 0, "drone": "scout-2", "type": "takeoff"},
+    {"tick": 0, "drone": "scout-3", "type": "takeoff"},
+    {"tick": 0, "drone": "scout-4", "type": "takeoff"}
+  ],
+  "record_trajectory": {"sample_every_ticks": 30},
+  "collision_avoidance": {
+    "safety_distance_meters": 2.0,
+    "prediction_horizon_seconds": 6.0,
+    "lateral_offset_meters": 5.0
+  },
+  "mission": {
+    "name": "four-drone-survey-baseline",
+    "tasks": [
+      {
+        "name": "sector-1",
+        "drone": "scout-1",
+        "waypoints_meters": [[4, 0, 1.5]],
+        "start_tick": 360,
+        "deadline_tick": 1000,
+        "tolerance_meters": 0.1
+      },
+      {
+        "name": "sector-2",
+        "drone": "scout-2",
+        "waypoints_meters": [[14, 0, 1.5]],
+        "start_tick": 360,
+        "deadline_tick": 1000,
+        "tolerance_meters": 0.1
+      },
+      {
+        "name": "sector-3",
+        "drone": "scout-3",
+        "waypoints_meters": [[24, 0, 1.5]],
+        "start_tick": 360,
+        "deadline_tick": 1000,
+        "tolerance_meters": 0.1
+      },
+      {
+        "name": "sector-4",
+        "drone": "scout-4",
+        "waypoints_meters": [[34, 0, 1.5]],
+        "start_tick": 360,
+        "deadline_tick": 1000,
+        "tolerance_meters": 0.1
+      }
+    ]
+  },
+  "expected": {
+    "minimum_drone_separation_meters": 2.0
+  }
+}

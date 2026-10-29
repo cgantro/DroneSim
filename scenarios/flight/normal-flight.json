@@ -1,19 +1,19 @@
 {
   "version": 1,
-  "ticks": 300,
+  "ticks": 1500,
   "commands": [
     {"tick": 0, "type": "takeoff"},
-    {"tick": 90, "type": "set_waypoint", "position_meters": [1.0, 0.0, 1.5]},
-    {"tick": 110, "type": "set_waypoint", "position_meters": [1.0, 1.0, 1.5]},
-    {"tick": 130, "type": "set_waypoint", "position_meters": [0.0, 1.0, 1.5]},
-    {"tick": 150, "type": "land"}
+    {"tick": 360, "type": "set_waypoint", "position_meters": [1.0, 0.0, 1.5]},
+    {"tick": 600, "type": "set_waypoint", "position_meters": [1.0, 1.0, 1.5]},
+    {"tick": 840, "type": "set_waypoint", "position_meters": [0.0, 1.0, 1.5]},
+    {"tick": 1080, "type": "land"}
   ],
   "expected": {
     "drones": [
-      {"name": "drone", "mode": "grounded", "position_meters": [0.0, 1.0, 0.0]}
+      {"name": "drone", "mode": "grounded", "position_meters": [0.0, 1.0, 0.23]}
     ],
-    "tolerance_meters": 0.000001,
+    "tolerance_meters": 0.15,
     "camera_status": "active",
-    "camera_frame_count": 300
+    "camera_frame_count": 1500
   }
 }

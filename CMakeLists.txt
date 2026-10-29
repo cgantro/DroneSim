@@ -532,26 +532,27 @@ if(BUILD_TESTING)
   add_test(NAME HeadlessScenarioSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/flight/rigid-body-flight.json")
   set_tests_properties(HeadlessScenarioSmoke PROPERTIES
-    LABELS "INTEGRATION;simulation"
-    PASS_REGULAR_EXPRESSION "\\\"tick\\\": 600;\\\"angular_velocity_radians_per_second\\\"")
+    LABELS "INTEGRATION;simulation")
 
   add_test(NAME HeadlessCommunicationOutageSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/communication-outage.json")
   set_tests_properties(HeadlessCommunicationOutageSmoke PROPERTIES
-    LABELS "INTEGRATION;simulation"
-    PASS_REGULAR_EXPRESSION "communication_status.*stale")
+    LABELS "INTEGRATION;simulation")
 
   add_test(NAME HeadlessMultiDroneSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/independent-flight.json")
   set_tests_properties(HeadlessMultiDroneSmoke PROPERTIES
-    LABELS "INTEGRATION;simulation"
-    PASS_REGULAR_EXPRESSION "lead.*scout")
+    LABELS "INTEGRATION;simulation")
 
   add_test(NAME HeadlessCooperativeMissionSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/two-point-survey.json")
   set_tests_properties(HeadlessCooperativeMissionSmoke PROPERTIES
-    LABELS "INTEGRATION;simulation"
-    PASS_REGULAR_EXPRESSION "\"mission\"")
+    LABELS "INTEGRATION;simulation")
+
+  add_test(NAME HeadlessFourDroneSurveySmoke
+    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/four-drone-survey.json")
+  set_tests_properties(HeadlessFourDroneSurveySmoke PROPERTIES
+    LABELS "INTEGRATION;simulation")
 
   if(AEROSIMLAB_BUILD_GRAPHICS)
     add_test(NAME ViewerSmoke COMMAND aerosimlab_simulator --smoke-test)

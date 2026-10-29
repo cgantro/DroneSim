@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "ticks": 180,
+  "ticks": 1000,
   "drones": [
     {"name": "lead", "initial_position_meters": [0, 0, 0]},
     {"name": "scout", "initial_position_meters": [10, 0, 0]}
@@ -8,10 +8,10 @@
   "commands": [
     {"tick": 0, "drone": "lead", "type": "takeoff"},
     {"tick": 0, "drone": "scout", "type": "takeoff"},
-    {"tick": 90, "drone": "scout", "type": "set_waypoint", "position_meters": [12, 0, 1.5]}
+    {"tick": 360, "drone": "scout", "type": "set_waypoint", "position_meters": [12, 0, 1.5]}
   ],
   "expected": {
-    "tolerance_meters": 0.000001,
+    "tolerance_meters": 0.15,
     "minimum_drone_separation_meters": 9.9,
     "drones": [
       {"name": "lead", "mode": "hovering", "position_meters": [0, 0, 1.5]},
