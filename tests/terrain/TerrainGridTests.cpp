@@ -1,6 +1,5 @@
 #include "terrain/TerrainGrid.h"
 #include "terrain/TrainingRangeTerrain.h"
-#include "simulation_core/EoCameraModel.h"
 
 #include <algorithm>
 #include <gtest/gtest.h>
@@ -12,8 +11,6 @@
 #include <limits>
 #include <numbers>
 #include <string>
-
-#include <glm/geometric.hpp>
 
 namespace aerosimlab::terrain
 {
@@ -57,23 +54,6 @@ void Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight()
     EXPECT_TRUE(terrain.ContainsLocalPositionMeters({10.0, 20.0}));
     EXPECT_FALSE(terrain.ContainsLocalPositionMeters({10.01, 0.0}));
     EXPECT_FLOAT_EQ(terrain.HeightAtLocalMeters({0.0, 0.0}), 120.0F);
-    EXPECT_EQ(terrain.ToSimulationPositionMeters({5.0, -2.0, 3.0}),
-        glm::dvec3(5.0, -2.0, 123.0));
-}
-
-void Verify_RenderedTerrainHeightUsesTheSameTriangleAsTheMesh()
-{
-    TerrainGrid terrain;
-    terrain.sampleCount = 2U;
-    terrain.spacingXMeters = 2.0F;
-    terrain.spacingYMeters = 2.0F;
-    terrain.referenceElevationMeters = 100.0F;
-    terrain.heightOffsetsMeters = {0.0F, 10.0F, 10.0F, 0.0F};
-
-    // 이 지점에서 두 대각선의 높이가 달라져 쌍선형 보간과 삼각형 보간을 구분할 수 있다.
-    EXPECT_FLOAT_EQ(terrain.HeightAtLocalMeters({0.0, 0.0}), 105.0F);
-    EXPECT_FLOAT_EQ(terrain.HeightAtRenderedSurfaceMeters({0.0, 0.0}), 110.0F);
-    EXPECT_FLOAT_EQ(terrain.HeightAtRenderedSurfaceMeters({1.0, -1.0}), 100.0F);
 }
 
 void Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips()
@@ -140,7 +120,6 @@ TEST(TerrainGridTests, CoreScenarios)
         Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight());
-    EXPECT_NO_FATAL_FAILURE(Verify_RenderedTerrainHeightUsesTheSameTriangleAsTheMesh());
     EXPECT_NO_FATAL_FAILURE(Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips());
     EXPECT_NO_FATAL_FAILURE(Verify_AsciiGridRejectsMissingHeightSamples());
 }

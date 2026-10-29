@@ -15,6 +15,8 @@
 #include <string>
 #include <type_traits>
 
+#include <glm/vec3.hpp>
+
 namespace aerosimlab::terrain
 {
 namespace
@@ -364,32 +366,6 @@ float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
     return referenceElevationMeters + std::lerp(north, south, cell.southFraction);
 }
 
-float TerrainGrid::HeightAtRenderedSurfaceMeters(
-    const glm::dvec2& positionMeters) const
-{
-    const auto cell = FindTerrainCell(*this, positionMeters);
-    const std::uint32_t eastColumn = cell.westColumn + 1U;
-    const std::uint32_t southRow = cell.northRow + 1U;
-    const float east = cell.eastFraction;
-    const float south = cell.southFraction;
-
-    // 지형 메시의 북동·남서 대각선을 기준으로 같은 삼각형 평면에서 높이를 구한다.
-    if (east + south <= 1.0F)
-    {
-        const float northWest = 1.0F - east - south;
-        return referenceElevationMeters
-            + HeightAt(cell.northRow, cell.westColumn) * northWest
-            + HeightAt(southRow, cell.westColumn) * south
-            + HeightAt(cell.northRow, eastColumn) * east;
-    }
-
-    const float southEast = east + south - 1.0F;
-    return referenceElevationMeters
-        + HeightAt(cell.northRow, eastColumn) * (1.0F - south)
-        + HeightAt(southRow, cell.westColumn) * (1.0F - east)
-        + HeightAt(southRow, eastColumn) * southEast;
-}
-
 glm::dvec2 TerrainGrid::ToLocalMeters(
     double latitudeDegrees, double longitudeDegrees) const
 {
@@ -417,14 +393,5 @@ glm::dvec2 TerrainGrid::ToLocalMeters(
         -sinLatitude * cosLongitude * delta.x
             - sinLatitude * sinLongitude * delta.y
             + cosLatitude * delta.z};
-}
-
-glm::dvec3 TerrainGrid::ToSimulationPositionMeters(
-    const glm::dvec3& eastNorthUpMeters) const
-{
-    return {
-        eastNorthUpMeters.x,
-        eastNorthUpMeters.y,
-        eastNorthUpMeters.z + HeightAtLocalMeters({0.0, 0.0})};
 }
 }

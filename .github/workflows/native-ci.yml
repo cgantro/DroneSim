@@ -26,9 +26,6 @@ jobs:
       - name: Run PX4 reference data tests
         run: python3 -m unittest discover -s tools/px4 -p 'test_*.py'
 
-      - name: Run map data conversion tests
-        run: python3 -m unittest tools.maps.test_convert_ngii_buildings
-
       - name: Install graphics and virtual display dependencies
         run: |
           sudo apt-get update
