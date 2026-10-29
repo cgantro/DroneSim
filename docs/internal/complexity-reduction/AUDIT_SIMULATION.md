@@ -243,3 +243,56 @@
 - 관측 갱신, 배터리 설정, 궤적·최종 결과 기록은 이제 같은 드론 목록을 순회한다. JSON의 생략 방식과 기본 이름은 그대로 지원한다.
 - 궤적 자료 크기 제한도 파싱 도중과 설정 검증에서 중복 검사하던 것을 검증 단계 한 곳에 남겼다.
 - Windows Release 전체 CTest 28/28 통과. 시뮬레이터 앱은 변경하지 않았다.
+
+## Simulation Core 파일별 재감사 — 2026-10-30
+
+기준 리비전은 `3b64c7c8`이다. 현재 저장소의 공개 헤더와 소스 17개, 관련 시험, CMake 등록 및 직접 호출부를 읽었다. 아래 내용은 코드 정적 조사다. 이번 조사에서는 빌드·시험·성능 측정을 실행하지 않았다. 좌표 표기는 별도 언급이 없으면 월드 위치 ENU(동·북·상), 기체 축 FLU(앞·왼쪽·위), 길이 m, 시간 s다.
+
+### 실행 흐름과 핵심 판단
+
+`SimulationCore::AdvanceOneTick()`이 `EcsStorage::AdvanceOneTick()`을 호출한다. 이 저장소는 운동학 모드에서 Flecs 시스템을 실행해 `DroneModel::AdvanceOneTick()`으로 상태를 전진시키고, 강체 모드에서는 비행 상태를 `QuadrotorFlightController::MotorTargets()`에 전달해 모터 목표를 만든다. 이어 `PhysicsWorld::Step(1/60)`이 AirSim 물리를 진행하고, 물리 상태를 ECS의 `DroneState`에 복사한다. 그 뒤 배터리, Tick, 카메라 자세를 갱신한다. 명령도 `SimulationCore::Apply()`에서 기본 입력을 확인한 다음 `DroneModel::Apply()`에 위임한다.
+
+따라서 “SimulationCore가 수학 계산까지 전부 직접 한다”는 판단은 맞지 않는다. 비행 이동 계산은 `DroneModel`, 강체 자세·추력 제어는 `QuadrotorFlightController`, 강체 적분과 좌표 변환은 `PhysicsWorld`, SAT·다각형 투영은 `CollisionGeometry`가 맡는다. 다만 `SimulationCore.cpp`의 내부 저장소가 ECS 수명·물리 세계·두 비행 모드 연결뿐 아니라 운동학 모드의 지형/건물 접촉 보정과 속도 제거까지 직접 수행한다. 특히 한 파일에 통합·접촉 정책이 함께 있어 역할을 좁힐 여지는 확인된다.
+
+### 파일별 책임과 적합성
+
+| 파일 | 실제 역할·계산·데이터 소유 | 입력 검증·책임 적합성·시험 |
+|---|---|---|
+| `include/simulation_core/BatteryModel.h` | 배터리 용량, 초기·잔여 Wh, 평균 비행/호버 소비율과 저전력 복귀 표시를 소유한다. | 공개 설정 자료형과 모델 API라 위치가 맞다. 값 범위 검사는 생성자에 있다. 직접 시험은 `SimulationCoreTests.cpp`의 소비·초기값 오류 검사. |
+| `src/BatteryModel.cpp` | 비행 모드별 평균 W를 고정 60Hz 틱의 Wh로 바꾸어 잔량을 감소시키고 0에서 제한한다. 실측 전압·전류 모델이 아니라 명시된 단순 추정이다. | 배터리 계산만 맡아 책임이 선명하다. 설정 범위 오류를 거부한다. `InitialWattHours()`는 현재 코드 검색상 시험에서만 쓰인다. 시험은 위 소비/리셋 케이스. |
+| `include/simulation_core/DroneModel.h` | `DroneState`, `DroneCommand`, `DroneControlState`, 비행 모드와 `Apply`/`AdvanceOneTick` 계약을 정의한다. | 기본 상태·명령 타입이므로 공개 헤더 위치가 맞다. 위치는 ENU, yaw/자세는 라디안·쿼터니언, 틱 간격 1/60초로 기록돼 있다. 직접 호출은 SimulationCore와 시험, 일부 상태는 다른 모듈의 인터페이스에도 쓰인다. |
+| `src/DroneModel.cpp` | 명령을 상태/제어 목표로 바꾸고 운동학 모드 위치·속도·고도 및 이륙/착륙 상태를 전진시킨다. | 비행 상태 계산 책임은 적합하다. 숫자 유한성, 비행 상태와 명령 조합을 확인한다. 제어/지면 접촉 동작은 `SimulationCoreTests.cpp`에서 시험한다. |
+| `include/simulation_core/EoCameraModel.h` | 카메라 모델·상태와 장착/광축/위쪽 축 계산의 공개 API를 정의한다. | 센서 상태 자료와 API로 위치가 적절하다. 프레임 파일 저장 기능은 현재 책임이 아니다. 카메라 상태와 프레임 진행은 SimulationCore 시험 및 렌더러 직접 호출에서 확인된다. |
+| `src/EoCameraModel.cpp` | 고정 기체 장착 위치·방향(기체 기준 m), 드론 쿼터니언으로 월드 자세를 계산하고 켜기/고장/복구 상태를 갱신한다. | 카메라 기하/상태만 담당해 모듈명과 맞는다. 모델 수치 유효성 검사는 `CameraModel::IsValid()`에서 한다. 독립 전용 시험 파일은 없고 SimulationCore 카메라 시험 및 앱 렌더 경로가 호출한다. |
+| `include/simulation_core/PhysicsWorld.h` | 강체 핸들, 위치·자세·속도 상태, 모터/바람/지형/장애물/틱 API를 공개한다. | SimulationCore가 PhysicsWorld 구현을 직접 노출하지 않도록 인터페이스 경계 역할을 한다. 입력 오류 계약과 복사 금지는 선언에 있다. 전용 시험은 `PhysicsWorldTests.cpp`. |
+| `src/PhysicsWorld.cpp` | AirSim API·기체 파라미터 어댑터, ENU/FLU↔NED/FRD 변환, 강체 수명, 모터 지연·고장, 충돌 후보와 AirSim 접촉, 지형 및 Tick을 구현한다. AirSim 객체는 `unique_ptr`가 소유되고 엔진에는 주소를 빌려준다. | 물리 연동 역할은 맞지만 어댑터·수명·좌표 변환·환경 충돌·모터 상태가 한 구현 파일에 모여 있다. 좌표·float 표현 가능성 확인은 AirSim 경계에 필요한 검사다. 1,256줄 규모지만 각 계산은 AirSim 연결 순서에 얽혀 있으므로 단순히 파일 분할부터 하는 것은 이득이 불확실하다. 광범위한 동역학·좌표·접촉 시험은 `PhysicsWorldTests.cpp`. |
+| `include/simulation_core/QuadrotorFlightController.h` | 목표 경유점 속도와 4개 로터 목표를 계산하는 무상태 함수 및 제어 상수를 선언한다. | 비행 제어 API로 적합하다. 고정 쿼드로터 형식임이 API에서 드러난다. 시험은 `PhysicsWorldTests.cpp`의 직접 제어 입력/목표 확인과 SimulationCore 강체 케이스. |
+| `src/QuadrotorFlightController.cpp` | 위치·속도 오차로 가속도를 제한하고, 추력 방향/헤딩으로 목표 자세를 만든다. 쿼터니언 자세 오차와 각속도 피드백으로 토크를 산출하고, 4×4 피벗 소거로 로터 추력을 구해 추력 계수로 RPM으로 바꾼다. | 수계산은 이 전용 파일에 있다. 책임 이름과 맞고 SimulationCore에 중복 구현된 제어식은 확인되지 않았다. 특이 연립식은 오류 처리한다. 수식·축 기준 설명을 보강할 여지는 있으나 core로 옮길 근거는 없다. 시험은 제어 입력, 이득, 관성/토크 반응 시험. |
+| `include/simulation_core/QuadrotorModel.h` | 기체 질량·관성·로터 배치·모터 계수·충돌 상자를 값으로 보유하는 파라미터 타입과 X500 생성 API다. | 현재 X500 시뮬레이터 범위의 모델 정의로 역할이 명확하다. 충돌 모양까지 파라미터에 들어가는 것은 PhysicsWorld 생성에 필요하다. 시험은 `QuadrotorModelTests.cpp`. |
+| `src/QuadrotorModel.cpp` | 공개 X500/Gazebo 기준값으로 관성·로터·충돌 상자를 구성하고, 별도 모터표 추정 설정을 만든다. | 기체 제원만 구성한다. 두 번째 추정 모델이 실제 시연 경로에서 필요한지는 앱 설정 호출과 요구 범위에 따라 판단할 후보이며, 코드만으로 dead code라 할 수 없다. 제원/배치/계수 시험 존재. |
+| `include/simulation_core/ScopedDuration.h` | 범위 진입부터 종료까지 시간을 측정해 외부 double에 누적하는 RAII 도구다. 대상 포인터는 빌려 쓴다. | 계측 역할은 단순하다. 공개 헤더지만 앱 그래픽 코드도 사용하므로 core에 위치하는 것이 자연스러운지는 경계 검토 후보. null 대상은 측정 생략. 시험은 전용 CoreScenarios에 시간 성능 단언이 있는지 별도 확인 필요; 현재 사용은 PhysicsWorld와 앱. |
+| `include/simulation_core/SimulationCore.h` | 외부가 사용하는 통합 API, 고정 틱 누산기, 드론/카메라/배터리/물리 환경 접근을 선언한다. ECS 내부 저장소는 `unique_ptr`로 감춘다. | 공개 조립 API로 위치가 맞으나 타입별 API가 넓다. `FixedTickAccumulator`는 틱 분수 상태와 프레임 경과시간을 보유하고 최대 0.1초를 소비한다. 시험은 전체 시뮬레이션 시험과 앱 세션 시험. |
+| `src/SimulationCore.cpp` | `EcsStorage`가 Flecs 월드, 엔티티 ID 맵, 시스템, 선택형 배터리 컴포넌트, 카메라/물리 객체 연결을 소유한다. 운동학 충돌에서 지형 높이, 상자·기둥·footprint 접촉을 찾고 위치 분리와 안쪽 속도 제거를 한다. 공개 생성/초기화/명령/환경 API는 입력을 검증·정규화하고 내부 저장소를 호출한다. | 가장 큰 결합 지점이다. 직접 계산은 운동학 접촉 응답, 지면 정착, 강체와 ECS 사이 상태 동기화 및 비행 모드 임계 전환이다. 주요 비행 동역학 식은 DroneModel/Controller/PhysicsWorld에 위임돼 있다. native/`__EMSCRIPTEN__` 조건 분기가 AirSim 의존 부분을 둘러싼다. 인접 메서드들이 같은 외부 불변식(드론 ID, 유한 수치, 좌표) 확인을 반복하는 부분은 있지만, 경계 검사와 내부 불변식 검사를 구분해야 한다. 장애물 footprint는 추가 시 `IsValidFootprint()` 이후 점별 유한성도 재검사하고, CollisionGeometry가 틱마다 저장된 footprint를 다시 검증한다. 이는 불변 데이터의 반복 검증 후보지만 내부 기하 함수 단독 호출 안전성은 보존 판단에 포함해야 한다. 접촉·틱·리셋·입력 오류·ECS/물리 동기화 시험은 `SimulationCoreTests.cpp`. |
+| `src/CollisionGeometry.h` | 물리 상자, footprint, prism 입력을 받아 접촉 깊이·방향 또는 `optional` 결과를 반환하는 내부 전용 기하 API다. span은 비소유다. | `src` 아래 private 헤더로 적절하다. 입력 오류와 비접촉이 일부 null 결과로 합쳐지므로 호출자가 이를 진단해야 한다. 공개 API로 노출되지 않는다. |
+| `src/CollisionGeometry.cpp` | 외접구/AABB broadphase, OBB SAT, footprint 투영, prism 높이 범위 접촉을 값으로 계산한다. | 충돌 기하 계산을 전용 파일에 둔 것은 적절하다. `FindPrismContact`→`ProjectToFootprint` 경로가 동일 외곽선 유효성 검사를 겹쳐 한다. `FindFootprintContact`도 매번 검사한다. 저장 시 검증된 기하를 재사용할 수 있는지는 호출 계약과 간결성 비교 후 판단할 최적화/단순화 후보다. 직접 시험은 SimulationCore/PhysicsWorld의 접촉 시나리오이며 별도 CollisionGeometry 시험은 확인되지 않았다. |
+
+### ECS, 모듈 경계, 중복 후보
+
+- Flecs는 실제로 사용된다. 위치/속도/자세/비행 모드와 제어 목표, 카메라, 선택 배터리를 컴포넌트로 만들고 시스템/반복문으로 갱신한다. 따라서 “Component를 전혀 쓰지 않는다”는 인상과 달리 드론의 반복 갱신 데이터는 컴포넌트다. 반면 정적 장애물·지형·AirSim 핸들 맵은 월드 자원 성격의 소유 데이터라 별도 저장한다. 이를 억지로 엔티티로 쪼개야 한다는 근거는 없다.
+- 제품 코드의 `include/simulation_core` 공개 헤더, `src` 구현 파일 배치는 현재 일관적이다. `CollisionGeometry.h`는 외부 계약이 아니라 구현 전용 계산이므로 `src`에 둔 것은 적절하다. CMake 루트에서 공개 헤더 경로를 등록하며 `PhysicsWorld.cpp`와 해당 테스트만 Emscripten 빌드에서 제외된다.
+- 직접 호출자는 Simulator 앱/장면/HUD, Scenario, Manual Control, Communication, Ground Control 및 테스트다. 이 중 Scenario는 `QuadrotorFlightController::WaypointVelocityTarget()`을 직접 호출해 경유점 속도를 계산한다. 따라서 시나리오·시뮬레이션 간 제어 규칙 공유가 존재한다. 이는 같은 식을 두 번 구현한 중복은 아니지만, 임무 경로 계산이 물리 모듈 구현을 직접 참조하는 의존 경계다.
+- 확인된 중복 후보는 finite-vector 유틸리티(DroneModel, SimulationCore, PhysicsWorld)와 footprint 검증 반복이다. 책임 경계가 각각 명령, ECS 입력, AirSim/기하 경계이므로 새 공용 유틸리티를 만들기 전에 실제 중복량과 호출 의미를 비교해야 한다.
+- `SimulationCore.cpp`는 복잡하지만 “전처리와 수계산이 한데 섞여 물리식을 직접 구현한다”로 요약하면 부정확하다. 정확한 설명은 **입력 경계/시스템 조립/상태 동기화/운동학 충돌 응답이 함께 있는 오케스트레이터이며, 비행 제어식과 충돌 기하 알고리즘은 전용 코드에 위임한다**이다. 우선 검토할 개선 단위는 불필요한 중복 검사 여부와 운동학 충돌 응답의 경계이며, 클래스 계층이나 인터페이스 추가가 필요하다는 증거는 없다.
+
+### 검토한 시험과 미확인 범위
+
+`tests/simulation_core/SimulationCoreTests.cpp`는 배터리 소모/설정 오류, 고정 틱, 바람, 이륙·이동·착륙, 상자/기둥/지형 접촉, 명령 입력 오류, 초기 상태, 강체 모터 입력 제한, Flecs·PhysicsWorld 동시 생성/삭제, 개별 카메라를 포함한다. `QuadrotorModelTests.cpp`는 질량·관성·로터 배치·모터표 추정값, `PhysicsWorldTests.cpp`는 모터 지연/고장, 추력·중력·질량 영향, 제어기 응답, 좌표 변환, 지형/건물/드론 접촉, float 표현 한계를 다룬다. GoogleTest 묶음 수와 시나리오 함수 수는 별개이므로 테스트 개수만으로 중복·가치를 판정하지 않았다.
+
+정적 읽기로 호출 순서와 자료형은 확인했지만, 실제 AirSim 적분 결과, 브라우저/네이티브 분기 동작, 동시 PhysicsWorld 안전성, 화면 표시와 성능은 런타임 확인하지 않았다. 다음 코드 변경 전에는 이 감사와 기존 테스트를 기준으로 “줄일 검사”와 “필수 경계 조건”을 구별해야 한다.
+
+### 감사 후 판단과 첫 수정
+
+- 확인된 비행 제어·이동 수식은 `DroneModel`, `QuadrotorFlightController`, `PhysicsWorld`, `CollisionGeometry`에 이미 나뉘어 있다. 이를 SimulationCore로 옮기거나 새 수학 추상화를 추가할 근거는 없다.
+- SimulationCore 안에는 운동학 모드의 지면·장애물 접촉 응답과 속도 보정이 함께 있다. ECS 조립 코드와 별도 책임으로 읽히도록 이 접촉 처리를 구체적인 값 객체 하나로 분리하기로 했다. 인터페이스·상속은 추가하지 않는다.
+- 프리즘 외곽선을 등록할 때 `IsValidFootprint()`가 이미 좌표 유한성을 확인한 뒤 같은 좌표를 다시 검사하는 코드를 제거했다. 충돌 기하 안에서도 프리즘 함수가 검증한 외곽선을 투영 함수가 다시 검사하던 중복을 한 번으로 줄였다. 각 함수 경계의 입력 거부와 계산식은 유지했다.
+- 변경 커밋 `c334a84e`. Release 시뮬레이션 시험 6/6과 시뮬레이터 통합 시험 5/5 통과. 전체 CTest, Emscripten 빌드, 실제 화면은 확인하지 않았다.
