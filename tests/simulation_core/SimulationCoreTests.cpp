@@ -340,6 +340,17 @@ void Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose()
     constexpr double startYawRadians = 0.4;
     simulation.SetInitialPose(startPositionMeters, startYawRadians);
 
+    const auto expectCameraAtDroneMount = [&simulation]
+    {
+        const DroneState& drone = simulation.State();
+        const glm::dvec3 mountOffset = glm::inverse(drone.orientation)
+            * (simulation.Camera().positionMeters - drone.positionMeters);
+        EXPECT_NEAR(mountOffset.x, 0.12, 1.0e-9);
+        EXPECT_NEAR(mountOffset.y, 0.0, 1.0e-9);
+        EXPECT_NEAR(mountOffset.z, -0.10, 1.0e-9);
+    };
+    expectCameraAtDroneMount();
+
     ASSERT_EQ(simulation.Apply(Command(DroneCommand::Kind::TakeOff)), CommandResult::Accepted);
     simulation.AdvanceOneTick();
     simulation.Reset();
@@ -349,6 +360,7 @@ void Verify_SimulationCore_ResetRestoresTheConfiguredKinematicStartPose()
     EXPECT_EQ(state.positionMeters, startPositionMeters);
     EXPECT_DOUBLE_EQ(state.yawRadians, startYawRadians);
     EXPECT_EQ(simulation.TickCount(), 0U);
+    expectCameraAtDroneMount();
 }
 
 void Verify_SimulationCore_UsesInitialMotorSpeedsInRigidBodyMode()

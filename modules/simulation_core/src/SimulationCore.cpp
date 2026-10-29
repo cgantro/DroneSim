@@ -151,7 +151,7 @@ struct SimulationCore::EcsStorage
 #endif
         RegisterDroneSystem();
         RegisterCameraSystem();
-        SynchronizeCameraPose();
+        SynchronizeCameraPoses();
     }
 
     void RegisterDroneSystem()
@@ -453,7 +453,13 @@ struct SimulationCore::EcsStorage
         return found->second;
     }
 
-    void SynchronizeCameraPose()
+    void SynchronizeCameraPose(flecs::entity drone)
+    {
+        EoCameraModel::UpdatePose(
+            drone.get_mut<CameraState>(), drone.get<DroneState>());
+    }
+
+    void SynchronizeCameraPoses()
     {
         world.each(
             [](CameraState& camera, const DroneState& state)
@@ -721,7 +727,7 @@ void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yaw
         positionMeters, yawRadians, groundElevationMeters};
     drone.set<EcsStorage::InitialPose>(initialPose);
     ecs_->ResetDrone(drone);
-    ecs_->SynchronizeCameraPose();
+    ecs_->SynchronizeCameraPose(drone);
 }
 
 void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
@@ -786,7 +792,7 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     }
 #endif
     drone.set<DroneState>(normalized);
-    ecs_->SynchronizeCameraPose();
+    ecs_->SynchronizeCameraPose(drone);
 }
 
 bool SimulationCore::RemoveDrone(DroneId droneId)
@@ -865,7 +871,7 @@ void SimulationCore::AdvanceOneTick()
             battery.Advance(state.mode);
         });
     ++ecs_->tickCount;
-    ecs_->SynchronizeCameraPose();
+    ecs_->SynchronizeCameraPoses();
 }
 
 void SimulationCore::Pause() noexcept
