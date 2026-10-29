@@ -2,7 +2,7 @@
 
 ## 현재 상태
 
-- 원격 `main`의 최신 변경은 `4ad0203a`이다. 자동 재배정과 사용하지 않던 Simulation Core 계측을 제거했고, `AddDrone`의 중복 진입점과 중복 환경 상태를 정리했다.
+- 원격 `main`의 최신 변경은 `5baf97ae`이다. 자동 재배정과 사용하지 않던 Simulation Core 계측을 제거했고, `AddDrone`의 중복 진입점과 중복 환경 상태를 정리했다.
 - Windows Release 전체 빌드와 CTest 29/29가 통과했다.
 - 사용자가 미리 삭제한 `assets/models/source/x500-v2/README.md`는 미커밋 상태로 남겨 두었다.
 - 다음은 Simulation Core가 맡은 책임과 Flecs 시스템의 데이터 흐름을 다시 보고, 이해하기 어려운 결합을 작은 단위로 줄이는 것이다.
