@@ -1,4 +1,5 @@
 #include "simulation_core/JoltPhysicsWorld.h"
+#include "simulation_core/QuadrotorModel.h"
 
 #include <gtest/gtest.h>
 
@@ -95,6 +96,49 @@ TEST(JoltPhysicsWorldTests, EqualTorqueProducesInertiaDependentRotation) {
       world.State(largeBox).angularVelocityRadiansPerSecond.z;
   EXPECT_GT(std::abs(smallRotation), std::abs(largeRotation));
   EXPECT_NEAR(std::abs(smallRotation / largeRotation), 4.0, 0.15);
+}
+
+TEST(JoltPhysicsWorldTests, X500RotorsProduceHoverAndClimbForces) {
+  JoltPhysicsWorld world;
+  const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+  JoltBoxDefinition definition;
+  definition.positionMeters = {0.0, 0.0, 20.0};
+  definition.halfExtentsMeters = {0.2, 0.2, 0.05};
+  const JoltRigidBodyHandle drone =
+      world.CreateQuadrotor(definition, parameters);
+
+  const double hoverSpeed =
+      std::sqrt(parameters.massKilograms * 9.81 /
+                (QuadrotorParameters::rotorCount *
+                 parameters.thrustCoefficientNewtonsPerSpeedSquared));
+  world.SetInitialMotorSpeeds(drone,
+                              {hoverSpeed, hoverSpeed, hoverSpeed, hoverSpeed});
+  for (int step = 1; step < 600; ++step)
+    world.StepFixed();
+
+  const JoltRigidBodyState hoveringState = world.State(drone);
+  EXPECT_NEAR(hoveringState.positionMeters.z, 20.0, 0.15);
+  EXPECT_NEAR(hoveringState.linearVelocityMetersPerSecond.z, 0.0, 0.1);
+
+  definition.positionMeters.x = 2.0;
+  const JoltRigidBodyHandle climbingDrone =
+      world.CreateQuadrotor(definition, parameters);
+  world.SetMotorTargets(climbingDrone, {900.0, 900.0, 900.0, 900.0});
+  world.StepFixed();
+  const double firstMotorSpeed =
+      world.MotorSpeedsRadiansPerSecond(climbingDrone)[0];
+  EXPECT_GT(firstMotorSpeed, 0.0);
+  EXPECT_LT(firstMotorSpeed, 900.0);
+  EXPECT_GT(world.MotorThrustsNewtons(climbingDrone)[0], 0.0);
+
+  for (int step = 0; step < 120; ++step)
+    world.StepFixed();
+  EXPECT_GT(world.State(climbingDrone).positionMeters.z, 21.0);
+
+  world.SetMotorTargets(climbingDrone, {900.0, 900.0, 700.0, 700.0});
+  for (int step = 0; step < 60; ++step)
+    world.StepFixed();
+  EXPECT_GT(world.State(climbingDrone).angularVelocityRadiansPerSecond.z, 0.0);
 }
 
 TEST(JoltPhysicsWorldTests, RejectsInvalidOrInapplicableOperations) {

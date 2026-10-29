@@ -3,10 +3,13 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 
 namespace aerosimlab::simulation {
+struct QuadrotorParameters;
+
 /** @brief 한 Jolt 물리 월드 안의 강체를 가리킨다. */
 struct JoltRigidBodyHandle {
   std::uint32_t value = 0;
@@ -52,6 +55,28 @@ public:
   /** @brief 질량과 상자 모양을 가진 움직이는 강체를 만든다. */
   [[nodiscard]] JoltRigidBodyHandle
   CreateDynamicBox(const JoltBoxDefinition &definition);
+
+  /** @brief X500 질량·관성·로터 배치로 움직이는 기체를 만든다. */
+  [[nodiscard]] JoltRigidBodyHandle
+  CreateQuadrotor(const JoltBoxDefinition &body,
+                  const QuadrotorParameters &parameters);
+
+  /** @brief 네 모터의 목표 회전 속도를 라디안/초로 지정한다. */
+  void SetMotorTargets(JoltRigidBodyHandle body,
+                       const std::array<double, 4> &speedRadiansPerSecond);
+
+  /** @brief 첫 물리 단계 전에 모터의 현재 회전 속도를 설정한다. */
+  void
+  SetInitialMotorSpeeds(JoltRigidBodyHandle body,
+                        const std::array<double, 4> &speedRadiansPerSecond);
+
+  /** @brief 모터의 현재 회전 속도를 라디안/초로 읽는다. */
+  [[nodiscard]] std::array<double, 4>
+  MotorSpeedsRadiansPerSecond(JoltRigidBodyHandle body) const;
+
+  /** @brief 현재 모터 속도에서 만들어진 각 로터의 추력을 뉴턴으로 읽는다. */
+  [[nodiscard]] std::array<double, 4>
+  MotorThrustsNewtons(JoltRigidBodyHandle body) const;
 
   /** @brief 강체에 한 번의 물리 단계 동안 작용할 힘을 가한다. */
   void ApplyForce(JoltRigidBodyHandle body, const glm::dvec3 &forceNewtons);

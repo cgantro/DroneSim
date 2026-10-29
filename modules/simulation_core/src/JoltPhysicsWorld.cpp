@@ -1,4 +1,5 @@
 #include "simulation_core/JoltPhysicsWorld.h"
+#include "simulation_core/QuadrotorModel.h"
 
 #include <Jolt/Jolt.h>
 
@@ -6,13 +7,16 @@
 #include <Jolt/Core/JobSystemSingleThreaded.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/MassProperties.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -168,9 +172,17 @@ JPH::RefConst<JPH::Shape> MakeBoxShape(const glm::dvec3 &halfExtentsMeters) {
 } // namespace
 
 struct JoltPhysicsWorld::Impl {
+  struct QuadrotorActuation {
+    QuadrotorParameters parameters;
+    std::array<double, QuadrotorParameters::rotorCount> targetSpeeds{};
+    std::array<double, QuadrotorParameters::rotorCount> motorSpeeds{};
+    bool hasStepped = false;
+  };
+
   struct BodyRecord {
     JPH::BodyID id;
     bool isStatic = false;
+    std::optional<QuadrotorActuation> quadrotor;
   };
 
   JoltRuntime &runtime;
@@ -202,8 +214,10 @@ struct JoltPhysicsWorld::Impl {
     }
   }
 
-  JoltRigidBodyHandle AddBody(const JPH::BodyCreationSettings &settings,
-                              JPH::EActivation activation, bool isStatic) {
+  JoltRigidBodyHandle
+  AddBody(const JPH::BodyCreationSettings &settings,
+          JPH::EActivation activation, bool isStatic,
+          std::optional<QuadrotorActuation> quadrotor = std::nullopt) {
     if (nextHandle == 0)
       throw std::overflow_error("강체 식별값을 더 만들 수 없습니다.");
 
@@ -214,13 +228,20 @@ struct JoltPhysicsWorld::Impl {
 
     const std::uint32_t handle = nextHandle++;
     try {
-      bodies.emplace(handle, BodyRecord{id, isStatic});
+      bodies.emplace(handle, BodyRecord{id, isStatic, std::move(quadrotor)});
     } catch (...) {
       bodyInterface.RemoveBody(id);
       bodyInterface.DestroyBody(id);
       throw;
     }
     return {handle};
+  }
+
+  BodyRecord &GetBody(JoltRigidBodyHandle handle) {
+    const auto found = bodies.find(handle.value);
+    if (found == bodies.end())
+      throw std::out_of_range("물리 월드에서 강체를 찾을 수 없습니다.");
+    return found->second;
   }
 
   const BodyRecord &GetBody(JoltRigidBodyHandle handle) const {
@@ -275,6 +296,117 @@ JoltPhysicsWorld::CreateDynamicBox(const JoltBoxDefinition &definition) {
   return impl_->AddBody(settings, JPH::EActivation::Activate, false);
 }
 
+JoltRigidBodyHandle
+JoltPhysicsWorld::CreateQuadrotor(const JoltBoxDefinition &body,
+                                  const QuadrotorParameters &parameters) {
+  if (!IsFinite(body.positionMeters) || !IsValidOrientation(body.orientation) ||
+      !HasPositiveComponents(body.halfExtentsMeters) ||
+      !std::isfinite(body.friction) || body.friction < 0.0 ||
+      !std::isfinite(body.restitution) || body.restitution < 0.0 ||
+      body.restitution > 1.0 || !std::isfinite(parameters.massKilograms) ||
+      parameters.massKilograms <= 0.0 ||
+      !HasPositiveComponents(
+          parameters.principalInertiaKilogramMetersSquared) ||
+      !std::isfinite(parameters.thrustCoefficientNewtonsPerSpeedSquared) ||
+      parameters.thrustCoefficientNewtonsPerSpeedSquared <= 0.0 ||
+      !std::isfinite(parameters.momentToThrustRatio) ||
+      parameters.momentToThrustRatio < 0.0 ||
+      !std::isfinite(parameters.motorTimeConstantUpSeconds) ||
+      parameters.motorTimeConstantUpSeconds <= 0.0 ||
+      !std::isfinite(parameters.motorTimeConstantDownSeconds) ||
+      parameters.motorTimeConstantDownSeconds <= 0.0 ||
+      !std::isfinite(parameters.maximumMotorSpeedRadiansPerSecond) ||
+      parameters.maximumMotorSpeedRadiansPerSecond <= 0.0) {
+    throw std::invalid_argument(
+        "드론의 물리 제원과 시작 상태를 확인해 주세요.");
+  }
+  if (!std::all_of(parameters.rotors.begin(), parameters.rotors.end(),
+                   [](const RotorDefinition &rotor) {
+                     return IsFinite(rotor.positionMeters);
+                   })) {
+    throw std::invalid_argument("로터 위치를 확인해 주세요.");
+  }
+
+  const auto shape = MakeBoxShape(body.halfExtentsMeters);
+  JPH::BodyCreationSettings settings(
+      shape.GetPtr(), ToJoltVector(body.positionMeters),
+      ToJoltRotation(body.orientation), JPH::EMotionType::Dynamic, movingLayer);
+  settings.mOverrideMassProperties =
+      JPH::EOverrideMassProperties::MassAndInertiaProvided;
+  settings.mMassPropertiesOverride.mMass =
+      ToJoltPositiveFloat(parameters.massKilograms);
+  // Jolt 축은 (동, 위, 남쪽 반대)이므로 ENU의 북·위 관성 순서를 바꾼다.
+  settings.mMassPropertiesOverride.mInertia = JPH::Mat44::sScale(JPH::Vec3(
+      ToJoltPositiveFloat(parameters.principalInertiaKilogramMetersSquared.x),
+      ToJoltPositiveFloat(parameters.principalInertiaKilogramMetersSquared.z),
+      ToJoltPositiveFloat(parameters.principalInertiaKilogramMetersSquared.y)));
+  settings.mFriction = ToJoltFloat(body.friction);
+  settings.mRestitution = ToJoltFloat(body.restitution);
+
+  Impl::QuadrotorActuation actuation;
+  actuation.parameters = parameters;
+  return impl_->AddBody(settings, JPH::EActivation::Activate, false,
+                        std::move(actuation));
+}
+
+void JoltPhysicsWorld::SetMotorTargets(
+    JoltRigidBodyHandle handle,
+    const std::array<double, 4> &speedRadiansPerSecond) {
+  auto &body = impl_->GetBody(handle);
+  if (!body.quadrotor)
+    throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
+  const double maximumSpeed =
+      body.quadrotor->parameters.maximumMotorSpeedRadiansPerSecond;
+  for (std::size_t rotor = 0; rotor < speedRadiansPerSecond.size(); ++rotor) {
+    if (!std::isfinite(speedRadiansPerSecond[rotor]))
+      throw std::invalid_argument("로터 목표 속도는 유한한 값이어야 합니다.");
+    body.quadrotor->targetSpeeds[rotor] =
+        std::clamp(speedRadiansPerSecond[rotor], 0.0, maximumSpeed);
+  }
+}
+
+void JoltPhysicsWorld::SetInitialMotorSpeeds(
+    JoltRigidBodyHandle handle,
+    const std::array<double, 4> &speedRadiansPerSecond) {
+  auto &body = impl_->GetBody(handle);
+  if (!body.quadrotor)
+    throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
+  if (body.quadrotor->hasStepped)
+    throw std::logic_error("초기 로터 속도는 첫 물리 단계 전에만 설정할 수 있습니다.");
+
+  const double maximumSpeed =
+      body.quadrotor->parameters.maximumMotorSpeedRadiansPerSecond;
+  for (double speed : speedRadiansPerSecond) {
+    if (!std::isfinite(speed) || speed < 0.0 || speed > maximumSpeed)
+      throw std::invalid_argument(
+          "초기 로터 속도를 허용 범위 안에서 지정해 주세요.");
+  }
+  body.quadrotor->motorSpeeds = speedRadiansPerSecond;
+  body.quadrotor->targetSpeeds = speedRadiansPerSecond;
+}
+
+std::array<double, 4> JoltPhysicsWorld::MotorSpeedsRadiansPerSecond(
+    JoltRigidBodyHandle handle) const {
+  const auto &body = impl_->GetBody(handle);
+  if (!body.quadrotor)
+    throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
+  return body.quadrotor->motorSpeeds;
+}
+
+std::array<double, 4>
+JoltPhysicsWorld::MotorThrustsNewtons(JoltRigidBodyHandle handle) const {
+  const auto &body = impl_->GetBody(handle);
+  if (!body.quadrotor)
+    throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
+  std::array<double, QuadrotorParameters::rotorCount> thrusts{};
+  const double coefficient =
+      body.quadrotor->parameters.thrustCoefficientNewtonsPerSpeedSquared;
+  for (std::size_t rotor = 0; rotor < thrusts.size(); ++rotor)
+    thrusts[rotor] = coefficient * body.quadrotor->motorSpeeds[rotor] *
+                     body.quadrotor->motorSpeeds[rotor];
+  return thrusts;
+}
+
 void JoltPhysicsWorld::ApplyForce(JoltRigidBodyHandle handle,
                                   const glm::dvec3 &forceNewtons) {
   if (!IsFinite(forceNewtons))
@@ -321,6 +453,50 @@ void JoltPhysicsWorld::SetState(JoltRigidBodyHandle handle,
 }
 
 void JoltPhysicsWorld::StepFixed() {
+  JPH::BodyInterface &bodyInterface = impl_->physicsSystem.GetBodyInterface();
+  for (auto &[handle, body] : impl_->bodies) {
+    static_cast<void>(handle);
+    if (!body.quadrotor)
+      continue;
+
+    auto &actuation = *body.quadrotor;
+    const QuadrotorParameters &parameters = actuation.parameters;
+    JPH::RVec3 bodyPosition;
+    JPH::Quat bodyRotation;
+    bodyInterface.GetPositionAndRotation(body.id, bodyPosition, bodyRotation);
+    const glm::dvec3 position = ToProjectVector(bodyPosition);
+    const glm::dquat orientation = ToProjectRotation(bodyRotation);
+    const double seconds = fixedStepSeconds;
+    double reactionTorqueBody = 0.0;
+
+    for (std::size_t rotor = 0; rotor < actuation.motorSpeeds.size(); ++rotor) {
+      const double target = actuation.targetSpeeds[rotor];
+      const double timeConstant = target >= actuation.motorSpeeds[rotor]
+                                      ? parameters.motorTimeConstantUpSeconds
+                                      : parameters.motorTimeConstantDownSeconds;
+      const double blend = 1.0 - std::exp(-seconds / timeConstant);
+      double &speed = actuation.motorSpeeds[rotor];
+      speed += (target - speed) * blend;
+
+      const double thrust =
+          parameters.thrustCoefficientNewtonsPerSpeedSquared * speed * speed;
+      const glm::dvec3 force = orientation * glm::dvec3{0.0, 0.0, thrust};
+      const glm::dvec3 rotorPosition =
+          position + orientation * parameters.rotors[rotor].positionMeters;
+      bodyInterface.AddForce(body.id, ToJoltVector(force),
+                             ToJoltVector(rotorPosition));
+      const double spinSign =
+          parameters.rotors[rotor].rotation == RotorRotation::CounterClockwise
+              ? 1.0
+              : -1.0;
+      reactionTorqueBody += spinSign * parameters.momentToThrustRatio * thrust;
+    }
+
+    const glm::dvec3 reactionTorque =
+        orientation * glm::dvec3{0.0, 0.0, reactionTorqueBody};
+    bodyInterface.AddTorque(body.id, ToJoltVector(reactionTorque));
+    actuation.hasStepped = true;
+  }
   impl_->physicsSystem.Update(static_cast<float>(fixedStepSeconds), 1,
                               &impl_->tempAllocator, &impl_->jobSystem);
 }
