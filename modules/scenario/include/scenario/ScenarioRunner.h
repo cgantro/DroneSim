@@ -121,9 +121,13 @@ struct ScenarioResult
     struct Mission
     {
         std::string name;
-        Outcome outcome = Outcome::Inconclusive;
+        /** @brief 작업 상태에서 전체 임무 결과를 계산한다. */
+        [[nodiscard]] Outcome GetOutcome() const noexcept;
         /** @brief 모든 작업이 완료됐는지 확인한다. 실패와 미확정은 outcome에 남는다. */
-        [[nodiscard]] bool IsPassed() const noexcept { return outcome == Outcome::Passed; }
+        [[nodiscard]] bool IsPassed() const noexcept
+        {
+            return GetOutcome() == Outcome::Passed;
+        }
         /** @brief 완료한 작업 수와 전체 작업 중 완료한 비율이다. */
         std::size_t completedTaskCount = 0;
         double completionPercent = 0.0;

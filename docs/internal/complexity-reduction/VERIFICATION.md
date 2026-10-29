@@ -1,5 +1,10 @@
 # 빌드와 시험 기록
 
+## 임무 판정 계산 — 2026-10-30
+
+- `Mission`의 결과 열거형은 완료·실패 작업 상태에서 계산할 수 있었다. 별도 필드를 제거하고 `GetOutcome()`에서 작업 목록으로 판정하도록 바꿨다. Headless JSON의 `outcome`과 `passed` 키는 유지한다.
+- Windows Release `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+
 ## 시나리오 드론 시작 상태 통합 — 2026-10-30
 
 - 시나리오 정의에서 드론 시작 상태를 위치·방향·속도·자세·모터·모드 필드로 나눠 저장하고, 실행 중 다시 `DroneState`를 조립하던 부분을 제거했다. 이제 같은 형식을 그대로 보관하고 Simulation Core에 전달한다.

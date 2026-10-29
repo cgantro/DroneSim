@@ -117,7 +117,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                 {"completed_tick", task.completedTick}});
         }
         mission = {{"name", result.mission->name},
-            {"outcome", aerosimlab::scenario::ToString(result.mission->outcome)},
+            {"outcome", aerosimlab::scenario::ToString(result.mission->GetOutcome())},
             {"passed", result.mission->IsPassed()},
             {"completed_task_count", result.mission->completedTaskCount},
             {"task_count", result.mission->tasks.size()},

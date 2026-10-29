@@ -165,3 +165,9 @@
 - `ScenarioDrone`은 하나의 시작 상태를 위치·방향·속도·자세·모터 속도·비행 모드 필드로 따로 저장했다. 실행기는 다시 `DroneState`를 만들어 Simulation Core에 전달했다.
 - `ScenarioDrone`이 `DroneState`를 직접 보관하도록 바꿨다. 위치와 방향 외의 초기 상태가 입력됐는지 나타내는 표시는 운동학 모드에서 강체 전용 입력을 거부하는 데 필요해 남겼다.
 - 이 변경은 JSON 필드와 상태 기본값을 바꾸지 않는다. 강체 상태 재현, 설정 오류 검사와 전체 CTest를 확인했다. 자세한 결과는 `VERIFICATION.md`에 있다.
+
+## 임무 결과 상태 중복 제거 — 2026-10-30
+
+- `Mission::outcome`은 작업별 `completedTick`과 `failed`에서 정해지므로 별도로 저장할 필요가 없었다.
+- `GetOutcome()`이 작업 목록을 순회해 실패를 우선 판정하고, 모두 끝났을 때 성공, 나머지는 미확정으로 돌려준다. `ScenarioResult::outcome`은 예상 조건 실패까지 담으므로 그대로 둔다.
+- JSON 응답 이름과 기존 상태 결과를 유지했다. 빌드·시험 결과는 `VERIFICATION.md`에 기록했다.

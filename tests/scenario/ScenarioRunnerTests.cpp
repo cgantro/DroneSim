@@ -650,7 +650,7 @@ void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
     EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Inconclusive);
     ASSERT_TRUE(result.mission.has_value());
     EXPECT_FALSE(result.mission->IsPassed());
-    EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Inconclusive);
+    EXPECT_EQ(result.mission->GetOutcome(), ScenarioResult::Outcome::Inconclusive);
     EXPECT_EQ(result.mission->completedTaskCount, 3U);
     EXPECT_FALSE(result.mission->completedTick.has_value());
     ASSERT_TRUE(result.mission->startedTick.has_value());
@@ -796,7 +796,7 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     ASSERT_TRUE(result.mission.has_value());
     EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Inconclusive);
     EXPECT_FALSE(result.IsPassed());
-    EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Inconclusive);
+    EXPECT_EQ(result.mission->GetOutcome(), ScenarioResult::Outcome::Inconclusive);
     EXPECT_FALSE(result.mission->IsPassed());
     ASSERT_EQ(result.mission->tasks.size(), 2U);
     for (const ScenarioResult::MissionTask& task : result.mission->tasks)
@@ -831,7 +831,7 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     const ScenarioResult failedResult = RunScenario(missedDeadlineScenario);
     ASSERT_TRUE(failedResult.mission.has_value());
     EXPECT_EQ(failedResult.outcome, ScenarioResult::Outcome::Failed);
-    EXPECT_EQ(failedResult.mission->outcome, ScenarioResult::Outcome::Failed);
+    EXPECT_EQ(failedResult.mission->GetOutcome(), ScenarioResult::Outcome::Failed);
     EXPECT_FALSE(failedResult.IsPassed());
     EXPECT_FALSE(failedResult.issues.empty());
 }
@@ -999,7 +999,7 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
         << " east_mode=" << (physicalAvoidanceResult.drones.size() > 1U
             ? static_cast<int>(physicalAvoidanceResult.drones[1].finalState.mode) : -1)
         << " mission=" << (physicalAvoidanceResult.mission.has_value()
-            ? static_cast<int>(physicalAvoidanceResult.mission->outcome) : -1);
+            ? static_cast<int>(physicalAvoidanceResult.mission->GetOutcome()) : -1);
     ASSERT_TRUE(physicalAvoidanceResult.mission.has_value());
     EXPECT_TRUE(physicalAvoidanceResult.mission->IsPassed());
     EXPECT_EQ(physicalAvoidanceResult.mission->completedTaskCount, 2U);
@@ -1013,7 +1013,7 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
         "scenarios/multi-drone/low-battery-return.json"));
     EXPECT_FALSE(energyResult.IsPassed());
     ASSERT_TRUE(energyResult.mission.has_value());
-    EXPECT_EQ(energyResult.mission->outcome, ScenarioResult::Outcome::Failed);
+    EXPECT_EQ(energyResult.mission->GetOutcome(), ScenarioResult::Outcome::Failed);
     ASSERT_EQ(energyResult.mission->tasks.size(), 2U);
     EXPECT_EQ(energyResult.mission->tasks[0].droneName, "low-charge");
     EXPECT_TRUE(energyResult.mission->tasks[0].failed);

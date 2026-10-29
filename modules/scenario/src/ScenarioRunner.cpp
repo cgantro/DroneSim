@@ -1101,8 +1101,6 @@ void CheckExpectedResults(
     {
         std::size_t totalWaypointCount = 0;
         std::size_t visitedWaypointCount = 0;
-        bool allTasksCompleted = true;
-        bool hasFailedTask = false;
         std::optional<std::uint64_t> latestTaskCompletionTick;
         for (const ScenarioResult::MissionTask& task : result.mission->tasks)
         {
@@ -1117,10 +1115,8 @@ void CheckExpectedResults(
             }
             else
             {
-                allTasksCompleted = false;
                 visitedWaypointCount += task.currentWaypointIndex;
             }
-            hasFailedTask = hasFailedTask || task.failed;
         }
         result.mission->completionPercent = 100.0
             * static_cast<double>(result.mission->completedTaskCount)
@@ -1128,13 +1124,9 @@ void CheckExpectedResults(
         result.mission->coveragePercent = totalWaypointCount == 0 ? 0.0
             : 100.0 * static_cast<double>(visitedWaypointCount)
                 / static_cast<double>(totalWaypointCount);
-        result.mission->completedTick = allTasksCompleted
+        result.mission->completedTick = result.mission->completedTaskCount
+                == result.mission->tasks.size()
             ? latestTaskCompletionTick : std::nullopt;
-        result.mission->outcome = hasFailedTask
-            ? ScenarioResult::Outcome::Failed
-            : allTasksCompleted
-                ? ScenarioResult::Outcome::Passed
-                : ScenarioResult::Outcome::Inconclusive;
     }
 
     CheckExpectedDroneResults(definition, result);
@@ -1143,10 +1135,23 @@ void CheckExpectedResults(
     if (!result.issues.empty())
         result.outcome = ScenarioResult::Outcome::Failed;
     else if (result.mission)
-        result.outcome = result.mission->outcome;
+        result.outcome = result.mission->GetOutcome();
     else
         result.outcome = ScenarioResult::Outcome::Passed;
 }
+}
+
+ScenarioResult::Outcome ScenarioResult::Mission::GetOutcome() const noexcept
+{
+    bool allTasksCompleted = true;
+    for (const MissionTask& task : tasks)
+    {
+        if (task.failed)
+            return Outcome::Failed;
+        if (!task.IsCompleted())
+            allTasksCompleted = false;
+    }
+    return allTasksCompleted ? Outcome::Passed : Outcome::Inconclusive;
 }
 
 std::string_view ToString(ScenarioResult::Outcome outcome) noexcept
