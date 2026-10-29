@@ -281,37 +281,40 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         const auto motorSpeeds = item.find(
             "initial_motor_speeds_radians_per_second");
         const auto mode = item.find("initial_mode");
-        const bool hasFullInitialState = velocity != item.end()
+        const bool hasExtendedInitialState = velocity != item.end()
             || orientation != item.end() || angularVelocity != item.end()
             || motorSpeeds != item.end() || mode != item.end();
-        const glm::dvec3 initialVelocity = velocity == item.end()
-            ? glm::dvec3{0.0}
-            : ReadVector(*velocity, "initial_velocity_meters_per_second");
-        const std::optional<glm::dquat> initialOrientation = orientation == item.end()
-            ? std::nullopt
-            : std::optional<glm::dquat>{ReadOrientationQuaternion(*orientation)};
-        const glm::dvec3 initialAngularVelocity = angularVelocity == item.end()
-            ? glm::dvec3{0.0}
-            : ReadVector(*angularVelocity,
-                "initial_angular_velocity_radians_per_second");
-        std::array<double, QuadrotorParameters::rotorCount> initialMotorSpeeds{};
+        DroneState initialState;
+        initialState.positionMeters = ReadVector(
+            Required(item, "initial_position_meters"), "initial_position_meters");
+        initialState.yawRadians = initialYawRadians;
+        initialState.orientation = orientation == item.end()
+            ? glm::angleAxis(initialYawRadians, glm::dvec3{0.0, 0.0, 1.0})
+            : ReadOrientationQuaternion(*orientation);
+        if (velocity != item.end())
+            initialState.velocityMetersPerSecond = ReadVector(
+                *velocity, "initial_velocity_meters_per_second");
+        if (angularVelocity != item.end())
+            initialState.angularVelocityRadiansPerSecond = ReadVector(
+                *angularVelocity, "initial_angular_velocity_radians_per_second");
         if (motorSpeeds != item.end())
         {
-            if (!motorSpeeds->is_array() || motorSpeeds->size() != initialMotorSpeeds.size())
+            if (!motorSpeeds->is_array()
+                || motorSpeeds->size() != initialState.motorSpeedsRadiansPerSecond.size())
                 throw std::invalid_argument(
                     "initial_motor_speeds_radians_per_second에는 로터별 값 4개가 필요합니다.");
-            for (std::size_t index = 0; index < initialMotorSpeeds.size(); ++index)
+            for (std::size_t index = 0;
+                 index < initialState.motorSpeedsRadiansPerSecond.size(); ++index)
             {
-                initialMotorSpeeds[index] = ReadFiniteNumber(
+                initialState.motorSpeedsRadiansPerSecond[index] = ReadFiniteNumber(
                     (*motorSpeeds)[index], "initial_motor_speeds_radians_per_second");
-                if (initialMotorSpeeds[index] < 0.0)
+                if (initialState.motorSpeedsRadiansPerSecond[index] < 0.0)
                     throw std::invalid_argument(
                         "초기 로터 속도는 0 이상이어야 합니다.");
             }
         }
-        FlightMode initialMode = FlightMode::Grounded;
         if (mode != item.end())
-            initialMode = ReadFlightMode(*mode);
+            initialState.mode = ReadFlightMode(*mode);
         std::optional<double> batteryCapacity;
         const auto capacity = item.find("battery_capacity_watt_hours");
         if (capacity != item.end())
@@ -329,10 +332,7 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         std::optional<CameraModel> cameraModel;
         if (const auto camera = item.find("camera_model"); camera != item.end())
             cameraModel = ReadCameraModel(*camera);
-        drones.push_back({std::move(name), ReadVector(
-            Required(item, "initial_position_meters"), "initial_position_meters"),
-            initialYawRadians, initialVelocity, initialOrientation,
-            initialAngularVelocity, initialMotorSpeeds, initialMode, hasFullInitialState,
+        drones.push_back({std::move(name), initialState, hasExtendedInitialState,
             batteryCapacity, initialBatteryPercent, cameraModel});
     }
     return drones;
@@ -1110,10 +1110,10 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     ReadEnvironmentSettings(document, definition);
     for (const ScenarioDrone& drone : definition.drones)
     {
-        if (drone.hasFullInitialState
+        if (drone.hasExtendedInitialState
             && definition.dynamics != SimulationDynamics::RigidBody)
             throw std::invalid_argument(
-                "완전한 초기 상태는 rigid_body 시나리오에서만 사용할 수 있습니다.");
+                "세부 초기 상태는 rigid_body 시나리오에서만 사용할 수 있습니다.");
     }
     if (definition.dynamics != SimulationDynamics::RigidBody
         && std::any_of(definition.commands.begin(), definition.commands.end(),

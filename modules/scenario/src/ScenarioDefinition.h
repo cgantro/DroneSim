@@ -35,14 +35,9 @@ struct TickCommand
 struct ScenarioDrone
 {
     std::string name;
-    glm::dvec3 initialPositionMeters;
-    double initialYawRadians;
-    glm::dvec3 initialVelocityMetersPerSecond{0.0};
-    std::optional<glm::dquat> initialOrientation;
-    glm::dvec3 initialAngularVelocityRadiansPerSecond{0.0};
-    std::array<double, QuadrotorParameters::rotorCount> initialMotorSpeedsRadiansPerSecond{};
-    FlightMode initialMode = FlightMode::Grounded;
-    bool hasFullInitialState = false;
+    DroneState initialState;
+    /** @brief 위치·방향 외의 시작 상태를 JSON에서 지정했는지 나타낸다. */
+    bool hasExtendedInitialState = false;
     std::optional<double> batteryCapacityWattHours;
     double initialBatteryPercent = 100.0;
     std::optional<CameraModel> cameraModel;

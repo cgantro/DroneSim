@@ -272,24 +272,12 @@ DroneIds CreateScenarioDrones(
     for (const ScenarioDrone& drone : definition.drones)
     {
         const DroneId id = simulation.AddDrone(
-            drone.initialPositionMeters, drone.initialYawRadians);
+            drone.initialState.positionMeters, drone.initialState.yawRadians);
         simulation.SetCameraModel(
             id, drone.cameraModel.value_or(definition.defaultCameraModel));
         droneIds.emplace(drone.name, id);
-        if (drone.hasFullInitialState)
-        {
-            DroneState initialState;
-            initialState.positionMeters = drone.initialPositionMeters;
-            initialState.velocityMetersPerSecond = drone.initialVelocityMetersPerSecond;
-            initialState.orientation = drone.initialOrientation.value_or(
-                glm::angleAxis(drone.initialYawRadians, glm::dvec3{0.0, 0.0, 1.0}));
-            initialState.angularVelocityRadiansPerSecond =
-                drone.initialAngularVelocityRadiansPerSecond;
-            initialState.motorSpeedsRadiansPerSecond =
-                drone.initialMotorSpeedsRadiansPerSecond;
-            initialState.mode = drone.initialMode;
-            simulation.SetInitialState(id, initialState);
-        }
+        if (drone.hasExtendedInitialState)
+            simulation.SetInitialState(id, drone.initialState);
     }
 
     if (!simulation.RemoveDrone(unusedDefaultDrone))
