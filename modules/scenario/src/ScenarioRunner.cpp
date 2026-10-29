@@ -1113,19 +1113,26 @@ void CheckExpectedResults(
     {
         std::size_t totalWaypointCount = 0;
         std::size_t visitedWaypointCount = 0;
+        bool allTasksCompleted = true;
+        bool hasFailedTask = false;
+        std::optional<std::uint64_t> latestTaskCompletionTick;
         for (const ScenarioResult::MissionTask& task : result.mission->tasks)
         {
             totalWaypointCount += task.waypointsMeters.size();
-            visitedWaypointCount += task.IsCompleted()
-                ? task.waypointsMeters.size() : task.currentWaypointIndex;
             if (task.IsCompleted())
             {
+                visitedWaypointCount += task.waypointsMeters.size();
                 ++result.mission->completedTaskCount;
-                if (task.completedTick
-                    && (!result.mission->completedTick
-                        || *task.completedTick > *result.mission->completedTick))
-                    result.mission->completedTick = task.completedTick;
+                if (!latestTaskCompletionTick
+                    || *task.completedTick > *latestTaskCompletionTick)
+                    latestTaskCompletionTick = task.completedTick;
             }
+            else
+            {
+                allTasksCompleted = false;
+                visitedWaypointCount += task.currentWaypointIndex;
+            }
+            hasFailedTask = hasFailedTask || task.failed;
         }
         result.mission->completionPercent = 100.0
             * static_cast<double>(result.mission->completedTaskCount)
@@ -1133,12 +1140,8 @@ void CheckExpectedResults(
         result.mission->coveragePercent = totalWaypointCount == 0 ? 0.0
             : 100.0 * static_cast<double>(visitedWaypointCount)
                 / static_cast<double>(totalWaypointCount);
-        const bool allTasksCompleted = std::all_of(
-            result.mission->tasks.begin(), result.mission->tasks.end(),
-            [](const ScenarioResult::MissionTask& task) { return task.IsCompleted(); });
-        const bool hasFailedTask = std::any_of(
-            result.mission->tasks.begin(), result.mission->tasks.end(),
-            [](const ScenarioResult::MissionTask& task) { return task.failed; });
+        result.mission->completedTick = allTasksCompleted
+            ? latestTaskCompletionTick : std::nullopt;
         result.mission->outcome = hasFailedTask
             ? ScenarioResult::Outcome::Failed
             : allTasksCompleted

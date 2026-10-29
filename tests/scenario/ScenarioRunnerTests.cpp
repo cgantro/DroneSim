@@ -652,6 +652,7 @@ void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
     EXPECT_FALSE(result.mission->IsPassed());
     EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Inconclusive);
     EXPECT_EQ(result.mission->completedTaskCount, 3U);
+    EXPECT_FALSE(result.mission->completedTick.has_value());
     ASSERT_TRUE(result.mission->startedTick.has_value());
     EXPECT_EQ(*result.mission->startedTick, 90U);
     for (const ScenarioResult::MissionTask& task : result.mission->tasks)

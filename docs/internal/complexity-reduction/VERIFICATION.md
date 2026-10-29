@@ -1,5 +1,11 @@
 # 빌드와 시험 기록
 
+## 부분 완료 임무의 완료 시각 수정 — 2026-10-30
+
+- 직접 통신 단절로 4개 작업 중 3개만 완료되는 경우, 이전에는 가장 늦게 끝난 작업의 시각이 전체 임무 완료 시각으로 노출됐다. 이제 전체 작업이 끝나지 않으면 `completed_tick`과 `completion_time_seconds`를 비운다.
+- 기존 heartbeat 단절 시험에 전체 완료 시각이 없는지 확인을 추가했다. Headless 출력은 `inconclusive`, 3/4 완료, `completed_tick` 없음, `completion_time_seconds` 없음으로 확인했다. 이 시나리오 실행 파일은 미확정 결과를 반환하므로 종료 코드 1이 정상이다.
+- Windows Release `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+
 ## 임무 완료 상태 중복 제거 — 2026-10-30
 
 - `MissionTask`의 `completed` 불리언은 완료되는 순간에만 `completedTick`과 함께 설정됐다. 불리언을 제거하고 `IsCompleted()`가 완료 Tick의 유무를 확인하도록 했다. JSON의 `completed` 항목은 같은 의미로 계속 출력한다.
