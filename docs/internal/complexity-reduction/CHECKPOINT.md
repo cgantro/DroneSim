@@ -477,3 +477,10 @@
 - 지면·상자·기둥·높이 미상 외곽선 접촉과 운동학 충돌 형상 저장을 `KinematicCollisionWorld` 값 객체로 옮겼다. Flecs 갱신 순서는 이동 계산 후 충돌 보정으로 유지했고, 강체 경로는 기존처럼 `PhysicsWorld`에 맡긴다.
 - Release 시뮬레이션 시험 6/6, 시뮬레이터 통합 시험 5/5 통과. 커밋 `c334a84e`, `a8ced502`가 원격 `main`에 반영됐다.
 - Emscripten 빌드, 전체 CTest와 실제 Viewer 화면은 확인하지 않았다. 다음에는 `SimulationCore` 생성·초기화·물리 동기화와 Flecs 컴포넌트 배치를 검토한다. 무리한 책임 분리는 추가하지 않는다.
+
+## SimulationCore 충돌 경계와 플랫폼 분기 검토 — 2026-10-30
+
+- 운동학 충돌 형상과 접촉 보정은 `KinematicCollisionWorld`로 옮겼다. SimulationCore에는 Flecs 시스템 조립과 네이티브 AirSim 경로 연결이 남는다. 비행 제어식, SAT·다각형 기하, 강체 적분 계산은 각 담당 코드에 있다.
+- `SimulationCore.cpp`의 `#if` 24개와 `#else` 2개를 조사했다. 웹에 AirSim 강체 물리를 링크하지 않고 강체 모드 요청을 거부하며, 네이티브와 운동학 환경 입력·Tick 경로를 나누는 분기다. 물리 인터페이스나 웹 대체 구현은 미지원 동작을 감추고 코드만 늘릴 수 있어 이번에는 추가하지 않는다.
+- 기존 Release 시험 실행 파일을 직접 실행해 시뮬레이션 6/6, 시뮬레이터 통합 5/5 통과를 확인했다. 실행 파일 시각은 변경된 소스 이후였다. 이번 셸에서는 `cmake` 명령을 찾지 못해 새 빌드는 실행하지 못했다. 웹 빌드와 Viewer 화면도 미검증이다.
+- 감사 내용과 분기 판단을 `AUDIT_SIMULATION.md`에 반영했다. 사용자가 이미 삭제한 `assets/models/source/x500-v2/README.md`는 변경하거나 스테이징하지 않는다.
