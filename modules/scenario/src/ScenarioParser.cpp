@@ -22,6 +22,8 @@ namespace
 using Json = nlohmann::json;
 
 constexpr std::uint64_t maximumScenarioTicks = 5'184'000;
+
+/** @brief 객체에서 필수 항목을 찾고, 빠졌으면 이름을 담아 오류를 알린다. */
 const Json& Required(const Json& object, const char* key)
 {
     const auto entry = object.find(key);
@@ -32,6 +34,7 @@ const Json& Required(const Json& object, const char* key)
     return *entry;
 }
 
+/** @brief Tick·횟수처럼 음수나 소수가 될 수 없는 값을 읽는다. */
 std::uint64_t ReadUnsigned(const Json& value, const char* name)
 {
     if (!value.is_number_unsigned() && !value.is_number_integer())
@@ -45,6 +48,7 @@ std::uint64_t ReadUnsigned(const Json& value, const char* name)
     return value.get<std::uint64_t>();
 }
 
+/** @brief 물리 계산에 사용할 숫자를 읽고 무한대와 NaN을 거른다. */
 double ReadFiniteNumber(const Json& value, const char* name)
 {
     if (!value.is_number())
@@ -59,6 +63,11 @@ double ReadFiniteNumber(const Json& value, const char* name)
     return number;
 }
 
+/**
+ * @brief 카메라 해상도와 세로 시야각을 카메라 설정으로 옮긴다.
+ * @details 해상도는 int로 바꾸기 전에 상한을 확인해 변환 범위를 보장한다.
+ * 실제로 사용할 수 있는 값인지는 설정 검증 단계에서 확인한다.
+ */
 CameraModel ReadCameraModel(const Json& value)
 {
     if (!value.is_object())
@@ -113,6 +122,7 @@ glm::dquat ReadOrientationQuaternion(const Json& value)
         ReadFiniteNumber(value[1], fieldName),
         ReadFiniteNumber(value[2], fieldName),
         ReadFiniteNumber(value[3], fieldName)};
+    // 큰 입력값도 제곱 과정에서 넘치지 않도록 최댓값으로 나눈 뒤 정규화한다.
     const double scale = std::max({
         std::abs(input.w), std::abs(input.x), std::abs(input.y), std::abs(input.z)});
     if (scale == 0.0)
@@ -274,6 +284,8 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         const auto motorSpeeds = item.find(
             "initial_motor_speeds_radians_per_second");
         const auto mode = item.find("initial_mode");
+        // 운동학 모델이 위치·방향만 사용하는지, 강체 모델의 전체 초기 상태를
+        // 입력했는지 검증 단계에서 구분할 수 있도록 표시한다.
         const bool hasExtendedInitialState = velocity != item.end()
             || orientation != item.end() || angularVelocity != item.end()
             || motorSpeeds != item.end() || mode != item.end();
@@ -486,6 +498,7 @@ Json ParseScenarioDocument(std::string_view jsonText)
     {
         throw std::invalid_argument(std::string("JSON을 읽지 못했습니다: ") + error.what());
     }
+    // 이후 항목 읽기는 키 이름으로 접근하므로 최상위 값은 객체여야 한다.
     if (!document.is_object())
         throw std::invalid_argument("시나리오의 첫 항목은 JSON 객체여야 합니다.");
     return document;
@@ -676,7 +689,12 @@ void ReadExpectedResults(const Json& document, ScenarioDefinition& definition)
 
 }
 
-/** @brief JSON 문법과 각 항목을 읽어 실행 설정을 만든다. */
+/**
+ * @brief JSON을 실행 설정 자료형으로 변환한다.
+ * @details 여기서는 필수 항목·자료형과 안전한 숫자 변환을 확인한다.
+ * 드론 이름 참조나 물리 방식처럼 여러 항목을 함께 봐야 하는 규칙은
+ * 이 함수가 반환된 다음 ScenarioRunner에서 별도로 검사한다.
+ */
 ScenarioDefinition ParseScenarioDefinition(std::string_view jsonText)
 {
     const Json document = ParseScenarioDocument(jsonText);
@@ -694,6 +712,7 @@ ScenarioDefinition ParseScenarioDefinition(std::string_view jsonText)
     definition.usesExistingPrimaryDrone = definition.drones.empty();
     if (definition.usesExistingPrimaryDrone)
     {
+        // 드론 목록을 생략한 예전 단일 드론 형식은 기본 드론 한 대로 실행한다.
         ScenarioDrone primaryDrone;
         primaryDrone.name = "drone";
         definition.drones.push_back(std::move(primaryDrone));
@@ -704,6 +723,8 @@ ScenarioDefinition ParseScenarioDefinition(std::string_view jsonText)
         Required(document, "commands"), definition.drones.front().name);
     definition.communicationOutages = ReadDroneCommunicationOutages(document);
 
+    // 독립 설정부터 읽고, 맨 마지막에 기대 결과를 읽는다. 설정 간 관계 검사는
+    // 파서가 끝난 뒤 별도 검증기가 맡는다.
     ReadTrajectorySettings(document, definition);
     definition.mission = ReadMission(document);
 

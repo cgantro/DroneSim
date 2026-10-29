@@ -602,6 +602,17 @@ void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
     ASSERT_EQ(wind.windVelocityMetersPerSecond, (glm::dvec3{2.0, 0.0, 0.0}));
     EXPECT_GT(std::abs(wind.drones.front().finalState.positionMeters.x
         - calm.drones.front().finalState.positionMeters.x), 0.01);
+
+    constexpr std::string_view kinematicWindScenario = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":120,
+     "wind_velocity_meters_per_second":[2,0,0],
+     "commands":[{"tick":0,"type":"takeoff"}],
+     "expected":{"drones":[{"name":"drone","mode":"hovering",
+       "position_meters":[0,0,1.5]}],"tolerance_meters":100}}
+    )json";
+    const ScenarioResult kinematicWind = RunScenario(kinematicWindScenario);
+    ASSERT_TRUE(kinematicWind.IsPassed());
+    EXPECT_GT(std::abs(kinematicWind.drones.front().finalState.positionMeters.x), 0.01);
 }
 
 void Verify_ScenarioRunner_ContinuesTaskDuringHeartbeatLoss()

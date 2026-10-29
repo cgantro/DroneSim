@@ -17,6 +17,7 @@ namespace
 {
 constexpr std::uint64_t maximumTrajectoryDroneSamples = 100'000;
 
+/** @brief 정의에 등록된 드론 이름을 명령·임무 참조 검사에 쓸 집합으로 만든다. */
 std::unordered_set<std::string> GetDroneNames(const ScenarioDefinition& definition)
 {
     std::unordered_set<std::string> names;
@@ -25,6 +26,7 @@ std::unordered_set<std::string> GetDroneNames(const ScenarioDefinition& definiti
     return names;
 }
 
+/** @brief 명령의 대상 드론이 있고 모든 명령 Tick이 순서대로 실행 범위에 있는지 확인한다. */
 void ValidateCommands(const ScenarioDefinition& definition,
     const std::unordered_set<std::string>& droneNames)
 {
@@ -37,6 +39,8 @@ void ValidateCommands(const ScenarioDefinition& definition,
                 "명령이 가리키는 드론을 찾을 수 없습니다: " + command.droneName);
         if (command.tick >= definition.tickCount)
             throw std::invalid_argument("명령 tick은 시나리오 실행 범위 안에 있어야 합니다.");
+        // 같은 Tick의 명령은 입력 순서대로 처리할 수 있지만, 시간을 거슬러
+        // 정렬되지 않은 명령은 실행 중 빠뜨릴 수 있으므로 거부한다.
         if (hasPreviousTick && command.tick < previousTick)
             throw std::invalid_argument("명령은 tick 순서대로 작성해야 합니다.");
         previousTick = command.tick;
@@ -44,12 +48,14 @@ void ValidateCommands(const ScenarioDefinition& definition,
     }
 }
 
+/** @brief 통신 장애가 등록된 드론에 대해 유효하고 서로 겹치지 않는지 확인한다. */
 void ValidateCommunicationOutages(const ScenarioDefinition& definition,
     const std::unordered_set<std::string>& droneNames)
 {
     std::unordered_map<std::string, std::uint64_t> previousEndByDrone;
     for (const DroneCommunicationOutage& outage : definition.communicationOutages)
     {
+        // 같은 드론의 장애 구간은 입력 순서대로 적고 서로 겹치지 않아야 한다.
         const auto previousEnd = previousEndByDrone.find(outage.droneName);
         if (!droneNames.contains(outage.droneName)
             || outage.startTick >= outage.endTick
@@ -65,6 +71,7 @@ void ValidateCommunicationOutages(const ScenarioDefinition& definition,
     }
 }
 
+/** @brief 임무 이름·담당 드론·고도·기한·도착 허용 오차를 확인한다. */
 void ValidateMission(const ScenarioDefinition& definition,
     const std::unordered_set<std::string>& droneNames)
 {
@@ -74,6 +81,7 @@ void ValidateMission(const ScenarioDefinition& definition,
     std::unordered_set<std::string> taskNames;
     for (const ScenarioMissionTask& task : definition.mission->tasks)
     {
+        // 이 M&S에서는 모든 임무 지점을 지면 이상 고도로 제한한다.
         const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
             task.waypointsMeters.end(),
             [](const glm::dvec3& point) { return point.z < 0.0; });
@@ -91,12 +99,11 @@ void ValidateMission(const ScenarioDefinition& definition,
     }
 }
 
+/** @brief 강체 물리에서만 계산할 수 있는 초기 상태와 조종 입력을 걸러낸다. */
 void ValidateRigidBodySettings(const ScenarioDefinition& definition)
 {
-    if (definition.windVelocity
-        && definition.dynamics != SimulationDynamics::RigidBody)
-        throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
-
+    // 바람은 운동학·강체 모델 모두에서 상태 이동에 반영하므로 여기서 제한하지 않는다.
+    // 자세·속도·모터 등 전체 초기 상태는 강체 물리에서만 반영할 수 있다.
     for (const ScenarioDrone& drone : definition.drones)
     {
         if (drone.hasExtendedInitialState
@@ -126,12 +133,15 @@ void ValidateRigidBodySettings(const ScenarioDefinition& definition)
             "controller_gains는 rigid_body 시나리오의 JSON 객체여야 합니다.");
 }
 
+/** @brief 기록할 모든 드론 궤적 표본 수가 메모리 한도 안에 있는지 확인한다. */
 void ValidateTrajectorySize(const ScenarioDefinition& definition)
 {
     if (!definition.trajectorySampleEveryTicks)
         return;
 
     const std::uint64_t interval = *definition.trajectorySampleEveryTicks;
+    // 궤적은 매 샘플마다 모든 드론 상태를 저장하므로, 예상 자료량을
+    // 상한과 나누어 비교해 곱셈 오버플로도 피한다.
     const std::uint64_t sampleCount = definition.tickCount / interval + 1
         + (definition.tickCount % interval != 0 ? 1 : 0);
     const std::uint64_t droneCount =
@@ -141,6 +151,7 @@ void ValidateTrajectorySize(const ScenarioDefinition& definition)
             "궤적 기록이 너무 큽니다. sample_every_ticks를 늘려 주세요.");
 }
 
+/** @brief 둘 이상의 기체가 있어야 의미가 있는 충돌 설정인지 확인한다. */
 void ValidateMultiDroneSettings(const ScenarioDefinition& definition)
 {
     if (definition.collisionAvoidance && definition.drones.size() < 2)
@@ -153,6 +164,7 @@ void ValidateMultiDroneSettings(const ScenarioDefinition& definition)
             "minimum_drone_separation_meters는 여러 드론이 있는 시나리오에서만 설정할 수 있습니다.");
 }
 
+/** @brief 드론별 카메라·배터리·모터 초기값이 실제 모델 범위에 맞는지 확인한다. */
 void ValidateDroneValues(const ScenarioDefinition& definition)
 {
     if (!definition.defaultCameraModel.IsValid())
@@ -179,6 +191,7 @@ void ValidateDroneValues(const ScenarioDefinition& definition)
     }
 }
 
+/** @brief 기체·제어기·충돌 회피 설정에 물리적으로 쓸 수 있는 값을 요구한다. */
 void ValidatePhysicsSettings(const ScenarioDefinition& definition)
 {
     const QuadrotorParameters& model = definition.quadrotorParameters;
@@ -212,6 +225,7 @@ void ValidatePhysicsSettings(const ScenarioDefinition& definition)
     }
 }
 
+/** @brief 배터리 용량·전력과 예비 비율이 소모 계산에 쓸 수 있는지 확인한다. */
 void ValidateEnergyModelValues(const ScenarioDefinition& definition)
 {
     if (!definition.energyModel)
@@ -226,6 +240,7 @@ void ValidateEnergyModelValues(const ScenarioDefinition& definition)
             "배터리 용량과 소비 전력은 양수이고 reserve_percent는 0 이상 100 미만이어야 합니다.");
 }
 
+/** @brief 기대 결과를 비교할 때 쓸 위치·자세 오차와 간격 기준을 확인한다. */
 void ValidateExpectedValues(const ScenarioDefinition& definition)
 {
     if (definition.toleranceMeters < 0.0)
@@ -240,6 +255,7 @@ void ValidateExpectedValues(const ScenarioDefinition& definition)
             "minimum_drone_separation_meters는 0 이상이어야 합니다.");
 }
 
+/** @brief 낮은 배터리로 시작하거나 착륙 예비량이 부족한 설정을 거른다. */
 void ValidateEnergySettings(const ScenarioDefinition& definition)
 {
     if (!definition.energyModel)
@@ -258,10 +274,12 @@ void ValidateEnergySettings(const ScenarioDefinition& definition)
 
     const EnergyModelSettings& settings = *definition.energyModel;
     constexpr double secondsPerHour = 3'600.0;
+    // 귀환 지점은 이륙 높이에서 시작한다. 수직 하강 시간 동안의 비행 전력과
+    // 착륙 명령이 다음 Tick에 반영될 때까지의 한 Tick 전력을 예비량으로 잡는다.
+    const double descentTimeSeconds = DroneModel::takeoffHeightMeters
+        / DroneModel::climbSpeedMetersPerSecond;
     const double landingEnergyWattHours = settings.flightPowerWatts
-        * DroneModel::takeoffHeightMeters
-        / DroneModel::climbSpeedMetersPerSecond / secondsPerHour
-        + settings.flightPowerWatts * DroneModel::fixedStepSeconds / secondsPerHour;
+        * (descentTimeSeconds + DroneModel::fixedStepSeconds) / secondsPerHour;
     for (const ScenarioDrone& drone : definition.drones)
     {
         const double capacityWattHours = drone.batteryCapacityWattHours.value_or(
@@ -278,7 +296,11 @@ void ValidateEnergySettings(const ScenarioDefinition& definition)
 }
 }
 
-/** @brief 다 읽은 설정 사이에 함께 지켜야 할 조건을 확인한다. */
+/**
+ * @brief 실행 설정의 값 범위와 항목 사이의 조건을 확인한다.
+ * @details 개별 값의 허용 범위, 드론 이름 참조, 비행 방식별 설정,
+ * 장애 구간과 임무 시각 순서, 배터리 귀환 가능성을 차례로 검사한다.
+ */
 void ValidateScenarioDefinition(const ScenarioDefinition& definition)
 {
     const std::unordered_set<std::string> droneNames = GetDroneNames(definition);

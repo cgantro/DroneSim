@@ -947,6 +947,8 @@ std::string_view ToString(ScenarioResult::Outcome outcome) noexcept
 
 ScenarioResult RunScenario(std::string_view jsonText)
 {
+    // 입력을 먼저 자료형으로 읽고 규칙을 검사한다. 잘못된 설정으로
+    // 시뮬레이션 객체를 만들거나 Tick을 시작하지 않는다.
     ScenarioDefinition definition = detail::ParseScenarioDefinition(jsonText);
     detail::ValidateScenarioDefinition(definition);
     const std::uint64_t tickCount = definition.tickCount;
@@ -1005,9 +1007,13 @@ ScenarioResult RunScenario(std::string_view jsonText)
         RecordTrajectorySample(definition, simulation, drones, 0, result);
     for (std::uint64_t tick = 0; tick < tickCount; ++tick)
     {
+        // 먼저 관제소의 연결 상태를 갱신하고, 통신이 살아 있는 드론에만
+        // 외부 명령을 전달한다. 드론은 통신이 끊겨도 이미 받은 경로를 계속 따른다.
         UpdateDroneObservations(tick, definition, simulation, drones, result);
         ApplyScheduledCommands(tick, definition.commands, simulation, drones,
             nextCommand, result);
+
+        // 배터리 귀환과 임무 명령은 같은 Tick의 물리 이동 전에 적용한다.
         if (definition.energyModel)
         {
             UpdateEnergyPolicy(tick, result.mission,
@@ -1030,6 +1036,9 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 drone.previousPositionMeters, currentPosition);
             drone.previousPositionMeters = currentPosition;
         }
+
+        // 물리 상태를 한 Tick 진행한 뒤 실제 이동 거리, 최소 간격,
+        // 임무 도착 여부와 요청된 궤적 표본을 기록한다.
         RecordMinimumDroneSeparation(
             definition, simulation, drones, dronePositionsMeters, result);
         UpdateMissionResults(tick, result.mission,
