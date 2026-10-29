@@ -602,10 +602,7 @@ struct SimulationCore::EcsStorage
         target.orientation = source.orientation;
         target.angularVelocityRadiansPerSecond = source.angularVelocityRadiansPerSecond;
         target.motorSpeedsRadiansPerSecond = physics->MotorSpeedsRadiansPerSecond(body);
-        const glm::dquat& q = source.orientation;
-        target.yawRadians = std::atan2(
-            2.0 * (q.w * q.z + q.x * q.y),
-            1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+        target.yawRadians = DroneModel::YawRadians(target);
     }
 
     void AdvancePhysicsWorld()
@@ -770,10 +767,7 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     flecs::entity& drone = ecs_->FindDrone(droneId);
     DroneState normalized = state;
     normalized.orientation = glm::normalize(normalized.orientation);
-    const glm::dquat& q = normalized.orientation;
-    normalized.yawRadians = std::atan2(
-        2.0 * (q.w * q.z + q.x * q.y),
-        1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+    normalized.yawRadians = DroneModel::YawRadians(normalized);
     DroneControlState& control = drone.get_mut<DroneControlState>();
     control.desiredYawRadians = normalized.yawRadians;
     control.targetVelocityMetersPerSecond = normalized.velocityMetersPerSecond;

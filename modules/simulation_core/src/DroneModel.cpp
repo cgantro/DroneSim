@@ -182,6 +182,14 @@ CommandResult DroneModel::Apply(
     return CommandResult::InvalidValue;
 }
 
+double DroneModel::YawRadians(const DroneState& state) noexcept
+{
+    const glm::dquat& orientation = state.orientation;
+    return std::atan2(
+        2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
+        1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z));
+}
+
 void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control,
     const glm::dvec3& windVelocityMetersPerSecond) noexcept
 {
