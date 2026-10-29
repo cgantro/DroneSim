@@ -884,14 +884,14 @@ void SimulationCore::Resume() noexcept
 
 void SimulationCore::Reset()
 {
-    for (auto& [id, drone] : ecs_->drones)
-    {
-        (void)id;
-        ecs_->ResetDrone(drone);
-        EoCameraModel::Reset(drone.get_mut<CameraState>());
-        if (drone.has<BatteryModel>())
-            drone.get_mut<BatteryModel>().Reset();
-    }
+    ecs_->world.each(
+        [this](flecs::entity drone, DroneState&, DroneControlState&, CameraState& camera)
+        {
+            ecs_->ResetDrone(drone);
+            EoCameraModel::Reset(camera);
+            if (drone.has<BatteryModel>())
+                drone.get_mut<BatteryModel>().Reset();
+        });
     ecs_->tickCount = 0;
     paused_ = false;
     ecs_->SynchronizeCameraPose();
