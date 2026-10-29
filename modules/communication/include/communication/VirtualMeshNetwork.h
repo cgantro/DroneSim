@@ -20,9 +20,6 @@ struct NetworkNodeSnapshot
 {
     NetworkNodeId id = 0;
     glm::dvec3 positionMeters{0.0};
-    bool powered = true;
-    bool canTransmit = true;
-    bool canReceive = true;
 };
 
 /** @brief 무선 신호를 가리는 건물이나 지형의 단순한 부피다. */
@@ -36,7 +33,6 @@ struct RadioObstacle
 struct VirtualMeshSettings
 {
     double maximumLinkRangeMeters = 90.0;
-    std::uint64_t linkLatencyTicks = 1;
 };
 
 /** @brief 직접 연결을 통해 보낼 임무 또는 상태 메시지다. */
@@ -64,8 +60,6 @@ struct VirtualMeshMetrics
 
 enum class MeshEventKind
 {
-    LinkDisabled,
-    LinkRestored,
     NodeRadioDisabled,
     NodeRadioRestored,
     MessageDelivered,
@@ -96,11 +90,6 @@ public:
     void UpdateNodes(std::span<const NetworkNodeSnapshot> nodes,
         std::span<const RadioObstacle> obstacles);
 
-    /** @brief 두 노드 사이의 양방향 통신을 끊거나 복구한다. */
-    void SetLinkDisabled(NetworkNodeId first, NetworkNodeId second, bool disabled);
-    [[nodiscard]] bool IsLinkDisabled(
-        NetworkNodeId first, NetworkNodeId second) const noexcept;
-
     /** @brief 한 노드의 송수신을 끊거나 복구한다. */
     void SetNodeRadioEnabled(NetworkNodeId node, bool enabled);
     [[nodiscard]] bool IsNodeRadioEnabled(NetworkNodeId node) const noexcept;
@@ -127,13 +116,10 @@ private:
     struct Transmission
     {
         std::uint64_t dueTick = 0;
-        std::uint64_t order = 0;
         NetworkNodeId sender = 0;
         NetworkNodeId receiver = 0;
         VirtualMeshMessage message;
     };
-
-    using NodePair = std::pair<NetworkNodeId, NetworkNodeId>;
 
     [[nodiscard]] bool LinkAvailable(NetworkNodeId sender,
         NetworkNodeId receiver) const;
@@ -150,7 +136,6 @@ private:
     VirtualMeshSettings settings_;
     std::map<NetworkNodeId, NetworkNodeSnapshot> nodes_;
     std::vector<RadioObstacle> obstacles_;
-    std::set<NodePair> disabledLinks_;
     std::set<NetworkNodeId> radioDisabledNodes_;
     std::vector<Transmission> transmissions_;
     std::vector<DeliveredMeshMessage> deliveredMessages_;
@@ -158,6 +143,5 @@ private:
     VirtualMeshMetrics metrics_;
     std::uint64_t currentTick_ = 0;
     std::uint64_t nextMessageId_ = 1;
-    std::uint64_t nextTransmissionOrder_ = 0;
 };
 }

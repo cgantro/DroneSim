@@ -12,7 +12,6 @@ VirtualMeshNetwork MakeNetwork()
 {
     VirtualMeshSettings settings;
     settings.maximumLinkRangeMeters = 100.0;
-    settings.linkLatencyTicks = 2U;
     return VirtualMeshNetwork(settings);
 }
 
@@ -25,15 +24,13 @@ void AddTwoNodes(VirtualMeshNetwork& network)
 }
 }
 
-TEST(VirtualMeshNetworkTests, DeliversMessageDirectlyAfterConfiguredDelay)
+TEST(VirtualMeshNetworkTests, DeliversMessageOnTheNextNetworkUpdate)
 {
     auto network = MakeNetwork();
     AddTwoNodes(network);
 
     ASSERT_TRUE(network.Send(1U, 2U, 7U, "state", "position"));
     network.Advance(1U);
-    EXPECT_TRUE(network.DeliveredMessages().empty());
-    network.Advance(2U);
     ASSERT_EQ(network.DeliveredMessages().size(), 1U);
     const auto& message = network.DeliveredMessages().front().message;
     EXPECT_EQ(message.source, 1U);
@@ -55,14 +52,14 @@ TEST(VirtualMeshNetworkTests, DoesNotForwardThroughAnIntermediateDrone)
     EXPECT_TRUE(network.DeliveredMessages().empty());
 }
 
-TEST(VirtualMeshNetworkTests, LinkAndRadioOutagesStopDirectDelivery)
+TEST(VirtualMeshNetworkTests, RadioOutageStopsQueuedAndNewMessages)
 {
     auto network = MakeNetwork();
     AddTwoNodes(network);
-    network.SetLinkDisabled(1U, 2U, true);
-    EXPECT_FALSE(network.Send(1U, 2U, 1U, "state", "blocked"));
-    network.SetLinkDisabled(1U, 2U, false);
+    ASSERT_TRUE(network.Send(1U, 2U, 1U, "state", "in flight"));
     network.SetNodeRadioEnabled(2U, false);
+    network.Advance(1U);
+    EXPECT_TRUE(network.DeliveredMessages().empty());
     EXPECT_FALSE(network.Send(1U, 2U, 2U, "state", "radio off"));
     network.SetNodeRadioEnabled(2U, true);
     ASSERT_TRUE(network.Send(1U, 2U, 3U, "state", "restored"));
@@ -91,7 +88,7 @@ TEST(VirtualMeshNetworkTests, ReportsDirectConnectionAndLosesItWhenBlocked)
     auto network = MakeNetwork();
     AddTwoNodes(network);
     EXPECT_TRUE(network.HasDirectLink(1U, 2U));
-    network.SetLinkDisabled(1U, 2U, true);
+    network.SetNodeRadioEnabled(2U, false);
     EXPECT_FALSE(network.HasDirectLink(1U, 2U));
 }
 }

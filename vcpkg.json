@@ -4,13 +4,12 @@
   "builtin-baseline": "a2f9862da6d88040a8537fb9b8cb24deaa9a196b",
   "features": {
     "desktop-video": {
-      "description": "네이티브 영상 녹화와 RTP 송수신에 필요한 라이브러리",
+      "description": "EO 카메라 라이브 영상 송수신에 필요한 라이브러리",
       "dependencies": [
         {
           "name": "opencv4",
           "version>=": "4.14.0",
           "default-features": false,
-          "features": ["msmf"],
           "platform": "windows"
         },
         {

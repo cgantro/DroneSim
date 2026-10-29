@@ -1,5 +1,4 @@
 const fs = require("node:fs");
-const crypto = require("node:crypto");
 const http = require("node:http");
 const path = require("node:path");
 const { chromium } = require(path.join(
@@ -314,25 +313,13 @@ async function run() {
     if (webGlErrors.length > 0)
       throw new Error(`화면을 다시 띄우는 동안 WebGL 오류가 발생했습니다: ${webGlErrors.join(" | ")}`);
     await page.waitForFunction(
-      () => {
-        const targets = document.querySelector("#inspection-target");
-        return targets?.options.length > 1
-          && Boolean(targets.options[1]?.dataset.facilityId);
-      },
+      () => document.querySelector("#inspection-target")?.options.length > 1,
       null,
       { timeout: 10000 }
     );
     const inspectionTarget = page.locator("#inspection-target");
     await inspectionTarget.selectOption("1");
-    const selectedFacility = await inspectionTarget.locator("option:checked")
-      .getAttribute("data-facility-id");
-    await page.getByRole("button", { name: "수집 시작" }).click();
-    await page.waitForFunction(
-      () => document.querySelector("#web-eo-recording")?.textContent
-        .includes("브라우저 저장 공간에 조각별 기록"),
-      null,
-      { timeout: 10000 }
-    );
+    await page.getByRole("button", { name: "정찰 시작" }).click();
     await page.waitForFunction(
       () => {
         const status = document.querySelector("#web-gcs-status")?.textContent || "";
@@ -348,7 +335,7 @@ async function run() {
         throw new Error(`정찰 임무 중 ${label} 수동 조작이 활성화되어 있습니다.`);
     }
     if (!await page.locator("#inspection-target").isDisabled()
-        || await page.getByRole("button", { name: "수집 중단" }).isDisabled())
+        || await page.getByRole("button", { name: "정찰 중단" }).isDisabled())
       throw new Error("정찰 임무 중 목표 선택 또는 임무 중단 상태가 올바르지 않습니다.");
     await page.getByRole("button", { name: "일시 정지" }).click();
     await page.waitForFunction(
@@ -371,7 +358,7 @@ async function run() {
       await page.waitForFunction(
         () => {
           const status = document.querySelector("#web-gcs-mission")?.textContent || "";
-          return status.includes("영상 수집 완료")
+          return status.includes("정찰 완료")
             || status.includes("실패:");
         },
         null,
@@ -381,7 +368,7 @@ async function run() {
       throw new Error(`정찰 임무가 끝나지 않았습니다: ${await telemetry.innerText()}`);
     }
     const missionStatus = await telemetry.innerText();
-    if (!missionStatus.includes("영상 수집 완료 (1개 위치)"))
+    if (!missionStatus.includes("정찰 완료 (1개 위치)"))
       throw new Error(`정찰 임무가 끝나지 않았습니다: ${missionStatus}`);
     for (const label of ["이륙", "정지", "전진", "후진", "좌측", "우측",
       "상승", "하강", "좌회전", "우회전", "착륙"]) {
@@ -389,184 +376,9 @@ async function run() {
         throw new Error(`정찰 임무 종료 뒤 ${label} 수동 조작이 다시 활성화되지 않았습니다.`);
     }
     if (await page.locator("#inspection-target").isDisabled()
-        || await page.getByRole("button", { name: "수집 시작" }).isDisabled()
-        || !await page.getByRole("button", { name: "수집 중단" }).isDisabled())
+        || await page.getByRole("button", { name: "정찰 시작" }).isDisabled()
+        || !await page.getByRole("button", { name: "정찰 중단" }).isDisabled())
       throw new Error("정찰 임무 완료 뒤 조작 상태가 올바르게 복구되지 않았습니다.");
-    await page.waitForFunction(
-      () => {
-        const text = document.querySelector("#web-eo-recording")?.textContent || "";
-        return text.includes("내려받을 수 있습니다")
-          || text.includes("브라우저에 저장했습니다");
-      },
-      null,
-      { timeout: 10000 }
-    );
-
-    const videoDownloadPromise = page.waitForEvent("download");
-    await page.getByRole("link", { name: "영상 내려받기", exact: true }).click();
-    const videoDownload = await videoDownloadPromise;
-    if (!videoDownload.suggestedFilename().endsWith(".webm"))
-      throw new Error(`영상 파일 형식이 WebM이 아닙니다: ${videoDownload.suggestedFilename()}`);
-    const videoPath = await videoDownload.path();
-    if (!videoPath || fs.statSync(videoPath).size === 0)
-      throw new Error("EO 영상 파일이 비어 있습니다.");
-
-    const manifestDownloadPromise = page.waitForEvent("download");
-    await page.getByRole("link", { name: "촬영 기록 내려받기" }).click();
-    const manifestDownload = await manifestDownloadPromise;
-    const manifestPath = await manifestDownload.path();
-    if (!manifestPath)
-      throw new Error("촬영 기록 파일을 내려받지 못했습니다.");
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    const videoBytes = fs.readFileSync(videoPath);
-    const videoHash = crypto.createHash("sha256").update(videoBytes).digest("hex");
-    if (manifest.format_version !== 5
-        || manifest.collection_state !== "CAPTURED"
-        || manifest.verification_state !== "VERIFIED"
-        || manifest.storage_state !== "SAVED"
-        || manifest.storage_backend !== "OPFS"
-        || manifest.mission_outcome !== "COMPLETED"
-        || manifest.video_storage_matches_capture !== true
-        || manifest.video_bytes !== videoBytes.length
-        || manifest.video_checksum !== videoHash
-        || manifest.recording_duration_milliseconds <= 0
-        || manifest.sample_interval_milliseconds !== 250
-        || !Array.isArray(manifest.samples) || manifest.samples.length < 2
-        || !Array.isArray(manifest.expected_zones) || manifest.expected_zones.length !== 1
-        || !Array.isArray(manifest.captured_zones) || manifest.captured_zones.length !== 1
-        || !Array.isArray(manifest.missing_zones) || manifest.missing_zones.length !== 0
-        || !Array.isArray(manifest.missing_zone_videos)
-        || manifest.missing_zone_videos.length !== 0
-        || manifest.capture_summary?.expected_zone_count !== 1
-        || manifest.capture_summary?.captured_zone_count !== 1
-        || manifest.capture_summary?.missing_zone_count !== 0
-        || !Array.isArray(manifest.zone_recordings)
-        || manifest.zone_recordings.length !== 1
-        || !Array.isArray(manifest.captured_images)
-        || manifest.captured_images.length !== 1
-        || !Array.isArray(manifest.missing_zone_images)
-        || manifest.missing_zone_images.length !== 0
-        || manifest.capture_summary?.captured_image_count !== 1
-        || manifest.capture_summary?.missing_image_count !== 0
-        || manifest.zone_recordings[0].collection_state !== "CAPTURED"
-        || manifest.zone_recordings[0].storage_state !== "SAVED"
-        || manifest.zone_recordings[0].storage_backend !== "OPFS"
-        || manifest.zone_recordings[0].verification_state !== "VERIFIED"
-        || manifest.zone_recordings[0].video_storage_matches_capture !== true
-        || manifest.zone_recordings[0].download_ready !== true
-        || manifest.zone_recordings[0].video_bytes <= 0
-        || !manifest.zone_recordings[0].video_checksum)
-      throw new Error("촬영 기록의 영상 크기·체크섬·상태 표본이 올바르지 않습니다.");
-    const capturedZone = manifest.captured_zones[0];
-    if (capturedZone.inspection_zone_id !== manifest.expected_zones[0].inspection_zone_id
-        || !Number.isFinite(capturedZone.simulation_tick)
-        || !Number.isFinite(capturedZone.simulation_time_seconds)
-        || capturedZone.video_frame_requested !== true
-        || capturedZone.recording_elapsed_milliseconds < 0
-        || capturedZone.collection_state !== "CAPTURED"
-        || capturedZone.storage_state !== "SAVED"
-        || capturedZone.verification_state !== "VERIFIED"
-        || capturedZone.download_ready !== true
-        || !capturedZone.video_file)
-      throw new Error("완료된 점검 구역의 실제 촬영 프레임 시각이 기록되지 않았습니다.");
-    const capturedImage = manifest.captured_images[0];
-    if (capturedImage.inspection_zone_id !== capturedZone.inspection_zone_id
-        || capturedImage.collection_state !== "CAPTURED"
-        || capturedImage.storage_state !== "SAVED"
-        || capturedImage.storage_backend !== "OPFS"
-        || capturedImage.verification_state !== "VERIFIED"
-        || capturedImage.image_storage_matches_capture !== true
-        || capturedImage.download_ready !== true
-        || !capturedImage.image_file.endsWith(".png")
-        || capturedImage.image_bytes <= 100
-        || capturedImage.image_width <= 0 || capturedImage.image_height <= 0
-        || !capturedImage.image_checksum
-        || !Array.isArray(capturedImage.camera_position_meters)
-        || !Array.isArray(capturedImage.camera_orientation_xyzw))
-      throw new Error("정지 사진의 저장 상태·크기·카메라 정보가 올바르지 않습니다.");
-    if (capturedZone.image_file !== capturedImage.image_file
-        || capturedZone.image_storage_state !== "SAVED"
-        || capturedZone.image_verification_state !== "VERIFIED"
-        || capturedZone.image_download_ready !== true)
-      throw new Error("촬영 지점과 정지 사진의 연결 정보가 맞지 않습니다.");
-    const zoneImagePromise = page.waitForEvent("download");
-    await page.locator("#web-eo-zone-downloads a[data-zone-image]").click();
-    const zoneImageDownload = await zoneImagePromise;
-    const zoneImagePath = await zoneImageDownload.path();
-    if (!zoneImagePath || !zoneImageDownload.suggestedFilename().endsWith(".png"))
-      throw new Error("촬영 지점의 정지 사진을 내려받지 못했습니다.");
-    const zoneImageBytes = fs.readFileSync(zoneImagePath);
-    const zoneImageHash = crypto.createHash("sha256").update(zoneImageBytes).digest("hex");
-    if (zoneImageBytes.length !== capturedImage.image_bytes
-        || zoneImageHash !== capturedImage.image_checksum
-        || zoneImageBytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a"
-        || zoneImageBytes.readUInt32BE(16) !== capturedImage.image_width
-        || zoneImageBytes.readUInt32BE(20) !== capturedImage.image_height)
-      throw new Error("내려받은 PNG 사진과 기록의 크기·체크섬이 맞지 않습니다.");
-    const zoneVideoPromise = page.waitForEvent("download");
-    await page.locator("#web-eo-zone-downloads a[data-zone-video]").click();
-    const zoneVideoDownload = await zoneVideoPromise;
-    const zoneVideoPath = await zoneVideoDownload.path();
-    if (!zoneVideoPath || !zoneVideoDownload.suggestedFilename().endsWith(".webm"))
-      throw new Error("점검 구역별 영상을 내려받지 못했습니다.");
-    const zoneVideoBytes = fs.readFileSync(zoneVideoPath);
-    const zoneVideoHash = crypto.createHash("sha256").update(zoneVideoBytes).digest("hex");
-    const savedZoneVideo = manifest.zone_recordings[0];
-    if (zoneVideoBytes.length !== savedZoneVideo.video_bytes
-        || zoneVideoHash !== savedZoneVideo.video_checksum
-        || savedZoneVideo.video_file !== capturedZone.video_file
-        || savedZoneVideo.inspection_zone_id !== capturedZone.inspection_zone_id
-        || !Number.isFinite(savedZoneVideo.start_simulation_tick)
-        || savedZoneVideo.capture_simulation_tick
-          - savedZoneVideo.start_simulation_tick < 60)
-      throw new Error("구역별 영상과 촬영 기록의 크기·체크섬·구역 ID가 맞지 않습니다.");
-    for (let index = 1; index < manifest.samples.length; ++index) {
-      const elapsedDifference = manifest.samples[index].recording_elapsed_milliseconds
-        - manifest.samples[index - 1].recording_elapsed_milliseconds;
-      if (elapsedDifference < 200)
-        throw new Error("촬영 상태 표본이 250ms보다 짧은 간격으로 중복 저장됐습니다.");
-    }
-    const inspectedZones = new Set(manifest.samples
-      .map((entry) => entry.inspection_zone_id)
-      .filter((zoneId) => typeof zoneId === "string" && zoneId.length > 0));
-    if (inspectedZones.size !== 1)
-      throw new Error(`선택한 점검 구역만 기록되지 않았습니다: ${[...inspectedZones]}`);
-    const capturedFacilities = new Set(manifest.samples
-      .map((entry) => entry.facility_id)
-      .filter((facilityId) => typeof facilityId === "string" && facilityId.length > 0));
-    if (capturedFacilities.size !== 1 || !selectedFacility.includes([...capturedFacilities][0]))
-      throw new Error(`선택한 OSM 건물만 촬영하지 않았습니다: ${selectedFacility}`);
-    const sample = manifest.samples.find((entry) => entry.inspection_zone_id);
-    if (!sample || !Array.isArray(sample.drone_position_meters)
-        || !Array.isArray(sample.camera_position_meters)
-        || !Array.isArray(sample.camera_orientation_xyzw)
-        || !Number.isFinite(sample.simulation_time_seconds)
-        || !sample.capture_assessment)
-      throw new Error("촬영 기록에 점검 구역·시간·위치·자세·판정 정보가 없습니다.");
-    console.log("Chromium에서 구역별 영상·정지 사진, 임무 영상, 촬영 기록과 체크섬을 확인했습니다.");
-
-    const expectedBrowserFiles = [
-      manifest.video_file,
-      manifest.video_file.replace(/\.webm$/i, ".manifest.json"),
-      capturedImage.image_file,
-      savedZoneVideo.video_file,
-    ];
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await page.waitForFunction(
-      () => document.querySelector("#startup-status")?.hidden === true,
-      null,
-      { timeout: 45000 }
-    );
-    await page.waitForFunction(
-      (expectedNames) => {
-        const savedNames = [...document.querySelectorAll("#web-eo-saved-files a[data-opfs-file]")]
-          .map((link) => link.dataset.opfsFile);
-        return expectedNames.every((name) => savedNames.includes(name));
-      },
-      expectedBrowserFiles,
-      { timeout: 10000 }
-    );
-    console.log("새로고침 뒤에도 OPFS의 임무 영상·구역 영상·촬영 기록을 다시 찾았습니다.");
   } catch (error) {
     console.error(`웹 시작 검사 실패: ${error.message}`);
     process.exitCode = 1;

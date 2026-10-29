@@ -34,13 +34,6 @@ enum class SessionCommand
     ReplayRecording
 };
 
-/** @brief EO 영상을 사용자 데이터 폴더에 녹화한다. */
-enum class VideoRecordingCommand
-{
-    Start,
-    Stop
-};
-
 /** @brief 등록된 정찰 위치를 순서대로 방문해 영상을 수집한다. */
 enum class InspectionCommand
 {
@@ -62,8 +55,7 @@ enum class FleetCommand
 struct CommandPacket
 {
     using Command = std::variant<std::monostate, simulation::DroneCommand,
-        CameraCommand, SessionCommand, VideoRecordingCommand, InspectionCommand,
-        FleetCommand>;
+        CameraCommand, SessionCommand, InspectionCommand, FleetCommand>;
 
     std::uint32_t commandId = 0;
     std::uint32_t sequence = 0;

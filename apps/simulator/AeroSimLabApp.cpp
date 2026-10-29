@@ -431,10 +431,8 @@ void AeroSimLabApp::LoadMapFeatures()
         const InspectionTarget& target = inspectionTargets_[index];
         EM_ASM({
             if (window.addDroneSimInspectionTarget)
-                window.addDroneSimInspectionTarget(
-                    $0, UTF8ToString($1), UTF8ToString($2), UTF8ToString($3));
-        }, static_cast<int>(index), target.facilityId.c_str(),
-            target.zoneId.c_str(), target.displayName.c_str());
+                window.addDroneSimInspectionTarget($0, UTF8ToString($1));
+        }, static_cast<int>(index), target.displayName.c_str());
     }
 #endif
 }
@@ -726,9 +724,7 @@ void AeroSimLabApp::RenderFrame()
             && !FleetReconnaissanceIsActive()
             && !CompleteFleetMissionIsActive()
             && !formationTransit_.active;
-        const bool videoIsRecording = eoVideoRecorder_
-            && eoVideoRecorder_->IsRecording();
-        SessionRecordingControls recordingControls;
+        SessionCommandControls recordingControls;
         recordingControls.groundControlPositions.reserve(droneIds.size());
         for (const aerosimlab::simulation::DroneId droneId : droneIds)
         {
@@ -753,10 +749,9 @@ void AeroSimLabApp::RenderFrame()
         recordingControls.hasRecordedCommands = recordingControls.recordedTicks > 0U;
         recordingControls.canStartCommandRecording = everyDroneIsGrounded
             && noMissionIsActive && !recordingControls.commandRecording
-            && !recordingControls.commandReplay && !videoIsRecording;
+            && !recordingControls.commandReplay;
         recordingControls.canReplayCommands = noMissionIsActive
-            && !recordingControls.commandRecording && !recordingControls.commandReplay
-            && !videoIsRecording;
+            && !recordingControls.commandRecording && !recordingControls.commandReplay;
         recordingControls.commandStatus = sessionControlStatus_;
         recordingControls.startCommandRecording = [this]
         {
@@ -772,23 +767,6 @@ void AeroSimLabApp::RenderFrame()
         {
             ApplyHudSessionCommand(
                 communication::SessionCommand::ReplayRecording);
-        };
-        recordingControls.videoRecording = videoIsRecording;
-        recordingControls.canStartVideoRecording = simulation_.Camera().status
-                == aerosimlab::simulation::CameraStatus::Active
-            && noMissionIsActive && !recordingControls.commandRecording
-            && !recordingControls.commandReplay && !videoIsRecording;
-        recordingControls.canStopVideoRecording = videoIsRecording && noMissionIsActive;
-        recordingControls.videoStatus = videoControlStatus_;
-        recordingControls.startVideoRecording = [this]
-        {
-            ApplyHudVideoRecordingCommand(
-                communication::VideoRecordingCommand::Start);
-        };
-        recordingControls.stopVideoRecording = [this]
-        {
-            ApplyHudVideoRecordingCommand(
-                communication::VideoRecordingCommand::Stop);
         };
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;

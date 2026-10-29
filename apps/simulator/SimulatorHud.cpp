@@ -48,8 +48,6 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
 {
     switch (kind)
     {
-    case communication::MeshEventKind::LinkDisabled: return "링크 장애";
-    case communication::MeshEventKind::LinkRestored: return "링크 복구";
     case communication::MeshEventKind::NodeRadioDisabled: return "드론 라디오 차단";
     case communication::MeshEventKind::NodeRadioRestored: return "드론 라디오 복구";
     case communication::MeshEventKind::MessageDelivered: return "메시지 전달";
@@ -168,7 +166,7 @@ void DrawCameraPanel(
     ImGui::End();
 }
 
-void DrawRecordingPanel(const SessionRecordingControls& controls)
+void DrawRecordingPanel(const SessionCommandControls& controls)
 {
     if (!ImGui::CollapsingHeader("기록과 다시 보기"))
         return;
@@ -214,31 +212,6 @@ void DrawRecordingPanel(const SessionRecordingControls& controls)
     if (!controls.commandStatus.empty())
         ImGui::TextWrapped("%s", controls.commandStatus.c_str());
 
-    ImGui::Separator();
-    if (controls.videoRecording)
-    {
-        ImGui::Text("EO 영상 녹화 중");
-        if (controls.canStopVideoRecording
-            && ImGui::Button("영상 녹화 마치기"))
-        {
-            controls.stopVideoRecording();
-        }
-        else if (!controls.canStopVideoRecording)
-        {
-            ImGui::TextDisabled("자동 정찰 녹화는 임무가 마무리할 때 저장합니다.");
-        }
-    }
-    else if (controls.canStartVideoRecording
-        && ImGui::Button("EO 영상 녹화 시작"))
-    {
-        controls.startVideoRecording();
-    }
-    else
-    {
-        ImGui::TextDisabled("카메라가 켜져 있고 다른 기록·임무가 없을 때 녹화할 수 있습니다.");
-    }
-    if (!controls.videoStatus.empty())
-        ImGui::TextWrapped("%s", controls.videoStatus.c_str());
 }
 
 void DrawFlightStatusPanel(
@@ -254,7 +227,7 @@ void DrawFlightStatusPanel(
     int& selectedFaultSource,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-    const SessionRecordingControls& recordingControls)
+    const SessionCommandControls& recordingControls)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
     {
@@ -495,7 +468,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const communication::VirtualMeshNetwork* formationNetwork,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-    const SessionRecordingControls& recordingControls,
+        const SessionCommandControls& recordingControls,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
     HudRenderTimings* timings)

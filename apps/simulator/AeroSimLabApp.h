@@ -3,9 +3,6 @@
 #include "SimulationBenchmark.h"
 #include "FleetTelemetry.h"
 #include "FleetMissionProgress.h"
-#ifndef __EMSCRIPTEN__
-#include "EoVideoRecorder.h"
-#endif
 #include "communication/Protocol.h"
 #include "communication/VirtualMeshNetwork.h"
 #include "graphics/Material.h"
@@ -270,12 +267,7 @@ private:
     [[nodiscard]] bool ApplySessionCommand(
         communication::SessionCommand command,
         communication::CommandReply& reply);
-    void ApplyVideoRecordingCommand(
-        communication::VideoRecordingCommand command,
-        communication::CommandReply& reply);
     void ApplyHudSessionCommand(communication::SessionCommand command);
-    void ApplyHudVideoRecordingCommand(
-        communication::VideoRecordingCommand command);
     void ApplyDroneCommand(aerosimlab::simulation::DroneId droneId,
         const aerosimlab::simulation::DroneCommand& command,
         communication::CommandReply& reply);
@@ -351,8 +343,7 @@ private:
             AligningCamera,
             Capturing,
             Landing,
-            Saved,
-            GeometryOnly,
+            Completed,
             Failed
         };
         Stage stage = Stage::Ready;
@@ -361,7 +352,7 @@ private:
         std::uint64_t pauseStartTick = 0;
         std::uint64_t captureStartFrame = 0;
         std::uint64_t captureReadyTick = 0;
-        bool readyFrameSaved = false;
+        bool captureConditionMet = false;
         std::string error;
         std::size_t activeTargetIndex = 0;
         std::size_t routeWaypointIndex = 0;
@@ -428,7 +419,6 @@ private:
     std::uint16_t udpPort_ = 0;
     aerosimlab::simulation::CommandRecording commandRecording_;
     std::string sessionControlStatus_;
-    std::string videoControlStatus_;
 #ifndef __EMSCRIPTEN__
     struct PendingGroundCommand
     {
@@ -458,19 +448,15 @@ private:
     };
     std::unordered_map<aerosimlab::simulation::DroneId, AuxiliaryCameraView>
         auxiliaryCameraViews_;
-    std::unique_ptr<EoVideoRecorder> eoVideoRecorder_;
+    std::unordered_map<std::uint64_t, aerosimlab::simulation::CameraState>
+        queuedEoCameraStates_;
     std::unique_ptr<aerosimlab::media::RtpVideoSender> eoVideoSender_;
     std::jthread eoVideoStartWorker_;
     std::atomic_bool eoVideoStartPending_ = false;
-    std::jthread captureTransferWorker_;
-    std::atomic_bool captureTransferPending_ = false;
-    std::chrono::steady_clock::time_point nextCaptureTransferAttempt_{};
     std::string eoVideoDestinationAddress_;
     std::string eoVideoAttemptedAddress_;
     std::string eoVideoStartError_;
     bool eoVideoStartErrorReported_ = false;
-    std::unordered_map<std::uint64_t, aerosimlab::simulation::CameraState>
-        queuedEoCameraStates_;
 #endif
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;

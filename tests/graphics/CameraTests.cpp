@@ -5,7 +5,7 @@
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
-#include "GlbData.h"
+#include "graphics/GlbData.h"
 
 #include <gtest/gtest.h>
 

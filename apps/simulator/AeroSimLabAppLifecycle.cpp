@@ -273,16 +273,6 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
             captureAssessment.c_str(), InspectionMissionStatus().c_str(), simulationTick,
             InspectionMissionIsActive(),
             state.mode == aerosimlab::simulation::FlightMode::Grounded);
-        EM_ASM({
-            if (window.updateDroneSimInspectionMetadata) {
-                window.updateDroneSimInspectionMetadata(
-                    $0, $1, $2, $3, $4, $5, $6, UTF8ToString($7), UTF8ToString($8));
-            }
-        },
-            camera.positionMeters.x, camera.positionMeters.y, camera.positionMeters.z,
-            camera.orientation.x, camera.orientation.y, camera.orientation.z,
-            camera.orientation.w, inspectionMission_.facilityId.c_str(),
-            inspectionMission_.zoneId.c_str());
         lastWebTelemetryUpdate_ = telemetryTime;
     }
     if (!webFirstFrameRendered_)

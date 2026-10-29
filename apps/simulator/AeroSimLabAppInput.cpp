@@ -18,7 +18,6 @@
 
 #ifndef __EMSCRIPTEN__
 #include "media/RtpVideoStream.h"
-#include "media/RecordedCaptureTransfer.h"
 #endif
 
 namespace aerosimlab::simulator
@@ -103,45 +102,6 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
         && *fleetCommand == communication::FleetCommand::GetStatus)
     {
         StartEoVideoStream(peer);
-        if (!captureTransferPending_.load()
-            && std::chrono::steady_clock::now() >= nextCaptureTransferAttempt_)
-        {
-            if (captureTransferWorker_.joinable())
-                captureTransferWorker_.join();
-            const std::string destination = peer.AddressIpv4();
-            captureTransferPending_ = true;
-            nextCaptureTransferAttempt_ = std::chrono::steady_clock::now()
-                + std::chrono::seconds(2);
-            captureTransferWorker_ = std::jthread([this, destination]
-            {
-                try
-                {
-                    for (const auto& manifestPath : EoVideoRecorder::FindSavedCaptures())
-                    {
-                        const std::string manifestName = manifestPath.filename().string();
-                        constexpr std::string_view manifestSuffix = ".manifest.json";
-                        const std::string baseName = manifestName.substr(
-                            0, manifestName.size() - manifestSuffix.size());
-                        const aerosimlab::media::RecordedCaptureFiles files{
-                            .video = manifestPath.parent_path() / (baseName + ".mp4"),
-                            .metadata = manifestPath.parent_path() / (baseName + ".jsonl"),
-                            .manifest = manifestPath};
-                        std::string transferError;
-                        if (!aerosimlab::media::SendRecordedCapture(destination,
-                                aerosimlab::media::defaultCaptureTransferPort,
-                                files, transferError))
-                            break;
-                        static_cast<void>(EoVideoRecorder::MarkCaptureDelivered(
-                            manifestPath, transferError));
-                    }
-                }
-                catch (...)
-                {
-                    // 전송을 못한 자료는 SAVED 상태로 남아 다음 연결 확인 때 다시 시도한다.
-                }
-                captureTransferPending_ = false;
-            });
-        }
         auto reply = makeReply();
         reply.accepted = true;
         reply.status = "fleet_status";
@@ -268,11 +228,7 @@ bool AeroSimLabApp::ApplySessionCommand(
     switch (command)
     {
     case Command::StartRecording:
-        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying()
-#ifndef __EMSCRIPTEN__
-            || (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
-#endif
-            )
+        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
         {
             reply.status = "recording_unavailable";
             return false;
@@ -305,11 +261,7 @@ bool AeroSimLabApp::ApplySessionCommand(
         return false;
 
     case Command::ReplayRecording:
-        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying()
-#ifndef __EMSCRIPTEN__
-            || (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
-#endif
-            )
+        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
         {
             reply.status = "recording_unavailable";
             return false;
@@ -363,105 +315,6 @@ void AeroSimLabApp::ApplyHudSessionCommand(
         sessionControlStatus_ = "다시 재생할 조종 입력이 없습니다.";
     else
         sessionControlStatus_ = "다른 기록이나 재생 작업이 진행 중입니다.";
-}
-
-void AeroSimLabApp::ApplyHudVideoRecordingCommand(
-    communication::VideoRecordingCommand command)
-{
-    communication::CommandReply reply;
-    ApplyVideoRecordingCommand(command, reply);
-    if (!reply.accepted)
-    {
-        videoControlStatus_ = reply.status == "video_recording_camera_unavailable"
-            ? "카메라 화면을 켠 뒤 녹화를 시작하세요."
-            : "영상 녹화 요청을 처리하지 못했습니다.";
-        return;
-    }
-
-    if (command == communication::VideoRecordingCommand::Start)
-    {
-        const std::string filename = eoVideoRecorder_
-            ? eoVideoRecorder_->VideoPath().filename().string() : std::string{};
-        videoControlStatus_ = "영상 녹화 중: " + filename;
-        return;
-    }
-
-    const std::size_t firstSeparator = reply.status.find(':');
-    const std::size_t secondSeparator = firstSeparator == std::string::npos
-        ? std::string::npos : reply.status.find(':', firstSeparator + 1U);
-    std::string filename = secondSeparator == std::string::npos
-        ? std::string{} : reply.status.substr(secondSeparator + 1U);
-    const std::size_t pathSeparator = filename.find_last_of("/\\");
-    if (pathSeparator != std::string::npos)
-        filename.erase(0, pathSeparator + 1U);
-    videoControlStatus_ = "영상 저장 완료: " + filename;
-}
-
-void AeroSimLabApp::ApplyVideoRecordingCommand(
-    communication::VideoRecordingCommand command,
-    communication::CommandReply& reply)
-{
-#ifdef __EMSCRIPTEN__
-    static_cast<void>(command);
-    reply.status = "video_recording_requires_native";
-#else
-    using Command = communication::VideoRecordingCommand;
-    if (command == Command::Start)
-    {
-        if (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
-        {
-            reply.status = "video_recording_already_active";
-            return;
-        }
-        if (simulation_.Camera().status != aerosimlab::simulation::CameraStatus::Active)
-        {
-            reply.status = "video_recording_camera_unavailable";
-            return;
-        }
-
-        DrainEoReadbacks();
-
-        auto recorder = std::make_unique<EoVideoRecorder>();
-        std::string error;
-        const auto& model = simulation_.Camera().model;
-        const auto path = NewEoRecordingPath();
-        if (!recorder->Start(path, model.imageWidthPixels, model.imageHeightPixels,
-            EoVideoRecorder::recordedFramesPerSecond,
-            inspectionMission_.facilityId, inspectionMission_.zoneId, error))
-        {
-            reply.status = "video_recording_failed:" + error;
-            return;
-        }
-        eoVideoRecorder_ = std::move(recorder);
-        window_->SetTitle("DroneSim | EO 영상 녹화 중");
-        reply.accepted = true;
-        reply.status = "video_recording_started:" + eoVideoRecorder_->VideoPath().string();
-        return;
-    }
-
-    if (!eoVideoRecorder_ || !eoVideoRecorder_->IsRecording())
-    {
-        reply.status = "video_recording_not_active";
-        return;
-    }
-
-    DrainEoReadbacks();
-    const auto path = eoVideoRecorder_->VideoPath();
-    std::uint64_t savedFrames = 0;
-    std::string error;
-    const bool saved = eoVideoRecorder_->Stop(savedFrames, error);
-    eoVideoRecorder_.reset();
-    if (!saved)
-    {
-        window_->SetTitle("DroneSim | EO 녹화 저장 실패: " + error);
-        reply.status = "video_recording_failed:" + error;
-        return;
-    }
-    window_->SetTitle("DroneSim | EO 영상 녹화 완료");
-    reply.accepted = true;
-    reply.status = "video_recording_stopped:" + std::to_string(savedFrames)
-        + ":" + path.string();
-#endif
 }
 
 void AeroSimLabApp::ApplyDroneCommand(
@@ -610,10 +463,6 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
             communication::SessionCommand command)
         {
             replayTickAdvanced = ApplySessionCommand(command, reply);
-        },
-        [this, &reply](communication::VideoRecordingCommand command)
-        {
-            ApplyVideoRecordingCommand(command, reply);
         },
         [this, &reply](communication::InspectionCommand command)
         {

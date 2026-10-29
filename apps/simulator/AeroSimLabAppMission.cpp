@@ -223,7 +223,7 @@ bool AeroSimLabApp::RequestInspectionMission(
     inspectionMission_.startTick = 0;
     inspectionMission_.captureStartFrame = 0;
     inspectionMission_.captureReadyTick = 0;
-    inspectionMission_.readyFrameSaved = false;
+    inspectionMission_.captureConditionMet = false;
     inspectionMission_.completedTargetCount = 0;
     if (selectedTargetIndex
         && *selectedTargetIndex >= inspectionTargets_.size())
@@ -1895,16 +1895,6 @@ void AeroSimLabApp::AdvanceInspectionMission()
 
     if (inspectionMission_.stage == Stage::StartRequested)
     {
-#ifndef __EMSCRIPTEN__
-        communication::CommandReply recordingReply;
-        ApplyVideoRecordingCommand(
-            communication::VideoRecordingCommand::Start, recordingReply);
-        if (!recordingReply.accepted)
-        {
-            FailInspectionMission(recordingReply.status);
-            return;
-        }
-#endif
         const aerosimlab::simulation::DroneCommand takeoff{CommandKind::TakeOff};
         if (ApplyAndRecordCommand(takeoff)
             != aerosimlab::simulation::CommandResult::Accepted)
@@ -1919,8 +1909,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
     const std::uint64_t elapsedTicks = simulation_.TickCount()
         - inspectionMission_.startTick;
     if (inspectionMission_.stage != Stage::Ready
-        && inspectionMission_.stage != Stage::Saved
-        && inspectionMission_.stage != Stage::GeometryOnly
+        && inspectionMission_.stage != Stage::Completed
         && inspectionMission_.stage != Stage::Failed
         && elapsedTicks > 60U * 180U * inspectionMission_.targetCount)
     {
@@ -1998,14 +1987,6 @@ void AeroSimLabApp::AdvanceInspectionMission()
             static_cast<void>(ApplyAndRecordCommand(stopYaw));
             inspectionMission_.captureStartFrame = simulation_.Camera().lastFrameTick;
             inspectionMission_.stage = Stage::Capturing;
-#ifdef __EMSCRIPTEN__
-            EM_ASM({
-                if (window.startDroneSimInspectionZoneRecording)
-                    window.startDroneSimInspectionZoneRecording(
-                        UTF8ToString($0), UTF8ToString($1), $2);
-            }, inspectionMission_.facilityId.c_str(), inspectionMission_.zoneId.c_str(),
-                static_cast<double>(simulation_.TickCount()));
-#endif
         }
         else
         {
@@ -2031,35 +2012,26 @@ void AeroSimLabApp::AdvanceInspectionMission()
             if (AssessInspectionView()
                 == aerosimlab::simulation::CaptureAssessment::Ready)
             {
-                if (!inspectionMission_.readyFrameSaved)
+                if (!inspectionMission_.captureConditionMet)
                     inspectionMission_.captureReadyTick = simulation_.TickCount();
-                inspectionMission_.readyFrameSaved = true;
+                inspectionMission_.captureConditionMet = true;
             }
             else
             {
-                inspectionMission_.readyFrameSaved = false;
+                inspectionMission_.captureConditionMet = false;
                 inspectionMission_.captureReadyTick = 0;
             }
         }
         constexpr std::uint64_t captureHoldTicks = 60U;
-        const bool captureHoldComplete = inspectionMission_.readyFrameSaved
+        const bool captureHoldComplete = inspectionMission_.captureConditionMet
             && simulation_.TickCount() - inspectionMission_.captureReadyTick >= captureHoldTicks;
 #endif
 #ifdef __EMSCRIPTEN__
         if (captureHoldComplete)
 #else
-        if (inspectionMission_.readyFrameSaved)
+        if (inspectionMission_.captureConditionMet)
 #endif
         {
-#ifdef __EMSCRIPTEN__
-            EM_ASM({
-                if (window.recordDroneSimCapturedZone) {
-                    window.recordDroneSimCapturedZone(
-                        UTF8ToString($0), UTF8ToString($1), $2);
-                }
-            }, inspectionMission_.facilityId.c_str(), inspectionMission_.zoneId.c_str(),
-                static_cast<double>(camera.lastFrameTick));
-#endif
             ++inspectionMission_.completedTargetCount;
             if (inspectionMission_.activeTargetIndex + 1U < inspectionMission_.endTargetIndex)
             {
@@ -2075,7 +2047,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
                 }
                 inspectionMission_.captureStartFrame = 0;
                 inspectionMission_.captureReadyTick = 0;
-                inspectionMission_.readyFrameSaved = false;
+                inspectionMission_.captureConditionMet = false;
                 inspectionMission_.stage = Stage::Approaching;
                 return;
             }
@@ -2095,22 +2067,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
     if (inspectionMission_.stage == Stage::Landing
         && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
     {
-#ifndef __EMSCRIPTEN__
-        if (eoVideoRecorder_)
-            eoVideoRecorder_->SetMissionOutcome(
-                EoVideoRecorder::MissionOutcome::Completed);
-        communication::CommandReply recordingReply;
-        ApplyVideoRecordingCommand(
-            communication::VideoRecordingCommand::Stop, recordingReply);
-        if (!recordingReply.accepted)
-        {
-            FailInspectionMission(recordingReply.status);
-            return;
-        }
-        inspectionMission_.stage = Stage::Saved;
-#else
-        inspectionMission_.stage = Stage::GeometryOnly;
-#endif
+        inspectionMission_.stage = Stage::Completed;
     }
 }
 
@@ -2124,16 +2081,6 @@ void AeroSimLabApp::FailInspectionMission(const std::string& reason)
             aerosimlab::simulation::DroneCommand::Kind::Land};
         static_cast<void>(ApplyAndRecordCommand(land));
     }
-#ifndef __EMSCRIPTEN__
-    if (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
-    {
-        eoVideoRecorder_->SetMissionOutcome(
-            EoVideoRecorder::MissionOutcome::Failed, reason);
-        communication::CommandReply recordingReply;
-        ApplyVideoRecordingCommand(
-            communication::VideoRecordingCommand::Stop, recordingReply);
-    }
-#endif
 }
 
 std::string AeroSimLabApp::InspectionMissionStatus() const
@@ -2154,13 +2101,10 @@ std::string AeroSimLabApp::InspectionMissionStatus() const
     case InspectionMissionStage::Approaching: return progress + "촬영 위치로 이동 중";
     case InspectionMissionStage::AligningCamera:
         return progress + "카메라 방향을 맞추는 중";
-    case InspectionMissionStage::Capturing: return progress + "영상 수집 중";
+    case InspectionMissionStage::Capturing: return progress + "카메라 시야 확인 중";
     case InspectionMissionStage::Landing: return "착륙 중";
-    case InspectionMissionStage::Saved:
-        return "영상 저장 완료 (" + std::to_string(inspectionMission_.completedTargetCount)
-            + "개 위치)";
-    case InspectionMissionStage::GeometryOnly:
-        return "영상 수집 완료 (" + std::to_string(inspectionMission_.completedTargetCount)
+    case InspectionMissionStage::Completed:
+        return "정찰 완료 (" + std::to_string(inspectionMission_.completedTargetCount)
             + "개 위치)";
     case InspectionMissionStage::Failed: return "실패: " + inspectionMission_.error;
     }

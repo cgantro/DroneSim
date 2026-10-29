@@ -33,9 +33,6 @@ endif()
 
 if(NOT EMSCRIPTEN AND (AEROSIMLAB_BUILD_GRAPHICS OR BUILD_TESTING))
   set(_aerosimlab_opencv_components core imgproc)
-  if(AEROSIMLAB_BUILD_GRAPHICS)
-    list(APPEND _aerosimlab_opencv_components videoio)
-  endif()
   find_package(OpenCV REQUIRED COMPONENTS ${_aerosimlab_opencv_components})
   find_package(Threads REQUIRED)
   if(WIN32 AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
@@ -156,7 +153,6 @@ target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
 if(NOT EMSCRIPTEN AND (AEROSIMLAB_BUILD_GRAPHICS OR BUILD_TESTING))
   add_library(aerosimlab_media STATIC
     modules/media/src/RtpVideoStream.cpp
-    modules/media/src/RecordedCaptureTransfer.cpp
   )
   target_include_directories(aerosimlab_media PUBLIC modules/media/include)
   if(WIN32 AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
@@ -288,7 +284,6 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_simulator_app PRIVATE
       apps/simulator/AeroSimLabAppEoCapture.cpp
-      apps/simulator/EoVideoRecorder.cpp
       apps/simulator/CooperativeMissionBenchmark.cpp
       apps/simulator/DroneScalingBenchmark.cpp
       apps/simulator/SimulatorHud.cpp
@@ -399,7 +394,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   )
   if(NOT EMSCRIPTEN)
     target_link_libraries(aerosimlab_simulator_app PRIVATE
-      aerosimlab_vision aerosimlab_media aerosimlab_imgui glfw opencv_videoio
+      aerosimlab_vision aerosimlab_media aerosimlab_imgui glfw
       Threads::Threads)
     target_compile_definitions(aerosimlab_simulator_app PRIVATE GLFW_INCLUDE_NONE)
   endif()
@@ -657,7 +652,6 @@ if(BUILD_TESTING)
       )
       target_include_directories(aerosimlab_simulator_integration_tests PRIVATE
         modules/graphics/src/graphics
-        ${OpenCV_INCLUDE_DIRS}
       )
       target_compile_definitions(aerosimlab_simulator_integration_tests PRIVATE
         AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
@@ -666,7 +660,6 @@ if(BUILD_TESTING)
         aerosimlab_simulator_app
         aerosimlab_ground_control_client
         nlohmann_json::nlohmann_json
-        opencv_videoio
         GTest::gtest_main
       )
       gtest_discover_tests(aerosimlab_simulator_integration_tests

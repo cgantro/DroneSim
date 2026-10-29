@@ -15,12 +15,6 @@ namespace
 constexpr double geometryTolerance = 1.0e-9;
 constexpr std::size_t maximumRecordedEvents = 64U;
 
-std::pair<NetworkNodeId, NetworkNodeId> MakePair(
-    NetworkNodeId first, NetworkNodeId second)
-{
-    return first < second ? std::pair{first, second} : std::pair{second, first};
-}
-
 double Cross(const glm::dvec2& first, const glm::dvec2& second)
 {
     return first.x * second.y - first.y * second.x;
@@ -90,31 +84,6 @@ void VirtualMeshNetwork::UpdateNodes(
     {
         return !nodes_.contains(id);
     });
-    std::erase_if(disabledLinks_, [this](const NodePair& pair)
-    {
-        return !nodes_.contains(pair.first) || !nodes_.contains(pair.second);
-    });
-}
-
-void VirtualMeshNetwork::SetLinkDisabled(
-    NetworkNodeId first, NetworkNodeId second, bool disabled)
-{
-    if (first == second)
-        throw std::invalid_argument("한 노드와 자기 자신 사이에는 링크 장애를 설정할 수 없습니다.");
-    const NodePair pair = MakePair(first, second);
-    const bool changed = disabled
-        ? disabledLinks_.insert(pair).second
-        : disabledLinks_.erase(pair) != 0U;
-    if (!changed)
-        return;
-    RecordEvent(disabled ? MeshEventKind::LinkDisabled : MeshEventKind::LinkRestored,
-        first, second, disabled ? "직접 연결을 끊었습니다." : "직접 연결을 복구했습니다.");
-}
-
-bool VirtualMeshNetwork::IsLinkDisabled(
-    NetworkNodeId first, NetworkNodeId second) const noexcept
-{
-    return first != second && disabledLinks_.contains(MakePair(first, second));
 }
 
 void VirtualMeshNetwork::SetNodeRadioEnabled(NetworkNodeId node, bool enabled)
@@ -166,12 +135,7 @@ void VirtualMeshNetwork::Advance(std::uint64_t tick)
         throw std::invalid_argument("가상 통신망 시간은 뒤로 갈 수 없습니다.");
     currentTick_ = tick;
     deliveredMessages_.clear();
-    std::sort(transmissions_.begin(), transmissions_.end(),
-        [](const Transmission& first, const Transmission& second)
-        {
-            return first.dueTick < second.dueTick
-                || (first.dueTick == second.dueTick && first.order < second.order);
-        });
+    // 전송은 현재 Tick에 쌓고 다음 Advance에서 처리하므로 보낸 순서가 유지된다.
     auto split = std::upper_bound(transmissions_.begin(), transmissions_.end(), tick,
         [](std::uint64_t current, const Transmission& transmission)
         {
@@ -222,8 +186,7 @@ bool VirtualMeshNetwork::CanExchangeAtPositions(
     const glm::dvec3& firstPositionMeters,
     const glm::dvec3& secondPositionMeters) const
 {
-    return LinkAvailableAt(first, second, firstPositionMeters, secondPositionMeters)
-        && LinkAvailableAt(second, first, secondPositionMeters, firstPositionMeters);
+    return LinkAvailableAt(first, second, firstPositionMeters, secondPositionMeters);
 }
 
 bool VirtualMeshNetwork::LinkAvailable(
@@ -244,10 +207,7 @@ bool VirtualMeshNetwork::LinkAvailableAt(NetworkNodeId sender,
     const auto senderNode = nodes_.find(sender);
     const auto receiverNode = nodes_.find(receiver);
     if (senderNode == nodes_.end() || receiverNode == nodes_.end()
-        || !senderNode->second.powered || !receiverNode->second.powered
-        || !senderNode->second.canTransmit || !receiverNode->second.canReceive
-        || radioDisabledNodes_.contains(sender) || radioDisabledNodes_.contains(receiver)
-        || disabledLinks_.contains(MakePair(sender, receiver)))
+        || radioDisabledNodes_.contains(sender) || radioDisabledNodes_.contains(receiver))
         return false;
     if (!std::isfinite(senderPositionMeters.x) || !std::isfinite(senderPositionMeters.y)
         || !std::isfinite(senderPositionMeters.z)
@@ -313,12 +273,10 @@ bool VirtualMeshNetwork::HasLineOfSight(
 void VirtualMeshNetwork::Transmit(NetworkNodeId sender, NetworkNodeId receiver,
     VirtualMeshMessage message)
 {
-    const std::uint64_t delay = std::max<std::uint64_t>(settings_.linkLatencyTicks, 1U);
     const std::uint64_t maximumTick = std::numeric_limits<std::uint64_t>::max();
-    const std::uint64_t dueTick = currentTick_ > maximumTick - delay
-        ? maximumTick : currentTick_ + delay;
-    transmissions_.push_back({dueTick, nextTransmissionOrder_++,
-        sender, receiver, std::move(message)});
+    const std::uint64_t nextTick = currentTick_ == maximumTick
+        ? maximumTick : currentTick_ + 1U;
+    transmissions_.push_back({nextTick, sender, receiver, std::move(message)});
 }
 
 void VirtualMeshNetwork::RecordEvent(MeshEventKind kind,

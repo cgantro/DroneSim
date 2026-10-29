@@ -207,50 +207,15 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
     const auto cameraState = queuedEoCameraStates_.find(simulationTick);
     if (cameraState != queuedEoCameraStates_.end())
     {
-        if (eoVideoRecorder_ && eoVideoRecorder_->IsRecording())
+        const bool viewCoversTarget =
+            aerosimlab::simulation::EoCameraModel::AssessCapture(
+                cameraState->second, inspectionMission_.surface, {},
+                inspectionOccluders_)
+            == aerosimlab::simulation::CaptureAssessment::Ready;
+        if (viewCoversTarget
+            && inspectionMission_.stage == InspectionMissionStage::Capturing)
         {
-            std::string error;
-            const auto captureAssessment =
-                aerosimlab::simulation::EoCameraModel::AssessCapture(
-                    cameraState->second, inspectionMission_.surface, {},
-                    inspectionOccluders_);
-            const bool isInspectionFrame = captureAssessment
-                == aerosimlab::simulation::CaptureAssessment::Ready;
-            const bool isScheduledVideoFrame = simulationTick
-                % EoVideoRecorder::simulationTicksPerRecordedFrame == 0U;
-            if ((isInspectionFrame || isScheduledVideoFrame)
-                && !eoVideoRecorder_->WriteFrame(eoFrame_, cameraState->second,
-                    static_cast<double>(simulationTick) / 60.0,
-                    captureAssessment, error))
-            {
-                const bool missionIsActive =
-                    inspectionMission_.stage != InspectionMissionStage::Ready
-                    && inspectionMission_.stage != InspectionMissionStage::Saved
-                    && inspectionMission_.stage != InspectionMissionStage::GeometryOnly
-                    && inspectionMission_.stage != InspectionMissionStage::Failed;
-                if (missionIsActive)
-                {
-                    FailInspectionMission("점검 영상을 저장하지 못했습니다. " + error);
-                }
-                else
-                {
-                    std::uint64_t savedFrames = 0;
-                    std::string finishError;
-                    static_cast<void>(eoVideoRecorder_->Stop(savedFrames, finishError));
-                    eoVideoRecorder_.reset();
-                    const std::string detail = finishError.empty()
-                        ? error : error + " " + finishError;
-                    window_->SetTitle("DroneSim | EO 녹화 중단: " + detail);
-                    static_cast<void>(savedFrames);
-                }
-            }
-#ifndef __EMSCRIPTEN__
-            else if (isInspectionFrame
-                && inspectionMission_.stage == InspectionMissionStage::Capturing)
-            {
-                inspectionMission_.readyFrameSaved = true;
-            }
-#endif
+            inspectionMission_.captureConditionMet = true;
         }
         queuedEoCameraStates_.erase(cameraState);
     }

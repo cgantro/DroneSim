@@ -1,6 +1,6 @@
 #include "graphics/GlbModel.h"
 
-#include "GlbData.h"
+#include "graphics/GlbData.h"
 #include "graphics/Material.h"
 #include "graphics/Mesh.h"
 #include "graphics/Renderer.h"

@@ -1,6 +1,5 @@
 #include "AeroSimLabApp.h"
 #include "FleetMissionProgress.h"
-#include "EoVideoRecorder.h"
 #include "FleetTelemetry.h"
 #include "FleetDroneSpawn.h"
 
@@ -17,18 +16,12 @@
 #include <glm/glm.hpp>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
-#include <nlohmann/json.hpp>
-
-#include <opencv2/videoio.hpp>
 
 #include <array>
 #include <chrono>
 #include <algorithm>
 #include <cstdint>
 #include <exception>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <limits>
 #include <map>
 #include <optional>
@@ -131,11 +124,8 @@ public:
             || mode == simulation::FlightMode::FollowingWaypoint);
         const auto originalReport = app.telemetryAtGroundControl_.at(
             disconnectedDroneId).state.positionMeters;
-        const auto groundControlNodeId = std::numeric_limits<
-            communication::NetworkNodeId>::max();
         for (const auto droneId : droneIds)
-            app.formationNetwork_->SetLinkDisabled(
-                droneId, groundControlNodeId, true);
+            app.formationNetwork_->SetNodeRadioEnabled(droneId, false);
 
         simulation::DroneCommand waypoint;
         waypoint.kind = simulation::DroneCommand::Kind::SetWaypoint;
@@ -159,8 +149,7 @@ public:
         EXPECT_GT(app.simulation_.TickCount() - received.receivedAtTick, 0U);
         const auto lastReceivedTick = received.receivedAtTick;
         for (const auto droneId : droneIds)
-            app.formationNetwork_->SetLinkDisabled(
-                droneId, groundControlNodeId, false);
+            app.formationNetwork_->SetNodeRadioEnabled(droneId, true);
         for (int tick = 0; tick < 360; ++tick)
         {
             app.AdvanceFleetNetwork();
@@ -183,10 +172,13 @@ public:
 
         const auto droneIds = app.fleetDroneIds_;
         ASSERT_EQ(droneIds.size(), 4U);
-        const auto groundControlNodeId = std::numeric_limits<
-            communication::NetworkNodeId>::max();
-        app.formationNetwork_->SetLinkDisabled(
-            droneIds.front(), groundControlNodeId, true);
+        // 시험용 통신망은 연결 설정만 있고 노드 목록은 첫 갱신 때 만들어진다.
+        // 한 번 상태를 주고받은 뒤 차단해야 차단 직전 전송분이 결과에 섞이지 않는다.
+        app.AdvanceFleetNetwork();
+        app.simulation_.AdvanceOneTick();
+        app.AdvanceFleetNetwork();
+        app.telemetryAtGroundControl_.clear();
+        app.formationNetwork_->SetNodeRadioEnabled(droneIds.front(), false);
         for (int tick = 0; tick < 240; ++tick)
         {
             app.AdvanceFleetNetwork();
@@ -556,141 +548,6 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
         FleetMissionProgress::Complete);
 }
 
-void Verify_EoVideoRecorderStoresH264AndFrameMetadata()
-{
-    const auto outputDirectory = std::filesystem::temp_directory_path()
-        / "dronesim-video-recorder-test";
-    std::filesystem::remove_all(outputDirectory);
-    const auto videoPath = outputDirectory / "inspection.mp4";
-    simulator::EoVideoRecorder recorder;
-    std::string error;
-    const simulation::CameraModel cameraModel{};
-    ASSERT_TRUE(recorder.Start(videoPath, cameraModel.imageWidthPixels,
-        cameraModel.imageHeightPixels, 60.0, "osm-building-1", "facade-test-area",
-        error)) << error;
-    recorder.SetMissionOutcome(simulator::EoVideoRecorder::MissionOutcome::Completed);
-
-    sensor::RgbFrame frame;
-    frame.width = cameraModel.imageWidthPixels;
-    frame.height = cameraModel.imageHeightPixels;
-    frame.rowOrder = sensor::RgbFrameRowOrder::BottomToTop;
-    frame.pixels.resize(static_cast<std::size_t>(frame.width * frame.height * 3), 128U);
-    simulation::CameraState camera;
-    camera.positionMeters = {1.0, 2.0, 3.0};
-    for (std::uint64_t tick = 1; tick <= 4; ++tick)
-    {
-        frame.simulationTick = tick;
-        ASSERT_TRUE(recorder.WriteFrame(frame, camera,
-            static_cast<double>(tick) / 60.0,
-            tick == 2 ? simulation::CaptureAssessment::Occluded
-                : simulation::CaptureAssessment::Ready,
-            error)) << error;
-    }
-    std::fill(frame.pixels.begin(), frame.pixels.end(), 0U);
-    auto metadataPath = videoPath;
-    metadataPath.replace_extension(".jsonl");
-    EXPECT_FALSE(std::filesystem::exists(metadataPath));
-    auto partialMetadataPath = metadataPath;
-    partialMetadataPath += ".partial";
-    EXPECT_TRUE(std::filesystem::exists(partialMetadataPath));
-
-    std::uint64_t savedFrameCount = 0;
-    ASSERT_TRUE(recorder.Stop(savedFrameCount, error)) << error;
-    EXPECT_EQ(savedFrameCount, 4U);
-    EXPECT_TRUE(std::filesystem::exists(metadataPath));
-    EXPECT_FALSE(std::filesystem::exists(partialMetadataPath));
-    ASSERT_TRUE(std::filesystem::exists(videoPath));
-    EXPECT_GT(std::filesystem::file_size(videoPath), 0U);
-    cv::VideoCapture decodedVideo(videoPath.string());
-    ASSERT_TRUE(decodedVideo.isOpened());
-    cv::Mat decodedFrame;
-    ASSERT_TRUE(decodedVideo.read(decodedFrame));
-    EXPECT_EQ(decodedFrame.cols, cameraModel.imageWidthPixels);
-    EXPECT_EQ(decodedFrame.rows, cameraModel.imageHeightPixels);
-    EXPECT_GT(cv::mean(decodedFrame)[0], 100.0);
-    decodedVideo.release();
-
-    std::ifstream metadata(metadataPath);
-    ASSERT_TRUE(metadata.good());
-    const std::string contents{
-        std::istreambuf_iterator<char>{metadata}, std::istreambuf_iterator<char>{}};
-    EXPECT_EQ(std::count(contents.begin(), contents.end(), '\n'), 4);
-    EXPECT_NE(contents.find("\"capture_state\":\"CAPTURED\""), std::string::npos);
-    EXPECT_NE(contents.find("\"facility_id\":\"osm-building-1\""), std::string::npos);
-    EXPECT_NE(contents.find("\"inspection_zone_id\":\"facade-test-area\""),
-        std::string::npos);
-    EXPECT_NE(contents.find("\"capture_assessment\":\"occluded\""),
-        std::string::npos);
-    EXPECT_NE(contents.find("\"simulation_tick\":4"), std::string::npos);
-    metadata.close();
-
-    auto manifestPath = videoPath;
-    manifestPath.replace_extension(".manifest.json");
-    std::ifstream manifest(manifestPath);
-    ASSERT_TRUE(manifest.good());
-    const std::string manifestText{
-        std::istreambuf_iterator<char>{manifest}, std::istreambuf_iterator<char>{}};
-    EXPECT_NE(manifestText.find("\"collection_state\": \"SAVED\""),
-        std::string::npos);
-    EXPECT_NE(manifestText.find("\"video_bytes\""), std::string::npos);
-    manifest.close();
-    const auto manifestData = nlohmann::json::parse(manifestText);
-    EXPECT_EQ(manifestData.at("checksum_algorithm").get<std::string>(),
-        "CRC-32/ISO-HDLC");
-    EXPECT_EQ(manifestData.at("accepted_frame_count").get<std::uint64_t>(), 4U);
-    EXPECT_EQ(manifestData.at("unwritten_frame_count").get<std::uint64_t>(), 0U);
-    EXPECT_EQ(manifestData.at("facility_id").get<std::string>(), "osm-building-1");
-    EXPECT_EQ(manifestData.at("inspection_zone_id").get<std::string>(),
-        "facade-test-area");
-    EXPECT_EQ(manifestData.at("mission_outcome").get<std::string>(), "COMPLETED");
-    EXPECT_EQ(manifestData.at("geometry_ready_frame_count").get<std::uint64_t>(), 3U);
-    std::string calculatedChecksum;
-    ASSERT_TRUE(simulator::EoVideoRecorder::CalculateFileChecksum(
-        videoPath, calculatedChecksum, error)) << error;
-    EXPECT_EQ(calculatedChecksum,
-        manifestData.at("video_checksum").get<std::string>());
-    ASSERT_TRUE(simulator::EoVideoRecorder::CalculateFileChecksum(
-        metadataPath, calculatedChecksum, error)) << error;
-    EXPECT_EQ(calculatedChecksum,
-        manifestData.at("metadata_checksum").get<std::string>());
-    ASSERT_TRUE(simulator::EoVideoRecorder::MarkCaptureDelivered(
-        manifestPath, error)) << error;
-    std::ifstream deliveredManifestFile(manifestPath);
-    ASSERT_TRUE(deliveredManifestFile.good());
-    const auto deliveredManifest = nlohmann::json::parse(
-        std::istreambuf_iterator<char>{deliveredManifestFile},
-        std::istreambuf_iterator<char>{});
-    EXPECT_EQ(deliveredManifest.at("collection_state").get<std::string>(),
-        "DELIVERED");
-    deliveredManifestFile.close();
-
-    const auto failedVideoPath = outputDirectory / "failed-inspection.mp4";
-    simulator::EoVideoRecorder failedRecorder;
-    ASSERT_TRUE(failedRecorder.Start(failedVideoPath,
-        cameraModel.imageWidthPixels, cameraModel.imageHeightPixels, 60.0,
-        "osm-building-1", "facade-test-area", error)) << error;
-    failedRecorder.SetMissionOutcome(
-        simulator::EoVideoRecorder::MissionOutcome::Failed,
-        "촬영 조건을 만족하지 못했습니다.");
-    frame.simulationTick = 5;
-    ASSERT_TRUE(failedRecorder.WriteFrame(frame, camera, 5.0 / 60.0,
-        simulation::CaptureAssessment::TooFar, error)) << error;
-    ASSERT_TRUE(failedRecorder.Stop(savedFrameCount, error)) << error;
-    auto failedManifestPath = failedVideoPath;
-    failedManifestPath.replace_extension(".manifest.json");
-    std::ifstream failedManifestFile(failedManifestPath);
-    ASSERT_TRUE(failedManifestFile.good());
-    const auto failedManifest = nlohmann::json::parse(
-        std::istreambuf_iterator<char>{failedManifestFile},
-        std::istreambuf_iterator<char>{});
-    EXPECT_EQ(failedManifest.at("collection_state").get<std::string>(), "SAVED");
-    EXPECT_EQ(failedManifest.at("mission_outcome").get<std::string>(), "FAILED");
-    EXPECT_EQ(failedManifest.at("mission_failure_reason").get<std::string>(),
-        "촬영 조건을 만족하지 못했습니다.");
-    failedManifestFile.close();
-    std::filesystem::remove_all(outputDirectory);
-}
-
 void Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain()
 {
     terrain::TerrainGrid terrainGrid;
@@ -917,7 +774,6 @@ TEST(SimulatorSessionTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
-    EXPECT_NO_FATAL_FAILURE(Verify_EoVideoRecorderStoresH264AndFrameMetadata());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_RecordingReplayOverUdp());
 }

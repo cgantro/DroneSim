@@ -3,7 +3,7 @@
 #include "graphics/IndexBuffer.h"
 #include "graphics/VertexArray.h"
 #include "graphics/VertexBuffer.h"
-#include "GlbData.h"
+#include "graphics/GlbData.h"
 
 #include "graphics/GlApi.h"
 
