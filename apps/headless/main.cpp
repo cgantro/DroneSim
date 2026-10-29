@@ -87,8 +87,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
             {"flight_time_seconds", drone.flightTimeSeconds},
             {"battery", std::move(battery)}});
     }
-    const auto& primaryDrone = result.drones.front();
-
     nlohmann::json mission = nullptr;
     if (result.mission)
     {
@@ -185,7 +183,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                 result.windVelocityMetersPerSecond->y,
                 result.windVelocityMetersPerSecond->z}
             : nlohmann::json(nullptr)},
-        {"final_state", ToJson(primaryDrone.finalState)},
         {"drones", std::move(drones)},
         {"physical_model", std::move(physicalModel)},
         {"controller_gains", std::move(controllerSettings)},
@@ -195,15 +192,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
         {"minimum_predicted_drone_separation_meters",
             result.minimumPredictedDroneSeparationMeters},
         {"collision_avoidance_events", result.collisionAvoidanceEvents},
-        {"camera", {
-            {"status", aerosimlab::simulation::ToString(primaryDrone.finalCamera.status)},
-            {"image_width_pixels", primaryDrone.finalCamera.model.imageWidthPixels},
-            {"image_height_pixels", primaryDrone.finalCamera.model.imageHeightPixels},
-            {"vertical_field_of_view_degrees",
-                primaryDrone.finalCamera.model.verticalFieldOfViewDegrees},
-            {"frame_count", primaryDrone.finalCamera.frameCount},
-            {"last_frame_tick", primaryDrone.finalCamera.lastFrameTick}
-        }},
         {"events", result.eventLog},
         {"issues", result.issues}
     };

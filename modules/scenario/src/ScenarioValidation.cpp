@@ -1,6 +1,8 @@
 #include "scenario/ScenarioDefinition.h"
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -151,6 +153,93 @@ void ValidateMultiDroneSettings(const ScenarioDefinition& definition)
             "minimum_drone_separation_meters는 여러 드론이 있는 시나리오에서만 설정할 수 있습니다.");
 }
 
+void ValidateDroneValues(const ScenarioDefinition& definition)
+{
+    if (!definition.defaultCameraModel.IsValid())
+        throw std::invalid_argument(
+            "카메라 해상도는 양수이고 세로 시야각은 0도보다 크고 180도보다 작아야 합니다.");
+
+    for (const ScenarioDrone& drone : definition.drones)
+    {
+        if (drone.cameraModel && !drone.cameraModel->IsValid())
+            throw std::invalid_argument(
+                "카메라 해상도는 양수이고 세로 시야각은 0도보다 크고 180도보다 작아야 합니다.");
+        if (drone.batteryCapacityWattHours
+            && *drone.batteryCapacityWattHours <= 0.0)
+            throw std::invalid_argument(
+                "battery_capacity_watt_hours는 양수여야 합니다.");
+        if (drone.initialBatteryPercent < 0.0
+            || drone.initialBatteryPercent > 100.0)
+            throw std::invalid_argument(
+                "initial_battery_percent는 0부터 100 사이여야 합니다.");
+        if (std::any_of(drone.initialState.motorSpeedsRadiansPerSecond.begin(),
+                drone.initialState.motorSpeedsRadiansPerSecond.end(),
+                [](double speed) { return speed < 0.0; }))
+            throw std::invalid_argument("초기 로터 속도는 0 이상이어야 합니다.");
+    }
+}
+
+void ValidatePhysicsSettings(const ScenarioDefinition& definition)
+{
+    const QuadrotorParameters& model = definition.quadrotorParameters;
+    const glm::dvec3& inertia = model.principalInertiaKilogramMetersSquared;
+    if (definition.quadrotorParametersCustomized
+        && (model.massKilograms <= 0.0 || inertia.x <= 0.0 || inertia.y <= 0.0
+            || inertia.z <= 0.0
+            || model.thrustCoefficientNewtonsPerSpeedSquared <= 0.0
+            || model.momentToThrustRatio <= 0.0
+            || model.motorTimeConstantUpSeconds <= 0.0
+            || model.motorTimeConstantDownSeconds <= 0.0
+            || model.maximumMotorSpeedRadiansPerSecond <= 0.0))
+        throw std::invalid_argument(
+            "기체 질량·관성·추력·토크·모터 시간·최대 속도는 모두 양수여야 합니다.");
+
+    const QuadrotorControllerParameters& controller =
+        definition.controllerParameters;
+    if (definition.controllerParametersCustomized
+        && (controller.positionGain <= 0.0 || controller.velocityGain <= 0.0
+            || controller.attitudeGain <= 0.0 || controller.angularRateGain <= 0.0))
+        throw std::invalid_argument("controller_gains 값은 모두 양수여야 합니다.");
+
+    if (definition.collisionAvoidance)
+    {
+        const CollisionAvoidanceSettings& settings = *definition.collisionAvoidance;
+        if (settings.safetyDistanceMeters <= 0.0
+            || settings.predictionHorizonSeconds <= 0.0
+            || settings.lateralOffsetMeters < settings.safetyDistanceMeters)
+            throw std::invalid_argument(
+                "충돌 회피 거리는 양수여야 하고 옆 이동 거리는 안전거리 이상이어야 합니다.");
+    }
+}
+
+void ValidateEnergyModelValues(const ScenarioDefinition& definition)
+{
+    if (!definition.energyModel)
+        return;
+
+    const EnergyModelSettings& settings = *definition.energyModel;
+    if (settings.capacityWattHours <= 0.0
+        || settings.hoverPowerWatts <= 0.0
+        || settings.flightPowerWatts <= 0.0
+        || settings.reservePercent < 0.0 || settings.reservePercent >= 100.0)
+        throw std::invalid_argument(
+            "배터리 용량과 소비 전력은 양수이고 reserve_percent는 0 이상 100 미만이어야 합니다.");
+}
+
+void ValidateExpectedValues(const ScenarioDefinition& definition)
+{
+    if (definition.toleranceMeters < 0.0)
+        throw std::invalid_argument("tolerance_meters는 0 이상이어야 합니다.");
+    if (definition.orientationToleranceRadians < 0.0
+        || definition.orientationToleranceRadians > std::numbers::pi)
+        throw std::invalid_argument(
+            "orientation_tolerance_radians는 0부터 π 사이여야 합니다.");
+    if (definition.minimumDroneSeparationMeters
+        && *definition.minimumDroneSeparationMeters < 0.0)
+        throw std::invalid_argument(
+            "minimum_drone_separation_meters는 0 이상이어야 합니다.");
+}
+
 void ValidateEnergySettings(const ScenarioDefinition& definition)
 {
     if (!definition.energyModel)
@@ -193,6 +282,10 @@ void ValidateEnergySettings(const ScenarioDefinition& definition)
 void ValidateScenarioDefinition(const ScenarioDefinition& definition)
 {
     const std::unordered_set<std::string> droneNames = GetDroneNames(definition);
+    ValidateDroneValues(definition);
+    ValidatePhysicsSettings(definition);
+    ValidateEnergyModelValues(definition);
+    ValidateExpectedValues(definition);
     ValidateCommands(definition, droneNames);
     ValidateCommunicationOutages(definition, droneNames);
     ValidateMission(definition, droneNames);

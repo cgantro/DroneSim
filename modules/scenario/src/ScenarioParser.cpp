@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <numbers>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -87,9 +86,6 @@ CameraModel ReadCameraModel(const Json& value)
         model.verticalFieldOfViewDegrees = ReadFiniteNumber(
             *fov, "vertical_field_of_view_degrees");
 
-    if (!model.IsValid())
-        throw std::invalid_argument(
-            "카메라 해상도는 양수이고 세로 시야각은 0도보다 크고 180도보다 작아야 합니다.");
     return model;
 }
 
@@ -305,9 +301,6 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
             {
                 initialState.motorSpeedsRadiansPerSecond[index] = ReadFiniteNumber(
                     (*motorSpeeds)[index], "initial_motor_speeds_radians_per_second");
-                if (initialState.motorSpeedsRadiansPerSecond[index] < 0.0)
-                    throw std::invalid_argument(
-                        "초기 로터 속도는 0 이상이어야 합니다.");
             }
         }
         if (mode != item.end())
@@ -318,14 +311,10 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         {
             batteryCapacity = ReadFiniteNumber(
                 *capacity, "battery_capacity_watt_hours");
-            if (*batteryCapacity <= 0.0)
-                throw std::invalid_argument("battery_capacity_watt_hours는 양수여야 합니다.");
         }
         const auto initialBattery = item.find("initial_battery_percent");
         const double initialBatteryPercent = initialBattery == item.end()
             ? 100.0 : ReadFiniteNumber(*initialBattery, "initial_battery_percent");
-        if (initialBatteryPercent < 0.0 || initialBatteryPercent > 100.0)
-            throw std::invalid_argument("initial_battery_percent는 0부터 100 사이여야 합니다.");
         std::optional<CameraModel> cameraModel;
         if (const auto camera = item.find("camera_model"); camera != item.end())
             cameraModel = ReadCameraModel(*camera);
@@ -589,17 +578,6 @@ void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& defini
             "maximum_motor_speed_radians_per_second");
     }
 
-    const glm::dvec3& inertia = model.principalInertiaKilogramMetersSquared;
-    if (model.massKilograms <= 0.0 || inertia.x <= 0.0 || inertia.y <= 0.0
-        || inertia.z <= 0.0
-        || model.thrustCoefficientNewtonsPerSpeedSquared <= 0.0
-        || model.momentToThrustRatio <= 0.0
-        || model.motorTimeConstantUpSeconds <= 0.0
-        || model.motorTimeConstantDownSeconds <= 0.0
-        || model.maximumMotorSpeedRadiansPerSecond <= 0.0)
-        throw std::invalid_argument(
-            "기체 질량·관성·추력·토크·모터 시간·최대 속도는 모두 양수여야 합니다.");
-
     definition.quadrotorParametersCustomized = true;
 }
 
@@ -621,10 +599,6 @@ void ReadControllerSettings(const Json& document, ScenarioDefinition& definition
     if (settings->contains("angular_rate"))
         controller.angularRateGain = ReadFiniteNumber((*settings)["angular_rate"], "angular_rate");
 
-    if (controller.positionGain <= 0.0 || controller.velocityGain <= 0.0
-        || controller.attitudeGain <= 0.0 || controller.angularRateGain <= 0.0)
-        throw std::invalid_argument("controller_gains 값은 모두 양수여야 합니다.");
-
     definition.controllerParametersCustomized = true;
 }
 
@@ -643,12 +617,6 @@ void ReadCollisionAvoidanceSettings(const Json& document, ScenarioDefinition& de
             "prediction_horizon_seconds"),
         ReadFiniteNumber(Required(*settingsValue, "lateral_offset_meters"),
             "lateral_offset_meters")};
-    if (settings.safetyDistanceMeters <= 0.0
-        || settings.predictionHorizonSeconds <= 0.0
-        || settings.lateralOffsetMeters < settings.safetyDistanceMeters)
-        throw std::invalid_argument(
-            "충돌 회피 거리는 양수여야 하고 옆 이동 거리는 안전거리 이상이어야 합니다.");
-
     definition.collisionAvoidance = settings;
 }
 
@@ -669,13 +637,6 @@ void ReadEnergyModelSettings(const Json& document, ScenarioDefinition& definitio
             "flight_power_watts"),
         ReadFiniteNumber(Required(*settingsValue, "reserve_percent"),
             "reserve_percent")};
-    if (settings.capacityWattHours <= 0.0
-        || settings.hoverPowerWatts <= 0.0
-        || settings.flightPowerWatts <= 0.0
-        || settings.reservePercent < 0.0 || settings.reservePercent >= 100.0)
-        throw std::invalid_argument(
-            "배터리 용량과 소비 전력은 양수이고 reserve_percent는 0 이상 100 미만이어야 합니다.");
-
     definition.energyModel = settings;
 }
 
@@ -683,27 +644,17 @@ void ReadExpectedLimitsAndCamera(const Json& expected, ScenarioDefinition& defin
 {
     if (expected.contains("tolerance_meters"))
         definition.toleranceMeters = ReadFiniteNumber(expected["tolerance_meters"], "tolerance_meters");
-    if (definition.toleranceMeters < 0.0)
-        throw std::invalid_argument("tolerance_meters는 0 이상이어야 합니다.");
-
     if (expected.contains("orientation_tolerance_radians"))
     {
         definition.orientationToleranceRadians = ReadFiniteNumber(
             expected["orientation_tolerance_radians"], "orientation_tolerance_radians");
     }
-    if (definition.orientationToleranceRadians < 0.0
-        || definition.orientationToleranceRadians > std::numbers::pi)
-        throw std::invalid_argument("orientation_tolerance_radians는 0부터 π 사이여야 합니다.");
     if (expected.contains("minimum_drone_separation_meters"))
     {
         definition.minimumDroneSeparationMeters = ReadFiniteNumber(
             expected["minimum_drone_separation_meters"],
             "minimum_drone_separation_meters");
     }
-    if (definition.minimumDroneSeparationMeters
-        && *definition.minimumDroneSeparationMeters < 0.0)
-        throw std::invalid_argument(
-            "minimum_drone_separation_meters는 0 이상이어야 합니다.");
     if (expected.contains("camera_status"))
         definition.expectedCameraStatus = ReadCameraStatus(expected["camera_status"]);
     if (expected.contains("camera_frame_count"))
@@ -725,8 +676,8 @@ void ReadExpectedResults(const Json& document, ScenarioDefinition& definition)
 
 }
 
-/** @brief JSON 문법과 설정을 확인한 뒤 실행에 필요한 자료만 묶어 돌려준다. */
-ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
+/** @brief JSON 문법과 각 항목을 읽어 실행 설정을 만든다. */
+ScenarioDefinition ParseScenarioDefinition(std::string_view jsonText)
 {
     const Json document = ParseScenarioDocument(jsonText);
 
@@ -762,7 +713,6 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     ReadCollisionAvoidanceSettings(document, definition);
     ReadEnergyModelSettings(document, definition);
     ReadExpectedResults(document, definition);
-    ValidateScenarioDefinition(definition);
     return definition;
 }
 }

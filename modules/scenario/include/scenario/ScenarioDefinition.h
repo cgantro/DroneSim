@@ -107,9 +107,9 @@ struct ScenarioDefinition
     std::optional<std::uint64_t> expectedFrameCount;
 };
 
-/** @brief JSON 설정을 읽고, 실행에 필요한 값만 묶어 돌려준다. */
-[[nodiscard]] ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText);
+/** @brief JSON 형식을 확인해 실행 설정으로 변환한다. */
+[[nodiscard]] ScenarioDefinition ParseScenarioDefinition(std::string_view jsonText);
 
-/** @brief 다 읽은 시나리오 설정끼리 함께 지켜야 할 조건을 확인한다. */
+/** @brief 설정 값의 허용 범위와 항목 사이의 규칙을 확인한다. */
 void ValidateScenarioDefinition(const ScenarioDefinition& definition);
 }

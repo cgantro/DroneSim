@@ -947,7 +947,8 @@ std::string_view ToString(ScenarioResult::Outcome outcome) noexcept
 
 ScenarioResult RunScenario(std::string_view jsonText)
 {
-    ScenarioDefinition definition = detail::ReadScenarioDefinition(jsonText);
+    ScenarioDefinition definition = detail::ParseScenarioDefinition(jsonText);
+    detail::ValidateScenarioDefinition(definition);
     const std::uint64_t tickCount = definition.tickCount;
     SimulationCore simulation{definition.dynamics,
         definition.quadrotorParameters, definition.controllerParameters};
