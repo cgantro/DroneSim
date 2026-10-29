@@ -3,7 +3,7 @@
 #include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
-#include "simulation_core/ScenarioRunner.h"
+#include "scenario/ScenarioRunner.h"
 #include "simulation_core/SimulationCore.h"
 
 #include <array>
@@ -13,8 +13,10 @@
 #include <string_view>
 #include <vector>
 
-namespace aerosimlab::simulation::detail
+namespace aerosimlab::scenario::detail
 {
+using namespace aerosimlab::simulation;
+
 struct ExpectedDrone
 {
     std::string name;

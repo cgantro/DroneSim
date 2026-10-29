@@ -26,15 +26,6 @@ enum class CameraCommand
     Recover
 };
 
-/** @brief 등록된 정찰 위치를 순서대로 방문해 영상을 수집한다. */
-enum class InspectionCommand
-{
-    Start,
-    Pause,
-    Resume,
-    Cancel
-};
-
 /** @brief 시뮬레이터의 여러 드론을 추가하거나 상태를 조회한다. */
 enum class FleetCommand
 {
@@ -47,7 +38,7 @@ enum class FleetCommand
 struct CommandPacket
 {
     using Command = std::variant<std::monostate, simulation::DroneCommand,
-        CameraCommand, InspectionCommand, FleetCommand>;
+        CameraCommand, FleetCommand>;
 
     std::uint32_t commandId = 0;
     std::uint32_t sequence = 0;
@@ -76,7 +67,6 @@ struct Telemetry
     simulation::DroneState drone;
     simulation::CameraState camera;
     std::vector<DroneTelemetry> drones;
-    std::string inspectionMissionStatus;
 };
 
 /** @brief 지상통제 명령의 접수·적용 결과와 적용 시점이다. */

@@ -2,6 +2,8 @@
 
 감사 기준 리비전: d6515b6e. 이후 변경은 CHECKPOINT와 VERIFICATION에서 확인한다.
 
+2026-10-29에 JSON 입력·결과 처리만 맡던 실행 코드를 `scenario` 모듈로 옮겼다. 아래 파일별 판정은 원래 조사 당시의 경로를 포함할 수 있으며, 현재 위치는 `modules/scenario`와 `tests/scenario`다. 이 이동은 SimulationCore의 내부 구조 변경을 뜻하지 않는다.
+
 기준: 4대 고정 V M01, 분산 정찰 M02, 복귀 M03, 직접 통신·라이브 EO. 2026-10-29 사용자 요청으로 EO 영상·사진 파일 저장을 제거했다. 아래 처음 감사한 내용의 ‘로컬 녹화’ 언급은 당시 기준선이며 현재 결정은 아니다. inventory의 simulation 52개 전부 본문을 읽었고, 이번에 SimulationCore의 실제 시스템 순서와 PhysicsWorld 연결을 다시 확인해 아래 조사 기록을 보강한다. 해당 조사와 파일별 판정은 정적 확인이며 빌드·시험을 뜻하지 않는다.
 
 ## 중요한 교차 확인 사항
@@ -19,11 +21,11 @@
 - `modules/simulation_core/include/simulation_core/DroneModel.h`: KEEP — 1–133. 명령·상태·제어값과 결과 유형, Apply 및 AdvanceOneTick을 정의한다(77–126). 위치 ENU, 각속도 FLU, tick은 1/60초(108). AirSim과 운동학 이중 경로의 실제 빌드 요구는 확인 필요.
 - `modules/simulation_core/include/simulation_core/EoCameraModel.h`: SIMPLIFY — 확인 1–138. 카메라 상태와 값 소유 점검면·가림 객체를 정의하고, 상태·드론을 받아 프레임·자세를 갱신하며 촬영 판단을 반환한다(99–131). span은 호출 중 빌린다. EO 기본 상태는 유지하고 시설 점검 평가 확장은 필요성 확인.
 - `modules/simulation_core/include/simulation_core/FormationPlanner.h`: SIMPLIFY — 1–82. 지형·장애물·리더 경로를 입력받아 값 소유 경로와 오프셋을 반환한다(23–79). V·Column·Line 및 전환 프로필은 고정 V 목표보다 넓다.
-- `modules/simulation_core/include/simulation_core/InspectionSurfaceJson.h`: SIMPLIFY — 확인 1–19. JSON 문자열을 점검면 또는 경유점 값으로 반환하고 잘못된 조건은 예외. 시설 점검 범위가 빠지면 구현과 함께 제거 후보; 일반 EO와 구분.
+- `modules/scenario/include/scenario/ScenarioJson.h` (당시 `simulation_core/InspectionSurfaceJson.h`): SIMPLIFY — 확인 1–19. JSON 문자열을 점검면 또는 경유점 값으로 반환하고 잘못된 조건은 예외. 시설 점검 범위가 빠지면 구현과 함께 제거 후보; 일반 EO와 구분.
 - `modules/simulation_core/include/simulation_core/PhysicsWorld.h`: KEEP — 확인 1–146. AirSim에 강체 생성·모터·지형·장애물·틱을 제공하며 Impl을 unique_ptr로 소유하고 복사를 금지한다(68–145). 잘못된 핸들의 DestroyBody는 false, 비유한 모터 입력은 거부(95,125). 충돌·좌표 계약 보존; 내부 수명은 구현 미완독.
 - `modules/simulation_core/include/simulation_core/QuadrotorFlightController.h`: KEEP — 확인 1–51. 상태·목표·물성·이득을 받아 경유 속도와 4개 로터 목표를 값 반환(35–49). 자체 가변 상태 없음. 오류 동작은 구현 미확인; 강체 비행 제어에 필요.
 - `modules/simulation_core/include/simulation_core/QuadrotorModel.h`: KEEP — 확인 1–60. 질량·관성·로터·충돌 상자·모터 계수를 값으로 소유하며 X500 기본 및 추정값을 반환한다(32–57). 오류·실제 호출은 구현 미확인. 별도 추정 모델은 MVP 사용 확인 후 정리 후보.
-- `modules/simulation_core/include/simulation_core/ScenarioRunner.h`: SIMPLIFY — 확인 1–167. RunScenario는 JSON을 받아 결과를 값 반환하고 잘못된 문법·필수값은 예외(159–165). 결과는 드론·임무·궤적을 소유하며 재할당 이력과 촬영 재시도 필드(100–129)가 고급 임무 범위다. headless JSON과 계약 정리 필요.
+- `modules/scenario/include/scenario/ScenarioRunner.h` (당시 `simulation_core/ScenarioRunner.h`): SIMPLIFY — 확인 1–167. RunScenario는 JSON을 받아 결과를 값 반환하고 잘못된 문법·필수값은 예외(159–165). 결과는 드론·임무·궤적을 소유하며 재할당 이력과 촬영 재시도 필드(100–129)가 고급 임무 범위다. headless JSON과 계약 정리 필요.
 - `modules/simulation_core/include/simulation_core/ScopedDuration.h`: KEEP — 확인 1–52. 생성 때 시간 시작, 소멸 때 전달받은 double에 시간 대입·누적한다(21–38). 포인터는 비소유이며 대상이 범위보다 오래 살아야 한다. null은 측정 생략. 벤치마크 소비자 확인 후 제거 가능성 검토.
 - `modules/simulation_core/include/simulation_core/SimulationCore.h`: KEEP — 확인 1–235. FixedTickAccumulator(55–66)는 잔여 시간을 소유하고 프레임 입력을 100ms로 제한한다. SimulationCore(72–234)는 ECS를 unique_ptr로 소유하고 명령·드론·카메라·배터리·충돌·틱 API를 제공한다. 없는 드론·배터리는 일부 예외, 마지막 드론은 제거 불가. 네이티브 AirSim과 웹 운동학 선택(31–38)은 호출 환경 확인 후 정리.
 - `modules/simulation_core/src/BatteryModel.cpp`: KEEP — 1–91. 생성자(9)는 설정 범위 오류에 예외를 던지고 Advance(33)는 모드별 평균 전력과 고정 틱으로 잔량을 갱신한다. Reset(46)은 초기량과 복귀 표시를 복원한다. 복귀 자체는 실행하지 않는다.
@@ -33,13 +35,13 @@
 - `modules/simulation_core/src/DroneModel.cpp`: KEEP — 확인 1–200, 201–315. Apply(72)는 상태·명령을 검증해 결과를 반환하고 상태·제어값을 갱신한다. AdvanceOneTick(185)은 고정 간격으로 이륙·이동·착륙과 지면 접촉을 계산한다. 외부 상태를 참조로 수정하며 로터 명령은 강체 경로와 연결 확인 필요. 운동학과 강체의 동작 차이는 구현 검토 필요.
 - `modules/simulation_core/src/EoCameraModel.cpp`: SIMPLIFY — 확인 1–200, 201–356. AdvanceOneTick(167)과 UpdatePose(176)는 카메라 상태를 갱신한다. AssessCapture(194)는 거리·각도·화면·해상도·가림 결과를 반환하고 상자·다각형을 빌려 읽는다. 고장 상태에서 SetEnabled는 무시(311); 시설 점검 판정은 기본 EO와 분리해 범위 검토. 별도 충돌 외곽선 계산과 경계 의미가 달라 무조건 통합하지 않는다.
 - `modules/simulation_core/src/FormationPlanner.cpp`: SIMPLIFY — 1–413. FormationOffsets(260)는 잘못된 입력에 예외, 대형과 방향에서 좌표 벡터 계산. PlanFormationRoute(345)는 지형 경로를 호출하고 실패 시 nullopt. 387–408의 Column 우회와 96–207의 전환 프로필은 고정 V 범위 밖이다. 제거 시 V 경로 없음과 충돌 여유를 처리해야 한다.
-- `modules/simulation_core/src/InspectionSurfaceJson.cpp`: SIMPLIFY — 1–124. JSON을 점검면·경유점 값으로 변환(54,112)하며 누락·비유한 값·잘못된 축이나 거리 조건에 예외를 던진다. 값 반환 외 상태는 없다. 시설 점검 평가의 MVP 필요성과 시나리오 파서 검증 중복을 확인한다.
+- `modules/scenario/src/ScenarioJson.cpp` (당시 `simulation_core/InspectionSurfaceJson.cpp`): SIMPLIFY — 1–124. JSON을 점검면·경유점 값으로 변환(54,112)하며 누락·비유한 값·잘못된 축이나 거리 조건에 예외를 던진다. 값 반환 외 상태는 없다. 시설 점검 평가의 MVP 필요성과 시나리오 파서 검증 중복을 확인한다.
 - `modules/simulation_core/src/PhysicsWorld.cpp`: KEEP — 확인 1–200, 201–400, 401–600, 601–800, 801–1000, 1001–1200, 1201–1270; 남은 줄 없음. Impl은 강체와 AirSim 시계를 소유하고 엔진에 강체 주소를 빌려준다(403–510); 소멸 전 clear. Step(1150)은 접촉·모터·엔진을 순서대로 실행하며 좌표 변환과 지형·장애물 접촉을 처리한다. 입력 오류와 미존재 핸들은 예외. 전역 시계의 동시 월드 실행 안전성은 미검증.
 - `modules/simulation_core/src/QuadrotorFlightController.cpp`: KEEP — 확인 1–233; 남은 줄 없음. WaypointVelocityTarget(150)은 위치에서 제한 속도를 반환하고 MotorTargets(170)는 상태·제어·물성에서 자세 토크와 로터 속도를 계산한다. 상태는 소유하지 않으며 로터 연립식이 특이하면 예외(127). 강체 제어와 운동학의 목표 동작 차이는 유지 여부 확인.
 - `modules/simulation_core/src/QuadrotorModel.cpp`: KEEP — 확인 1–67; 남은 줄 없음. X500Gazebo(7)는 기체·로터 관성 및 9개 충돌 상자를 값으로 구성하고 X500MotorTableEstimate(56)는 계수 세 개를 추정값으로 대체한다. 가변 상태·오류 처리 없음. 별도 추정값이 필요한지 소비자 확인.
-- `modules/simulation_core/src/ScenarioDefinition.cpp`: SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1329; 남은 줄 없음. ReadScenarioDefinition(1254)은 JSON을 검증해 값 소유 정의를 반환하고 잘못된 입력은 예외. GenerateSurveyTasks(610)는 드론별 영역과 왕복 경로를 생성; 앱 임무 생성과 중복 여부 확인. 시설 점검·재시도 및 통신 장애·물성 변경 설정은 범위 정리 후보이며 필수 조사 경로와 구분.
-- `modules/simulation_core/src/ScenarioDefinition.h`: SIMPLIFY — 확인 1–143; 남은 줄 없음. 시나리오 정의는 드론·예약 명령·통신 장애·편대·임무 등을 vector/optional 값으로 소유하고 파서 결과를 실행기에 전달한다(104–141). 고급 재할당 관련 결과 모델과 확장 설정은 소비자 확인 후 축소 후보.
-- `modules/simulation_core/src/ScenarioRunner.cpp`: SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1500, 1501–1624; 남은 줄 없음. RunScenario(1480)는 파서·SimulationCore를 만들고 관측, 명령, 에너지, 임무, 편대, 회피, 카메라, 틱 순으로 실행 후 결과 반환. UpdateMissionCommands(475)는 통신 단절·배터리 후 임무 재배정(539–600), UpdateMissionResults(1160)는 촬영 재시도; 고급 재할당 제거 후보. 충돌 회피와 통신 상태·미확정 결과는 단순 삭제 전 MVP 안전 동작 확인. 앱에도 임무 실행이 있어 경계 확인 필요.
+- `modules/scenario/src/ScenarioDefinition.cpp`: SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1329; 남은 줄 없음. ReadScenarioDefinition(1254)은 JSON을 검증해 값 소유 정의를 반환하고 잘못된 입력은 예외. GenerateSurveyTasks(610)는 드론별 영역과 왕복 경로를 생성; 앱 임무 생성과 중복 여부 확인. 시설 점검·재시도 및 통신 장애·물성 변경 설정은 범위 정리 후보이며 필수 조사 경로와 구분.
+- `modules/scenario/src/ScenarioDefinition.h`: SIMPLIFY — 확인 1–143; 남은 줄 없음. 시나리오 정의는 드론·예약 명령·통신 장애·편대·임무 등을 vector/optional 값으로 소유하고 파서 결과를 실행기에 전달한다(104–141). 고급 재할당 관련 결과 모델과 확장 설정은 소비자 확인 후 축소 후보.
+- `modules/scenario/src/ScenarioRunner.cpp`: SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1500, 1501–1624; 남은 줄 없음. RunScenario(1480)는 파서·SimulationCore를 만들고 관측, 명령, 에너지, 임무, 편대, 회피, 카메라, 틱 순으로 실행 후 결과 반환. UpdateMissionCommands(475)는 통신 단절·배터리 후 임무 재배정(539–600), UpdateMissionResults(1160)는 촬영 재시도; 고급 재할당 제거 후보. 충돌 회피와 통신 상태·미확정 결과는 단순 삭제 전 MVP 안전 동작 확인. 앱에도 임무 실행이 있어 경계 확인 필요.
 - `modules/simulation_core/src/SimulationCore.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1179; 남은 줄 없음. EcsStorage(37)는 Flecs 엔티티·배터리와 물리 월드를 소유한다. AdvanceOneTick(895)은 ECS 진행 후 물리, 배터리, tick, 카메라 자세를 갱신하고 일시정지 시 반환. 생성 실패 시 물리 강체와 엔티티 정리(407). 운동학과 강체의 접촉 처리는 서로 다른 구현이며 플랫폼 요구 확인 후 축소 판단.
 
 ## Simulation Core의 실제 책임과 경계
@@ -71,6 +73,6 @@
 - `tests/simulation_core/FormationPlannerTests.cpp`: SIMPLIFY — 확인 1–140; 남은 줄 없음. 4대 V 회전 좌표(17)와 경로·Column 우회 및 V 복귀 프로필(32)을 검증한다. 고정 V 요구에 맞춰 전환 기대를 정리하되 4대 오프셋·경로 실패 안전 검사는 유지. 실행하지 않음.
 - `tests/simulation_core/PhysicsWorldTests.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–888; 남은 줄 없음. 모터·제어·좌표계·지면·장애물·드론 충돌과 범위 오류를 확인한다(44,274,489,511,582,744,782). AirSim 접촉과 수명 변경 시 중요한 회귀 범위이며 고장 주입 시험은 기능 범위 결정 후 정리. 실행하지 않음.
 - `tests/simulation_core/QuadrotorModelTests.cpp`: KEEP — 확인 1–124; 남은 줄 없음. 제조사 표의 추정 계수와 X500 질량·관성·로터 배치(12,86)를 확인한다. 해당 모델을 유지할 때 물성 변경 검증에 필요. 실행하지 않음.
-- `tests/simulation_core/ScenarioRunnerTests.cpp`: SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1500, 1501–1688; 남은 줄 없음. 시나리오·카메라·물성·통신·4대 분산 조사·충돌 회피·저배터리와 재할당을 검사한다(160,762,1000,1250,1568). 16–256대 확장 및 재할당 기대는 제거 후보; 4대 조사·통신 단절의 미확정 처리·복귀·충돌 안전 시험은 요구에 맞게 보존. 실행하지 않음.
+- `tests/scenario/ScenarioRunnerTests.cpp` (당시 `tests/simulation_core`): SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1500, 1501–1688; 남은 줄 없음. 시나리오·카메라·물성·통신·4대 분산 조사·충돌 회피·저배터리와 재할당을 검사한다(160,762,1000,1250,1568). 16–256대 확장 및 재할당 기대는 제거 후보; 4대 조사·통신 단절의 미확정 처리·복귀·충돌 안전 시험은 요구에 맞게 보존. 실행하지 않음.
 - `tests/simulation_core/SimulationCoreTests.cpp`: KEEP — 확인 1–250, 251–500, 501–642; 남은 줄 없음. 배터리·고정 틱·일시정지·운동학 장애물·지형·ECS 및 물리 드론 수명·개별 카메라 검증(40,72,155,361,389). 점검면·시설물 검사(476 이후)는 확장 기능 범위에 맞춰 정리. 실행하지 않음.
 - `tests/terrain/TerrainGridTests.cpp`: KEEP — 확인 1–200, 201–284; 남은 줄 없음. 지형 크기·좌표·보간·파일 왕복과 오류 및 건물 우회·막힌 경로를 확인한다(26,40,75,89,150,203). 건물 경로 시험은 평지로 긴 경로의 중간 지형 장애를 확인하지 않는다. 외벽·교량 관련 기대는 기능 제거 시 함께 정리. 실행하지 않음.

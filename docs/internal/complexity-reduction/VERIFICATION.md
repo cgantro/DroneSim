@@ -127,3 +127,17 @@
 - Windows Release 전체 정리 빌드 성공. CTest 29/29 통과했으며 SimulatorSession의 CoreScenarios와 ViewerSmoke도 개별 확인했다.
 - 헤더 변경 뒤 처음 실행한 증분 빌드 산출물로는 시뮬레이터 시험에서 접근 위반이 났다. 앱의 전체 정리 재빌드 후에는 재현되지 않았다. 따라서 확인된 사실은 낡은 개체 파일 조합과의 연관성이며, 그 접근 위반의 더 깊은 원인은 확정하지 않았다.
 - 웹 브라우저 동작은 이번 작업에서 확인하지 않았다.
+## 2026-10-29 구형 단일 드론 임무 제거
+
+- Windows Release 전체 빌드 성공.
+- SimulatorSession의 `CoreScenarios` 통과, ViewerSmoke 통과.
+- 전체 CTest 28/29. `Communication.GroundControlClientTests.CoreScenarios`는 접근 위반으로 실패했다. 같은 시험의 이전 실행에서도 실패 기록이 있어 이번 임무 변경과의 인과는 확인되지 않았다.
+- `ProtocolTests.CoreScenarios`는 통신 코드에서 사용하지 않는 ScenarioRunner 헤더를 제거한 뒤 다시 빌드해 통과했다.
+- 웹 브라우저 직접 실행은 확인하지 않았다.
+
+## Simulation Core와 시나리오 모듈 분리 — 2026-10-29
+
+- JSON 시나리오 실행기·입력 파서·전용 시험을 `scenario` 모듈로 분리했다. Core 타깃의 소스와 링크 설정에서 시나리오 파일과 JSON 의존성이 빠진 것을 빌드 설정에서 확인했다.
+- Release 빌드에서 scenario 시험, simulation 시험, headless 실행기와 simulator 앱이 성공했다.
+- 관련 CTest 8/8 통과: 시뮬레이션 코어, 시나리오 실행기, 5개 headless 시나리오, ViewerSmoke.
+- 전체 CTest는 이번 변경에서 실행하지 않았다. 웹 브라우저 동작도 확인하지 않았다.

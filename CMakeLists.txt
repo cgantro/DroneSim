@@ -64,9 +64,6 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/BatteryModel.cpp
   modules/simulation_core/src/DroneModel.cpp
   modules/simulation_core/src/EoCameraModel.cpp
-  modules/simulation_core/src/InspectionSurfaceJson.cpp
-  modules/simulation_core/src/ScenarioRunner.cpp
-  modules/simulation_core/src/ScenarioDefinition.cpp
   modules/simulation_core/src/CollisionGeometry.cpp
   modules/simulation_core/src/SimulationCore.cpp
   modules/simulation_core/src/QuadrotorModel.cpp
@@ -81,11 +78,22 @@ endif()
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm aerosimlab_terrain
-  PRIVATE nlohmann_json::nlohmann_json flecs::flecs_static
+  PRIVATE flecs::flecs_static
 )
 if(NOT EMSCRIPTEN)
   target_link_libraries(aerosimlab_simulation_core PRIVATE aerosimlab_airsim)
 endif()
+
+add_library(aerosimlab_scenario STATIC
+  modules/scenario/src/ScenarioJson.cpp
+  modules/scenario/src/ScenarioRunner.cpp
+  modules/scenario/src/ScenarioDefinition.cpp
+)
+target_include_directories(aerosimlab_scenario PUBLIC modules/scenario/include)
+target_link_libraries(aerosimlab_scenario
+  PUBLIC aerosimlab_simulation_core
+  PRIVATE nlohmann_json::nlohmann_json
+)
 
 add_library(aerosimlab_communication STATIC
   modules/communication/src/Protocol.cpp
@@ -140,7 +148,7 @@ endif()
 
 add_executable(aerosimlab_headless apps/headless/main.cpp)
 target_link_libraries(aerosimlab_headless PRIVATE
-  aerosimlab_simulation_core
+  aerosimlab_scenario
   nlohmann_json::nlohmann_json
 )
 if(NOT EMSCRIPTEN)
@@ -467,7 +475,6 @@ if(BUILD_TESTING)
   include(GoogleTest)
   add_executable(aerosimlab_simulation_tests
     tests/simulation_core/SimulationCoreTests.cpp
-    tests/simulation_core/ScenarioRunnerTests.cpp
     tests/simulation_core/FormationPlannerTests.cpp
     tests/simulation_core/QuadrotorModelTests.cpp
     tests/terrain/TerrainGridTests.cpp
@@ -488,6 +495,23 @@ if(BUILD_TESTING)
   )
   gtest_discover_tests(aerosimlab_simulation_tests
     TEST_PREFIX "Simulation."
+    DISCOVERY_TIMEOUT 60
+    PROPERTIES LABELS "UNIT;simulation"
+  )
+
+  add_executable(aerosimlab_scenario_tests
+    tests/scenario/ScenarioRunnerTests.cpp
+  )
+  target_compile_definitions(aerosimlab_scenario_tests PRIVATE
+    AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
+  target_link_libraries(aerosimlab_scenario_tests PRIVATE
+    aerosimlab_scenario
+    nlohmann_json::nlohmann_json
+    GTest::gtest_main
+  )
+  gtest_discover_tests(aerosimlab_scenario_tests
+    TEST_PREFIX "Scenario."
     DISCOVERY_TIMEOUT 60
     PROPERTIES LABELS "UNIT;simulation"
   )

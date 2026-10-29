@@ -7,7 +7,6 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 #include "simulation_core/QuadrotorModel.h"
-#include "simulation_core/ScenarioRunner.h"
 
 #include <algorithm>
 #include <cmath>

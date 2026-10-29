@@ -45,23 +45,6 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     EXPECT_EQ(std::get<CameraCommand>(DecodeCommand(EncodeCommand(camera)).command),
         CameraCommand::InjectFault);
 
-    CommandPacket inspection;
-    inspection.commandId = 13;
-    inspection.sequence = 17;
-    inspection.command = InspectionCommand::Start;
-    EXPECT_EQ(std::get<InspectionCommand>(
-        DecodeCommand(EncodeCommand(inspection)).command), InspectionCommand::Start);
-    inspection.command = InspectionCommand::Cancel;
-    EXPECT_EQ(std::get<InspectionCommand>(
-        DecodeCommand(EncodeCommand(inspection)).command), InspectionCommand::Cancel);
-    for (const auto expected : {InspectionCommand::Pause,
-             InspectionCommand::Resume})
-    {
-        inspection.command = expected;
-        EXPECT_EQ(std::get<InspectionCommand>(
-            DecodeCommand(EncodeCommand(inspection)).command), expected);
-    }
-
     CommandPacket addDrone;
     addDrone.commandId = 10;
     addDrone.sequence = 14;
@@ -92,7 +75,6 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     reply.telemetry.drone.motorSpeedsRadiansPerSecond = {120.0, 121.0, 119.0, 122.0};
     reply.telemetry.camera.status = simulation::CameraStatus::Fault;
     reply.telemetry.camera.frameCount = 8;
-    reply.telemetry.inspectionMissionStatus = "구역 1/3: 이륙 중";
     reply.telemetry.drones = {
         {1, "드론 1", simulation::FlightMode::Hovering, {1.0, 2.0, 3.0}}};
     const std::string encodedReply = EncodeReply(reply);
@@ -111,8 +93,6 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     EXPECT_EQ(decoded.telemetry.drone.motorSpeedsRadiansPerSecond,
         reply.telemetry.drone.motorSpeedsRadiansPerSecond);
     EXPECT_EQ(decoded.telemetry.camera.status, simulation::CameraStatus::Fault);
-    EXPECT_EQ(decoded.telemetry.inspectionMissionStatus,
-        reply.telemetry.inspectionMissionStatus);
     ASSERT_EQ(decoded.telemetry.drones.size(), 1U);
     EXPECT_EQ(decoded.telemetry.drones[0].id, 1U);
     EXPECT_EQ(decoded.telemetry.drones[0].name, "드론 1");

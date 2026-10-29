@@ -1,4 +1,4 @@
-#include "simulation_core/ScenarioRunner.h"
+#include "scenario/ScenarioRunner.h"
 #include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/SimulationCore.h"
@@ -19,8 +19,10 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::simulation
+namespace aerosimlab::scenario
 {
+using namespace aerosimlab::simulation;
+
 namespace
 {
 using detail::ExpectedDrone;

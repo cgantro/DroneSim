@@ -1,5 +1,4 @@
 #include "communication/Protocol.h"
-#include "simulation_core/ScenarioRunner.h"
 
 #include <nlohmann/json.hpp>
 
@@ -189,12 +188,6 @@ Telemetry ReadTelemetry(const Json& value)
     camera.frameCount = ReadUnsigned(Required(value, "camera_frame_count"), "camera_frame_count");
     camera.lastFrameTick = ReadUnsigned(Required(value, "camera_last_frame_tick"), "camera_last_frame_tick");
     telemetry.drones = ReadFleetTelemetry(value);
-    if (value.contains("inspection_mission_status"))
-    {
-        if (!value["inspection_mission_status"].is_string())
-            throw std::invalid_argument("점검 임무 상태가 문자열이 아닙니다.");
-        telemetry.inspectionMissionStatus = value["inspection_mission_status"].get<std::string>();
-    }
     return telemetry;
 }
 
@@ -205,15 +198,6 @@ CameraCommand ReadCameraCommand(std::string_view action)
     if (action == "fault") return CameraCommand::InjectFault;
     if (action == "recover") return CameraCommand::Recover;
     throw std::invalid_argument("알 수 없는 카메라 명령입니다.");
-}
-
-InspectionCommand ReadInspectionCommand(std::string_view action)
-{
-    if (action == "start") return InspectionCommand::Start;
-    if (action == "pause") return InspectionCommand::Pause;
-    if (action == "resume") return InspectionCommand::Resume;
-    if (action == "cancel") return InspectionCommand::Cancel;
-    throw std::invalid_argument("알 수 없는 점검 임무 명령입니다.");
 }
 
 simulation::DroneCommand ReadDroneCommand(const Json& payload, std::string_view action)
@@ -296,22 +280,6 @@ Json EncodeCommandPayload(CameraCommand command)
     return {{"target", "camera"}, {"action", action}};
 }
 
-Json EncodeCommandPayload(InspectionCommand command)
-{
-    switch (command)
-    {
-    case InspectionCommand::Start:
-        return {{"target", "inspection_mission"}, {"action", "start"}};
-    case InspectionCommand::Pause:
-        return {{"target", "inspection_mission"}, {"action", "pause"}};
-    case InspectionCommand::Resume:
-        return {{"target", "inspection_mission"}, {"action", "resume"}};
-    case InspectionCommand::Cancel:
-        return {{"target", "inspection_mission"}, {"action", "cancel"}};
-    }
-    throw std::invalid_argument("알 수 없는 점검 임무 명령입니다.");
-}
-
 Json EncodeCommandPayload(FleetCommand command)
 {
     const char* action = "status";
@@ -373,11 +341,6 @@ CommandPacket DecodeCommand(std::string_view datagram)
         packet.command = ReadCameraCommand(action);
         return packet;
     }
-    if (target == "inspection_mission")
-    {
-        packet.command = ReadInspectionCommand(action);
-        return packet;
-    }
     if (target == "fleet")
     {
         if (action == "add_drone") packet.command = FleetCommand::AddDrone;
@@ -406,8 +369,7 @@ std::string EncodeReply(const CommandReply& reply)
         {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
         {"camera_status", aerosimlab::communication::ToString(camera.status)},
         {"camera_frame_count", camera.frameCount},
-        {"camera_last_frame_tick", camera.lastFrameTick},
-        {"inspection_mission_status", reply.telemetry.inspectionMissionStatus}
+        {"camera_last_frame_tick", camera.lastFrameTick}
     };
     if (reply.status != "fleet_status" && reply.telemetry.drones.size() <= 1U)
     {

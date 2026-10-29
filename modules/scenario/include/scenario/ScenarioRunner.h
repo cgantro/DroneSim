@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::simulation
+namespace aerosimlab::scenario
 {
 /**
  * @brief JSON 시나리오 실행의 최종 상태와 시험 결과를 돌려준다.
@@ -28,8 +28,8 @@ struct ScenarioResult
     double simulationTimeSeconds = 0.0;
     /** @brief 시나리오에서 강체 물리에 적용한 ENU 기준 바람 속도다. */
     std::optional<glm::dvec3> windVelocityMetersPerSecond;
-    DroneState finalState;
-    CameraState finalCamera;
+    simulation::DroneState finalState;
+    simulation::CameraState finalCamera;
     std::vector<std::string> issues;
     std::vector<std::string> eventLog;
     /** @brief 기준을 요청한 시나리오에서 잰 최소 3차원 중심 간 거리다. */
@@ -66,19 +66,19 @@ struct ScenarioResult
     {
         std::uint64_t tick = 0;
         double timeSeconds = 0.0;
-        std::vector<std::pair<std::string, DroneState>> drones;
+        std::vector<std::pair<std::string, simulation::DroneState>> drones;
     };
     std::vector<TrajectorySample> trajectory;
     /** @brief 시나리오에서 이름으로 지정한 드론의 마지막 상태다. */
     struct Drone
     {
         std::string name;
-        DroneState finalState;
+        simulation::DroneState finalState;
         enum class CommunicationStatus { Connected, Stale, Unknown } communicationStatus =
             CommunicationStatus::Connected;
         /** @brief finalState가 실제 현재 위치인지, 마지막으로 전달된 위치인지 나타낸다. */
         std::uint64_t lastHeartbeatTick = 0;
-        CameraState finalCamera;
+        simulation::CameraState finalCamera;
         /** @brief 에너지 모형을 켠 시나리오에서 설정한 배터리 용량과 사용·잔량이다. */
         std::optional<double> batteryCapacityWattHours;
         /** @brief 시작 잔량에서 시나리오 동안 실제로 소비한 에너지다. */
@@ -122,9 +122,10 @@ struct ScenarioResult
         std::uint64_t startTick = 0;
         std::uint64_t deadlineTick = 0;
         double toleranceMeters = 0.0;
-        std::optional<InspectionSurface> inspectionSurface;
-        std::vector<InspectionOccluderBox> inspectionOccluders;
-        CaptureAssessment lastCaptureAssessment = CaptureAssessment::NoNewFrame;
+        std::optional<simulation::InspectionSurface> inspectionSurface;
+        std::vector<simulation::InspectionOccluderBox> inspectionOccluders;
+        simulation::CaptureAssessment lastCaptureAssessment =
+            simulation::CaptureAssessment::NoNewFrame;
         /** @brief 점검면이 화면과 해상도 조건을 만족한 프레임의 모의 Tick이다. */
         std::optional<std::uint64_t> firstGeometryCaptureTick;
         bool started = false;

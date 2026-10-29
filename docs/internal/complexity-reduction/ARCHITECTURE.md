@@ -4,14 +4,16 @@
 
 ## 구조 한눈에 보기
 
-DroneSim은 여러 정적 라이브러리를 CMake로 묶은 한 프로그램이다. 모듈 간 순환 참조는 찾지 못했다. 시뮬레이션 상태와 비행 계산은 `simulation_core`, 지도 자료와 경로는 `terrain`, 화면 그리기는 `graphics`, 통신은 `communication`, 프로그램 조립과 임무 진행은 `apps/simulator`가 맡는다.
+DroneSim은 여러 정적 라이브러리를 CMake로 묶은 한 프로그램이다. 모듈 간 순환 참조는 찾지 못했다. 시뮬레이션 상태와 비행 계산은 `simulation_core`, JSON 시험 입력과 실행은 `scenario`, 지도 자료와 경로는 `terrain`, 화면 그리기는 `graphics`, 통신은 `communication`, 프로그램 조립과 임무 진행은 `apps/simulator`가 맡는다.
 
 ```text
-terrain ──▶ simulation_core ──▶ communication ──▶ 지상통제 클라이언트
-                    ▲                                  ▲
-manual_control ─────┘                                  │
-sensor ──▶ vision (영상 품질 계산)                     │
-graphics ◀────────────── apps/simulator ───────────────┘
+apps/headless ──▶ scenario ──▶ simulation_core ──▶ terrain
+apps/simulator ──▶ graphics
+      ├─────────▶ communication ──▶ simulation_core
+      ├─────────▶ manual_control ─▶ simulation_core
+      └─────────▶ simulation_core
+지상통제 클라이언트 ──▶ communication
+vision ──▶ sensor
 ```
 
 화살표는 직접 빌드 의존성을 나타낸다. `simulation_core`는 Flecs와 AirSim을 사용하지만, AirSim 물리 진행은 Flecs 시스템 호출 바깥에서 일어난다. 따라서 “모든 비행 계산이 ECS 안에서 처리된다”고 설명하면 맞지 않는다.
@@ -20,7 +22,8 @@ graphics ◀────────────── apps/simulator ───�
 
 | 영역 | 현재 책임 | 검토 결과 |
 |---|---|---|
-| `simulation_core` | 드론 상태·제어·고정 Tick·AirSim 연동·배터리·카메라·편대·JSON 시나리오 | 중심 기능은 분명하지만 시나리오 정의·실행까지 들어 있어 범위가 넓다. 앱 임무와 실제 중복을 확인한 뒤 정리한다. |
+| `simulation_core` | 드론 상태·제어·고정 Tick·AirSim 연동·배터리·카메라·편대 | 비행 모의 핵심을 맡는다. Flecs·AirSim 경계와 별도 저장 자료는 추가 정리가 남았다. |
+| `scenario` | JSON 시험 입력 검사·시뮬레이션 실행·결과 요약 | 자동 시험 책임을 코어에서 분리했다. `simulation_core`에 한 방향으로 의존한다. |
 | `terrain` | 높이 격자·좌표 변환·건물/도로/나무/물/교량 읽기·비행 경로 | 실제 지도 자료와 경로 기능이 함께 있다. 현재 앱 경로에 사용되므로 기능별 호출처 확인 없이 쪼개지 않는다. |
 | `graphics` | 창·카메라·셰이더·메시·GLB·화면 출력 | 화면 기반 모듈로 책임은 대체로 맞다. GLB 로더 진입점이 둘이고 내부 파서가 공개 헤더로 노출된 점은 정리 후보다. |
 | `communication` | 명령 형식·UDP 소켓·직접 가상 통신 | 현재는 순환 의존이 없다. 메시지 형식이 시뮬레이션 자료형을 직접 사용해 Simulation Core와 강하게 묶여 있다. |
@@ -30,7 +33,7 @@ graphics ◀────────────── apps/simulator ───�
 | `media` | 삭제됨 | 사용자가 라이브 영상 전송도 제거하도록 요청했다. 화면 패널 표시는 그래픽스 안에서 직접 처리한다. |
 | 앱 | 창·GUI·임무·환경 연결·텔레메트리 표시 | 프로그램 연결을 맡는 위치다. 다만 임무와 상태가 한 앱 클래스에 모여 있어 찾아가기 어렵다. |
 
-주요 빌드 경계는 `CMakeLists.txt`의 모듈 선언에 있다. `communication`은 프로토콜이 `DroneCommand` 등 Simulation Core 타입을 직접 포함해서 해당 모듈을 공개 의존성으로 둔다. `manual_control`도 `FlightMode` 사용 때문에 같은 의존성이 있다. 지금 두 모듈만 독립 제품처럼 재사용할 요구가 없으므로, 의존을 끊기 위한 변환 계층을 새로 만드는 것은 과하다.
+주요 빌드 경계는 `CMakeLists.txt`의 모듈 선언에 있다. `scenario`는 JSON 입력을 검사하고 Simulation Core를 실행한다. JSON 라이브러리는 시나리오와 통신 프로토콜에서 쓰며, `simulation_core`의 컴파일 항목과 의존성에서는 빠졌다. `communication`은 `DroneCommand` 등 Simulation Core 타입을, `manual_control`은 `FlightMode`를 직접 사용하므로 공개 의존성을 둔다. 이 두 모듈을 독립 제품처럼 재사용할 요구가 없어 변환 계층은 추가하지 않았다.
 
 ## Flecs와 비행 상태
 
@@ -64,14 +67,14 @@ TrainingRangeScene 배치 목록
 | 드론 카메라 자세 | Flecs의 `CameraState` | 비동기 GPU 픽셀과 맞추는 Tick별 상태 | 픽셀 생성 당시의 자세로 촬영 가능 여부를 평가한다. 처리 후 Tick 항목을 지운다. |
 | 배터리 | `EcsStorage::batteries` 맵 | 앱 임무 표시·복귀 판단 | 현재는 ECS 드론 컴포넌트와 별도 관리한다. 정리 전 API 사용처 확인이 필요하다. |
 | 카메라 픽셀 | GPU 프레임버퍼/PBO, 완료 후 앱의 `eoFrame_` | OpenCV 분석용 빌린 화면 | GPU에서 읽은 화면을 앱에 전달해 로컬 표시와 품질 계산에 쓴다. 영상 전송과 파일 저장은 제거했다. |
-| 임무 진행 | 앱의 `inspectionMission_`, `fleetReconnaissance_`, `completeFleetMission_`, `formationTransit_` | 화면 표시 상태 | 단일 카메라 정찰, 드론별 정찰, 전체 임무, 편대 이동을 각각 나타낸다. 목적은 다르지만 앱 클래스의 멤버에 함께 있어 어느 값이 기준인지 찾기 어렵다. |
-| 건물·정찰 환경 | `TrainingRangeScene` 배치와 생성한 `obstacles_` | `inspectionOccluders_`, `formationRadioObstacles_`, `inspectionTargets_`, SimulationCore 장애물 | 경로는 장면의 건물 목록을 직접 읽는다. 가림·통신·충돌은 목적별 모양의 파생 자료다. |
+| 임무 진행 | 앱의 `fleetReconnaissance_`, `completeFleetMission_`, `formationTransit_` | 화면 표시 상태 | 구형 단일 드론 점검 흐름은 제거했다. 드론별 정찰과 전체 임무의 단계 정보는 아직 앱에 함께 있어 갱신 책임을 더 살펴야 한다. |
+| 건물·정찰 환경 | `TrainingRangeScene` 배치 | `obstacles_`, `formationRadioObstacles_`, 정찰 목표, SimulationCore 충돌 형상 | 장면 배치에서 화면·충돌·통신·정찰 자료를 만든다. 가림막과 자동 촬영 평가는 제거했으며, 남은 파생 자료의 생성 위치와 기준 목록은 정리 대상이다. |
 | 네트워크 노드 위치 | Simulation Core의 현재 위치 | `VirtualMeshNetwork::nodes_` | 약 6 Tick마다 전달한 위치로 링크 거리·가림을 판정한다. 갱신 주기만큼 오래된 샘플일 수 있다. |
 | 관제·리더 텔레메트리 | 실제 비행 상태는 Simulation Core | `telemetryAtGroundControl_`, `peerTelemetryAtLeader_` | 메시지가 끊긴 동안 마지막으로 받은 위치를 유지한다. 실제 현재 상태와 구분해야 하므로 의도된 사본이다. |
 
 사본이 있다는 사실만으로 중복 구현은 아니다. 마지막 수신 텔레메트리, 비동기 프레임 Tick, 네트워크 위치는 지연이나 처리 시점을 나타내므로 별도 보관이 필요하다. 혼란을 줄이는 핵심은 **원본 상태인지, 시점이 고정된 사본인지, 계산해 만든 파생 자료인지** 이름과 갱신 위치에서 구분하는 것이다.
 
-가장 정리가 필요한 곳은 임무 상태와 파생 환경 자료다. 고정 4대 임무에서 더 이상 쓰지 않는 상태나 기능을 제거하고, 남는 단계별 상태를 어디서 갱신하는지 명확히 해야 한다. 건물은 현재 `TrainingRangeScene::Obstacles()`가 경로 계획과 앱의 파생 계산에 쓰이는 기준 자료다.
+가장 정리가 필요한 곳은 앱의 임무 단계 상태와 파생 환경 자료다. 구형 단일 드론 임무는 제거했지만, 편대 이동·드론별 정찰·전체 임무 단계가 나뉘어 있으므로 남은 각 상태의 기준과 갱신 순서를 더 확인해야 한다. 건물은 `TrainingRangeScene`의 배치 목록에서 경로·통신·충돌 자료로 이어진다.
 
 ## 파일로 저장되는 자료
 
@@ -91,11 +94,12 @@ TrainingRangeScene 배치 목록
 ## 파일 배치와 이름
 
 - 공개 모듈 헤더는 대부분 `modules/<모듈>/include/<모듈>/`에 있고 구현은 `src/` 아래에 있다.
-- `modules/simulation_core/src/CollisionGeometry.h`, `ScenarioDefinition.h`, `modules/terrain/src/MapGeometry.h`는 여러 내부 구현 파일이 공유하는 비공개 헤더다. `include`는 외부에 약속하는 공개 인터페이스 위치다. 이 헤더를 모두 `include`로 옮기면 구현 세부를 공개 API로 노출하게 된다. 현재처럼 `src`에 두거나, 한 파일에서만 쓴다면 해당 `.cpp` 안으로 합치는 편이 맞다. 별도 `detail` 폴더를 만들 필요는 없다.
+- `modules/simulation_core/src/CollisionGeometry.h`, `modules/scenario/src/ScenarioDefinition.h`, `modules/terrain/src/MapGeometry.h`는 여러 내부 구현 파일이 공유하는 비공개 헤더다. `include`는 외부에 약속하는 공개 인터페이스 위치다. 이 헤더를 모두 `include`로 옮기면 구현 세부를 공개 API로 노출하게 된다. 현재처럼 `src`에 두거나, 한 파일에서만 쓴다면 해당 `.cpp` 안으로 합치는 편이 맞다. 별도 `detail` 폴더를 만들 필요는 없다.
 - `Mesh::LoadGlb()`는 저장소 안에서 호출되지 않아 제거했다. `GlbModel::Load()`가 현재 GLB 모델을 불러오는 진입점이다.
 - `GlbData.h`는 GLB 내부 파서인데 현재 `graphics/include`에 있다. 외부 공개용이 아니라면 `include`에 둔 것은 공개 범위가 넓다. 내부 파서 위치는 별도로 검토해야 한다.
 - 그래픽스 시험의 include 경로에서 이전 `modules/graphics/src/graphics` 경로를 제거했다.
-- `ScenarioRunner`와 `ScenarioDefinition`은 시뮬레이션 코어 라이브러리에 포함되지만 JSON 시나리오를 조립·실행하는 별도 책임이다. 앱 임무와 중복되는지 확인하지 않은 상태에서 새 모듈로 옮기지 않는다.
+- JSON 시나리오 실행기와 점검 입력 파서는 `scenario` 모듈로 옮겼다. 전용 시험도 별도 실행 파일로 빌드한다. 앱 HUD에서 쓰지 않던 시나리오 헤더 포함도 제거했다.
+- `simulation_core`에서 시나리오 실행과 JSON 파싱을 떼어 냈다. 통신 구현에 있던 사용하지 않는 시나리오 헤더 의존도 제거했다.
 
 ## 우선 정리 순서
 
@@ -105,7 +109,7 @@ TrainingRangeScene 배치 목록
 4. **GLB 파서의 공개 범위를 검토한다.** 중복 로더를 제거했다. 내부 파서를 공개 `include`에서 감출 방법은 아직 남은 후보다.
 5. **Simulation Core의 배터리 저장 방식을 소비자와 함께 검토한다.** API와 참조 사용을 조사한 뒤 ECS 컴포넌트가 실제로 더 읽기 쉬운지 결정한다.
 
-새 계층을 추가하거나 모듈을 쪼개는 일은 위 정리로 책임을 설명할 수 없는 문제가 남을 때만 검토한다. 이번 감사는 코드·빌드 설정·호출 관계를 정적으로 읽었다. GUI에서 장면을 바꾸거나 통신·프레임 지연을 실행해 확인하지는 않았다.
+시나리오 실행·JSON 파싱을 별도 모듈로 옮겨 코어에서 JSON 의존성을 제거했다. `SimulationCore` 클래스 자체의 책임 분리와 Flecs 컴포넌트·별도 맵 사이의 저장 구조 정리는 아직 남아 있다. 이번 변경에서는 앱 임무 처리나 물리 동작을 바꾸지 않았다. GUI 조작과 웹 실행은 확인하지 않았다.
 
 ## 확인한 단순화
 

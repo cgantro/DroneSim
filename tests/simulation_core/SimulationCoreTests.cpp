@@ -1,7 +1,6 @@
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
-#include "simulation_core/InspectionSurfaceJson.h"
 #include "terrain/MapBuildings.h"
 #include "terrain/TerrainGrid.h"
 
@@ -527,49 +526,6 @@ void Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels()
         CaptureAssessment::Ready);
 }
 
-void Verify_InspectionSurfaceJsonNormalizesAxesAndRejectsInvalidCaptureRules()
-{
-    const auto surface = ParseInspectionSurfaceJson(R"({
-        "center_meters": [12, 3, 4],
-        "normal": [-2, 0, 0],
-        "width_axis": [1, 3, 0],
-        "width_meters": 4,
-        "height_meters": 2,
-        "minimum_distance_meters": 3,
-        "maximum_distance_meters": 15,
-        "maximum_incidence_angle_degrees": 45,
-        "minimum_pixel_width": 80,
-        "minimum_pixel_height": 60
-    })");
-
-    EXPECT_NEAR(glm::length(surface.normal), 1.0, 1.0e-12);
-    EXPECT_NEAR(glm::length(surface.widthAxis), 1.0, 1.0e-12);
-    EXPECT_NEAR(glm::dot(surface.normal, surface.widthAxis), 0.0, 1.0e-12);
-    EXPECT_DOUBLE_EQ(surface.centerMeters.z, 4.0);
-    EXPECT_EQ(surface.minimumPixelHeight, 60);
-
-    EXPECT_THROW(static_cast<void>(ParseInspectionSurfaceJson(R"({
-        "center_meters": [0, 0, 0], "normal": [1, 0, 0],
-        "width_axis": [2, 0, 0], "width_meters": 1, "height_meters": 1,
-        "minimum_distance_meters": 1, "maximum_distance_meters": 2,
-        "maximum_incidence_angle_degrees": 45,
-        "minimum_pixel_width": 1, "minimum_pixel_height": 1
-    })")), std::invalid_argument);
-}
-
-void Verify_InspectionWaypointsJsonReadsOrderedEnuCoordinates()
-{
-    const auto waypoints = ParseInspectionWaypointsJson(
-        R"([[1, 2, 3], [4, 5, 6]])");
-    ASSERT_EQ(waypoints.size(), 2U);
-    EXPECT_DOUBLE_EQ(waypoints[0].x, 1.0);
-    EXPECT_DOUBLE_EQ(waypoints[1].z, 6.0);
-    EXPECT_THROW(static_cast<void>(ParseInspectionWaypointsJson("[]")),
-        std::invalid_argument);
-    EXPECT_THROW(static_cast<void>(ParseInspectionWaypointsJson(R"([[1, 2]])")),
-        std::invalid_argument);
-}
-
 void Verify_EoCameraModelUsesBuildingFootprintsForOcclusion()
 {
     constexpr double diagonal = 0.7071067811865476;
@@ -631,10 +587,6 @@ TEST(SimulationCoreTests, CoreScenarios)
         Verify_KinematicWaypointTurnsDroneAndCameraTowardTravelDirection());
     EXPECT_NO_FATAL_FAILURE(
         Verify_EoCameraModelChecksSurfaceDistanceDirectionAndPixels());
-    EXPECT_NO_FATAL_FAILURE(
-        Verify_InspectionSurfaceJsonNormalizesAxesAndRejectsInvalidCaptureRules());
-    EXPECT_NO_FATAL_FAILURE(
-        Verify_InspectionWaypointsJsonReadsOrderedEnuCoordinates());
     EXPECT_NO_FATAL_FAILURE(
         Verify_EoCameraModelUsesBuildingFootprintsForOcclusion());
 }

@@ -1,4 +1,5 @@
-#include "simulation_core/ScenarioRunner.h"
+#include "scenario/ScenarioRunner.h"
+#include "scenario/ScenarioJson.h"
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
@@ -16,10 +17,35 @@
 #include <string_view>
 #include <vector>
 
-namespace aerosimlab::simulation
+namespace aerosimlab::scenario
 {
+using namespace aerosimlab::simulation;
+
 namespace
 {
+void Verify_ScenarioJsonReadsInspectionGeometry()
+{
+    const auto surface = ParseInspectionSurfaceJson(R"({
+        "center_meters": [12, 3, 4],
+        "normal": [-2, 0, 0],
+        "width_axis": [1, 3, 0],
+        "width_meters": 4,
+        "height_meters": 2,
+        "minimum_distance_meters": 3,
+        "maximum_distance_meters": 15,
+        "maximum_incidence_angle_degrees": 45,
+        "minimum_pixel_width": 80,
+        "minimum_pixel_height": 60
+    })");
+
+    EXPECT_NEAR(glm::length(surface.normal), 1.0, 1.0e-12);
+    EXPECT_NEAR(glm::length(surface.widthAxis), 1.0, 1.0e-12);
+    EXPECT_NEAR(glm::dot(surface.normal, surface.widthAxis), 0.0, 1.0e-12);
+    EXPECT_DOUBLE_EQ(surface.centerMeters.z, 4.0);
+    EXPECT_EQ(surface.minimumPixelHeight, 60);
+
+}
+
 std::string ReadScenarioFixture(std::string_view relativePath)
 {
     const std::filesystem::path path =
@@ -1632,6 +1658,8 @@ void Verify_ScenarioRunner_CompletesTasksAfterSimultaneousOutage()
 
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioJsonReadsInspectionGeometry());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories());
     EXPECT_NO_FATAL_FAILURE(

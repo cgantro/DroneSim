@@ -1,4 +1,4 @@
-#include "simulation_core/InspectionSurfaceJson.h"
+#include "scenario/ScenarioJson.h"
 
 #include <nlohmann/json.hpp>
 
@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace aerosimlab::simulation
+namespace aerosimlab::scenario
 {
 namespace
 {
@@ -51,13 +51,13 @@ std::uint64_t ReadUnsigned(const Json& value, const char* name)
 }
 }
 
-InspectionSurface ParseInspectionSurfaceJson(std::string_view jsonText)
+simulation::InspectionSurface ParseInspectionSurfaceJson(std::string_view jsonText)
 {
     const Json value = Json::parse(jsonText);
     if (!value.is_object())
         throw std::invalid_argument("inspection_surface는 JSON 객체여야 합니다.");
 
-    InspectionSurface surface;
+    simulation::InspectionSurface surface;
     surface.centerMeters = ReadVector(
         Required(value, "center_meters"), "inspection_surface.center_meters");
     surface.normal = ReadVector(
@@ -109,16 +109,4 @@ InspectionSurface ParseInspectionSurfaceJson(std::string_view jsonText)
     return surface;
 }
 
-std::vector<glm::dvec3> ParseInspectionWaypointsJson(std::string_view jsonText)
-{
-    const Json values = Json::parse(jsonText);
-    if (!values.is_array() || values.empty())
-        throw std::invalid_argument("점검 경유점은 비어 있지 않은 좌표 목록이어야 합니다.");
-
-    std::vector<glm::dvec3> waypoints;
-    waypoints.reserve(values.size());
-    for (const Json& value : values)
-        waypoints.push_back(ReadVector(value, "waypoints_meters"));
-    return waypoints;
-}
 }

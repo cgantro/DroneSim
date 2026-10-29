@@ -1,5 +1,5 @@
 #include "ScenarioDefinition.h"
-#include "simulation_core/InspectionSurfaceJson.h"
+#include "scenario/ScenarioJson.h"
 
 #include <nlohmann/json.hpp>
 
@@ -16,8 +16,10 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::simulation::detail
+namespace aerosimlab::scenario::detail
 {
+using namespace aerosimlab::simulation;
+
 namespace
 {
 using Json = nlohmann::json;

@@ -1,4 +1,4 @@
-#include "simulation_core/ScenarioRunner.h"
+#include "scenario/ScenarioRunner.h"
 
 #include <nlohmann/json.hpp>
 
@@ -40,10 +40,10 @@ nlohmann::json ToJson(const aerosimlab::simulation::DroneState& state)
         {"yaw_radians", state.yawRadians}};
 }
 
-nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
+nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
 {
     using CommunicationStatus =
-        aerosimlab::simulation::ScenarioResult::Drone::CommunicationStatus;
+        aerosimlab::scenario::ScenarioResult::Drone::CommunicationStatus;
     const auto communicationStatusName = [](CommunicationStatus status)
     {
         switch (status)
@@ -156,7 +156,7 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
                 {"first_geometry_capture_tick", task.firstGeometryCaptureTick}});
         }
         mission = {{"name", result.mission->name},
-            {"outcome", aerosimlab::simulation::ToString(result.mission->outcome)},
+            {"outcome", aerosimlab::scenario::ToString(result.mission->outcome)},
             {"passed", result.mission->passed},
             {"completed_task_count", result.mission->completedTaskCount},
             {"task_count", result.mission->tasks.size()},
@@ -220,7 +220,7 @@ nlohmann::json ToJson(const aerosimlab::simulation::ScenarioResult& result)
     }
 
     return {
-        {"outcome", aerosimlab::simulation::ToString(result.outcome)},
+        {"outcome", aerosimlab::scenario::ToString(result.outcome)},
         {"passed", result.passed},
         {"tick_count", result.tickCount},
         {"simulation_time_seconds", result.simulationTimeSeconds},
@@ -284,7 +284,7 @@ int main(int argc, char** argv)
         const std::string jsonText{
             std::istreambuf_iterator<char>{input},
             std::istreambuf_iterator<char>{}};
-        const auto result = aerosimlab::simulation::RunScenario(jsonText);
+        const auto result = aerosimlab::scenario::RunScenario(jsonText);
         std::cout << ToJson(result).dump(2) << '\n';
         return result.passed ? 0 : 1;
     }
