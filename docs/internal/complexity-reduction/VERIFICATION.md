@@ -192,3 +192,9 @@
 - Windows Release 전체 빌드 성공.
 - 전체 CTest 29/29 통과. 통신 단절 중 담당 드론과 작업이 유지되고 임무 결과가 미확정으로 남는 시험, 저전력 귀환 후 담당 작업이 미완료 처리되는 시험을 확인했다.
 - Headless 정상 임무 시험은 `two-point-survey.json`으로 실행했다. 웹 브라우저는 확인하지 않았다.
+
+## 사용하지 않던 Simulation Core 계측 제거 — 2026-10-29
+
+- Windows Release 전체 빌드 성공.
+- 전체 CTest 29/29 통과. Flecs, 물리 월드, 시뮬레이터와 ViewerSmoke를 포함한다.
+- Flecs·접촉 계측 API 이름의 코드 검색 결과 사용처가 남지 않았다. 사용자 화면에서 읽는 AirSim 물리 시간 측정은 보존했다.
