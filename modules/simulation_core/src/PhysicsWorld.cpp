@@ -22,12 +22,10 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <limits>
 #include <optional>
 #include <stdexcept>
-#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -208,11 +206,6 @@ public:
             targetSpeeds_.at(rotorIndex) = 0.0;
     }
 
-    [[nodiscard]] bool IsRotorMotorFaulted(std::size_t rotorIndex) const
-    {
-        return motorFaults_.at(rotorIndex);
-    }
-
     void SetInitialMotorSpeeds(
         const std::array<double, QuadrotorParameters::rotorCount>& speeds,
         double maximumSpeed)
@@ -350,8 +343,9 @@ private:
 
 struct Obstacle
 {
-    glm::dvec3 centerMeters;
-    glm::dvec3 halfExtentsMeters;
+    // 외곽선이 비어 있으면 상자이고, 있으면 외곽선과 높이로 접촉을 검사한다.
+    glm::dvec3 centerMeters{0.0};
+    glm::dvec3 halfExtentsMeters{0.0};
     std::vector<glm::dvec2> outlineMeters;
     double bottomMeters = 0.0;
     double topMeters = 0.0;
@@ -409,6 +403,7 @@ struct PhysicsWorld::Impl
         ActuationApi actuation;
         msr::airlib::Kinematics kinematics;
         msr::airlib::Environment environment;
+        // 모델은 위 네 객체의 주소를 빌리므로 먼저 파괴되도록 뒤에 둔다.
         std::unique_ptr<AirSimBody> model;
         std::vector<RigidBodyBox> collisionBoxes;
         std::vector<OrientedBox> worldCollisionBoxes;
@@ -480,6 +475,19 @@ struct PhysicsWorld::Impl
         {
             actuation.AdvanceMotorResponse(seconds, maximumMotorSpeed);
         }
+
+        /** @brief 현재 강체 자세를 읽어 충돌 상자의 월드 좌표를 갱신한다. */
+        void RefreshCollisionGeometry()
+        {
+            collisionState = ToProjectState(kinematics.getState());
+            for (std::size_t index = 0; index < collisionBoxes.size(); ++index)
+            {
+                worldCollisionBoxes[index] = ToWorldBox(
+                    collisionState.positionMeters,
+                    collisionState.orientation,
+                    collisionBoxes[index]);
+            }
+        }
     };
 
     // AirSim 시계는 전역으로 보관된다. 월드는 자기 시계를 소유하고 호출 전에 다시 활성화한다.
@@ -547,15 +555,7 @@ struct PhysicsWorld::Impl
         for (std::size_t index = 0; index < bodies.size(); ++index)
         {
             Body& body = *bodies[index];
-            body.collisionState = ToProjectState(body.kinematics.getState());
-            for (std::size_t boxIndex = 0;
-                boxIndex < body.collisionBoxes.size(); ++boxIndex)
-            {
-                body.worldCollisionBoxes[boxIndex] = ToWorldBox(
-                    body.collisionState.positionMeters,
-                    body.collisionState.orientation,
-                    body.collisionBoxes[boxIndex]);
-            }
+            body.RefreshCollisionGeometry();
             largestCollisionRadius = std::max(
                 largestCollisionRadius, body.collisionRadiusMeters);
         }
@@ -722,23 +722,12 @@ struct PhysicsWorld::Impl
         {
             const OrientedBox box = ToWorldBox(
                 state.positionMeters, state.orientation, collisionBox);
-            const double radiusX = box.halfExtentsMeters.x
-                    * std::abs(box.axes[0].x)
-                + box.halfExtentsMeters.y
-                    * std::abs(box.axes[1].x)
-                + box.halfExtentsMeters.z
-                    * std::abs(box.axes[2].x);
-            const double radiusY = box.halfExtentsMeters.x
-                    * std::abs(box.axes[0].y)
-                + box.halfExtentsMeters.y
-                    * std::abs(box.axes[1].y)
-                + box.halfExtentsMeters.z
-                    * std::abs(box.axes[2].y);
             const glm::dvec3 relativeCenter = box.centerMeters - state.positionMeters;
-            minimumRelativeX = std::min(minimumRelativeX, relativeCenter.x - radiusX);
-            maximumRelativeX = std::max(maximumRelativeX, relativeCenter.x + radiusX);
-            minimumRelativeY = std::min(minimumRelativeY, relativeCenter.y - radiusY);
-            maximumRelativeY = std::max(maximumRelativeY, relativeCenter.y + radiusY);
+            const glm::dvec3& halfExtents = box.axisAlignedHalfExtentsMeters;
+            minimumRelativeX = std::min(minimumRelativeX, relativeCenter.x - halfExtents.x);
+            maximumRelativeX = std::max(maximumRelativeX, relativeCenter.x + halfExtents.x);
+            minimumRelativeY = std::min(minimumRelativeY, relativeCenter.y - halfExtents.y);
+            maximumRelativeY = std::max(maximumRelativeY, relativeCenter.y + halfExtents.y);
         }
 
         const double halfWidth = terrain->HalfWidthMeters();
@@ -784,15 +773,7 @@ struct PhysicsWorld::Impl
      */
     void CorrectGroundPenetration(Body& body)
     {
-        body.collisionState = ToProjectState(body.kinematics.getState());
-        for (std::size_t boxIndex = 0;
-            boxIndex < body.collisionBoxes.size(); ++boxIndex)
-        {
-            body.worldCollisionBoxes[boxIndex] = ToWorldBox(
-                body.collisionState.positionMeters,
-                body.collisionState.orientation,
-                body.collisionBoxes[boxIndex]);
-        }
+        body.RefreshCollisionGeometry();
 
         const auto contact = FindTerrainContact(body, stepCount);
         if (!contact)
@@ -824,31 +805,17 @@ struct PhysicsWorld::Impl
             {
                 for (const OrientedBox& worldBox : body.worldCollisionBoxes)
                 {
-                    const double radiusX = worldBox.halfExtentsMeters.x
-                            * std::abs(worldBox.axes[0].x)
-                        + worldBox.halfExtentsMeters.y
-                            * std::abs(worldBox.axes[1].x)
-                        + worldBox.halfExtentsMeters.z
-                            * std::abs(worldBox.axes[2].x);
-                    const double radiusY = worldBox.halfExtentsMeters.x
-                            * std::abs(worldBox.axes[0].y)
-                        + worldBox.halfExtentsMeters.y
-                            * std::abs(worldBox.axes[1].y)
-                        + worldBox.halfExtentsMeters.z
-                            * std::abs(worldBox.axes[2].y);
-                    const double radiusZ = worldBox.halfExtentsMeters.x
-                            * std::abs(worldBox.axes[0].z)
-                        + worldBox.halfExtentsMeters.y
-                            * std::abs(worldBox.axes[1].z)
-                        + worldBox.halfExtentsMeters.z
-                            * std::abs(worldBox.axes[2].z);
+                    const glm::dvec3& halfExtents =
+                        worldBox.axisAlignedHalfExtentsMeters;
+                    const double horizontalRadius =
+                        std::hypot(halfExtents.x, halfExtents.y);
                     std::optional<BoxContact> contact;
                     if (obstacle.footprintOnly)
                     {
                         const auto footprintContact = collision::FindFootprintContact(
                             obstacle.outlineMeters,
                             {worldBox.centerMeters.x, worldBox.centerMeters.y},
-                            std::hypot(radiusX, radiusY));
+                            horizontalRadius);
                         if (footprintContact)
                         {
                             contact = BoxContact{
@@ -865,7 +832,7 @@ struct PhysicsWorld::Impl
                         const auto prismContact = collision::FindPrismContact(
                             obstacle.outlineMeters, obstacle.bottomMeters,
                             obstacle.topMeters, worldBox.centerMeters,
-                            std::hypot(radiusX, radiusY), radiusZ);
+                            horizontalRadius, halfExtents.z);
                         if (prismContact)
                         {
                             contact = BoxContact{prismContact->normal,
@@ -959,8 +926,9 @@ void PhysicsWorld::AddStaticObstacleBox(
     {
         throw std::invalid_argument("고정 상자의 위치와 크기를 확인해 주세요.");
     }
-    impl_->obstacles.push_back(
-        {centerMeters, glm::dvec3{halfExtentsMeters}, {}, 0.0, 0.0, false});
+    impl_->obstacles.push_back(Obstacle{
+        .centerMeters = centerMeters,
+        .halfExtentsMeters = glm::dvec3{halfExtentsMeters}});
 }
 
 void PhysicsWorld::AddStaticObstaclePrism(
@@ -970,21 +938,10 @@ void PhysicsWorld::AddStaticObstaclePrism(
     if (!collision::IsValidPrism(outlineMeters, bottomMeters, topMeters))
         throw std::invalid_argument("건물 외곽선과 높이 범위를 확인해 주세요.");
 
-    glm::dvec2 minimum = outlineMeters.front();
-    glm::dvec2 maximum = minimum;
-    for (const glm::dvec2& point : outlineMeters)
-    {
-        minimum = glm::min(minimum, point);
-        maximum = glm::max(maximum, point);
-    }
-
-    const glm::dvec2 center = (minimum + maximum) * 0.5;
-    const double halfHeight = (topMeters - bottomMeters) * 0.5;
-    impl_->obstacles.push_back({
-        {center.x, center.y, (bottomMeters + topMeters) * 0.5},
-        {(maximum.x - minimum.x) * 0.5,
-            (maximum.y - minimum.y) * 0.5, halfHeight},
-        outlineMeters, bottomMeters, topMeters, false});
+    impl_->obstacles.push_back(Obstacle{
+        .outlineMeters = outlineMeters,
+        .bottomMeters = bottomMeters,
+        .topMeters = topMeters});
 }
 
 void PhysicsWorld::AddStaticObstacleFootprint(
@@ -993,20 +950,9 @@ void PhysicsWorld::AddStaticObstacleFootprint(
     if (!collision::IsValidFootprint(outlineMeters))
         throw std::invalid_argument("구조물 외곽선 좌표를 확인해 주세요.");
 
-    glm::dvec2 minimum = outlineMeters.front();
-    glm::dvec2 maximum = minimum;
-    for (const glm::dvec2& point : outlineMeters)
-    {
-        minimum = glm::min(minimum, point);
-        maximum = glm::max(maximum, point);
-    }
-
-    const glm::dvec2 center = (minimum + maximum) * 0.5;
-    impl_->obstacles.push_back({
-        {center.x, center.y, 0.0},
-        {(maximum.x - minimum.x) * 0.5,
-            (maximum.y - minimum.y) * 0.5, 0.0},
-        outlineMeters, 0.0, 0.0, true});
+    impl_->obstacles.push_back(Obstacle{
+        .outlineMeters = outlineMeters,
+        .footprintOnly = true});
 }
 
 RigidBodyHandle PhysicsWorld::CreateQuadrotor(
@@ -1072,12 +1018,6 @@ void PhysicsWorld::SetRotorMotorFault(
     RigidBodyHandle handle, std::size_t rotorIndex, bool faulted)
 {
     impl_->GetBody(handle).actuation.SetRotorMotorFault(rotorIndex, faulted);
-}
-
-bool PhysicsWorld::IsRotorMotorFaulted(
-    RigidBodyHandle handle, std::size_t rotorIndex) const
-{
-    return impl_->GetBody(handle).actuation.IsRotorMotorFaulted(rotorIndex);
 }
 
 void PhysicsWorld::SetInitialMotorSpeeds(
@@ -1153,11 +1093,12 @@ void PhysicsWorld::Step(double seconds, double* stepDurationMicroseconds)
     static_cast<void>(impl_->clock->stepBy(seconds));
     ScopedDuration measurePhysicsStep(stepDurationMicroseconds);
     ++impl_->stepCount;
-    double largestCollisionRadius = 0.0;
+    // 적분 전 같은 기체 자세로 지형 경계와 드론 간 접촉을 준비한다.
     for (auto& body : impl_->bodies)
         impl_->ConstrainBodyToTerrain(*body);
-    largestCollisionRadius = impl_->PrepareCollisionData();
+    const double largestCollisionRadius = impl_->PrepareCollisionData();
     impl_->PrepareDroneContacts(largestCollisionRadius);
+    // 접촉과 로터 입력을 각 기체에 전달한 다음 AirSim을 한 단계 진행한다.
     for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
     {
         auto& body = impl_->bodies[index];
@@ -1173,6 +1114,7 @@ void PhysicsWorld::Step(double seconds, double* stepDurationMicroseconds)
         body->updatedSinceReset = true;
     }
     impl_->physicsEngine.update();
+    // 지면에 고정된 순간에는 남아 있는 관통 깊이를 한 번 보정한다.
     for (auto& body : impl_->bodies)
     {
         impl_->ConstrainBodyToTerrain(*body);

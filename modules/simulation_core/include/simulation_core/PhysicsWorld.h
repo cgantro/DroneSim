@@ -94,10 +94,6 @@ public:
     void SetRotorMotorFault(
         RigidBodyHandle body, std::size_t rotorIndex, bool faulted);
 
-    /** @brief 지정한 로터에 고장이 적용됐는지 확인한다. */
-    [[nodiscard]] bool IsRotorMotorFaulted(
-        RigidBodyHandle body, std::size_t rotorIndex) const;
-
     /** @brief 첫 물리 Tick 전에 로터의 현재 속도를 설정한다. */
     void SetInitialMotorSpeeds(
         RigidBodyHandle body,
