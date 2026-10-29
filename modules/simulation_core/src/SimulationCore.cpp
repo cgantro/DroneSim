@@ -815,11 +815,6 @@ std::size_t SimulationCore::DroneCount() const noexcept
     return ecs_->drones.size();
 }
 
-SimulationDynamics SimulationCore::Dynamics() const noexcept
-{
-    return ecs_->dynamics;
-}
-
 std::vector<DroneId> SimulationCore::DroneIds() const
 {
     std::vector<DroneId> ids;
@@ -961,41 +956,6 @@ void SimulationCore::SetCameraFault(DroneId droneId, bool faulted)
         EoCameraModel::Recover(camera);
 }
 
-void SimulationCore::SetRotorMotorFault(
-    DroneId droneId, std::size_t rotorIndex, bool faulted)
-{
-#if !defined(__EMSCRIPTEN__)
-    if (ecs_->dynamics != SimulationDynamics::RigidBody)
-        throw std::logic_error("로터 고장은 AirSim 강체 모의에서만 적용할 수 있습니다.");
-
-    const RigidBodyHandle body = ecs_->FindDrone(droneId)
-        .get<EcsStorage::PhysicsBody>().handle;
-    ecs_->physics->SetRotorMotorFault(body, rotorIndex, faulted);
-#else
-    static_cast<void>(droneId);
-    static_cast<void>(rotorIndex);
-    static_cast<void>(faulted);
-    throw std::logic_error("웹 운동학 모의에는 로터 고장 모델이 없습니다.");
-#endif
-}
-
-bool SimulationCore::IsRotorMotorFaulted(
-    DroneId droneId, std::size_t rotorIndex) const
-{
-#if !defined(__EMSCRIPTEN__)
-    if (ecs_->dynamics != SimulationDynamics::RigidBody)
-        throw std::logic_error("로터 고장은 AirSim 강체 모의에서만 확인할 수 있습니다.");
-
-    const RigidBodyHandle body = ecs_->FindDrone(droneId)
-        .get<EcsStorage::PhysicsBody>().handle;
-    return ecs_->physics->IsRotorMotorFaulted(body, rotorIndex);
-#else
-    static_cast<void>(droneId);
-    static_cast<void>(rotorIndex);
-    throw std::logic_error("웹 운동학 모의에는 로터 고장 모델이 없습니다.");
-#endif
-}
-
 void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
     if (!std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))
@@ -1110,8 +1070,4 @@ double SimulationCore::SimulationTimeSeconds() const noexcept
     return static_cast<double>(ecs_->tickCount) * DroneModel::fixedStepSeconds;
 }
 
-bool SimulationCore::IsPaused() const noexcept
-{
-    return paused_;
-}
 }

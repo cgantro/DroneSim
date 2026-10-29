@@ -105,9 +105,6 @@ public:
     /** @brief 현재 시뮬레이션에 있는 드론 수를 반환한다. */
     [[nodiscard]] std::size_t DroneCount() const noexcept;
 
-    /** @brief 현재 시뮬레이션의 물리 계산 방식을 반환한다. */
-    [[nodiscard]] SimulationDynamics Dynamics() const noexcept;
-
     /** @brief 현재 드론 식별값을 오름차순으로 돌려준다. */
     [[nodiscard]] std::vector<DroneId> DroneIds() const;
 
@@ -163,12 +160,6 @@ public:
     /** @brief 지정한 드론의 카메라 장애를 주입하거나 해제한다. */
     void SetCameraFault(DroneId droneId, bool faulted);
 
-    /** @brief AirSim 강체 모의에서 지정한 드론 로터의 전원을 끊거나 복구한다. 로터 번호는 0부터 시작한다. */
-    void SetRotorMotorFault(DroneId droneId, std::size_t rotorIndex, bool faulted);
-
-    /** @brief 지정한 드론 로터가 고장 상태인지 확인한다. */
-    [[nodiscard]] bool IsRotorMotorFaulted(DroneId droneId, std::size_t rotorIndex) const;
-
     /** @brief 강체 모드에서 사용할 월드 기준 바람 속도를 설정한다. */
     void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity);
 
@@ -199,9 +190,6 @@ public:
 
     /** @brief 누적된 모의 시간을 초 단위로 반환한다. */
     [[nodiscard]] double SimulationTimeSeconds() const noexcept;
-
-    /** @brief 모의가 일시정지 상태인지 반환한다. */
-    [[nodiscard]] bool IsPaused() const noexcept;
 
 private:
     struct EcsStorage;
