@@ -395,21 +395,6 @@ void UpdateMissionCommands(
     }
 }
 
-glm::dvec3 MissionWaypoint(
-    const DroneState& state,
-    const ScenarioResult::MissionTask* task,
-    const std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
-    bool includeAvoidanceTarget)
-{
-    if (!task)
-        return state.positionMeters;
-
-    const auto avoidanceTarget = activeAvoidanceTargets.find(task->droneName);
-    if (includeAvoidanceTarget && avoidanceTarget != activeAvoidanceTargets.end())
-        return avoidanceTarget->second;
-    return CurrentWaypoint(*task);
-}
-
 /** @brief 현재 임무 경유점을 향하는 목표 속도를 계산한다. */
 glm::dvec3 MissionVelocityIntent(
     const DroneState& state,
@@ -421,8 +406,11 @@ glm::dvec3 MissionVelocityIntent(
     if (!task)
         return state.velocityMetersPerSecond;
 
-    const glm::dvec3 waypoint = MissionWaypoint(
-        state, task, activeAvoidanceTargets, includeAvoidanceTarget);
+    const auto avoidanceTarget = activeAvoidanceTargets.find(task->droneName);
+    const glm::dvec3 waypoint = includeAvoidanceTarget
+        && avoidanceTarget != activeAvoidanceTargets.end()
+        ? avoidanceTarget->second
+        : CurrentWaypoint(*task);
 
     glm::dvec3 targetVelocity{0.0};
     if (definition.dynamics == SimulationDynamics::RigidBody)
