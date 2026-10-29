@@ -1,8 +1,8 @@
 #include "simulation_core/SimulationCore.h"
+#include "simulation_core/KinematicCollisionWorld.h"
 #if !defined(__EMSCRIPTEN__)
 #include "simulation_core/PhysicsWorld.h"
 #endif
-#include "CollisionGeometry.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 
@@ -30,65 +30,14 @@ bool HasFiniteVector(const glm::dvec3& value) noexcept
         && std::isfinite(value.z);
 }
 
-bool HasFiniteVector(const glm::vec3& value) noexcept
-{
-    return std::isfinite(value.x)
-        && std::isfinite(value.y)
-        && std::isfinite(value.z);
-}
-
 bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
 {
     return HasFiniteVector(positionMeters) && std::isfinite(yawRadians);
-}
-
-void ResolvePlanarObstacleContact(
-    DroneState& state, DroneControlState& control,
-    const glm::dvec2& normal, double penetrationMeters)
-{
-    const glm::dvec2 correction = normal * penetrationMeters;
-    state.positionMeters.x += correction.x;
-    state.positionMeters.y += correction.y;
-
-    glm::dvec2 velocity{
-        state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y};
-    const double inwardSpeed = glm::dot(velocity, normal);
-    if (inwardSpeed < 0.0)
-        velocity -= inwardSpeed * normal;
-    state.velocityMetersPerSecond.x = velocity.x;
-    state.velocityMetersPerSecond.y = velocity.y;
-
-    glm::dvec2 target{
-        control.targetVelocityMetersPerSecond.x,
-        control.targetVelocityMetersPerSecond.y};
-    const double inwardTargetSpeed = glm::dot(target, normal);
-    if (inwardTargetSpeed < 0.0)
-        target -= inwardTargetSpeed * normal;
-    control.targetVelocityMetersPerSecond.x = target.x;
-    control.targetVelocityMetersPerSecond.y = target.y;
 }
 }
 
 struct SimulationCore::EcsStorage
 {
-    struct StaticObstacleBox
-    {
-        glm::dvec3 centerMeters{0.0};
-        glm::dvec3 halfExtentsMeters{0.0};
-    };
-
-    struct StaticObstaclePrism
-    {
-        std::vector<glm::dvec2> outlineMeters;
-        double bottomMeters = 0.0;
-        double topMeters = 0.0;
-    };
-
-    struct StaticObstacleFootprint
-    {
-        std::vector<glm::dvec2> outlineMeters;
-    };
-
     struct InitialPose
     {
         glm::dvec3 positionMeters{0.0};
@@ -115,10 +64,7 @@ struct SimulationCore::EcsStorage
     std::map<DroneId, flecs::entity> drones;
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
-    std::vector<StaticObstacleBox> kinematicObstacles;
-    std::vector<StaticObstaclePrism> kinematicPrisms;
-    std::vector<StaticObstacleFootprint> kinematicFootprints;
-    std::optional<terrain::TerrainGrid> terrainGrid;
+    KinematicCollisionWorld kinematicCollision;
     glm::dvec3 windVelocityMetersPerSecond{0.0};
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
@@ -184,192 +130,11 @@ struct SimulationCore::EcsStorage
                         const glm::dvec3 previousPosition = states[row].positionMeters;
                         DroneModel::AdvanceOneTick(
                             states[row], controls[row], windVelocityMetersPerSecond);
-                        ResolveKinematicContacts(
+                        kinematicCollision.Resolve(
                             states[row], controls[row], previousPosition);
                     }
                 }
             });
-    }
-
-    void ResolveKinematicContacts(
-        DroneState& state, DroneControlState& control,
-        const glm::dvec3& previousPosition) const
-    {
-        KeepInsideTerrainBounds(state, control);
-        ResolveTerrainContact(state, control);
-        ResolveObstacleBoxes(state, control, previousPosition);
-        ResolveObstaclePrisms(state, control);
-        ResolveObstacleFootprints(state, control);
-    }
-
-    void KeepInsideTerrainBounds(
-        DroneState& state, DroneControlState& control) const
-    {
-        if (!terrainGrid)
-            return;
-
-        constexpr double droneHalfWidthMeters = 0.30;
-        const double maximumCenterX = std::max(
-            0.0, terrainGrid->HalfWidthMeters() - droneHalfWidthMeters);
-        const double maximumCenterY = std::max(
-            0.0, terrainGrid->HalfDepthMeters() - droneHalfWidthMeters);
-        const auto clampAxis = [](
-            double& position, double maximum, double& velocity, double& targetVelocity)
-        {
-            if (position > maximum)
-            {
-                position = maximum;
-                if (velocity > 0.0)
-                    velocity = 0.0;
-                if (targetVelocity > 0.0)
-                    targetVelocity = 0.0;
-            }
-            else if (position < -maximum)
-            {
-                position = -maximum;
-                if (velocity < 0.0)
-                    velocity = 0.0;
-                if (targetVelocity < 0.0)
-                    targetVelocity = 0.0;
-            }
-        };
-        clampAxis(state.positionMeters.x, maximumCenterX,
-            state.velocityMetersPerSecond.x,
-            control.targetVelocityMetersPerSecond.x);
-        clampAxis(state.positionMeters.y, maximumCenterY,
-            state.velocityMetersPerSecond.y,
-            control.targetVelocityMetersPerSecond.y);
-    }
-
-    void ResolveTerrainContact(
-        DroneState& state, DroneControlState& control) const
-    {
-        if (!terrainGrid || !terrainGrid->ContainsLocalPositionMeters(
-                {state.positionMeters.x, state.positionMeters.y}))
-            return;
-
-        constexpr double droneHalfWidthMeters = 0.30;
-        constexpr double droneHalfHeightMeters = 0.12;
-        const glm::dvec2 dronePosition{state.positionMeters.x, state.positionMeters.y};
-        control.groundElevationMeters = terrainGrid->HeightAtLocalMeters(dronePosition);
-
-        double highestGroundMeters = control.groundElevationMeters;
-        // 기체 네 모서리의 지면도 확인해 경사면이 동체를 뚫고 지나가지 않게 한다.
-        constexpr glm::dvec2 footprintOffsets[] = {
-            {-droneHalfWidthMeters, -droneHalfWidthMeters},
-            {-droneHalfWidthMeters, droneHalfWidthMeters},
-            {droneHalfWidthMeters, -droneHalfWidthMeters},
-            {droneHalfWidthMeters, droneHalfWidthMeters}};
-        for (const glm::dvec2& offset : footprintOffsets)
-        {
-            const glm::dvec2 sample = dronePosition + offset;
-            if (terrainGrid->ContainsLocalPositionMeters(sample))
-                highestGroundMeters = std::max(
-                    highestGroundMeters,
-                    static_cast<double>(terrainGrid->HeightAtLocalMeters(sample)));
-        }
-
-        const double minimumCenterHeightMeters =
-            highestGroundMeters + droneHalfHeightMeters;
-        if (state.positionMeters.z >= minimumCenterHeightMeters)
-            return;
-
-        state.positionMeters.z = minimumCenterHeightMeters;
-        if (state.velocityMetersPerSecond.z < 0.0)
-            state.velocityMetersPerSecond.z = 0.0;
-        if (control.targetVelocityMetersPerSecond.z < 0.0)
-            control.targetVelocityMetersPerSecond.z = 0.0;
-        if (state.mode == FlightMode::Landing)
-        {
-            // 충돌 형상이 지면에서 기체 중심을 띄우므로, 이 접촉을 착륙 완료로 본다.
-            state.velocityMetersPerSecond = glm::dvec3{0.0};
-            control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
-            control.commandedYawRateRadiansPerSecond = 0.0;
-            state.mode = FlightMode::Grounded;
-        }
-    }
-
-    void ResolveObstacleBoxes(
-        DroneState& state, DroneControlState& control,
-        const glm::dvec3& previousPosition) const
-    {
-        constexpr glm::dvec3 droneHalfExtentsMeters{0.30, 0.30, 0.12};
-        for (const StaticObstacleBox& obstacle : kinematicObstacles)
-        {
-            const glm::dvec3 offset = state.positionMeters - obstacle.centerMeters;
-            const glm::dvec3 overlap = obstacle.halfExtentsMeters
-                + droneHalfExtentsMeters - glm::abs(offset);
-            if (overlap.x <= 0.0 || overlap.y <= 0.0 || overlap.z <= 0.0)
-                continue;
-
-            glm::length_t axis = 0;
-            if (overlap.y < overlap[axis])
-                axis = 1;
-            if (overlap.z < overlap[axis])
-                axis = 2;
-
-            const double previousSide = previousPosition[axis]
-                - obstacle.centerMeters[axis];
-            const double currentSide = offset[axis];
-            const double side = previousSide != 0.0
-                ? std::copysign(1.0, previousSide)
-                : (currentSide != 0.0 ? std::copysign(1.0, currentSide) : 1.0);
-            state.positionMeters[axis] = obstacle.centerMeters[axis]
-                + side * (obstacle.halfExtentsMeters[axis]
-                    + droneHalfExtentsMeters[axis]);
-
-            if (state.velocityMetersPerSecond[axis] * side < 0.0)
-                state.velocityMetersPerSecond[axis] = 0.0;
-            if (control.targetVelocityMetersPerSecond[axis] * side < 0.0)
-                control.targetVelocityMetersPerSecond[axis] = 0.0;
-        }
-    }
-
-    void ResolveObstaclePrisms(
-        DroneState& state, DroneControlState& control) const
-    {
-        constexpr double droneRadiusMeters = 0.4242640687119285;
-        constexpr double droneHalfHeightMeters = 0.12;
-        for (const StaticObstaclePrism& obstacle : kinematicPrisms)
-        {
-            const auto contact = detail::FindPrismContact(
-                obstacle.outlineMeters, obstacle.bottomMeters, obstacle.topMeters,
-                state.positionMeters, droneRadiusMeters, droneHalfHeightMeters);
-            if (!contact)
-                continue;
-
-            if (std::abs(contact->normal.z) > 0.5)
-            {
-                state.positionMeters.z += contact->normal.z
-                    * contact->penetrationMeters;
-                if (state.velocityMetersPerSecond.z * contact->normal.z < 0.0)
-                    state.velocityMetersPerSecond.z = 0.0;
-                if (control.targetVelocityMetersPerSecond.z * contact->normal.z < 0.0)
-                    control.targetVelocityMetersPerSecond.z = 0.0;
-                continue;
-            }
-
-            const glm::dvec2 normal{contact->normal.x, contact->normal.y};
-            ResolvePlanarObstacleContact(
-                state, control, normal, contact->penetrationMeters);
-        }
-    }
-
-    void ResolveObstacleFootprints(
-        DroneState& state, DroneControlState& control) const
-    {
-        constexpr double droneRadiusMeters = 0.4242640687119285;
-        for (const StaticObstacleFootprint& obstacle : kinematicFootprints)
-        {
-            const auto contact = detail::FindFootprintContact(
-                obstacle.outlineMeters,
-                {state.positionMeters.x, state.positionMeters.y}, droneRadiusMeters);
-            if (!contact)
-                continue;
-
-            ResolvePlanarObstacleContact(
-                state, control, contact->normal, contact->penetrationMeters);
-        }
     }
 
 #if !defined(__EMSCRIPTEN__)
@@ -991,14 +756,6 @@ double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 void SimulationCore::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    if (!HasFiniteVector(centerMeters)
-        || !HasFiniteVector(halfExtentsMeters)
-        || halfExtentsMeters.x <= 0.0F || halfExtentsMeters.y <= 0.0F
-        || halfExtentsMeters.z <= 0.0F)
-    {
-        throw std::invalid_argument("장애물 위치와 크기를 확인해 주세요.");
-    }
-
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
@@ -1006,18 +763,13 @@ void SimulationCore::AddStaticObstacleBox(
         return;
     }
 #endif
-    ecs_->kinematicObstacles.push_back(
-        {centerMeters, glm::dvec3{halfExtentsMeters}});
+    ecs_->kinematicCollision.AddStaticObstacleBox(centerMeters, halfExtentsMeters);
 }
 
 void SimulationCore::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)
 {
-    if (!detail::IsValidFootprint(outlineMeters) || !std::isfinite(bottomMeters)
-        || !std::isfinite(topMeters) || !(topMeters > bottomMeters))
-        throw std::invalid_argument("건물 외곽선과 높이 범위를 확인해 주세요.");
-
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
@@ -1026,16 +778,13 @@ void SimulationCore::AddStaticObstaclePrism(
         return;
     }
 #endif
-    ecs_->kinematicPrisms.push_back(
-        {outlineMeters, bottomMeters, topMeters});
+    ecs_->kinematicCollision.AddStaticObstaclePrism(
+        outlineMeters, bottomMeters, topMeters);
 }
 
 void SimulationCore::AddStaticObstacleFootprint(
     const std::vector<glm::dvec2>& outlineMeters)
 {
-    if (!detail::IsValidFootprint(outlineMeters))
-        throw std::invalid_argument("구조물 외곽선 좌표를 확인해 주세요.");
-
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
@@ -1043,7 +792,7 @@ void SimulationCore::AddStaticObstacleFootprint(
         return;
     }
 #endif
-    ecs_->kinematicFootprints.push_back({outlineMeters});
+    ecs_->kinematicCollision.AddStaticObstacleFootprint(outlineMeters);
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
@@ -1055,7 +804,7 @@ void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
         return;
     }
 #endif
-    ecs_->terrainGrid = std::move(terrain);
+    ecs_->kinematicCollision.SetTerrain(std::move(terrain));
 }
 
 std::uint64_t SimulationCore::TickCount() const noexcept

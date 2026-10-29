@@ -66,6 +66,7 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/DroneModel.cpp
   modules/simulation_core/src/EoCameraModel.cpp
   modules/simulation_core/src/CollisionGeometry.cpp
+  modules/simulation_core/src/KinematicCollisionWorld.cpp
   modules/simulation_core/src/SimulationCore.cpp
   modules/simulation_core/src/QuadrotorModel.cpp
   modules/simulation_core/src/QuadrotorFlightController.cpp
