@@ -1073,16 +1073,24 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios());
 
-    constexpr std::string_view duplicateMissionAssignment = R"json(
-    {"version":1,"dynamics":"kinematic","ticks":2,
-     "drones":[{"name":"lead"},{"name":"wing"}],
-     "mission":{"name":"survey","tasks":[
-       {"name":"first","role":"scan","drone":"lead",
-        "waypoints_meters":[[0,0,1]],"start_tick":0,"deadline_tick":1,"tolerance_meters":0},
-       {"name":"second","role":"guard","drone":"lead",
-        "waypoints_meters":[[1,0,1]],"start_tick":0,"deadline_tick":1,"tolerance_meters":0}]}}
+    constexpr std::string_view sequentialDroneTasks = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":500,
+     "commands":[{"tick":0,"type":"takeoff"}],
+     "mission":{"name":"two-stop-survey","tasks":[
+       {"name":"first","role":"scan","drone":"drone",
+        "waypoints_meters":[[0,0,1.5]],"start_tick":0,
+        "deadline_tick":499,"tolerance_meters":0.1},
+       {"name":"second","role":"guard","drone":"drone",
+        "waypoints_meters":[[2,0,1.5]],"start_tick":0,
+        "deadline_tick":499,"tolerance_meters":0.1}]},
+     "expected":{"drones":[
+       {"name":"drone","mode":"hovering","position_meters":[2,0,1.5]}]}}
     )json";
-    EXPECT_THROW(static_cast<void>(RunScenario(duplicateMissionAssignment)), std::invalid_argument);
+    const ScenarioResult sequentialResult = RunScenario(sequentialDroneTasks);
+    ASSERT_TRUE(sequentialResult.IsPassed())
+        << (sequentialResult.issues.empty() ? "" : sequentialResult.issues.front());
+    ASSERT_TRUE(sequentialResult.mission.has_value());
+    EXPECT_EQ(sequentialResult.mission->CompletedTaskCount(), 2U);
 
     constexpr std::string_view targetPositionAlias = R"json(
     {"version":1,"dynamics":"kinematic","ticks":2,

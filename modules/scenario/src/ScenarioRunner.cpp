@@ -351,21 +351,17 @@ void UpdateMissionCommands(
     if (!mission)
         return;
 
-    for (auto taskIterator = mission->tasks.begin();
-         taskIterator != mission->tasks.end(); ++taskIterator)
+    // 목록 순서대로 훑으면서 드론마다 첫 미완료 작업 하나만 처리한다.
+    DroneNameSet dronesWithPendingTask;
+    for (ScenarioResult::MissionTask& task : mission->tasks)
     {
-        ScenarioResult::MissionTask& task = *taskIterator;
-        if (task.IsCompleted() || task.failed || tick < task.startTick
-            || !IsConnected(observations, task.droneName))
+        if (task.IsCompleted() || task.failed)
             continue;
-        const bool earlierTaskIsActive = std::any_of(mission->tasks.begin(),
-            taskIterator, [&task](const ScenarioResult::MissionTask& previous)
-            {
-                return previous.droneName == task.droneName
-                    && !previous.IsCompleted() && !previous.failed;
-            });
-        if (earlierTaskIsActive)
+        if (!dronesWithPendingTask.insert(task.droneName).second)
             continue;
+        if (tick < task.startTick || !IsConnected(observations, task.droneName))
+            continue;
+
         const DroneId droneId = droneIds.at(task.droneName);
         const FlightMode mode = simulation.State(droneId).mode;
         if (!CanReceiveWaypoint(mode))
@@ -376,6 +372,7 @@ void UpdateMissionCommands(
                 continue;
 
             task.failed = true;
+            dronesWithPendingTask.erase(task.droneName);
             if (task.started)
                 result.issues.push_back(task.droneName
                     + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다.");
@@ -402,6 +399,7 @@ void UpdateMissionCommands(
         if (moveResult != CommandResult::Accepted)
         {
             task.failed = true;
+            dronesWithPendingTask.erase(task.droneName);
             result.issues.push_back(task.droneName + " 드론에 임무 목표를 전달하지 못했습니다.");
         }
     }
