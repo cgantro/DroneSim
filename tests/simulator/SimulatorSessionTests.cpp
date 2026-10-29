@@ -198,7 +198,36 @@ public:
 
         EXPECT_FALSE(app.telemetryAtGroundControl_.contains(droneIds.front()));
         for (std::size_t i = 1; i < droneIds.size(); ++i)
-            EXPECT_TRUE(app.telemetryAtGroundControl_.contains(droneIds[i]));
+            ASSERT_TRUE(app.telemetryAtGroundControl_.contains(droneIds[i]));
+
+        const auto blockedDroneId = droneIds[2];
+        app.formationNetwork_->SetNodeRadioEnabled(blockedDroneId, false);
+        // 이미 전송 중인 메시지가 정리된 뒤 마지막 수신 시각을 확인한다.
+        for (int tick = 0; tick < 30; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+        const auto lastReceivedTick =
+            app.telemetryAtGroundControl_.at(blockedDroneId).receivedAtTick;
+        for (int tick = 0; tick < 120; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+        EXPECT_EQ(app.telemetryAtGroundControl_.at(blockedDroneId).receivedAtTick,
+            lastReceivedTick);
+        EXPECT_GT(app.telemetryAtGroundControl_.at(droneIds[1]).receivedAtTick,
+            lastReceivedTick);
+
+        app.formationNetwork_->SetNodeRadioEnabled(blockedDroneId, true);
+        for (int tick = 0; tick < 480; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+        EXPECT_GT(app.telemetryAtGroundControl_.at(blockedDroneId).receivedAtTick,
+            lastReceivedTick);
     }
 
     static void VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing()
