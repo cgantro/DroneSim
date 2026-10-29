@@ -1,5 +1,7 @@
 # app 소유 파일 감사
 
+이 감사표는 `d6515b6e` 기준 코드의 조사 기록이다. 조종 명령 기록·재생은 2026-10-29 제거했으며, 현재 상태는 CHECKPOINT와 VERIFICATION의 최신 항목을 따른다.
+
 기준: d6515b6e와 당시 미커밋 변경을 포함한 작업 트리, INVENTORY.tsv의 owner=app 32개. 이 기록의 초기 로컬 녹화 관련 평가는 2026-10-29 사용자 요청으로 뒤집혔다. 카메라 파일 녹화·저장은 제거하고 라이브 EO 화면은 유지한다. 아래 파일별 조사 내용은 당시 코드 기준이며 이후 변경은 CHECKPOINT와 VERIFICATION에서 확인한다.
 
 | 경로 | 판단 | 확인된 입출력·호출·상태/오류·중복 또는 범위 판단 |
@@ -9,7 +11,7 @@
 | apps/simulator/AeroSimLabAppBenchmark.cpp | SIMPLIFY | RecordBenchmarkFrame 15, WriteBenchmarkReport 70: 화면 계측을 보고서로 출력한다. 고정 임무 범위에서 쓰지 않는 대규모 확장 측정은 제거하고 화면 측정만 남겼다. |
 | apps/simulator/AeroSimLabAppEoCapture.cpp | SIMPLIFY | RenderScenePanel 16, CaptureEoFrame 99, ProcessCompletedEoReadback 105, QueueEoReadback 159, ProcessEoPixels 200, DrainEoReadbacks 281. 렌더 대상에서 픽셀을 읽어 EO 품질·시야 조건을 계산한다. 비동기 readback 수명과 종료 drain은 라이브 화면과 분석에 필요하다. |
 | apps/simulator/AeroSimLabAppGamepad.cpp | KEEP | ScanForGamepad 27, PollGamepad 50, HandleGamepadDisconnected 118. 장치 상태를 입력으로 조종 명령을 만들고 연결 해제를 처리한다. 독립 기능이지만 MVP에서 수동 조종 필요 여부는 별도 결정. |
-| apps/simulator/AeroSimLabAppInput.cpp | SIMPLIFY | PollGroundControl 184, ProcessPendingGroundCommand 727, CurrentTelemetry 840. UDP 명령을 받아 응답·상태를 만들며 송신 예외는 814–825에서 처리한다. 장애 기록·재생 39–174 및 전송 관련 경로는 제거 대상. 목표 임무와 직접 통신은 보존해야 한다. |
+| apps/simulator/AeroSimLabAppInput.cpp | SIMPLIFY | 당시 PollGroundControl 184, ProcessPendingGroundCommand 727, CurrentTelemetry 840이 UDP 명령과 상태 응답을 처리했다. 기록·재생 제어는 이후 제거했다. 목표 임무와 직접 통신은 보존한다. |
 | apps/simulator/AeroSimLabAppLifecycle.cpp | SIMPLIFY | Run 28, RunFrame 139, SmokeTestIsComplete 302, ValidateSmokeTestOutput 313. 프레임 입력→모의→렌더→swap을 묶고 웹 예외 및 smoke 시간 초과를 처리한다. 벤치마크·웹/네이티브 분기 정리는 EO 검증과 종료 경로를 보존하며 수행. |
 | apps/simulator/AeroSimLabAppMission.cpp | SIMPLIFY | StartFleetReconnaissance 399, StartFleetReturn 565/573, AdvanceFleetReconnaissance 821, AdvanceCompleteFleetMission 1003, PrepareFleetNetwork 1260, InitializeFleetLeadership 1318, AdvanceFleetNetwork 1447, AdvanceFormationTransit 1698. 임무 상태와 메시지 입출력이 얽혀 있다. 리더 교체·중계·다중홉을 직접 통신으로 대체하되 M01→M02→M03과 실패/착륙 처리를 함께 검증해야 한다. |
 | apps/simulator/BenchmarkProcessMemory.h | SIMPLIFY | ProcessMemorySample 14, ReadProcessMemorySample 21은 프로세스 메모리 계측에 선택적 결과를 반환한다. 벤치마크 보존 여부와 함께 결정. |
@@ -29,13 +31,13 @@
 | apps/simulator/FleetTelemetry.h | SIMPLIFY | PeerTelemetry 13. 동료 상태 데이터 계약. 직접 통신에 필요한 필드 유지, 중계·선출 전용 필드 확인 후 제거. |
 | apps/simulator/SimulationBenchmark.cpp | SIMPLIFY | Percentile 23, SummarizeDurations 50, BuildViewerBenchmarkReport 61. 측정값을 JSON 보고서로 변환. 가변 대수·장애 계측과 앱 계측 의존을 분리해 필요한 검증만 보존. |
 | apps/simulator/SimulationBenchmark.h | SIMPLIFY | ViewerBenchmarkMeasurements를 선언한다. 드론 수 확장 벤치마크의 입력 형식과 함수 선언을 제거하고 화면 측정 결과만 남겼다. |
-| apps/simulator/SimulatorHud.cpp | SIMPLIFY | HUD가 사용자 입력을 앱 제어에 연결하고 장면·EO·상태를 그린다. 비행 명령 기록 UI와 카메라 영상 녹화는 서로 다른 기능이며, 후자는 제거했다. |
+| apps/simulator/SimulatorHud.cpp | SIMPLIFY | HUD가 사용자 입력을 앱 제어에 연결하고 장면·EO·상태를 그린다. 명령 기록 UI와 카메라 영상 녹화 UI는 모두 제거했다. |
 | apps/simulator/SimulatorHud.h | SIMPLIFY | SessionRecordingControls 47, SimulatorHud 85, PendingGpuQuery 124. UI 입력과 콜백/계측 상태 계약. 구현의 제거 대상과 동기화하고 GPU 쿼리 수명 확인. |
 | apps/simulator/TrainingRangeScene.cpp | KEEP | Load 68은 자산과 지형·simulation을 받아 시설·장애물·정찰 지점을 만들고, Draw 124가 renderer에 전달한다. Obstacles 134, ReconPoints 140으로 임무에 연결. 자산 로드 실패 처리 추가 확인 필요. |
 | apps/simulator/TrainingRangeScene.h | KEEP | ReconPoint 27, ModelGroup 50, TrainingRangeScene 24. 장면 모델과 정찰 위치를 소유해 렌더링 및 경로 계획에 제공한다. |
 | apps/simulator/main.cpp | SIMPLIFY | RunSimulator 73, WinMain 182, main 210. 시작 옵션을 읽고 앱을 실행하며 시작 오류를 표시한다. 제거할 벤치마크·전송 옵션과 도움말을 함께 정리. |
 | apps/simulator/web/web_shell_single_thread.html | SIMPLIFY | 웹 입력·상태와 카메라 패널을 연결한다. 2026-10-29 요청에 따라 브라우저 녹화·저장·WebRTC를 제거했다. 페이지 안에서 시뮬레이터 캔버스 일부를 카메라 패널에 복사한다. 실제 브라우저 검증은 별도 수행이 필요하다. |
-| tests/simulator/SimulatorSessionTests.cpp | SIMPLIFY | 4대 임무·직접 통신·명령 기록 재생을 시험한다. 카메라 녹화 저장 시험은 2026-10-29 제거했다. |
+| tests/simulator/SimulatorSessionTests.cpp | SIMPLIFY | 현재 4대 임무·직접 통신과 UDP 비행 명령을 시험한다. 명령 기록·재생과 카메라 저장 시험은 제거했다. |
 
 ## 우선 확인할 위험과 범위 제한
 

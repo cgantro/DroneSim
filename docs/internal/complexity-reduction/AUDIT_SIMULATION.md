@@ -15,7 +15,7 @@
 ## 파일별 범위와 판정
 - `apps/headless/main.cpp`: SIMPLIFY — 1–296. main(257)은 JSON 파일 크기와 열기 오류를 확인해 RunScenario를 호출하고 JSON을 출력한다. ToJson(43)은 재할당·점검면·물리·궤적까지 직렬화한다. 예외는 종료 코드 2, 실패 결과는 1이다. 고급 임무 필드 제거 전 소비자 계약 확인 필요.
 - `modules/simulation_core/include/simulation_core/BatteryModel.h`: KEEP — 1–46. 배터리 설정을 입력받아 고정 틱 소비량·잔량·복귀 조건을 제공하고 에너지와 복귀 표시를 소유한다(41–44). 오류 검사는 구현 참조.
-- `modules/simulation_core/include/simulation_core/CommandRecording.h`: SIMPLIFY — 1–63. 명령과 틱을 vector로 소유하고 재생 범위를 span으로 빌려준다(15–61). 내부 저장소 변경 시 span 수명에 주의. EO 영상 녹화와 별개인 명령 재생의 MVP 필요성을 확인한다.
+- `modules/simulation_core/include/simulation_core/CommandRecording.h`: REMOVED — 당시 명령과 Tick을 저장하고 재생 범위를 span으로 빌려주던 기능이다. 2026-10-29 조종 명령 기록·재생 제품 기능 제거와 함께 삭제했다.
 - `modules/simulation_core/include/simulation_core/DroneModel.h`: KEEP — 1–133. 명령·상태·제어값과 결과 유형, Apply 및 AdvanceOneTick을 정의한다(77–126). 위치 ENU, 각속도 FLU, tick은 1/60초(108). AirSim과 운동학 이중 경로의 실제 빌드 요구는 확인 필요.
 - `modules/simulation_core/include/simulation_core/EoCameraModel.h`: SIMPLIFY — 확인 1–138. 카메라 상태와 값 소유 점검면·가림 객체를 정의하고, 상태·드론을 받아 프레임·자세를 갱신하며 촬영 판단을 반환한다(99–131). span은 호출 중 빌린다. EO 기본 상태는 유지하고 시설 점검 평가 확장은 필요성 확인.
 - `modules/simulation_core/include/simulation_core/FormationPlanner.h`: SIMPLIFY — 1–82. 지형·장애물·리더 경로를 입력받아 값 소유 경로와 오프셋을 반환한다(23–79). V·Column·Line 및 전환 프로필은 고정 V 목표보다 넓다.
@@ -29,7 +29,7 @@
 - `modules/simulation_core/src/BatteryModel.cpp`: KEEP — 1–91. 생성자(9)는 설정 범위 오류에 예외를 던지고 Advance(33)는 모드별 평균 전력과 고정 틱으로 잔량을 갱신한다. Reset(46)은 초기량과 복귀 표시를 복원한다. 복귀 자체는 실행하지 않는다.
 - `modules/simulation_core/src/CollisionGeometry.cpp`: KEEP — 확인 1–200, 201–327. 외접구·AABB 및 분리축으로 상자 접촉을 계산하고(39,253), 외곽선 투영으로 footprint·prism 접촉을 반환한다(106,172,194). 유효하지 않거나 겹치지 않으면 nullopt; 값 기반 지역 상태. EO의 별도 다각형 판정과 목적이 달라 통합 전 경계 규칙 검토 필요.
 - `modules/simulation_core/src/CollisionGeometry.h`: KEEP — 확인 1–91. 강체 상자·외곽선 입력에서 접촉 값 또는 optional을 반환하는 내부 순수 계산 인터페이스(53–90). span은 비소유. 접촉 실패와 입력 오류가 nullopt로 합쳐지는 의미에 주의.
-- `modules/simulation_core/src/CommandRecording.cpp`: SIMPLIFY — 1–94. 시작·중단은 부적절한 상태에서 false(5–31), Record와 FinishTick은 명령·길이 기록(58–68), CommandsForReplayTick은 내부 vector span 반환(71). 호출처 확인 후 제거 판단.
+- `modules/simulation_core/src/CommandRecording.cpp`: REMOVED — 당시 기록 경계 Tick과 재생 인덱스를 관리했다. 앱·HUD·UDP 호출처와 함께 삭제했다.
 - `modules/simulation_core/src/DroneModel.cpp`: KEEP — 확인 1–200, 201–315. Apply(72)는 상태·명령을 검증해 결과를 반환하고 상태·제어값을 갱신한다. AdvanceOneTick(185)은 고정 간격으로 이륙·이동·착륙과 지면 접촉을 계산한다. 외부 상태를 참조로 수정하며 로터 명령은 강체 경로와 연결 확인 필요. 운동학과 강체의 동작 차이는 구현 검토 필요.
 - `modules/simulation_core/src/EoCameraModel.cpp`: SIMPLIFY — 확인 1–200, 201–356. AdvanceOneTick(167)과 UpdatePose(176)는 카메라 상태를 갱신한다. AssessCapture(194)는 거리·각도·화면·해상도·가림 결과를 반환하고 상자·다각형을 빌려 읽는다. 고장 상태에서 SetEnabled는 무시(311); 시설 점검 판정은 기본 EO와 분리해 범위 검토. 별도 충돌 외곽선 계산과 경계 의미가 달라 무조건 통합하지 않는다.
 - `modules/simulation_core/src/FormationPlanner.cpp`: SIMPLIFY — 1–413. FormationOffsets(260)는 잘못된 입력에 예외, 대형과 방향에서 좌표 벡터 계산. PlanFormationRoute(345)는 지형 경로를 호출하고 실패 시 nullopt. 387–408의 Column 우회와 96–207의 전환 프로필은 고정 V 범위 밖이다. 제거 시 V 경로 없음과 충돌 여유를 처리해야 한다.
@@ -67,7 +67,7 @@
 - `modules/terrain/src/MapWaterBodies.cpp`: KEEP — 확인 1–132; 남은 줄 없음. LoadMapWaterBodies(67)는 GeoJSON 물 외곽·섬 경계를 값으로 소유해 반환하며 파일·JSON·features 오류는 예외. ContainsWater(122)는 MapGeometry 포함 계산을 재사용해 섬을 제외. IntersectsTerrain(41)은 경계 상자 교차만 확인한다.
 - `modules/terrain/src/TerrainGrid.cpp`: KEEP — 확인 1–200, 201–400, 401–430; 남은 줄 없음. Load/LoadAsciiGrid(115,185)는 파일 형식·수·유효 숫자를 검사해 지형 값을 반환하고 Save(282)는 파일을 쓴다. HeightAtLocalMeters(353)는 쌍선형, HeightAtRenderedSurfaceMeters(367)는 메시 삼각형 보간으로 값이 다를 수 있다. FindTerrainCell은 범위·구조 오류를 던진다. HeightAt(315)은 행·열만 검사하므로 직접 구성한 높이 vector의 길이 계약에 주의.
 - `modules/terrain/src/TrainingRangeTerrain.cpp`: KEEP — 확인 1–53; 남은 줄 없음. CreateTrainingRangeTerrain(8)은 101×101 높이 vector에 언덕·능선 값을 채우고 최솟값을 0으로 조정해 반환한다. 외부 입력·상태 없음. 시험 지형 소비자를 확인해 실제 사용 범위에 맞춰 유지.
-- `tests/simulation_core/CommandRecordingTests.cpp`: SIMPLIFY — 확인 1–98; 남은 줄 없음. ReplayMatchesRecordedSimulation(12)은 명령·틱을 기록 후 재생해 상태와 tick을 비교한다. 등록된 시험(95)은 운동학만 실행한다. 명령 재생 제거 시 이 시험도 함께 정리하고 EO 영상 녹화와 구별한다. 실행하지 않음.
+- `tests/simulation_core/CommandRecordingTests.cpp`: REMOVED — 명령 기록·재생 전용 시험이다. 제품 기능 삭제와 함께 삭제했으며, JSON 시나리오 시험은 유지한다.
 - `tests/simulation_core/FormationPlannerTests.cpp`: SIMPLIFY — 확인 1–140; 남은 줄 없음. 4대 V 회전 좌표(17)와 경로·Column 우회 및 V 복귀 프로필(32)을 검증한다. 고정 V 요구에 맞춰 전환 기대를 정리하되 4대 오프셋·경로 실패 안전 검사는 유지. 실행하지 않음.
 - `tests/simulation_core/PhysicsWorldTests.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–888; 남은 줄 없음. 모터·제어·좌표계·지면·장애물·드론 충돌과 범위 오류를 확인한다(44,274,489,511,582,744,782). AirSim 접촉과 수명 변경 시 중요한 회귀 범위이며 고장 주입 시험은 기능 범위 결정 후 정리. 실행하지 않음.
 - `tests/simulation_core/QuadrotorModelTests.cpp`: KEEP — 확인 1–124; 남은 줄 없음. 제조사 표의 추정 계수와 X500 질량·관성·로터 배치(12,86)를 확인한다. 해당 모델을 유지할 때 물성 변경 검증에 필요. 실행하지 않음.
