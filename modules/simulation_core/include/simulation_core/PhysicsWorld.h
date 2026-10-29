@@ -54,13 +54,6 @@ struct PhysicsDynamicsSample
     glm::dvec3 linearAccelerationMetersPerSecondSquared{0.0};
 };
 
-/** @brief 물리 Tick 전체와 접촉 생성에 걸린 시간을 마이크로초로 기록한다. */
-struct PhysicsStepMeasurements
-{
-    double stepDurationMicroseconds = 0.0;
-    double contactGenerationMicroseconds = 0.0;
-};
-
 /**
  * @brief AirSim 하나로 드론 비행과 충돌 반응을 계산한다.
  * @details AirSim이 힘, 이동, 회전 적분과 충돌 후 반응을 맡는다. Unreal 없이 실행하므로 이 클래스가 지형·장애물 접촉 정보만 만들어 AirSim에 전달한다. 장면 좌표는 동·북·위(ENU), 기체 좌표는 앞·왼쪽·위(FLU) 기준이다.
@@ -120,7 +113,7 @@ public:
     void SetState(RigidBodyHandle body, const RigidBodyState& state);
 
     /** @brief AirSim이 힘, 이동, 회전과 접촉 반응을 고정 시간만큼 계산한다. */
-    void Step(double seconds, PhysicsStepMeasurements* measurements = nullptr);
+    void Step(double seconds, double* stepDurationMicroseconds = nullptr);
 
     /** @brief 물리 세계에서 강체를 제거한다. 이미 제거했거나 잘못된 핸들이면 false를 반환한다. */
     [[nodiscard]] bool DestroyBody(RigidBodyHandle body);

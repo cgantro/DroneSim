@@ -40,14 +40,6 @@ inline constexpr SimulationDynamics defaultSimulationDynamics =
 /** @brief 한 시뮬레이션 안에서 드론 하나를 식별한다. */
 using DroneId = std::uint64_t;
 
-/** @brief 마지막 Tick에서 측정한 Flecs 시스템별 실행 시간이다. 단위는 마이크로초다. */
-struct EcsSystemDurations
-{
-    double advanceKinematicDroneMicroseconds = 0.0;
-    double applyRigidBodyForcesMicroseconds = 0.0;
-    double advanceCameraMicroseconds = 0.0;
-};
-
 /**
  * @brief 화면 프레임 시간을 고정 간격 모의 Tick 수로 바꾼다.
  * @details Tick보다 짧은 나머지 시간은 다음 프레임으로 넘긴다. 한 프레임에서 처리할 시간은 100ms로 제한해 화면이 멈춘 뒤 과도한 따라잡기를 막는다.
@@ -187,20 +179,8 @@ public:
     /** @brief 벤치마크에서 물리 단계 시간 측정을 켜거나 끈다. */
     void SetPhysicsStepTimingEnabled(bool enabled) noexcept;
 
-    /** @brief 벤치마크에서 마지막 Tick의 Flecs 시스템별 시간을 확인하도록 측정을 켜거나 끈다. */
-    void SetEcsSystemTimingEnabled(bool enabled) noexcept;
-
-    /** @brief 마지막 Tick에서 개별 Flecs 시스템이 실행된 시간을 반환한다. */
-    [[nodiscard]] EcsSystemDurations LastEcsSystemDurations() const noexcept;
-
-    /** @brief 마지막 Tick의 Flecs 진행 전체 시간을 마이크로초로 반환한다. */
-    [[nodiscard]] double LastFlecsProgressDurationMicroseconds() const noexcept;
-
     /** @brief 마지막 Tick의 AirSim 물리 계산 시간을 마이크로초로 반환한다. */
     [[nodiscard]] double LastPhysicsStepDurationMicroseconds() const noexcept;
-
-    /** @brief 마지막 Tick에서 접촉 정보를 찾는 데 든 시간을 마이크로초로 반환한다. */
-    [[nodiscard]] double LastContactGenerationDurationMicroseconds() const noexcept;
 
     /** @brief 지도 건물처럼 움직이지 않는 상자 장애물을 추가한다. */
     void AddStaticObstacleBox(

@@ -5,7 +5,6 @@
 #include "CollisionGeometry.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
-#include "simulation_core/ScopedDuration.h"
 
 #include <flecs.h>
 #include <glm/common.hpp>
@@ -85,12 +84,8 @@ struct SimulationCore::EcsStorage
     std::vector<StaticObstacleFootprint> kinematicFootprints;
     std::optional<terrain::TerrainGrid> terrainGrid;
     glm::dvec3 windVelocityMetersPerSecond{0.0};
-    bool measureEcsSystemDuration = false;
-    EcsSystemDurations lastEcsSystemDurations;
-    double lastFlecsProgressDurationMicroseconds = 0.0;
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
-    double lastContactGenerationDurationMicroseconds = 0.0;
     std::uint64_t tickCount = 0;
 
     static void ApplyInitialPose(
@@ -144,10 +139,6 @@ struct SimulationCore::EcsStorage
             .kind(flecs::OnUpdate)
             .run([this](flecs::iter& iterator)
             {
-                ScopedDuration measureSystem(
-                    measureEcsSystemDuration
-                        ? &lastEcsSystemDurations.advanceKinematicDroneMicroseconds
-                        : nullptr);
                 while (iterator.next())
                 {
                     auto states = iterator.field<DroneState>(0);
@@ -366,10 +357,6 @@ struct SimulationCore::EcsStorage
             .kind(flecs::OnUpdate)
             .run([this](flecs::iter& iterator)
             {
-                ScopedDuration measureSystem(
-                    measureEcsSystemDuration
-                        ? &lastEcsSystemDurations.applyRigidBodyForcesMicroseconds
-                        : nullptr);
                 while (iterator.next())
                 {
                     auto states = iterator.field<DroneState>(0);
@@ -391,9 +378,6 @@ struct SimulationCore::EcsStorage
             .kind(flecs::OnUpdate)
             .run([this](flecs::iter& iterator)
             {
-                ScopedDuration measureSystem(
-                    measureEcsSystemDuration
-                        ? &lastEcsSystemDurations.advanceCameraMicroseconds : nullptr);
                 while (iterator.next())
                 {
                     auto cameraStates = iterator.field<CameraState>(0);
@@ -628,12 +612,8 @@ struct SimulationCore::EcsStorage
 
     void AdvancePhysicsWorld()
     {
-        PhysicsStepMeasurements measurements;
         physics->Step(DroneModel::fixedStepSeconds,
-            measurePhysicsStepDuration ? &measurements : nullptr);
-        lastPhysicsStepDurationMicroseconds = measurements.stepDurationMicroseconds;
-        lastContactGenerationDurationMicroseconds =
-            measurements.contactGenerationMicroseconds;
+            measurePhysicsStepDuration ? &lastPhysicsStepDurationMicroseconds : nullptr);
 
         for (auto& [id, drone] : drones)
         {
@@ -896,14 +876,7 @@ void SimulationCore::AdvanceOneTick()
         return;
     }
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
-    ecs_->lastContactGenerationDurationMicroseconds = 0.0;
-    ecs_->lastEcsSystemDurations = {};
-    ecs_->lastFlecsProgressDurationMicroseconds = 0.0;
-    {
-        ScopedDuration measureEcsSystems(ecs_->measureEcsSystemDuration
-            ? &ecs_->lastFlecsProgressDurationMicroseconds : nullptr);
-        ecs_->world.progress(DroneModel::fixedStepSeconds);
-    }
+    ecs_->world.progress(DroneModel::fixedStepSeconds);
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->AdvancePhysicsWorld();
@@ -1050,34 +1023,11 @@ void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept
 {
     ecs_->measurePhysicsStepDuration = enabled;
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
-    ecs_->lastContactGenerationDurationMicroseconds = 0.0;
-}
-
-void SimulationCore::SetEcsSystemTimingEnabled(bool enabled) noexcept
-{
-    ecs_->measureEcsSystemDuration = enabled;
-    ecs_->lastEcsSystemDurations = {};
-    ecs_->lastFlecsProgressDurationMicroseconds = 0.0;
-}
-
-EcsSystemDurations SimulationCore::LastEcsSystemDurations() const noexcept
-{
-    return ecs_->lastEcsSystemDurations;
-}
-
-double SimulationCore::LastFlecsProgressDurationMicroseconds() const noexcept
-{
-    return ecs_->lastFlecsProgressDurationMicroseconds;
 }
 
 double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 {
     return ecs_->lastPhysicsStepDurationMicroseconds;
-}
-
-double SimulationCore::LastContactGenerationDurationMicroseconds() const noexcept
-{
-    return ecs_->lastContactGenerationDurationMicroseconds;
 }
 
 void SimulationCore::AddStaticObstacleBox(

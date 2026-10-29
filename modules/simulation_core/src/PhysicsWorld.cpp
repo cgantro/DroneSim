@@ -1151,40 +1151,26 @@ void PhysicsWorld::SetState(RigidBodyHandle handle, const RigidBodyState& state)
     body.wasGrounded = false;
 }
 
-void PhysicsWorld::Step(double seconds, PhysicsStepMeasurements* measurements)
+void PhysicsWorld::Step(double seconds, double* stepDurationMicroseconds)
 {
     if (!std::isfinite(seconds) || !(seconds > 0.0))
         throw std::invalid_argument("물리 시간 간격을 확인해 주세요.");
     static_cast<void>(msr::airlib::ClockFactory::get(impl_->clock));
     static_cast<void>(impl_->clock->stepBy(seconds));
-    if (measurements != nullptr)
-        measurements->contactGenerationMicroseconds = 0.0;
-
-    ScopedDuration measurePhysicsStep(measurements != nullptr
-        ? &measurements->stepDurationMicroseconds : nullptr);
+    ScopedDuration measurePhysicsStep(stepDurationMicroseconds);
     ++impl_->stepCount;
     double largestCollisionRadius = 0.0;
-    {
-        ScopedDuration measureBodyOrdering(measurements != nullptr
-                ? &measurements->contactGenerationMicroseconds : nullptr,
-            ScopedDuration::Mode::Accumulate);
-        for (auto& body : impl_->bodies)
-            impl_->ConstrainBodyToTerrain(*body);
-        largestCollisionRadius = impl_->PrepareCollisionData();
-        impl_->PrepareDroneContacts(largestCollisionRadius);
-    }
+    for (auto& body : impl_->bodies)
+        impl_->ConstrainBodyToTerrain(*body);
+    largestCollisionRadius = impl_->PrepareCollisionData();
+    impl_->PrepareDroneContacts(largestCollisionRadius);
     for (std::size_t index = 0; index < impl_->bodies.size(); ++index)
     {
         auto& body = impl_->bodies[index];
-        {
-            ScopedDuration measureContactGeneration(measurements != nullptr
-                    ? &measurements->contactGenerationMicroseconds : nullptr,
-                ScopedDuration::Mode::Accumulate);
-            body->environment.setPosition(body->kinematics.getPose().position);
-            body->environment.update();
-            body->model->setCollisionInfo(
-                impl_->BuildAirSimContactInfo(*body, impl_->droneContacts[index]));
-        }
+        body->environment.setPosition(body->kinematics.getPose().position);
+        body->environment.update();
+        body->model->setCollisionInfo(
+            impl_->BuildAirSimContactInfo(*body, impl_->droneContacts[index]));
         if (body->initialMotorOutputsPending)
             body->InitializeMotorOutputs();
         body->AdvanceMotorResponse(seconds);
