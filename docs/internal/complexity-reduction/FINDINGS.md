@@ -33,7 +33,7 @@
 - `tools/px4/prepare_reference.py` 전체: pyulog에서 위치·자세·각속도·모터 로그를 읽어 60Hz 강체 재생 JSON을 만든다(prepare_scenario:408). NED/FRD를 ENU/FLU로 변환하고, 표본 간격·원점 변경·ESC 연결을 검사한다. 참조 기록의 민감 정보를 제외하며 기존 출력 파일은 거부한다. 물리 검증이 필요하므로 유지 후보이며 결과 해석은 실기체 정확도 주장과 구분한다.
 - `tools/px4/test_prepare_reference.py` 전체: TopicSamples 보간·축 변환·고도 원점 및 ESC 상태 오류 등을 unittest로 확인한다(TopicSamplesTests:20). 변환기를 유지하면 관련 시험을 유지한다. 이번 감사에서 실행하지 않았다.
 
-- `tools/web_runtime_smoke.cjs` 전체: 임시 로컬 HTTP 서버와 Playwright Chrome으로 시작·WebGL·EO·이륙·브라우저 녹화 및 다운로드 검사를 한다(run:61). 실패는 종료 코드 1로 알리고 finally에서 브라우저와 서버를 닫는다. 단일 시설물·WebRTC·촬영 판정 중심 부분은 4대 새 범위에 맞게 바꿔야 한다. 플랫폼 유지용 기본 브라우저 시험은 남긴다. 이번 감사에서는 브라우저를 실행하지 않았다.
+- `tools/web_runtime_smoke.cjs`: 임시 로컬 HTTP 서버와 Playwright Chrome으로 시작·WebGL·같은 페이지의 EO 카메라 패널·수동 비행 조작을 확인한다. 브라우저 녹화·다운로드와 WebRTC 검사는 제거된 기능에 대한 낡은 확인이어서 현재 캔버스 표시 확인으로 바꿨다. 이 턴에서는 브라우저 자체 실행은 하지 않았다.
 
 ## 외부 코드와 보관 자료
 

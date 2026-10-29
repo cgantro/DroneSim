@@ -131,31 +131,37 @@ async function run() {
       () => {
         return document.querySelector("#web-gcs-mode")?.textContent === "grounded"
           && document.querySelector("#web-gcs-capture")?.textContent
-            .includes("영상 구도 상태:");
+            .includes("파손 여부는 사람이 판단합니다.");
       },
       null,
       { timeout: 5000 }
     );
     await page.waitForFunction(
       () => {
-        const video = document.querySelector("#web-eo-live-video");
+        const canvas = document.querySelector("#web-eo-live-canvas");
         const streamStatus = document.querySelector("#web-eo-live-status")?.textContent || "";
-        return streamStatus.includes("로컬 WebRTC 수신 연결됨")
-          && video?.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
-          && video.videoWidth > 0 && video.videoHeight > 0
-          && video.srcObject instanceof MediaStream
-          && video.srcObject.getVideoTracks().some((track) => track.readyState === "live");
+        if (!streamStatus.includes("카메라 화면을 표시")
+            || !canvas || canvas.width <= 0 || canvas.height <= 0)
+          return false;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        const pixels = context.getImageData(0, 0,
+          Math.min(32, canvas.width), Math.min(24, canvas.height)).data;
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index] > 20 || pixels[index + 1] > 20 || pixels[index + 2] > 20)
+            return true;
+        }
+        return false;
       },
       null,
       { timeout: 20000 }
     );
     const cameraPixels = await page.evaluate(() => {
-      const video = document.querySelector("#web-eo-live-video");
+      const source = document.querySelector("#web-eo-live-canvas");
       const canvas = document.createElement("canvas");
       canvas.width = 32;
       canvas.height = 24;
       const context = canvas.getContext("2d", { willReadFrequently: true });
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.drawImage(source, 0, 0, canvas.width, canvas.height);
       const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
       const colors = new Set();
       let visiblePixels = 0;
@@ -170,8 +176,8 @@ async function run() {
       return { visiblePixels, colorCount: colors.size };
     });
     if (cameraPixels.visiblePixels < 24 || cameraPixels.colorCount < 8)
-      throw new Error(`EO 영상 연결은 됐지만 화면 픽셀이 비어 있습니다: ${JSON.stringify(cameraPixels)}`);
-    console.log("Chromium에서 EO 영상의 WebRTC 송수신과 수신 화면을 확인했습니다.");
+      throw new Error(`EO 카메라 패널이 비어 있습니다: ${JSON.stringify(cameraPixels)}`);
+    console.log("Chromium에서 같은 페이지의 EO 카메라 패널 표시를 확인했습니다.");
     await page.getByRole("button", { name: "이륙" }).click();
     await page.waitForFunction(
       () => document.querySelector("#web-gcs-mode")?.textContent !== "grounded",
