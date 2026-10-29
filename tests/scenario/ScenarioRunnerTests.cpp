@@ -836,9 +836,9 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     EXPECT_FALSE(failedResult.issues.empty());
 }
 
-void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
+void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
 {
-    constexpr std::string_view dividedSurveyScenario = R"json(
+    constexpr std::string_view assignedSurveyScenario = R"json(
     {"version":1,"dynamics":"kinematic","ticks":480,
      "drones":[
        {"name":"survey-1","initial_position_meters":[2,0,0]},
@@ -850,25 +850,35 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
        {"tick":0,"drone":"survey-2","type":"takeoff"},
        {"tick":0,"drone":"survey-3","type":"takeoff"},
        {"tick":0,"drone":"survey-4","type":"takeoff"}],
-     "mission":{"name":"grid-survey","survey_area":{
-       "name":"field","bounds_meters":[0,0,16,8],
-       "altitude_meters":1.5,"lane_spacing_meters":8,
-       "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2}},
+     "mission":{"name":"grid-survey","tasks":[
+       {"name":"sector-1","role":"survey","drone":"survey-1",
+        "waypoints_meters":[[0,0,1.5],[4,0,1.5],[4,8,1.5],[0,8,1.5]],
+        "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2},
+       {"name":"sector-2","role":"survey","drone":"survey-2",
+        "waypoints_meters":[[4,0,1.5],[8,0,1.5],[8,8,1.5],[4,8,1.5]],
+        "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2},
+       {"name":"sector-3","role":"survey","drone":"survey-3",
+        "waypoints_meters":[[8,0,1.5],[12,0,1.5],[12,8,1.5],[8,8,1.5]],
+        "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2},
+       {"name":"sector-4","role":"survey","drone":"survey-4",
+        "waypoints_meters":[[12,0,1.5],[16,0,1.5],[16,8,1.5],[12,8,1.5]],
+        "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2}]},
      "expected":{"tolerance_meters":0.2,"drones":[
        {"name":"survey-1","mode":"hovering","position_meters":[0,8,1.5]},
        {"name":"survey-2","mode":"hovering","position_meters":[4,8,1.5]},
        {"name":"survey-3","mode":"hovering","position_meters":[8,8,1.5]},
        {"name":"survey-4","mode":"hovering","position_meters":[12,8,1.5]}]}}
     )json";
-    const ScenarioResult areaResult = RunScenario(dividedSurveyScenario);
-    ASSERT_TRUE(areaResult.IsPassed()) << (areaResult.issues.empty() ? "" : areaResult.issues.front());
-    ASSERT_TRUE(areaResult.mission.has_value());
-    EXPECT_TRUE(areaResult.mission->IsPassed());
-    EXPECT_DOUBLE_EQ(areaResult.mission->coveragePercent, 100.0);
-    ASSERT_EQ(areaResult.mission->tasks.size(), 4);
-    for (std::size_t index = 0; index < areaResult.mission->tasks.size(); ++index)
+    const ScenarioResult surveyResult = RunScenario(assignedSurveyScenario);
+    ASSERT_TRUE(surveyResult.IsPassed())
+        << (surveyResult.issues.empty() ? "" : surveyResult.issues.front());
+    ASSERT_TRUE(surveyResult.mission.has_value());
+    EXPECT_TRUE(surveyResult.mission->IsPassed());
+    EXPECT_DOUBLE_EQ(surveyResult.mission->coveragePercent, 100.0);
+    ASSERT_EQ(surveyResult.mission->tasks.size(), 4);
+    for (std::size_t index = 0; index < surveyResult.mission->tasks.size(); ++index)
     {
-        const auto& task = areaResult.mission->tasks[index];
+        const auto& task = surveyResult.mission->tasks[index];
         EXPECT_TRUE(task.IsCompleted()) << task.name;
         ASSERT_EQ(task.waypointsMeters.size(), 4);
         EXPECT_DOUBLE_EQ(task.waypointsMeters[0].x, 4.0 * static_cast<double>(index));
@@ -1081,7 +1091,8 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommands());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive());
-    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios());
+    EXPECT_NO_FATAL_FAILURE(
+        Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios());
 
     constexpr std::string_view duplicateMissionAssignment = R"json(
     {"version":1,"dynamics":"kinematic","ticks":2,
