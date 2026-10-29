@@ -1,11 +1,17 @@
 #pragma once
 
 #include <glm/gtc/quaternion.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <vector>
+
+namespace aerosimlab::terrain {
+struct TerrainGrid;
+}
 
 namespace aerosimlab::simulation {
 struct QuadrotorParameters;
@@ -52,6 +58,16 @@ public:
   AddStaticBox(const glm::dvec3 &centerMeters,
                const glm::dvec3 &halfExtentsMeters);
 
+  /** @brief 지형 격자와 같은 표면 높이를 가진 정적 충돌 지형을 만든다. */
+  void SetTerrain(const aerosimlab::terrain::TerrainGrid &terrain);
+
+  /** @brief 외곽선과 높이로 건물·구조물의 정적 충돌 메시를 만든다. */
+  void AddStaticPrism(const std::vector<glm::dvec2> &outlineMeters,
+                      double bottomMeters, double topMeters);
+
+  /** @brief 모터에 작용할 월드 기준 바람 속도를 지정한다. */
+  void SetWindVelocityMetersPerSecond(const glm::dvec3 &velocity);
+
   /** @brief 질량과 상자 모양을 가진 움직이는 강체를 만든다. */
   [[nodiscard]] JoltRigidBodyHandle
   CreateDynamicBox(const JoltBoxDefinition &definition);
@@ -89,7 +105,7 @@ public:
   void SetState(JoltRigidBodyHandle body, const JoltRigidBodyState &state);
 
   /** @brief 물리 시계를 1/60초 진행한다. */
-  void StepFixed();
+  void StepFixed(double *stepDurationMicroseconds = nullptr);
 
   /** @brief 현재 위치·자세·속도를 읽는다. */
   [[nodiscard]] JoltRigidBodyState State(JoltRigidBodyHandle body) const;

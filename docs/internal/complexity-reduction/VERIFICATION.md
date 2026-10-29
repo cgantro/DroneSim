@@ -526,3 +526,9 @@
 
 - Windows Release headless·시나리오 시험 빌드 성공, 전체 CTest 28/28 통과.
 - 두 지점 headless 실행 결과에서 `outcome: passed`, 완료 작업 수 `2/2`를 확인했다. 최상위·임무별 `passed`와 `completion_percent` 항목은 출력하지 않는다.
+
+# Jolt 지형·건물 접촉 기반 추가 — 2026-10-30
+
+- Jolt 환경에 DEM 높이 격자와 높이 있는 다각형 건물 충돌체를 추가했다. 바람 속도에 대한 단순한 기체 저항도 적용했다. 이 변경만으로 앱이 Jolt를 사용하게 된 것은 아니다.
+- Windows Release 전체 빌드 성공. Jolt 전용 시험 6/6, 전체 CTest 32/32 통과.
+- 웹 빌드는 실행하지 않았다. AirSim을 사용하는 앱의 물리 경로는 아직 전환되지 않았다.

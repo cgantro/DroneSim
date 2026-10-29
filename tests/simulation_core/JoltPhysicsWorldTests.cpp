@@ -1,5 +1,6 @@
 #include "simulation_core/JoltPhysicsWorld.h"
 #include "simulation_core/QuadrotorModel.h"
+#include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
 
@@ -55,6 +56,35 @@ TEST(JoltPhysicsWorldTests, RigidBodyBasics) {
   EXPECT_FALSE(world.DestroyBody(fallingBox));
   EXPECT_NO_THROW(static_cast<void>(world.State(ground)));
   EXPECT_THROW(static_cast<void>(world.State(fallingBox)), std::out_of_range);
+}
+
+TEST(JoltPhysicsWorldTests, TerrainAndBuildingMeshesStopFallingBodies) {
+  JoltPhysicsWorld world;
+  aerosimlab::terrain::TerrainGrid terrain;
+  terrain.sampleCount = 3;
+  terrain.spacingXMeters = 10.0F;
+  terrain.spacingYMeters = 10.0F;
+  terrain.heightOffsetsMeters.assign(9, 0.0F);
+  world.SetTerrain(terrain);
+  world.AddStaticPrism(
+      {{4.0, -2.0}, {6.0, -2.0}, {6.0, 2.0}, {5.0, 0.5}, {4.0, 2.0}}, 0.0, 3.0);
+
+  const JoltRigidBodyHandle fallingBox = MakeFallingBox(world, 2.0);
+  for (int step = 0; step < 180; ++step)
+    world.StepFixed();
+  EXPECT_NEAR(world.State(fallingBox).positionMeters.z, 0.25, 0.03);
+
+  JoltBoxDefinition approachingDefinition;
+  approachingDefinition.positionMeters = {2.0, 0.0, 1.0};
+  approachingDefinition.halfExtentsMeters = {0.25, 0.25, 0.25};
+  const JoltRigidBodyHandle approachingBox =
+      world.CreateDynamicBox(approachingDefinition);
+  JoltRigidBodyState movingState = world.State(approachingBox);
+  movingState.linearVelocityMetersPerSecond = {3.0, 0.0, 0.0};
+  world.SetState(approachingBox, movingState);
+  for (int step = 0; step < 120; ++step)
+    world.StepFixed();
+  EXPECT_LT(world.State(approachingBox).positionMeters.x, 3.8);
 }
 
 TEST(JoltPhysicsWorldTests, EqualForceProducesMassDependentAcceleration) {
