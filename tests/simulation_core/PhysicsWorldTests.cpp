@@ -1,7 +1,7 @@
 #include "simulation_core/PhysicsWorld.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/QuadrotorModel.h"
-#include "CollisionGeometry.h"
+#include "simulation_core/CollisionGeometry.h"
 #include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>
@@ -673,18 +673,18 @@ void Verify_AirSimCollision_UsesDroneBoxesInsteadOfTheirBoundingSphere()
 
 void Verify_CollisionBroadphase_KeepsTouchingBoxesForPreciseTest()
 {
-    using detail::BroadphaseMayOverlap;
-    using detail::CollisionRadius;
-    using detail::FindBoxContact;
-    using detail::ToWorldBox;
+    using collision::BroadphaseMayOverlap;
+    using collision::CollisionRadius;
+    using collision::FindBoxContact;
+    using collision::ToWorldBox;
 
     const std::array<RigidBodyBox, 1> boxes{
         RigidBodyBox{glm::vec3{3.0F, 4.0F, 12.0F}, glm::dvec3{0.0},
             glm::dquat{1.0, 0.0, 0.0, 0.0}}};
     const double radius = CollisionRadius(boxes);
-    const detail::OrientedBox first = ToWorldBox(
+    const collision::OrientedBox first = ToWorldBox(
         glm::dvec3{0.0}, glm::dquat{1.0, 0.0, 0.0, 0.0}, boxes.front());
-    const detail::OrientedBox second = ToWorldBox(
+    const collision::OrientedBox second = ToWorldBox(
         glm::dvec3{6.0, 8.0, 24.0},
         glm::dquat{1.0, 0.0, 0.0, 0.0}, boxes.front());
 

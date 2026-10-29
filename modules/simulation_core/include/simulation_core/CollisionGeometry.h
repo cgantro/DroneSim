@@ -7,7 +7,7 @@
 #include <span>
 #include <vector>
 
-namespace aerosimlab::simulation::detail
+namespace aerosimlab::simulation::collision
 {
 /** @brief 월드 좌표에 놓인 회전 상자와 빠른 후보 검사에 필요한 경계다. */
 struct OrientedBox
@@ -75,6 +75,14 @@ std::optional<BoxContact> FindBoxContact(
 
 /** @brief 외곽선의 유한 좌표와 넓이가 유효한지 확인한다. */
 bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept;
+
+/** @brief 고정 상자의 위치와 양의 반 크기가 유효한지 확인한다. */
+bool IsValidObstacleBox(
+    const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters) noexcept;
+
+/** @brief 외곽선과 바닥·꼭대기 높이가 유효한 건물 프리즘인지 확인한다. */
+bool IsValidPrism(std::span<const glm::dvec2> outlineMeters,
+    double bottomMeters, double topMeters) noexcept;
 
 /** @brief 높이를 모르는 다각형과 원형 수평 투영의 겹침을 찾는다. */
 std::optional<FootprintContact> FindFootprintContact(

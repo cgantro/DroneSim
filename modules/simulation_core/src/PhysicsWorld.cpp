@@ -3,7 +3,7 @@
 #include "simulation_core/DroneModel.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/ScopedDuration.h"
-#include "CollisionGeometry.h"
+#include "simulation_core/CollisionGeometry.h"
 
 #include <mutex>
 #include <common/ClockFactory.hpp>
@@ -38,13 +38,13 @@ namespace
 {
 using AirSimBody = msr::airlib::MultiRotorPhysicsBody;
 using AirSimVector = msr::airlib::Vector3r;
-using detail::BoxContact;
-using detail::BroadphaseMayOverlap;
-using detail::CollisionRadius;
-using detail::FindBoxContact;
-using detail::OrientedBox;
-using detail::SupportPoint;
-using detail::ToWorldBox;
+using collision::BoxContact;
+using collision::BroadphaseMayOverlap;
+using collision::CollisionRadius;
+using collision::FindBoxContact;
+using collision::OrientedBox;
+using collision::SupportPoint;
+using collision::ToWorldBox;
 
 // 장면 좌표는 동·북·위(ENU), AirSim 월드는 북·동·아래(NED)다.
 const glm::dmat3 projectToAirSimWorld{
@@ -845,7 +845,7 @@ struct PhysicsWorld::Impl
                     std::optional<BoxContact> contact;
                     if (obstacle.footprintOnly)
                     {
-                        const auto footprintContact = detail::FindFootprintContact(
+                        const auto footprintContact = collision::FindFootprintContact(
                             obstacle.outlineMeters,
                             {worldBox.centerMeters.x, worldBox.centerMeters.y},
                             std::hypot(radiusX, radiusY));
@@ -862,7 +862,7 @@ struct PhysicsWorld::Impl
                     }
                     else
                     {
-                        const auto prismContact = detail::FindPrismContact(
+                        const auto prismContact = collision::FindPrismContact(
                             obstacle.outlineMeters, obstacle.bottomMeters,
                             obstacle.topMeters, worldBox.centerMeters,
                             std::hypot(radiusX, radiusY), radiusZ);
@@ -955,9 +955,7 @@ PhysicsWorld::~PhysicsWorld() = default;
 void PhysicsWorld::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    if (!IsFinite(centerMeters)
-        || !IsFinite(glm::dvec3{halfExtentsMeters})
-        || glm::any(glm::lessThanEqual(halfExtentsMeters, glm::vec3{0.0F})))
+    if (!collision::IsValidObstacleBox(centerMeters, halfExtentsMeters))
     {
         throw std::invalid_argument("고정 상자의 위치와 크기를 확인해 주세요.");
     }
@@ -969,9 +967,7 @@ void PhysicsWorld::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)
 {
-    if (!detail::IsValidFootprint(outlineMeters)
-        || !std::isfinite(bottomMeters)
-        || !std::isfinite(topMeters) || !(topMeters > bottomMeters))
+    if (!collision::IsValidPrism(outlineMeters, bottomMeters, topMeters))
         throw std::invalid_argument("건물 외곽선과 높이 범위를 확인해 주세요.");
 
     glm::dvec2 minimum = outlineMeters.front();
@@ -994,7 +990,7 @@ void PhysicsWorld::AddStaticObstaclePrism(
 void PhysicsWorld::AddStaticObstacleFootprint(
     const std::vector<glm::dvec2>& outlineMeters)
 {
-    if (!detail::IsValidFootprint(outlineMeters))
+    if (!collision::IsValidFootprint(outlineMeters))
         throw std::invalid_argument("구조물 외곽선 좌표를 확인해 주세요.");
 
     glm::dvec2 minimum = outlineMeters.front();

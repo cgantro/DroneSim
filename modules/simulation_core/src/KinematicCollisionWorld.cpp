@@ -1,6 +1,6 @@
 #include "simulation_core/KinematicCollisionWorld.h"
 
-#include "CollisionGeometry.h"
+#include "simulation_core/CollisionGeometry.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,20 +35,6 @@ void ResolvePlanarContact(DroneState& state, DroneControlState& control,
     control.targetVelocityMetersPerSecond.x = target.x;
     control.targetVelocityMetersPerSecond.y = target.y;
 }
-
-bool HasFiniteVector(const glm::dvec3& value) noexcept
-{
-    return std::isfinite(value.x)
-        && std::isfinite(value.y)
-        && std::isfinite(value.z);
-}
-
-bool HasFiniteVector(const glm::vec3& value) noexcept
-{
-    return std::isfinite(value.x)
-        && std::isfinite(value.y)
-        && std::isfinite(value.z);
-}
 }
 
 void KinematicCollisionWorld::SetTerrain(terrain::TerrainGrid terrain)
@@ -59,10 +45,7 @@ void KinematicCollisionWorld::SetTerrain(terrain::TerrainGrid terrain)
 void KinematicCollisionWorld::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    if (!HasFiniteVector(centerMeters)
-        || !HasFiniteVector(halfExtentsMeters)
-        || halfExtentsMeters.x <= 0.0F || halfExtentsMeters.y <= 0.0F
-        || halfExtentsMeters.z <= 0.0F)
+    if (!collision::IsValidObstacleBox(centerMeters, halfExtentsMeters))
     {
         throw std::invalid_argument("장애물 위치와 크기를 확인해 주세요.");
     }
@@ -74,8 +57,7 @@ void KinematicCollisionWorld::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)
 {
-    if (!detail::IsValidFootprint(outlineMeters) || !std::isfinite(bottomMeters)
-        || !std::isfinite(topMeters) || !(topMeters > bottomMeters))
+    if (!collision::IsValidPrism(outlineMeters, bottomMeters, topMeters))
     {
         throw std::invalid_argument("건물 외곽선과 높이 범위를 확인해 주세요.");
     }
@@ -86,7 +68,7 @@ void KinematicCollisionWorld::AddStaticObstaclePrism(
 void KinematicCollisionWorld::AddStaticObstacleFootprint(
     const std::vector<glm::dvec2>& outlineMeters)
 {
-    if (!detail::IsValidFootprint(outlineMeters))
+    if (!collision::IsValidFootprint(outlineMeters))
         throw std::invalid_argument("구조물 외곽선 좌표를 확인해 주세요.");
 
     footprints_.push_back({outlineMeters});
@@ -225,7 +207,7 @@ void KinematicCollisionWorld::ResolvePrismContacts(
     constexpr double droneHalfHeightMeters = 0.12;
     for (const Prism& obstacle : prisms_)
     {
-        const auto contact = detail::FindPrismContact(
+        const auto contact = collision::FindPrismContact(
             obstacle.outlineMeters, obstacle.bottomMeters, obstacle.topMeters,
             state.positionMeters, droneRadiusMeters, droneHalfHeightMeters);
         if (!contact)
@@ -252,7 +234,7 @@ void KinematicCollisionWorld::ResolveFootprintContacts(
     constexpr double droneRadiusMeters = 0.4242640687119285;
     for (const Footprint& obstacle : footprints_)
     {
-        const auto contact = detail::FindFootprintContact(
+        const auto contact = collision::FindFootprintContact(
             obstacle.outlineMeters,
             {state.positionMeters.x, state.positionMeters.y}, droneRadiusMeters);
         if (contact)

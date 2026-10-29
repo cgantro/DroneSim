@@ -1,10 +1,10 @@
-#include "CollisionGeometry.h"
+#include "simulation_core/CollisionGeometry.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
-namespace aerosimlab::simulation::detail
+namespace aerosimlab::simulation::collision
 {
 namespace
 {
@@ -91,6 +91,26 @@ bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept
         twiceArea += current.x * next.y - next.x * current.y;
     }
     return std::isfinite(twiceArea) && std::abs(twiceArea) > 1.0e-9;
+}
+
+bool IsValidObstacleBox(
+    const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters) noexcept
+{
+    return std::isfinite(centerMeters.x) && std::isfinite(centerMeters.y)
+        && std::isfinite(centerMeters.z)
+        && std::isfinite(halfExtentsMeters.x)
+        && std::isfinite(halfExtentsMeters.y)
+        && std::isfinite(halfExtentsMeters.z)
+        && halfExtentsMeters.x > 0.0F
+        && halfExtentsMeters.y > 0.0F
+        && halfExtentsMeters.z > 0.0F;
+}
+
+bool IsValidPrism(std::span<const glm::dvec2> outlineMeters,
+    double bottomMeters, double topMeters) noexcept
+{
+    return IsValidFootprint(outlineMeters) && std::isfinite(bottomMeters)
+        && std::isfinite(topMeters) && topMeters > bottomMeters;
 }
 
 namespace
@@ -195,10 +215,10 @@ std::optional<PrismContact> FindPrismContact(
     const glm::dvec3& centerMeters,
     double horizontalRadiusMeters, double verticalRadiusMeters)
 {
-    if (!IsValidFootprint(outlineMeters) || !std::isfinite(bottomMeters)
-        || !std::isfinite(topMeters) || !std::isfinite(centerMeters.x)
+    if (!IsValidPrism(outlineMeters, bottomMeters, topMeters)
+        || !std::isfinite(centerMeters.x)
         || !std::isfinite(centerMeters.y) || !std::isfinite(centerMeters.z)
-        || !(topMeters > bottomMeters) || !(horizontalRadiusMeters > 0.0)
+        || !(horizontalRadiusMeters > 0.0)
         || !(verticalRadiusMeters > 0.0))
         return std::nullopt;
 
