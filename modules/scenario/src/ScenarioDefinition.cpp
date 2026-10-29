@@ -398,19 +398,6 @@ ScenarioMissionTask ReadMissionTask(
         Required(taskValue, "deadline_tick"), "deadline_tick");
     task.toleranceMeters = ReadFiniteNumber(
         Required(taskValue, "tolerance_meters"), "tolerance_meters");
-    if (const auto facility = taskValue.find("facility_id"); facility != taskValue.end())
-    {
-        if (!facility->is_string() || facility->get<std::string>().empty())
-            throw std::invalid_argument("facility_id는 비어 있지 않은 문자열이어야 합니다.");
-        task.facilityId = facility->get<std::string>();
-    }
-    if (const auto zone = taskValue.find("inspection_zone_id"); zone != taskValue.end())
-    {
-        if (!zone->is_string() || zone->get<std::string>().empty())
-            throw std::invalid_argument(
-                "inspection_zone_id는 비어 있지 않은 문자열이어야 합니다.");
-        task.inspectionZoneId = zone->get<std::string>();
-    }
     return task;
 }
 

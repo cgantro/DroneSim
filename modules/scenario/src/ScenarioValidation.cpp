@@ -70,7 +70,6 @@ void ValidateMission(const ScenarioDefinition& definition,
         return;
 
     std::unordered_set<std::string> taskNames;
-    std::unordered_set<std::string> zoneIds;
     for (const ScenarioMissionTask& task : definition.mission->tasks)
     {
         const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
@@ -81,9 +80,6 @@ void ValidateMission(const ScenarioDefinition& definition,
             || !droneNames.contains(task.droneName))
             throw std::invalid_argument(
                 "임무 이름은 고유해야 하며 등록된 드론을 지정해야 합니다.");
-        if (!task.inspectionZoneId.empty()
-            && !zoneIds.insert(task.inspectionZoneId).second)
-            throw std::invalid_argument("inspection_zone_id는 임무 안에서 고유해야 합니다.");
         if (hasNegativeAltitude || task.toleranceMeters < 0.0
             || task.startTick > task.deadlineTick
             || task.deadlineTick >= definition.tickCount)

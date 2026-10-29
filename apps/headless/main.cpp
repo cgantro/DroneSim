@@ -106,10 +106,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
             tasks.push_back({
                 {"name", task.name},
                 {"role", task.role},
-                {"facility_id", task.facilityId.empty()
-                        ? nlohmann::json(nullptr) : nlohmann::json(task.facilityId)},
-                {"inspection_zone_id", task.inspectionZoneId.empty()
-                        ? nlohmann::json(nullptr) : nlohmann::json(task.inspectionZoneId)},
                 {"drone", task.droneName},
                 {"target_position_meters", {target.x, target.y, target.z}},
                 {"waypoints_meters", std::move(waypoints)},

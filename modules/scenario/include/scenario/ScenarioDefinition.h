@@ -64,8 +64,6 @@ struct ScenarioMissionTask
 {
     std::string name;
     std::string role;
-    std::string facilityId;
-    std::string inspectionZoneId;
     std::string droneName;
     std::vector<glm::dvec3> waypointsMeters;
     std::uint64_t startTick = 0;

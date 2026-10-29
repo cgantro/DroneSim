@@ -29,14 +29,12 @@
     "lateral_offset_meters": 5.0
   },
   "mission": {
-    "name": "four-zone-inspection-outage-test",
+    "name": "four-drone-survey-outage-test",
     "tasks": [
       {
         "name": "sector-1",
-        "role": "facility inspection",
+        "role": "survey",
         "drone": "scout-1",
-        "facility_id": "synthetic-test-facility",
-        "inspection_zone_id": "test-zone-1",
         "waypoints_meters": [[4, 0, 1.5]],
         "start_tick": 90,
         "deadline_tick": 310,
@@ -44,10 +42,8 @@
       },
       {
         "name": "sector-2",
-        "role": "facility inspection",
+        "role": "survey",
         "drone": "scout-2",
-        "facility_id": "synthetic-test-facility",
-        "inspection_zone_id": "test-zone-2",
         "waypoints_meters": [[14, 0, 1.5]],
         "start_tick": 90,
         "deadline_tick": 310,
@@ -55,10 +51,8 @@
       },
       {
         "name": "sector-3",
-        "role": "facility inspection",
+        "role": "survey",
         "drone": "scout-3",
-        "facility_id": "synthetic-test-facility",
-        "inspection_zone_id": "test-zone-3",
         "waypoints_meters": [[24, 0, 1.5]],
         "start_tick": 90,
         "deadline_tick": 310,
@@ -66,10 +60,8 @@
       },
       {
         "name": "sector-4",
-        "role": "facility inspection",
+        "role": "survey",
         "drone": "scout-4",
-        "facility_id": "synthetic-test-facility",
-        "inspection_zone_id": "test-zone-4",
         "waypoints_meters": [[34, 0, 1.5]],
         "start_tick": 90,
         "deadline_tick": 310,

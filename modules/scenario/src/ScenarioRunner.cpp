@@ -262,8 +262,6 @@ ScenarioResult::Mission CreateMissionResult(ScenarioMission definition)
         ScenarioResult::MissionTask runtimeTask;
         runtimeTask.name = std::move(task.name);
         runtimeTask.role = std::move(task.role);
-        runtimeTask.facilityId = std::move(task.facilityId);
-        runtimeTask.inspectionZoneId = std::move(task.inspectionZoneId);
         runtimeTask.droneName = std::move(task.droneName);
         runtimeTask.waypointsMeters = std::move(task.waypointsMeters);
         runtimeTask.startTick = task.startTick;

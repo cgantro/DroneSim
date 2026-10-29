@@ -481,3 +481,10 @@
 
 - Windows Release에서 headless 실행기와 시나리오 시험 빌드 성공.
 - 전체 CTest 28/28 통과. 잘못된 카메라 해상도를 모델 유효성 검사에서 거부하는 기존 시험을 확인했다.
+
+## 시설물 점검 식별값 제거 — 2026-10-30
+
+- Windows Release `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공, 전체 CTest 28/28 통과.
+- `two-point-survey.json` headless 실행 결과 `outcome: passed`, `passed: true` 확인.
+- 네 대 통신 단절 예제는 `inconclusive` 결과를 의도하므로 CLI 종료 코드 1을 반환한다. 통신 장애 동작은 전체 CTest에서 통과했다.
+- 저장소 검색에서 제거한 시설·구역 식별값을 다시 참조하는 코드와 시험이 남지 않았다.

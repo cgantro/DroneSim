@@ -136,13 +136,11 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
      "commands":[
        {"tick":0,"drone":"east","type":"takeoff"},
        {"tick":0,"drone":"north","type":"takeoff"}],
-     "mission":{"name":"bridge-survey","tasks":[
+     "mission":{"name":"two-drone-survey","tasks":[
        {"name":"east-face","role":"survey","drone":"east",
-        "facility_id":"facility-bridge","inspection_zone_id":"deck-east",
         "waypoints_meters":[[0,0,1.5]],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1},
        {"name":"north-face","role":"survey","drone":"north",
-        "facility_id":"facility-bridge","inspection_zone_id":"deck-north",
         "waypoints_meters":[[0,4,1.5]],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1}]},
      "expected":{"drones":[
@@ -160,14 +158,12 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
     EXPECT_EQ(result.mission->CompletedTaskCount(), 2U);
     EXPECT_DOUBLE_EQ(result.mission->CompletionPercent(), 100.0);
     EXPECT_TRUE(result.mission->CompletedTick().has_value());
-    EXPECT_EQ(result.mission->tasks[0].facilityId, "facility-bridge");
-    EXPECT_EQ(result.mission->tasks[0].inspectionZoneId, "deck-east");
     EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Active);
     EXPECT_EQ(result.drones[0].finalCamera.model.imageWidthPixels, 1280);
 
-    nlohmann::json duplicateZone = nlohmann::json::parse(source);
-    duplicateZone["mission"]["tasks"][1]["inspection_zone_id"] = "deck-east";
-    EXPECT_THROW(static_cast<void>(RunScenario(duplicateZone.dump())),
+    nlohmann::json duplicateTask = nlohmann::json::parse(source);
+    duplicateTask["mission"]["tasks"][1]["name"] = "east-face";
+    EXPECT_THROW(static_cast<void>(RunScenario(duplicateTask.dump())),
         std::invalid_argument);
 
     nlohmann::json invalidCamera = nlohmann::json::parse(source);
