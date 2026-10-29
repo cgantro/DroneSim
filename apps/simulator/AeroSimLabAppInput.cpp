@@ -285,36 +285,6 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         {
             ApplyCameraCommand(command, reply);
         },
-        [this, &reply](communication::InspectionCommand command)
-        {
-            if (command == communication::InspectionCommand::Start)
-            {
-                reply.accepted = RequestInspectionMission();
-                reply.status = reply.accepted
-                    ? "inspection_mission_started" : InspectionMissionStatus();
-                return;
-            }
-
-            if (command == communication::InspectionCommand::Pause)
-            {
-                reply.accepted = PauseInspectionMission();
-                reply.status = reply.accepted
-                    ? "inspection_mission_paused" : "inspection_mission_cannot_pause";
-                return;
-            }
-
-            if (command == communication::InspectionCommand::Resume)
-            {
-                reply.accepted = ResumeInspectionMission();
-                reply.status = reply.accepted
-                    ? "inspection_mission_resumed" : "inspection_mission_not_paused";
-                return;
-            }
-
-            reply.accepted = CancelInspectionMission();
-            reply.status = reply.accepted
-                ? "inspection_mission_cancelled" : "no_active_inspection_mission";
-        },
         [this, &reply](communication::FleetCommand command)
         {
             if (command == communication::FleetCommand::AddDrone)
@@ -359,7 +329,6 @@ communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
     telemetry.primaryDroneId = simulation_.PrimaryDroneId();
     telemetry.drone = simulation_.State();
     telemetry.camera = simulation_.Camera();
-    telemetry.inspectionMissionStatus = InspectionMissionStatus();
     telemetry.drones.reserve(fleetDroneIds_.size());
     for (const auto id : fleetDroneIds_)
     {
@@ -368,7 +337,7 @@ communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
         telemetry.drones.push_back({
             id, "드론 " + std::to_string(id), drone.mode, drone.positionMeters,
             mission == fleetReconnaissance_.end() ? std::string{}
-                : inspectionTargets_[mission->second.targetIndex].displayName,
+                : reconTargets_[mission->second.targetIndex].displayName,
             mission == fleetReconnaissance_.end() ? std::string{}
                 : std::string(detail::FleetDroneStatusLabel(
                     mission->second.status))});

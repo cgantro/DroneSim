@@ -174,7 +174,6 @@ void AeroSimLabApp::QueueEoReadback()
     if (queued)
     {
         lastQueuedEoFrameTick_ = camera.lastFrameTick;
-        queuedEoCameraStates_.insert_or_assign(camera.lastFrameTick, camera);
         if (benchmarkMode_)
         {
             eoReadbackHappenedThisFrame_ = true;
@@ -203,21 +202,6 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
     eoFrame_.simulationTick = simulationTick;
     // 밝기·대비·선명도는 행 방향과 무관하므로 OpenGL 픽셀을 그대로 분석한다.
     eoFrame_.rowOrder = aerosimlab::sensor::RgbFrameRowOrder::BottomToTop;
-    const auto cameraState = queuedEoCameraStates_.find(simulationTick);
-    if (cameraState != queuedEoCameraStates_.end())
-    {
-        const bool viewCoversTarget =
-            aerosimlab::simulation::EoCameraModel::AssessCapture(
-                cameraState->second, inspectionMission_.surface, {},
-                inspectionOccluders_)
-            == aerosimlab::simulation::CaptureAssessment::Ready;
-        if (viewCoversTarget
-            && inspectionMission_.stage == InspectionMissionStage::Capturing)
-        {
-            inspectionMission_.captureConditionMet = true;
-        }
-        queuedEoCameraStates_.erase(cameraState);
-    }
     double analysisDurationMicroseconds = 0.0;
     // 분석기가 프레임 메모리를 빌려 쓰므로 분석이 끝날 때까지 픽셀을 유지한다.
     aerosimlab::vision::RgbFrameQuality quality;

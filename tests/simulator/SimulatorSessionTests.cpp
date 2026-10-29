@@ -63,7 +63,7 @@ public:
         const auto expectedRoute = terrain::PlanMapFlightRoute(
             app.terrainGrid_, app.trainingRangeScene_->Obstacles(),
             app.simulation_.State(droneId).positionMeters,
-            app.inspectionTargets_.front().approachPositionMeters,
+            app.reconTargets_.front().approachPositionMeters,
             3.0, app.cameraTransitAltitudeMeters_);
         ASSERT_TRUE(expectedRoute);
         ASSERT_FALSE(expectedRoute->empty());

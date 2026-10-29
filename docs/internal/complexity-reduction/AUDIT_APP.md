@@ -1,19 +1,19 @@
 # app 소유 파일 감사
 
-이 감사표는 `d6515b6e` 기준 코드의 조사 기록이다. 조종 명령 기록·재생은 2026-10-29 제거했으며, 현재 상태는 CHECKPOINT와 VERIFICATION의 최신 항목을 따른다.
+이 감사표는 `d6515b6e` 기준 코드의 조사 기록이다. 조종 명령 기록·재생과 앱의 구형 단일 드론 점검 임무는 2026-10-29 제거했다. 현재 상태는 CHECKPOINT와 VERIFICATION의 최신 항목을 따른다.
 
 기준: d6515b6e와 당시 미커밋 변경을 포함한 작업 트리, INVENTORY.tsv의 owner=app 32개. 이 기록의 초기 로컬 녹화 관련 평가는 2026-10-29 사용자 요청으로 뒤집혔다. 카메라 파일 녹화·저장은 제거하고 라이브 EO 화면은 유지한다. 아래 파일별 조사 내용은 당시 코드 기준이며 이후 변경은 CHECKPOINT와 VERIFICATION에서 확인한다.
 
 | 경로 | 판단 | 확인된 입출력·호출·상태/오류·중복 또는 범위 판단 |
 |---|---|---|
 | apps/simulator/AeroSimLabApp.cpp | SIMPLIFY | 생성자 178, 그래픽 초기화 271–350, 지형/시설 361–438, 4대 생성 441–466, tick 498, RenderFrame 678, 카메라 941/982. 자산과 simulation을 받아 렌더링·상태에 연결하고 unique_ptr로 그래픽 객체 소유. 미션·네트워크·웹 분기를 목표에 맞게 축소. CreateTerrainMesh 120–153은 격자 수 2 이상에 의존하므로 생산자 불변식 확인 필요. |
-| apps/simulator/AeroSimLabApp.h | SIMPLIFY | Options 85, inspection 342–355, recon 502, telemetry 528, formation 546, complete mission 559. 앱이 그래픽·제어·통신·미션 상태를 함께 소유한다. 실제 호출과 수명에 맞춰 제거 대상 상태를 함께 정리해야 한다. |
+| apps/simulator/AeroSimLabApp.h | SIMPLIFY | 기준선에는 구형 점검 상태와 네 대 정찰·전체 임무 상태가 함께 있었다. 구형 상태·목표·카메라 판정 자료를 제거하고 정찰 지점 자료만 남겼다. 앱은 여전히 그래픽·제어·통신·임무를 함께 소유하므로 책임 검토가 남았다. |
 | apps/simulator/AeroSimLabAppBenchmark.cpp | SIMPLIFY | RecordBenchmarkFrame 15, WriteBenchmarkReport 70: 화면 계측을 보고서로 출력한다. 고정 임무 범위에서 쓰지 않는 대규모 확장 측정은 제거하고 화면 측정만 남겼다. |
-| apps/simulator/AeroSimLabAppEoCapture.cpp | SIMPLIFY | RenderScenePanel 16, CaptureEoFrame 99, ProcessCompletedEoReadback 105, QueueEoReadback 159, ProcessEoPixels 200, DrainEoReadbacks 281. 렌더 대상에서 픽셀을 읽어 EO 품질·시야 조건을 계산한다. 비동기 readback 수명과 종료 drain은 라이브 화면과 분석에 필요하다. |
+| apps/simulator/AeroSimLabAppEoCapture.cpp | SIMPLIFY | RenderScenePanel 16, CaptureEoFrame 99, ProcessCompletedEoReadback 105, QueueEoReadback 159, ProcessEoPixels 200, DrainEoReadbacks 281. 렌더 대상에서 픽셀을 읽어 라이브 화면과 EO 화질 정보를 만든다. 구형 촬영 구도 판정과 연결하던 카메라 상태 사본은 제거했다. 비동기 readback 수명과 종료 drain은 남겼다. |
 | apps/simulator/AeroSimLabAppGamepad.cpp | KEEP | ScanForGamepad 27, PollGamepad 50, HandleGamepadDisconnected 118. 장치 상태를 입력으로 조종 명령을 만들고 연결 해제를 처리한다. 독립 기능이지만 MVP에서 수동 조종 필요 여부는 별도 결정. |
 | apps/simulator/AeroSimLabAppInput.cpp | SIMPLIFY | 당시 PollGroundControl 184, ProcessPendingGroundCommand 727, CurrentTelemetry 840이 UDP 명령과 상태 응답을 처리했다. 기록·재생 제어는 이후 제거했다. 목표 임무와 직접 통신은 보존한다. |
 | apps/simulator/AeroSimLabAppLifecycle.cpp | SIMPLIFY | Run 28, RunFrame 139, SmokeTestIsComplete 302, ValidateSmokeTestOutput 313. 프레임 입력→모의→렌더→swap을 묶고 웹 예외 및 smoke 시간 초과를 처리한다. 벤치마크·웹/네이티브 분기 정리는 EO 검증과 종료 경로를 보존하며 수행. |
-| apps/simulator/AeroSimLabAppMission.cpp | SIMPLIFY | StartFleetReconnaissance 399, StartFleetReturn 565/573, AdvanceFleetReconnaissance 821, AdvanceCompleteFleetMission 1003, PrepareFleetNetwork 1260, InitializeFleetLeadership 1318, AdvanceFleetNetwork 1447, AdvanceFormationTransit 1698. 임무 상태와 메시지 입출력이 얽혀 있다. 리더 교체·중계·다중홉을 직접 통신으로 대체하되 M01→M02→M03과 실패/착륙 처리를 함께 검증해야 한다. |
+| apps/simulator/AeroSimLabAppMission.cpp | SIMPLIFY | 기준선에는 단일 드론의 이륙·접근·카메라 정렬·촬영·착륙 처리와 네 대 임무가 함께 있었다. 구형 단일 드론 흐름을 제거했다. 남은 흐름은 편대 이동·드론별 정찰·재집결·복귀를 맡으며, 메시지 처리와 임무 판정은 아직 한 파일에 모여 있다. |
 | apps/simulator/BenchmarkProcessMemory.h | SIMPLIFY | ProcessMemorySample 14, ReadProcessMemorySample 21은 프로세스 메모리 계측에 선택적 결과를 반환한다. 벤치마크 보존 여부와 함께 결정. |
 | apps/simulator/BuildRevision.cpp | KEEP | 빌드 리비전 제공 구현. 호출·생성 연결과 실패 시 값은 추가 확인 필요. |
 | apps/simulator/BuildRevision.h | KEEP | 리비전 인터페이스. 빌드 생성 및 표시 호출처 확인 필요. |
@@ -72,4 +72,11 @@
 
 
 마지막 확인 당시 SimulatorHud.cpp는 장면과 각 드론 카메라 화면을 렌더 콜백으로 표시했다. 2026-10-29 요청으로 웹 WebRTC와 네이티브 RTP 송수신을 제거했다. 웹 셸은 페이지 안에서 시뮬레이터 캔버스 일부를 같은 창 카메라 패널로 복사한다. 이전 파일별 줄 번호는 감사 기준 시점의 내용이며, 현재 호출 흐름의 증거로 쓰지 않는다.
+
+## 구형 단일 드론 점검 흐름 제거 — 2026-10-29
+
+- 앱의 구형 단일 드론 점검 상태, 카메라 방향 맞춤·촬영 대기 단계, 점검면·가림 자료, 해당 경로 표시와 웹 시작·멈춤·재개 조작을 제거했다. 네 대가 편대 이동·분산 정찰·복귀를 하는 전체 임무는 남겼다.
+- 정찰 지점 자료는 이름과 접근 위치만 가진다. 카메라 영상은 표시하고 화질을 읽되, 앱이 촬영 성공을 판정하지 않는다.
+- Windows Release 앱·시험 타깃 링크 성공. 전체 CTest 29/29 통과. 관제 클라이언트 시험은 첫 실행에서 접근 위반이 났지만, 시험 실행 파일을 다시 빌드한 뒤 통과했고 같은 시험을 10회 반복해 모두 통과했다. 최초 실패 원인은 정확히 특정하지 못했다.
+- 웹 셸의 인라인 JavaScript 구문 검사는 통과했다. Emscripten 빌드와 브라우저 실행은 확인하지 않았다.
 

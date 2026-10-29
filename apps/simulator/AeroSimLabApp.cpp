@@ -208,48 +208,32 @@ void AeroSimLabApp::QueueWebFlightCommand(
     aerosimlab::simulation::DroneCommand::Kind kind)
 {
     externalControl_ = true;
-    if (InspectionMissionIsActive())
+    if (CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive())
         return;
     pendingControllerAction_ = aerosimlab::simulation::DroneCommand{kind};
 }
 
-bool AeroSimLabApp::StartWebInspectionMission(int targetIndex)
+bool AeroSimLabApp::StartWebFleetMission()
 {
     externalControl_ = true;
-    if (targetIndex < -1
-        || (targetIndex >= 0
-            && static_cast<std::size_t>(targetIndex) >= inspectionTargets_.size()))
+    return StartCompleteFleetMission();
+}
+
+bool AeroSimLabApp::StopWebFleetMission()
+{
+    externalControl_ = true;
+    if (!CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
+        && !formationTransit_.active)
         return false;
-
-    std::optional<std::size_t> selectedTarget;
-    if (targetIndex >= 0)
-        selectedTarget = static_cast<std::size_t>(targetIndex);
-    return RequestInspectionMission(selectedTarget);
-}
-
-bool AeroSimLabApp::PauseWebInspectionMission()
-{
-    externalControl_ = true;
-    return PauseInspectionMission();
-}
-
-bool AeroSimLabApp::ResumeWebInspectionMission()
-{
-    externalControl_ = true;
-    return ResumeInspectionMission();
-}
-
-bool AeroSimLabApp::CancelWebInspectionMission()
-{
-    externalControl_ = true;
-    return CancelInspectionMission();
+    FailCompleteFleetMission("지상통제소에서 전체 임무를 중단했습니다.");
+    return true;
 }
 
 void AeroSimLabApp::SetWebPilotAxes(
     const aerosimlab::manual_control::GamepadAxes& axes)
 {
     externalControl_ = true;
-    if (InspectionMissionIsActive())
+    if (CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive())
     {
         webPilotAxes_.reset();
         pendingPilotCommand_.reset();
@@ -372,68 +356,22 @@ void AeroSimLabApp::LoadMapFeatures()
     trainingRangeScene_ = std::make_unique<TrainingRangeScene>();
     trainingRangeScene_->Load(AssetPath(""), terrainGrid_, simulation_);
     cameraTransitAltitudeMeters_ = trainingRangeCameraTransitAltitudeMeters;
-    inspectionTargets_.clear();
-    inspectionOccluders_.clear();
-
-    for (const auto& obstacle : trainingRangeScene_->Obstacles())
-    {
-        double bottomMeters = obstacle.groundElevationsMeters.front();
-        for (const double height : obstacle.groundElevationsMeters)
-            bottomMeters = std::min(bottomMeters, height);
-        inspectionOccluders_.push_back({
-            obstacle.outlineMeters, bottomMeters, bottomMeters + obstacle.heightMeters});
-    }
+    reconTargets_.clear();
 
     for (const auto& point : trainingRangeScene_->ReconPoints())
     {
         const double groundMeters = terrainGrid_.HeightAtLocalMeters(point.positionMeters);
-        InspectionTarget target;
-        target.facilityId = "industrial-training-range";
-        target.displayName = point.id;
-        target.zoneId = point.id;
-        target.buildingOsmId = point.id;
-        target.surface = {
-            .centerMeters = {point.positionMeters, groundMeters + 2.0},
-            .normal = {0.0, 0.0, 1.0},
-            .widthAxis = {1.0, 0.0, 0.0},
-            .widthMeters = 8.0,
-            .heightMeters = 6.0,
-            .minimumDistanceMeters = 7.0,
-            .maximumDistanceMeters = 35.0,
-            .maximumIncidenceAngleDegrees = 65.0,
-            .minimumPixelWidth = 32,
-            .minimumPixelHeight = 24};
-        target.routeStartMeters = {demoDroneStartMeters,
-            terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters) + 4.0};
-        target.approachPositionMeters = {point.positionMeters,
-            groundMeters + 15.0};
-        target.routeAutomaticallyPlanned = true;
-        inspectionTargets_.push_back(std::move(target));
+        reconTargets_.push_back({point.id, {point.positionMeters, groundMeters + 15.0}});
     }
-
-#ifdef __EMSCRIPTEN__
-    EM_ASM({
-        if (window.clearDroneSimInspectionTargets)
-            window.clearDroneSimInspectionTargets();
-    });
-    for (std::size_t index = 0; index < inspectionTargets_.size(); ++index)
-    {
-        const InspectionTarget& target = inspectionTargets_[index];
-        EM_ASM({
-            if (window.addDroneSimInspectionTarget)
-                window.addDroneSimInspectionTarget($0, UTF8ToString($1));
-        }, static_cast<int>(index), target.displayName.c_str());
-    }
-#endif
 }
 void AeroSimLabApp::InitializeStartingState()
 {
-    if (inspectionTargets_.empty())
+    if (reconTargets_.empty())
         throw std::runtime_error("훈련장 정찰 지점을 준비하지 못했습니다.");
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
     const glm::dvec2 toFirstTarget = glm::dvec2{
-        inspectionTargets_.front().surface.centerMeters.x,
-        inspectionTargets_.front().surface.centerMeters.y} - demoDroneStartMeters;
+        reconTargets_.front().approachPositionMeters.x,
+        reconTargets_.front().approachPositionMeters.y} - demoDroneStartMeters;
     const double initialYawRadians = std::atan2(toFirstTarget.y, toFirstTarget.x);
     simulation_.SetInitialPose({demoDroneStartMeters.x, demoDroneStartMeters.y,
         startElevation +
@@ -458,29 +396,6 @@ void AeroSimLabApp::ConfigureTrainingBattery(
     aerosimlab::simulation::DroneId droneId)
 {
     simulation_.ConfigureBattery(droneId, trainingBatteryModel);
-}
-
-aerosimlab::simulation::CaptureAssessment AeroSimLabApp::AssessInspectionView() const
-{
-    return aerosimlab::simulation::EoCameraModel::AssessCapture(
-        simulation_.Camera(), inspectionMission_.surface, {}, inspectionOccluders_);
-}
-
-void AeroSimLabApp::SetActiveInspectionTarget(std::size_t index)
-{
-    if (index >= inspectionTargets_.size())
-        throw std::out_of_range("점검 구역 번호가 임무 범위를 벗어났습니다.");
-
-    inspectionMission_.activeTargetIndex = index;
-    const InspectionTarget& target = inspectionTargets_[index];
-    inspectionMission_.facilityId = target.facilityId;
-    inspectionMission_.targetDisplayName = target.displayName;
-    inspectionMission_.zoneId = target.zoneId;
-    inspectionMission_.surface = target.surface;
-    inspectionMission_.routeWaypointIndex = 0;
-    inspectionMission_.goalMeters = target.routeWaypointsMeters.empty()
-        ? target.approachPositionMeters
-        : target.routeWaypointsMeters.front();
 }
 
 void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
@@ -515,10 +430,8 @@ void AeroSimLabApp::AdvanceSimulationTick()
     AdvanceFleetReconnaissance();
     AdvanceFormationTransit();
     AdvanceCompleteFleetMission();
-    if (demoMode_ && !externalControl_
-        && inspectionMission_.stage == InspectionMissionStage::Ready)
-        static_cast<void>(RequestInspectionMission());
-    AdvanceInspectionMission();
+    if (demoMode_ && !externalControl_ && CompleteFleetMissionCanStart())
+        static_cast<void>(StartCompleteFleetMission());
     ExpireGroundControlCommand();
     const bool groundControlTickAdvanced = ProcessPendingGroundCommand();
     const bool fleetMissionActive = std::any_of(
@@ -564,7 +477,7 @@ void AeroSimLabApp::AdvanceAmbientWind()
 
 void AeroSimLabApp::AdvanceManualControlTick()
 {
-    if (InspectionMissionIsActive())
+    if (CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive())
     {
         simulation_.AdvanceOneTick();
         return;
@@ -842,47 +755,6 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         DrawCube(transform, cameraPosition, material, view, projection);
     };
 
-    if (showMissionGuides
-        && inspectionMission_.activeTargetIndex < inspectionTargets_.size())
-    {
-        const InspectionTarget& target =
-            inspectionTargets_[inspectionMission_.activeTargetIndex];
-        glm::dvec3 previous = target.routeStartMeters;
-        for (const glm::dvec3& waypoint : target.routeWaypointsMeters)
-        {
-            drawRouteSegment(previous, waypoint, missionRouteMaterial_);
-            previous = waypoint;
-        }
-        drawRouteSegment(previous, target.approachPositionMeters, missionRouteMaterial_);
-
-        const glm::dvec3 verticalAxis = glm::normalize(glm::cross(
-            target.surface.normal, target.surface.widthAxis));
-        const glm::dvec3 halfWidth = target.surface.widthAxis
-            * (target.surface.widthMeters * 0.5);
-        const glm::dvec3 halfHeight = verticalAxis
-            * (target.surface.heightMeters * 0.5);
-        const glm::dvec3 center = target.surface.centerMeters;
-        const std::array<glm::dvec3, 4> captureCorners{
-            center - halfWidth - halfHeight,
-            center + halfWidth - halfHeight,
-            center + halfWidth + halfHeight,
-            center - halfWidth + halfHeight};
-        for (std::size_t corner = 0; corner < captureCorners.size(); ++corner)
-        {
-            drawRouteSegment(captureCorners[corner],
-                captureCorners[(corner + 1U) % captureCorners.size()],
-                inspectionTargetMaterial_);
-        }
-        const glm::vec3 targetMarker = ToRenderPosition(center);
-        DrawCube(glm::translate(glm::mat4{1.0F}, targetMarker)
-            * glm::scale(glm::mat4{1.0F}, glm::vec3{0.35F}),
-            cameraPosition, inspectionTargetMaterial_, view, projection);
-        const glm::vec3 approachMarker = ToRenderPosition(target.approachPositionMeters);
-        DrawCube(glm::translate(glm::mat4{1.0F}, approachMarker)
-            * glm::scale(glm::mat4{1.0F}, glm::vec3{0.65F}),
-            cameraPosition, missionRouteMaterial_, view, projection);
-    }
-
     if (showMissionGuides)
     {
         for (const auto& [droneId, mission] : fleetReconnaissance_)
@@ -899,10 +771,10 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
                 previous = waypoint;
             }
             drawRouteSegment(previous,
-                inspectionTargets_[mission.targetIndex].approachPositionMeters,
+                reconTargets_[mission.targetIndex].approachPositionMeters,
                 missionRouteMaterial_);
             const glm::vec3 marker = ToRenderPosition(
-                inspectionTargets_[mission.targetIndex].approachPositionMeters);
+                reconTargets_[mission.targetIndex].approachPositionMeters);
             DrawCube(glm::translate(glm::mat4{1.0F}, marker)
                 * glm::scale(glm::mat4{1.0F}, glm::vec3{0.65F}),
                 cameraPosition, missionRouteMaterial_, view, projection);
@@ -946,37 +818,6 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         droneCameraModel_->Draw(cameraMount, *renderer_, *shader_, view, projection,
             cameraPosition);
 
-        if (showMissionGuides && InspectionMissionIsActive()
-            && cameraState.status == aerosimlab::simulation::CameraStatus::Active)
-        {
-            const glm::dvec3 cameraForward = glm::normalize(
-                aerosimlab::simulation::EoCameraModel::OpticalAxis(cameraState));
-            const glm::dvec3 cameraUp = glm::normalize(
-                aerosimlab::simulation::EoCameraModel::UpAxis(cameraState));
-            const glm::dvec3 cameraRight = glm::normalize(
-                glm::cross(cameraForward, cameraUp));
-            constexpr double viewDistanceMeters = 10.0;
-            const double halfHeightMeters = viewDistanceMeters * std::tan(
-                glm::radians(cameraState.model.verticalFieldOfViewDegrees * 0.5));
-            const double halfWidthMeters = halfHeightMeters
-                * cameraState.model.imageWidthPixels
-                / static_cast<double>(cameraState.model.imageHeightPixels);
-            const glm::dvec3 farCenter = cameraState.positionMeters
-                + cameraForward * viewDistanceMeters;
-            const std::array<glm::dvec3, 4> corners{
-                farCenter - cameraRight * halfWidthMeters - cameraUp * halfHeightMeters,
-                farCenter + cameraRight * halfWidthMeters - cameraUp * halfHeightMeters,
-                farCenter + cameraRight * halfWidthMeters + cameraUp * halfHeightMeters,
-                farCenter - cameraRight * halfWidthMeters + cameraUp * halfHeightMeters};
-
-            for (std::size_t corner = 0; corner < corners.size(); ++corner)
-            {
-                drawRouteSegment(cameraState.positionMeters, corners[corner],
-                    cameraViewMaterial_);
-                drawRouteSegment(corners[corner],
-                    corners[(corner + 1U) % corners.size()], cameraViewMaterial_);
-            }
-        }
     }
 }
 
@@ -1025,36 +866,20 @@ extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebPilotInput(
         .yaw = yaw});
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStartInspectionMission(int targetIndex)
+extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStartFleetMission()
 {
     if (aerosimlab::simulator::activeWebApplication == nullptr)
         return 0;
     return aerosimlab::simulator::activeWebApplication
-        ->StartWebInspectionMission(targetIndex)
+        ->StartWebFleetMission()
         ? 1 : 0;
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebPauseInspectionMission()
+extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStopFleetMission()
 {
     if (aerosimlab::simulator::activeWebApplication == nullptr)
         return 0;
     return aerosimlab::simulator::activeWebApplication
-        ->PauseWebInspectionMission() ? 1 : 0;
-}
-
-extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebResumeInspectionMission()
-{
-    if (aerosimlab::simulator::activeWebApplication == nullptr)
-        return 0;
-    return aerosimlab::simulator::activeWebApplication
-        ->ResumeWebInspectionMission() ? 1 : 0;
-}
-
-extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebCancelInspectionMission()
-{
-    if (aerosimlab::simulator::activeWebApplication == nullptr)
-        return 0;
-    return aerosimlab::simulator::activeWebApplication
-        ->CancelWebInspectionMission() ? 1 : 0;
+        ->StopWebFleetMission() ? 1 : 0;
 }
 #endif

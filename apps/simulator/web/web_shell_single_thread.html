@@ -56,7 +56,6 @@
       #web-gcs-controls { display: grid; grid-template-columns: minmax(190px, .9fr) minmax(0, 1.5fr); align-content: stretch; gap: 10px; min-height: 0; }
       .control-group { align-content: center; }
       .control-group h3 { color: #b8c8cf; }
-      #inspection-target-label { color: var(--muted); font-size: 12px; }
       #mission-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
       #flight-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
       #web-gcs button { min-width: 0; min-height: 36px; padding: 6px 8px; color: var(--text); background: #263741; border: 1px solid #3a505c; border-radius: 6px; font: inherit; font-size: 12px; white-space: nowrap; touch-action: none; transition: background-color .12s ease, border-color .12s ease; }
@@ -64,9 +63,8 @@
       #web-gcs button:focus-visible, #web-gcs select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       #web-gcs button:disabled { opacity: .48; }
       #web-gcs [data-command="0"] { background: #176b50; border-color: #2f9471; }
-      #web-gcs [data-command="2"], #web-gcs [data-cancel-inspection] { background: #713b3b; border-color: #99504a; }
-      #web-gcs [data-start-inspection] { background: #245d79; border-color: #3980a2; }
-      #web-gcs [data-inspection-target] { min-width: 0; min-height: 36px; padding: 6px 8px; color: var(--text); background: #101a21; border: 1px solid #3a505c; border-radius: 6px; font: inherit; }
+      #web-gcs [data-command="2"], #web-gcs [data-stop-fleet] { background: #713b3b; border-color: #99504a; }
+      #web-gcs [data-start-fleet] { background: #245d79; border-color: #3980a2; }
       @media (min-width: 1001px) {
         .telemetry-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         #web-gcs-mission-card { grid-column: span 2; }
@@ -121,9 +119,9 @@
               <div class="telemetry-card"><span>지면 위 고도</span><strong id="web-gcs-altitude">0.0 m</strong></div>
               <div class="telemetry-card"><span>이동 속도</span><strong id="web-gcs-speed">0.0 m/s</strong></div>
               <div class="telemetry-card"><span>EO 카메라</span><strong id="web-gcs-camera">준비 중</strong></div>
-              <div class="telemetry-card" id="web-gcs-mission-card"><span>영상 정찰</span><strong id="web-gcs-mission">대기 중</strong></div>
+              <div class="telemetry-card" id="web-gcs-mission-card"><span>편대 임무</span><strong id="web-gcs-mission">대기 중</strong></div>
             </div>
-            <p id="web-gcs-capture">영상 구도 상태: 시뮬레이터 준비 중</p>
+            <p id="web-gcs-capture">영상은 지상통제소에서 확인하고, 파손 여부는 사람이 판단합니다.</p>
           </div>
         </section>
         <section id="camera-panel" class="view-panel" aria-label="드론 카메라 영상">
@@ -137,18 +135,11 @@
     </main>
     <section id="web-gcs" aria-label="웹 지상통제">
       <div id="web-gcs-controls">
-        <section class="control-group" aria-label="정찰 임무">
-          <h3>사람이 지정한 정찰 지점</h3>
-          <label id="inspection-target-label" for="inspection-target">정찰 위치</label>
-          <select id="inspection-target" data-inspection-target disabled>
-            <option value="-1">모든 촬영 위치</option>
-          </select>
+        <section class="control-group" aria-label="편대 임무">
+          <h3>네 대 편대 임무</h3>
           <div id="mission-actions">
-            <button type="button" data-start-inspection disabled>정찰 시작</button>
-            <button type="button" data-pause-inspection disabled
-                title="이동·카메라 정렬 중에만 가능합니다.">일시 정지</button>
-            <button type="button" data-resume-inspection disabled>재개</button>
-            <button type="button" data-cancel-inspection disabled>정찰 중단</button>
+            <button type="button" data-start-fleet disabled>전체 임무 시작</button>
+            <button type="button" data-stop-fleet disabled>임무 중단 · 모두 착륙</button>
           </div>
         </section>
         <section class="control-group" aria-label="수동 비행 조작">
@@ -217,7 +208,6 @@
         document.querySelectorAll("#web-gcs button").forEach(function (button) {
           button.disabled = false;
         });
-        document.querySelector("#inspection-target").disabled = false;
         startEoViewportCopy();
         setEoLiveStatus("시뮬레이터 카메라 화면을 표시하고 있습니다.");
       };
@@ -226,18 +216,6 @@
         eoViewport = { x: x, y: y, width: width, height: height };
         if (eoCanvasCopyActive)
           copyEoViewport(performance.now());
-      };
-
-      window.clearDroneSimInspectionTargets = function () {
-        var select = document.querySelector("#inspection-target");
-        while (select.options.length > 1)
-          select.remove(1);
-      };
-      window.addDroneSimInspectionTarget = function (index, displayName) {
-        var option = document.createElement("option");
-        option.value = String(index);
-        option.textContent = displayName || "이름 없는 정찰 위치";
-        document.querySelector("#inspection-target").add(option);
       };
 
       function setEoLiveStatus(message) {
@@ -274,19 +252,7 @@
       }
 
       window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive,
-          captureAssessment, missionStatus, simulationTick, missionActive, grounded) {
-        var captureLabels = {
-          ready: "목표가 화면에 보임",
-          camera_unavailable: "카메라 꺼짐 또는 장애",
-          no_new_frame: "새 영상 프레임 없음",
-          too_near: "목표에 너무 가까움",
-          too_far: "목표에서 너무 멂",
-          surface_facing_away: "카메라가 목표를 향하지 않음",
-          outside_frame: "카메라 화면 밖",
-          resolution_too_low: "화면에서 목표가 너무 작음",
-          occluded: "목표가 구조물에 가려짐",
-          unknown: "상태를 확인할 수 없음"
-        };
+          missionStatus, simulationTick, missionActive, missionCanStart, grounded) {
         document.getElementById("web-gcs-mode").textContent = mode;
         document.getElementById("web-gcs-clock").textContent = "T+"
           + (Number(simulationTick) / 60).toFixed(1) + " s · "
@@ -296,22 +262,13 @@
         document.getElementById("web-gcs-altitude").textContent = z.toFixed(1) + " m";
         document.getElementById("web-gcs-speed").textContent = speed.toFixed(1) + " m/s";
         document.getElementById("web-gcs-camera").textContent = cameraActive ? "켜짐" : "꺼짐";
-        document.getElementById("web-gcs-capture").textContent = "영상 구도 상태: "
-          + (captureLabels[captureAssessment] || captureLabels.unknown)
-          + " · 파손 여부는 사람이 영상으로 판단합니다.";
         document.getElementById("web-gcs-mission").textContent = missionStatus;
 
-        var missionCanStart = !missionActive && Boolean(grounded);
-        var missionIsPaused = missionStatus.includes("일시 정지");
-        var missionCanPause = missionActive && (missionStatus.includes("촬영 위치로 이동 중")
-          || missionStatus.includes("카메라 방향을 맞추는 중"));
+        var canStart = Boolean(missionCanStart) && Boolean(grounded);
         document.querySelectorAll("#web-gcs [data-command], #web-gcs [data-axis]")
           .forEach(function (button) { button.disabled = missionActive; });
-        document.querySelector("#inspection-target").disabled = missionActive;
-        document.querySelector("[data-start-inspection]").disabled = !missionCanStart;
-        document.querySelector("[data-pause-inspection]").disabled = !missionCanPause;
-        document.querySelector("[data-resume-inspection]").disabled = !missionIsPaused;
-        document.querySelector("[data-cancel-inspection]").disabled = !missionActive;
+        document.querySelector("[data-start-fleet]").disabled = !canStart;
+        document.querySelector("[data-stop-fleet]").disabled = !missionActive;
 
       };
 
@@ -332,27 +289,16 @@
               Module._DroneSimWebFlightCommand(Number(button.dataset.command));
           });
         });
-        document.querySelector("#web-gcs [data-start-inspection]").addEventListener(
+        document.querySelector("#web-gcs [data-start-fleet]").addEventListener(
             "click", function () {
           releaseAll();
-          var targetIndex = Number(document.querySelector("#inspection-target").value);
-          if (typeof Module._DroneSimWebStartInspectionMission === "function")
-            Module._DroneSimWebStartInspectionMission(targetIndex);
+          if (typeof Module._DroneSimWebStartFleetMission === "function")
+            Module._DroneSimWebStartFleetMission();
         });
-        document.querySelector("#web-gcs [data-pause-inspection]").addEventListener(
+        document.querySelector("#web-gcs [data-stop-fleet]").addEventListener(
             "click", function () {
-          if (typeof Module._DroneSimWebPauseInspectionMission === "function")
-            Module._DroneSimWebPauseInspectionMission();
-        });
-        document.querySelector("#web-gcs [data-resume-inspection]").addEventListener(
-            "click", function () {
-          if (typeof Module._DroneSimWebResumeInspectionMission === "function")
-            Module._DroneSimWebResumeInspectionMission();
-        });
-        document.querySelector("#web-gcs [data-cancel-inspection]").addEventListener(
-            "click", function () {
-          if (typeof Module._DroneSimWebCancelInspectionMission === "function")
-            Module._DroneSimWebCancelInspectionMission();
+          if (typeof Module._DroneSimWebStopFleetMission === "function")
+            Module._DroneSimWebStopFleetMission();
         });
         document.querySelectorAll("#web-gcs [data-axis]").forEach(function (button) {
           var parts = button.dataset.axis.split(":");

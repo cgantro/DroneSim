@@ -95,14 +95,10 @@ public:
 #ifdef __EMSCRIPTEN__
     /** @brief 웹 지상통제 버튼에서 비행 명령을 예약한다. */
     void QueueWebFlightCommand(aerosimlab::simulation::DroneCommand::Kind kind);
-    /** @brief 사람이 지정한 정찰 위치를 방문해 영상을 수집한다. */
-    [[nodiscard]] bool StartWebInspectionMission(int targetIndex);
-    /** @brief 이동·카메라 정렬 중인 웹 정찰 임무를 잠시 멈춘다. */
-    [[nodiscard]] bool PauseWebInspectionMission();
-    /** @brief 멈춘 웹 정찰 임무를 이어서 진행한다. */
-    [[nodiscard]] bool ResumeWebInspectionMission();
-    /** @brief 진행 중인 웹 정찰 임무를 중단하고 착륙을 요청한다. */
-    [[nodiscard]] bool CancelWebInspectionMission();
+    /** @brief 네 대가 편대 이동·정찰·복귀를 하는 전체 임무를 시작한다. */
+    [[nodiscard]] bool StartWebFleetMission();
+    /** @brief 전체 임무를 중단하고 네 대 모두 착륙시킨다. */
+    [[nodiscard]] bool StopWebFleetMission();
     /** @brief 웹 조작 버튼의 입력을 다음 비행 Tick에 적용한다. */
     void SetWebPilotAxes(const aerosimlab::manual_control::GamepadAxes& axes);
 #endif
@@ -168,9 +164,6 @@ private:
     void LoadMapFeatures();
     void InitializeStartingState();
     void ConfigureTrainingBattery(aerosimlab::simulation::DroneId droneId);
-    /** @brief 카메라가 가상 점검면을 담을 수 있는지 공통 센서 판정으로 확인한다. */
-    [[nodiscard]] aerosimlab::simulation::CaptureAssessment AssessInspectionView() const;
-    void SetActiveInspectionTarget(std::size_t index);
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
@@ -181,13 +174,6 @@ private:
     /** @brief 스모크 검사에서 마지막으로 읽은 EO 영상과 카메라 Tick을 확인한다. */
     [[nodiscard]] int ValidateSmokeTestOutput() const;
     void AdvanceManualControlTick();
-    [[nodiscard]] bool RequestInspectionMission(
-        std::optional<std::size_t> selectedTargetIndex = std::nullopt);
-    [[nodiscard]] bool InspectionMissionIsActive() const;
-    [[nodiscard]] bool PauseInspectionMission();
-    [[nodiscard]] bool ResumeInspectionMission();
-    [[nodiscard]] bool CancelInspectionMission();
-    void AdvanceInspectionMission();
     [[nodiscard]] bool FleetReconnaissanceCanStart() const;
     [[nodiscard]] bool FleetReconnaissanceIsActive() const;
     [[nodiscard]] bool CompleteFleetMissionCanStart() const;
@@ -224,8 +210,6 @@ private:
     [[nodiscard]] bool StartFleetReturn(bool takeOffDrones);
     void FailCompleteFleetMission(const std::string& reason);
     void AdvanceFormationTransit();
-    void FailInspectionMission(const std::string& reason);
-    [[nodiscard]] std::string InspectionMissionStatus() const;
     /** @brief 지정한 드론에 비행 명령을 적용한다. */
     [[nodiscard]] aerosimlab::simulation::CommandResult ApplySimulationCommand(
         const aerosimlab::simulation::DroneCommand& command);
@@ -300,57 +284,12 @@ private:
     bool smokeTest_ = false;
     aerosimlab::simulation::FixedTickAccumulator fixedTickAccumulator_;
     bool demoMode_ = false;
-    struct InspectionTarget
+    struct ReconTarget
     {
-        std::string facilityId;
         std::string displayName;
-        std::string zoneId;
-        std::string buildingOsmId;
-        aerosimlab::simulation::InspectionSurface surface;
-        glm::dvec3 routeStartMeters{0.0};
-        std::vector<glm::dvec3> routeWaypointsMeters;
         glm::dvec3 approachPositionMeters{0.0};
-        bool routeAutomaticallyPlanned = false;
     };
-    /** @brief 점검 임무의 진행 단계와 현재 구역을 함께 보관한다. */
-    struct InspectionMissionState
-    {
-        enum class Stage
-        {
-            Ready,
-            StartRequested,
-            Paused,
-            TakingOff,
-            Approaching,
-            AligningCamera,
-            Capturing,
-            Landing,
-            Completed,
-            Failed
-        };
-        Stage stage = Stage::Ready;
-        Stage pausedStage = Stage::Ready;
-        std::uint64_t startTick = 0;
-        std::uint64_t pauseStartTick = 0;
-        std::uint64_t captureStartFrame = 0;
-        std::uint64_t captureReadyTick = 0;
-        bool captureConditionMet = false;
-        std::string error;
-        std::size_t activeTargetIndex = 0;
-        std::size_t routeWaypointIndex = 0;
-        std::size_t endTargetIndex = 0;
-        std::size_t targetCount = 0;
-        std::size_t completedTargetCount = 0;
-        glm::dvec3 goalMeters{0.0};
-        std::string facilityId;
-        std::string targetDisplayName;
-        std::string zoneId;
-        aerosimlab::simulation::InspectionSurface surface;
-    };
-    using InspectionMissionStage = InspectionMissionState::Stage;
-    InspectionMissionState inspectionMission_;
-    std::vector<InspectionTarget> inspectionTargets_;
-    std::vector<aerosimlab::simulation::InspectionOccluderPolygon> inspectionOccluders_;
+    std::vector<ReconTarget> reconTargets_;
     /** @brief 정찰 중 카메라 시야가 나무 수관에 가리지 않도록 확보한 통과 고도다. */
     double cameraTransitAltitudeMeters_ = 0.0;
     bool externalControl_ = false;
@@ -427,8 +366,6 @@ private:
     };
     std::unordered_map<aerosimlab::simulation::DroneId, AuxiliaryCameraView>
         auxiliaryCameraViews_;
-    std::unordered_map<std::uint64_t, aerosimlab::simulation::CameraState>
-        queuedEoCameraStates_;
 #endif
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
@@ -524,10 +461,6 @@ private:
         glm::vec4{0.25F, 0.40F, 0.25F, 1.0F}, 0.0F, 0.92F};
     aerosimlab::graphics::Material missionRouteMaterial_{
         glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
-    aerosimlab::graphics::Material inspectionTargetMaterial_{
-        glm::vec4{1.0F, 0.58F, 0.12F, 1.0F}, 0.0F, 0.48F};
-    aerosimlab::graphics::Material cameraViewMaterial_{
-        glm::vec4{0.78F, 0.34F, 0.96F, 1.0F}, 0.0F, 0.48F};
     std::mt19937 windGenerator_{0x44524F4EU};
     glm::dvec3 windVelocityMetersPerSecond_{0.0};
     glm::dvec3 windTargetMetersPerSecond_{0.0};
