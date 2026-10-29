@@ -157,7 +157,7 @@ modules/simulation_core/include/simulation_core/BatteryModel.h	1611	46	simulatio
 modules/simulation_core/include/simulation_core/CommandRecording.h	2331	63	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/simulation_core/include/simulation_core/DroneModel.h	5322	133	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/simulation_core/include/simulation_core/EoCameraModel.h	4915	138	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/simulation_core/include/simulation_core/FormationPlanner.h	2929	82	simulation	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_SIMULATION.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+modules/flight_planning/include/flight_planning/FormationPlanner.h	1672	48	flight_planning	REVIEWED	KEEP	c35dcf98	no	AUDIT_SIMULATION.md 모듈 분리 기록	편대 배치와 경로 계획을 선언
 modules/simulation_core/include/simulation_core/InspectionSurfaceJson.h	676	19	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/simulation_core/include/simulation_core/PhysicsWorld.h	5757	146	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/simulation_core/include/simulation_core/QuadrotorFlightController.h	2031	51	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
@@ -171,7 +171,7 @@ modules/simulation_core/src/CollisionGeometry.h	3221	91	simulation	REVIEWED	KEEP
 modules/simulation_core/src/CommandRecording.cpp	1935	94	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/simulation_core/src/DroneModel.cpp	11094	315	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/simulation_core/src/EoCameraModel.cpp	13591	356	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/simulation_core/src/FormationPlanner.cpp	15918	413	simulation	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_SIMULATION.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+modules/flight_planning/src/FormationPlanner.cpp	3768	98	flight_planning	REVIEWED	KEEP	c35dcf98	no	AUDIT_SIMULATION.md 모듈 분리 기록	고정 V 배치와 편대 통과 경로 계산
 modules/simulation_core/src/InspectionSurfaceJson.cpp	5194	124	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/simulation_core/src/PhysicsWorld.cpp	52719	1270	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 modules/simulation_core/src/QuadrotorFlightController.cpp	9227	233	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
@@ -222,7 +222,7 @@ tests/manual_control/GamepadCommandMapperTests.cpp	1805	48	infra	REVIEWED	KEEP	d
 tests/media/RtpVideoStreamTests.cpp	5978	154	infra	REMOVED	REMOVED	d6515b6e	no	2026-10-29 영상 전송 제거	RTP 통합 시험 제거
 tests/sensor/RgbFrameTests.cpp	1137	41	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
 tests/simulation_core/CommandRecordingTests.cpp	3519	98	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
-tests/simulation_core/FormationPlannerTests.cpp	6116	140	simulation	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_SIMULATION.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+tests/flight_planning/FormationPlannerTests.cpp	2805	69	flight_planning	REVIEWED	KEEP	c35dcf98	no	AUDIT_SIMULATION.md 모듈 분리 기록	V 배치와 좁은 경로 거부를 확인
 tests/simulation_core/PhysicsWorldTests.cpp	41092	888	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 tests/simulation_core/QuadrotorModelTests.cpp	5794	124	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
 tests/simulation_core/ScenarioRunnerTests.cpp	86833	1688	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도

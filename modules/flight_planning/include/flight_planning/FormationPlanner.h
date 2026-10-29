@@ -10,7 +10,7 @@
 #include <optional>
 #include <vector>
 
-namespace aerosimlab::simulation
+namespace aerosimlab::flight_planning
 {
 /** @brief 리더가 따라갈 경로와 경로에 맞춰 고른 대형·드론 간격이다. */
 struct FormationRoutePlan

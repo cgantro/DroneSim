@@ -60,6 +60,12 @@ add_library(aerosimlab_terrain STATIC
 target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
 target_link_libraries(aerosimlab_terrain PUBLIC glm::glm PRIVATE nlohmann_json::nlohmann_json)
 
+add_library(aerosimlab_flight_planning STATIC
+  modules/flight_planning/src/FormationPlanner.cpp
+)
+target_include_directories(aerosimlab_flight_planning PUBLIC modules/flight_planning/include)
+target_link_libraries(aerosimlab_flight_planning PUBLIC glm::glm aerosimlab_terrain)
+
 add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/BatteryModel.cpp
   modules/simulation_core/src/DroneModel.cpp
@@ -68,7 +74,6 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/SimulationCore.cpp
   modules/simulation_core/src/QuadrotorModel.cpp
   modules/simulation_core/src/QuadrotorFlightController.cpp
-  modules/simulation_core/src/FormationPlanner.cpp
 )
 if(NOT EMSCRIPTEN)
   target_sources(aerosimlab_simulation_core PRIVATE
@@ -347,6 +352,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   target_link_libraries(aerosimlab_simulator_app PUBLIC
     aerosimlab_graphics
     aerosimlab_simulation_core
+    aerosimlab_flight_planning
     aerosimlab_manual_control
     aerosimlab_sensor
     aerosimlab_communication
@@ -474,7 +480,7 @@ if(BUILD_TESTING)
   include(GoogleTest)
   add_executable(aerosimlab_simulation_tests
     tests/simulation_core/SimulationCoreTests.cpp
-    tests/simulation_core/FormationPlannerTests.cpp
+    tests/flight_planning/FormationPlannerTests.cpp
     tests/simulation_core/QuadrotorModelTests.cpp
     tests/terrain/TerrainGridTests.cpp
   )
@@ -489,6 +495,7 @@ if(BUILD_TESTING)
   endif()
   target_link_libraries(aerosimlab_simulation_tests PRIVATE
     aerosimlab_simulation_core
+    aerosimlab_flight_planning
     nlohmann_json::nlohmann_json
     GTest::gtest_main
   )

@@ -1,4 +1,4 @@
-#include "simulation_core/FormationPlanner.h"
+#include "flight_planning/FormationPlanner.h"
 
 #include "terrain/MapFlightRoute.h"
 
@@ -8,7 +8,7 @@
 
 #include <glm/geometric.hpp>
 
-namespace aerosimlab::simulation
+namespace aerosimlab::flight_planning
 {
 namespace
 {

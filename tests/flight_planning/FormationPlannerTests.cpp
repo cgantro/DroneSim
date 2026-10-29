@@ -1,4 +1,4 @@
-#include "simulation_core/FormationPlanner.h"
+#include "flight_planning/FormationPlanner.h"
 
 #include "terrain/TrainingRangeTerrain.h"
 
@@ -9,7 +9,7 @@
 #include <cmath>
 #include <vector>
 
-namespace aerosimlab::simulation
+namespace aerosimlab::flight_planning
 {
 TEST(FormationPlannerTests, PlacesFourDronesBehindLeaderAndRotatesWithRoute)
 {

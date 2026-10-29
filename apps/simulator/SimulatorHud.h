@@ -5,7 +5,6 @@
 #include "SimulationBenchmark.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
-#include "simulation_core/FormationPlanner.h"
 
 #include <array>
 #include <cstddef>

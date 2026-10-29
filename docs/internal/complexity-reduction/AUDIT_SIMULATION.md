@@ -20,7 +20,7 @@
 - `modules/simulation_core/include/simulation_core/CommandRecording.h`: REMOVED — 당시 명령과 Tick을 저장하고 재생 범위를 span으로 빌려주던 기능이다. 2026-10-29 조종 명령 기록·재생 제품 기능 제거와 함께 삭제했다.
 - `modules/simulation_core/include/simulation_core/DroneModel.h`: KEEP — 1–133. 명령·상태·제어값과 결과 유형, Apply 및 AdvanceOneTick을 정의한다(77–126). 위치 ENU, 각속도 FLU, tick은 1/60초(108). AirSim과 운동학 이중 경로의 실제 빌드 요구는 확인 필요.
 - `modules/simulation_core/include/simulation_core/EoCameraModel.h`: SIMPLIFY — 현재는 카메라 모델·상태, Tick 프레임 증가, 기체에 붙은 카메라 자세, 켜기·끄기·고장·초기화를 제공한다. 과거 점검면·가림 형상과 촬영 가능 판정은 2026-10-29 제거했다.
-- `modules/simulation_core/include/simulation_core/FormationPlanner.h`: SIMPLIFY — 1–82. 지형·장애물·리더 경로를 입력받아 값 소유 경로와 오프셋을 반환한다(23–79). V·Column·Line 및 전환 프로필은 고정 V 목표보다 넓다.
+- `modules/flight_planning/include/flight_planning/FormationPlanner.h`: 분리 완료 — 편대 위치와 편대 경로 계획의 공개 입력·결과를 선언한다. Simulation Core 자료형을 사용하지 않는다.
 - `modules/scenario/include/scenario/ScenarioJson.h` (당시 `simulation_core/InspectionSurfaceJson.h`): REMOVED — 시나리오 JSON 안의 점검면 기하를 읽던 헤더. 자동 촬영 판정을 제거하면서 파서와 함께 삭제했다.
 - `modules/simulation_core/include/simulation_core/PhysicsWorld.h`: KEEP — 확인 1–146. AirSim에 강체 생성·모터·지형·장애물·틱을 제공하며 Impl을 unique_ptr로 소유하고 복사를 금지한다(68–145). 잘못된 핸들의 DestroyBody는 false, 비유한 모터 입력은 거부(95,125). 충돌·좌표 계약 보존; 내부 수명은 구현 미완독.
 - `modules/simulation_core/include/simulation_core/QuadrotorFlightController.h`: KEEP — 확인 1–51. 상태·목표·물성·이득을 받아 경유 속도와 4개 로터 목표를 값 반환(35–49). 자체 가변 상태 없음. 오류 동작은 구현 미확인; 강체 비행 제어에 필요.
@@ -34,7 +34,7 @@
 - `modules/simulation_core/src/CommandRecording.cpp`: REMOVED — 당시 기록 경계 Tick과 재생 인덱스를 관리했다. 앱·HUD·UDP 호출처와 함께 삭제했다.
 - `modules/simulation_core/src/DroneModel.cpp`: KEEP — 확인 1–200, 201–315. Apply(72)는 상태·명령을 검증해 결과를 반환하고 상태·제어값을 갱신한다. AdvanceOneTick(185)은 고정 간격으로 이륙·이동·착륙과 지면 접촉을 계산한다. 외부 상태를 참조로 수정하며 로터 명령은 강체 경로와 연결 확인 필요. 운동학과 강체의 동작 차이는 구현 검토 필요.
 - `modules/simulation_core/src/EoCameraModel.cpp`: SIMPLIFY — 현재는 카메라 프레임·자세·상태를 갱신한다. 과거의 점검면 거리·각도·화면·해상도·건물 가림 판정은 2026-10-29 제거했다. 카메라 고장 상태에서 켜기 요청을 무시하는 동작은 유지한다.
-- `modules/simulation_core/src/FormationPlanner.cpp`: SIMPLIFY — 1–413. FormationOffsets(260)는 잘못된 입력에 예외, 대형과 방향에서 좌표 벡터 계산. PlanFormationRoute(345)는 지형 경로를 호출하고 실패 시 nullopt. 387–408의 Column 우회와 96–207의 전환 프로필은 고정 V 범위 밖이다. 제거 시 V 경로 없음과 충돌 여유를 처리해야 한다.
+- `modules/flight_planning/src/FormationPlanner.cpp`: 분리 완료 — V자 오프셋을 진행 방향에 맞춰 회전하고, 편대 전체 폭을 반영한 여유값으로 지형 경로를 요청한다. 현재 구현에서 다른 대형 전환 기능은 확인되지 않았다.
 - `modules/scenario/src/ScenarioJson.cpp` (당시 `simulation_core/InspectionSurfaceJson.cpp`): REMOVED — 점검면 기하 JSON 파서. 촬영 조건 판정과 함께 2026-10-29 삭제했다.
 - `modules/simulation_core/src/PhysicsWorld.cpp`: KEEP — 확인 1–200, 201–400, 401–600, 601–800, 801–1000, 1001–1200, 1201–1270; 남은 줄 없음. Impl은 강체와 AirSim 시계를 소유하고 엔진에 강체 주소를 빌려준다(403–510); 소멸 전 clear. Step(1150)은 접촉·모터·엔진을 순서대로 실행하며 좌표 변환과 지형·장애물 접촉을 처리한다. 입력 오류와 미존재 핸들은 예외. 전역 시계의 동시 월드 실행 안전성은 미검증.
 - `modules/simulation_core/src/QuadrotorFlightController.cpp`: KEEP — 확인 1–233; 남은 줄 없음. WaypointVelocityTarget(150)은 위치에서 제한 속도를 반환하고 MotorTargets(170)는 상태·제어·물성에서 자세 토크와 로터 속도를 계산한다. 상태는 소유하지 않으며 로터 연립식이 특이하면 예외(127). 강체 제어와 운동학의 목표 동작 차이는 유지 여부 확인.
@@ -70,7 +70,7 @@
 - `modules/terrain/src/TerrainGrid.cpp`: KEEP — 확인 1–200, 201–400, 401–430; 남은 줄 없음. Load/LoadAsciiGrid(115,185)는 파일 형식·수·유효 숫자를 검사해 지형 값을 반환하고 Save(282)는 파일을 쓴다. HeightAtLocalMeters(353)는 쌍선형, HeightAtRenderedSurfaceMeters(367)는 메시 삼각형 보간으로 값이 다를 수 있다. FindTerrainCell은 범위·구조 오류를 던진다. HeightAt(315)은 행·열만 검사하므로 직접 구성한 높이 vector의 길이 계약에 주의.
 - `modules/terrain/src/TrainingRangeTerrain.cpp`: KEEP — 확인 1–53; 남은 줄 없음. CreateTrainingRangeTerrain(8)은 101×101 높이 vector에 언덕·능선 값을 채우고 최솟값을 0으로 조정해 반환한다. 외부 입력·상태 없음. 시험 지형 소비자를 확인해 실제 사용 범위에 맞춰 유지.
 - `tests/simulation_core/CommandRecordingTests.cpp`: REMOVED — 명령 기록·재생 전용 시험이다. 제품 기능 삭제와 함께 삭제했으며, JSON 시나리오 시험은 유지한다.
-- `tests/simulation_core/FormationPlannerTests.cpp`: SIMPLIFY — 확인 1–140; 남은 줄 없음. 4대 V 회전 좌표(17)와 경로·Column 우회 및 V 복귀 프로필(32)을 검증한다. 고정 V 요구에 맞춰 전환 기대를 정리하되 4대 오프셋·경로 실패 안전 검사는 유지. 실행하지 않음.
+- `tests/flight_planning/FormationPlannerTests.cpp`: 편대 계획 시험 — 4대 V 배치와 좁은 경로 거부를 확인한다. 경로·대형 알고리즘을 바꿀 때 이 모듈과 함께 검증한다.
 - `tests/simulation_core/PhysicsWorldTests.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–888; 남은 줄 없음. 모터·제어·좌표계·지면·장애물·드론 충돌과 범위 오류를 확인한다(44,274,489,511,582,744,782). AirSim 접촉과 수명 변경 시 중요한 회귀 범위이며 고장 주입 시험은 기능 범위 결정 후 정리. 실행하지 않음.
 - `tests/simulation_core/QuadrotorModelTests.cpp`: KEEP — 확인 1–124; 남은 줄 없음. 제조사 표의 추정 계수와 X500 질량·관성·로터 배치(12,86)를 확인한다. 해당 모델을 유지할 때 물성 변경 검증에 필요. 실행하지 않음.
 - `tests/scenario/ScenarioRunnerTests.cpp` (당시 `tests/simulation_core`): SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1500, 1501–1688; 남은 줄 없음. 시나리오·카메라·물성·통신·4대 분산 조사·충돌 회피·저배터리와 재할당을 검사한다(160,762,1000,1250,1568). 16–256대 확장 및 재할당 기대는 제거 후보; 4대 조사·통신 단절의 미확정 처리·복귀·충돌 안전 시험은 요구에 맞게 보존. 실행하지 않음.

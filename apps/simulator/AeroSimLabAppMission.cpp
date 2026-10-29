@@ -641,6 +641,7 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
 bool AeroSimLabApp::StartFleetRally()
 {
     using namespace aerosimlab::simulation;
+    using namespace aerosimlab::flight_planning;
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
     if (droneIds.empty() || fleetLeaderId_ == 0U
         || std::any_of(droneIds.begin(), droneIds.end(), [this](DroneId droneId)
@@ -1142,6 +1143,7 @@ void AeroSimLabApp::FailCompleteFleetMission(const std::string& reason)
 bool AeroSimLabApp::StartFormationTransit()
 {
     using namespace aerosimlab::simulation;
+    using namespace aerosimlab::flight_planning;
 
     if (formationTransit_.active || inspectionTargets_.empty()
         || InspectionMissionIsActive())
@@ -1636,6 +1638,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
 void AeroSimLabApp::AdvanceFormationTransit()
 {
     using namespace aerosimlab::simulation;
+    using namespace aerosimlab::flight_planning;
     if (!formationTransit_.active)
         return;
 

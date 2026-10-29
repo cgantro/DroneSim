@@ -4,13 +4,14 @@
 
 ## 구조 한눈에 보기
 
-DroneSim은 여러 정적 라이브러리를 CMake로 묶은 한 프로그램이다. 모듈 간 순환 참조는 찾지 못했다. 시뮬레이션 상태와 비행 계산은 `simulation_core`, JSON 시험 입력과 실행은 `scenario`, 지도 자료와 경로는 `terrain`, 화면 그리기는 `graphics`, 통신은 `communication`, 프로그램 조립과 임무 진행은 `apps/simulator`가 맡는다.
+DroneSim은 여러 정적 라이브러리를 CMake로 묶은 한 프로그램이다. 모듈 간 순환 참조는 찾지 못했다. 시뮬레이션 상태와 비행 계산은 `simulation_core`, 편대 배치와 편대가 통과할 경로는 `flight_planning`, JSON 시험 입력과 실행은 `scenario`, 지도 자료와 경로는 `terrain`, 화면 그리기는 `graphics`, 통신은 `communication`, 프로그램 조립과 임무 진행은 `apps/simulator`가 맡는다.
 
 ```text
 apps/headless ──▶ scenario ──▶ simulation_core ──▶ terrain
 apps/simulator ──▶ graphics
       ├─────────▶ communication ──▶ simulation_core
       ├─────────▶ manual_control ─▶ simulation_core
+      └─────────▶ flight_planning ─▶ terrain
       └─────────▶ simulation_core
 지상통제 클라이언트 ──▶ communication
 vision ──▶ sensor
@@ -22,7 +23,8 @@ vision ──▶ sensor
 
 | 영역 | 현재 책임 | 검토 결과 |
 |---|---|---|
-| `simulation_core` | 드론 상태·제어·고정 Tick·AirSim 연동·배터리·카메라·편대 | 비행 모의 핵심을 맡는다. Flecs·AirSim 경계와 별도 저장 자료는 추가 정리가 남았다. |
+| `simulation_core` | 드론 상태·제어·고정 Tick·AirSim 연동·배터리·카메라·충돌 | 비행 모의 핵심을 맡는다. Flecs·AirSim 경계와 별도 저장 자료는 추가 정리가 남았다. |
+| `flight_planning` | 편대 위치 계산·편대 폭을 고려한 이동 경로 요청 | Simulation Core와 독립된 계산으로 분리했다. 지형 모듈에 의존하며 화면 앱과 시험에서 사용한다. |
 | `scenario` | JSON 시험 입력 검사·시뮬레이션 실행·결과 요약 | 자동 시험 책임을 코어에서 분리했다. `simulation_core`에 한 방향으로 의존한다. |
 | `terrain` | 높이 격자·좌표 변환·건물/도로/나무/물/교량 읽기·비행 경로 | 실제 지도 자료와 경로 기능이 함께 있다. 현재 앱 경로에 사용되므로 기능별 호출처 확인 없이 쪼개지 않는다. |
 | `graphics` | 창·카메라·셰이더·메시·GLB·화면 출력 | 화면 기반 모듈로 책임은 대체로 맞다. GLB 로더 진입점이 둘이고 내부 파서가 공개 헤더로 노출된 점은 정리 후보다. |
@@ -33,7 +35,7 @@ vision ──▶ sensor
 | `media` | 삭제됨 | 사용자가 라이브 영상 전송도 제거하도록 요청했다. 화면 패널 표시는 그래픽스 안에서 직접 처리한다. |
 | 앱 | 창·GUI·임무·환경 연결·텔레메트리 표시 | 프로그램 연결을 맡는 위치다. 다만 임무와 상태가 한 앱 클래스에 모여 있어 찾아가기 어렵다. |
 
-주요 빌드 경계는 `CMakeLists.txt`의 모듈 선언에 있다. `scenario`는 JSON 입력을 검사하고 Simulation Core를 실행한다. JSON 라이브러리는 시나리오와 통신 프로토콜에서 쓰며, `simulation_core`의 컴파일 항목과 의존성에서는 빠졌다. `communication`은 `DroneCommand` 등 Simulation Core 타입을, `manual_control`은 `FlightMode`를 직접 사용하므로 공개 의존성을 둔다. 이 두 모듈을 독립 제품처럼 재사용할 요구가 없어 변환 계층은 추가하지 않았다.
+주요 빌드 경계는 `CMakeLists.txt`의 모듈 선언에 있다. `scenario`는 JSON 입력을 검사하고 Simulation Core를 실행한다. `flight_planning`은 편대 배치와 편대 폭을 반영한 경로 요청을 계산하며, `simulation_core`를 참조하지 않는다. JSON 라이브러리는 시나리오와 통신 프로토콜에서 쓰며, `simulation_core`의 컴파일 항목과 의존성에서는 빠졌다. `communication`은 `DroneCommand` 등 Simulation Core 타입을, `manual_control`은 `FlightMode`를 직접 사용하므로 공개 의존성을 둔다. 이 두 모듈을 독립 제품처럼 재사용할 요구가 없어 변환 계층은 추가하지 않았다.
 
 ## Flecs와 비행 상태
 
@@ -100,6 +102,7 @@ TrainingRangeScene 배치 목록
 - 그래픽스 시험의 include 경로에서 이전 `modules/graphics/src/graphics` 경로를 제거했다.
 - JSON 시나리오 실행기와 점검 입력 파서는 `scenario` 모듈로 옮겼다. 전용 시험도 별도 실행 파일로 빌드한다. 앱 HUD에서 쓰지 않던 시나리오 헤더 포함도 제거했다.
 - `simulation_core`에서 시나리오 실행과 JSON 파싱을 떼어 냈다. 통신 구현에 있던 사용하지 않는 시나리오 헤더 의존도 제거했다.
+- 편대 위치·통과 경로 계산을 `flight_planning`으로 옮겼다. 구현과 헤더가 Simulation Core에 의존하지 않으므로 코어 타깃에서 빼고, 시뮬레이터와 편대 시험이 새 모듈을 직접 사용하게 했다. 알고리즘 동작은 이번 변경에서 바꾸지 않았다.
 
 ## 우선 정리 순서
 

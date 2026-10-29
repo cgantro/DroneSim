@@ -148,3 +148,10 @@
 - 관련 CTest 3/3 통과: `Simulation.SimulationCoreTests.CoreScenarios`, `Scenario.ScenarioRunnerTests.CoreScenarios`, `HeadlessFormationOutageSmoke`.
 - 코드·시나리오·시험·headless 결과에서 `InspectionSurface`, `CaptureAssessment`, `inspection_surface`, `inspection_occluders`, `max_capture_retries` 참조가 남지 않은 것을 검색으로 확인했다.
 - 전체 CTest, 웹 빌드·브라우저 실행은 확인하지 않았다.
+
+## 편대 경로 계산 모듈 분리 — 2026-10-29
+
+- `FormationPlanner` 구현·공개 헤더·시험을 `flight_planning` 경계로 옮기고, `simulation_core` 타깃의 소스 목록에서 제거했다.
+- Release 빌드 성공: `aerosimlab_simulation_tests`, `aerosimlab_headless`, `aerosimlab_simulator`.
+- 관련 CTest 5/5 통과: SimulationCore, 두 편대 계획 시험, SimulatorSession, ViewerSmoke.
+- 전체 CTest와 웹 빌드·브라우저 실행은 확인하지 않았다.

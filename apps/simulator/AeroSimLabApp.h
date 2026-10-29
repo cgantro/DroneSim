@@ -9,7 +9,7 @@
 #include "manual_control/GamepadCommandMapper.h"
 #include "sensor/RgbFrame.h"
 #include "simulation_core/EoCameraModel.h"
-#include "simulation_core/FormationPlanner.h"
+#include "flight_planning/FormationPlanner.h"
 #include "terrain/MapBuildings.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
@@ -485,7 +485,7 @@ private:
         telemetryAtGroundControl_;
     struct FormationTransitState
     {
-        aerosimlab::simulation::FormationRoutePlan route;
+        aerosimlab::flight_planning::FormationRoutePlan route;
         std::size_t waypointIndex = 0;
         std::uint32_t nextMessageSequence = 1;
         std::map<aerosimlab::simulation::DroneId, glm::dvec3> sentFollowerTargets;
