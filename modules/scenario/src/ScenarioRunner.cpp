@@ -1135,7 +1135,7 @@ void CheckExpectedResults(
         result.mission->coveragePercent = totalWaypointCount == 0 ? 0.0
             : 100.0 * static_cast<double>(visitedWaypointCount)
                 / static_cast<double>(totalWaypointCount);
-        result.mission->passed = std::all_of(
+        const bool allTasksCompleted = std::all_of(
             result.mission->tasks.begin(), result.mission->tasks.end(),
             [](const ScenarioResult::MissionTask& task) { return task.completed; });
         const bool hasFailedTask = std::any_of(
@@ -1143,7 +1143,7 @@ void CheckExpectedResults(
             [](const ScenarioResult::MissionTask& task) { return task.failed; });
         result.mission->outcome = hasFailedTask
             ? ScenarioResult::Outcome::Failed
-            : result.mission->passed
+            : allTasksCompleted
                 ? ScenarioResult::Outcome::Passed
                 : ScenarioResult::Outcome::Inconclusive;
     }
@@ -1157,7 +1157,6 @@ void CheckExpectedResults(
         result.outcome = result.mission->outcome;
     else
         result.outcome = ScenarioResult::Outcome::Passed;
-    result.passed = result.outcome == ScenarioResult::Outcome::Passed;
 }
 }
 

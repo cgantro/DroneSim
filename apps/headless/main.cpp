@@ -119,7 +119,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
         }
         mission = {{"name", result.mission->name},
             {"outcome", aerosimlab::scenario::ToString(result.mission->outcome)},
-            {"passed", result.mission->passed},
+            {"passed", result.mission->IsPassed()},
             {"completed_task_count", result.mission->completedTaskCount},
             {"task_count", result.mission->tasks.size()},
             {"completion_percent", result.mission->completionPercent},
@@ -183,7 +183,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
 
     return {
         {"outcome", aerosimlab::scenario::ToString(result.outcome)},
-        {"passed", result.passed},
+        {"passed", result.IsPassed()},
         {"tick_count", result.tickCount},
         {"simulation_time_seconds", result.simulationTimeSeconds},
         {"wind_velocity_meters_per_second", result.windVelocityMetersPerSecond
@@ -248,7 +248,7 @@ int main(int argc, char** argv)
             std::istreambuf_iterator<char>{}};
         const auto result = aerosimlab::scenario::RunScenario(jsonText);
         std::cout << ToJson(result).dump(2) << '\n';
-        return result.passed ? 0 : 1;
+        return result.IsPassed() ? 0 : 1;
     }
     catch (const std::exception& error)
     {

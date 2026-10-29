@@ -52,7 +52,7 @@ void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
         ReadScenarioFixture("scenarios/flight/physical-model-override.json");
     const ScenarioResult result = RunScenario(customModelScenario);
     EXPECT_TRUE(result.trajectory.empty());
-    ASSERT_TRUE(result.passed)
+    ASSERT_TRUE(result.IsPassed())
         << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_TRUE(result.physicalModel.has_value());
     EXPECT_TRUE(result.physicalModel->customized);
@@ -71,7 +71,7 @@ void Verify_ScenarioRunner_UsesAndReportsPhysicalModelOverrides()
     customModelScenario.replace(customModelScenario.find(customMass),
         customMass.size(), baselineMass);
     const ScenarioResult baselineResult = RunScenario(customModelScenario);
-    ASSERT_TRUE(baselineResult.passed)
+    ASSERT_TRUE(baselineResult.IsPassed())
         << (baselineResult.issues.empty() ? "" : baselineResult.issues.front());
     const auto meanMotorSpeed = [](const DroneState& state)
     {
@@ -104,7 +104,7 @@ void Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories()
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
-    ASSERT_TRUE(result.passed);
+    ASSERT_TRUE(result.IsPassed());
     ASSERT_EQ(result.trajectory.size(), 4);
     EXPECT_EQ(result.trajectory[0].tick, 0U);
     EXPECT_DOUBLE_EQ(result.trajectory[0].timeSeconds, 0.0);
@@ -144,7 +144,7 @@ void Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone()
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
-    ASSERT_TRUE(result.passed)
+    ASSERT_TRUE(result.IsPassed())
         << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_EQ(result.drones.size(), 2U);
     EXPECT_EQ(result.drones[0].name, "east");
@@ -190,7 +190,7 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
     )json";
 
     const ScenarioResult result = RunScenario(source);
-    ASSERT_TRUE(result.passed)
+    ASSERT_TRUE(result.IsPassed())
         << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_TRUE(result.mission.has_value());
     ASSERT_EQ(result.mission->tasks.size(), 2U);
@@ -233,7 +233,7 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
-    ASSERT_TRUE(result.passed)
+    ASSERT_TRUE(result.IsPassed())
         << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_EQ(result.trajectory.size(), 3);
     const DroneState& initial = result.trajectory.front().drones.front().second;
@@ -339,7 +339,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     };
 
     const ScenarioResult estimatedStartResult = RunScenario(fixtureText);
-    ASSERT_TRUE(estimatedStartResult.passed);
+    ASSERT_TRUE(estimatedStartResult.IsPassed());
     ASSERT_EQ(estimatedStartResult.trajectory.size(), reference.size());
     const std::array<double, 5> estimatedStartRmse = calculateRmse(
         reference, estimatedStartResult);
@@ -348,7 +348,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     zeroStartScenario["drones"][0]["initial_motor_speeds_radians_per_second"] =
         {0.0, 0.0, 0.0, 0.0};
     const ScenarioResult zeroStartResult = RunScenario(zeroStartScenario.dump());
-    ASSERT_TRUE(zeroStartResult.passed);
+    ASSERT_TRUE(zeroStartResult.IsPassed());
     ASSERT_EQ(zeroStartResult.trajectory.size(), reference.size());
     const std::array<double, 5> zeroStartRmse = calculateRmse(
         reference, zeroStartResult);
@@ -361,7 +361,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
                 .at("thrust_coefficient_newtons_per_speed_squared").get<double>();
     const ScenarioResult increasedThrustResult =
         RunScenario(increasedThrustScenario.dump());
-    ASSERT_TRUE(increasedThrustResult.passed);
+    ASSERT_TRUE(increasedThrustResult.IsPassed());
     ASSERT_EQ(increasedThrustResult.trajectory.size(), reference.size());
     const std::array<double, 5> increasedThrustRmse = calculateRmse(
         reference, increasedThrustResult);
@@ -383,7 +383,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
         "tests/data/px4_x500_position_replay_2026_10_16_100s.json"));
     const Json& recentReference = recentFlightFixture.at("reference_samples");
     const ScenarioResult recentFlightResult = RunScenario(recentFlightFixture.dump());
-    ASSERT_TRUE(recentFlightResult.passed);
+    ASSERT_TRUE(recentFlightResult.IsPassed());
     ASSERT_EQ(recentFlightResult.trajectory.size(), recentReference.size());
     const std::array<double, 5> recentFlightRmse = calculateRmse(
         recentReference, recentFlightResult);
@@ -400,7 +400,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
         freeFlightScenario["drones"][0]["initial_position_meters"][2].get<double>()
         + 100.0;
     const ScenarioResult freeFlightResult = RunScenario(freeFlightScenario.dump());
-    ASSERT_TRUE(freeFlightResult.passed);
+    ASSERT_TRUE(freeFlightResult.IsPassed());
     ASSERT_EQ(freeFlightResult.trajectory.size(), recentReference.size());
     const std::array<double, 5> freeFlightRmse = calculateRmse(
         recentReference, freeFlightResult);
@@ -425,7 +425,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
             ["thrust_coefficient_newtons_per_speed_squared"].get<double>();
     const ScenarioResult increasedThrustRecentResult =
         RunScenario(increasedThrustRecentScenario.dump());
-    ASSERT_TRUE(increasedThrustRecentResult.passed);
+    ASSERT_TRUE(increasedThrustRecentResult.IsPassed());
     ASSERT_EQ(increasedThrustRecentResult.trajectory.size(), recentReference.size());
     const std::array<double, 5> increasedThrustRecentRmse = calculateRmse(
         recentReference, increasedThrustRecentResult);
@@ -442,7 +442,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
         {0.24, 0.24, 0.0}, {-0.24, -0.24, 0.0}};
     const ScenarioResult px4GeometryRecentResult =
         RunScenario(px4GeometryRecentScenario.dump());
-    ASSERT_TRUE(px4GeometryRecentResult.passed);
+    ASSERT_TRUE(px4GeometryRecentResult.IsPassed());
     ASSERT_EQ(px4GeometryRecentResult.trajectory.size(), recentReference.size());
     const std::array<double, 5> px4GeometryRecentRmse = calculateRmse(
         recentReference, px4GeometryRecentResult);
@@ -457,7 +457,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
         {0.0, 0.0, 0.0, 0.0};
     const ScenarioResult zeroSpeedRecentResult =
         RunScenario(zeroSpeedRecentScenario.dump());
-    ASSERT_TRUE(zeroSpeedRecentResult.passed);
+    ASSERT_TRUE(zeroSpeedRecentResult.IsPassed());
     ASSERT_EQ(zeroSpeedRecentResult.trajectory.size(), recentReference.size());
     const std::array<double, 5> zeroSpeedRecentRmse = calculateRmse(
         recentReference, zeroSpeedRecentResult);
@@ -489,7 +489,7 @@ void Verify_ScenarioRunner_RecordsPx4ReferenceErrorsAcrossModelVariants()
     }
     const ScenarioResult motorTableRecentResult =
         RunScenario(motorTableRecentScenario.dump());
-    ASSERT_TRUE(motorTableRecentResult.passed);
+    ASSERT_TRUE(motorTableRecentResult.IsPassed());
     ASSERT_EQ(motorTableRecentResult.trajectory.size(), recentReference.size());
     const std::array<double, 5> motorTableRecentRmse = calculateRmse(
         recentReference, motorTableRecentResult);
@@ -531,9 +531,9 @@ void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
     const ScenarioResult lowGain = RunScenario(lowGainScenario);
     const ScenarioResult highGain = RunScenario(highGainScenario);
     const ScenarioResult explicitDefault = RunScenario(defaultGainScenario);
-    ASSERT_TRUE(lowGain.passed)
+    ASSERT_TRUE(lowGain.IsPassed())
         << (lowGain.issues.empty() ? "" : lowGain.issues.front());
-    ASSERT_TRUE(highGain.passed)
+    ASSERT_TRUE(highGain.IsPassed())
         << (highGain.issues.empty() ? "" : highGain.issues.front());
     const std::string customGainBlock =
         "     \"controller_gains\":{\"position\":3.0,\"velocity\":2.5,\n"
@@ -591,7 +591,7 @@ void Verify_ScenarioRunner_AccountsForFlightAndHoverPower()
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
-    ASSERT_TRUE(result.passed);
+    ASSERT_TRUE(result.IsPassed());
     ASSERT_EQ(result.drones.size(), 2U);
     for (const auto& drone : result.drones)
     {
@@ -631,8 +631,8 @@ void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
 
     const ScenarioResult calm = RunScenario(calmScenario);
     const ScenarioResult wind = RunScenario(windScenario);
-    ASSERT_TRUE(calm.passed);
-    ASSERT_TRUE(wind.passed);
+    ASSERT_TRUE(calm.IsPassed());
+    ASSERT_TRUE(wind.IsPassed());
     ASSERT_TRUE(calm.windVelocityMetersPerSecond == std::nullopt);
     ASSERT_EQ(wind.windVelocityMetersPerSecond, (glm::dvec3{2.0, 0.0, 0.0}));
     EXPECT_GT(std::abs(wind.finalState.positionMeters.x
@@ -643,12 +643,12 @@ void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
 {
     const ScenarioResult result = RunScenario(
         ReadScenarioFixture("scenarios/multi-drone/four-drone-survey-outage.json"));
-    EXPECT_FALSE(result.passed);
+    EXPECT_FALSE(result.IsPassed());
     ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
     EXPECT_GE(*result.minimumDroneSeparationMeters, 2.0);
     EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Inconclusive);
     ASSERT_TRUE(result.mission.has_value());
-    EXPECT_FALSE(result.mission->passed);
+    EXPECT_FALSE(result.mission->IsPassed());
     EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Inconclusive);
     EXPECT_EQ(result.mission->completedTaskCount, 3U);
     ASSERT_TRUE(result.mission->startedTick.has_value());
@@ -706,7 +706,7 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommands()
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
-    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    EXPECT_TRUE(result.IsPassed()) << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_EQ(result.drones.size(), 2);
     EXPECT_EQ(result.drones[0].name, "lead");
     EXPECT_EQ(result.drones[1].name, "scout");
@@ -730,7 +730,7 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommands()
     std::string unsafeScenario{scenario};
     unsafeScenario.replace(unsafeScenario.find("9.9"), 3, "10.1");
     const ScenarioResult unsafeResult = RunScenario(unsafeScenario);
-    EXPECT_FALSE(unsafeResult.passed);
+    EXPECT_FALSE(unsafeResult.IsPassed());
     ASSERT_EQ(unsafeResult.issues.size(), 1);
     EXPECT_NE(unsafeResult.issues.front().find("최소 거리"), std::string::npos);
 
@@ -740,7 +740,7 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommands()
     wrongOrientationScenario.replace(
         wrongOrientationScenario.find(expectedOrientation), expectedOrientation.size(), "1,0,0,0");
     const ScenarioResult wrongOrientationResult = RunScenario(wrongOrientationScenario);
-    EXPECT_FALSE(wrongOrientationResult.passed);
+    EXPECT_FALSE(wrongOrientationResult.IsPassed());
     ASSERT_EQ(wrongOrientationResult.issues.size(), 1);
     EXPECT_NE(wrongOrientationResult.issues.front().find("최종 자세"), std::string::npos);
 
@@ -763,7 +763,7 @@ void Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones()
     )json";
 
     const ScenarioResult result = RunScenario(scenario);
-    EXPECT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
+    EXPECT_TRUE(result.IsPassed()) << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
     EXPECT_DOUBLE_EQ(*result.minimumDroneSeparationMeters, 2.0);
 }
@@ -794,9 +794,9 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     const ScenarioResult result = RunScenario(scenario);
     ASSERT_TRUE(result.mission.has_value());
     EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Inconclusive);
-    EXPECT_FALSE(result.passed);
+    EXPECT_FALSE(result.IsPassed());
     EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Inconclusive);
-    EXPECT_FALSE(result.mission->passed);
+    EXPECT_FALSE(result.mission->IsPassed());
     ASSERT_EQ(result.mission->tasks.size(), 2U);
     for (const ScenarioResult::MissionTask& task : result.mission->tasks)
     {
@@ -831,7 +831,7 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     ASSERT_TRUE(failedResult.mission.has_value());
     EXPECT_EQ(failedResult.outcome, ScenarioResult::Outcome::Failed);
     EXPECT_EQ(failedResult.mission->outcome, ScenarioResult::Outcome::Failed);
-    EXPECT_FALSE(failedResult.passed);
+    EXPECT_FALSE(failedResult.IsPassed());
     EXPECT_FALSE(failedResult.issues.empty());
 }
 
@@ -860,9 +860,9 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
        {"name":"survey-4","mode":"hovering","position_meters":[12,8,1.5]}]}}
     )json";
     const ScenarioResult areaResult = RunScenario(dividedSurveyScenario);
-    ASSERT_TRUE(areaResult.passed) << (areaResult.issues.empty() ? "" : areaResult.issues.front());
+    ASSERT_TRUE(areaResult.IsPassed()) << (areaResult.issues.empty() ? "" : areaResult.issues.front());
     ASSERT_TRUE(areaResult.mission.has_value());
-    EXPECT_TRUE(areaResult.mission->passed);
+    EXPECT_TRUE(areaResult.mission->IsPassed());
     EXPECT_DOUBLE_EQ(areaResult.mission->coveragePercent, 100.0);
     ASSERT_EQ(areaResult.mission->tasks.size(), 4);
     for (std::size_t index = 0; index < areaResult.mission->tasks.size(); ++index)
@@ -896,12 +896,12 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
          {"name":"east","mode":"hovering","position_meters":[-4,0,1.5]}]}}
     )json";
     const ScenarioResult avoidanceResult = RunScenario(collisionAvoidanceScenario);
-    EXPECT_TRUE(avoidanceResult.passed)
+    EXPECT_TRUE(avoidanceResult.IsPassed())
         << (avoidanceResult.issues.empty() ? "" : avoidanceResult.issues.front())
         << " minimum=" << avoidanceResult.minimumDroneSeparationMeters.value_or(-1.0)
         << " avoidance_events=" << avoidanceResult.collisionAvoidanceEvents;
     ASSERT_TRUE(avoidanceResult.mission.has_value());
-    EXPECT_TRUE(avoidanceResult.mission->passed);
+    EXPECT_TRUE(avoidanceResult.mission->IsPassed());
     EXPECT_GT(avoidanceResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(avoidanceResult.minimumDroneSeparationMeters.has_value());
     EXPECT_GE(*avoidanceResult.minimumDroneSeparationMeters, 2.5);
@@ -935,14 +935,14 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
          {"name":"support","mode":"hovering","position_meters":[21,0,1.5]}]}}
     )json";
     const ScenarioResult stationaryDroneResult = RunScenario(stationaryDroneScenario);
-    EXPECT_TRUE(stationaryDroneResult.passed)
+    EXPECT_TRUE(stationaryDroneResult.IsPassed())
         << (stationaryDroneResult.issues.empty()
             ? "" : stationaryDroneResult.issues.front())
         << " minimum="
         << stationaryDroneResult.minimumDroneSeparationMeters.value_or(-1.0)
         << " avoidance_events=" << stationaryDroneResult.collisionAvoidanceEvents;
     ASSERT_TRUE(stationaryDroneResult.mission.has_value());
-    EXPECT_TRUE(stationaryDroneResult.mission->passed);
+    EXPECT_TRUE(stationaryDroneResult.mission->IsPassed());
     EXPECT_EQ(stationaryDroneResult.mission->completedTaskCount, 2U);
     EXPECT_GT(stationaryDroneResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(stationaryDroneResult.minimumDroneSeparationMeters.has_value());
@@ -985,7 +985,7 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
         "\"initial_position_meters\":[4,0,0]",
         "\"initial_position_meters\":[8,0,0]"));
     const ScenarioResult physicalAvoidanceResult = RunScenario(physicalAvoidanceScenario);
-    ASSERT_TRUE(physicalAvoidanceResult.passed)
+    ASSERT_TRUE(physicalAvoidanceResult.IsPassed())
         << (physicalAvoidanceResult.issues.empty()
             ? "" : physicalAvoidanceResult.issues.front())
         << " minimum="
@@ -1000,7 +1000,7 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
         << " mission=" << (physicalAvoidanceResult.mission.has_value()
             ? static_cast<int>(physicalAvoidanceResult.mission->outcome) : -1);
     ASSERT_TRUE(physicalAvoidanceResult.mission.has_value());
-    EXPECT_TRUE(physicalAvoidanceResult.mission->passed);
+    EXPECT_TRUE(physicalAvoidanceResult.mission->IsPassed());
     EXPECT_EQ(physicalAvoidanceResult.mission->completedTaskCount, 2U);
     EXPECT_GT(physicalAvoidanceResult.collisionAvoidanceEvents, 0U);
     ASSERT_TRUE(physicalAvoidanceResult.minimumDroneSeparationMeters.has_value());
@@ -1010,7 +1010,7 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
 
     const ScenarioResult energyResult = RunScenario(ReadScenarioFixture(
         "scenarios/multi-drone/low-battery-return.json"));
-    EXPECT_FALSE(energyResult.passed);
+    EXPECT_FALSE(energyResult.IsPassed());
     ASSERT_TRUE(energyResult.mission.has_value());
     EXPECT_EQ(energyResult.mission->outcome, ScenarioResult::Outcome::Failed);
     ASSERT_EQ(energyResult.mission->tasks.size(), 2U);

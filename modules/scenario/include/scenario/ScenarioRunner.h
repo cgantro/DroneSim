@@ -22,8 +22,8 @@ struct ScenarioResult
     /** @brief 모든 기준을 만족하면 Passed, 명시적 오류면 Failed, 근거가 부족하면 Inconclusive다. */
     enum class Outcome { Passed, Failed, Inconclusive };
     Outcome outcome = Outcome::Inconclusive;
-    /** @brief outcome이 Passed일 때만 true다. */
-    bool passed = false;
+    /** @brief 결과 상태가 Passed인지 확인한다. */
+    [[nodiscard]] bool IsPassed() const noexcept { return outcome == Outcome::Passed; }
     std::uint64_t tickCount = 0;
     double simulationTimeSeconds = 0.0;
     /** @brief 시나리오에서 강체 물리에 적용한 ENU 기준 바람 속도다. */
@@ -123,8 +123,8 @@ struct ScenarioResult
     {
         std::string name;
         Outcome outcome = Outcome::Inconclusive;
-        /** @brief 모든 작업이 완료됐을 때만 true다. 실패와 미확정은 outcome으로 나눈다. */
-        bool passed = false;
+        /** @brief 모든 작업이 완료됐는지 확인한다. 실패와 미확정은 outcome에 남는다. */
+        [[nodiscard]] bool IsPassed() const noexcept { return outcome == Outcome::Passed; }
         /** @brief 완료한 작업 수와 전체 작업 중 완료한 비율이다. */
         std::size_t completedTaskCount = 0;
         double completionPercent = 0.0;

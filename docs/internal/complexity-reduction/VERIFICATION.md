@@ -318,3 +318,8 @@
 - `Scenario.ScenarioRunnerTests.CoreScenarios`와 `HeadlessCommunicationOutageSmoke` 2/2 통과.
 - 전체 CTest 28/28 통과. 직접 통신 단절 시험에서 scout 상태가 `stale`로 표시되고, 기준 위치·비행 결과 기대값도 통과했다.
 - CTest가 확인한 것은 JSON Runner 동작이다. 앱 가상망과 네이티브 시뮬레이터의 통신 장애 화면은 이번 변경에서 수정하거나 별도 실행하지 않았다.
+
+## 시나리오 결과 상태 정리 — 2026-10-29
+
+- 제거한 `passed` 저장 필드를 사용하는 곳이 남지 않았는지 앱·모듈·시험에서 검색했다. C++ 호출부는 `IsPassed()`를 쓰고, headless 결과 JSON의 기존 `passed` 항목은 그대로 출력한다.
+- Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
