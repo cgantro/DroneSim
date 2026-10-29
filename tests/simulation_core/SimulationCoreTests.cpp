@@ -174,6 +174,20 @@ void Verify_SimulationCore_ExecutesTakeoffMovementAndLandingOnFixedTicks()
 
 void Verify_KinematicDroneStopsAtStaticBuildings()
 {
+    SimulationCore boxObstacle{SimulationDynamics::Kinematic};
+    const DroneId boxObstacleDrone = boxObstacle.PrimaryDroneId();
+    DroneState boxStart;
+    boxStart.positionMeters = {0.0, 0.0, 2.0};
+    boxStart.velocityMetersPerSecond = {5.0, 0.0, 0.0};
+    boxStart.mode = FlightMode::Flying;
+    boxObstacle.SetInitialState(boxObstacleDrone, boxStart);
+    boxObstacle.AddStaticObstacleBox({1.0, 0.0, 2.0}, {0.1F, 1.0F, 1.0F});
+    for (int tick = 0; tick < 60; ++tick)
+        boxObstacle.AdvanceOneTick();
+    EXPECT_LE(boxObstacle.State(boxObstacleDrone).positionMeters.x, 0.600001);
+    EXPECT_DOUBLE_EQ(
+        boxObstacle.State(boxObstacleDrone).velocityMetersPerSecond.x, 0.0);
+
     SimulationCore simulation{SimulationDynamics::Kinematic};
     const DroneId droneId = simulation.PrimaryDroneId();
     DroneState start;

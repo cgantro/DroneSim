@@ -195,88 +195,105 @@ struct SimulationCore::EcsStorage
         DroneState& state, DroneControlState& control,
         const glm::dvec3& previousPosition) const
     {
+        KeepInsideTerrainBounds(state, control);
+        ResolveTerrainContact(state, control);
+        ResolveObstacleBoxes(state, control, previousPosition);
+        ResolveObstaclePrisms(state, control);
+        ResolveObstacleFootprints(state, control);
+    }
+
+    void KeepInsideTerrainBounds(
+        DroneState& state, DroneControlState& control) const
+    {
+        if (!terrainGrid)
+            return;
+
         constexpr double droneHalfWidthMeters = 0.30;
-        constexpr glm::dvec3 droneHalfExtentsMeters{
-            droneHalfWidthMeters, droneHalfWidthMeters, 0.12};
-        if (terrainGrid)
+        const double maximumCenterX = std::max(
+            0.0, terrainGrid->HalfWidthMeters() - droneHalfWidthMeters);
+        const double maximumCenterY = std::max(
+            0.0, terrainGrid->HalfDepthMeters() - droneHalfWidthMeters);
+        const auto clampAxis = [](
+            double& position, double maximum, double& velocity, double& targetVelocity)
         {
-            const double halfWidth = terrainGrid->HalfWidthMeters();
-            const double halfDepth = terrainGrid->HalfDepthMeters();
-            const double maximumCenterX = std::max(
-                0.0, halfWidth - droneHalfWidthMeters);
-            const double maximumCenterY = std::max(
-                0.0, halfDepth - droneHalfWidthMeters);
-            const auto keepInsideTerrain = [](
-                double& position, double maximum, double& velocity, double& targetVelocity)
+            if (position > maximum)
             {
-                if (position > maximum)
-                {
-                    position = maximum;
-                    if (velocity > 0.0)
-                        velocity = 0.0;
-                    if (targetVelocity > 0.0)
-                        targetVelocity = 0.0;
-                }
-                else if (position < -maximum)
-                {
-                    position = -maximum;
-                    if (velocity < 0.0)
-                        velocity = 0.0;
-                    if (targetVelocity < 0.0)
-                        targetVelocity = 0.0;
-                }
-            };
-            keepInsideTerrain(state.positionMeters.x, maximumCenterX,
-                state.velocityMetersPerSecond.x,
-                control.targetVelocityMetersPerSecond.x);
-            keepInsideTerrain(state.positionMeters.y, maximumCenterY,
-                state.velocityMetersPerSecond.y,
-                control.targetVelocityMetersPerSecond.y);
-        }
+                position = maximum;
+                if (velocity > 0.0)
+                    velocity = 0.0;
+                if (targetVelocity > 0.0)
+                    targetVelocity = 0.0;
+            }
+            else if (position < -maximum)
+            {
+                position = -maximum;
+                if (velocity < 0.0)
+                    velocity = 0.0;
+                if (targetVelocity < 0.0)
+                    targetVelocity = 0.0;
+            }
+        };
+        clampAxis(state.positionMeters.x, maximumCenterX,
+            state.velocityMetersPerSecond.x,
+            control.targetVelocityMetersPerSecond.x);
+        clampAxis(state.positionMeters.y, maximumCenterY,
+            state.velocityMetersPerSecond.y,
+            control.targetVelocityMetersPerSecond.y);
+    }
 
-        if (terrainGrid
-            && terrainGrid->ContainsLocalPositionMeters(
+    void ResolveTerrainContact(
+        DroneState& state, DroneControlState& control) const
+    {
+        if (!terrainGrid || !terrainGrid->ContainsLocalPositionMeters(
                 {state.positionMeters.x, state.positionMeters.y}))
+            return;
+
+        constexpr double droneHalfWidthMeters = 0.30;
+        constexpr double droneHalfHeightMeters = 0.12;
+        const glm::dvec2 dronePosition{state.positionMeters.x, state.positionMeters.y};
+        control.groundElevationMeters = terrainGrid->HeightAtLocalMeters(dronePosition);
+
+        double highestGroundMeters = control.groundElevationMeters;
+        // 기체 네 모서리의 지면도 확인해 경사면이 동체를 뚫고 지나가지 않게 한다.
+        constexpr glm::dvec2 footprintOffsets[] = {
+            {-droneHalfWidthMeters, -droneHalfWidthMeters},
+            {-droneHalfWidthMeters, droneHalfWidthMeters},
+            {droneHalfWidthMeters, -droneHalfWidthMeters},
+            {droneHalfWidthMeters, droneHalfWidthMeters}};
+        for (const glm::dvec2& offset : footprintOffsets)
         {
-            const glm::dvec2 dronePosition{state.positionMeters.x, state.positionMeters.y};
-            control.groundElevationMeters = terrainGrid->HeightAtLocalMeters(dronePosition);
-
-            double highestGroundMeters = control.groundElevationMeters;
-            // 기체 네 모서리의 지면도 확인해 경사면이 동체를 뚫고 지나가지 않게 한다.
-            constexpr glm::dvec2 footprintOffsets[] = {
-                {-droneHalfWidthMeters, -droneHalfWidthMeters},
-                {-droneHalfWidthMeters, droneHalfWidthMeters},
-                {droneHalfWidthMeters, -droneHalfWidthMeters},
-                {droneHalfWidthMeters, droneHalfWidthMeters}};
-            for (const glm::dvec2& offset : footprintOffsets)
-            {
-                const glm::dvec2 sample = dronePosition + offset;
-                if (terrainGrid->ContainsLocalPositionMeters(sample))
-                    highestGroundMeters = std::max(
-                        highestGroundMeters,
-                        static_cast<double>(terrainGrid->HeightAtLocalMeters(sample)));
-            }
-
-            const double minimumCenterHeightMeters =
-                highestGroundMeters + droneHalfExtentsMeters.z;
-            if (state.positionMeters.z < minimumCenterHeightMeters)
-            {
-                state.positionMeters.z = minimumCenterHeightMeters;
-                if (state.velocityMetersPerSecond.z < 0.0)
-                    state.velocityMetersPerSecond.z = 0.0;
-                if (control.targetVelocityMetersPerSecond.z < 0.0)
-                    control.targetVelocityMetersPerSecond.z = 0.0;
-                if (state.mode == FlightMode::Landing)
-                {
-                    // 충돌 형상이 지면에서 기체 중심을 띄우므로, 이 접촉을 착륙 완료로 본다.
-                    state.velocityMetersPerSecond = glm::dvec3{0.0};
-                    control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
-                    control.commandedYawRateRadiansPerSecond = 0.0;
-                    state.mode = FlightMode::Grounded;
-                }
-            }
+            const glm::dvec2 sample = dronePosition + offset;
+            if (terrainGrid->ContainsLocalPositionMeters(sample))
+                highestGroundMeters = std::max(
+                    highestGroundMeters,
+                    static_cast<double>(terrainGrid->HeightAtLocalMeters(sample)));
         }
 
+        const double minimumCenterHeightMeters =
+            highestGroundMeters + droneHalfHeightMeters;
+        if (state.positionMeters.z >= minimumCenterHeightMeters)
+            return;
+
+        state.positionMeters.z = minimumCenterHeightMeters;
+        if (state.velocityMetersPerSecond.z < 0.0)
+            state.velocityMetersPerSecond.z = 0.0;
+        if (control.targetVelocityMetersPerSecond.z < 0.0)
+            control.targetVelocityMetersPerSecond.z = 0.0;
+        if (state.mode == FlightMode::Landing)
+        {
+            // 충돌 형상이 지면에서 기체 중심을 띄우므로, 이 접촉을 착륙 완료로 본다.
+            state.velocityMetersPerSecond = glm::dvec3{0.0};
+            control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
+            control.commandedYawRateRadiansPerSecond = 0.0;
+            state.mode = FlightMode::Grounded;
+        }
+    }
+
+    void ResolveObstacleBoxes(
+        DroneState& state, DroneControlState& control,
+        const glm::dvec3& previousPosition) const
+    {
+        constexpr glm::dvec3 droneHalfExtentsMeters{0.30, 0.30, 0.12};
         for (const StaticObstacleBox& obstacle : kinematicObstacles)
         {
             const glm::dvec3 offset = state.positionMeters - obstacle.centerMeters;
@@ -306,14 +323,18 @@ struct SimulationCore::EcsStorage
             if (control.targetVelocityMetersPerSecond[axis] * side < 0.0)
                 control.targetVelocityMetersPerSecond[axis] = 0.0;
         }
+    }
 
+    void ResolveObstaclePrisms(
+        DroneState& state, DroneControlState& control) const
+    {
+        constexpr double droneRadiusMeters = 0.4242640687119285;
+        constexpr double droneHalfHeightMeters = 0.12;
         for (const StaticObstaclePrism& obstacle : kinematicPrisms)
         {
-            constexpr double droneRadiusMeters = 0.4242640687119285;
             const auto contact = detail::FindPrismContact(
                 obstacle.outlineMeters, obstacle.bottomMeters, obstacle.topMeters,
-                state.positionMeters, droneRadiusMeters,
-                droneHalfExtentsMeters.z);
+                state.positionMeters, droneRadiusMeters, droneHalfHeightMeters);
             if (!contact)
                 continue;
 
@@ -325,18 +346,21 @@ struct SimulationCore::EcsStorage
                     state.velocityMetersPerSecond.z = 0.0;
                 if (control.targetVelocityMetersPerSecond.z * contact->normal.z < 0.0)
                     control.targetVelocityMetersPerSecond.z = 0.0;
+                continue;
             }
-            else
-            {
-                const glm::dvec2 normal{contact->normal.x, contact->normal.y};
-                ResolvePlanarObstacleContact(
-                    state, control, normal, contact->penetrationMeters);
-            }
-        }
 
+            const glm::dvec2 normal{contact->normal.x, contact->normal.y};
+            ResolvePlanarObstacleContact(
+                state, control, normal, contact->penetrationMeters);
+        }
+    }
+
+    void ResolveObstacleFootprints(
+        DroneState& state, DroneControlState& control) const
+    {
+        constexpr double droneRadiusMeters = 0.4242640687119285;
         for (const StaticObstacleFootprint& obstacle : kinematicFootprints)
         {
-            constexpr double droneRadiusMeters = 0.4242640687119285;
             const auto contact = detail::FindFootprintContact(
                 obstacle.outlineMeters,
                 {state.positionMeters.x, state.positionMeters.y}, droneRadiusMeters);
