@@ -401,3 +401,8 @@
 - 임무 명령 적용 때 앞선 작업을 매번 다시 검색하던 코드를 목록 한 번만 도는 방식으로 바꿨다. 각 드론은 앞 작업이 완료되거나 실패한 뒤 다음 작업을 처리한다.
 - 이름만 `duplicateMissionAssignment`였던 검사는 필수 경유점이 빠진 입력을 던져 실제 배정 규칙을 확인하지 못했다. 유효한 경로 두 개를 같은 드론에 지정해 차례로 끝내는 시험으로 바꾸었다.
 - Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 해당 시나리오 시험 2/2 및 전체 CTest 28/28 통과.
+
+## 충돌 회피의 임무 검색 통합 — 2026-10-30
+
+- 진행 중인 작업을 찾는 조건을 공통 함수로 모았다. 드론 쌍의 위험 계산과 회피 명령 적용이 같은 작업 기준을 사용한다.
+- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.

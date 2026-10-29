@@ -503,6 +503,20 @@ glm::dvec3 PositionBeyondConflict(
     return conflictPosition + glm::normalize(forward) * clearanceMeters;
 }
 
+/** @brief 드론이 맡아 진행 중인 첫 임무 작업을 찾는다. */
+const ScenarioResult::MissionTask* FindActiveMissionTask(
+    const ScenarioResult::Mission& mission,
+    std::string_view droneName)
+{
+    const auto task = std::find_if(mission.tasks.begin(), mission.tasks.end(),
+        [droneName](const ScenarioResult::MissionTask& candidate)
+        {
+            return candidate.droneName == droneName && candidate.started
+                && !candidate.IsCompleted() && !candidate.failed;
+        });
+    return task == mission.tasks.end() ? nullptr : &*task;
+}
+
 void UpdateCollisionAvoidance(
     std::uint64_t tick,
     const ScenarioDefinition& definition,
@@ -525,26 +539,18 @@ void UpdateCollisionAvoidance(
     {
         const std::string& firstName = definition.drones[firstIndex].name;
         const bool firstConnected = IsConnected(observations, firstName);
-        const auto firstTask = std::find_if(mission->tasks.begin(), mission->tasks.end(),
-            [firstConnected, &firstName](const ScenarioResult::MissionTask& task)
-            {
-                return firstConnected && task.droneName == firstName && task.started
-                    && !task.IsCompleted() && !task.failed;
-            });
-        const bool firstHasTask = firstTask != mission->tasks.end()
+        const ScenarioResult::MissionTask* firstTask = firstConnected
+            ? FindActiveMissionTask(*mission, firstName) : nullptr;
+        const bool firstHasTask = firstTask != nullptr
             && CanReceiveWaypoint(simulation.State(droneIds.at(firstName)).mode);
         for (std::size_t secondIndex = firstIndex + 1;
             secondIndex < definition.drones.size(); ++secondIndex)
         {
             const std::string& secondName = definition.drones[secondIndex].name;
             const bool secondConnected = IsConnected(observations, secondName);
-            const auto secondTask = std::find_if(mission->tasks.begin(), mission->tasks.end(),
-                [secondConnected, &secondName](const ScenarioResult::MissionTask& task)
-                {
-                    return secondConnected && task.droneName == secondName && task.started
-                        && !task.IsCompleted() && !task.failed;
-                });
-            const bool secondHasTask = secondTask != mission->tasks.end()
+            const ScenarioResult::MissionTask* secondTask = secondConnected
+                ? FindActiveMissionTask(*mission, secondName) : nullptr;
+            const bool secondHasTask = secondTask != nullptr
                 && CanReceiveWaypoint(simulation.State(droneIds.at(secondName)).mode);
             const bool bothDronesHaveTasks = firstConnected && secondConnected
                 && firstHasTask && secondHasTask;
@@ -589,10 +595,10 @@ void UpdateCollisionAvoidance(
             const glm::dvec3 relativePosition =
                 secondState.positionMeters - firstState.positionMeters;
             const glm::dvec3 firstVelocityIntent = MissionVelocityIntent(
-                firstState, firstHasTask ? &*firstTask : nullptr, definition,
+                firstState, firstTask, definition,
                 activeAvoidanceTargets, true);
             const glm::dvec3 secondVelocityIntent = MissionVelocityIntent(
-                secondState, secondHasTask ? &*secondTask : nullptr, definition,
+                secondState, secondTask, definition,
                 activeAvoidanceTargets, true);
             const PredictedApproach intendedPath = PredictClosestApproach(
                 firstState.positionMeters, firstVelocityIntent,
@@ -602,10 +608,10 @@ void UpdateCollisionAvoidance(
                 secondVelocityIntent - firstVelocityIntent;
             const double predictedDistance = intendedPath.distanceMeters;
             const glm::dvec3 firstRouteVelocity = MissionVelocityIntent(
-                firstState, firstHasTask ? &*firstTask : nullptr, definition,
+                firstState, firstTask, definition,
                 activeAvoidanceTargets, false);
             const glm::dvec3 secondRouteVelocity = MissionVelocityIntent(
-                secondState, secondHasTask ? &*secondTask : nullptr, definition,
+                secondState, secondTask, definition,
                 activeAvoidanceTargets, false);
             const PredictedApproach routeContinuation = PredictClosestApproach(
                 firstState.positionMeters, firstRouteVelocity,
@@ -695,13 +701,7 @@ void UpdateCollisionAvoidance(
 
     for (const std::string& droneName : currentlyAvoiding)
     {
-        const auto task = std::find_if(mission->tasks.begin(), mission->tasks.end(),
-            [&droneName](const ScenarioResult::MissionTask& candidate)
-            {
-                return candidate.droneName == droneName && candidate.started
-                    && !candidate.IsCompleted() && !candidate.failed;
-            });
-        if (task == mission->tasks.end())
+        if (!FindActiveMissionTask(*mission, droneName))
             continue;
 
         // 충돌 지점을 지나서 비켜서도록 목표를 잡고, 위험이 끝날 때까지 유지한다.
