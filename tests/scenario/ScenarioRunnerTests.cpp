@@ -156,7 +156,6 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
     EXPECT_TRUE(result.mission->tasks[0].IsCompleted());
     EXPECT_TRUE(result.mission->tasks[1].IsCompleted());
     EXPECT_EQ(result.mission->CompletedTaskCount(), 2U);
-    EXPECT_DOUBLE_EQ(result.mission->CompletionPercent(), 100.0);
     EXPECT_TRUE(result.mission->CompletedTick().has_value());
     EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Active);
     EXPECT_EQ(result.drones[0].finalCamera.model.imageWidthPixels, 1280);

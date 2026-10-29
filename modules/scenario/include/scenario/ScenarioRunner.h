@@ -135,13 +135,6 @@ struct ScenarioResult
             }
             return count;
         }
-        /** @brief 완료한 작업의 비율을 백분율로 돌려준다. */
-        [[nodiscard]] double CompletionPercent() const noexcept
-        {
-            return tasks.empty() ? 0.0
-                : 100.0 * static_cast<double>(CompletedTaskCount())
-                    / static_cast<double>(tasks.size());
-        }
         /** @brief 방문한 경유점 비율을 작업별 진행 상태에서 계산한다. */
         [[nodiscard]] double WaypointProgressPercent() const noexcept
         {

@@ -116,10 +116,8 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
         }
         mission = {{"name", result.mission->name},
             {"outcome", aerosimlab::scenario::ToString(result.mission->GetOutcome())},
-            {"passed", result.mission->IsPassed()},
             {"completed_task_count", result.mission->CompletedTaskCount()},
             {"task_count", result.mission->tasks.size()},
-            {"completion_percent", result.mission->CompletionPercent()},
             {"waypoint_progress_percent", result.mission->WaypointProgressPercent()},
             {"started_tick", result.mission->startedTick},
             {"completed_tick", completedTick},
@@ -180,7 +178,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
 
     return {
         {"outcome", aerosimlab::scenario::ToString(result.outcome)},
-        {"passed", result.IsPassed()},
         {"tick_count", result.tickCount},
         {"simulation_time_seconds", result.simulationTimeSeconds},
         {"wind_velocity_meters_per_second", result.windVelocityMetersPerSecond

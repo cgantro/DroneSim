@@ -500,3 +500,8 @@
 - Windows Release headless·시나리오 시험 빌드 성공, 전체 CTest 28/28 통과.
 - 두 지점 headless 실행에서 `outcome: passed`, `waypoint_progress_percent: 100` 확인.
 - 기존의 모호한 `coverage_percent` 출력은 제거했다.
+
+## headless 결과 중복 항목 정리 — 2026-10-30
+
+- Windows Release headless·시나리오 시험 빌드 성공, 전체 CTest 28/28 통과.
+- 두 지점 headless 실행 결과에서 `outcome: passed`, 완료 작업 수 `2/2`를 확인했다. 최상위·임무별 `passed`와 `completion_percent` 항목은 출력하지 않는다.

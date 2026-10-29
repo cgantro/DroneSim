@@ -427,3 +427,8 @@
 
 - 결과값은 실제 영상·표면 촬영 범위가 아니라 방문한 경유점 비율이었다. 계산은 유지하고 메서드와 headless JSON 항목을 `waypoint_progress_percent`로 바꿨다.
 - Windows Release 빌드, 전체 CTest 28/28, 두 지점 headless 임무의 진행률 100% 확인.
+
+## headless 결과 중복 항목 정리 — 2026-10-30
+
+- `outcome`과 같은 뜻인 `passed` 출력, 작업 수에서 계산할 수 있는 완료율 출력과 전용 메서드를 제거했다. 경유점 진행률과 완료 작업 수는 남겼다.
+- Windows Release 빌드, 전체 CTest 28/28, headless 결과의 새 형식을 확인했다.
