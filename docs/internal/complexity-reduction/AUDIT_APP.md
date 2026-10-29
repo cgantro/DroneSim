@@ -4,6 +4,14 @@
 
 기준: d6515b6e와 당시 미커밋 변경을 포함한 작업 트리, INVENTORY.tsv의 owner=app 32개. 이 기록의 초기 로컬 녹화 관련 평가는 2026-10-29 사용자 요청으로 뒤집혔다. 카메라 파일 녹화·저장은 제거하고 라이브 EO 화면은 유지한다. 아래 파일별 조사 내용은 당시 코드 기준이며 이후 변경은 CHECKPOINT와 VERIFICATION에서 확인한다.
 
+## 현재 작업 트리 대조 — 2026-10-29
+
+현재 `apps/`에는 28개 파일이 있다. 위 표는 이전 감사 시점의 32개 목록이므로 삭제된 항목을 포함하며, 현재 목록과 섞어 읽지 않는다. 이번 시나리오 재검토에서 다시 확인한 앱 경계는 다음과 같다.
+
+- `apps/headless/main.cpp`는 JSON 파일을 읽어 `scenario::RunScenario`를 실행하고 결과를 JSON으로 출력한다.
+- `apps/simulator/AeroSimLabAppMission.cpp`는 화면 시뮬레이터의 편대·정찰·복귀 임무를 직접 진행한다. JSON Runner를 호출하지 않는다.
+- 따라서 시나리오 자동 시험은 headless 경로를 검증하며, 화면에서 수행하는 앱 임무를 대신 검증하지 않는다. 앱 시험은 기존 `tests/simulator/SimulatorSessionTests.cpp` 및 Viewer 실행 경로를 별도로 확인해야 한다.
+
 | 경로 | 판단 | 확인된 입출력·호출·상태/오류·중복 또는 범위 판단 |
 |---|---|---|
 | apps/simulator/AeroSimLabApp.cpp | SIMPLIFY | 생성자 178, 그래픽 초기화 271–350, 지형/시설 361–438, 4대 생성 441–466, tick 498, RenderFrame 678, 카메라 941/982. 자산과 simulation을 받아 렌더링·상태에 연결하고 unique_ptr로 그래픽 객체 소유. 미션·네트워크·웹 분기를 목표에 맞게 축소. CreateTerrainMesh 120–153은 격자 수 2 이상에 의존하므로 생산자 불변식 확인 필요. |
