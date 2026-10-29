@@ -908,11 +908,12 @@ void SimulationCore::AdvanceOneTick()
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->AdvancePhysicsWorld();
 #endif
-    for (auto& [droneId, drone] : ecs_->drones)
-    {
-        if (drone.has<BatteryModel>())
-            drone.get_mut<BatteryModel>().Advance(State(droneId).mode);
-    }
+    // 배터리 컴포넌트가 붙은 드론만 골라, 물리 계산 뒤의 비행 상태로 잔량을 갱신한다.
+    ecs_->world.each(
+        [](BatteryModel& battery, const DroneState& state)
+        {
+            battery.Advance(state.mode);
+        });
     ++ecs_->tickCount;
     ecs_->SynchronizeCameraPose();
 }

@@ -180,3 +180,10 @@
 - 네 대 정찰 시험에서 점검면 조건을 없앴다. 시험은 임무 완료, 카메라가 꺼져도 비행 임무가 진행되는 동작, 중복 구역 ID와 잘못된 카메라 설정 거부를 확인한다.
 - Release에서 시뮬레이션 시험, 시나리오 시험, headless 실행기와 simulator 앱을 빌드했다. 관련 CTest 3/3 통과: SimulationCore, ScenarioRunner, HeadlessFormationOutageSmoke. 전체 CTest와 웹 브라우저는 확인하지 않았다.
 - 남은 큰 작업: `SimulationCore` 내부 책임과 Flecs 컴포넌트·별도 맵 저장 방식을 소비자 기준으로 다시 살핀다. 자동 임무 재배정은 이번 변경에 포함하지 않았다.
+
+## 배터리 컴포넌트 갱신을 Flecs 조회로 통일 — 2026-10-29
+
+- `AdvanceOneTick()`은 드론 ID 맵을 순회하며 배터리 유무를 검사하지 않는다. `BatteryModel`과 `DroneState`가 함께 붙은 엔티티만 Flecs 조회로 찾아 잔량을 갱신한다.
+- 갱신 시점은 기존과 같이 물리 계산 뒤다. 따라서 배터리는 해당 Tick의 비행 상태를 반영한다.
+- Windows Release에서 시뮬레이션 시험 실행 파일을 빌드했고, 시뮬레이션·편대·물리 관련 CTest 6/6 통과.
+- 다음 확인: 드론 ID→엔티티 맵이 외부 `DroneId` API에 필요한지 살핀다. 모든 자료를 ECS로 옮기지는 않는다.

@@ -174,3 +174,9 @@
 - Release에서 시뮬레이터와 관련 시험 타깃을 연결했다.
 - 전체 CTest 29/29 통과. 첫 실행에서 `GroundControlClientTests.CoreScenarios`가 접근 위반을 냈다. 통신 코드는 바꾸지 않고 시험 실행 파일을 다시 빌드한 뒤 전체 시험을 재실행해 통과했고, 해당 시험을 10회 반복해 모두 통과했다. 처음 실패한 빌드 산출물의 정확한 원인은 확인하지 못했다.
 - 웹 셸의 두 인라인 JavaScript 구간은 Node 구문 검사에서 통과했다. Emscripten 빌드와 브라우저 동작은 확인하지 않았다.
+
+## 배터리 ECS 조회 정리 — 2026-10-29
+
+- Release 빌드 성공: `aerosimlab_simulation_tests`.
+- CTest 6/6 통과: SimulationCore, 편대 배치와 좁은 경로, 기체 모델, 지형 격자, PhysicsWorld.
+- 전체 CTest와 웹 빌드는 이번 변경에서 실행하지 않았다.
