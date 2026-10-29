@@ -31,22 +31,40 @@ using detail::CollisionAvoidanceSettings;
 using detail::EnergyModelSettings;
 using detail::TickCommand;
 using detail::DroneCommunicationOutage;
-using DroneIds = std::unordered_map<std::string, DroneId>;
-using DroneHomePositions = std::unordered_map<std::string, glm::dvec3>;
 using DroneCommunicationStatus = ScenarioResult::Drone::CommunicationStatus;
 
+struct DroneObservation
+{
+    DroneCommunicationStatus status = DroneCommunicationStatus::Connected;
+    std::uint64_t lastHeartbeatTick = 0;
+    DroneState lastKnownState;
+    std::optional<double> lastKnownBatteryPercent;
+};
+
+struct ScenarioDroneRuntime
+{
+    DroneId id{};
+    glm::dvec3 homePositionMeters{0.0};
+    DroneObservation observation;
+    glm::dvec3 previousPositionMeters{0.0};
+    double flightDistanceMeters = 0.0;
+    double flightTimeSeconds = 0.0;
+};
+
+using ScenarioDrones = std::unordered_map<std::string, ScenarioDroneRuntime>;
+
 void RecordTrajectorySample(const ScenarioDefinition& definition,
-    const SimulationCore& simulation, const DroneIds& droneIds,
+    const SimulationCore& simulation, const ScenarioDrones& drones,
     std::uint64_t tick, ScenarioResult& result)
 {
     ScenarioResult::TrajectorySample sample;
     sample.tick = tick;
     sample.timeSeconds = static_cast<double>(tick) * DroneModel::fixedStepSeconds;
-    sample.drones.reserve(droneIds.size());
+    sample.drones.reserve(drones.size());
 
     const auto addDrone = [&](const std::string& name)
     {
-        sample.drones.emplace_back(name, simulation.State(droneIds.at(name)));
+        sample.drones.emplace_back(name, simulation.State(drones.at(name).id));
     };
     if (definition.drones.empty())
         addDrone(definition.primaryDroneName);
@@ -57,15 +75,6 @@ void RecordTrajectorySample(const ScenarioDefinition& definition,
     result.trajectory.push_back(std::move(sample));
 }
 
-struct DroneObservation
-{
-    DroneCommunicationStatus status = DroneCommunicationStatus::Connected;
-    std::uint64_t lastHeartbeatTick = 0;
-    DroneState lastKnownState;
-    std::optional<double> lastKnownBatteryPercent;
-};
-
-using DroneObservations = std::unordered_map<std::string, DroneObservation>;
 using DroneNameSet = std::unordered_set<std::string>;
 
 bool CanReceiveWaypoint(FlightMode mode) noexcept
@@ -79,14 +88,14 @@ void UpdateEnergyPolicy(
     std::uint64_t tick,
     std::optional<ScenarioResult::Mission>& mission,
     SimulationCore& simulation,
-    const DroneIds& droneIds,
-    const DroneHomePositions& homePositions,
+    const ScenarioDrones& drones,
     const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
     const auto handleDrone = [&](const std::string& droneName)
     {
-        const DroneId droneId = droneIds.at(droneName);
+        const ScenarioDroneRuntime& drone = drones.at(droneName);
+        const DroneId droneId = drone.id;
         BatteryModel& energy = simulation.Battery(droneId);
         if (!energy.IsReturningForLowBattery())
         {
@@ -114,7 +123,7 @@ void UpdateEnergyPolicy(
         if (!CanReceiveWaypoint(state.mode))
             return;
 
-        const glm::dvec3& returnPosition = homePositions.at(droneName);
+        const glm::dvec3& returnPosition = drone.homePositionMeters;
         if (glm::distance(state.positionMeters, returnPosition) <= 0.2)
         {
             const CommandResult landResult = simulation.Apply(droneId,
@@ -140,9 +149,10 @@ void UpdateEnergyPolicy(
         handleDrone(drone.name);
 }
 
-bool IsConnected(const DroneObservations& observations, const std::string& droneName)
+bool IsConnected(const ScenarioDrones& drones, const std::string& droneName)
 {
-    return observations.at(droneName).status == DroneCommunicationStatus::Connected;
+    return drones.at(droneName).observation.status
+        == DroneCommunicationStatus::Connected;
 }
 
 const glm::dvec3& CurrentWaypoint(const ScenarioResult::MissionTask& task)
@@ -168,14 +178,14 @@ void UpdateDroneObservations(
     std::uint64_t tick,
     const ScenarioDefinition& definition,
     SimulationCore& simulation,
-    const DroneIds& droneIds,
-    DroneObservations& observations,
+    ScenarioDrones& drones,
     ScenarioResult& result)
 {
     const auto updateDrone = [&](const std::string& droneName)
     {
-        const DroneId droneId = droneIds.at(droneName);
-        DroneObservation& observation = observations.at(droneName);
+        ScenarioDroneRuntime& drone = drones.at(droneName);
+        const DroneId droneId = drone.id;
+        DroneObservation& observation = drone.observation;
         const DroneCommunicationOutage* outage = FindActiveCommunicationOutage(
             tick, droneName, definition.communicationOutages);
         if (outage == nullptr)
@@ -228,17 +238,17 @@ void UpdateDroneObservations(
  * @brief 시나리오에서 사용할 이름과 실제 드론 번호를 연결한다.
  * @details 드론 목록이 있으면 SimulationCore가 미리 만든 기본 드론을 지우고 목록을 구성한다.
  */
-DroneIds CreateScenarioDrones(
+ScenarioDrones CreateScenarioDrones(
     const ScenarioDefinition& definition,
     SimulationCore& simulation)
 {
-    DroneIds droneIds;
+    ScenarioDrones drones;
     if (definition.drones.empty())
     {
         const DroneId id = simulation.PrimaryDroneId();
         simulation.SetCameraModel(id, definition.defaultCameraModel);
-        droneIds.emplace(definition.primaryDroneName, id);
-        return droneIds;
+        drones.emplace(definition.primaryDroneName, ScenarioDroneRuntime{id});
+        return drones;
     }
 
     const DroneId unusedDefaultDrone = simulation.PrimaryDroneId();
@@ -248,14 +258,14 @@ DroneIds CreateScenarioDrones(
             drone.initialState.positionMeters, drone.initialState.yawRadians);
         simulation.SetCameraModel(
             id, drone.cameraModel.value_or(definition.defaultCameraModel));
-        droneIds.emplace(drone.name, id);
+        drones.emplace(drone.name, ScenarioDroneRuntime{id});
         if (drone.hasExtendedInitialState)
             simulation.SetInitialState(id, drone.initialState);
     }
 
     if (!simulation.RemoveDrone(unusedDefaultDrone))
         throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
-    return droneIds;
+    return drones;
 }
 
 double OrientationErrorRadians(
@@ -270,7 +280,7 @@ double OrientationErrorRadians(
 void RecordMinimumDroneSeparation(
     const ScenarioDefinition& definition,
     const SimulationCore& simulation,
-    const DroneIds& droneIds,
+    const ScenarioDrones& drones,
     std::vector<glm::dvec3>& positionsMeters,
     ScenarioResult& result)
 {
@@ -281,7 +291,7 @@ void RecordMinimumDroneSeparation(
     for (const ScenarioDrone& drone : definition.drones)
     {
         positionsMeters.push_back(
-            simulation.State(droneIds.at(drone.name)).positionMeters);
+            simulation.State(drones.at(drone.name).id).positionMeters);
     }
 
     std::optional<double> minimumDistanceSquaredMeters;
@@ -315,15 +325,14 @@ void ApplyScheduledCommands(
     std::uint64_t tick,
     const std::vector<TickCommand>& commands,
     SimulationCore& simulation,
-    const DroneIds& droneIds,
-    const DroneObservations& observations,
+    const ScenarioDrones& drones,
     std::size_t& nextCommand,
     ScenarioResult& result)
 {
     while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
     {
         const TickCommand& command = commands[nextCommand++];
-        if (!IsConnected(observations, command.droneName))
+        if (!IsConnected(drones, command.droneName))
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + command.droneName
@@ -331,7 +340,7 @@ void ApplyScheduledCommands(
             continue;
         }
 
-        if (simulation.Apply(droneIds.at(command.droneName), command.command)
+        if (simulation.Apply(drones.at(command.droneName).id, command.command)
             != CommandResult::Accepted)
         {
             result.issues.push_back("tick " + std::to_string(tick) + "에서 "
@@ -344,8 +353,7 @@ void UpdateMissionCommands(
     std::uint64_t tick,
     std::optional<ScenarioResult::Mission>& mission,
     SimulationCore& simulation,
-    const DroneIds& droneIds,
-    const DroneObservations& observations,
+    const ScenarioDrones& drones,
     ScenarioResult& result)
 {
     if (!mission)
@@ -359,10 +367,10 @@ void UpdateMissionCommands(
             continue;
         if (!dronesWithPendingTask.insert(task.droneName).second)
             continue;
-        if (tick < task.startTick || !IsConnected(observations, task.droneName))
+        if (tick < task.startTick || !IsConnected(drones, task.droneName))
             continue;
 
-        const DroneId droneId = droneIds.at(task.droneName);
+        const DroneId droneId = drones.at(task.droneName).id;
         const FlightMode mode = simulation.State(droneId).mode;
         if (!CanReceiveWaypoint(mode))
         {
@@ -522,8 +530,7 @@ void UpdateCollisionAvoidance(
     const ScenarioDefinition& definition,
     std::optional<ScenarioResult::Mission>& mission,
     SimulationCore& simulation,
-    const DroneIds& droneIds,
-    const DroneObservations& observations,
+    const ScenarioDrones& drones,
     DroneNameSet& dronesAvoiding,
     std::unordered_map<std::string, glm::dvec3>& activeAvoidanceDirections,
     std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
@@ -541,11 +548,11 @@ void UpdateCollisionAvoidance(
     activeTasks.reserve(definition.drones.size());
     for (const ScenarioDrone& drone : definition.drones)
     {
-        const bool connected = IsConnected(observations, drone.name);
+        const bool connected = IsConnected(drones, drone.name);
         droneConnected.push_back(connected);
         const ScenarioResult::MissionTask* task = connected
             ? FindActiveMissionTask(*mission, drone.name) : nullptr;
-        if (task && !CanReceiveWaypoint(simulation.State(droneIds.at(drone.name)).mode))
+        if (task && !CanReceiveWaypoint(simulation.State(drones.at(drone.name).id).mode))
             task = nullptr;
         activeTasks.push_back(task);
     }
@@ -593,8 +600,8 @@ void UpdateCollisionAvoidance(
                                                 bool connected)
             {
                 if (connected)
-                    return simulation.State(droneIds.at(droneName));
-                DroneState state = observations.at(droneName).lastKnownState;
+                    return simulation.State(drones.at(droneName).id);
+                DroneState state = drones.at(droneName).observation.lastKnownState;
                 // 통신이 오래 끊긴 뒤에는 예전 속도로 현재 위치를 외삽할 수 없다.
                 // 마지막으로 확인한 위치를 정지 장애물로 보고 회피 경로를 계산한다.
                 state.velocityMetersPerSecond = glm::dvec3{0.0};
@@ -719,7 +726,7 @@ void UpdateCollisionAvoidance(
         // 충돌 지점을 지나서 비켜서도록 목표를 잡고, 위험이 끝날 때까지 유지한다.
         const auto avoidanceTarget = activeAvoidanceTargets.try_emplace(
             droneName, avoidanceTargets.at(droneName)).first;
-        const CommandResult commandResult = simulation.Apply(droneIds.at(droneName),
+        const CommandResult commandResult = simulation.Apply(drones.at(droneName).id,
             {DroneCommand::Kind::SetWaypoint, avoidanceTarget->second});
         if (commandResult != CommandResult::Accepted)
         {
@@ -759,8 +766,7 @@ void UpdateMissionResults(
     std::uint64_t tick,
     std::optional<ScenarioResult::Mission>& mission,
     const SimulationCore& simulation,
-    const DroneIds& droneIds,
-    const DroneObservations& observations,
+    const ScenarioDrones& drones,
     ScenarioResult& result)
 {
     if (!mission)
@@ -769,10 +775,10 @@ void UpdateMissionResults(
     for (ScenarioResult::MissionTask& task : mission->tasks)
     {
         if (!task.started || task.IsCompleted() || task.failed
-            || task.droneName.empty() || !IsConnected(observations, task.droneName))
+            || task.droneName.empty() || !IsConnected(drones, task.droneName))
             continue;
 
-        const DroneId droneId = droneIds.at(task.droneName);
+        const DroneId droneId = drones.at(task.droneName).id;
         const glm::dvec3 distance = simulation.State(droneId).positionMeters
             - CurrentWaypoint(task);
         const bool reachedWaypoint = glm::length(distance) <= task.toleranceMeters;
@@ -802,10 +808,7 @@ void UpdateMissionResults(
 void PopulateFinalSnapshot(
     const ScenarioDefinition& definition,
     const SimulationCore& simulation,
-    const DroneIds& droneIds,
-    const DroneObservations& observations,
-    const std::unordered_map<std::string, double>& flightDistancesMeters,
-    const std::unordered_map<std::string, double>& flightTimesSeconds,
+    const ScenarioDrones& drones,
     ScenarioResult& result)
 {
     result.tickCount = simulation.TickCount();
@@ -833,17 +836,18 @@ void PopulateFinalSnapshot(
     }
     const auto appendDrone = [&](const std::string& droneName)
     {
-        const DroneObservation& observation = observations.at(droneName);
+        const ScenarioDroneRuntime& runtime = drones.at(droneName);
+        const DroneObservation& observation = runtime.observation;
         ScenarioResult::Drone drone{
             droneName, observation.lastKnownState,
             observation.status, observation.lastHeartbeatTick};
-        drone.finalCamera = simulation.Camera(droneIds.at(droneName));
-        drone.flightDistanceMeters = flightDistancesMeters.at(droneName);
-        drone.flightTimeSeconds = flightTimesSeconds.at(droneName);
+        drone.finalCamera = simulation.Camera(runtime.id);
+        drone.flightDistanceMeters = runtime.flightDistanceMeters;
+        drone.flightTimeSeconds = runtime.flightTimeSeconds;
         drone.reportedBatteryPercent = observation.lastKnownBatteryPercent;
-        if (simulation.HasBattery(droneIds.at(droneName)))
+        if (simulation.HasBattery(runtime.id))
         {
-            const BatteryModel& battery = simulation.Battery(droneIds.at(droneName));
+            const BatteryModel& battery = simulation.Battery(runtime.id);
             drone.batteryCapacityWattHours = battery.CapacityWattHours();
             drone.energyConsumedWattHours = battery.ConsumedWattHours();
             drone.batteryRemainingWattHours = battery.RemainingWattHours();
@@ -991,23 +995,16 @@ ScenarioResult RunScenario(std::string_view jsonText)
     if (definition.windVelocity)
         simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
 
-    DroneIds droneIds = CreateScenarioDrones(definition, simulation);
-    DroneHomePositions homePositions;
-    DroneObservations observations;
-    std::unordered_map<std::string, glm::dvec3> previousPositions;
-    std::unordered_map<std::string, double> flightDistancesMeters;
-    std::unordered_map<std::string, double> flightTimesSeconds;
-    for (const auto& [droneName, droneId] : droneIds)
+    ScenarioDrones drones = CreateScenarioDrones(definition, simulation);
+    for (auto& [droneName, drone] : drones)
     {
-        glm::dvec3 homePosition = simulation.State(droneId).positionMeters;
-        if (simulation.State(droneId).mode == FlightMode::Grounded)
-            homePosition.z += DroneModel::takeoffHeightMeters;
-        homePositions.emplace(droneName, homePosition);
-        observations.emplace(droneName, DroneObservation{
-            DroneCommunicationStatus::Connected, 0, simulation.State(droneId)});
-        previousPositions.emplace(droneName, simulation.State(droneId).positionMeters);
-        flightDistancesMeters.emplace(droneName, 0.0);
-        flightTimesSeconds.emplace(droneName, 0.0);
+        const DroneState& initialState = simulation.State(drone.id);
+        drone.homePositionMeters = initialState.positionMeters;
+        if (initialState.mode == FlightMode::Grounded)
+            drone.homePositionMeters.z += DroneModel::takeoffHeightMeters;
+        drone.observation = DroneObservation{
+            DroneCommunicationStatus::Connected, 0, initialState};
+        drone.previousPositionMeters = initialState.positionMeters;
     }
     if (definition.energyModel)
     {
@@ -1019,9 +1016,9 @@ ScenarioResult RunScenario(std::string_view jsonText)
             BatteryModelParameters parameters = *definition.energyModel;
             if (scenarioDrone && scenarioDrone->batteryCapacityWattHours)
                 parameters.capacityWattHours = *scenarioDrone->batteryCapacityWattHours;
-            const DroneId droneId = droneIds.at(droneName);
+            const DroneId droneId = drones.at(droneName).id;
             simulation.ConfigureBattery(droneId, parameters, initialPercent);
-            observations.at(droneName).lastKnownBatteryPercent =
+            drones.at(droneName).observation.lastKnownBatteryPercent =
                 simulation.Battery(droneId).RemainingPercent();
         };
         if (definition.drones.empty())
@@ -1054,67 +1051,64 @@ ScenarioResult RunScenario(std::string_view jsonText)
         dronePositionsMeters.reserve(definition.drones.size());
 
     RecordMinimumDroneSeparation(
-        definition, simulation, droneIds, dronePositionsMeters, result);
+        definition, simulation, drones, dronePositionsMeters, result);
     if (definition.trajectorySampleEveryTicks)
-        RecordTrajectorySample(definition, simulation, droneIds, 0, result);
+        RecordTrajectorySample(definition, simulation, drones, 0, result);
     for (std::uint64_t tick = 0; tick < tickCount; ++tick)
     {
-        UpdateDroneObservations(tick, definition, simulation, droneIds,
-            observations, result);
-        ApplyScheduledCommands(tick, definition.commands, simulation, droneIds,
-            observations, nextCommand, result);
+        UpdateDroneObservations(tick, definition, simulation, drones, result);
+        ApplyScheduledCommands(tick, definition.commands, simulation, drones,
+            nextCommand, result);
         if (definition.energyModel)
         {
             UpdateEnergyPolicy(tick, result.mission,
-                simulation, droneIds, homePositions, definition, result);
+                simulation, drones, definition, result);
         }
-        UpdateMissionCommands(tick, result.mission, simulation, droneIds,
-            observations, result);
+        UpdateMissionCommands(tick, result.mission, simulation, drones, result);
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
-            droneIds, observations, dronesAvoiding, activeAvoidanceDirections,
+            drones, dronesAvoiding, activeAvoidanceDirections,
             activeAvoidanceTargets, result);
-        for (const auto& [droneName, droneId] : droneIds)
+        for (auto& [droneName, drone] : drones)
         {
-            if (simulation.State(droneId).mode != FlightMode::Grounded)
-                flightTimesSeconds.at(droneName) += DroneModel::fixedStepSeconds;
+            if (simulation.State(drone.id).mode != FlightMode::Grounded)
+                drone.flightTimeSeconds += DroneModel::fixedStepSeconds;
         }
         simulation.AdvanceOneTick();
-        for (const auto& [droneName, droneId] : droneIds)
+        for (auto& [droneName, drone] : drones)
         {
             const glm::dvec3& currentPosition =
-                simulation.State(droneId).positionMeters;
-            flightDistancesMeters.at(droneName) += glm::distance(
-                previousPositions.at(droneName), currentPosition);
-            previousPositions.at(droneName) = currentPosition;
+                simulation.State(drone.id).positionMeters;
+            drone.flightDistanceMeters += glm::distance(
+                drone.previousPositionMeters, currentPosition);
+            drone.previousPositionMeters = currentPosition;
         }
         RecordMinimumDroneSeparation(
-            definition, simulation, droneIds, dronePositionsMeters, result);
+            definition, simulation, drones, dronePositionsMeters, result);
         UpdateMissionResults(tick, result.mission,
-            simulation, droneIds, observations, result);
+            simulation, drones, result);
         const std::uint64_t completedTick = tick + 1;
         if (definition.trajectorySampleEveryTicks
             && (completedTick % *definition.trajectorySampleEveryTicks == 0
                 || completedTick == tickCount))
         {
             RecordTrajectorySample(
-                definition, simulation, droneIds, completedTick, result);
+                definition, simulation, drones, completedTick, result);
         }
     }
 
-    for (const auto& [droneName, droneId] : droneIds)
+    for (auto& [droneName, drone] : drones)
     {
-        DroneObservation& observation = observations.at(droneName);
+        DroneObservation& observation = drone.observation;
         if (observation.status == DroneCommunicationStatus::Connected)
         {
-            observation.lastKnownState = simulation.State(droneId);
+            observation.lastKnownState = simulation.State(drone.id);
             observation.lastHeartbeatTick = tickCount;
-            if (simulation.HasBattery(droneId))
+            if (simulation.HasBattery(drone.id))
                 observation.lastKnownBatteryPercent =
-                    simulation.Battery(droneId).RemainingPercent();
+                    simulation.Battery(drone.id).RemainingPercent();
         }
     }
-    PopulateFinalSnapshot(definition, simulation, droneIds, observations,
-        flightDistancesMeters, flightTimesSeconds, result);
+    PopulateFinalSnapshot(definition, simulation, drones, result);
     CheckExpectedResults(definition, result);
     return result;
 }

@@ -411,3 +411,10 @@
 
 - 충돌 회피에서 드론 쌍을 검사할 때마다 연결 상태와 현재 임무를 다시 검색하던 처리를 없앴다. 회피 갱신 시작 때 드론별 정보를 한 번만 모아 쌍별 계산과 회피 명령에서 재사용한다.
 - Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+
+## 시나리오 드론별 실행 상태 통합 — 2026-10-30
+
+- 변경: `ScenarioRunner.cpp`의 드론별 ID, 귀환 위치, 관측 상태, 이전 위치, 비행 거리와 시간을 하나의 실행 상태 맵으로 통합했다.
+- 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
+- 시험: 전체 Release CTest 28/28 통과.
+- 범위: 시나리오 동작과 JSON 형식은 바꾸지 않았다. 웹 실행은 확인하지 않았다.
