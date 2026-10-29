@@ -558,11 +558,7 @@ private:
     };
     CompleteFleetMissionState completeFleetMission_;
     std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
-    communication::VirtualMeshMode fleetNetworkMode_ =
-        communication::VirtualMeshMode::Direct;
     std::vector<communication::RadioObstacle> formationRadioObstacles_;
-    float fleetPacketLossPercent_ = 0.0F;
-    std::uint32_t fleetLatencyJitterTicks_ = 0U;
     aerosimlab::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{

@@ -801,40 +801,7 @@ void AeroSimLabApp::RenderFrame()
             {
                 static_cast<void>(StartCompleteFleetMission());
             },
-            formationNetworkActive,
-            fleetPacketLossPercent_,
-            [this](float percentage)
-            {
-                fleetPacketLossPercent_ = percentage;
-                if (formationNetwork_)
-                    formationNetwork_->SetPacketLossProbability(
-                        static_cast<double>(percentage) / 100.0);
-            },
-            fleetLatencyJitterTicks_,
-            [this](std::uint32_t maximumExtraTicks)
-            {
-                fleetLatencyJitterTicks_ = static_cast<int>(maximumExtraTicks);
-                if (formationNetwork_)
-                    formationNetwork_->SetLinkLatencyJitterTicks(maximumExtraTicks);
-            },
             formationNetwork_.get(),
-            [this, formationNetworkActive](aerosimlab::simulation::DroneId first,
-                aerosimlab::simulation::DroneId second, bool disabled)
-            {
-                if (formationNetwork_ && formationNetworkActive)
-                {
-                    formationNetwork_->SetLinkDisabled(first, second, disabled);
-                }
-            },
-            [this, formationNetworkActive](aerosimlab::simulation::DroneId source,
-                aerosimlab::simulation::DroneId destination, bool disabled)
-            {
-                if (formationNetwork_ && formationNetworkActive)
-                {
-                    formationNetwork_->SetDirectedLinkDisabled(
-                        source, destination, disabled);
-                }
-            },
             [this, formationNetworkActive](aerosimlab::simulation::DroneId droneId,
                 bool enabled)
             {
@@ -842,15 +809,6 @@ void AeroSimLabApp::RenderFrame()
                 {
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
                 }
-            },
-            [this](aerosimlab::simulation::DroneId droneId, bool faulted)
-            {
-                simulation_.SetCameraFault(droneId, faulted);
-            },
-            [this](aerosimlab::simulation::DroneId droneId,
-                std::size_t rotorIndex, bool faulted)
-            {
-                simulation_.SetRotorMotorFault(droneId, rotorIndex, faulted);
             },
             recordingControls,
             [this](int width, int height) { return RenderScenePanel(width, height); },

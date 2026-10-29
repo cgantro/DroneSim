@@ -1231,15 +1231,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     telemetryAtGroundControl_.clear();
 
     communication::VirtualMeshSettings settings;
-    settings.mode = fleetNetworkMode_;
-    settings.leaderNodeId = fleetLeaderId_;
     settings.maximumLinkRangeMeters = 130.0;
-    settings.helloIntervalTicks = 15;
-    settings.neighborTimeoutTicks = 90;
-    settings.routeLifetimeTicks = 300;
-    settings.maximumHops = 5;
-    settings.packetLossProbability = static_cast<double>(fleetPacketLossPercent_) / 100.0;
-    settings.linkLatencyJitterTicks = fleetLatencyJitterTicks_;
     formationNetwork_ = std::make_unique<
         communication::VirtualMeshNetwork>(settings);
 
@@ -1320,7 +1312,7 @@ bool AeroSimLabApp::SendFleetRouteAssignment(
         return true;
     }
 
-    const auto messageId = formationNetwork_->SendReliable(fleetLeaderId_, droneId,
+    const auto messageId = formationNetwork_->Send(fleetLeaderId_, droneId,
         sequence, "fleet_route", payload);
     if (!messageId)
         return false;
@@ -1564,7 +1556,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     // 관제소는 각 기체에서 직접 받은 상태만 표시한다.
     for (const DroneId droneId : droneIds)
     {
-        if (!formationNetwork_->HasRecentNeighbor(droneId, groundControlNodeId))
+        if (!formationNetwork_->HasDirectLink(droneId, groundControlNodeId))
             continue;
         const auto lastSent = lastGroundControlTelemetrySentAtTick_.find(droneId);
         if (lastSent != lastGroundControlTelemetrySentAtTick_.end()
@@ -1576,7 +1568,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             ? 0U : static_cast<std::uint8_t>(mission->second.leg);
         const std::string status = mission == fleetReconnaissance_.end()
             ? std::string{} : mission->second.status;
-        if (formationNetwork_->SendLatest(droneId, groundControlNodeId,
+        if (formationNetwork_->Send(droneId, groundControlNodeId,
                 nextGroundControlTelemetrySequence_++, "ground_control_telemetry",
                 detail::EncodePeerTelemetry(state.positionMeters, state.mode,
                     leg, status, 0U, 0U)))
@@ -1601,7 +1593,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             ? 0U : mission->second.assignmentVersion;
         const std::uint64_t leaseExpiresAtTick = mission == fleetReconnaissance_.end()
             ? 0U : mission->second.assignmentLeaseExpiresAtTick;
-        static_cast<void>(formationNetwork_->SendLatest(droneId, leaderId,
+        static_cast<void>(formationNetwork_->Send(droneId, leaderId,
             nextTelemetrySequence_++, "drone_telemetry",
             detail::EncodePeerTelemetry(simulation_.State(droneId).positionMeters,
                 simulation_.State(droneId).mode, missionLeg, missionStatus,

@@ -50,194 +50,12 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
     {
     case communication::MeshEventKind::LinkDisabled: return "링크 장애";
     case communication::MeshEventKind::LinkRestored: return "링크 복구";
-    case communication::MeshEventKind::DirectedLinkDisabled: return "방향 링크 차단";
-    case communication::MeshEventKind::DirectedLinkRestored: return "방향 링크 복구";
     case communication::MeshEventKind::NodeRadioDisabled: return "드론 라디오 차단";
     case communication::MeshEventKind::NodeRadioRestored: return "드론 라디오 복구";
-    case communication::MeshEventKind::NeighborDiscovered: return "이웃 발견";
-    case communication::MeshEventKind::RouteSearchStarted: return "경로 탐색";
-    case communication::MeshEventKind::RouteFound: return "경로 복구";
     case communication::MeshEventKind::MessageDelivered: return "메시지 전달";
     case communication::MeshEventKind::PacketDropped: return "패킷 폐기";
-    case communication::MeshEventKind::RouteError: return "경로 오류";
-    case communication::MeshEventKind::ReliableRetry: return "중요 메시지 재전송";
-    case communication::MeshEventKind::ReliableAcknowledged: return "목적지 확인 응답";
-    case communication::MeshEventKind::ReliableFailed: return "메시지 확인 실패";
-    case communication::MeshEventKind::QueueFull: return "대기 한도 초과";
     }
     return "통신 사건";
-}
-
-std::string FormatRoute(const std::vector<communication::NetworkNodeId>& route)
-{
-    std::string result;
-    for (const communication::NetworkNodeId node : route)
-    {
-        if (!result.empty())
-            result += " → ";
-        result += DroneName(node);
-    }
-    return result.empty() ? "경로 정보 없음" : result;
-}
-
-void DrawArrow(ImDrawList& drawList, ImVec2 start, ImVec2 end,
-    ImU32 color, float thickness)
-{
-    const ImVec2 delta{end.x - start.x, end.y - start.y};
-    const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);
-    if (length <= 0.001F)
-        return;
-
-    const ImVec2 direction{delta.x / length, delta.y / length};
-    constexpr float nodeRadius = 16.0F;
-    constexpr float arrowLength = 7.0F;
-    const ImVec2 lineStart{
-        start.x + direction.x * nodeRadius,
-        start.y + direction.y * nodeRadius};
-    const ImVec2 lineEnd{
-        end.x - direction.x * (nodeRadius + 2.0F),
-        end.y - direction.y * (nodeRadius + 2.0F)};
-    drawList.AddLine(lineStart, lineEnd, color, thickness);
-
-    const ImVec2 perpendicular{-direction.y, direction.x};
-    const ImVec2 arrowBase{
-        lineEnd.x - direction.x * arrowLength,
-        lineEnd.y - direction.y * arrowLength};
-    drawList.AddTriangleFilled(lineEnd,
-        {arrowBase.x + perpendicular.x * arrowLength * 0.6F,
-            arrowBase.y + perpendicular.y * arrowLength * 0.6F},
-        {arrowBase.x - perpendicular.x * arrowLength * 0.6F,
-            arrowBase.y - perpendicular.y * arrowLength * 0.6F}, color);
-}
-
-void DrawMeshGraph(const simulation::SimulationCore& simulation,
-    const communication::VirtualMeshNetwork& network)
-{
-    if (!ImGui::CollapsingHeader("가상망 연결 그래프",
-            ImGuiTreeNodeFlags_DefaultOpen))
-        return;
-
-    struct NodePosition
-    {
-        communication::NetworkNodeId id;
-        ImVec2 center;
-        bool groundControl;
-    };
-
-    constexpr communication::NetworkNodeId groundControlId =
-        std::numeric_limits<communication::NetworkNodeId>::max();
-    std::vector<communication::NetworkNodeId> nodeIds = simulation.DroneIds();
-    nodeIds.push_back(groundControlId);
-
-    const ImVec2 available = ImGui::GetContentRegionAvail();
-    const ImVec2 canvasSize{std::max(220.0F, available.x), 170.0F};
-    const ImVec2 canvasTopLeft = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("가상망 연결 그래프 영역", canvasSize);
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
-    drawList->AddRectFilled(canvasTopLeft,
-        {canvasTopLeft.x + canvasSize.x, canvasTopLeft.y + canvasSize.y},
-        IM_COL32(22, 29, 38, 255), 5.0F);
-
-    const ImVec2 center{canvasTopLeft.x + canvasSize.x * 0.5F,
-        canvasTopLeft.y + canvasSize.y * 0.5F};
-    const float radius = std::min(canvasSize.x * 0.37F,
-        canvasSize.y * 0.34F);
-    std::vector<NodePosition> nodes;
-    nodes.reserve(nodeIds.size());
-    constexpr float fullTurn = 6.28318530718F;
-    for (std::size_t index = 0; index < nodeIds.size(); ++index)
-    {
-        const float angle = -1.57079632679F
-            + fullTurn * static_cast<float>(index)
-                / static_cast<float>(nodeIds.size());
-        nodes.push_back({nodeIds[index],
-            {center.x + std::cos(angle) * radius,
-                center.y + std::sin(angle) * radius},
-            nodeIds[index] == groundControlId});
-    }
-
-    const auto findNode = [&nodes](communication::NetworkNodeId id)
-        -> const NodePosition*
-    {
-        const auto found = std::find_if(nodes.begin(), nodes.end(),
-            [id](const NodePosition& node) { return node.id == id; });
-        return found == nodes.end() ? nullptr : &*found;
-    };
-
-    for (std::size_t firstIndex = 0; firstIndex < nodes.size(); ++firstIndex)
-    {
-        for (std::size_t secondIndex = firstIndex + 1U;
-             secondIndex < nodes.size(); ++secondIndex)
-        {
-            const auto& first = nodes[firstIndex];
-            const auto& second = nodes[secondIndex];
-            const bool firstKnowsSecond = network.HasRecentNeighbor(
-                first.id, second.id);
-            const bool secondKnowsFirst = network.HasRecentNeighbor(
-                second.id, first.id);
-            const bool disabled = network.IsLinkDisabled(first.id, second.id);
-            if (!firstKnowsSecond && !secondKnowsFirst && !disabled)
-                continue;
-
-            const ImU32 color = disabled ? IM_COL32(224, 76, 76, 255)
-                : firstKnowsSecond && secondKnowsFirst
-                    ? IM_COL32(105, 190, 130, 255)
-                    : IM_COL32(235, 164, 74, 255);
-            if (firstKnowsSecond != secondKnowsFirst)
-            {
-                DrawArrow(*drawList,
-                    firstKnowsSecond ? first.center : second.center,
-                    firstKnowsSecond ? second.center : first.center,
-                    color, 1.5F);
-            }
-            else
-            {
-                const ImVec2 direction{second.center.x - first.center.x,
-                    second.center.y - first.center.y};
-                const float length = std::sqrt(
-                    direction.x * direction.x + direction.y * direction.y);
-                if (length > 0.001F)
-                {
-                    const ImVec2 inset{direction.x / length * 16.0F,
-                        direction.y / length * 16.0F};
-                    drawList->AddLine(
-                        {first.center.x + inset.x, first.center.y + inset.y},
-                        {second.center.x - inset.x, second.center.y - inset.y},
-                        color, disabled ? 2.0F : 1.5F);
-                }
-            }
-        }
-    }
-
-    for (const simulation::DroneId droneId : simulation.DroneIds())
-    {
-        const auto nextHop = network.NextHop(droneId, groundControlId);
-        const NodePosition* source = findNode(droneId);
-        const NodePosition* destination = nextHop ? findNode(*nextHop) : nullptr;
-        if (source != nullptr && destination != nullptr)
-            DrawArrow(*drawList, source->center, destination->center,
-                IM_COL32(82, 166, 245, 255), 3.0F);
-    }
-
-    for (const auto& node : nodes)
-    {
-        const bool radioEnabled = network.IsNodeRadioEnabled(node.id);
-        const ImU32 fill = !radioEnabled ? IM_COL32(174, 63, 63, 255)
-            : node.groundControl ? IM_COL32(57, 105, 170, 255)
-                : IM_COL32(57, 75, 95, 255);
-        drawList->AddCircleFilled(node.center, 16.0F, fill);
-        drawList->AddCircle(node.center, 16.0F,
-            IM_COL32(215, 224, 234, 255), 0, 1.5F);
-        const std::string label = node.groundControl
-            ? "GCS" : "D" + std::to_string(node.id);
-        const ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
-        drawList->AddText(
-            {node.center.x - textSize.x * 0.5F,
-                node.center.y - textSize.y * 0.5F},
-            IM_COL32(255, 255, 255, 255), label.c_str());
-    }
-
-    ImGui::TextDisabled("초록·주황 선: 최근 직접 이웃 · 빨간 선: 장애 · 파란 화살표: GCS까지 다음 홉");
 }
 
 void CreateDefaultDockspace(ImGuiViewport* viewport)
@@ -432,24 +250,10 @@ void DrawFlightStatusPanel(
     const std::string& completeFleetMissionStatus,
     bool completeFleetMissionCanStart,
     const std::function<void()>& startCompleteFleetMission,
-    bool formationMissionActive,
-    float& packetLossPercent,
-    const std::function<void(float)>& setPacketLossPercent,
-    std::uint32_t& latencyJitterTicks,
-    const std::function<void(std::uint32_t)>& setLatencyJitterTicks,
     const communication::VirtualMeshNetwork* formationNetwork,
     int& selectedFaultSource,
-    int& selectedFaultDestination,
-    int& selectedFaultRotor,
-    const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
-        setFormationLinkDisabled,
-    const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
-        setFormationDirectedLinkDisabled,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-    const std::function<void(simulation::DroneId, bool)>& setCameraFault,
-    const std::function<void(simulation::DroneId, std::size_t, bool)>&
-        setRotorMotorFault,
     const SessionRecordingControls& recordingControls)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
@@ -526,224 +330,43 @@ void DrawFlightStatusPanel(
         if (formationNetwork != nullptr)
         {
             ImGui::Separator();
-            ImGui::Text("가상 통신: 직접 연결");
-            if (formationMissionActive)
+            ImGui::Text("가상 통신: 드론과 지상통제소 사이 직접 연결");
+            const auto droneIds = simulation.DroneIds();
+            if (!droneIds.empty())
             {
-                ImGui::Text("통신 장애 시험");
-                if (ImGui::SliderFloat("패킷 손실률", &packetLossPercent,
-                        0.0F, 100.0F, "%.0f%%"))
-                    setPacketLossPercent(packetLossPercent);
-                constexpr std::uint32_t minimumJitterTicks = 0U;
-                constexpr std::uint32_t maximumJitterTicks = 12U;
-                if (ImGui::SliderScalar("지연 흔들림 상한", ImGuiDataType_U32,
-                        &latencyJitterTicks, &minimumJitterTicks,
-                        &maximumJitterTicks, "%u Tick"))
-                    setLatencyJitterTicks(latencyJitterTicks);
-                ImGui::TextDisabled("기본 지연에 0~상한 Tick을 더합니다. 1 Tick은 약 16.7ms입니다.");
-                ImGui::TextDisabled("확인 응답이 없으면 정찰 경로를 60 Tick마다 최대 10회 다시 보냅니다.");
-                const auto droneIds = simulation.DroneIds();
-                if (droneIds.size() >= 2U)
+                selectedFaultSource = std::clamp(selectedFaultSource, 0,
+                    static_cast<int>(droneIds.size() - 1U));
+                std::array<std::string, communication::maximumFleetDroneCount> names;
+                std::array<const char*, communication::maximumFleetDroneCount> namePointers{};
+                for (std::size_t index = 0; index < droneIds.size(); ++index)
                 {
-                    const int lastDroneIndex = static_cast<int>(droneIds.size() - 1U);
-                    selectedFaultSource = std::clamp(selectedFaultSource, 0, lastDroneIndex);
-                    selectedFaultDestination = std::clamp(
-                        selectedFaultDestination, 0, lastDroneIndex);
-                    std::array<std::string, communication::maximumFleetDroneCount> names;
-                    std::array<const char*, communication::maximumFleetDroneCount> namePointers{};
-                    for (std::size_t index = 0; index < droneIds.size(); ++index)
-                    {
-                        names[index] = DroneName(droneIds[index]);
-                        namePointers[index] = names[index].c_str();
-                    }
-
-                    ImGui::SetNextItemWidth(-1.0F);
-                    ImGui::Combo("송신 드론", &selectedFaultSource,
-                        namePointers.data(), static_cast<int>(droneIds.size()));
-                    ImGui::SetNextItemWidth(-1.0F);
-                    ImGui::Combo("상대 드론", &selectedFaultDestination,
-                        namePointers.data(), static_cast<int>(droneIds.size()));
-                    const simulation::DroneId source = droneIds[
-                        static_cast<std::size_t>(selectedFaultSource)];
-                    const simulation::DroneId destination = droneIds[
-                        static_cast<std::size_t>(selectedFaultDestination)];
-
-                    ImGui::Separator();
-                    const bool radioEnabled = formationNetwork->IsNodeRadioEnabled(source);
-                    ImGui::Text("선택 드론 라디오: %s",
-                        radioEnabled ? "송수신 가능" : "차단됨");
-                    if (radioEnabled)
-                    {
-                        if (ImGui::Button("선택 드론 송수신 차단"))
-                            setFormationNodeRadioEnabled(source, false);
-                    }
-                    else if (ImGui::Button("선택 드론 라디오 복구"))
-                    {
-                        setFormationNodeRadioEnabled(source, true);
-                    }
-
-                    const auto cameraStatus = simulation.Camera(source).status;
-                    const bool cameraFaulted = cameraStatus
-                        == simulation::CameraStatus::Fault;
-                    ImGui::Text("선택 드론 카메라: %s",
-                        cameraFaulted ? "고장"
-                            : cameraStatus == simulation::CameraStatus::Active
-                                ? "켜짐" : "꺼짐");
-                    if (cameraFaulted)
-                    {
-                        if (ImGui::Button("선택 드론 카메라 복구"))
-                            setCameraFault(source, false);
-                    }
-                    else if (ImGui::Button("선택 드론 카메라 고장 주입"))
-                    {
-                        setCameraFault(source, true);
-                    }
-
-#ifndef __EMSCRIPTEN__
-                    constexpr int rotorCount = static_cast<int>(
-                        simulation::QuadrotorParameters::rotorCount);
-                    const char* rotorLabels[]{"로터 1", "로터 2", "로터 3", "로터 4"};
-                    selectedFaultRotor = std::clamp(selectedFaultRotor, 0, rotorCount - 1);
-                    ImGui::SetNextItemWidth(-1.0F);
-                    ImGui::Combo("고장 로터", &selectedFaultRotor,
-                        rotorLabels, rotorCount);
-                    const auto rotorIndex = static_cast<std::size_t>(selectedFaultRotor);
-                    if (simulation.IsRotorMotorFaulted(source, rotorIndex))
-                    {
-                        if (ImGui::Button("선택 로터 복구"))
-                            setRotorMotorFault(source, rotorIndex, false);
-                    }
-                    else if (ImGui::Button("선택 로터 고장 주입"))
-                    {
-                        setRotorMotorFault(source, rotorIndex, true);
-                    }
-                    ImGui::TextDisabled("전원이 끊기면 로터가 감속하며 기체 자세가 무너질 수 있습니다.");
-#endif
-
-                    if (source == destination)
-                    {
-                        ImGui::TextDisabled("서로 다른 드론을 골라 주세요.");
-                    }
-                    else
-                    {
-                        const bool disabled = formationNetwork->IsLinkDisabled(source, destination);
-                        ImGui::Text("강제 장애: %s", disabled ? "설정됨" : "해제됨");
-                        const auto nextHop = formationNetwork->NextHop(source, destination);
-                        if (nextHop)
-                            ImGui::Text("현재 다음 드론: %s", DroneName(*nextHop).c_str());
-                        else
-                            ImGui::TextDisabled("현재 경로: 찾는 중 또는 연결 안 됨");
-                        if (disabled)
-                        {
-                            if (ImGui::Button("링크 복구"))
-                                setFormationLinkDisabled(source, destination, false);
-                        }
-                        else if (ImGui::Button("링크 끊기"))
-                        {
-                            setFormationLinkDisabled(source, destination, true);
-                        }
-
-                        ImGui::Separator();
-                        const bool forwardDisabled =
-                            formationNetwork->IsDirectedLinkDisabled(source, destination);
-                        const bool reverseDisabled =
-                            formationNetwork->IsDirectedLinkDisabled(destination, source);
-                        ImGui::Text("방향 장애: %s → %s %s · %s → %s %s",
-                            DroneName(source).c_str(), DroneName(destination).c_str(),
-                            forwardDisabled ? "차단" : "연결",
-                            DroneName(destination).c_str(), DroneName(source).c_str(),
-                            reverseDisabled ? "차단" : "연결");
-                        const std::string forwardLabel = DroneName(source)
-                            + (forwardDisabled ? " → 복구##ForwardLink"
-                                               : " → 차단##ForwardLink");
-                        if (ImGui::Button(forwardLabel.c_str()))
-                            setFormationDirectedLinkDisabled(
-                                source, destination, !forwardDisabled);
-                        ImGui::SameLine();
-                        const std::string reverseLabel = DroneName(destination)
-                            + (reverseDisabled ? " → 복구##ReverseLink"
-                                               : " → 차단##ReverseLink");
-                        if (ImGui::Button(reverseLabel.c_str()))
-                            setFormationDirectedLinkDisabled(
-                                destination, source, !reverseDisabled);
-                    }
+                    names[index] = DroneName(droneIds[index]);
+                    namePointers[index] = names[index].c_str();
+                }
+                ImGui::SetNextItemWidth(-1.0F);
+                ImGui::Combo("시험할 드론", &selectedFaultSource,
+                    namePointers.data(), static_cast<int>(droneIds.size()));
+                const simulation::DroneId droneId = droneIds[
+                    static_cast<std::size_t>(selectedFaultSource)];
+                const bool radioEnabled = formationNetwork->IsNodeRadioEnabled(droneId);
+                const bool linked = formationNetwork->HasDirectLink(droneId,
+                    std::numeric_limits<communication::NetworkNodeId>::max());
+                ImGui::Text("지상통제 연결: %s",
+                    radioEnabled && linked ? "직접 연결" : "끊김");
+                if (radioEnabled)
+                {
+                    if (ImGui::Button("이 드론 통신 차단"))
+                        setFormationNodeRadioEnabled(droneId, false);
+                }
+                else if (ImGui::Button("이 드론 통신 복구"))
+                {
+                    setFormationNodeRadioEnabled(droneId, true);
                 }
             }
             const auto& metrics = formationNetwork->Metrics();
-            ImGui::Text("전달 %llu · 중계 %llu · 폐기 %llu",
+            ImGui::Text("전달 %llu · 폐기 %llu",
                 static_cast<unsigned long long>(metrics.deliveredMessages),
-                static_cast<unsigned long long>(metrics.forwardedMessages),
                 static_cast<unsigned long long>(metrics.droppedMessages));
-            DrawMeshGraph(simulation, *formationNetwork);
-            if (ImGui::CollapsingHeader("현재 라우팅 경로"))
-            {
-                const auto droneIds = simulation.DroneIds();
-                constexpr ImGuiTableFlags routeTableFlags =
-                    ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
-                    | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp;
-                if (ImGui::BeginTable("FleetRoutes", 4, routeTableFlags,
-                        ImVec2(0.0F, 150.0F)))
-                {
-                    ImGui::TableSetupColumn("보내는 드론");
-                    ImGui::TableSetupColumn("목적지");
-                    ImGui::TableSetupColumn("다음 홉");
-                    ImGui::TableSetupColumn("연결 방식");
-                    ImGui::TableHeadersRow();
-                    for (const simulation::DroneId source : droneIds)
-                    {
-                        for (const simulation::DroneId destination : droneIds)
-                        {
-                            if (source == destination)
-                                continue;
-
-                            const auto nextHop = formationNetwork->NextHop(
-                                source, destination);
-                            ImGui::TableNextRow();
-                            ImGui::TableSetColumnIndex(0);
-                            ImGui::TextUnformatted(DroneName(source).c_str());
-                            ImGui::TableSetColumnIndex(1);
-                            ImGui::TextUnformatted(DroneName(destination).c_str());
-                            ImGui::TableSetColumnIndex(2);
-                            ImGui::TextUnformatted(nextHop
-                                ? DroneName(*nextHop).c_str() : "없음");
-                            ImGui::TableSetColumnIndex(3);
-                            const char* routeKind = !nextHop ? "경로 없음"
-                                : *nextHop == destination ? "직접 연결" : "중계";
-                            ImGui::TextUnformatted(routeKind);
-                        }
-                    }
-                    ImGui::EndTable();
-                }
-            }
-            if (ImGui::CollapsingHeader("최근 도착 패킷"))
-            {
-                const auto messages = formationNetwork->DeliveredMessages();
-                const std::size_t firstVisibleMessage = messages.size() > 8U
-                    ? messages.size() - 8U : 0U;
-                if (firstVisibleMessage == messages.size())
-                {
-                    ImGui::TextDisabled("아직 도착한 패킷이 없습니다.");
-                }
-                for (std::size_t index = firstVisibleMessage;
-                     index < messages.size(); ++index)
-                {
-                    const communication::DeliveredMeshMessage& delivered = messages[index];
-                    const communication::VirtualMeshMessage& message = delivered.message;
-                    const std::string label = "Tick "
-                        + std::to_string(delivered.deliveredAtTick) + " · "
-                        + message.kind + " · #" + std::to_string(message.sequence);
-                    if (ImGui::TreeNode(label.c_str()))
-                    {
-                        ImGui::Text("보낸 드론: %s",
-                            DroneName(message.source).c_str());
-                        ImGui::Text("받은 드론: %s",
-                            DroneName(message.destination).c_str());
-                        const std::string route = FormatRoute(message.route);
-                        ImGui::Text("전달 경로: %s", route.c_str());
-                        ImGui::TextWrapped("내용: %s", message.payload.c_str());
-                        ImGui::TreePop();
-                    }
-                }
-            }
             const auto events = formationNetwork->Events();
             const std::size_t visibleEvents = std::min<std::size_t>(events.size(), 4U);
             for (std::size_t offset = 0; offset < visibleEvents; ++offset)
@@ -753,7 +376,6 @@ void DrawFlightStatusPanel(
                     static_cast<double>(event.tick) / 60.0,
                     MeshEventLabel(event.kind), DroneName(event.source).c_str(),
                     DroneName(event.destination).c_str());
-                ImGui::TextDisabled("  %s", event.detail.c_str());
             }
         }
         ImGui::Separator();
@@ -870,21 +492,9 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::string& completeFleetMissionStatus,
     bool completeFleetMissionCanStart,
     const std::function<void()>& startCompleteFleetMission,
-    bool formationMissionActive,
-    float& packetLossPercent,
-    const std::function<void(float)>& setPacketLossPercent,
-    std::uint32_t& latencyJitterTicks,
-    const std::function<void(std::uint32_t)>& setLatencyJitterTicks,
     const communication::VirtualMeshNetwork* formationNetwork,
-    const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
-        setFormationLinkDisabled,
-    const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
-        setFormationDirectedLinkDisabled,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-    const std::function<void(simulation::DroneId, bool)>& setCameraFault,
-    const std::function<void(simulation::DroneId, std::size_t, bool)>&
-        setRotorMotorFault,
     const SessionRecordingControls& recordingControls,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
@@ -907,14 +517,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
         fleetReturnCanStart, startFleetReturn,
         completeFleetMissionStatus, completeFleetMissionCanStart,
-        startCompleteFleetMission, formationMissionActive,
-        packetLossPercent, setPacketLossPercent,
-        latencyJitterTicks, setLatencyJitterTicks,
-        formationNetwork, selectedFaultSource_,
-        selectedFaultDestination_, selectedFaultRotor_,
-        setFormationLinkDisabled,
-        setFormationDirectedLinkDisabled,
-        setFormationNodeRadioEnabled, setCameraFault, setRotorMotorFault,
+        startCompleteFleetMission,
+        formationNetwork, selectedFaultSource_, setFormationNodeRadioEnabled,
         recordingControls);
 
     if (timings != nullptr)

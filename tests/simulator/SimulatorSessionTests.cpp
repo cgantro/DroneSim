@@ -83,8 +83,6 @@ public:
     static void UseConnectedNetworkForTest(AeroSimLabApp& app)
     {
         communication::VirtualMeshSettings settings;
-        settings.mode = app.fleetNetworkMode_;
-        settings.leaderNodeId = app.fleetLeaderId_;
         settings.maximumLinkRangeMeters = 1'000.0;
         app.formationNetwork_ = std::make_unique<
             communication::VirtualMeshNetwork>(settings);
@@ -136,7 +134,7 @@ public:
         const auto groundControlNodeId = std::numeric_limits<
             communication::NetworkNodeId>::max();
         for (const auto droneId : droneIds)
-            app.formationNetwork_->SetDirectedLinkDisabled(
+            app.formationNetwork_->SetLinkDisabled(
                 droneId, groundControlNodeId, true);
 
         simulation::DroneCommand waypoint;
@@ -161,7 +159,7 @@ public:
         EXPECT_GT(app.simulation_.TickCount() - received.receivedAtTick, 0U);
         const auto lastReceivedTick = received.receivedAtTick;
         for (const auto droneId : droneIds)
-            app.formationNetwork_->SetDirectedLinkDisabled(
+            app.formationNetwork_->SetLinkDisabled(
                 droneId, groundControlNodeId, false);
         for (int tick = 0; tick < 360; ++tick)
         {
@@ -180,7 +178,6 @@ public:
             .networkEnabled = false});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
-        app.fleetNetworkMode_ = communication::VirtualMeshMode::Direct;
         UseConnectedNetworkForTest(app);
         app.formationTransit_.active = true;
 
@@ -188,7 +185,7 @@ public:
         ASSERT_EQ(droneIds.size(), 4U);
         const auto groundControlNodeId = std::numeric_limits<
             communication::NetworkNodeId>::max();
-        app.formationNetwork_->SetDirectedLinkDisabled(
+        app.formationNetwork_->SetLinkDisabled(
             droneIds.front(), groundControlNodeId, true);
         for (int tick = 0; tick < 240; ++tick)
         {
@@ -355,13 +352,7 @@ public:
             }
             const auto& metrics = app.formationNetwork_->Metrics();
             failureContext << "; 통신 통계 전달 " << metrics.deliveredMessages
-                << ", 중계 " << metrics.forwardedMessages << ", 경로 탐색 "
-                << metrics.routeRequests << ", 경로 오류 " << metrics.routeErrors
                 << ", 폐기 " << metrics.droppedMessages;
-            const auto leaderHop = app.formationNetwork_->NextHop(
-                droneIds.back(), app.fleetLeaderId_);
-            failureContext << "; 리더 경로 다음 홉 "
-                << (leaderHop ? std::to_string(*leaderHop) : "없음");
             const auto events = app.formationNetwork_->Events();
             const std::size_t firstEvent = events.size() > 12U
                 ? events.size() - 12U : 0U;

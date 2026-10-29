@@ -81,21 +81,9 @@ public:
         const std::string& completeFleetMissionStatus,
         bool completeFleetMissionCanStart,
         const std::function<void()>& startCompleteFleetMission,
-        bool formationMissionActive,
-        float& packetLossPercent,
-        const std::function<void(float)>& setPacketLossPercent,
-        std::uint32_t& latencyJitterTicks,
-        const std::function<void(std::uint32_t)>& setLatencyJitterTicks,
         const communication::VirtualMeshNetwork* formationNetwork,
-        const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
-            setFormationLinkDisabled,
-        const std::function<void(simulation::DroneId, simulation::DroneId, bool)>&
-            setFormationDirectedLinkDisabled,
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
-        const std::function<void(simulation::DroneId, bool)>& setCameraFault,
-        const std::function<void(simulation::DroneId, std::size_t, bool)>&
-            setRotorMotorFault,
         const SessionRecordingControls& recordingControls,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
@@ -113,8 +101,6 @@ private:
 
     bool initialized_ = false;
     int selectedFaultSource_ = 0;
-    int selectedFaultDestination_ = 1;
-    int selectedFaultRotor_ = 0;
     std::string layoutFile_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };
