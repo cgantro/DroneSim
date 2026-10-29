@@ -129,7 +129,7 @@ public:
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
         UseConnectedNetworkForTest(app);
-        app.formationTransit_.active = true;
+        app.formationTransit_.phase = AeroSimLabApp::FormationTransitState::Phase::InProgress;
 
         const auto droneIds = app.fleetDroneIds_;
         ASSERT_EQ(droneIds.size(), 4U);
@@ -194,7 +194,7 @@ public:
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
         UseConnectedNetworkForTest(app);
-        app.formationTransit_.active = true;
+        app.formationTransit_.phase = AeroSimLabApp::FormationTransitState::Phase::InProgress;
 
         const auto droneIds = app.fleetDroneIds_;
         ASSERT_EQ(droneIds.size(), 4U);
@@ -261,7 +261,7 @@ public:
             app.simulation_.SetInitialState(droneId, state);
         }
 
-        app.formationTransit_.active = true;
+        app.formationTransit_.phase = AeroSimLabApp::FormationTransitState::Phase::InProgress;
         app.formationTransit_.route.leaderStartMeters =
             app.simulation_.State(droneIds.front()).positionMeters;
         app.formationTransit_.route.leaderWaypointsMeters.push_back(
@@ -271,7 +271,8 @@ public:
 
         app.AdvanceFormationTransit();
 
-        EXPECT_FALSE(app.formationTransit_.active);
+        EXPECT_EQ(app.formationTransit_.phase,
+            AeroSimLabApp::FormationTransitState::Phase::Failed);
         EXPECT_EQ(app.completeFleetMission_.stage,
             AeroSimLabApp::CompleteFleetMissionState::Stage::Failed);
         EXPECT_EQ(app.completeFleetMission_.status,
@@ -279,6 +280,53 @@ public:
         for (const auto droneId : droneIds)
             EXPECT_EQ(app.simulation_.State(droneId).mode,
                 simulation::FlightMode::Landing);
+    }
+
+    static void VerifyFormationResultDoesNotDependOnStatusText()
+    {
+        using FormationPhase = AeroSimLabApp::FormationTransitState::Phase;
+        using MissionStage = AeroSimLabApp::CompleteFleetMissionState::Stage;
+        AeroSimLabApp app({.smokeTest = true,
+            .simulationDynamics = simulation::SimulationDynamics::Kinematic,
+            .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+
+        for (const auto droneId : app.fleetDroneIds_)
+        {
+            auto state = app.simulation_.State(droneId);
+            state.positionMeters.z += 15.0;
+            state.mode = simulation::FlightMode::Hovering;
+            app.simulation_.SetInitialState(droneId, state);
+            app.completeFleetMission_.homePositionsMeters[droneId] = state.positionMeters;
+            if (droneId != app.fleetLeaderId_)
+            {
+                AeroSimLabApp::ReceivedPeerTelemetry report;
+                report.state.positionMeters = state.positionMeters;
+                report.state.mode = state.mode;
+                report.receivedAtTick = app.simulation_.TickCount();
+                app.peerTelemetryAtLeader_[droneId] = report;
+            }
+        }
+
+        // 도착 상태라면 안내 문구가 바뀌어도 다음 정찰 단계를 시작한다.
+        app.completeFleetMission_.stage = MissionStage::FormationTransit;
+        app.formationTransit_.phase = FormationPhase::Arrived;
+        app.formationTransit_.status = "다른 도착 안내";
+        app.AdvanceCompleteFleetMission();
+        ASSERT_EQ(app.completeFleetMission_.stage, MissionStage::Reconnaissance)
+            << app.completeFleetMission_.status;
+        app.FailCompleteFleetMission("정찰 단계 중단");
+        EXPECT_EQ(app.formationTransit_.phase, FormationPhase::Arrived);
+
+        // 실패 상태는 도착 문구가 남아 있어도 성공으로 처리하지 않는다.
+        app.completeFleetMission_.stage = MissionStage::FormationTransit;
+        app.formationTransit_.phase = FormationPhase::Failed;
+        app.formationTransit_.status = "목적지 도착 · 편대 유지 중";
+        app.AdvanceCompleteFleetMission();
+        EXPECT_EQ(app.completeFleetMission_.stage, MissionStage::Failed);
+        EXPECT_EQ(app.completeFleetMission_.status,
+            "M01 편대 이동이 끝나지 않아 전체 임무를 중단했습니다.");
     }
 
     static void VerifyCompleteFleetMissionFinishesAndLands()
@@ -768,6 +816,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::AeroSimLabAppTestAccess::VerifyObserverCameraCanFollowEachDrone());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyFormationResultDoesNotDependOnStatusText());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyCompleteFleetMissionFinishesAndLands());
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues());

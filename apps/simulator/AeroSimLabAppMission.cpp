@@ -177,7 +177,7 @@ std::optional<FleetRouteMessage> DecodeFleetRoute(const std::string& payload)
 
 bool AeroSimLabApp::FleetIsReadyForMission() const
 {
-    if (CompleteFleetMissionIsActive() || formationTransit_.active
+    if (CompleteFleetMissionIsActive() || formationTransit_.IsActive()
         || reconTargets_.empty() || FleetReconnaissanceIsActive())
         return false;
 
@@ -379,7 +379,7 @@ bool AeroSimLabApp::StartFleetReconnaissance(
 bool AeroSimLabApp::FleetReturnCanStart() const
 {
     if (fleetReconnaissance_.empty() || CompleteFleetMissionIsActive()
-        || formationTransit_.active)
+        || formationTransit_.IsActive())
         return false;
 
     const auto& droneIds = fleetDroneIds_;
@@ -869,9 +869,9 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
 
     if (completeFleetMission_.stage == Stage::FormationTransit)
     {
-        if (formationTransit_.active)
+        if (formationTransit_.IsActive())
             return;
-        if (formationTransit_.status != "목적지 도착 · 편대 유지 중")
+        if (formationTransit_.phase != FormationTransitState::Phase::Arrived)
         {
             FailCompleteFleetMission("M01 편대 이동이 끝나지 않아 전체 임무를 중단했습니다.");
             return;
@@ -1017,7 +1017,8 @@ void AeroSimLabApp::FailCompleteFleetMission(const std::string& reason)
     using Command = aerosimlab::simulation::DroneCommand;
     completeFleetMission_.stage = CompleteFleetMissionState::Stage::Failed;
     completeFleetMission_.status = reason;
-    formationTransit_.active = false;
+    if (formationTransit_.IsActive())
+        formationTransit_.phase = FormationTransitState::Phase::Failed;
     for (const auto droneId : simulation_.DroneIds())
     {
         const FlightMode mode = simulation_.State(droneId).mode;
@@ -1031,7 +1032,7 @@ bool AeroSimLabApp::StartFormationTransit()
     using namespace aerosimlab::simulation;
     using namespace aerosimlab::flight_planning;
 
-    if (formationTransit_.active || reconTargets_.empty())
+    if (formationTransit_.IsActive() || reconTargets_.empty())
         return false;
 
     InitializeFleetLeadership();
@@ -1058,12 +1059,14 @@ bool AeroSimLabApp::StartFormationTransit()
         cameraTransitAltitudeMeters_);
     if (!route)
     {
+        formationTransit_.phase = FormationTransitState::Phase::Failed;
         formationTransit_.status = "목적지까지 편대 경로를 찾지 못했습니다.";
         return false;
     }
 
     if (!PrepareFleetNetwork(true))
     {
+        formationTransit_.phase = FormationTransitState::Phase::Failed;
         formationTransit_.status = "가상 통신망을 준비하지 못했습니다.";
         return false;
     }
@@ -1078,6 +1081,7 @@ bool AeroSimLabApp::StartFormationTransit()
             for (const DroneId airborneId : takingOff)
                 static_cast<void>(simulation_.Apply(airborneId,
                     {DroneCommand::Kind::Land}));
+            formationTransit_.phase = FormationTransitState::Phase::Failed;
             formationTransit_.status = "드론 이륙 명령을 적용하지 못했습니다.";
             return false;
         }
@@ -1091,7 +1095,7 @@ bool AeroSimLabApp::StartFormationTransit()
     formationTransit_.lastTargetSentAtTick.clear();
     formationTransit_.lastAppliedSequence.clear();
     formationTransit_.lastNetworkNodeUpdateTick.reset();
-    formationTransit_.active = true;
+    formationTransit_.phase = FormationTransitState::Phase::InProgress;
     formationTransit_.status = "출발 준비 · V자 대형 · "
         + reconTargets_.back().displayName;
     externalControl_ = true;
@@ -1287,7 +1291,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     using aerosimlab::simulation::DroneCommand;
     using aerosimlab::simulation::DroneId;
 
-    if (!formationNetwork_ || (!formationTransit_.active
+    if (!formationNetwork_ || (!formationTransit_.IsActive()
         && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()))
         return;
 
@@ -1370,7 +1374,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         if (message.source != leaderId)
             continue;
 
-        if (message.kind == "formation_waypoint" && formationTransit_.active)
+        if (message.kind == "formation_waypoint" && formationTransit_.IsActive())
         {
             if (std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), message.destination)
                 == fleetDroneIds_.end())
@@ -1390,7 +1394,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             if (simulation_.Apply(message.destination, command)
                 != aerosimlab::simulation::CommandResult::Accepted)
             {
-                formationTransit_.active = false;
+                formationTransit_.phase = FormationTransitState::Phase::Failed;
                 formationTransit_.status = "통신으로 받은 편대 목표를 적용하지 못했습니다.";
                 return;
             }
@@ -1524,14 +1528,14 @@ void AeroSimLabApp::AdvanceFormationTransit()
 {
     using namespace aerosimlab::simulation;
     using namespace aerosimlab::flight_planning;
-    if (!formationTransit_.active)
+    if (!formationTransit_.IsActive())
         return;
 
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
     if (droneIds.size() < 2U
         || formationTransit_.route.leaderWaypointsMeters.empty())
     {
-        formationTransit_.active = false;
+        formationTransit_.phase = FormationTransitState::Phase::Failed;
         formationTransit_.status = "편대 구성을 유지할 수 없어 임무를 멈췄습니다.";
         return;
     }
@@ -1542,7 +1546,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
         return;
     if (leader.mode == FlightMode::Landing)
     {
-        formationTransit_.active = false;
+        formationTransit_.phase = FormationTransitState::Phase::Failed;
         formationTransit_.status = "리더가 착륙해 편대 이동을 멈췄습니다.";
         return;
     }
@@ -1554,7 +1558,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
         const auto peer = peerTelemetryAtLeader_.find(droneIds[index]);
         if (peer == peerTelemetryAtLeader_.end())
         {
-            formationTransit_.active = false;
+            formationTransit_.phase = FormationTransitState::Phase::Failed;
             formationTransit_.status = "통신 끊김 · 편대 안전 착륙";
             if (completeFleetMission_.stage
                 == CompleteFleetMissionState::Stage::FormationTransit)
@@ -1592,7 +1596,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
             return;
         }
 
-        formationTransit_.active = false;
+        formationTransit_.phase = FormationTransitState::Phase::Failed;
         formationTransit_.status = "통신 끊김 · 편대 안전 착륙";
         if (completeFleetMission_.stage
             == CompleteFleetMissionState::Stage::FormationTransit)
@@ -1648,7 +1652,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
             continue;
         if (mode == FlightMode::Landing)
         {
-            formationTransit_.active = false;
+            formationTransit_.phase = FormationTransitState::Phase::Failed;
             formationTransit_.status = "추종 드론이 착륙해 편대 이동을 멈췄습니다.";
             return;
         }
@@ -1668,7 +1672,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
         {
             if (simulation_.Apply(droneId, command) != CommandResult::Accepted)
             {
-                formationTransit_.active = false;
+                formationTransit_.phase = FormationTransitState::Phase::Failed;
                 formationTransit_.status = "리더 목표를 적용하지 못해 임무를 멈췄습니다.";
                 return;
             }
@@ -1689,7 +1693,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
                 EncodeWaypoint(target));
             if (!messageId)
             {
-                formationTransit_.active = false;
+                formationTransit_.phase = FormationTransitState::Phase::Failed;
                 formationTransit_.status = "추종 드론에게 편대 목표를 보내지 못했습니다.";
                 return;
             }
@@ -1714,7 +1718,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
     }
     if (leaderArrived && followersArrived)
     {
-        formationTransit_.active = false;
+        formationTransit_.phase = FormationTransitState::Phase::Arrived;
         formationTransit_.status = "목적지 도착 · 편대 유지 중";
         return;
     }

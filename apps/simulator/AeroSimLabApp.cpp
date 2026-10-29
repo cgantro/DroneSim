@@ -218,7 +218,7 @@ bool AeroSimLabApp::StopWebFleetMission()
 {
     externalControl_ = true;
     if (!CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
-        && !formationTransit_.active)
+        && !formationTransit_.IsActive())
         return false;
     FailCompleteFleetMission("지상통제소에서 전체 임무를 중단했습니다.");
     return true;
@@ -574,7 +574,7 @@ void AeroSimLabApp::RenderFrame()
                 < std::chrono::seconds(2);
         const bool fleetReturnCanStart = FleetReturnCanStart();
         const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
-        const bool formationNetworkActive = formationTransit_.active
+        const bool formationNetworkActive = formationTransit_.IsActive()
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
         const auto droneIds = simulation_.DroneIds();
         GroundControlStatus groundControlStatus;

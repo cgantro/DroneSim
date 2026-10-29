@@ -394,6 +394,21 @@ private:
         telemetryAtGroundControl_;
     struct FormationTransitState
     {
+        /** @brief 화면 문구를 바꿔도 편대 이동의 결과 판정이 달라지지 않게 한다. */
+        enum class Phase
+        {
+            Idle,
+            InProgress,
+            Arrived,
+            Failed
+        };
+
+        Phase phase = Phase::Idle;
+        [[nodiscard]] bool IsActive() const noexcept
+        {
+            return phase == Phase::InProgress;
+        }
+
         aerosimlab::flight_planning::FormationRoutePlan route;
         std::size_t waypointIndex = 0;
         std::uint32_t nextMessageSequence = 1;
@@ -401,7 +416,6 @@ private:
         std::map<aerosimlab::simulation::DroneId, std::uint64_t> lastTargetSentAtTick;
         std::map<aerosimlab::simulation::DroneId, std::uint32_t> lastAppliedSequence;
         std::optional<std::uint64_t> lastNetworkNodeUpdateTick;
-        bool active = false;
         std::string status = "대기";
     };
     FormationTransitState formationTransit_;
