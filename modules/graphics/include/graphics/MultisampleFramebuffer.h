@@ -1,38 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
-#include <vector>
 
 namespace aerosimlab::graphics
 {
-
-/** @brief 픽셀 읽기 요청을 OpenGL에 전달한 CPU 호출 시간이다. GPU 실행 시간은 포함하지 않는다. */
-struct RgbReadbackEnqueueTimings
-{
-    double slotAndBufferCreationMicroseconds = 0.0;
-    double bufferBindingAndAllocationMicroseconds = 0.0;
-    double readTargetSetupMicroseconds = 0.0;
-    double readPixelsCallMicroseconds = 0.0;
-    double fenceCreationCallMicroseconds = 0.0;
-    double glStateRestoreMicroseconds = 0.0;
-};
-
-/** @brief 완료된 픽셀을 가져올 때 실행한 CPU 호출 시간이다. */
-struct RgbReadbackPollTimings
-{
-    double fenceWaitCallMicroseconds = 0.0;
-    double fallbackFinishMicroseconds = 0.0;
-    double pixelBufferResizeMicroseconds = 0.0;
-    double pixelPackBufferBindMicroseconds = 0.0;
-    double bufferMapCallMicroseconds = 0.0;
-    double pixelCopyMicroseconds = 0.0;
-    double bufferUnmapCallMicroseconds = 0.0;
-    double cleanupMicroseconds = 0.0;
-    bool pixelsReady = false;
-    bool bufferMapped = false;
-    bool fenceWaitFailed = false;
-};
 
 /**
  * @brief MSAA 색·깊이를 저장하고, 화면용 질감을 따로 만들어 장면 패널에 보여 준다.
@@ -93,24 +64,6 @@ public:
     /** @brief 최근에 합성한 화면을 ImGui에서 사용할 OpenGL 텍스처 번호로 돌려준다. */
     [[nodiscard]] std::uint32_t GetTextureId() const { return m_ResolvedColorTexture; }
 
-    /**
-     * @brief 화면 픽셀 읽기를 GPU에 맡기고, 읽을 때 함께 저장할 시뮬레이션 Tick을 기록한다.
-     * @details 기본 프레임버퍼가 바인딩된 상태에서 호출한다. 끝나면 읽기 프레임버퍼와 픽셀 전송 상태를 기본값으로 맞춘다.
-     */
-    [[nodiscard]] bool QueueRgbReadback(
-        std::uint64_t simulationTick, RgbReadbackEnqueueTimings* timings = nullptr);
-
-    /**
-     * @brief GPU가 이미 다 읽은 가장 오래된 화면을 CPU로 복사한다. 아직 준비되지 않았으면 false를 돌려준다.
-     * @details 픽셀 버퍼 바인딩은 기본값으로 돌려놓는다.
-     */
-    [[nodiscard]] bool TryReadRgbPixels(
-        std::vector<std::uint8_t>& pixels, std::uint64_t& simulationTick,
-        RgbReadbackPollTimings* timings = nullptr);
-
-    /** @brief 종료·시험 직전에 남은 GPU 읽기를 마치고 결과를 꺼낼 수 있게 한다. */
-    void FinishRgbReadbacks();
-
     /** @brief 생성 또는 마지막 크기 변경에 지정한 너비 [pixel]를 반환한다. */
     int GetWidth() const { return m_Width; }
     /** @brief 생성 또는 마지막 크기 변경에 지정한 높이 [pixel]를 반환한다. */
@@ -119,8 +72,6 @@ public:
     int GetSamples() const { return m_Samples; }
 
 private:
-    struct PixelReadback;
-
     // 색과 카메라 깊이 저장소를 같은 크기·표본 수로 만들고 GPU가 함께 쓸 수 있는지 확인한다.
     void Create();
 
@@ -144,8 +95,6 @@ private:
     // 색과 카메라 깊이 저장소가 픽셀마다 공통으로 검사하는 위치 수.
     int m_Samples = 4;
 
-    // OpenGL 동기화 핸들을 공개 헤더에 노출하지 않도록 세부 상태를 숨긴다.
-    std::unique_ptr<PixelReadback> m_PixelReadback;
 };
 
 } // namespace aerosimlab::graphics

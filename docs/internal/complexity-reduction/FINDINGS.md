@@ -28,7 +28,7 @@
 - `tools/px4/compare_reference.py` 전체: 시나리오 참조 표본과 결과 궤적을 입력받아 위치·속도·자세·각속도·로터 회전수 RMSE를 계산한다(compare_reference:41). 벡터 크기·유한값·시간 일치를 검사하고 오류를 CLI로 알린다. 유지 후보이며 사용자 요청 임무 시험과 별도의 물리 검증 도구다.
 - `tools/px4/test_compare_reference.py` 전체: 기준 표본을 메모리에서 만들고 동일 상태·자세 부호·시간 불일치·운동학 입력 거부 등을 독립 검증한다(CompareReferenceTests:14). 위 비교 도구를 유지하면 시험도 유지한다. 이번 감사에서 실행하지 않았다.
 - `tools/terrain/convert_ascii_grid.cpp` 전체: ASCII 지형 격자와 좌표를 읽어 변환 파일로 저장한다(main:21). 인자 수와 숫자 변환을 검사하고 실패 시 종료 코드 1 또는 2를 반환한다. 훈련장 외 기존 자산 변환에 쓰는지 호출처를 확인한 뒤 유지 여부를 정한다.
-- 2026-10-29 영상 전송 제거: GStreamer는 RTP 송수신 외 사용처가 없어 vcpkg와 CMake 의존성에서 제거했다. OpenCV는 프레임 품질 계산에 남아 있다.
+- 2026-10-29 영상 전송 제거: GStreamer는 RTP 송수신 외 사용처가 없어 vcpkg와 CMake 의존성에서 제거했다. 2026-10-30 정찰 판정에 영상 분석을 사용하지 않는 범위로 줄이면서 OpenCV와 CPU 픽셀 읽기 경로도 제거했다. GPU 텍스처 카메라 표시는 유지한다.
 
 - `tools/px4/prepare_reference.py` 전체: pyulog에서 위치·자세·각속도·모터 로그를 읽어 60Hz 강체 재생 JSON을 만든다(prepare_scenario:408). NED/FRD를 ENU/FLU로 변환하고, 표본 간격·원점 변경·ESC 연결을 검사한다. 참조 기록의 민감 정보를 제외하며 기존 출력 파일은 거부한다. 물리 검증이 필요하므로 유지 후보이며 결과 해석은 실기체 정확도 주장과 구분한다.
 - `tools/px4/test_prepare_reference.py` 전체: TopicSamples 보간·축 변환·고도 원점 및 ESC 상태 오류 등을 unittest로 확인한다(TopicSamplesTests:20). 변환기를 유지하면 관련 시험을 유지한다. 이번 감사에서 실행하지 않았다.

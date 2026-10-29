@@ -1,18 +1,5 @@
 {
   "name": "aerosimlab",
   "version-string": "0.1.0",
-  "builtin-baseline": "a2f9862da6d88040a8537fb9b8cb24deaa9a196b",
-  "features": {
-    "desktop-vision": {
-      "description": "EO 카메라 영상의 품질 계산에 필요한 라이브러리",
-      "dependencies": [
-        {
-          "name": "opencv4",
-          "version>=": "4.14.0",
-          "default-features": false,
-          "platform": "windows"
-        }
-      ]
-    }
-  }
+  "builtin-baseline": "a2f9862da6d88040a8537fb9b8cb24deaa9a196b"
 }

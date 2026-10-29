@@ -2,6 +2,13 @@
 
 이 감사표는 `d6515b6e` 기준 코드의 조사 기록이다. 조종 명령 기록·재생과 앱의 구형 단일 드론 점검 임무는 2026-10-29 제거했다. 현재 상태는 CHECKPOINT와 VERIFICATION의 최신 항목을 따른다.
 
+## 현재 실행 경계 확인 — 2026-10-30
+
+- `apps/ground_control`은 화면 프로그램이 아니라 `aerosimlab_ground_control_client` 정적 라이브러리다. 명령을 UDP로 보내고 응답을 기다리는 코드는 있지만, 현재 저장소의 실행 파일에서 이 라이브러리를 호출하는 곳은 없다. 따라서 독립 지상통제 프로그램으로는 바로 실행할 수 없다.
+- 지금 화면에서 쓰는 지상통제 기능은 시뮬레이터 안의 ImGui 패널과 `AeroSimLabAppInput.cpp`의 UDP 서버 처리다. 이를 외부 앱용 클라이언트와 혼동하지 않도록 문서·실행 안내에서 구분해야 한다.
+- `apps/simulator`는 여러 소스 파일로 나뉘어 있어도 앱 상태를 `AeroSimLabApp` 하나가 소유한다. `AeroSimLabAppMission.cpp`에는 편대·통신·임무 흐름이 함께 있고, 헤더에는 그래픽·제어·네트워크·임무 상태가 모여 있다. 파일을 더 쪼개기보다 먼저 각 상태의 소유자와 호출 경계를 줄이는 것이 필요하다.
+- EO 화면은 GPU 프레임버퍼 텍스처를 패널에 표시한다. CPU 픽셀 읽기·화질 분석·종료 drain을 제거하고, 남은 장면·카메라 렌더링 코드를 역할에 맞는 이름으로 정리했다.
+
 기준: d6515b6e와 당시 미커밋 변경을 포함한 작업 트리, INVENTORY.tsv의 owner=app 32개. 이 기록의 초기 로컬 녹화 관련 평가는 2026-10-29 사용자 요청으로 뒤집혔다. 카메라 파일 녹화·저장은 제거하고 라이브 EO 화면은 유지한다. 아래 파일별 조사 내용은 당시 코드 기준이며 이후 변경은 CHECKPOINT와 VERIFICATION에서 확인한다.
 
 ## 현재 작업 트리 대조 — 2026-10-29
@@ -17,7 +24,7 @@
 | apps/simulator/AeroSimLabApp.cpp | SIMPLIFY | 생성자 178, 그래픽 초기화 271–350, 지형/시설 361–438, 4대 생성 441–466, tick 498, RenderFrame 678, 카메라 941/982. 자산과 simulation을 받아 렌더링·상태에 연결하고 unique_ptr로 그래픽 객체 소유. 미션·네트워크·웹 분기를 목표에 맞게 축소. CreateTerrainMesh 120–153은 격자 수 2 이상에 의존하므로 생산자 불변식 확인 필요. |
 | apps/simulator/AeroSimLabApp.h | SIMPLIFY | 기준선에는 구형 점검 상태와 네 대 정찰·전체 임무 상태가 함께 있었다. 구형 상태·목표·카메라 판정 자료를 제거하고 정찰 지점 자료만 남겼다. 앱은 여전히 그래픽·제어·통신·임무를 함께 소유하므로 책임 검토가 남았다. |
 | apps/simulator/AeroSimLabAppBenchmark.cpp | SIMPLIFY | RecordBenchmarkFrame 15, WriteBenchmarkReport 70: 화면 계측을 보고서로 출력한다. 고정 임무 범위에서 쓰지 않는 대규모 확장 측정은 제거하고 화면 측정만 남겼다. |
-| apps/simulator/AeroSimLabAppEoCapture.cpp | SIMPLIFY | RenderScenePanel 16, CaptureEoFrame 99, ProcessCompletedEoReadback 105, QueueEoReadback 159, ProcessEoPixels 200, DrainEoReadbacks 281. 렌더 대상에서 픽셀을 읽어 라이브 화면과 EO 화질 정보를 만든다. 구형 촬영 구도 판정과 연결하던 카메라 상태 사본은 제거했다. 비동기 readback 수명과 종료 drain은 남겼다. |
+| apps/simulator/AeroSimLabAppCamera.cpp | SIMPLIFY | 과거 감사 시점에는 GPU 픽셀 읽기와 화질 분석이 있었다. 2026-10-30 해당 분석·종료 drain을 제거했다. 현재는 GPU 카메라 장면을 출력 텍스처에 그려 패널에 제공한다. |
 | apps/simulator/AeroSimLabAppGamepad.cpp | KEEP | ScanForGamepad 27, PollGamepad 50, HandleGamepadDisconnected 118. 장치 상태를 입력으로 조종 명령을 만들고 연결 해제를 처리한다. 독립 기능이지만 MVP에서 수동 조종 필요 여부는 별도 결정. |
 | apps/simulator/AeroSimLabAppInput.cpp | SIMPLIFY | 당시 PollGroundControl 184, ProcessPendingGroundCommand 727, CurrentTelemetry 840이 UDP 명령과 상태 응답을 처리했다. 기록·재생 제어는 이후 제거했다. 목표 임무와 직접 통신은 보존한다. |
 | apps/simulator/AeroSimLabAppLifecycle.cpp | SIMPLIFY | Run 28, RunFrame 139, SmokeTestIsComplete 302, ValidateSmokeTestOutput 313. 프레임 입력→모의→렌더→swap을 묶고 웹 예외 및 smoke 시간 초과를 처리한다. 벤치마크·웹/네이티브 분기 정리는 EO 검증과 종료 경로를 보존하며 수행. |

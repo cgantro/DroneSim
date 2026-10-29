@@ -31,11 +31,6 @@ if(POLICY CMP0169)
   cmake_policy(SET CMP0169 OLD)
 endif()
 
-if(NOT EMSCRIPTEN AND (AEROSIMLAB_BUILD_GRAPHICS OR BUILD_TESTING))
-  set(_aerosimlab_opencv_components core imgproc)
-  find_package(OpenCV REQUIRED COMPONENTS ${_aerosimlab_opencv_components})
-endif()
-
 if(NOT EMSCRIPTEN AND BUILD_TESTING)
   find_package(Threads REQUIRED)
 endif()
@@ -130,18 +125,6 @@ add_library(aerosimlab_manual_control STATIC
 )
 target_include_directories(aerosimlab_manual_control PUBLIC modules/manual_control/include)
 target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_core)
-
-add_library(aerosimlab_sensor STATIC modules/sensor/src/RgbFrame.cpp)
-target_include_directories(aerosimlab_sensor PUBLIC modules/sensor/include)
-if(NOT EMSCRIPTEN AND (AEROSIMLAB_BUILD_GRAPHICS OR BUILD_TESTING))
-  add_library(aerosimlab_vision STATIC
-    modules/vision/src/RgbFrameView.cpp
-    modules/vision/src/RgbFrameQuality.cpp
-  )
-  target_include_directories(aerosimlab_vision PUBLIC modules/vision/include)
-  target_link_libraries(aerosimlab_vision PUBLIC
-    aerosimlab_sensor opencv_core opencv_imgproc)
-endif()
 
 if(NOT EMSCRIPTEN)
   add_library(aerosimlab_ground_control_client STATIC
@@ -251,7 +234,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   )
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_simulator_app PRIVATE
-      apps/simulator/AeroSimLabAppEoCapture.cpp
+      apps/simulator/AeroSimLabAppCamera.cpp
       apps/simulator/SimulatorHud.cpp
     )
   endif()
@@ -355,13 +338,12 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     aerosimlab_simulation_core
     aerosimlab_flight_planning
     aerosimlab_manual_control
-    aerosimlab_sensor
     aerosimlab_communication
     nlohmann_json::nlohmann_json
   )
   if(NOT EMSCRIPTEN)
     target_link_libraries(aerosimlab_simulator_app PRIVATE
-      aerosimlab_vision aerosimlab_imgui glfw)
+      aerosimlab_imgui glfw)
     target_compile_definitions(aerosimlab_simulator_app PRIVATE GLFW_INCLUDE_NONE)
   endif()
   if(WIN32)
@@ -560,28 +542,6 @@ if(BUILD_TESTING)
     DISCOVERY_TIMEOUT 60
     PROPERTIES LABELS "UNIT;manual_control"
   )
-
-  add_executable(aerosimlab_sensor_tests tests/sensor/RgbFrameTests.cpp)
-  target_link_libraries(aerosimlab_sensor_tests PRIVATE aerosimlab_sensor GTest::gtest_main)
-  gtest_discover_tests(aerosimlab_sensor_tests
-    TEST_PREFIX "Sensor."
-    DISCOVERY_TIMEOUT 60
-    PROPERTIES LABELS "UNIT;sensor"
-  )
-
-  if(NOT EMSCRIPTEN)
-    add_executable(aerosimlab_vision_tests
-      tests/vision/RgbFrameViewTests.cpp
-      tests/vision/RgbFrameQualityTests.cpp
-    )
-    target_link_libraries(aerosimlab_vision_tests PRIVATE aerosimlab_vision GTest::gtest_main)
-    gtest_discover_tests(aerosimlab_vision_tests
-      TEST_PREFIX "Vision."
-      DISCOVERY_TIMEOUT 60
-      PROPERTIES LABELS "UNIT;vision"
-    )
-
-  endif()
 
   add_test(NAME HeadlessScenarioSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/flight/rigid-body-flight.json")

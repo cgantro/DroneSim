@@ -35,10 +35,6 @@ struct ViewerBenchmarkMeasurements
         double scenePanelRenderMicroseconds = 0.0;
         double cameraSceneRenderMicroseconds = 0.0;
         double bufferSwapMicroseconds = 0.0;
-        double eoReadbackHandlingMicroseconds = 0.0;
-        double eoFenceWaitMicroseconds = 0.0;
-        double eoBufferMapMicroseconds = 0.0;
-        double eoPixelCopyMicroseconds = 0.0;
         double hudInterfaceBuildMicroseconds = 0.0;
         double hudFrameFinalizeMicroseconds = 0.0;
         double hudBackendDrawMicroseconds = 0.0;
@@ -48,7 +44,6 @@ struct ViewerBenchmarkMeasurements
         std::size_t hudIndexCount = 0;
         double hudGpuExecutionMicroseconds = 0.0;
         bool hudGpuTimingAvailable = false;
-        bool eoReadbackHappened = false;
     };
 
     std::string sourceRevision;
@@ -65,35 +60,9 @@ struct ViewerBenchmarkMeasurements
     std::vector<double> tickDurationsMicroseconds;
     std::vector<double> applicationFrameDurationsMicroseconds;
     std::vector<double> renderFrameDurationsMicroseconds;
-    std::vector<double> renderFrameDurationsWithEoReadbackMicroseconds;
-    std::vector<double> renderFrameDurationsWithoutEoReadbackMicroseconds;
     std::vector<SlowFrame> slowFrames;
 #ifndef __EMSCRIPTEN__
     std::vector<double> physicsStepDurationsMicroseconds;
-    // GPU에 픽셀 복사를 맡기는 CPU 호출 시간이다. 실제 GPU 복사 시간은 포함하지 않는다.
-    std::vector<double> eoReadbackEnqueueDurationsMicroseconds;
-    // OpenGL이 픽셀 전송과 완료 표식을 접수하는 CPU 호출 시간이다.
-    std::vector<double> eoReadbackSlotSetupDurationsMicroseconds;
-    std::vector<double> eoPixelBufferSetupDurationsMicroseconds;
-    std::vector<double> eoReadTargetSetupDurationsMicroseconds;
-    std::vector<double> eoReadPixelsCallDurationsMicroseconds;
-    std::vector<double> eoFenceCreationCallDurationsMicroseconds;
-    std::vector<double> eoGlStateRestoreDurationsMicroseconds;
-    // 완료 여부를 확인하고 준비된 픽셀을 CPU 메모리로 복사하는 시간이다.
-    std::vector<double> eoReadbackPollDurationsMicroseconds;
-    std::vector<double> eoFenceWaitCallDurationsMicroseconds;
-    std::vector<double> eoReadbackFallbackFinishDurationsMicroseconds;
-    std::vector<double> eoPixelBufferResizeDurationsMicroseconds;
-    std::vector<double> eoPixelPackBufferBindDurationsMicroseconds;
-    std::vector<double> eoPixelBufferMapCallDurationsMicroseconds;
-    std::vector<double> eoPixelCopyDurationsMicroseconds;
-    std::vector<double> eoPixelBufferUnmapCallDurationsMicroseconds;
-    std::vector<double> eoReadbackCleanupDurationsMicroseconds;
-    std::vector<double> visionDurationsMicroseconds;
-    double meanBrightness = 0.0;
-    double meanContrast = 0.0;
-    double meanSharpness = 0.0;
-    std::size_t visionSampleCount = 0;
 #endif
 };
 

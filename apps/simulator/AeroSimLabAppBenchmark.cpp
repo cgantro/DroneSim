@@ -16,10 +16,6 @@ void AeroSimLabApp::RecordBenchmarkFrame(double applicationMicroseconds)
 {
     benchmarkMeasurements_.renderFrameDurationsMicroseconds.push_back(
         frameMeasurements_.renderFrameMicroseconds);
-    auto& frameDurations = eoReadbackHappenedThisFrame_
-        ? benchmarkMeasurements_.renderFrameDurationsWithEoReadbackMicroseconds
-        : benchmarkMeasurements_.renderFrameDurationsWithoutEoReadbackMicroseconds;
-    frameDurations.push_back(frameMeasurements_.renderFrameMicroseconds);
     benchmarkMeasurements_.applicationFrameDurationsMicroseconds.push_back(
         applicationMicroseconds);
 
@@ -53,18 +49,13 @@ void AeroSimLabApp::RecordBenchmarkFrame(double applicationMicroseconds)
         .scenePanelRenderMicroseconds = frameMeasurements_.scenePanelRenderMicroseconds,
         .cameraSceneRenderMicroseconds = frameMeasurements_.cameraSceneRenderMicroseconds,
         .bufferSwapMicroseconds = frameMeasurements_.bufferSwapMicroseconds,
-        .eoReadbackHandlingMicroseconds = frameMeasurements_.eoReadbackHandlingMicroseconds,
-        .eoFenceWaitMicroseconds = frameMeasurements_.eoFenceWaitMicroseconds,
-        .eoBufferMapMicroseconds = frameMeasurements_.eoBufferMapMicroseconds,
-        .eoPixelCopyMicroseconds = frameMeasurements_.eoPixelCopyMicroseconds,
         .hudInterfaceBuildMicroseconds = frameMeasurements_.hudInterfaceBuildMicroseconds,
         .hudFrameFinalizeMicroseconds = frameMeasurements_.hudFinalizeMicroseconds,
         .hudBackendDrawMicroseconds = frameMeasurements_.hudBackendDrawMicroseconds,
         .hudDrawListCount = frameMeasurements_.hudDrawListCount,
         .hudDrawCommandCount = frameMeasurements_.hudDrawCommandCount,
         .hudVertexCount = frameMeasurements_.hudVertexCount,
-        .hudIndexCount = frameMeasurements_.hudIndexCount,
-        .eoReadbackHappened = eoReadbackHappenedThisFrame_});
+        .hudIndexCount = frameMeasurements_.hudIndexCount});
 }
 
 void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
@@ -91,16 +82,6 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     measurements.renderedFrames = renderedFrames_ - benchmarkStartRenderedFrames_;
     measurements.processCpuSeconds = static_cast<double>(
         std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC;
-#ifndef __EMSCRIPTEN__
-    if (benchmarkMeasurements_.visionSampleCount > 0)
-    {
-        const double sampleCount = static_cast<double>(
-            benchmarkMeasurements_.visionSampleCount);
-        measurements.meanBrightness = totalMeanBrightness_ / sampleCount;
-        measurements.meanContrast = totalMeanContrast_ / sampleCount;
-        measurements.meanSharpness = totalSharpness_ / sampleCount;
-    }
-#endif
     nlohmann::json report = BuildViewerBenchmarkReport(std::move(measurements));
     SaveViewerBenchmarkReport(report);
 }

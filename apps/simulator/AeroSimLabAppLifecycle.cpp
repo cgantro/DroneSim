@@ -116,10 +116,6 @@ int AeroSimLabApp::Run()
             std::chrono::steady_clock::now() - startTime_ >= std::chrono::duration<double>(benchmarkDurationSeconds))
             break;
     }
-#ifndef __EMSCRIPTEN__
-    if (smokeTest_)
-        DrainEoReadbacks();
-#endif
     if (smokeTest_)
     {
         const int smokeTestResult = ValidateSmokeTestOutput();
@@ -198,7 +194,6 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         : std::chrono::steady_clock::time_point{};
     auto renderComplete = std::chrono::steady_clock::time_point{};
 #endif
-    eoReadbackHappenedThisFrame_ = false;
     {
         aerosimlab::simulation::ScopedDuration measureRenderFrame(
             benchmarkMode_ ? &frameMeasurements_.renderFrameMicroseconds : nullptr);
@@ -306,23 +301,10 @@ bool AeroSimLabApp::SmokeTestIsComplete() const
 
 int AeroSimLabApp::ValidateSmokeTestOutput() const
 {
-    const bool cameraFrameHasPixels = eoFrame_.IsValid()
-        && std::any_of(eoFrame_.pixels.begin(), eoFrame_.pixels.end(), [](std::uint8_t value)
-        {
-            return value != 0;
-        });
-    if (!cameraFrameHasPixels)
-        return 5;
-
     const auto& camera = simulation_.Camera();
-    if (camera.status == aerosimlab::simulation::CameraStatus::Active
-        && eoFrame_.simulationTick != camera.lastFrameTick)
-    {
-        std::cerr << "EO 영상 Tick이 카메라의 마지막 Tick과 다릅니다. 영상="
-                  << eoFrame_.simulationTick << ", 카메라="
-                  << camera.lastFrameTick << '\n';
-        return 6;
-    }
+    if (camera.status != aerosimlab::simulation::CameraStatus::Active
+        || camera.lastFrameTick == 0)
+        return 5;
 
     return 0;
 }

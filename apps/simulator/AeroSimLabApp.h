@@ -7,7 +7,6 @@
 #include "communication/VirtualMeshNetwork.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
-#include "sensor/RgbFrame.h"
 #include "simulation_core/EoCameraModel.h"
 #include "flight_planning/FormationPlanner.h"
 #include "terrain/MapBuildings.h"
@@ -43,14 +42,6 @@ class Shader;
 class Texture2D;
 class Window;
 }
-
-#ifndef __EMSCRIPTEN__
-namespace aerosimlab::vision
-{
-class RgbFrameAnalyzer;
-}
-
-#endif
 
 namespace aerosimlab::simulator
 {
@@ -121,10 +112,6 @@ private:
         double bufferSwapMicroseconds = 0.0;
         double scenePanelRenderMicroseconds = 0.0;
         double cameraSceneRenderMicroseconds = 0.0;
-        double eoReadbackHandlingMicroseconds = 0.0;
-        double eoFenceWaitMicroseconds = 0.0;
-        double eoBufferMapMicroseconds = 0.0;
-        double eoPixelCopyMicroseconds = 0.0;
         double hudInterfaceBuildMicroseconds = 0.0;
         double hudFinalizeMicroseconds = 0.0;
         double hudBackendDrawMicroseconds = 0.0;
@@ -171,7 +158,7 @@ private:
     void AdvanceAmbientWind();
     /** @brief 현재 실행 경로에서 스모크 검사를 끝낼 조건이 충족됐는지 확인한다. */
     [[nodiscard]] bool SmokeTestIsComplete() const;
-    /** @brief 스모크 검사에서 마지막으로 읽은 EO 영상과 카메라 Tick을 확인한다. */
+    /** @brief 카메라 모의가 한 번 이상 갱신됐는지 확인한다. 픽셀은 CPU로 읽지 않는다. */
     [[nodiscard]] int ValidateSmokeTestOutput() const;
     void AdvanceManualControlTick();
     /** @brief 임무·정찰 지점·드론 상태가 새 임무를 시작할 수 있는지 확인한다. */
@@ -265,16 +252,6 @@ private:
         const aerosimlab::graphics::Camera& camera,
         bool showMissionGuides,
         std::optional<aerosimlab::simulation::DroneId> hiddenDroneId = std::nullopt);
-    /** @brief 끝난 픽셀 읽기를 처리한 뒤 새 카메라 화면을 GPU에 맡긴다. */
-    void CaptureEoFrame();
-    /** @brief GPU에서 끝난 EO 픽셀 읽기와 측정값을 처리한다. */
-    void ProcessCompletedEoReadback();
-    /** @brief 아직 읽지 않은 카메라 Tick이 있으면 GPU에 읽기를 예약한다. */
-    void QueueEoReadback();
-    /** @brief 저장된 EO 화면의 Tick과 품질을 갱신한다. */
-    void ProcessEoPixels(std::uint64_t simulationTick);
-    /** @brief 스모크 검사 전에 마지막 EO 화면까지 읽어 온다. */
-    void DrainEoReadbacks();
 #endif
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition, bool showMissionGuides,
@@ -300,12 +277,10 @@ private:
     bool gamepadConnected_ = false;
     bool previousTakeoffButton_ = false;
     bool previousLandButton_ = false;
-    bool eoReadbackHappenedThisFrame_ = false;
     int gamepadJoystickId_ = -1;
     int unsupportedJoystickId_ = -1;
     std::optional<aerosimlab::simulation::DroneCommand> pendingControllerAction_;
     std::optional<aerosimlab::manual_control::PilotCommand> pendingPilotCommand_;
-    aerosimlab::sensor::RgbFrame eoFrame_;
     bool networkEnabled_ = false;
     bool smokeFlightCommandObserved_ = false;
     bool benchmarkMode_ = false;
@@ -316,7 +291,6 @@ private:
     std::size_t renderedFrames_ = 0;
     std::size_t benchmarkStartRenderedFrames_ = 0;
     std::uint64_t benchmarkStartSimulationTicks_ = 0;
-    std::uint64_t lastQueuedEoFrameTick_ = 0;
 #ifndef __EMSCRIPTEN__
     // 같은 센서 Tick의 EO 화면은 화면 프레임마다 반복해서 그리지 않는다.
     std::optional<std::uint64_t> lastRenderedEoFrameTick_;
@@ -327,12 +301,6 @@ private:
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
     int framebufferWidth_ = 0;
     int framebufferHeight_ = 0;
-#ifndef __EMSCRIPTEN__
-    double totalMeanBrightness_ = 0.0;
-    double totalMeanContrast_ = 0.0;
-    double totalSharpness_ = 0.0;
-    std::unique_ptr<aerosimlab::vision::RgbFrameAnalyzer> visionAnalyzer_;
-#endif
     std::chrono::steady_clock::time_point startTime_;
 #ifdef __EMSCRIPTEN__
     std::chrono::steady_clock::time_point webPreviousFrame_;

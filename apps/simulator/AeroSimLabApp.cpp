@@ -30,9 +30,6 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
-#ifndef __EMSCRIPTEN__
-#include "vision/RgbFrameQuality.h"
-#endif
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <array>
@@ -188,9 +185,7 @@ AeroSimLabApp::AeroSimLabApp(Options options)
         throw std::invalid_argument("지상통제 명령 유효기간은 1 Tick 이상이어야 합니다.");
     if (benchmarkMode_)
         simulation_.SetPhysicsStepTimingEnabled(true);
-#ifndef __EMSCRIPTEN__
-    visionAnalyzer_ = std::make_unique<aerosimlab::vision::RgbFrameAnalyzer>();
-#else
+#ifdef __EMSCRIPTEN__
     activeWebApplication = this;
 #endif
 }

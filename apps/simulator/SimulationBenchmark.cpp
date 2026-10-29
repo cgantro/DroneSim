@@ -71,7 +71,7 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
         {"configuration", std::string(measurements.windowVisible
             ? "visible OpenGL window with VSync off; "
             : "hidden OpenGL window with VSync off; ")
-            + "one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring"},
+            + "one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes"},
         {"source_revision", measurements.sourceRevision},
         {"window_visible", measurements.windowVisible},
         {"framebuffer", {
@@ -92,10 +92,6 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             std::move(measurements.applicationFrameDurationsMicroseconds))},
         {"render_frame_duration_us", SummarizeDurations(
             std::move(measurements.renderFrameDurationsMicroseconds))},
-        {"render_frame_with_eo_readback_duration_us", SummarizeDurations(
-            std::move(measurements.renderFrameDurationsWithEoReadbackMicroseconds))},
-        {"render_frame_without_eo_readback_duration_us", SummarizeDurations(
-            std::move(measurements.renderFrameDurationsWithoutEoReadbackMicroseconds))},
         {"slow_frames_over_16_67ms", nlohmann::json::array()},
         {"process_cpu_percent_approx", measurements.elapsedSeconds > 0.0
             ? 100.0 * measurements.processCpuSeconds / measurements.elapsedSeconds : 0.0}};
@@ -113,10 +109,6 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             {"scene_panel_render_us", frame.scenePanelRenderMicroseconds},
             {"camera_scene_render_us", frame.cameraSceneRenderMicroseconds},
             {"buffer_swap_us", frame.bufferSwapMicroseconds},
-            {"eo_readback_handling_us", frame.eoReadbackHandlingMicroseconds},
-            {"eo_fence_wait_us", frame.eoFenceWaitMicroseconds},
-            {"eo_buffer_map_us", frame.eoBufferMapMicroseconds},
-            {"eo_pixel_copy_us", frame.eoPixelCopyMicroseconds},
             {"hud_interface_build_us", frame.hudInterfaceBuildMicroseconds},
             {"hud_frame_finalize_us", frame.hudFrameFinalizeMicroseconds},
             {"hud_backend_draw_us", frame.hudBackendDrawMicroseconds},
@@ -125,52 +117,12 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             {"hud_vertex_count", frame.hudVertexCount},
             {"hud_index_count", frame.hudIndexCount},
             {"hud_gpu_execution_us", frame.hudGpuExecutionMicroseconds},
-            {"hud_gpu_timing_available", frame.hudGpuTimingAvailable},
-            {"eo_readback_happened", frame.eoReadbackHappened}});
+            {"hud_gpu_timing_available", frame.hudGpuTimingAvailable}});
     }
 
 #ifndef __EMSCRIPTEN__
     report["physics_step_duration_us"] = SummarizeDurations(
         std::move(measurements.physicsStepDurationsMicroseconds));
-    report["eo_pixel_readback_enqueue_duration_us"] = SummarizeDurations(
-        std::move(measurements.eoReadbackEnqueueDurationsMicroseconds));
-    report["eo_pixel_readback_slot_setup_us"] = SummarizeDurations(
-        std::move(measurements.eoReadbackSlotSetupDurationsMicroseconds));
-    report["eo_pixel_buffer_setup_us"] = SummarizeDurations(
-        std::move(measurements.eoPixelBufferSetupDurationsMicroseconds));
-    report["eo_read_target_setup_us"] = SummarizeDurations(
-        std::move(measurements.eoReadTargetSetupDurationsMicroseconds));
-    report["eo_gl_readpixels_call_us"] = SummarizeDurations(
-        std::move(measurements.eoReadPixelsCallDurationsMicroseconds));
-    report["eo_gl_fence_creation_call_us"] = SummarizeDurations(
-        std::move(measurements.eoFenceCreationCallDurationsMicroseconds));
-    report["eo_gl_state_restore_us"] = SummarizeDurations(
-        std::move(measurements.eoGlStateRestoreDurationsMicroseconds));
-    report["eo_pixel_readback_poll_duration_us"] = SummarizeDurations(
-        std::move(measurements.eoReadbackPollDurationsMicroseconds));
-    report["eo_gl_fence_wait_call_us"] = SummarizeDurations(
-        std::move(measurements.eoFenceWaitCallDurationsMicroseconds));
-    report["eo_gl_fallback_finish_us"] = SummarizeDurations(
-        std::move(measurements.eoReadbackFallbackFinishDurationsMicroseconds));
-    report["eo_pixel_buffer_resize_us"] = SummarizeDurations(
-        std::move(measurements.eoPixelBufferResizeDurationsMicroseconds));
-    report["eo_gl_pixel_pack_buffer_bind_us"] = SummarizeDurations(
-        std::move(measurements.eoPixelPackBufferBindDurationsMicroseconds));
-    report["eo_gl_buffer_map_call_us"] = SummarizeDurations(
-        std::move(measurements.eoPixelBufferMapCallDurationsMicroseconds));
-    report["eo_pixel_copy_us"] = SummarizeDurations(
-        std::move(measurements.eoPixelCopyDurationsMicroseconds));
-    report["eo_gl_buffer_unmap_call_us"] = SummarizeDurations(
-        std::move(measurements.eoPixelBufferUnmapCallDurationsMicroseconds));
-    report["eo_readback_cleanup_us"] = SummarizeDurations(
-        std::move(measurements.eoReadbackCleanupDurationsMicroseconds));
-    report["vision_analysis"] = {
-        {"samples", measurements.visionSampleCount},
-        {"mean_brightness", measurements.meanBrightness},
-        {"mean_contrast", measurements.meanContrast},
-        {"mean_sharpness", measurements.meanSharpness},
-        {"duration_us", SummarizeDurations(
-            std::move(measurements.visionDurationsMicroseconds))}};
 #endif
 
     if (const auto memory = ReadProcessMemorySample())
