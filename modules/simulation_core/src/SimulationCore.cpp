@@ -487,7 +487,6 @@ struct SimulationCore::EcsStorage
                     return first.first < second.first;
                 });
             primaryDroneId = nextPrimary->first;
-            SynchronizeCameraPose();
         }
         return true;
     }
