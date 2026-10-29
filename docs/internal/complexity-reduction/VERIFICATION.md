@@ -228,3 +228,8 @@
 
 - Windows Release 전체 빌드 성공, 전체 CTest 29/29 통과.
 - 강체 상태 복사와 초기 상태 설정에 있던 동일한 쿼터니언→yaw 계산을 `DroneModel::YawRadians()`로 모았다. 두 호출 경로가 새 함수를 사용하고, 저장소에 계산식이 중복되지 않는 것을 확인했다.
+
+## 카메라 자세 ECS 갱신 — 2026-10-29
+
+- Windows Release 전체 빌드 성공, 전체 CTest 29/29 통과.
+- 카메라 자세 갱신이 ID 맵 대신 Flecs의 `CameraState`·`DroneState` 조회를 사용하도록 바꿨다. 엔티티 구성과 갱신 결과를 포함하는 기존 SimulationCore 및 카메라 시험을 통과했다.
