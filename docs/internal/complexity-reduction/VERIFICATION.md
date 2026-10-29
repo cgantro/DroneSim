@@ -418,3 +418,10 @@
 - 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
 - 시험: 전체 Release CTest 28/28 통과.
 - 범위: 시나리오 동작과 JSON 형식은 바꾸지 않았다. 웹 실행은 확인하지 않았다.
+
+## 시나리오 설정 읽기와 조합 검증 분리 — 2026-10-30
+
+- 변경: 항목 자체의 JSON 형식과 값 검사는 각 읽기 함수에 두고, 비행 방식·드론 수·배터리 예비량처럼 여러 설정을 함께 봐야 하는 규칙은 읽기가 끝난 뒤 한 단계에서 확인한다. 검사 규칙은 제거하지 않았다.
+- 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
+- 시험: 전체 Release CTest 28/28 통과.
+- 범위: 기존 시나리오 JSON 형식과 정상 실행 결과를 바꾸지 않았다. 웹 실행은 확인하지 않았다.

@@ -586,9 +586,6 @@ void ReadEnvironmentSettings(const Json& document, ScenarioDefinition& definitio
             document["wind_velocity_meters_per_second"],
             "wind_velocity_meters_per_second");
     }
-    if (definition.windVelocity
-        && definition.dynamics != SimulationDynamics::RigidBody)
-        throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
 }
 
 void ReadTrajectorySettings(const Json& document, ScenarioDefinition& definition)
@@ -604,18 +601,13 @@ void ReadTrajectorySettings(const Json& document, ScenarioDefinition& definition
     if (sampleEveryTicks == 0)
         throw std::invalid_argument("sample_every_ticks는 1 이상이어야 합니다.");
 
-    const std::uint64_t sampledTicks = definition.tickCount / sampleEveryTicks;
-    const std::uint64_t periodicSamples = sampledTicks + 1;
-    const bool finalTickNeedsExtraSample = definition.tickCount % sampleEveryTicks != 0;
-    const std::uint64_t sampleCount = periodicSamples
-        + (finalTickNeedsExtraSample ? 1 : 0);
+    const std::uint64_t sampleCount = definition.tickCount / sampleEveryTicks + 1
+        + (definition.tickCount % sampleEveryTicks != 0 ? 1 : 0);
     const std::uint64_t droneCount = definition.drones.empty()
         ? 1 : static_cast<std::uint64_t>(definition.drones.size());
     if (sampleCount > maximumTrajectoryDroneSamples / droneCount)
-    {
         throw std::invalid_argument(
             "궤적 기록이 너무 큽니다. sample_every_ticks를 늘려 주세요.");
-    }
 
     definition.trajectorySampleEveryTicks = sampleEveryTicks;
 }
@@ -625,12 +617,8 @@ void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& defini
     const auto settings = document.find("quadrotor_model");
     if (settings == document.end())
         return;
-    if (!settings->is_object()
-        || definition.dynamics != SimulationDynamics::RigidBody)
-    {
-        throw std::invalid_argument(
-            "quadrotor_model은 rigid_body 시나리오의 JSON 객체여야 합니다.");
-    }
+    if (!settings->is_object())
+        throw std::invalid_argument("quadrotor_model은 JSON 객체여야 합니다.");
 
     QuadrotorParameters& model = definition.quadrotorParameters;
     if (settings->contains("mass_kg"))
@@ -692,10 +680,9 @@ void ReadQuadrotorModelSettings(const Json& document, ScenarioDefinition& defini
         || model.motorTimeConstantUpSeconds <= 0.0
         || model.motorTimeConstantDownSeconds <= 0.0
         || model.maximumMotorSpeedRadiansPerSecond <= 0.0)
-    {
         throw std::invalid_argument(
             "기체 질량·관성·추력·토크·모터 시간·최대 속도는 모두 양수여야 합니다.");
-    }
+
     definition.quadrotorParametersCustomized = true;
 }
 
@@ -704,12 +691,8 @@ void ReadControllerSettings(const Json& document, ScenarioDefinition& definition
     const auto settings = document.find("controller_gains");
     if (settings == document.end())
         return;
-    if (!settings->is_object()
-        || definition.dynamics != SimulationDynamics::RigidBody)
-    {
-        throw std::invalid_argument(
-            "controller_gains는 rigid_body 시나리오의 JSON 객체여야 합니다.");
-    }
+    if (!settings->is_object())
+        throw std::invalid_argument("controller_gains는 JSON 객체여야 합니다.");
 
     QuadrotorControllerParameters& controller = definition.controllerParameters;
     if (settings->contains("position"))
@@ -723,9 +706,8 @@ void ReadControllerSettings(const Json& document, ScenarioDefinition& definition
 
     if (controller.positionGain <= 0.0 || controller.velocityGain <= 0.0
         || controller.attitudeGain <= 0.0 || controller.angularRateGain <= 0.0)
-    {
         throw std::invalid_argument("controller_gains 값은 모두 양수여야 합니다.");
-    }
+
     definition.controllerParametersCustomized = true;
 }
 
@@ -734,8 +716,8 @@ void ReadCollisionAvoidanceSettings(const Json& document, ScenarioDefinition& de
     const auto settingsValue = document.find("collision_avoidance");
     if (settingsValue == document.end())
         return;
-    if (!settingsValue->is_object() || definition.drones.size() < 2)
-        throw std::invalid_argument("collision_avoidance는 드론 두 대 이상인 시나리오에서 설정해야 합니다.");
+    if (!settingsValue->is_object())
+        throw std::invalid_argument("collision_avoidance는 JSON 객체여야 합니다.");
 
     CollisionAvoidanceSettings settings{
         ReadFiniteNumber(Required(*settingsValue, "safety_distance_meters"),
@@ -747,10 +729,9 @@ void ReadCollisionAvoidanceSettings(const Json& document, ScenarioDefinition& de
     if (settings.safetyDistanceMeters <= 0.0
         || settings.predictionHorizonSeconds <= 0.0
         || settings.lateralOffsetMeters < settings.safetyDistanceMeters)
-    {
         throw std::invalid_argument(
             "충돌 회피 거리는 양수여야 하고 옆 이동 거리는 안전거리 이상이어야 합니다.");
-    }
+
     definition.collisionAvoidance = settings;
 }
 
@@ -758,18 +739,7 @@ void ReadEnergyModelSettings(const Json& document, ScenarioDefinition& definitio
 {
     const auto settingsValue = document.find("energy_model");
     if (settingsValue == document.end())
-    {
-        const bool hasDroneEnergyOverrides = std::any_of(
-            definition.drones.begin(), definition.drones.end(),
-            [](const ScenarioDrone& drone)
-            {
-                return drone.batteryCapacityWattHours.has_value()
-                    || drone.initialBatteryPercent != 100.0;
-            });
-        if (hasDroneEnergyOverrides)
-            throw std::invalid_argument("드론 배터리 설정을 쓰려면 energy_model을 지정해야 합니다.");
         return;
-    }
     if (!settingsValue->is_object())
         throw std::invalid_argument("energy_model은 JSON 객체여야 합니다.");
 
@@ -786,41 +756,9 @@ void ReadEnergyModelSettings(const Json& document, ScenarioDefinition& definitio
         || settings.hoverPowerWatts <= 0.0
         || settings.flightPowerWatts <= 0.0
         || settings.reservePercent < 0.0 || settings.reservePercent >= 100.0)
-    {
         throw std::invalid_argument(
             "배터리 용량과 소비 전력은 양수이고 reserve_percent는 0 이상 100 미만이어야 합니다.");
-    }
 
-    constexpr double secondsPerHour = 3'600.0;
-    const double landingEnergyWattHours = settings.flightPowerWatts
-        * DroneModel::takeoffHeightMeters
-        / DroneModel::climbSpeedMetersPerSecond / secondsPerHour
-        + settings.flightPowerWatts * DroneModel::fixedStepSeconds / secondsPerHour;
-    const auto validateDroneBattery = [&](double capacityWattHours,
-        double initialPercent, std::string_view droneName)
-    {
-        const double reserveWattHours = capacityWattHours
-            * (settings.reservePercent / 100.0);
-        const double initialWattHours = capacityWattHours * (initialPercent / 100.0);
-        if (reserveWattHours < landingEnergyWattHours
-            || initialWattHours < landingEnergyWattHours)
-        {
-            throw std::invalid_argument(std::string(droneName)
-                + " 드론의 배터리 예비량은 기본 착륙에 필요한 에너지보다 커야 합니다.");
-        }
-    };
-    if (definition.drones.empty())
-    {
-        validateDroneBattery(settings.capacityWattHours, 100.0, "기본");
-    }
-    else
-    {
-        for (const ScenarioDrone& drone : definition.drones)
-        {
-            validateDroneBattery(drone.batteryCapacityWattHours.value_or(
-                settings.capacityWattHours), drone.initialBatteryPercent, drone.name);
-        }
-    }
     definition.energyModel = settings;
 }
 
@@ -839,7 +777,6 @@ void ReadExpectedLimitsAndCamera(const Json& expected, ScenarioDefinition& defin
     if (definition.orientationToleranceRadians < 0.0
         || definition.orientationToleranceRadians > std::numbers::pi)
         throw std::invalid_argument("orientation_tolerance_radians는 0부터 π 사이여야 합니다.");
-
     if (expected.contains("minimum_drone_separation_meters"))
     {
         definition.minimumDroneSeparationMeters = ReadFiniteNumber(
@@ -847,10 +784,9 @@ void ReadExpectedLimitsAndCamera(const Json& expected, ScenarioDefinition& defin
             "minimum_drone_separation_meters");
     }
     if (definition.minimumDroneSeparationMeters
-        && (*definition.minimumDroneSeparationMeters < 0.0 || definition.drones.size() < 2))
+        && *definition.minimumDroneSeparationMeters < 0.0)
         throw std::invalid_argument(
-            "minimum_drone_separation_meters는 여러 드론이 있는 시나리오에서 0 이상이어야 합니다.");
-
+            "minimum_drone_separation_meters는 0 이상이어야 합니다.");
     if (expected.contains("camera_status"))
         definition.expectedCameraStatus = ReadCameraStatus(expected["camera_status"]);
     if (expected.contains("camera_frame_count"))
@@ -868,6 +804,117 @@ void ReadExpectedResults(const Json& document, ScenarioDefinition& definition)
 
     definition.expectedDrones = ReadExpectedDrones(Required(expected, "drones"));
     ReadExpectedLimitsAndCamera(expected, definition);
+}
+
+void ValidateRigidBodySettings(const ScenarioDefinition& definition)
+{
+    if (definition.windVelocity
+        && definition.dynamics != SimulationDynamics::RigidBody)
+        throw std::invalid_argument("바람은 rigid_body 시나리오에서만 설정할 수 있습니다.");
+
+    for (const ScenarioDrone& drone : definition.drones)
+    {
+        if (drone.hasExtendedInitialState
+            && definition.dynamics != SimulationDynamics::RigidBody)
+            throw std::invalid_argument(
+                "세부 초기 상태는 rigid_body 시나리오에서만 사용할 수 있습니다.");
+    }
+    if (definition.dynamics != SimulationDynamics::RigidBody
+        && std::any_of(definition.commands.begin(), definition.commands.end(),
+            [](const TickCommand& command)
+            {
+                return command.command.kind == DroneCommand::Kind::SetRotorThrusts;
+            }))
+        throw std::invalid_argument(
+            "로터 추력 재생 명령은 rigid_body 시나리오에서만 사용할 수 있습니다.");
+
+    if (definition.quadrotorParametersCustomized
+        && definition.dynamics != SimulationDynamics::RigidBody)
+        throw std::invalid_argument(
+            "quadrotor_model은 rigid_body 시나리오의 JSON 객체여야 합니다.");
+
+    if (definition.controllerParametersCustomized
+        && definition.dynamics != SimulationDynamics::RigidBody)
+        throw std::invalid_argument(
+            "controller_gains는 rigid_body 시나리오의 JSON 객체여야 합니다.");
+}
+
+void ValidateTrajectorySize(const ScenarioDefinition& definition)
+{
+    if (!definition.trajectorySampleEveryTicks)
+        return;
+
+    const std::uint64_t interval = *definition.trajectorySampleEveryTicks;
+    const std::uint64_t sampleCount = definition.tickCount / interval + 1
+        + (definition.tickCount % interval != 0 ? 1 : 0);
+    const std::uint64_t droneCount = definition.drones.empty()
+        ? 1 : static_cast<std::uint64_t>(definition.drones.size());
+    if (sampleCount > maximumTrajectoryDroneSamples / droneCount)
+        throw std::invalid_argument(
+            "궤적 기록이 너무 큽니다. sample_every_ticks를 늘려 주세요.");
+}
+
+void ValidateMultiDroneSettings(const ScenarioDefinition& definition)
+{
+    if (definition.collisionAvoidance && definition.drones.size() < 2)
+        throw std::invalid_argument(
+            "collision_avoidance는 드론 두 대 이상인 시나리오에서 설정해야 합니다.");
+
+    if (definition.minimumDroneSeparationMeters
+        && definition.drones.size() < 2)
+        throw std::invalid_argument(
+            "minimum_drone_separation_meters는 여러 드론이 있는 시나리오에서만 설정할 수 있습니다.");
+}
+
+void ValidateEnergySettings(const ScenarioDefinition& definition)
+{
+    if (!definition.energyModel)
+    {
+        const bool hasDroneEnergyOverrides = std::any_of(
+            definition.drones.begin(), definition.drones.end(),
+            [](const ScenarioDrone& drone)
+            {
+                return drone.batteryCapacityWattHours.has_value()
+                    || drone.initialBatteryPercent != 100.0;
+            });
+        if (hasDroneEnergyOverrides)
+            throw std::invalid_argument("드론 배터리 설정을 쓰려면 energy_model을 지정해야 합니다.");
+    }
+    else
+    {
+        const EnergyModelSettings& settings = *definition.energyModel;
+        constexpr double secondsPerHour = 3'600.0;
+        const double landingEnergyWattHours = settings.flightPowerWatts
+            * DroneModel::takeoffHeightMeters
+            / DroneModel::climbSpeedMetersPerSecond / secondsPerHour
+            + settings.flightPowerWatts * DroneModel::fixedStepSeconds / secondsPerHour;
+        const auto validateDroneBattery = [&](double capacityWattHours,
+            double initialPercent, std::string_view droneName)
+        {
+            const double reserveWattHours = capacityWattHours
+                * (settings.reservePercent / 100.0);
+            const double initialWattHours = capacityWattHours * (initialPercent / 100.0);
+            if (reserveWattHours < landingEnergyWattHours
+                || initialWattHours < landingEnergyWattHours)
+                throw std::invalid_argument(std::string(droneName)
+                    + " 드론의 배터리 예비량은 기본 착륙에 필요한 에너지보다 커야 합니다.");
+        };
+        if (definition.drones.empty())
+            validateDroneBattery(settings.capacityWattHours, 100.0, "기본");
+        else
+            for (const ScenarioDrone& drone : definition.drones)
+                validateDroneBattery(drone.batteryCapacityWattHours.value_or(
+                    settings.capacityWattHours), drone.initialBatteryPercent, drone.name);
+    }
+}
+
+/** @brief 설정을 모두 읽은 뒤 항목 사이의 조건을 확인한다. */
+void ValidateScenarioDefinition(const ScenarioDefinition& definition)
+{
+    ValidateRigidBodySettings(definition);
+    ValidateTrajectorySize(definition);
+    ValidateMultiDroneSettings(definition);
+    ValidateEnergySettings(definition);
 }
 
 }
@@ -909,26 +956,12 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
         document, definition.tickCount, droneNames);
 
     ReadEnvironmentSettings(document, definition);
-    for (const ScenarioDrone& drone : definition.drones)
-    {
-        if (drone.hasExtendedInitialState
-            && definition.dynamics != SimulationDynamics::RigidBody)
-            throw std::invalid_argument(
-                "세부 초기 상태는 rigid_body 시나리오에서만 사용할 수 있습니다.");
-    }
-    if (definition.dynamics != SimulationDynamics::RigidBody
-        && std::any_of(definition.commands.begin(), definition.commands.end(),
-            [](const TickCommand& command)
-            {
-                return command.command.kind == DroneCommand::Kind::SetRotorThrusts;
-            }))
-        throw std::invalid_argument(
-            "로터 추력 재생 명령은 rigid_body 시나리오에서만 사용할 수 있습니다.");
     ReadQuadrotorModelSettings(document, definition);
     ReadControllerSettings(document, definition);
     ReadCollisionAvoidanceSettings(document, definition);
     ReadEnergyModelSettings(document, definition);
     ReadExpectedResults(document, definition);
+    ValidateScenarioDefinition(definition);
     return definition;
 }
 }
