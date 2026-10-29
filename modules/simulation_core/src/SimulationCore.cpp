@@ -31,6 +31,31 @@ bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
         && std::isfinite(yawRadians);
 }
 
+void ResolvePlanarObstacleContact(
+    DroneState& state, DroneControlState& control,
+    const glm::dvec2& normal, double penetrationMeters)
+{
+    const glm::dvec2 correction = normal * penetrationMeters;
+    state.positionMeters.x += correction.x;
+    state.positionMeters.y += correction.y;
+
+    glm::dvec2 velocity{
+        state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y};
+    const double inwardSpeed = glm::dot(velocity, normal);
+    if (inwardSpeed < 0.0)
+        velocity -= inwardSpeed * normal;
+    state.velocityMetersPerSecond.x = velocity.x;
+    state.velocityMetersPerSecond.y = velocity.y;
+
+    glm::dvec2 target{
+        control.targetVelocityMetersPerSecond.x,
+        control.targetVelocityMetersPerSecond.y};
+    const double inwardTargetSpeed = glm::dot(target, normal);
+    if (inwardTargetSpeed < 0.0)
+        target -= inwardTargetSpeed * normal;
+    control.targetVelocityMetersPerSecond.x = target.x;
+    control.targetVelocityMetersPerSecond.y = target.y;
+}
 }
 
 struct SimulationCore::EcsStorage
@@ -293,25 +318,8 @@ struct SimulationCore::EcsStorage
             else
             {
                 const glm::dvec2 normal{contact->normal.x, contact->normal.y};
-                const glm::dvec2 correction = normal * contact->penetrationMeters;
-                state.positionMeters.x += correction.x;
-                state.positionMeters.y += correction.y;
-                const glm::dvec2 velocity{state.velocityMetersPerSecond.x,
-                    state.velocityMetersPerSecond.y};
-                const double inwardSpeed = glm::dot(velocity, normal);
-                if (inwardSpeed < 0.0)
-                {
-                    state.velocityMetersPerSecond.x -= inwardSpeed * normal.x;
-                    state.velocityMetersPerSecond.y -= inwardSpeed * normal.y;
-                }
-                const glm::dvec2 target{control.targetVelocityMetersPerSecond.x,
-                    control.targetVelocityMetersPerSecond.y};
-                const double inwardTargetSpeed = glm::dot(target, normal);
-                if (inwardTargetSpeed < 0.0)
-                {
-                    control.targetVelocityMetersPerSecond.x -= inwardTargetSpeed * normal.x;
-                    control.targetVelocityMetersPerSecond.y -= inwardTargetSpeed * normal.y;
-                }
+                ResolvePlanarObstacleContact(
+                    state, control, normal, contact->penetrationMeters);
             }
         }
 
@@ -324,26 +332,8 @@ struct SimulationCore::EcsStorage
             if (!contact)
                 continue;
 
-            state.positionMeters.x += contact->normal.x * contact->penetrationMeters;
-            state.positionMeters.y += contact->normal.y * contact->penetrationMeters;
-            const glm::dvec2 normal = contact->normal;
-            const glm::dvec2 velocity{
-                state.velocityMetersPerSecond.x, state.velocityMetersPerSecond.y};
-            const double inwardSpeed = glm::dot(velocity, normal);
-            if (inwardSpeed < 0.0)
-            {
-                state.velocityMetersPerSecond.x -= inwardSpeed * normal.x;
-                state.velocityMetersPerSecond.y -= inwardSpeed * normal.y;
-            }
-            const glm::dvec2 target{
-                control.targetVelocityMetersPerSecond.x,
-                control.targetVelocityMetersPerSecond.y};
-            const double inwardTargetSpeed = glm::dot(target, normal);
-            if (inwardTargetSpeed < 0.0)
-            {
-                control.targetVelocityMetersPerSecond.x -= inwardTargetSpeed * normal.x;
-                control.targetVelocityMetersPerSecond.y -= inwardTargetSpeed * normal.y;
-            }
+            ResolvePlanarObstacleContact(
+                state, control, contact->normal, contact->penetrationMeters);
         }
     }
 
