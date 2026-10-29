@@ -72,8 +72,6 @@ namespace
 {
 constexpr communication::NetworkNodeId groundControlNodeId =
     std::numeric_limits<communication::NetworkNodeId>::max();
-constexpr std::uint64_t peerTelemetrySuspectAfterTicks = 30U;
-constexpr std::uint64_t peerTelemetryUnknownAfterTicks = 180U;
 constexpr std::uint64_t missionLeaseGraceTicks = 1800U;
 constexpr double missionLeasePlanningSpeedMetersPerSecond = 1.0;
 
@@ -632,50 +630,6 @@ bool AeroSimLabApp::StartFleetRally()
     return true;
 }
 
-std::string AeroSimLabApp::FleetReconnaissanceStatus() const
-{
-    std::ostringstream status;
-    status << fleetLeadershipStatus_ << '\n';
-
-    for (const auto droneId : fleetDroneIds_)
-    {
-        const auto mission = fleetReconnaissance_.find(droneId);
-        if (mission == fleetReconnaissance_.end())
-            continue;
-
-        const std::size_t targetIndex = mission->second.targetIndex;
-        const std::string& targetName = reconTargets_[targetIndex].displayName;
-        status << "드론 " << droneId << " · " << targetName
-            << " · " << detail::FleetDroneStatusLabel(mission->second.status);
-        if (simulation_.HasBattery(droneId))
-            status << " · 배터리 " << std::fixed << std::setprecision(0)
-                << simulation_.Battery(droneId).RemainingPercent() << '%';
-        if (droneId != fleetLeaderId_)
-        {
-            const auto telemetry = peerTelemetryAtLeader_.find(droneId);
-            if (telemetry == peerTelemetryAtLeader_.end())
-                status << " · 연결 대기";
-            else
-            {
-                const std::uint64_t ageTicks = simulation_.TickCount()
-                    - telemetry->second.receivedAtTick;
-                status << (ageTicks <= peerTelemetrySuspectAfterTicks
-                    ? " · 연결됨"
-                    : ageTicks <= peerTelemetryUnknownAfterTicks
-                        ? " · 통신 의심" : " · 상태 미확인");
-            }
-        }
-        if (mission->second.pendingRouteSequence != 0U)
-        {
-            status << (mission->second.routeTransmissionCount >= 10U
-                    ? " · 경로 확인 응답 없음"
-                    : " · 경로 확인 대기");
-        }
-        status << '\n';
-    }
-    return status.str();
-}
-
 void AeroSimLabApp::AdvanceFleetReconnaissance()
 {
     using DroneId = aerosimlab::simulation::DroneId;
@@ -726,11 +680,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                     if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
                         static_cast<void>(simulation_.Apply(droneId,
                             {Command::Kind::Land}));
-                }
-                else
-                {
-                    fleetLeadershipStatus_ = "배터리 예비량 도달 · 드론 "
-                        + std::to_string(droneId) + " 복귀 중";
                 }
                 continue;
             }
@@ -1161,8 +1110,6 @@ void AeroSimLabApp::InitializeFleetLeadership()
     groundControlPositionMeters_ = simulation_.State().positionMeters;
     groundControlPositionMeters_.z = terrainGrid_.HeightAtLocalMeters(
         {groundControlPositionMeters_.x, groundControlPositionMeters_.y}) + 1.5;
-    fleetLeadershipStatus_ = fleetDroneIds_.empty()
-        ? "리더 없음" : "리더 정상 · 드론 " + std::to_string(fleetLeaderId_);
 }
 
 bool AeroSimLabApp::SendFleetRouteAssignment(

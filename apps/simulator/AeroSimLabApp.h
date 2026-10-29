@@ -174,7 +174,6 @@ private:
     void AdvanceFleetReconnaissance();
     [[nodiscard]] bool FleetReturnCanStart() const;
     [[nodiscard]] bool StartFleetReturn();
-    [[nodiscard]] std::string FleetReconnaissanceStatus() const;
     [[nodiscard]] bool StartFormationTransit();
     [[nodiscard]] bool StartFleetReconnaissance(
         bool takeOffDrones,
@@ -373,7 +372,6 @@ private:
         fleetReconnaissance_;
     aerosimlab::simulation::DroneId fleetLeaderId_ = 0;
     std::uint64_t nextMissionAssignmentVersion_ = 1;
-    std::string fleetLeadershipStatus_ = "리더 대기 중";
     struct ReceivedPeerTelemetry
     {
         aerosimlab::simulator::detail::PeerTelemetry state;
