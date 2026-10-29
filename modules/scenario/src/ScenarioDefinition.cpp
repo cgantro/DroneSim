@@ -10,7 +10,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -337,9 +336,7 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
 }
 
 std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
-    const Json& document,
-    std::uint64_t tickCount,
-    const std::unordered_set<std::string>& droneNames)
+    const Json& document)
 {
     const auto found = document.find("communication_outages");
     if (found == document.end())
@@ -348,7 +345,6 @@ std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
         throw std::invalid_argument("communication_outages는 배열이어야 합니다.");
 
     std::vector<DroneCommunicationOutage> outages;
-    std::unordered_map<std::string, std::uint64_t> previousEndByDrone;
     outages.reserve(found->size());
     for (const Json& item : *found)
     {
@@ -365,29 +361,15 @@ std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
             Required(item, "end_tick"), "end_tick");
         const std::uint64_t heartbeatTimeoutTicks = ReadUnsigned(
             Required(item, "heartbeat_timeout_ticks"), "heartbeat_timeout_ticks");
-        const auto previousEnd = previousEndByDrone.find(droneName);
-        if (!droneNames.contains(droneName) || startTick >= endTick
-            || endTick > tickCount || heartbeatTimeoutTicks == 0
-            || (previousEnd != previousEndByDrone.end()
-                && startTick < previousEnd->second))
-        {
-            throw std::invalid_argument(
-                "통신 장애는 등록된 드론의 겹치지 않는 Tick 구간과 양수 하트비트 제한을 지정해야 합니다.");
-        }
-        previousEndByDrone[droneName] = endTick;
         outages.push_back({std::move(droneName), startTick, endTick,
             heartbeatTimeoutTicks});
     }
     return outages;
 }
 
-/** @brief 임무 하나를 읽고 드론 배정, 경로와 Tick 범위를 확인한다. */
+/** @brief 임무 항목의 JSON 값을 실행 결과 구조체로 옮긴다. */
 ScenarioResult::MissionTask ReadMissionTask(
-    const Json& taskValue,
-    std::uint64_t tickCount,
-    const std::unordered_set<std::string>& droneNames,
-    std::unordered_set<std::string>& taskNames,
-    std::unordered_set<std::string>& zoneIds)
+    const Json& taskValue)
 {
     if (!taskValue.is_object())
         throw std::invalid_argument("각 mission task는 JSON 객체여야 합니다.");
@@ -395,23 +377,16 @@ ScenarioResult::MissionTask ReadMissionTask(
     const Json& taskNameValue = Required(taskValue, "name");
     const Json& roleValue = Required(taskValue, "role");
     const Json& droneValue = Required(taskValue, "drone");
-    if (!taskNameValue.is_string() || taskNameValue.get<std::string>().empty()
-        || !roleValue.is_string() || roleValue.get<std::string>().empty()
+    if (!taskNameValue.is_string() || !roleValue.is_string()
         || !droneValue.is_string())
     {
-        throw std::invalid_argument(
-            "임무 name과 role은 비어 있지 않은 문자열이어야 하고 drone을 지정해야 합니다.");
+        throw std::invalid_argument("임무 name과 role은 문자열이어야 하고 drone을 지정해야 합니다.");
     }
 
     ScenarioResult::MissionTask task;
     task.name = taskNameValue.get<std::string>();
     task.role = roleValue.get<std::string>();
     task.droneName = droneValue.get<std::string>();
-    if (!taskNames.insert(task.name).second || !droneNames.contains(task.droneName))
-    {
-        throw std::invalid_argument("임무 이름은 고유해야 하며 등록된 드론을 지정해야 합니다.");
-    }
-
     const Json& waypoints = Required(taskValue, "waypoints_meters");
     if (!waypoints.is_array() || waypoints.empty())
         throw std::invalid_argument("waypoints_meters는 한 점 이상을 담은 배열이어야 합니다.");
@@ -435,24 +410,12 @@ ScenarioResult::MissionTask ReadMissionTask(
             throw std::invalid_argument(
                 "inspection_zone_id는 비어 있지 않은 문자열이어야 합니다.");
         task.inspectionZoneId = zone->get<std::string>();
-        if (!zoneIds.insert(task.inspectionZoneId).second)
-            throw std::invalid_argument("inspection_zone_id는 임무 안에서 고유해야 합니다.");
-    }
-    const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
-        task.waypointsMeters.end(), [](const glm::dvec3& point) { return point.z < 0.0; });
-    if (hasNegativeAltitude || task.toleranceMeters < 0.0
-        || task.startTick > task.deadlineTick || task.deadlineTick >= tickCount)
-    {
-        throw std::invalid_argument(
-            "임무 목표 고도와 허용 오차는 0 이상이고, 시작·기한 Tick은 시나리오 범위 안이어야 합니다.");
     }
     return task;
 }
 
 std::optional<ScenarioResult::Mission> ReadMission(
-    const Json& document,
-    std::uint64_t tickCount,
-    const std::unordered_set<std::string>& droneNames)
+    const Json& document)
 {
     const auto found = document.find("mission");
     if (found == document.end())
@@ -470,21 +433,17 @@ std::optional<ScenarioResult::Mission> ReadMission(
 
     ScenarioResult::Mission mission;
     mission.name = nameValue.get<std::string>();
-    std::unordered_set<std::string> taskNames;
-    std::unordered_set<std::string> zoneIds;
     mission.tasks.reserve(tasks.size());
     for (const Json& taskValue : tasks)
     {
-        mission.tasks.push_back(ReadMissionTask(
-            taskValue, tickCount, droneNames, taskNames, zoneIds));
+        mission.tasks.push_back(ReadMissionTask(taskValue));
     }
     return mission;
 }
 
 std::string ReadCommandDroneName(
     const Json& command,
-    const std::string& defaultDroneName,
-    const std::unordered_set<std::string>& droneNames)
+    const std::string& defaultDroneName)
 {
     std::string droneName = defaultDroneName;
     const auto drone = command.find("drone");
@@ -494,16 +453,12 @@ std::string ReadCommandDroneName(
             throw std::invalid_argument("명령 drone은 드론 name 문자열이어야 합니다.");
         droneName = drone->get<std::string>();
     }
-    if (!droneNames.contains(droneName))
-        throw std::invalid_argument("명령이 가리키는 드론을 찾을 수 없습니다: " + droneName);
     return droneName;
 }
 
 std::vector<TickCommand> ReadCommands(
     const Json& commands,
-    std::uint64_t tickCount,
-    const std::string& defaultDroneName,
-    const std::unordered_set<std::string>& droneNames)
+    const std::string& defaultDroneName)
 {
     if (!commands.is_array())
     {
@@ -512,24 +467,12 @@ std::vector<TickCommand> ReadCommands(
 
     std::vector<TickCommand> result;
     result.reserve(commands.size());
-    std::uint64_t previousTick = 0;
-    bool hasPreviousTick = false;
     for (const Json& item : commands)
     {
         const std::uint64_t tick = ReadUnsigned(Required(item, "tick"), "tick");
-        if (tick >= tickCount)
-        {
-            throw std::invalid_argument("명령 tick은 시나리오 실행 범위 안에 있어야 합니다.");
-        }
-        if (hasPreviousTick && tick < previousTick)
-        {
-            throw std::invalid_argument("명령은 tick 순서대로 작성해야 합니다.");
-        }
         std::string droneName = ReadCommandDroneName(
-            item, defaultDroneName, droneNames);
+            item, defaultDroneName);
         result.push_back({tick, std::move(droneName), ReadCommand(item)});
-        previousTick = tick;
-        hasPreviousTick = true;
     }
     return result;
 }
@@ -822,19 +765,12 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     }
     if (const auto camera = document.find("camera_model"); camera != document.end())
         definition.defaultCameraModel = ReadCameraModel(*camera);
-    std::unordered_set<std::string> droneNames;
-    for (const ScenarioDrone& drone : definition.drones)
-        droneNames.insert(drone.name);
-
     definition.commands = ReadCommands(
-        Required(document, "commands"), definition.tickCount,
-        definition.drones.front().name, droneNames);
-    definition.communicationOutages = ReadDroneCommunicationOutages(
-        document, definition.tickCount, droneNames);
+        Required(document, "commands"), definition.drones.front().name);
+    definition.communicationOutages = ReadDroneCommunicationOutages(document);
 
     ReadTrajectorySettings(document, definition);
-    definition.mission = ReadMission(
-        document, definition.tickCount, droneNames);
+    definition.mission = ReadMission(document);
 
     ReadEnvironmentSettings(document, definition);
     ReadQuadrotorModelSettings(document, definition);

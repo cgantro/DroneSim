@@ -463,3 +463,9 @@
 - Windows Release 실행기·시나리오 시험 빌드 성공.
 - 전체 CTest 28/28 통과.
 - 회피 진입·종료, 강체 최소 간격, 다중 드론 임무 결과를 확인했다.
+
+## 시나리오 입력과 규칙 검사 분리 — 2026-10-30
+
+- Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공.
+- 전체 Release CTest 28/28 통과. 잘못된 명령·통신 단절·임무 입력을 포함한 기존 시나리오 시험을 그대로 실행했다.
+- `git diff --check` 통과. 웹 브라우저는 확인하지 않았다.
