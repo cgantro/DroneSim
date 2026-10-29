@@ -42,11 +42,11 @@
 - `modules/scenario/src/ScenarioDefinition.cpp`: SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1329; 남은 줄 없음. ReadScenarioDefinition(1254)은 JSON을 검증해 값 소유 정의를 반환하고 잘못된 입력은 예외. GenerateSurveyTasks(610)는 드론별 영역과 왕복 경로를 생성; 앱 임무 생성과 중복 여부 확인. 시설 점검·재시도 및 통신 장애·물성 변경 설정은 범위 정리 후보이며 필수 조사 경로와 구분.
 - `modules/scenario/src/ScenarioDefinition.h`: SIMPLIFY — 확인 1–143; 남은 줄 없음. 시나리오 정의는 드론·예약 명령·통신 장애·편대·임무 등을 vector/optional 값으로 소유하고 파서 결과를 실행기에 전달한다(104–141). 고급 재할당 관련 결과 모델과 확장 설정은 소비자 확인 후 축소 후보.
 - `modules/scenario/src/ScenarioRunner.cpp`: SIMPLIFY — RunScenario는 시나리오 정의를 읽고 관측, 명령, 에너지, 임무, 편대, 회피와 Tick을 진행한다. 임무 완료는 경유점 도착으로 확인한다. 자동 촬영 판정·재시도는 2026-10-29 제거했다. UpdateMissionCommands에는 통신·배터리 조건의 임무 재배정이 남아 있으며 별도 축소 후보이다. 앱에도 임무 실행이 있어 중복 책임 검토가 필요하다.
-- `modules/simulation_core/src/SimulationCore.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1179; 남은 줄 없음. EcsStorage(37)는 Flecs 엔티티·배터리와 물리 월드를 소유한다. AdvanceOneTick(895)은 ECS 진행 후 물리, 배터리, tick, 카메라 자세를 갱신하고 일시정지 시 반환. 생성 실패 시 물리 강체와 엔티티 정리(407). 운동학과 강체의 접촉 처리는 서로 다른 구현이며 플랫폼 요구 확인 후 축소 판단.
+- `modules/simulation_core/src/SimulationCore.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1179; 남은 줄 없음. EcsStorage(37)는 Flecs 엔티티와 물리 월드를 소유한다. 배터리는 설정된 드론 엔티티의 선택형 `BatteryModel` 컴포넌트다. AdvanceOneTick(895)은 ECS 진행 후 물리, 배터리, tick, 카메라 자세를 갱신하고 일시정지 시 반환. 생성 실패 시 물리 강체와 엔티티 정리(407). 운동학과 강체의 접촉 처리는 서로 다른 구현이며 플랫폼 요구 확인 후 축소 판단.
 
 ## Simulation Core의 실제 책임과 경계
 
-- `SimulationCore`는 Flecs 세계와 드론 엔티티를 만들고, 명령 적용 및 단일 1/60초 틱을 외부에 제공한다. Flecs 컴포넌트는 별도 타입을 많이 두기보다 드론 상태·제어 목표·카메라 상태를 엔티티에 붙이며, 배터리와 식별자→엔티티 대응은 `EcsStorage`의 별도 맵에 둔다. 배터리 컴포넌트 전환은 Flecs가 `BatteryModel`의 기본 생성자를 요구해 중단됐고, 래퍼 추가는 더 복잡하므로 맵을 유지하기로 했다. 따라서 ECS는 실제로 사용되지만 모든 시뮬레이션 데이터를 컴포넌트로 표현하지는 않는다.
+- `SimulationCore`는 Flecs 세계와 드론 엔티티를 만들고, 명령 적용 및 단일 1/60초 틱을 외부에 제공한다. Flecs 컴포넌트는 별도 타입을 많이 두기보다 드론 상태·제어 목표·카메라 상태를 엔티티에 붙인다. 배터리도 기본 생성자를 제공한 `BatteryModel` 컴포넌트로 옮겼으며, 식별자→엔티티 대응은 `EcsStorage`의 맵으로 찾는다. 지형, 바람, 충돌 장애물과 계측값은 코어 소유 자료다. 모든 시뮬레이션 데이터를 ECS로 표현하지는 않는다.
 - Flecs 시스템은 운동학 모드에서 `DroneState`와 `DroneControlState`를 순회해 운동학 계산과 접촉 처리를 한다. 카메라 시스템은 `CameraState`를 갱신한다. 강체 모드에서는 Flecs 시스템이 목표 로터 속도를 AirSim의 물리 월드에 전달하고, `AdvanceOneTick()` 뒤 물리 월드를 한 번 진행해 결과를 각 드론 상태에 복사한다. 현재 구조는 ECS 시스템이 전체 물리 적분을 맡는 형태가 아니라, ECS가 드론 상태·제어를 보유하고 별도 `PhysicsWorld`가 강체를 소유하는 혼합 구조다.
 - `AdvanceOneTick()`의 순서는 일시정지 확인 → Flecs 진행(제어·운동학/로터 입력·카메라 tick) → 강체 모드의 AirSim 적분과 상태 동기화 → 배터리 갱신 → Tick 증가 → 카메라 자세 동기화다. 이 순서가 앱·헤드리스 양쪽에서 공유되는 실행 단위다.
 - 화면 장면과 렌더링은 Simulation Core에 있지 않다. `TrainingRangeScene`과 그래픽 모듈이 장면 자산·그리기 데이터를 다루고, 앱이 시뮬레이션 상태를 렌더러 입력으로 넘긴다. 상세 모듈 책임·파일 배치·장면 관리 조사는 사용자 요청에 따라 다음 단계의 별도 구조 감사에서 한다.

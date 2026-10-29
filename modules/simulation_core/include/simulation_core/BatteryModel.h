@@ -20,6 +20,9 @@ struct BatteryModelParameters
 class BatteryModel
 {
 public:
+    /** @brief Flecs가 컴포넌트 저장 공간을 만들 때 사용한다. 설정은 ConfigureBattery에서 덮어쓴다. */
+    BatteryModel() = default;
+
     BatteryModel(BatteryModelParameters parameters, double initialPercent = 100.0);
 
     /** @brief 현재 비행 상태에 해당하는 에너지를 고정 Tick만큼 사용한다. */

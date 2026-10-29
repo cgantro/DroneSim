@@ -77,7 +77,9 @@ void Verify_SimulationCore_AdvancesAndResetsBatteryWithEachTick()
     start.mode = FlightMode::Flying;
     start.velocityMetersPerSecond = {1.0, 0.0, 0.0};
     simulation.SetInitialState(droneId, start);
+    EXPECT_FALSE(simulation.HasBattery(droneId));
     simulation.ConfigureBattery(droneId, {10.0, 0.0, 3600.0, 20.0});
+    EXPECT_TRUE(simulation.HasBattery(droneId));
 
     simulation.AdvanceOneTick();
     EXPECT_NEAR(simulation.Battery(droneId).ConsumedWattHours(),

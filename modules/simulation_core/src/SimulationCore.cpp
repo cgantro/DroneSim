@@ -78,7 +78,6 @@ struct SimulationCore::EcsStorage
 #endif
     flecs::world world;
     std::unordered_map<DroneId, flecs::entity> drones;
-    std::unordered_map<DroneId, BatteryModel> batteries;
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
     std::vector<StaticObstacleBox> kinematicObstacles;
@@ -496,7 +495,6 @@ struct SimulationCore::EcsStorage
         found->second.destruct();
         const bool removedPrimary = id == primaryDroneId;
         drones.erase(found);
-        batteries.erase(id);
         if (removedPrimary)
         {
             const auto nextPrimary = std::min_element(
@@ -865,30 +863,30 @@ std::vector<DroneId> SimulationCore::DroneIds() const
 void SimulationCore::ConfigureBattery(
     DroneId droneId, BatteryModelParameters parameters, double initialPercent)
 {
-    static_cast<void>(ecs_->FindDrone(droneId));
-    ecs_->batteries.insert_or_assign(
-        droneId, BatteryModel{parameters, initialPercent});
+    ecs_->FindDrone(droneId).set<BatteryModel>(
+        BatteryModel{parameters, initialPercent});
 }
 
 bool SimulationCore::HasBattery(DroneId droneId) const noexcept
 {
-    return ecs_->batteries.contains(droneId);
+    const auto found = ecs_->drones.find(droneId);
+    return found != ecs_->drones.end() && found->second.has<BatteryModel>();
 }
 
 BatteryModel& SimulationCore::Battery(DroneId droneId)
 {
-    const auto found = ecs_->batteries.find(droneId);
-    if (found == ecs_->batteries.end())
+    flecs::entity& drone = ecs_->FindDrone(droneId);
+    if (!drone.has<BatteryModel>())
         throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
-    return found->second;
+    return drone.get_mut<BatteryModel>();
 }
 
 const BatteryModel& SimulationCore::Battery(DroneId droneId) const
 {
-    const auto found = ecs_->batteries.find(droneId);
-    if (found == ecs_->batteries.end())
+    const flecs::entity& drone = ecs_->FindDrone(droneId);
+    if (!drone.has<BatteryModel>())
         throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
-    return found->second;
+    return drone.get<BatteryModel>();
 }
 
 void SimulationCore::AdvanceOneTick()
@@ -910,8 +908,11 @@ void SimulationCore::AdvanceOneTick()
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->AdvancePhysicsWorld();
 #endif
-    for (auto& [droneId, battery] : ecs_->batteries)
-        battery.Advance(State(droneId).mode);
+    for (auto& [droneId, drone] : ecs_->drones)
+    {
+        if (drone.has<BatteryModel>())
+            drone.get_mut<BatteryModel>().Advance(State(droneId).mode);
+    }
     ++ecs_->tickCount;
     ecs_->SynchronizeCameraPose();
 }
@@ -938,10 +939,11 @@ void SimulationCore::Reset()
         (void)id;
         EoCameraModel::Reset(drone.get_mut<CameraState>());
     }
-    for (auto& [id, battery] : ecs_->batteries)
+    for (auto& [id, drone] : ecs_->drones)
     {
         (void)id;
-        battery.Reset();
+        if (drone.has<BatteryModel>())
+            drone.get_mut<BatteryModel>().Reset();
     }
     ecs_->tickCount = 0;
     paused_ = false;
