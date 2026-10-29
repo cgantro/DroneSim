@@ -732,7 +732,7 @@ void UpdateMissionResults(
     for (ScenarioResult::MissionTask& task : mission->tasks)
     {
         if (!task.started || task.IsCompleted() || task.failed
-            || task.droneName.empty() || !IsConnected(drones, task.droneName))
+            || !IsConnected(drones, task.droneName))
             continue;
 
         const DroneId droneId = drones.at(task.droneName).id;
