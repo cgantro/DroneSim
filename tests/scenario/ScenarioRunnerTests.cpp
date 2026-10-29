@@ -194,8 +194,8 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
         << (result.issues.empty() ? "" : result.issues.front());
     ASSERT_TRUE(result.mission.has_value());
     ASSERT_EQ(result.mission->tasks.size(), 2U);
-    EXPECT_TRUE(result.mission->tasks[0].completed);
-    EXPECT_TRUE(result.mission->tasks[1].completed);
+    EXPECT_TRUE(result.mission->tasks[0].IsCompleted());
+    EXPECT_TRUE(result.mission->tasks[1].IsCompleted());
     EXPECT_EQ(result.mission->tasks[0].facilityId, "facility-bridge");
     EXPECT_EQ(result.mission->tasks[0].inspectionZoneId, "deck-east");
     EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Disabled);
@@ -658,12 +658,12 @@ void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
     {
         if (task.name == "sector-2")
         {
-            EXPECT_FALSE(task.completed);
+            EXPECT_FALSE(task.IsCompleted());
             EXPECT_EQ(task.droneName, "scout-2");
         }
         else
         {
-            EXPECT_TRUE(task.completed) << task.name;
+            EXPECT_TRUE(task.IsCompleted()) << task.name;
         }
     }
 
@@ -800,7 +800,7 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     ASSERT_EQ(result.mission->tasks.size(), 2U);
     for (const ScenarioResult::MissionTask& task : result.mission->tasks)
     {
-        EXPECT_FALSE(task.completed);
+        EXPECT_FALSE(task.IsCompleted());
         EXPECT_FALSE(task.failed);
         EXPECT_FALSE(task.droneName.empty());
     }
@@ -868,7 +868,7 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
     for (std::size_t index = 0; index < areaResult.mission->tasks.size(); ++index)
     {
         const auto& task = areaResult.mission->tasks[index];
-        EXPECT_TRUE(task.completed) << task.name;
+        EXPECT_TRUE(task.IsCompleted()) << task.name;
         ASSERT_EQ(task.waypointsMeters.size(), 4);
         EXPECT_DOUBLE_EQ(task.waypointsMeters[0].x, 4.0 * static_cast<double>(index));
         EXPECT_DOUBLE_EQ(task.waypointsMeters[1].x, 4.0 * static_cast<double>(index + 1));
@@ -1017,7 +1017,7 @@ void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
     EXPECT_EQ(energyResult.mission->tasks[0].droneName, "low-charge");
     EXPECT_TRUE(energyResult.mission->tasks[0].failed);
     EXPECT_EQ(energyResult.mission->tasks[1].droneName, "reserve");
-    EXPECT_TRUE(energyResult.mission->tasks[1].completed);
+    EXPECT_TRUE(energyResult.mission->tasks[1].IsCompleted());
     ASSERT_EQ(energyResult.drones.size(), 2U);
     const auto& depletedDrone = energyResult.drones[0];
     EXPECT_TRUE(depletedDrone.returnedForLowBattery);

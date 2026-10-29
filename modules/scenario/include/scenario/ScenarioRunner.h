@@ -111,9 +111,11 @@ struct ScenarioResult
         std::uint64_t deadlineTick = 0;
         double toleranceMeters = 0.0;
         bool started = false;
-        bool completed = false;
         bool failed = false;
         std::optional<std::uint64_t> completedTick;
+
+        /** @brief 완료 Tick이 기록됐는지 확인한다. */
+        [[nodiscard]] bool IsCompleted() const noexcept { return completedTick.has_value(); }
     };
     /** @brief 임무의 완료·실패·미확정 결과와 역할별 진행 상태다. */
     struct Mission

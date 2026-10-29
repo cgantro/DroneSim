@@ -104,7 +104,7 @@ void UpdateEnergyPolicy(
             {
                 for (ScenarioResult::MissionTask& task : mission->tasks)
                 {
-                    if (task.droneName != droneName || task.completed || task.failed)
+                    if (task.droneName != droneName || task.IsCompleted() || task.failed)
                         continue;
                     task.failed = true;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
@@ -417,14 +417,14 @@ void UpdateMissionCommands(
          taskIterator != mission->tasks.end(); ++taskIterator)
     {
         ScenarioResult::MissionTask& task = *taskIterator;
-        if (task.completed || task.failed || tick < task.startTick
+        if (task.IsCompleted() || task.failed || tick < task.startTick
             || !IsConnected(observations, task.droneName))
             continue;
         const bool earlierTaskIsActive = std::any_of(mission->tasks.begin(),
             taskIterator, [&task](const ScenarioResult::MissionTask& previous)
             {
                 return previous.droneName == task.droneName
-                    && !previous.completed && !previous.failed;
+                    && !previous.IsCompleted() && !previous.failed;
             });
         if (earlierTaskIsActive)
             continue;
@@ -649,7 +649,7 @@ void UpdateCollisionAvoidance(
             [firstConnected, &firstName](const ScenarioResult::MissionTask& task)
             {
                 return firstConnected && task.droneName == firstName && task.started
-                    && !task.completed && !task.failed;
+                    && !task.IsCompleted() && !task.failed;
             });
         const bool firstHasTask = firstTask != mission->tasks.end()
             && CanReceiveWaypoint(simulation.State(droneIds.at(firstName)).mode);
@@ -662,7 +662,7 @@ void UpdateCollisionAvoidance(
                 [secondConnected, &secondName](const ScenarioResult::MissionTask& task)
                 {
                     return secondConnected && task.droneName == secondName && task.started
-                        && !task.completed && !task.failed;
+                        && !task.IsCompleted() && !task.failed;
                 });
             const bool secondHasTask = secondTask != mission->tasks.end()
                 && CanReceiveWaypoint(simulation.State(droneIds.at(secondName)).mode);
@@ -837,7 +837,7 @@ void UpdateCollisionAvoidance(
             [&droneName](const ScenarioResult::MissionTask& candidate)
             {
                 return candidate.droneName == droneName && candidate.started
-                    && !candidate.completed && !candidate.failed;
+                    && !candidate.IsCompleted() && !candidate.failed;
             });
         if (task == mission->tasks.end())
             continue;
@@ -916,7 +916,7 @@ void UpdateMissionResults(
 
     for (ScenarioResult::MissionTask& task : mission->tasks)
     {
-        if (!task.started || task.completed || task.failed
+        if (!task.started || task.IsCompleted() || task.failed
             || task.droneName.empty() || !IsConnected(observations, task.droneName))
             continue;
 
@@ -934,7 +934,6 @@ void UpdateMissionResults(
         }
         else if (reachedWaypoint)
         {
-            task.completed = true;
             task.completedTick = tick;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
@@ -1117,9 +1116,9 @@ void CheckExpectedResults(
         for (const ScenarioResult::MissionTask& task : result.mission->tasks)
         {
             totalWaypointCount += task.waypointsMeters.size();
-            visitedWaypointCount += task.completed
+            visitedWaypointCount += task.IsCompleted()
                 ? task.waypointsMeters.size() : task.currentWaypointIndex;
-            if (task.completed)
+            if (task.IsCompleted())
             {
                 ++result.mission->completedTaskCount;
                 if (task.completedTick
@@ -1136,7 +1135,7 @@ void CheckExpectedResults(
                 / static_cast<double>(totalWaypointCount);
         const bool allTasksCompleted = std::all_of(
             result.mission->tasks.begin(), result.mission->tasks.end(),
-            [](const ScenarioResult::MissionTask& task) { return task.completed; });
+            [](const ScenarioResult::MissionTask& task) { return task.IsCompleted(); });
         const bool hasFailedTask = std::any_of(
             result.mission->tasks.begin(), result.mission->tasks.end(),
             [](const ScenarioResult::MissionTask& task) { return task.failed; });

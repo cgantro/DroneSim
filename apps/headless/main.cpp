@@ -112,7 +112,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                 {"waypoints_meters", std::move(waypoints)},
                 {"current_waypoint_index", task.currentWaypointIndex},
                 {"started", task.started},
-                {"completed", task.completed},
+                {"completed", task.IsCompleted()},
                 {"failed", task.failed},
                 {"completed_tick", task.completedTick}});
         }

@@ -1,5 +1,10 @@
 # 빌드와 시험 기록
 
+## 임무 완료 상태 중복 제거 — 2026-10-30
+
+- `MissionTask`의 `completed` 불리언은 완료되는 순간에만 `completedTick`과 함께 설정됐다. 불리언을 제거하고 `IsCompleted()`가 완료 Tick의 유무를 확인하도록 했다. JSON의 `completed` 항목은 같은 의미로 계속 출력한다.
+- Windows Release `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+
 ## 최상위 기본 드론 상태 중복 제거 — 2026-10-30
 
 - `ScenarioResult`의 최상위 비행·카메라 복사본을 제거했다. 시나리오는 기본 드론을 포함해 적어도 한 대를 결과에 담으므로, Headless JSON은 첫 드론 상태를 최상위 `final_state`·`camera` 항목으로 출력한다.
