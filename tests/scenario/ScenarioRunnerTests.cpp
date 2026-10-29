@@ -126,43 +126,6 @@ void Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories()
     EXPECT_THROW(static_cast<void>(RunScenario(oversizedTrace)), std::invalid_argument);
 }
 
-void Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone()
-{
-    constexpr std::string_view scenario = R"json(
-    {"version":1,"dynamics":"kinematic","ticks":4,
-     "drones":[
-       {"name":"east","initial_position_meters":[0,0,0]},
-       {"name":"north","initial_position_meters":[0,1,0]}],
-     "commands":[],
-     "camera_events":[
-       {"tick":0,"drone":"east","action":"disable"},
-       {"tick":0,"drone":"north","action":"fault"},
-       {"tick":2,"drone":"north","action":"recover"}],
-     "expected":{"camera_status":"disabled","camera_frame_count":0,
-       "drones":[
-         {"name":"east","mode":"grounded","position_meters":[0,0,0]},
-         {"name":"north","mode":"grounded","position_meters":[0,1,0]}]}}
-    )json";
-
-    const ScenarioResult result = RunScenario(scenario);
-    ASSERT_TRUE(result.IsPassed())
-        << (result.issues.empty() ? "" : result.issues.front());
-    ASSERT_EQ(result.drones.size(), 2U);
-    EXPECT_EQ(result.drones[0].name, "east");
-    EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Disabled);
-    EXPECT_EQ(result.drones[0].finalCamera.frameCount, 0U);
-    EXPECT_EQ(result.drones[1].name, "north");
-    EXPECT_EQ(result.drones[1].finalCamera.status, CameraStatus::Active);
-    EXPECT_EQ(result.drones[1].finalCamera.frameCount, 2U);
-    EXPECT_EQ(result.eventLog.size(), 3U);
-
-    constexpr std::string_view unknownDrone = R"json(
-    {"version":1,"dynamics":"kinematic","ticks":1,"commands":[],
-     "camera_events":[{"tick":0,"drone":"missing","action":"fault"}]}
-    )json";
-    EXPECT_THROW(static_cast<void>(RunScenario(unknownDrone)), std::invalid_argument);
-}
-
 void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
 {
     constexpr std::string_view source = R"json(
@@ -173,8 +136,6 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
      "commands":[
        {"tick":0,"drone":"east","type":"takeoff"},
        {"tick":0,"drone":"north","type":"takeoff"}],
-     "camera_events":[
-       {"tick":105,"drone":"east","action":"disable"}],
      "mission":{"name":"bridge-survey","tasks":[
        {"name":"east-face","role":"survey","drone":"east",
         "facility_id":"facility-bridge","inspection_zone_id":"deck-east",
@@ -198,7 +159,7 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
     EXPECT_TRUE(result.mission->tasks[1].IsCompleted());
     EXPECT_EQ(result.mission->tasks[0].facilityId, "facility-bridge");
     EXPECT_EQ(result.mission->tasks[0].inspectionZoneId, "deck-east");
-    EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Disabled);
+    EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Active);
     EXPECT_EQ(result.drones[0].finalCamera.model.imageWidthPixels, 1280);
 
     nlohmann::json duplicateZone = nlohmann::json::parse(source);
@@ -1074,8 +1035,6 @@ TEST(ScenarioRunnerTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories());
-    EXPECT_NO_FATAL_FAILURE(
-        Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunnerCompletesTasksAtWaypoints());
     EXPECT_NO_FATAL_FAILURE(

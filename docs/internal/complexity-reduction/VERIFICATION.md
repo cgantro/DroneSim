@@ -379,3 +379,8 @@
 - 단일 드론 시나리오에서는 기대 상태를 `mode`·`position_meters`로 직접 적고, 다중 드론은 `expected.drones` 목록을 쓰던 두 형식을 하나로 합쳤다. 이제 모든 기대 상태에 드론 이름을 포함한 `expected.drones` 목록이 필요하다.
 - 저장소의 세 비행 예제와 시나리오 단위 시험 입력을 새 형식으로 바꿨다. 옛 단일 드론 형식을 거부하는 검사도 추가했다.
 - Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+
+## 예약형 카메라 장애 제거 — 2026-10-30
+
+- 기본 임무에 쓰이지 않던 시나리오 전용 카메라 켜기·끄기·고장·복구 시간표를 제거했다. 카메라 상태 및 프레임 수 기대값, 기본 카메라 동작은 남겼다.
+- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.

@@ -536,57 +536,6 @@ std::vector<TickCommand> ReadCommands(
     return result;
 }
 
-CameraEventAction ReadCameraEventAction(const std::string& action)
-{
-    if (action == "enable") return CameraEventAction::Enable;
-    if (action == "disable") return CameraEventAction::Disable;
-    if (action == "fault") return CameraEventAction::Fault;
-    if (action == "recover") return CameraEventAction::Recover;
-    throw std::invalid_argument("알 수 없는 카메라 이벤트입니다: " + action);
-}
-
-std::vector<ScheduledCameraEvent> ReadCameraEvents(
-    const Json& document,
-    std::uint64_t tickCount,
-    const std::unordered_set<std::string>& droneNames)
-{
-    const auto found = document.find("camera_events");
-    if (found == document.end())
-        return {};
-    if (!found->is_array())
-        throw std::invalid_argument("camera_events는 배열이어야 합니다.");
-
-    std::vector<ScheduledCameraEvent> events;
-    events.reserve(found->size());
-    std::uint64_t previousTick = 0;
-    bool hasPreviousTick = false;
-    for (const Json& event : *found)
-    {
-        const std::uint64_t tick = ReadUnsigned(Required(event, "tick"), "tick");
-        const Json& actionValue = Required(event, "action");
-        if (tick >= tickCount || !actionValue.is_string())
-            throw std::invalid_argument("카메라 이벤트의 tick 또는 action이 잘못되었습니다.");
-        if (hasPreviousTick && tick < previousTick)
-            throw std::invalid_argument("카메라 이벤트는 tick 순서대로 작성해야 합니다.");
-        const std::string action = actionValue.get<std::string>();
-        std::string droneName;
-        if (event.contains("drone"))
-        {
-            const Json& droneValue = event["drone"];
-            if (!droneValue.is_string())
-                throw std::invalid_argument("카메라 이벤트의 drone은 문자열이어야 합니다.");
-            droneName = droneValue.get<std::string>();
-            if (!droneNames.contains(droneName))
-                throw std::invalid_argument("카메라 이벤트가 알 수 없는 드론을 지정했습니다: "
-                    + droneName);
-        }
-        events.push_back({tick, ReadCameraEventAction(action), std::move(droneName)});
-        previousTick = tick;
-        hasPreviousTick = true;
-    }
-    return events;
-}
-
 CameraStatus ReadCameraStatus(const Json& value)
 {
     if (!value.is_string())
@@ -979,8 +928,6 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     ReadControllerSettings(document, definition);
     ReadCollisionAvoidanceSettings(document, definition);
     ReadEnergyModelSettings(document, definition);
-    definition.cameraEvents = ReadCameraEvents(
-        document, definition.tickCount, droneNames);
     ReadExpectedResults(document, definition);
     return definition;
 }

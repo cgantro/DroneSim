@@ -30,7 +30,6 @@ using detail::ScenarioDefinition;
 using detail::ScenarioDrone;
 using detail::CollisionAvoidanceSettings;
 using detail::EnergyModelSettings;
-using detail::ScheduledCameraEvent;
 using detail::TickCommand;
 using detail::DroneCommunicationOutage;
 using DroneIds = std::unordered_map<std::string, DroneId>;
@@ -258,29 +257,6 @@ DroneIds CreateScenarioDrones(
     if (!simulation.RemoveDrone(unusedDefaultDrone))
         throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
     return droneIds;
-}
-
-/** @brief 카메라 동작을 적용하고 실행 기록에 쓸 이름을 돌려준다. */
-std::string_view ApplyCameraEvent(
-    SimulationCore& simulation, DroneId droneId, detail::CameraEventAction action)
-{
-    using Action = detail::CameraEventAction;
-    switch (action)
-    {
-    case Action::Enable:
-        simulation.SetCameraEnabled(droneId, true);
-        return "enable";
-    case Action::Disable:
-        simulation.SetCameraEnabled(droneId, false);
-        return "disable";
-    case Action::Fault:
-        simulation.SetCameraFault(droneId, true);
-        return "fault";
-    case Action::Recover:
-        simulation.SetCameraFault(droneId, false);
-        return "recover";
-    }
-    return "unknown";
 }
 
 double OrientationErrorRadians(
@@ -844,28 +820,6 @@ void UpdateCollisionAvoidance(
     dronesAvoiding = std::move(currentlyAvoiding);
 }
 
-void ApplyCameraEvents(
-    std::uint64_t tick,
-    const std::vector<ScheduledCameraEvent>& cameraEvents,
-    SimulationCore& simulation,
-    const DroneIds& droneIds,
-    std::string_view primaryDroneName,
-    std::size_t& nextCameraEvent,
-    ScenarioResult& result)
-{
-    while (nextCameraEvent < cameraEvents.size()
-        && cameraEvents[nextCameraEvent].tick == tick)
-    {
-        const ScheduledCameraEvent& event = cameraEvents[nextCameraEvent++];
-        const std::string droneName = event.droneName.empty()
-            ? std::string(primaryDroneName) : event.droneName;
-        const std::string_view actionName = ApplyCameraEvent(
-            simulation, droneIds.at(droneName), event.action);
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": " + droneName
-            + " 카메라 " + std::string(actionName));
-    }
-}
-
 void UpdateMissionResults(
     std::uint64_t tick,
     std::optional<ScenarioResult::Mission>& mission,
@@ -1189,7 +1143,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
         result.trajectory.reserve(static_cast<std::size_t>(sampleCount));
     }
     std::size_t nextCommand = 0;
-    std::size_t nextCameraEvent = 0;
     DroneNameSet dronesAvoiding;
     std::unordered_map<std::string, glm::dvec3> activeAvoidanceDirections;
     std::unordered_map<std::string, glm::dvec3> activeAvoidanceTargets;
@@ -1217,8 +1170,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
             droneIds, observations, dronesAvoiding, activeAvoidanceDirections,
             activeAvoidanceTargets, result);
-        ApplyCameraEvents(tick, definition.cameraEvents, simulation, droneIds,
-            definition.primaryDroneName, nextCameraEvent, result);
         for (const auto& [droneName, droneId] : droneIds)
         {
             if (simulation.State(droneId).mode != FlightMode::Grounded)

@@ -6,7 +6,6 @@
 #include "scenario/ScenarioRunner.h"
 #include "simulation_core/SimulationCore.h"
 
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -60,23 +59,6 @@ struct CollisionAvoidanceSettings
 
 using EnergyModelSettings = BatteryModelParameters;
 
-/** @brief JSON 카메라 동작을 실행 단계에서 안전하게 구분한다. */
-enum class CameraEventAction
-{
-    Enable,
-    Disable,
-    Fault,
-    Recover
-};
-
-struct ScheduledCameraEvent
-{
-    std::uint64_t tick;
-    CameraEventAction action;
-    /** @brief 비우면 기본 드론의 카메라에 적용한다. */
-    std::string droneName;
-};
-
 /** @brief JSON 시나리오를 실행하기 전에 읽고 검증한 값이다. */
 struct ScenarioDefinition
 {
@@ -98,7 +80,6 @@ struct ScenarioDefinition
     std::optional<glm::dvec3> windVelocity;
     /** @brief 궤적 저장을 요청한 경우의 샘플 간격이다. */
     std::optional<std::uint64_t> trajectorySampleEveryTicks;
-    std::vector<ScheduledCameraEvent> cameraEvents;
     std::vector<ExpectedDrone> expectedDrones;
     double toleranceMeters = 0.01;
     double orientationToleranceRadians = 0.01;
