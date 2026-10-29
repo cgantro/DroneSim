@@ -18,18 +18,14 @@ struct TerrainGrid
     float spacingXMeters = 0.0F;
     float spacingYMeters = 0.0F;
     float referenceElevationMeters = 0.0F;
-    double centerLatitudeDegrees = 0.0;
-    double centerLongitudeDegrees = 0.0;
     std::vector<float> heightOffsetsMeters;
 
     /** @brief 저장된 지형 격자를 읽는다. 파일 형식이 맞지 않으면 원인을 알려준다. */
     [[nodiscard]] static TerrainGrid Load(const std::filesystem::path& path);
 
-    /** @brief 미터 단위 투영 좌표계로 준비한 ESRI ASCII 격자를 읽는다. */
+    /** @brief 높이와 칸 간격을 읽고 격자 중심을 시뮬레이터 원점에 둔다. */
     [[nodiscard]] static TerrainGrid LoadAsciiGrid(
         const std::filesystem::path& path,
-        double centerLatitudeDegrees,
-        double centerLongitudeDegrees,
         float referenceElevationMeters);
 
     /** @brief 소수점 높이를 보존하는 지형 자료 형식으로 저장한다. */
@@ -50,9 +46,5 @@ struct TerrainGrid
 
     /** @brief 지도 중심 기준의 동쪽·북쪽 위치에서 격자 높이를 보간해 반환한다. */
     [[nodiscard]] float HeightAtLocalMeters(const glm::dvec2& positionMeters) const;
-
-    /** @brief WGS84 위도·경도를 지형 중심 접평면의 동쪽·북쪽 미터 좌표로 바꾼다. */
-    [[nodiscard]] glm::dvec2 ToLocalMeters(
-        double latitudeDegrees, double longitudeDegrees) const;
 };
 }

@@ -9,7 +9,6 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
-#include <numbers>
 #include <string>
 
 namespace aerosimlab::terrain
@@ -27,30 +26,19 @@ void Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief()
     EXPECT_GT(*std::max_element(terrain.heightOffsetsMeters.begin(),
         terrain.heightOffsetsMeters.end()), 30.0F);
 }
-void Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight()
+void Verify_TerrainGridBoundsAndInterpolatesHeight()
 {
     TerrainGrid terrain;
     terrain.sampleCount = 3;
     terrain.spacingXMeters = 10.0F;
     terrain.spacingYMeters = 20.0F;
     terrain.referenceElevationMeters = 100.0F;
-    terrain.centerLatitudeDegrees = 37.0;
-    terrain.centerLongitudeDegrees = -122.0;
     terrain.heightOffsetsMeters = {0.0F, 10.0F, 20.0F,
         10.0F, 20.0F, 30.0F,
         20.0F, 30.0F, 40.0F};
 
     EXPECT_DOUBLE_EQ(terrain.HalfWidthMeters(), 10.0);
     EXPECT_DOUBLE_EQ(terrain.HalfDepthMeters(), 20.0);
-    EXPECT_DOUBLE_EQ(terrain.ToLocalMeters(37.0, -122.0).x, 0.0);
-    const glm::dvec2 northOffset = terrain.ToLocalMeters(
-        37.0 + 20.0 / 111320.0, -122.0);
-    const glm::dvec2 eastOffset = terrain.ToLocalMeters(
-        37.0, -122.0 + 20.0 / (111320.0 * std::cos(37.0 * std::numbers::pi / 180.0)));
-    EXPECT_NEAR(northOffset.x, 0.0, 1.0e-6);
-    EXPECT_NEAR(northOffset.y, 20.0, 0.1);
-    EXPECT_NEAR(eastOffset.x, 20.0, 0.1);
-    EXPECT_NEAR(eastOffset.y, 0.0, 1.0e-4);
     EXPECT_TRUE(terrain.ContainsLocalPositionMeters({10.0, 20.0}));
     EXPECT_FALSE(terrain.ContainsLocalPositionMeters({10.01, 0.0}));
     EXPECT_FLOAT_EQ(terrain.HeightAtLocalMeters({0.0, 0.0}), 120.0F);
@@ -76,8 +64,7 @@ void Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips()
             "100.25 100.50 100.75\n";
     }
 
-    const TerrainGrid imported = TerrainGrid::LoadAsciiGrid(
-        sourcePath, 37.49, 127.10, 100.5F);
+    const TerrainGrid imported = TerrainGrid::LoadAsciiGrid(sourcePath, 100.5F);
     EXPECT_EQ(imported.sampleCount, 3U);
     EXPECT_FLOAT_EQ(imported.spacingXMeters, 2.0F);
     EXPECT_FLOAT_EQ(imported.referenceElevationMeters, 100.5F);
@@ -89,9 +76,6 @@ void Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips()
     EXPECT_FLOAT_EQ(restored.HeightAt(0U, 0U), 0.75F);
     EXPECT_FLOAT_EQ(restored.HeightAt(1U, 1U), 0.5F);
     EXPECT_FLOAT_EQ(restored.HeightAt(2U, 2U), 0.25F);
-    EXPECT_NEAR(restored.centerLatitudeDegrees, 37.49, 1.0e-12);
-    EXPECT_NEAR(restored.centerLongitudeDegrees, 127.10, 1.0e-12);
-
     std::error_code ignored;
     std::filesystem::remove(sourcePath, ignored);
     std::filesystem::remove(convertedPath, ignored);
@@ -109,7 +93,7 @@ void Verify_AsciiGridRejectsMissingHeightSamples()
     }
 
     EXPECT_THROW(static_cast<void>(TerrainGrid::LoadAsciiGrid(
-            path, 37.49, 127.10, 100.5F)), std::runtime_error);
+            path, 100.5F)), std::runtime_error);
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
 }
@@ -119,7 +103,7 @@ TEST(TerrainGridTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(
         Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief());
     EXPECT_NO_FATAL_FAILURE(
-        Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight());
+        Verify_TerrainGridBoundsAndInterpolatesHeight());
     EXPECT_NO_FATAL_FAILURE(Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips());
     EXPECT_NO_FATAL_FAILURE(Verify_AsciiGridRejectsMissingHeightSamples());
 }

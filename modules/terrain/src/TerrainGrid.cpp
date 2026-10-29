@@ -2,28 +2,23 @@
 
 #include <algorithm>
 #include <array>
-#include <bit>
 #include <cctype>
 #include <cmath>
 #include <cstring>
 #include <fstream>
 #include <limits>
 #include <map>
-#include <numbers>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
 
-#include <glm/vec3.hpp>
-
 namespace aerosimlab::terrain
 {
 namespace
 {
-constexpr std::array<char, 8> terrainMagic{'A', 'E', 'R', 'O', 'T', 'R', 'N', '1'};
-constexpr std::array<char, 8> floatTerrainMagic{'A', 'E', 'R', 'O', 'T', 'R', 'N', '2'};
-constexpr std::uint64_t headerSizeBytes = 40;
+constexpr std::array<char, 8> terrainMagic{'A', 'E', 'R', 'O', 'T', 'R', 'N', '3'};
+constexpr std::uint64_t headerSizeBytes = 24;
 
 template <typename T>
 bool ReadLittleEndian(std::ifstream& input, T& value)
@@ -93,25 +88,6 @@ TerrainCellCoordinates FindTerrainCell(
         static_cast<float>(row - northRow)};
 }
 
-glm::dvec3 Wgs84SurfacePositionEcef(
-    double latitudeDegrees, double longitudeDegrees)
-{
-    constexpr double semiMajorAxisMeters = 6'378'137.0;
-    constexpr double flattening = 1.0 / 298.257223563;
-    constexpr double eccentricitySquared = flattening * (2.0 - flattening);
-    constexpr double radiansPerDegree = std::numbers::pi_v<double> / 180.0;
-
-    const double latitudeRadians = latitudeDegrees * radiansPerDegree;
-    const double longitudeRadians = longitudeDegrees * radiansPerDegree;
-    const double sinLatitude = std::sin(latitudeRadians);
-    const double cosLatitude = std::cos(latitudeRadians);
-    const double primeVerticalRadius = semiMajorAxisMeters
-        / std::sqrt(1.0 - eccentricitySquared * sinLatitude * sinLatitude);
-    return {
-        primeVerticalRadius * cosLatitude * std::cos(longitudeRadians),
-        primeVerticalRadius * cosLatitude * std::sin(longitudeRadians),
-        primeVerticalRadius * (1.0 - eccentricitySquared) * sinLatitude};
-}
 }
 
 TerrainGrid TerrainGrid::Load(const std::filesystem::path& path)
@@ -128,34 +104,24 @@ TerrainGrid TerrainGrid::Load(const std::filesystem::path& path)
     std::array<char, terrainMagic.size()> magic{};
     TerrainGrid grid;
     if (!input.read(magic.data(), static_cast<std::streamsize>(magic.size()))
-        || (magic != terrainMagic && magic != floatTerrainMagic)
+        || magic != terrainMagic
         || !ReadLittleEndian(input, grid.sampleCount)
         || !ReadLittleEndian(input, grid.spacingXMeters)
         || !ReadLittleEndian(input, grid.spacingYMeters)
-        || !ReadLittleEndian(input, grid.referenceElevationMeters)
-        || !ReadLittleEndian(input, grid.centerLatitudeDegrees)
-        || !ReadLittleEndian(input, grid.centerLongitudeDegrees))
+        || !ReadLittleEndian(input, grid.referenceElevationMeters))
     {
         throw std::runtime_error("지형 자료의 형식이나 머리 정보가 올바르지 않습니다.");
     }
 
     RequireFinitePositive(grid.spacingXMeters, "동서 간격");
     RequireFinitePositive(grid.spacingYMeters, "남북 간격");
-    if (!std::isfinite(grid.referenceElevationMeters)
-        || !std::isfinite(grid.centerLatitudeDegrees)
-        || !std::isfinite(grid.centerLongitudeDegrees)
-        || grid.centerLatitudeDegrees < -90.0 || grid.centerLatitudeDegrees > 90.0
-        || grid.centerLongitudeDegrees < -180.0 || grid.centerLongitudeDegrees > 180.0
-        || grid.sampleCount < 3U)
+    if (!std::isfinite(grid.referenceElevationMeters) || grid.sampleCount < 3U)
     {
-        throw std::runtime_error("지형 크기, 기준 높이 또는 중심 좌표를 확인해 주세요.");
+        throw std::runtime_error("지형 크기와 기준 높이를 확인해 주세요.");
     }
 
     const std::uint64_t sampleTotal = static_cast<std::uint64_t>(grid.sampleCount) * grid.sampleCount;
-    const bool storesFloatHeights = magic == floatTerrainMagic;
-    const std::uint64_t bytesPerHeight = storesFloatHeights
-        ? sizeof(float) : sizeof(std::int16_t);
-    const std::uint64_t expectedSize = headerSizeBytes + sampleTotal * bytesPerHeight;
+    const std::uint64_t expectedSize = headerSizeBytes + sampleTotal * sizeof(float);
     if (expectedSize != static_cast<std::uint64_t>(fileSize)
         || sampleTotal > std::numeric_limits<std::size_t>::max())
     {
@@ -165,29 +131,14 @@ TerrainGrid TerrainGrid::Load(const std::filesystem::path& path)
     grid.heightOffsetsMeters.resize(static_cast<std::size_t>(sampleTotal));
     for (float& height : grid.heightOffsetsMeters)
     {
-        if (storesFloatHeights)
-        {
-            if (!ReadLittleEndian(input, height) || !std::isfinite(height))
-                throw std::runtime_error("지형 높이 자료가 잘렸거나 숫자가 아닙니다.");
-        }
-        else
-        {
-            std::uint16_t encodedHeight = 0;
-            if (!ReadLittleEndian(input, encodedHeight))
-                throw std::runtime_error("지형 높이 자료가 중간에 끝났습니다.");
-            const std::int16_t heightOffset = std::bit_cast<std::int16_t>(encodedHeight);
-            if (heightOffset == std::numeric_limits<std::int16_t>::min())
-                throw std::runtime_error("높이를 알 수 없는 지점이 지형 자료에 있습니다.");
-            height = static_cast<float>(heightOffset);
-        }
+        if (!ReadLittleEndian(input, height) || !std::isfinite(height))
+            throw std::runtime_error("지형 높이 자료가 잘렸거나 숫자가 아닙니다.");
     }
     return grid;
 }
 
 TerrainGrid TerrainGrid::LoadAsciiGrid(
     const std::filesystem::path& path,
-    double centerLatitudeDegrees,
-    double centerLongitudeDegrees,
     float referenceElevationMeters)
 {
     std::ifstream input(path);
@@ -230,12 +181,10 @@ TerrainGrid TerrainGrid::LoadAsciiGrid(
         || std::floor(columnCountValue) != columnCountValue
         || !std::isfinite(cellSize) || !(cellSize > 0.0)
         || cellSize > static_cast<double>(std::numeric_limits<float>::max())
-        || !std::isfinite(centerLatitudeDegrees)
-        || !std::isfinite(centerLongitudeDegrees)
         || !std::isfinite(referenceElevationMeters))
     {
         throw std::runtime_error(
-            "지형 격자는 미터 단위의 정사각형 자료여야 하며 기준 좌표와 높이가 필요합니다.");
+            "지형 격자는 미터 단위의 정사각형 자료여야 합니다.");
     }
     const bool hasXCorner = header.contains("xllcorner");
     const bool hasYCorner = header.contains("yllcorner");
@@ -254,8 +203,6 @@ TerrainGrid TerrainGrid::LoadAsciiGrid(
     grid.spacingXMeters = static_cast<float>(cellSize);
     grid.spacingYMeters = static_cast<float>(cellSize);
     grid.referenceElevationMeters = referenceElevationMeters;
-    grid.centerLatitudeDegrees = centerLatitudeDegrees;
-    grid.centerLongitudeDegrees = centerLongitudeDegrees;
     grid.heightOffsetsMeters.reserve(static_cast<std::size_t>(grid.sampleCount)
         * grid.sampleCount);
 
@@ -288,9 +235,6 @@ void TerrainGrid::Save(const std::filesystem::path& path) const
         || !std::isfinite(spacingXMeters) || !(spacingXMeters > 0.0F)
         || !std::isfinite(spacingYMeters) || !(spacingYMeters > 0.0F)
         || !std::isfinite(referenceElevationMeters)
-        || !std::isfinite(centerLatitudeDegrees) || centerLatitudeDegrees < -90.0
-        || centerLatitudeDegrees > 90.0 || !std::isfinite(centerLongitudeDegrees)
-        || centerLongitudeDegrees < -180.0 || centerLongitudeDegrees > 180.0
         || !std::all_of(heightOffsetsMeters.begin(), heightOffsetsMeters.end(),
             [](float height) { return std::isfinite(height); }))
     {
@@ -300,14 +244,11 @@ void TerrainGrid::Save(const std::filesystem::path& path) const
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output)
         throw std::runtime_error("지형 자료를 저장할 수 없습니다: " + path.string());
-    output.write(floatTerrainMagic.data(),
-        static_cast<std::streamsize>(floatTerrainMagic.size()));
+    output.write(terrainMagic.data(), static_cast<std::streamsize>(terrainMagic.size()));
     WriteLittleEndian(output, sampleCount);
     WriteLittleEndian(output, spacingXMeters);
     WriteLittleEndian(output, spacingYMeters);
     WriteLittleEndian(output, referenceElevationMeters);
-    WriteLittleEndian(output, centerLatitudeDegrees);
-    WriteLittleEndian(output, centerLongitudeDegrees);
     for (const float height : heightOffsetsMeters)
         WriteLittleEndian(output, height);
     if (!output)
@@ -366,32 +307,4 @@ float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
     return referenceElevationMeters + std::lerp(north, south, cell.southFraction);
 }
 
-glm::dvec2 TerrainGrid::ToLocalMeters(
-    double latitudeDegrees, double longitudeDegrees) const
-{
-    if (!std::isfinite(latitudeDegrees) || !std::isfinite(longitudeDegrees)
-        || latitudeDegrees < -90.0 || latitudeDegrees > 90.0
-        || longitudeDegrees < -180.0 || longitudeDegrees > 180.0)
-    {
-        throw std::invalid_argument("위도와 경도는 유효한 좌표여야 합니다.");
-    }
-
-    constexpr double radiansPerDegree = std::numbers::pi_v<double> / 180.0;
-    const glm::dvec3 origin = Wgs84SurfacePositionEcef(
-        centerLatitudeDegrees, centerLongitudeDegrees);
-    const glm::dvec3 point = Wgs84SurfacePositionEcef(
-        latitudeDegrees, longitudeDegrees);
-    const glm::dvec3 delta = point - origin;
-    const double originLatitudeRadians = centerLatitudeDegrees * radiansPerDegree;
-    const double originLongitudeRadians = centerLongitudeDegrees * radiansPerDegree;
-    const double sinLatitude = std::sin(originLatitudeRadians);
-    const double cosLatitude = std::cos(originLatitudeRadians);
-    const double sinLongitude = std::sin(originLongitudeRadians);
-    const double cosLongitude = std::cos(originLongitudeRadians);
-    return {
-        -sinLongitude * delta.x + cosLongitude * delta.y,
-        -sinLatitude * cosLongitude * delta.x
-            - sinLatitude * sinLongitude * delta.y
-            + cosLatitude * delta.z};
-}
 }
