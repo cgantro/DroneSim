@@ -2,7 +2,7 @@
 
 ## 현재 상태
 
-- 최신 제품 코드 변경: `d187de2d`, main. 실제 HEAD와 미커밋 내용은 `git status --short --branch`와 `git log -5 --oneline`으로 확인한다.
+- 최신 제품 코드 변경: `e4167ad1`, main. 구조 문서 갱신은 `16ad6eb0`이다. 실제 HEAD와 미커밋 내용은 `git status --short --branch`와 `git log -5 --oneline`으로 확인한다.
 - 목록 279개: 본문 검토 223개, 메타데이터 확인 32개, 생성물 제외 24개, UNREAD 0개. 범주별 근거와 미검증은 INVENTORY 및 AUDIT 기록을 확인한다.
 - 이전 Release 빌드와 CTest 39개 통과. 당시 4대 정상 임무 시험은 AdaptiveMesh였다. 아래 최신 상태에서 직접 연결로 교체했다.
 - `vector too long`의 재현 입력·스택·원인 미확인. 초기 출력과 원본 기록을 찾지 못했으므로 수정했다고 주장하지 않는다.
@@ -127,4 +127,5 @@
 - 사용자가 구조 판단에는 Terra 또는 Sol을 쓰도록 요청했다. Luna의 파일 조사는 완료했지만, 현재 협업 슬롯이 차 있어 독립 Terra/Sol 검토를 시작하지 못했다. `ARCHITECTURE.md`의 정리 순서는 그 교차 검토 전 후보로 취급한다.
 - 2026-10-29: 확인된 중복 두 곳을 정리했다. 호출되지 않던 `Mesh::LoadGlb()`와 그 전용 GLB 처리 코드를 지웠고, 장면 건물 전체를 복사하던 `routeBuildings_`를 없앴다. 앱과 시험은 `TrainingRangeScene::Obstacles()`를 기준으로 읽는다.
 - 검증: Windows Release 전체 빌드 성공, CTest 31/31 통과. 헤더 멤버 제거 직후 증분 빌드 결과에서 앱 파일 일부가 재컴파일되지 않아 통합 시험과 ViewerSmoke가 접근 위반을 냈다. 앱 소스와 시뮬레이터 시험을 전부 다시 빌드한 뒤 통과했다. `Mesh::LoadGlb()`와 `routeBuildings_` 사용처는 더 남지 않았다.
+- 저장 위치를 확인했다. 지도·모델은 `assets/`, 시나리오와 시험 입력은 `scenarios/`·`tests/data/`, HUD 배치는 `%LOCALAPPDATA%/AeroSimLab/imgui.ini`, 성능 결과는 기본적으로 실행 파일 옆의 `benchmark-latest.json`에 간다. 지형 격자 저장 함수는 시험에서만 호출되고, 명령 기록은 메모리에만 남는다. 서로 성격이 다른 입력·설정·출력은 한 폴더에 섞지 않고 이 문서에 위치와 주인을 함께 적는다.
 - 남은 정리: 임무 상태의 기준 위치, 건물에서 파생한 가림·무선 장애물의 생성과 갱신 책임, GLB 내부 파서 헤더의 공개 위치. 구조 판단 검토에는 Terra/Sol이 필요하다.
