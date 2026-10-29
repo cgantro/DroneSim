@@ -425,3 +425,10 @@
 - 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
 - 시험: 전체 Release CTest 28/28 통과.
 - 범위: 기존 시나리오 JSON 형식과 정상 실행 결과를 바꾸지 않았다. 웹 실행은 확인하지 않았다.
+
+## 기본 드론 경로 통합 — 2026-10-30
+
+- 변경: 드론 목록을 생략하는 JSON은 파서에서 기본 `drone` 항목으로 정규화한다. 실행기는 기존 SimulationCore 기본 기체를 재사용하고, 관측·배터리·궤적·결과 처리는 목록 하나를 순회한다.
+- 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
+- 시험: 전체 Release CTest 28/28 통과.
+- 범위: 기존 JSON 문법과 기본 드론 동작을 유지했다. 시뮬레이터 앱의 별도 임무 처리는 바꾸지 않았다.

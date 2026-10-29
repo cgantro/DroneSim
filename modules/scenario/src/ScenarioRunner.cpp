@@ -66,11 +66,8 @@ void RecordTrajectorySample(const ScenarioDefinition& definition,
     {
         sample.drones.emplace_back(name, simulation.State(drones.at(name).id));
     };
-    if (definition.drones.empty())
-        addDrone(definition.primaryDroneName);
-    else
-        for (const ScenarioDrone& drone : definition.drones)
-            addDrone(drone.name);
+    for (const ScenarioDrone& drone : definition.drones)
+        addDrone(drone.name);
 
     result.trajectory.push_back(std::move(sample));
 }
@@ -140,11 +137,6 @@ void UpdateEnergyPolicy(
             result.issues.push_back(droneName + " 드론이 배터리 귀환 경로를 받지 못했습니다.");
     };
 
-    if (definition.drones.empty())
-    {
-        handleDrone(definition.primaryDroneName);
-        return;
-    }
     for (const ScenarioDrone& drone : definition.drones)
         handleDrone(drone.name);
 }
@@ -224,46 +216,36 @@ void UpdateDroneObservations(
     };
 
     // 이벤트 로그 순서도 시나리오 입력 순서에 맞춰 매번 같게 만든다.
-    if (definition.drones.empty())
-    {
-        updateDrone(definition.primaryDroneName);
-        return;
-    }
-
     for (const ScenarioDrone& drone : definition.drones)
         updateDrone(drone.name);
 }
 
 /**
  * @brief 시나리오에서 사용할 이름과 실제 드론 번호를 연결한다.
- * @details 드론 목록이 있으면 SimulationCore가 미리 만든 기본 드론을 지우고 목록을 구성한다.
+ * @details 목록을 생략한 경우에는 SimulationCore의 기본 드론을 그대로 사용한다.
  */
 ScenarioDrones CreateScenarioDrones(
     const ScenarioDefinition& definition,
     SimulationCore& simulation)
 {
     ScenarioDrones drones;
-    if (definition.drones.empty())
-    {
-        const DroneId id = simulation.PrimaryDroneId();
-        simulation.SetCameraModel(id, definition.defaultCameraModel);
-        drones.emplace(definition.primaryDroneName, ScenarioDroneRuntime{id});
-        return drones;
-    }
-
-    const DroneId unusedDefaultDrone = simulation.PrimaryDroneId();
+    const DroneId defaultDrone = simulation.PrimaryDroneId();
     for (const ScenarioDrone& drone : definition.drones)
     {
-        const DroneId id = simulation.AddDrone(
-            drone.initialState.positionMeters, drone.initialState.yawRadians);
+        DroneId id = defaultDrone;
+        if (!definition.usesExistingPrimaryDrone)
+        {
+            id = simulation.AddDrone(
+                drone.initialState.positionMeters, drone.initialState.yawRadians);
+        }
         simulation.SetCameraModel(
             id, drone.cameraModel.value_or(definition.defaultCameraModel));
         drones.emplace(drone.name, ScenarioDroneRuntime{id});
-        if (drone.hasExtendedInitialState)
+        if (!definition.usesExistingPrimaryDrone && drone.hasExtendedInitialState)
             simulation.SetInitialState(id, drone.initialState);
     }
 
-    if (!simulation.RemoveDrone(unusedDefaultDrone))
+    if (!definition.usesExistingPrimaryDrone && !simulation.RemoveDrone(defaultDrone))
         throw std::logic_error("시나리오용 기본 드론을 교체하지 못했습니다.");
     return drones;
 }
@@ -857,13 +839,8 @@ void PopulateFinalSnapshot(
         result.drones.push_back(std::move(drone));
     };
 
-    if (definition.drones.empty())
-    {
-        appendDrone(definition.primaryDroneName);
-    }
-    else
-        for (const ScenarioDrone& drone : definition.drones)
-            appendDrone(drone.name);
+    for (const ScenarioDrone& drone : definition.drones)
+        appendDrone(drone.name);
 
 }
 
@@ -1008,27 +985,17 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
     if (definition.energyModel)
     {
-        const auto addEnergy = [&](const std::string& droneName,
-            const ScenarioDrone* scenarioDrone)
+        for (const ScenarioDrone& scenarioDrone : definition.drones)
         {
-            const double initialPercent = scenarioDrone
-                ? scenarioDrone->initialBatteryPercent : 100.0;
             BatteryModelParameters parameters = *definition.energyModel;
-            if (scenarioDrone && scenarioDrone->batteryCapacityWattHours)
-                parameters.capacityWattHours = *scenarioDrone->batteryCapacityWattHours;
-            const DroneId droneId = drones.at(droneName).id;
-            simulation.ConfigureBattery(droneId, parameters, initialPercent);
-            drones.at(droneName).observation.lastKnownBatteryPercent =
+            if (scenarioDrone.batteryCapacityWattHours)
+                parameters.capacityWattHours = *scenarioDrone.batteryCapacityWattHours;
+            ScenarioDroneRuntime& runtime = drones.at(scenarioDrone.name);
+            const DroneId droneId = runtime.id;
+            simulation.ConfigureBattery(
+                droneId, parameters, scenarioDrone.initialBatteryPercent);
+            runtime.observation.lastKnownBatteryPercent =
                 simulation.Battery(droneId).RemainingPercent();
-        };
-        if (definition.drones.empty())
-        {
-            addEnergy(definition.primaryDroneName, nullptr);
-        }
-        else
-        {
-            for (const ScenarioDrone& drone : definition.drones)
-                addEnergy(drone.name, &drone);
         }
     }
 

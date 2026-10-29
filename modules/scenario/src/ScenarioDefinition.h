@@ -64,7 +64,8 @@ struct ScenarioDefinition
 {
     std::uint64_t tickCount = 0;
     std::vector<ScenarioDrone> drones;
-    std::string primaryDroneName;
+    /** @brief JSON에서 드론 목록을 생략해 SimulationCore의 기본 기체를 쓰는지 나타낸다. */
+    bool usesExistingPrimaryDrone = false;
     CameraModel defaultCameraModel;
     std::vector<TickCommand> commands;
     std::vector<DroneCommunicationOutage> communicationOutages;

@@ -601,14 +601,6 @@ void ReadTrajectorySettings(const Json& document, ScenarioDefinition& definition
     if (sampleEveryTicks == 0)
         throw std::invalid_argument("sample_every_ticks는 1 이상이어야 합니다.");
 
-    const std::uint64_t sampleCount = definition.tickCount / sampleEveryTicks + 1
-        + (definition.tickCount % sampleEveryTicks != 0 ? 1 : 0);
-    const std::uint64_t droneCount = definition.drones.empty()
-        ? 1 : static_cast<std::uint64_t>(definition.drones.size());
-    if (sampleCount > maximumTrajectoryDroneSamples / droneCount)
-        throw std::invalid_argument(
-            "궤적 기록이 너무 큽니다. sample_every_ticks를 늘려 주세요.");
-
     definition.trajectorySampleEveryTicks = sampleEveryTicks;
 }
 
@@ -847,8 +839,8 @@ void ValidateTrajectorySize(const ScenarioDefinition& definition)
     const std::uint64_t interval = *definition.trajectorySampleEveryTicks;
     const std::uint64_t sampleCount = definition.tickCount / interval + 1
         + (definition.tickCount % interval != 0 ? 1 : 0);
-    const std::uint64_t droneCount = definition.drones.empty()
-        ? 1 : static_cast<std::uint64_t>(definition.drones.size());
+    const std::uint64_t droneCount =
+        static_cast<std::uint64_t>(definition.drones.size());
     if (sampleCount > maximumTrajectoryDroneSamples / droneCount)
         throw std::invalid_argument(
             "궤적 기록이 너무 큽니다. sample_every_ticks를 늘려 주세요.");
@@ -899,12 +891,9 @@ void ValidateEnergySettings(const ScenarioDefinition& definition)
                 throw std::invalid_argument(std::string(droneName)
                     + " 드론의 배터리 예비량은 기본 착륙에 필요한 에너지보다 커야 합니다.");
         };
-        if (definition.drones.empty())
-            validateDroneBattery(settings.capacityWattHours, 100.0, "기본");
-        else
-            for (const ScenarioDrone& drone : definition.drones)
-                validateDroneBattery(drone.batteryCapacityWattHours.value_or(
-                    settings.capacityWattHours), drone.initialBatteryPercent, drone.name);
+        for (const ScenarioDrone& drone : definition.drones)
+            validateDroneBattery(drone.batteryCapacityWattHours.value_or(
+                settings.capacityWattHours), drone.initialBatteryPercent, drone.name);
     }
 }
 
@@ -934,20 +923,22 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
         throw std::invalid_argument("ticks는 1부터 5,184,000 사이여야 합니다.");
 
     definition.drones = ReadDrones(document);
+    definition.usesExistingPrimaryDrone = definition.drones.empty();
+    if (definition.usesExistingPrimaryDrone)
+    {
+        ScenarioDrone primaryDrone;
+        primaryDrone.name = "drone";
+        definition.drones.push_back(std::move(primaryDrone));
+    }
     if (const auto camera = document.find("camera_model"); camera != document.end())
         definition.defaultCameraModel = ReadCameraModel(*camera);
-    definition.primaryDroneName = definition.drones.empty()
-        ? "drone" : definition.drones.front().name;
     std::unordered_set<std::string> droneNames;
-    if (definition.drones.empty())
-        droneNames.insert(definition.primaryDroneName);
-    else
-        for (const ScenarioDrone& drone : definition.drones)
-            droneNames.insert(drone.name);
+    for (const ScenarioDrone& drone : definition.drones)
+        droneNames.insert(drone.name);
 
     definition.commands = ReadCommands(
         Required(document, "commands"), definition.tickCount,
-        definition.primaryDroneName, droneNames);
+        definition.drones.front().name, droneNames);
     definition.communicationOutages = ReadDroneCommunicationOutages(
         document, definition.tickCount, droneNames);
 
