@@ -47,6 +47,21 @@ namespace aerosimlab::simulator
 class AeroSimLabAppTestAccess
 {
 public:
+    static void VerifyCompleteMissionRequiresFourDrones()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_EQ(app.simulation_.DroneIds().size(), 4U);
+        EXPECT_TRUE(app.CompleteFleetMissionCanStart());
+
+        const auto extraDrone = app.simulation_.AddDrone({0.0, 0.0, 0.0});
+        EXPECT_FALSE(app.CompleteFleetMissionCanStart());
+        ASSERT_TRUE(app.simulation_.RemoveDrone(extraDrone));
+        const auto lastDrone = app.simulation_.DroneIds().back();
+        ASSERT_TRUE(app.simulation_.RemoveDrone(lastDrone));
+        EXPECT_FALSE(app.CompleteFleetMissionCanStart());
+    }
+
     static void VerifyReconnaissanceKeepsTheFirstWaypoint()
     {
         AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
@@ -190,8 +205,7 @@ public:
         app.InitializeGraphics();
         const auto droneIds = app.simulation_.DroneIds();
 
-        ASSERT_TRUE(app.StartCompleteFleetMission(
-            simulation::FormationShape::Vee)) << app.formationTransit_.status;
+        ASSERT_TRUE(app.StartCompleteFleetMission()) << app.formationTransit_.status;
         bool sawReconnaissance = false;
         bool sawRegrouping = false;
         bool sawReturning = false;
@@ -964,4 +978,9 @@ TEST(SimulatorSessionTests, FleetDroneReturnsWhenBatteryReachesReserve)
 TEST(SimulatorSessionTests, ReconnaissanceKeepsTheFirstWaypoint)
 {
     simulator::AeroSimLabAppTestAccess::VerifyReconnaissanceKeepsTheFirstWaypoint();
+}
+
+TEST(SimulatorSessionTests, CompleteMissionRequiresFourDrones)
+{
+    simulator::AeroSimLabAppTestAccess::VerifyCompleteMissionRequiresFourDrones();
 }

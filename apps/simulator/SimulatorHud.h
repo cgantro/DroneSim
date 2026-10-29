@@ -97,7 +97,7 @@ public:
         const std::function<void()>& startFleetReturn,
         const std::string& completeFleetMissionStatus,
         bool completeFleetMissionCanStart,
-        const std::function<void(simulation::FormationShape)>& startCompleteFleetMission,
+        const std::function<void()>& startCompleteFleetMission,
         bool formationMissionActive,
         communication::VirtualMeshMode& selectedNetworkMode,
         const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,

@@ -213,8 +213,7 @@ private:
     [[nodiscard]] bool FleetReconnaissanceIsActive() const;
     [[nodiscard]] bool CompleteFleetMissionCanStart() const;
     [[nodiscard]] bool CompleteFleetMissionIsActive() const;
-    [[nodiscard]] bool StartCompleteFleetMission(
-        aerosimlab::simulation::FormationShape shape);
+    [[nodiscard]] bool StartCompleteFleetMission();
     [[nodiscard]] std::string CompleteFleetMissionStatus() const;
     void AdvanceCompleteFleetMission();
     [[nodiscard]] bool StartFleetReconnaissance();
@@ -222,8 +221,7 @@ private:
     [[nodiscard]] bool FleetReturnCanStart() const;
     [[nodiscard]] bool StartFleetReturn();
     [[nodiscard]] std::string FleetReconnaissanceStatus() const;
-    [[nodiscard]] bool StartFormationTransit(
-        aerosimlab::simulation::FormationShape shape);
+    [[nodiscard]] bool StartFormationTransit();
     [[nodiscard]] bool StartFleetReconnaissance(
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
@@ -570,8 +568,6 @@ private:
         };
 
         Stage stage = Stage::Idle;
-        aerosimlab::simulation::FormationShape formationShape =
-            aerosimlab::simulation::FormationShape::Vee;
         std::map<aerosimlab::simulation::DroneId, glm::dvec3> homePositionsMeters;
         std::string status = "대기";
     };

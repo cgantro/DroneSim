@@ -555,7 +555,7 @@ void DrawFlightStatusPanel(
     const std::function<void()>& startFleetReturn,
     const std::string& completeFleetMissionStatus,
     bool completeFleetMissionCanStart,
-    const std::function<void(simulation::FormationShape)>& startCompleteFleetMission,
+    const std::function<void()>& startCompleteFleetMission,
     bool formationMissionActive,
     communication::VirtualMeshMode& selectedNetworkMode,
     bool networkModeCanChange,
@@ -647,7 +647,7 @@ void DrawFlightStatusPanel(
         ImGui::Text("임무: %s", completeFleetMissionStatus.c_str());
         if (completeFleetMissionCanStart
             && ImGui::Button("편대 정찰 임무 시작"))
-            startCompleteFleetMission(simulation::FormationShape::Vee);
+            startCompleteFleetMission();
         else if (!completeFleetMissionCanStart)
             ImGui::TextDisabled("모든 드론이 지상에 있고 다른 임무가 없어야 합니다.");
         if (fleetReturnCanStart && ImGui::Button("출발 지점으로 복귀"))
@@ -1091,7 +1091,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::function<void()>& startFleetReturn,
     const std::string& completeFleetMissionStatus,
     bool completeFleetMissionCanStart,
-    const std::function<void(simulation::FormationShape)>& startCompleteFleetMission,
+    const std::function<void()>& startCompleteFleetMission,
     bool formationMissionActive,
     communication::VirtualMeshMode& selectedNetworkMode,
     const std::function<void(communication::VirtualMeshMode)>& setNetworkMode,

@@ -13,8 +13,7 @@ namespace aerosimlab::simulation
 {
 TEST(FormationPlannerTests, PlacesFourDronesBehindLeaderAndRotatesWithRoute)
 {
-    const auto offsets = FormationOffsets(
-        FormationShape::Vee, 4U, 8.0, glm::half_pi<double>());
+    const auto offsets = FormationOffsets(4U, 8.0, glm::half_pi<double>());
 
     ASSERT_EQ(offsets.size(), 4U);
     EXPECT_NEAR(glm::length(offsets[0]), 0.0, 1.0e-12);
@@ -31,10 +30,9 @@ TEST(FormationPlannerTests, RejectsNarrowRouteInsteadOfChangingFormation)
     const auto openTerrain = terrain::CreateTrainingRangeTerrain();
     const auto openRoute = PlanFormationRoute(openTerrain, {},
         {-205.0, -155.0, 4.0}, {176.0, -148.0, 18.0}, 4U,
-        FormationShape::Vee, 8.0, 1.0, 2.0, 18.0);
+        8.0, 1.0, 2.0, 18.0);
 
     ASSERT_TRUE(openRoute.has_value());
-    EXPECT_EQ(openRoute->shape, FormationShape::Vee);
     EXPECT_DOUBLE_EQ(openRoute->spacingMeters, 8.0);
     EXPECT_GT(openRoute->requiredClearanceMeters, 10.0);
     ASSERT_GE(openRoute->leaderWaypointsMeters.size(), 2U);
@@ -66,6 +64,6 @@ TEST(FormationPlannerTests, RejectsNarrowRouteInsteadOfChangingFormation)
     // V자 대형이 지나갈 수 없으면 간격이나 모양을 임의로 바꾸지 않는다.
     EXPECT_FALSE(PlanFormationRoute(narrowTerrain, walls,
         {-200.0, 0.0, 10.0}, {200.0, 0.0, 10.0}, 4U,
-        FormationShape::Vee, 8.0, 1.5, 2.0, 10.0));
+        8.0, 1.5, 2.0, 10.0));
 }
 }

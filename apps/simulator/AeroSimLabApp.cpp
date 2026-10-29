@@ -838,9 +838,9 @@ void AeroSimLabApp::RenderFrame()
             fleetReturnCanStart,
             [this] { static_cast<void>(StartFleetReturn()); },
             CompleteFleetMissionStatus(), completeFleetMissionCanStart,
-            [this](aerosimlab::simulation::FormationShape shape)
+            [this]
             {
-                static_cast<void>(StartCompleteFleetMission(shape));
+                static_cast<void>(StartCompleteFleetMission());
             },
             formationNetworkActive,
             fleetNetworkMode_,

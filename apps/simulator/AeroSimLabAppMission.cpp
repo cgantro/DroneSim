@@ -311,7 +311,7 @@ bool AeroSimLabApp::CompleteFleetMissionCanStart() const
         return false;
 
     const auto droneIds = simulation_.DroneIds();
-    return droneIds.size() >= 2U && std::all_of(droneIds.begin(), droneIds.end(),
+    return droneIds.size() == 4U && std::all_of(droneIds.begin(), droneIds.end(),
         [this](aerosimlab::simulation::DroneId id)
         {
             return simulation_.State(id).mode
@@ -337,8 +337,7 @@ bool AeroSimLabApp::FleetReconnaissanceIsActive() const
         });
 }
 
-bool AeroSimLabApp::StartCompleteFleetMission(
-    aerosimlab::simulation::FormationShape shape)
+bool AeroSimLabApp::StartCompleteFleetMission()
 {
     if (!CompleteFleetMissionCanStart())
         return false;
@@ -348,13 +347,12 @@ bool AeroSimLabApp::StartCompleteFleetMission(
         completeFleetMission_.homePositionsMeters.emplace(
             droneId, simulation_.State(droneId).positionMeters);
 
-    if (!StartFormationTransit(shape))
+    if (!StartFormationTransit())
     {
         completeFleetMission_.homePositionsMeters.clear();
         return false;
     }
 
-    completeFleetMission_.formationShape = shape;
     completeFleetMission_.stage = CompleteFleetMissionState::Stage::FormationTransit;
     completeFleetMission_.status = "M01 편대 이동 중";
     return true;
@@ -671,8 +669,7 @@ bool AeroSimLabApp::StartFleetRally()
         centerMeters += completeFleetMission_.homePositionsMeters.at(droneId);
     centerMeters /= static_cast<double>(droneIds.size());
     centerMeters.z += 12.0;
-    const auto offsets = FormationOffsets(FormationShape::Vee,
-        rallyDroneIds.size(), 8.0, 0.0);
+    const auto offsets = FormationOffsets(rallyDroneIds.size(), 8.0, 0.0);
 
     std::vector<std::vector<glm::dvec3>> rallyRoutes;
     rallyRoutes.reserve(rallyDroneIds.size());
@@ -1139,8 +1136,7 @@ void AeroSimLabApp::FailCompleteFleetMission(const std::string& reason)
     }
 }
 
-bool AeroSimLabApp::StartFormationTransit(
-    aerosimlab::simulation::FormationShape shape)
+bool AeroSimLabApp::StartFormationTransit()
 {
     using namespace aerosimlab::simulation;
 
@@ -1153,7 +1149,7 @@ bool AeroSimLabApp::StartFormationTransit(
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
     if (droneIds.empty())
         return false;
-    if (droneIds.size() < 2U || std::any_of(droneIds.begin(), droneIds.end(),
+    if (droneIds.size() != 4U || std::any_of(droneIds.begin(), droneIds.end(),
         [this](DroneId droneId)
         {
             return simulation_.State(droneId).mode != FlightMode::Grounded;
@@ -1168,7 +1164,7 @@ bool AeroSimLabApp::StartFormationTransit(
     const glm::dvec3 destination{stagingPosition, stagingAltitude};
     const auto route = PlanFormationRoute(terrainGrid_, routeBuildings_,
         simulation_.State(droneIds.front()).positionMeters, destination,
-        droneIds.size(), shape, 8.0, 1.5, 2.0,
+        droneIds.size(), 8.0, 1.5, 2.0,
         cameraTransitAltitudeMeters_);
     if (!route)
     {
@@ -1206,10 +1202,8 @@ bool AeroSimLabApp::StartFormationTransit(
     formationTransit_.lastAppliedSequence.clear();
     formationTransit_.lastNetworkNodeUpdateTick.reset();
     formationTransit_.active = true;
-    formationTransit_.status = std::string{"출발 준비 · "}
-        + (shape == FormationShape::Vee ? "V자 대형"
-            : shape == FormationShape::Column ? "일렬 대형" : "횡대")
-        + " · " + inspectionTargets_.back().displayName;
+    formationTransit_.status = "출발 준비 · V자 대형 · "
+        + inspectionTargets_.back().displayName;
     externalControl_ = true;
     groundControlActive_ = true;
     pendingControllerAction_.reset();
@@ -1773,7 +1767,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
             route[nextIndex].y - formationTransit_.route.leaderStartMeters.y};
     const double heading = glm::length(direction) > 1.0e-6
         ? std::atan2(direction.y, direction.x) : leader.yawRadians;
-    const auto offsets = FormationOffsets(formationTransit_.route.shape,
+    const auto offsets = FormationOffsets(
         droneIds.size(), formationTransit_.route.spacingMeters, heading);
 
     for (std::size_t index = 0; index < droneIds.size(); ++index)
