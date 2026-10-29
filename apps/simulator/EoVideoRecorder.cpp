@@ -328,9 +328,9 @@ void EoVideoRecorder::SetMissionOutcome(
 
 bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
 {
-    savedFrameCount = savedFrameCount_;
     if (!impl_ || !impl_->sessionOpen.load())
     {
+        savedFrameCount = savedFrameCount_;
         impl_.reset();
         error = "진행 중인 영상 녹화가 없습니다.";
         return false;
@@ -350,6 +350,7 @@ bool EoVideoRecorder::Stop(std::uint64_t& savedFrameCount, std::string& error)
     const bool metadataFlushed = static_cast<bool>(impl_->metadata);
     impl_->metadata.close();
     impl_->sessionOpen = false;
+    // 인코더가 프레임 수를 갱신하므로 작업이 끝난 뒤에 읽는다.
     savedFrameCount = savedFrameCount_;
 
     bool saved = metadataFlushed;
