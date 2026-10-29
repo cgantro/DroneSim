@@ -1002,7 +1002,10 @@ void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
         throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
+    {
         ecs_->physics->SetWindVelocityMetersPerSecond(velocity);
+        return;
+    }
 #endif
     ecs_->windVelocityMetersPerSecond = velocity;
 }
