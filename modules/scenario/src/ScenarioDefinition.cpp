@@ -1,5 +1,4 @@
 #include "ScenarioDefinition.h"
-#include "scenario/ScenarioJson.h"
 
 #include <nlohmann/json.hpp>
 
@@ -484,41 +483,13 @@ std::vector<DroneCommunicationOutage> ReadDroneCommunicationOutages(
     return outages;
 }
 
-/** @brief 점검면 방향과 거리·영상 해상도 조건을 읽고 범위를 확인한다. */
-InspectionSurface ReadInspectionSurface(const Json& value)
-{
-    return ParseInspectionSurfaceJson(value.dump());
-}
-
-/** @brief 점검면과 카메라 사이의 시야를 가리는 상자 목록을 읽는다. */
-std::vector<InspectionOccluderBox> ReadInspectionOccluders(const Json& value)
-{
-    if (!value.is_array())
-        throw std::invalid_argument("inspection_occluders는 상자 목록이어야 합니다.");
-
-    std::vector<InspectionOccluderBox> boxes;
-    boxes.reserve(value.size());
-    for (const Json& item : value)
-    {
-        if (!item.is_object())
-            throw std::invalid_argument("가림 상자는 JSON 객체여야 합니다.");
-        InspectionOccluderBox box{
-            ReadVector(Required(item, "center_meters"), "center_meters"),
-            ReadVector(Required(item, "half_extents_meters"), "half_extents_meters")};
-        if (glm::any(glm::lessThanEqual(box.halfExtentsMeters, glm::dvec3{0.0})))
-            throw std::invalid_argument("가림 상자의 반쪽 길이는 모두 양수여야 합니다.");
-        boxes.push_back(box);
-    }
-    return boxes;
-}
-
 /** @brief 임무 하나를 읽고 드론 배정, 경로와 Tick 범위를 확인한다. */
 ScenarioResult::MissionTask ReadMissionTask(
     const Json& taskValue,
     std::uint64_t tickCount,
     const std::unordered_set<std::string>& droneNames,
     std::unordered_set<std::string>& taskNames,
-    std::unordered_set<std::string>& inspectionZoneIds)
+    std::unordered_set<std::string>& zoneIds)
 {
     if (!taskValue.is_object())
         throw std::invalid_argument("각 mission task는 JSON 객체여야 합니다.");
@@ -564,42 +535,23 @@ ScenarioResult::MissionTask ReadMissionTask(
     task.startTick = ReadUnsigned(Required(taskValue, "start_tick"), "start_tick");
     task.deadlineTick = ReadUnsigned(
         Required(taskValue, "deadline_tick"), "deadline_tick");
-    if (taskValue.contains("max_capture_retries"))
-    {
-        const std::uint64_t retryCount = ReadUnsigned(
-            taskValue["max_capture_retries"], "max_capture_retries");
-        if (retryCount > 10U)
-            throw std::invalid_argument("max_capture_retries는 0부터 10 사이여야 합니다.");
-        task.maximumCaptureRetries = static_cast<std::uint32_t>(retryCount);
-    }
     task.toleranceMeters = ReadFiniteNumber(
         Required(taskValue, "tolerance_meters"), "tolerance_meters");
-    const auto inspectionSurface = taskValue.find("inspection_surface");
-    if (inspectionSurface != taskValue.end())
+    if (const auto facility = taskValue.find("facility_id"); facility != taskValue.end())
     {
-        task.inspectionSurface = ReadInspectionSurface(*inspectionSurface);
-        const Json& facilityId = Required(taskValue, "facility_id");
-        const Json& zoneId = Required(taskValue, "inspection_zone_id");
-        if (!facilityId.is_string() || facilityId.get<std::string>().empty()
-            || !zoneId.is_string() || zoneId.get<std::string>().empty())
-        {
+        if (!facility->is_string() || facility->get<std::string>().empty())
+            throw std::invalid_argument("facility_id는 비어 있지 않은 문자열이어야 합니다.");
+        task.facilityId = facility->get<std::string>();
+    }
+    if (const auto zone = taskValue.find("inspection_zone_id"); zone != taskValue.end())
+    {
+        if (!zone->is_string() || zone->get<std::string>().empty())
             throw std::invalid_argument(
-                "점검면에는 비어 있지 않은 facility_id와 inspection_zone_id가 필요합니다.");
-        }
-        task.facilityId = facilityId.get<std::string>();
-        task.inspectionZoneId = zoneId.get<std::string>();
-        if (!inspectionZoneIds.insert(task.inspectionZoneId).second)
+                "inspection_zone_id는 비어 있지 않은 문자열이어야 합니다.");
+        task.inspectionZoneId = zone->get<std::string>();
+        if (!zoneIds.insert(task.inspectionZoneId).second)
             throw std::invalid_argument("inspection_zone_id는 임무 안에서 고유해야 합니다.");
     }
-    if (task.maximumCaptureRetries > 0U && !task.inspectionSurface)
-        throw std::invalid_argument(
-            "max_capture_retries를 쓰려면 inspection_surface가 필요합니다.");
-    const auto inspectionOccluders = taskValue.find("inspection_occluders");
-    if (inspectionOccluders != taskValue.end())
-        task.inspectionOccluders = ReadInspectionOccluders(*inspectionOccluders);
-    if (!task.inspectionOccluders.empty() && !task.inspectionSurface)
-        throw std::invalid_argument(
-            "inspection_occluders를 쓰려면 inspection_surface가 필요합니다.");
     const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
         task.waypointsMeters.end(), [](const glm::dvec3& point) { return point.z < 0.0; });
     if (hasNegativeAltitude || task.toleranceMeters < 0.0
@@ -727,12 +679,12 @@ std::optional<ScenarioResult::Mission> ReadMission(
     if (!tasksValue->is_array() || tasksValue->empty())
         throw std::invalid_argument("mission.tasks에는 한 개 이상의 작업이 필요합니다.");
     std::unordered_set<std::string> taskNames;
-    std::unordered_set<std::string> inspectionZoneIds;
+    std::unordered_set<std::string> zoneIds;
     mission.tasks.reserve(tasksValue->size());
     for (const Json& taskValue : *tasksValue)
     {
         mission.tasks.push_back(ReadMissionTask(
-            taskValue, tickCount, droneNames, taskNames, inspectionZoneIds));
+            taskValue, tickCount, droneNames, taskNames, zoneIds));
     }
     return mission;
 }

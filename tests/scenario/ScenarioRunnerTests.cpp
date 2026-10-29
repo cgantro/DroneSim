@@ -1,5 +1,4 @@
 #include "scenario/ScenarioRunner.h"
-#include "scenario/ScenarioJson.h"
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
@@ -23,29 +22,6 @@ using namespace aerosimlab::simulation;
 
 namespace
 {
-void Verify_ScenarioJsonReadsInspectionGeometry()
-{
-    const auto surface = ParseInspectionSurfaceJson(R"({
-        "center_meters": [12, 3, 4],
-        "normal": [-2, 0, 0],
-        "width_axis": [1, 3, 0],
-        "width_meters": 4,
-        "height_meters": 2,
-        "minimum_distance_meters": 3,
-        "maximum_distance_meters": 15,
-        "maximum_incidence_angle_degrees": 45,
-        "minimum_pixel_width": 80,
-        "minimum_pixel_height": 60
-    })");
-
-    EXPECT_NEAR(glm::length(surface.normal), 1.0, 1.0e-12);
-    EXPECT_NEAR(glm::length(surface.widthAxis), 1.0, 1.0e-12);
-    EXPECT_NEAR(glm::dot(surface.normal, surface.widthAxis), 0.0, 1.0e-12);
-    EXPECT_DOUBLE_EQ(surface.centerMeters.z, 4.0);
-    EXPECT_EQ(surface.minimumPixelHeight, 60);
-
-}
-
 std::string ReadScenarioFixture(std::string_view relativePath)
 {
     const std::filesystem::path path =
@@ -187,7 +163,7 @@ void Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone()
     EXPECT_THROW(static_cast<void>(RunScenario(unknownDrone)), std::invalid_argument);
 }
 
-void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
+void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
 {
     constexpr std::string_view source = R"json(
     {"version":1,"dynamics":"kinematic","ticks":150,
@@ -197,168 +173,45 @@ void Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks()
      "commands":[
        {"tick":0,"drone":"east","type":"takeoff"},
        {"tick":0,"drone":"north","type":"takeoff"}],
-     "mission":{"name":"bridge-inspection","tasks":[
-       {"name":"east-face","role":"inspect","drone":"east",
+     "camera_events":[
+       {"tick":105,"drone":"east","action":"disable"}],
+     "mission":{"name":"bridge-survey","tasks":[
+       {"name":"east-face","role":"survey","drone":"east",
         "facility_id":"facility-bridge","inspection_zone_id":"deck-east",
         "target_position_meters":[0,0,1.5],"start_tick":110,
-        "deadline_tick":145,"tolerance_meters":0.1,
-        "inspection_surface":{
-          "center_meters":[10,0,0.62],"normal":[-1,0,0],
-          "width_axis":[0,1,0],"width_meters":2,"height_meters":1,
-          "minimum_distance_meters":5,"maximum_distance_meters":15,
-          "maximum_incidence_angle_degrees":30,
-          "minimum_pixel_width":100,"minimum_pixel_height":50}},
-       {"name":"north-face","role":"inspect","drone":"north",
+        "deadline_tick":145,"tolerance_meters":0.1},
+       {"name":"north-face","role":"survey","drone":"north",
         "facility_id":"facility-bridge","inspection_zone_id":"deck-north",
         "target_position_meters":[0,4,1.5],"start_tick":110,
-        "deadline_tick":145,"tolerance_meters":0.1,
-        "inspection_surface":{
-          "center_meters":[10,4,0.62],"normal":[-1,0,0],
-          "width_axis":[0,1,0],"width_meters":2,"height_meters":1,
-          "minimum_distance_meters":5,"maximum_distance_meters":15,
-          "maximum_incidence_angle_degrees":30,
-          "minimum_pixel_width":100,"minimum_pixel_height":50}}]},
+        "deadline_tick":145,"tolerance_meters":0.1}]},
      "expected":{"drones":[
        {"name":"east","mode":"hovering","position_meters":[0,0,1.5]},
        {"name":"north","mode":"hovering","position_meters":[0,4,1.5]}]}}
     )json";
 
-    const ScenarioResult successful = RunScenario(source);
-    ASSERT_TRUE(successful.passed)
-        << (successful.issues.empty() ? "" : successful.issues.front());
-    ASSERT_TRUE(successful.mission.has_value());
-    ASSERT_EQ(successful.mission->tasks.size(), 2U);
-    EXPECT_TRUE(successful.mission->tasks[0].completed);
-    EXPECT_TRUE(successful.mission->tasks[0].firstGeometryCaptureTick.has_value());
-    EXPECT_EQ(successful.mission->tasks[0].lastCaptureAssessment,
-        CaptureAssessment::Ready);
-    EXPECT_EQ(successful.mission->tasks[0].facilityId, "facility-bridge");
-    EXPECT_EQ(successful.mission->tasks[0].inspectionZoneId, "deck-east");
-    EXPECT_EQ(successful.drones[0].finalCamera.model.imageWidthPixels, 1280);
-
-    nlohmann::json singleDroneMission = nlohmann::json::parse(source);
-    singleDroneMission["mission"]["tasks"].erase(1);
-    singleDroneMission["drones"].erase(1);
-    singleDroneMission["commands"].erase(1);
-    singleDroneMission["expected"]["drones"].erase(1);
-    const ScenarioResult singleDrone = RunScenario(singleDroneMission.dump());
-    ASSERT_TRUE(singleDrone.passed)
-        << (singleDrone.issues.empty() ? "" : singleDrone.issues.front());
-    ASSERT_TRUE(singleDrone.mission.has_value());
-    ASSERT_EQ(singleDrone.mission->tasks.size(), 1U);
-    EXPECT_TRUE(singleDrone.mission->tasks[0].completed);
-
-    nlohmann::json sequentialZones = nlohmann::json::parse(source);
-    sequentialZones["mission"]["tasks"][1]["drone"] = "east";
-    sequentialZones["mission"]["tasks"][1]["target_position_meters"] = {0.0, 0.0, 1.5};
-    sequentialZones["mission"]["tasks"][1]["inspection_surface"]["center_meters"] =
-        {10.0, 0.7, 0.62};
-    const ScenarioResult oneDroneTwoZones = RunScenario(sequentialZones.dump());
-    ASSERT_TRUE(oneDroneTwoZones.passed)
-        << (oneDroneTwoZones.issues.empty() ? "" : oneDroneTwoZones.issues.front());
-    ASSERT_TRUE(oneDroneTwoZones.mission.has_value());
-    EXPECT_TRUE(oneDroneTwoZones.mission->tasks[0].completed);
-    EXPECT_TRUE(oneDroneTwoZones.mission->tasks[1].completed);
-    ASSERT_TRUE(oneDroneTwoZones.mission->tasks[0].completedTick.has_value());
-    ASSERT_TRUE(oneDroneTwoZones.mission->tasks[1].completedTick.has_value());
-    EXPECT_GT(*oneDroneTwoZones.mission->tasks[1].completedTick,
-        *oneDroneTwoZones.mission->tasks[0].completedTick);
-
-    nlohmann::json missingFacilityId = nlohmann::json::parse(source);
-    missingFacilityId["mission"]["tasks"][0].erase("facility_id");
-    EXPECT_THROW(static_cast<void>(RunScenario(missingFacilityId.dump())),
-        std::invalid_argument);
-
-    nlohmann::json obstructedSurface = nlohmann::json::parse(source);
-    obstructedSurface["mission"]["tasks"][0]["inspection_occluders"] =
-        nlohmann::json::array({{{"center_meters", {5.0, 0.0, 1.0}},
-            {"half_extents_meters", {0.5, 2.0, 2.0}}}});
-    const ScenarioResult obstructed = RunScenario(obstructedSurface.dump());
-    ASSERT_TRUE(obstructed.mission.has_value());
-    EXPECT_FALSE(obstructed.mission->tasks[0].completed);
-    EXPECT_FALSE(obstructed.mission->tasks[0].firstGeometryCaptureTick.has_value());
-    EXPECT_EQ(obstructed.mission->tasks[0].lastCaptureAssessment,
-        CaptureAssessment::Occluded);
-
-    nlohmann::json boxBehindSurface = nlohmann::json::parse(source);
-    boxBehindSurface["mission"]["tasks"][0]["inspection_occluders"] =
-        nlohmann::json::array({{{"center_meters", {12.0, 0.0, 1.0}},
-            {"half_extents_meters", {0.5, 2.0, 2.0}}}});
-    const ScenarioResult visibleSurface = RunScenario(boxBehindSurface.dump());
-    ASSERT_TRUE(visibleSurface.mission.has_value());
-    EXPECT_TRUE(visibleSurface.mission->tasks[0].completed);
-    EXPECT_EQ(visibleSurface.mission->tasks[0].lastCaptureAssessment,
-        CaptureAssessment::Ready);
-
-    nlohmann::json invalidOccluder = nlohmann::json::parse(source);
-    invalidOccluder["mission"]["tasks"][0]["inspection_occluders"] =
-        nlohmann::json::array({{{"center_meters", {5.0, 0.0, 1.0}},
-            {"half_extents_meters", {0.5, 0.0, 2.0}}}});
-    EXPECT_THROW(static_cast<void>(RunScenario(invalidOccluder.dump())),
-        std::invalid_argument);
+    const ScenarioResult result = RunScenario(source);
+    ASSERT_TRUE(result.passed)
+        << (result.issues.empty() ? "" : result.issues.front());
+    ASSERT_TRUE(result.mission.has_value());
+    ASSERT_EQ(result.mission->tasks.size(), 2U);
+    EXPECT_TRUE(result.mission->tasks[0].completed);
+    EXPECT_TRUE(result.mission->tasks[1].completed);
+    EXPECT_EQ(result.mission->tasks[0].facilityId, "facility-bridge");
+    EXPECT_EQ(result.mission->tasks[0].inspectionZoneId, "deck-east");
+    EXPECT_EQ(result.drones[0].finalCamera.status, CameraStatus::Disabled);
+    EXPECT_EQ(result.drones[0].finalCamera.model.imageWidthPixels, 1280);
 
     nlohmann::json duplicateZone = nlohmann::json::parse(source);
     duplicateZone["mission"]["tasks"][1]["inspection_zone_id"] = "deck-east";
     EXPECT_THROW(static_cast<void>(RunScenario(duplicateZone.dump())),
         std::invalid_argument);
 
-    nlohmann::json differentCameraModels = nlohmann::json::parse(source);
-    differentCameraModels["camera_model"] = {
-        {"image_width_pixels", 1920},
-        {"image_height_pixels", 1080},
-        {"vertical_field_of_view_degrees", 60.0}};
-    differentCameraModels["drones"][0]["camera_model"] = {
+    nlohmann::json invalidCamera = nlohmann::json::parse(source);
+    invalidCamera["drones"][0]["camera_model"] = {
         {"image_width_pixels", 160},
         {"image_height_pixels", 120},
-        {"vertical_field_of_view_degrees", 70.0}};
-    const ScenarioResult differentCameras = RunScenario(differentCameraModels.dump());
-    EXPECT_EQ(differentCameras.drones[0].finalCamera.model.imageWidthPixels, 160);
-    EXPECT_EQ(differentCameras.drones[0].finalCamera.model.imageHeightPixels, 120);
-    EXPECT_EQ(differentCameras.drones[1].finalCamera.model.imageWidthPixels, 1920);
-    EXPECT_EQ(differentCameras.drones[1].finalCamera.model.imageHeightPixels, 1080);
-    ASSERT_TRUE(differentCameras.mission.has_value());
-    EXPECT_FALSE(differentCameras.mission->tasks[0].completed);
-    EXPECT_EQ(differentCameras.mission->tasks[0].lastCaptureAssessment,
-        CaptureAssessment::ResolutionTooLow);
-    EXPECT_TRUE(differentCameras.mission->tasks[1].completed);
-
-    nlohmann::json invalidCamera = nlohmann::json::parse(source);
-    invalidCamera["drones"][0]["camera_model"]["vertical_field_of_view_degrees"] = 180;
-    EXPECT_THROW(static_cast<void>(RunScenario(invalidCamera.dump())), std::invalid_argument);
-
-    nlohmann::json withCameraDisabled = nlohmann::json::parse(source);
-    withCameraDisabled["camera_events"] = nlohmann::json::array({
-        {{"tick", 105}, {"drone", "east"}, {"action", "disable"}}});
-    const ScenarioResult incomplete = RunScenario(withCameraDisabled.dump());
-    ASSERT_FALSE(incomplete.passed);
-    ASSERT_TRUE(incomplete.mission.has_value());
-    ASSERT_TRUE(incomplete.mission->tasks[0].failed);
-    EXPECT_FALSE(incomplete.mission->tasks[0].firstGeometryCaptureTick.has_value());
-    EXPECT_EQ(incomplete.mission->tasks[0].lastCaptureAssessment,
-        CaptureAssessment::CameraUnavailable);
-
-    nlohmann::json recoveredCamera = withCameraDisabled;
-    recoveredCamera["ticks"] = 220;
-    recoveredCamera["mission"]["tasks"].erase(1);
-    recoveredCamera["mission"]["tasks"][0]["max_capture_retries"] = 1;
-    recoveredCamera["drones"][1]["initial_position_meters"] = {0.0, 1.0, 0.0};
-    recoveredCamera["expected"]["drones"][1]["position_meters"] = {0.0, 0.0, 1.5};
-    const ScenarioResult retried = RunScenario(recoveredCamera.dump());
-    ASSERT_TRUE(retried.passed)
-        << (retried.issues.empty() ? "" : retried.issues.front());
-    ASSERT_TRUE(retried.mission.has_value());
-    const auto& retriedTask = retried.mission->tasks[0];
-    EXPECT_TRUE(retriedTask.completed);
-    EXPECT_EQ(retriedTask.captureRetryCount, 1U);
-    EXPECT_EQ(retriedTask.maximumCaptureRetries, 1U);
-    EXPECT_TRUE(retriedTask.firstGeometryCaptureTick.has_value());
-    EXPECT_EQ(retriedTask.assignmentHistory.size(), 2U);
-    EXPECT_EQ(retriedTask.assignmentHistory[0], "east");
-    EXPECT_EQ(retriedTask.assignmentHistory[1], "north");
-
-    nlohmann::json excessiveCaptureRetries = recoveredCamera;
-    excessiveCaptureRetries["mission"]["tasks"][0]["max_capture_retries"] = 11;
-    EXPECT_THROW(static_cast<void>(RunScenario(excessiveCaptureRetries.dump())),
+        {"vertical_field_of_view_degrees", 180.0}};
+    EXPECT_THROW(static_cast<void>(RunScenario(invalidCamera.dump())),
         std::invalid_argument);
 }
 
@@ -803,11 +656,7 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     EXPECT_EQ(*result.mission->startedTick, 90U);
     for (const ScenarioResult::MissionTask& task : result.mission->tasks)
     {
-        EXPECT_TRUE(task.completed) << task.inspectionZoneId;
-        EXPECT_FALSE(task.inspectionZoneId.empty());
-        ASSERT_TRUE(task.firstGeometryCaptureTick.has_value()) << task.inspectionZoneId;
-        EXPECT_EQ(task.lastCaptureAssessment, CaptureAssessment::Ready)
-            << task.inspectionZoneId;
+        EXPECT_TRUE(task.completed) << task.name;
     }
 
     const auto disconnectedDrone = std::find_if(result.drones.begin(), result.drones.end(),
@@ -864,10 +713,7 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
     EXPECT_EQ(physicalResult.mission->outcome, ScenarioResult::Outcome::Passed);
     for (const ScenarioResult::MissionTask& task : physicalResult.mission->tasks)
     {
-        EXPECT_TRUE(task.completed) << task.inspectionZoneId;
-        ASSERT_TRUE(task.firstGeometryCaptureTick.has_value()) << task.inspectionZoneId;
-        EXPECT_EQ(task.lastCaptureAssessment, CaptureAssessment::Ready)
-            << task.inspectionZoneId;
+        EXPECT_TRUE(task.completed) << task.name;
     }
     ASSERT_TRUE(physicalResult.mission->startedTick.has_value());
     EXPECT_GT(*physicalResult.mission->startedTick, 90U);
@@ -1659,13 +1505,11 @@ void Verify_ScenarioRunner_CompletesTasksAfterSimultaneousOutage()
 TEST(ScenarioRunnerTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
-        Verify_ScenarioJsonReadsInspectionGeometry());
-    EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsBoundedTimeAlignedTrajectories());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ControlsAndReportsCamerasPerDrone());
     EXPECT_NO_FATAL_FAILURE(
-        Verify_ScenarioRunner_RequiresCameraGeometryForInspectionTasks());
+        Verify_ScenarioRunnerCompletesTasksAtWaypoints());
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust());
     EXPECT_NO_FATAL_FAILURE(

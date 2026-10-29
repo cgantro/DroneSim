@@ -585,14 +585,8 @@ void UpdateMissionCommands(
         if (task.completed || task.failed || !task.droneName.empty()
             || tick < task.startTick)
             continue;
-        std::optional<std::string> availableDrone;
-        if (!task.lastCaptureAttemptDroneName.empty())
-        {
-            availableDrone = findNearestDrone(CurrentWaypoint(task), false,
-                task.lastCaptureAttemptDroneName);
-        }
-        if (!availableDrone)
-            availableDrone = findNearestDrone(CurrentWaypoint(task), false, {});
+        const std::optional<std::string> availableDrone =
+            findNearestDrone(CurrentWaypoint(task), false, {});
         if (!availableDrone)
             continue;
         task.droneName = *availableDrone;
@@ -648,14 +642,8 @@ void UpdateMissionCommands(
                 + task.droneName + " 드론이 '" + task.role + "' 임무를 시작했습니다.");
         }
 
-        DroneCommand moveCommand{DroneCommand::Kind::SetWaypoint, CurrentWaypoint(task)};
-        if (task.inspectionSurface)
-        {
-            const glm::dvec3 directionToSurface = task.inspectionSurface->centerMeters
-                - CurrentWaypoint(task);
-            moveCommand.targetYawRadians = std::atan2(
-                directionToSurface.y, directionToSurface.x);
-        }
+        const DroneCommand moveCommand{
+            DroneCommand::Kind::SetWaypoint, CurrentWaypoint(task)};
         const CommandResult moveResult = simulation.Apply(droneId, moveCommand);
         if (moveResult != CommandResult::Accepted)
         {
@@ -1158,7 +1146,6 @@ void ApplyCameraEvents(
 
 void UpdateMissionResults(
     std::uint64_t tick,
-    std::uint64_t tickCount,
     std::optional<ScenarioResult::Mission>& mission,
     const SimulationCore& simulation,
     const DroneIds& droneIds,
@@ -1175,29 +1162,6 @@ void UpdateMissionResults(
             continue;
 
         const DroneId droneId = droneIds.at(task.droneName);
-        if (task.inspectionSurface && !task.firstGeometryCaptureTick)
-        {
-            const CameraState& camera = simulation.Camera(droneId);
-            if (camera.lastFrameTick == simulation.TickCount())
-            {
-                task.lastCaptureAssessment = EoCameraModel::AssessCapture(
-                    camera, *task.inspectionSurface, task.inspectionOccluders);
-                if (task.lastCaptureAssessment == CaptureAssessment::Ready)
-                {
-                    task.firstGeometryCaptureTick = camera.lastFrameTick;
-                    result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                        + task.droneName + " 드론의 '" + task.name
-                        + "' 점검면이 카메라 프레임 조건을 만족했습니다.");
-                }
-            }
-            else
-            {
-                task.lastCaptureAssessment = camera.status == CameraStatus::Active
-                    ? CaptureAssessment::NoNewFrame
-                    : CaptureAssessment::CameraUnavailable;
-            }
-        }
-
         const glm::dvec3 distance = simulation.State(droneId).positionMeters
             - CurrentWaypoint(task);
         const bool reachedWaypoint = glm::length(distance) <= task.toleranceMeters;
@@ -1209,8 +1173,7 @@ void UpdateMissionResults(
                 + std::to_string(task.currentWaypointIndex + 1) + "/"
                 + std::to_string(task.waypointsMeters.size()) + "에 도착했습니다.");
         }
-        else if (reachedWaypoint
-            && (!task.inspectionSurface || task.firstGeometryCaptureTick))
+        else if (reachedWaypoint)
         {
             task.completed = true;
             task.completedTick = tick;
@@ -1219,39 +1182,9 @@ void UpdateMissionResults(
         }
         else if (tick >= task.deadlineTick)
         {
-            if (task.inspectionSurface && !task.firstGeometryCaptureTick
-                && task.captureRetryCount < task.maximumCaptureRetries
-                && tick + 1U < tickCount)
-            {
-                const std::uint64_t attemptDuration =
-                    task.deadlineTick - task.startTick;
-                ++task.captureRetryCount;
-                task.lastCaptureAttemptDroneName = task.droneName;
-                task.droneName.clear();
-                task.started = false;
-                task.startTick = tick + 1U;
-                task.deadlineTick = task.startTick + std::min(
-                    attemptDuration, tickCount - 1U - task.startTick);
-                task.currentWaypointIndex = 0U;
-                task.firstGeometryCaptureTick.reset();
-                task.lastCaptureAssessment = CaptureAssessment::NoNewFrame;
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-                    + task.name + "' 점검면 촬영을 확인하지 못해 구역을 다시 배정합니다. 재시도 "
-                    + std::to_string(task.captureRetryCount) + "/"
-                    + std::to_string(task.maximumCaptureRetries) + ".");
-                continue;
-            }
             task.failed = true;
-            if (task.inspectionSurface && !task.firstGeometryCaptureTick)
-            {
-                result.issues.push_back(task.droneName
-                    + " 드론이 임무 기한 안에 점검면 촬영 조건을 만족하지 못했습니다.");
-            }
-            else
-            {
-                result.issues.push_back(task.droneName
-                    + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
-            }
+            result.issues.push_back(task.droneName
+                + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
         }
     }
 }
@@ -1593,7 +1526,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         }
         RecordMinimumDroneSeparation(
             definition, simulation, droneIds, dronePositionsMeters, result);
-        UpdateMissionResults(tick, definition.tickCount, result.mission,
+        UpdateMissionResults(tick, result.mission,
             simulation, droneIds, observations, result);
         const std::uint64_t completedTick = tick + 1;
         if (definition.trajectorySampleEveryTicks

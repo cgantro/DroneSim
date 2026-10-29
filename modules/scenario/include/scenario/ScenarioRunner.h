@@ -109,12 +109,6 @@ struct ScenarioResult
         std::string initialDroneName;
         std::vector<std::string> assignmentHistory;
         std::uint32_t reassignmentCount = 0;
-        /** @brief 촬영 조건을 놓친 뒤 다시 시도한 횟수다. */
-        std::uint32_t captureRetryCount = 0;
-        /** @brief 촬영 조건을 놓쳤을 때 허용하는 재시도 횟수다. */
-        std::uint32_t maximumCaptureRetries = 0;
-        /** @brief 다음 촬영 시도에서는 먼저 다른 드론을 찾도록 이전 담당을 기억한다. */
-        std::string lastCaptureAttemptDroneName;
         glm::dvec3 targetPositionMeters{0.0};
         /** @brief 점 임무는 한 점, 구역 임무는 왕복 경로의 순서 있는 지점 목록이다. */
         std::vector<glm::dvec3> waypointsMeters;
@@ -122,12 +116,6 @@ struct ScenarioResult
         std::uint64_t startTick = 0;
         std::uint64_t deadlineTick = 0;
         double toleranceMeters = 0.0;
-        std::optional<simulation::InspectionSurface> inspectionSurface;
-        std::vector<simulation::InspectionOccluderBox> inspectionOccluders;
-        simulation::CaptureAssessment lastCaptureAssessment =
-            simulation::CaptureAssessment::NoNewFrame;
-        /** @brief 점검면이 화면과 해상도 조건을 만족한 프레임의 모의 Tick이다. */
-        std::optional<std::uint64_t> firstGeometryCaptureTick;
         bool started = false;
         bool completed = false;
         bool failed = false;

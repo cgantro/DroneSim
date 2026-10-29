@@ -85,7 +85,6 @@ if(NOT EMSCRIPTEN)
 endif()
 
 add_library(aerosimlab_scenario STATIC
-  modules/scenario/src/ScenarioJson.cpp
   modules/scenario/src/ScenarioRunner.cpp
   modules/scenario/src/ScenarioDefinition.cpp
 )

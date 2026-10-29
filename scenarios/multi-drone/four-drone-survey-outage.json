@@ -40,19 +40,7 @@
         "target_position_meters": [4, 0, 1.5],
         "start_tick": 90,
         "deadline_tick": 310,
-        "tolerance_meters": 0.1,
-        "inspection_surface": {
-          "center_meters": [12, 0, 0.62],
-          "normal": [-1, 0, 0],
-          "width_axis": [0, 1, 0],
-          "width_meters": 2,
-          "height_meters": 1,
-          "minimum_distance_meters": 5,
-          "maximum_distance_meters": 15,
-          "maximum_incidence_angle_degrees": 30,
-          "minimum_pixel_width": 100,
-          "minimum_pixel_height": 50
-        }
+        "tolerance_meters": 0.1
       },
       {
         "name": "sector-2",
@@ -63,19 +51,7 @@
         "target_position_meters": [14, 0, 1.5],
         "start_tick": 90,
         "deadline_tick": 310,
-        "tolerance_meters": 0.1,
-        "inspection_surface": {
-          "center_meters": [22, 0, 0.62],
-          "normal": [-1, 0, 0],
-          "width_axis": [0, 1, 0],
-          "width_meters": 2,
-          "height_meters": 1,
-          "minimum_distance_meters": 5,
-          "maximum_distance_meters": 15,
-          "maximum_incidence_angle_degrees": 30,
-          "minimum_pixel_width": 100,
-          "minimum_pixel_height": 50
-        }
+        "tolerance_meters": 0.1
       },
       {
         "name": "sector-3",
@@ -86,19 +62,7 @@
         "target_position_meters": [24, 0, 1.5],
         "start_tick": 90,
         "deadline_tick": 310,
-        "tolerance_meters": 0.1,
-        "inspection_surface": {
-          "center_meters": [32, 0, 0.62],
-          "normal": [-1, 0, 0],
-          "width_axis": [0, 1, 0],
-          "width_meters": 2,
-          "height_meters": 1,
-          "minimum_distance_meters": 5,
-          "maximum_distance_meters": 15,
-          "maximum_incidence_angle_degrees": 30,
-          "minimum_pixel_width": 100,
-          "minimum_pixel_height": 50
-        }
+        "tolerance_meters": 0.1
       },
       {
         "name": "sector-4",
@@ -109,19 +73,7 @@
         "target_position_meters": [34, 0, 1.5],
         "start_tick": 90,
         "deadline_tick": 310,
-        "tolerance_meters": 0.1,
-        "inspection_surface": {
-          "center_meters": [42, 0, 0.62],
-          "normal": [-1, 0, 0],
-          "width_axis": [0, 1, 0],
-          "width_meters": 2,
-          "height_meters": 1,
-          "minimum_distance_meters": 5,
-          "maximum_distance_meters": 15,
-          "maximum_incidence_angle_degrees": 30,
-          "minimum_pixel_width": 100,
-          "minimum_pixel_height": 50
-        }
+        "tolerance_meters": 0.1
       }
     ]
   },

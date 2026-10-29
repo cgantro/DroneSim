@@ -141,3 +141,10 @@
 - Release 빌드에서 scenario 시험, simulation 시험, headless 실행기와 simulator 앱이 성공했다.
 - 관련 CTest 8/8 통과: 시뮬레이션 코어, 시나리오 실행기, 5개 headless 시나리오, ViewerSmoke.
 - 전체 CTest는 이번 변경에서 실행하지 않았다. 웹 브라우저 동작도 확인하지 않았다.
+
+## 자동 촬영 합격 판정 제거 — 2026-10-29
+
+- Windows Release 빌드 성공: `aerosimlab_simulation_tests`, `aerosimlab_scenario_tests`, `aerosimlab_headless`, `aerosimlab_simulator`.
+- 관련 CTest 3/3 통과: `Simulation.SimulationCoreTests.CoreScenarios`, `Scenario.ScenarioRunnerTests.CoreScenarios`, `HeadlessFormationOutageSmoke`.
+- 코드·시나리오·시험·headless 결과에서 `InspectionSurface`, `CaptureAssessment`, `inspection_surface`, `inspection_occluders`, `max_capture_retries` 참조가 남지 않은 것을 검색으로 확인했다.
+- 전체 CTest, 웹 빌드·브라우저 실행은 확인하지 않았다.

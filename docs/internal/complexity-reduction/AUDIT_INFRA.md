@@ -182,7 +182,7 @@
 129. `scenarios/flight/physical-model-override.json` — **KEEP**. 강체 제원 재정의·이륙 입력과 허용 위치를 제공하며 ScenarioRunnerTests가 참조한다. 물리 제원 입력 경로를 검증하는 독립 사례다. 기대 위치 허용치가 넓으므로 정확한 물리 성능 증거는 아니다.
 130. `scenarios/flight/rigid-body-flight.json` — **KEEP**. 강체 모드의 바람·이륙·착륙 및 예상 위치를 제공하며 CMake headless smoke가 참조한다. 편대 임무와 다른 기초 물리 확인이다. 실행 결과는 미검증.
 131. `scenarios/multi-drone/energy-and-outage-reallocation.json` — **REMOVE**. 저전력·통신 단절에서 임무 재배정을 시험하는 네 기체 입력과 기대값이다. ScenarioRunnerTests와 CooperativeMissionBenchmark가 참조한다. 자동 장애 복구와 광범위 benchmark 제거 때 관련 테스트와 함께 정리한다.
-132. `scenarios/multi-drone/four-drone-survey-outage.json` — **SIMPLIFY**. 네 기체 정찰·촬영면·단절·재배정·최소 간격 기대값을 제공하며 headless smoke, ScenarioRunnerTests 및 benchmark가 참조한다. 단절·자동 재배정은 제거 대상이지만 네 기체 정찰과 EO 촬영 조건은 남길 가치가 있어 정상 임무 시험으로 대체/분리 여부를 확인한다. 현재 시험은 실행하지 않았다.
+132. `scenarios/multi-drone/four-drone-survey-outage.json` — **SIMPLIFY**. 네 기체 정찰·통신 단절·재배정·최소 간격 기대값을 제공하며 headless smoke와 ScenarioRunnerTests가 참조한다. 점검면 촬영 조건은 2026-10-29 제거하고 경유점 도착으로 임무 완료를 판단하도록 바꿨다. 자동 재배정은 별도 축소 대상이다.
 133. `scenarios/multi-drone/independent-flight.json` — **KEEP**. 두 기체의 독립 이륙·이동과 최소 간격을 기술하며 CMake smoke가 참조한다. 정상 다중 기체 기본 동작과 장애 재배정은 다른 범위다.
 134. `scenarios/multi-drone/leader-following-outage.json` — **SIMPLIFY**. 리더·추종 오프셋과 일시 단절, 최종 위치를 기술하며 CMake smoke가 참조한다. 정상 편대 추종은 필요하지만 장애 복구 요구는 제외하므로 직접 통신의 정상 추종 확인과 분리한다.
 135. `scenarios/multi-drone/low-battery-reallocation.json` — **REMOVE**. 저전력 착륙과 다른 기체의 목표 인수를 위한 입력/기대값이며 ScenarioRunnerTests가 참조한다. 자동 장애 재배정 제거 범위에 해당한다. 정상 비행의 배터리 표시·기본 동작까지 삭제한다는 뜻은 아니다.

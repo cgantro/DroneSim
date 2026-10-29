@@ -98,34 +98,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
             {
                 waypoints.push_back({waypoint.x, waypoint.y, waypoint.z});
             }
-            nlohmann::json inspectionSurface = nullptr;
-            if (task.inspectionSurface)
-            {
-                const auto& surface = *task.inspectionSurface;
-                inspectionSurface = {
-                    {"center_meters", {surface.centerMeters.x,
-                        surface.centerMeters.y, surface.centerMeters.z}},
-                    {"normal", {surface.normal.x, surface.normal.y, surface.normal.z}},
-                    {"width_axis", {surface.widthAxis.x,
-                        surface.widthAxis.y, surface.widthAxis.z}},
-                    {"width_meters", surface.widthMeters},
-                    {"height_meters", surface.heightMeters},
-                    {"minimum_distance_meters", surface.minimumDistanceMeters},
-                    {"maximum_distance_meters", surface.maximumDistanceMeters},
-                    {"maximum_incidence_angle_degrees",
-                        surface.maximumIncidenceAngleDegrees},
-                    {"minimum_pixel_width", surface.minimumPixelWidth},
-                    {"minimum_pixel_height", surface.minimumPixelHeight}};
-            }
-            nlohmann::json inspectionOccluders = nlohmann::json::array();
-            for (const auto& box : task.inspectionOccluders)
-            {
-                inspectionOccluders.push_back({
-                    {"center_meters", {box.centerMeters.x,
-                        box.centerMeters.y, box.centerMeters.z}},
-                    {"half_extents_meters", {box.halfExtentsMeters.x,
-                        box.halfExtentsMeters.y, box.halfExtentsMeters.z}}});
-            }
             tasks.push_back({
                 {"name", task.name},
                 {"role", task.role},
@@ -137,8 +109,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                 {"initial_drone", task.initialDroneName},
                 {"assignment_history", task.assignmentHistory},
                 {"reassignment_count", task.reassignmentCount},
-                {"capture_retry_count", task.captureRetryCount},
-                {"max_capture_retries", task.maximumCaptureRetries},
                 {"target_position_meters", {
                     task.targetPositionMeters.x,
                     task.targetPositionMeters.y,
@@ -148,12 +118,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                 {"started", task.started},
                 {"completed", task.completed},
                 {"failed", task.failed},
-                {"completed_tick", task.completedTick},
-                {"inspection_surface", std::move(inspectionSurface)},
-                {"inspection_occluders", std::move(inspectionOccluders)},
-                {"capture_assessment",
-                    aerosimlab::simulation::ToString(task.lastCaptureAssessment)},
-                {"first_geometry_capture_tick", task.firstGeometryCaptureTick}});
+                {"completed_tick", task.completedTick}});
         }
         mission = {{"name", result.mission->name},
             {"outcome", aerosimlab::scenario::ToString(result.mission->outcome)},

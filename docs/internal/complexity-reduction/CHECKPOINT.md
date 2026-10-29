@@ -145,3 +145,10 @@
 - 2026-10-29: JSON 시나리오 입력·실행·결과 처리를 별도 `scenario` 모듈로 옮겼다. 점검 JSON 파서와 ScenarioRunner 테스트도 함께 이동했다. `simulation_core`의 링크 설정에서 JSON 라이브러리를 제거했고 headless 실행기만 `scenario` 모듈을 연결한다.
 - Release 빌드에서 시나리오·시뮬레이션 시험, headless 실행기와 simulator 앱을 빌드했다. 시나리오·코어·5개 headless 시나리오·ViewerSmoke 관련 CTest 8/8 통과. GUI 조작과 웹 브라우저는 확인하지 않았다.
 - `SimulationCore` 클래스의 책임 분리와 Flecs 컴포넌트·별도 맵 저장 방식 정리는 아직 남아 있다.
+
+## 자동 촬영 합격 판정 제거 — 2026-10-29
+
+- 점검면의 거리·각도·카메라 화면·픽셀 크기·건물 가림을 검사하던 `AssessCapture`와 전용 기하 자료형, JSON 파서, 결과 항목을 제거했다. 시나리오 임무는 카메라가 아니라 경유점에 도착했는지로 완료를 판정한다. 카메라 상태·자세·프레임 진행과 라이브 EO 화면은 유지한다.
+- 네 대 정찰 시험에서 점검면 조건을 없앴다. 시험은 임무 완료, 카메라가 꺼져도 비행 임무가 진행되는 동작, 중복 구역 ID와 잘못된 카메라 설정 거부를 확인한다.
+- Release에서 시뮬레이션 시험, 시나리오 시험, headless 실행기와 simulator 앱을 빌드했다. 관련 CTest 3/3 통과: SimulationCore, ScenarioRunner, HeadlessFormationOutageSmoke. 전체 CTest와 웹 브라우저는 확인하지 않았다.
+- 남은 큰 작업: `SimulationCore` 내부 책임과 Flecs 컴포넌트·별도 맵 저장 방식을 소비자 기준으로 다시 살핀다. 자동 임무 재배정은 이번 변경에 포함하지 않았다.
