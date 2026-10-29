@@ -210,6 +210,7 @@
 - Windows Release 전체 빌드 성공. SimulationCore 시험에 무풍·바람 조건을 비교하는 확인을 추가했다.
 - 전체 CTest 29/29 통과.
 - 증분 빌드에서는 `DroneControlState` 크기가 바뀐 뒤 이를 읽는 `QuadrotorFlightController.cpp`가 다시 컴파일되지 않아 강체 충돌 회피 시험이 실패했다. 관련 타깃을 정리한 뒤 해당 파일이 새 컴포넌트 배치로 다시 빌드됐고, 시나리오 시험과 전체 CTest가 통과했다.
+- 강체 모드 바람 설정은 `PhysicsWorld`만 갱신하고, 운동학 모드 바람 설정은 `SimulationCore`만 갱신한다. Release 전체 빌드와 CTest 29/29 통과.
 
 ## 강체 모드 지형 격자 중복 제거 — 2026-10-29
 
