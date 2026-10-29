@@ -830,11 +830,8 @@ std::vector<DroneId> SimulationCore::DroneIds() const
 {
     std::vector<DroneId> ids;
     ids.reserve(ecs_->drones.size());
-    for (const auto& [id, drone] : ecs_->drones)
-    {
-        (void)drone;
-        ids.push_back(id);
-    }
+    for (const auto& entry : ecs_->drones)
+        ids.push_back(entry.first);
     return ids;
 }
 
