@@ -217,3 +217,9 @@
 - Windows Release 전체 빌드 성공.
 - 전체 CTest 29/29 통과. 운동학 지형 접촉, 강체 물리, 통합 실행과 ViewerSmoke를 확인했다.
 - 강체 모드 지형 소유권을 `PhysicsWorld` 하나로 옮겼다. 운동학 모드는 `SimulationCore`의 지형 격자를 그대로 사용한다.
+
+## 사용되지 않던 SimulationCore API 제거 — 2026-10-29
+
+- Windows Release 전체 빌드 성공.
+- 전체 CTest 29/29 통과. 로터 고장 물리 동작은 기존 `PhysicsWorld` 시험에서 계속 확인한다.
+- 저장소 전체에서 제거한 네 API의 선언 외 호출처가 없음을 다시 검색해 확인했다.
