@@ -233,3 +233,8 @@
 
 - Windows Release 전체 빌드 성공, 전체 CTest 29/29 통과.
 - 카메라 자세 갱신이 ID 맵 대신 Flecs의 `CameraState`·`DroneState` 조회를 사용하도록 바꿨다. 엔티티 구성과 갱신 결과를 포함하는 기존 SimulationCore 및 카메라 시험을 통과했다.
+
+## Reset ECS 조회 — 2026-10-29
+
+- Windows Release 전체 빌드 성공, 전체 CTest 29/29 통과.
+- 드론 초기화가 ID 맵 대신 `DroneState`·`DroneControlState`·`CameraState`가 함께 붙은 엔티티를 조회한다. SimulationCore의 초기 자세·배터리 초기화·다중 드론 생성·제거 시험이 포함된 전체 시험을 통과했다.
