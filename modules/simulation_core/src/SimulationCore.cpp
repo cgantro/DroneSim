@@ -23,12 +23,23 @@ namespace aerosimlab::simulation
 {
 namespace
 {
+bool HasFiniteVector(const glm::dvec3& value) noexcept
+{
+    return std::isfinite(value.x)
+        && std::isfinite(value.y)
+        && std::isfinite(value.z);
+}
+
+bool HasFiniteVector(const glm::vec3& value) noexcept
+{
+    return std::isfinite(value.x)
+        && std::isfinite(value.y)
+        && std::isfinite(value.z);
+}
+
 bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
 {
-    return std::isfinite(positionMeters.x)
-        && std::isfinite(positionMeters.y)
-        && std::isfinite(positionMeters.z)
-        && std::isfinite(yawRadians);
+    return HasFiniteVector(positionMeters) && std::isfinite(yawRadians);
 }
 
 void ResolvePlanarObstacleContact(
@@ -718,13 +729,9 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     if (ecs_->tickCount != 0)
         throw std::logic_error("드론 시작 상태는 첫 Tick 전에만 바꿀 수 있습니다.");
     const double orientationLength = glm::length(state.orientation);
-    if (!HasFinitePose(state.positionMeters, 0.0)
-        || !std::isfinite(state.velocityMetersPerSecond.x)
-        || !std::isfinite(state.velocityMetersPerSecond.y)
-        || !std::isfinite(state.velocityMetersPerSecond.z)
-        || !std::isfinite(state.angularVelocityRadiansPerSecond.x)
-        || !std::isfinite(state.angularVelocityRadiansPerSecond.y)
-        || !std::isfinite(state.angularVelocityRadiansPerSecond.z)
+    if (!HasFiniteVector(state.positionMeters)
+        || !HasFiniteVector(state.velocityMetersPerSecond)
+        || !HasFiniteVector(state.angularVelocityRadiansPerSecond)
         || !std::isfinite(orientationLength) || orientationLength < 1.0e-12
         || !std::all_of(state.motorSpeedsRadiansPerSecond.begin(),
             state.motorSpeedsRadiansPerSecond.end(),
@@ -940,7 +947,7 @@ void SimulationCore::SetCameraFault(DroneId droneId, bool faulted)
 
 void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
-    if (!std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))
+    if (!HasFiniteVector(velocity))
         throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
@@ -966,11 +973,8 @@ double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 void SimulationCore::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    if (!std::isfinite(centerMeters.x) || !std::isfinite(centerMeters.y)
-        || !std::isfinite(centerMeters.z)
-        || !std::isfinite(halfExtentsMeters.x)
-        || !std::isfinite(halfExtentsMeters.y)
-        || !std::isfinite(halfExtentsMeters.z)
+    if (!HasFiniteVector(centerMeters)
+        || !HasFiniteVector(halfExtentsMeters)
         || halfExtentsMeters.x <= 0.0F || halfExtentsMeters.y <= 0.0F
         || halfExtentsMeters.z <= 0.0F)
     {
