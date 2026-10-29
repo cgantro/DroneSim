@@ -475,3 +475,4 @@
 - Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공.
 - 전체 Release CTest 28/28 통과. 임무 완료·실패·미확정 결과를 포함한 시나리오 시험을 기존 입력으로 확인했다.
 - 실행 결과의 외부 형식은 바꾸지 않았다. 웹 브라우저는 확인하지 않았다.
+- 내부 정의 헤더 위치를 옮긴 뒤에도 Release 실행기·시험 빌드와 전체 CTest 28/28 통과.

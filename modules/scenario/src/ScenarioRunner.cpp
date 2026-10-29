@@ -2,7 +2,7 @@
 #include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/SimulationCore.h"
-#include "ScenarioDefinition.h"
+#include "scenario/ScenarioDefinition.h"
 
 #include <glm/geometric.hpp>
 

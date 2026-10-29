@@ -1,4 +1,4 @@
-#include "ScenarioDefinition.h"
+#include "scenario/ScenarioDefinition.h"
 
 #include <algorithm>
 #include <stdexcept>

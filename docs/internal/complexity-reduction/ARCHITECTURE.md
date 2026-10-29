@@ -94,7 +94,7 @@ TrainingRangeScene 배치 목록
 ## 파일 배치와 이름
 
 - 공개 모듈 헤더는 대부분 `modules/<모듈>/include/<모듈>/`에 있고 구현은 `src/` 아래에 있다.
-- `modules/simulation_core/src/CollisionGeometry.h`, `modules/scenario/src/ScenarioDefinition.h`, `modules/terrain/src/MapGeometry.h`는 여러 내부 구현 파일이 공유하는 비공개 헤더다. `include`는 외부에 약속하는 공개 인터페이스 위치다. 이 헤더를 모두 `include`로 옮기면 구현 세부를 공개 API로 노출하게 된다. 현재처럼 `src`에 두거나, 한 파일에서만 쓴다면 해당 `.cpp` 안으로 합치는 편이 맞다. 별도 `detail` 폴더를 만들 필요는 없다.
+- `modules/simulation_core/src/CollisionGeometry.h`와 `modules/terrain/src/MapGeometry.h`는 내부 구현끼리 공유하는 헤더다. 시나리오 정의 헤더는 2026-10-30에 사용자가 요청한 저장소 배치에 맞춰 `modules/scenario/include/scenario/`로 옮겼다. 내부 자료형은 `detail` 이름공간에 두어 공개 실행 기능과 구별한다. 별도 `detail` 폴더는 만들지 않는다.
 - `Mesh::LoadGlb()`는 저장소 안에서 호출되지 않아 제거했다. `GlbModel::Load()`가 현재 GLB 모델을 불러오는 진입점이다.
 - `GlbData.h`는 GLB 내부 파서인데 현재 `graphics/include`에 있다. 외부 공개용이 아니라면 `include`에 둔 것은 공개 범위가 넓다. 내부 파서 위치는 별도로 검토해야 한다.
 - 그래픽스 시험의 include 경로에서 이전 `modules/graphics/src/graphics` 경로를 제거했다.
