@@ -69,7 +69,7 @@ CameraModel ReadCameraModel(const Json& value)
     if (const auto width = value.find("image_width_pixels"); width != value.end())
     {
         const std::uint64_t parsed = ReadUnsigned(*width, "image_width_pixels");
-        if (parsed == 0 || parsed > static_cast<std::uint64_t>(
+        if (parsed > static_cast<std::uint64_t>(
                 CameraModel::maximumImageDimensionPixels))
             throw std::invalid_argument("image_width_pixels는 1부터 8192 사이여야 합니다.");
         model.imageWidthPixels = static_cast<int>(parsed);
@@ -77,7 +77,7 @@ CameraModel ReadCameraModel(const Json& value)
     if (const auto height = value.find("image_height_pixels"); height != value.end())
     {
         const std::uint64_t parsed = ReadUnsigned(*height, "image_height_pixels");
-        if (parsed == 0 || parsed > static_cast<std::uint64_t>(
+        if (parsed > static_cast<std::uint64_t>(
                 CameraModel::maximumImageDimensionPixels))
             throw std::invalid_argument("image_height_pixels는 1부터 8192 사이여야 합니다.");
         model.imageHeightPixels = static_cast<int>(parsed);
