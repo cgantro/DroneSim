@@ -1,0 +1,280 @@
+path	bytes	loc	owner	audit_status	decision	baseline_head	locally_modified	evidence	verification
+.agents/skills/troubleshooting-postmortem/SKILL.md	3098	40	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+.gitattributes	41	3	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+.github/workflows/deploy-pages.yml	3804	126	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+.github/workflows/native-ci.yml	2220	76	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+.github/workflows/quality.yml	3995	142	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+.gitignore	1239	75	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+.vscode/settings.json	68	4	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+AGENTS.md	3814	53	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+CMakeLists.txt	29253	686	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+CMakePresets.json	2581	87	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+GOAL.md	4082	43	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+README.md	2265	33	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+SPEC.md	7245	54	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+apps/ground_control/GroundControlClient.cpp	2150	59	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+apps/ground_control/GroundControlClient.h	2171	63	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+apps/headless/main.cpp	13110	296	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/AeroSimLabApp.cpp	53612	1264	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+apps/simulator/AeroSimLabApp.h	27381	604	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+apps/simulator/AeroSimLabAppBenchmark.cpp	6068	131	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/AeroSimLabAppEoCapture.cpp	12910	299	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/AeroSimLabAppGamepad.cpp	6642	188	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/AeroSimLabAppInput.cpp	30699	863	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/AeroSimLabAppLifecycle.cpp	12653	337	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/AeroSimLabAppMission.cpp	92771	2240	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+apps/simulator/BenchmarkProcessMemory.h	924	36	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/BuildRevision.cpp	199	11	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/BuildRevision.h	186	9	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/CooperativeMissionBenchmark.cpp	24232	563	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/DroneScalingBenchmark.cpp	20963	480	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/EoVideoRecorder.cpp	23461	659	app	REVIEWED	SIMPLIFY	7bfce7e7	no	AUDIT_APP.md 및 녹화 Stop 경쟁 수정	Release 빌드와 CoreScenarios 통과; sanitizer 미실시
+apps/simulator/EoVideoRecorder.h	3426	90	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/ExecutableDirectory.h	1113	36	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/FaultScenarioTimeline.cpp	20347	583	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/FaultScenarioTimeline.h	4093	101	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/FleetDroneSpawn.cpp	1096	37	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/FleetDroneSpawn.h	644	24	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/FleetMissionProgress.cpp	5456	119	app	REVIEWED	KEEP	535aebeb	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 관련 CTest 7개 통과; 직접 통신 미검증
+apps/simulator/FleetMissionProgress.h	2346	92	app	REVIEWED	KEEP	b8a3bb7f	no	AUDIT_APP.md 파일별 항목	Release 빌드 및 관련 CTest 3개 통과; 직접 통신 별도 검증 필요
+apps/simulator/FleetTelemetry.h	838	33	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/SimulationBenchmark.cpp	9811	204	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/SimulationBenchmark.h	5400	129	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/SimulatorHud.cpp	55330	1203	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+apps/simulator/SimulatorHud.h	5387	143	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+apps/simulator/TrainingRangeScene.cpp	6227	149	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/TrainingRangeScene.h	1734	59	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/main.cpp	7185	214	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/web/web_shell_single_thread.html	65648	1335	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+assets/models/drones/x500/LICENSE	1532	29	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/drones/x500/action-camera.glb	140756		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/drones/x500/carbon-weave.ppm	49167	4	infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/drones/x500/visual.glb	13853744		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/drones/x500/카메라_출처.txt	426	8	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/README.md	760	7	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/LICENSE.txt	288	8	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/Textures/colormap.png	11986		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/building-a.glb	177316		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/building-c.glb	175844		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/building-f.glb	134916		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/building-j.glb	80792		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/building-m.glb	138920		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/building-q.glb	181248		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/building-t.glb	139896		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/chimney-large.glb	20932		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/detail-tank-large.glb	47452		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/detail-tank.glb	31436		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/shipping-container-a.glb	36624		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/shipping-container-b.glb	37052		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/shipping-container-c.glb	36620		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/water-tower.glb	93836		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/industrial/windmill.glb	46292		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/nature/LICENSE.txt	611	23	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/nature/rock_largeA.glb	7552		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/nature/rock_largeC.glb	7004		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/nature/rock_tallB.glb	14060		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/nature/tree_oak.glb	14644		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/environment/nature/tree_pineTallA_detailed.glb	10708		infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/models/source/x500-v2/README.md	595	8	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+assets/shaders/Scene.glsl	7717	196	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+cmake/Dependencies.cmake	3708	109	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+cmake/GenerateBuildRevision.cmake	1201	40	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/images/simulator-overview.jpg	73017		infra	METADATA_ONLY	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/기술구조.md	8623	100	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결.md	5210	45	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/PX4-기록-재생-자세-차이.md	4970	39	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/PX4-높이-기준.md	4836	44	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/강체-이륙-임무-시작.md	2669	27	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/강체-지면-접촉-관통.md	3493	29	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/강체-충돌회피-안전거리-미달.md	4156	37	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/기체-질량-관성-누락.md	5910	49	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/물리-수치-범위.md	5216	48	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/지형-경계-이탈.md	3042	25	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/지형-높이와-충돌.md	8950	61	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/충돌-경계-접촉-누락.md	2694	27	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/통신단절-충돌회피-거리미달.md	8201	62	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/비행과 충돌/호버-드론-충돌회피-누락.md	3226	31	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/시험과 성능/다중드론-충돌-성능.md	11375	104	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/시험과 성능/통합시험-UDP-시작-시간초과.md	4741	37	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/임무와 통신/명령-기록-재생.md	6844	53	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/임무와 통신/접근위반-미확정.md	4740	35	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/임무와 통신/정찰-재배정-카메라-방향.md	3241	33	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/임무와 통신/정찰-지점-반복-재배정.md	2836	33	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/임무와 통신/조종기-연결-감지.md	1416	19	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/임무와 통신/조종기-연결해제-안전동작.md	6151	45	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/임무와 통신/지상통제-UDP-응답.md	7015	58	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/화면과 카메라/웹-화면-로딩-멈춤.md	3249	31	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/화면과 카메라/정찰-이륙-상태와-화면시험.md	6464	42	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/화면과 카메라/카메라-기울기-반영.md	3912	31	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/화면과 카메라/카메라-재생-프레임.md	4657	38	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/문제해결/화면과 카메라/화면-프레임-지연.md	23465	207	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/성능검증.md	1627	22	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/public/시작하기.md	6007	81	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/include/communication/Protocol.h	3732	132	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/include/communication/UdpSocket.h	1457	47	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/include/communication/UdpSocketPlatform.h	931	28	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/include/communication/VirtualMeshNetwork.h	12260	315	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/src/Protocol.cpp	21770	541	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/src/UdpSocket.cpp	1014	49	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/src/UdpSocketPosix.cpp	5411	162	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/src/UdpSocketWindows.cpp	6449	186	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/communication/src/VirtualMeshNetwork.cpp	46190	1228	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/Camera.h	5560	100	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/GlApi.h	95	7	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/GlbModel.h	2024	56	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/IndexBuffer.h	2670	54	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/Material.h	2075	52	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/Mesh.h	6030	110	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/MultisampleFramebuffer.h	7902	151	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/Renderer.h	1442	58	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/Shader.h	5489	100	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/Texture2D.h	1642	49	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/VertexArray.h	2066	41	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/VertexBuffer.h	2251	48	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/include/graphics/Window.h	4758	117	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/Camera.cpp	2402	89	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/GlbData.h	12993	292	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/GlbModel.cpp	14797	337	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/IndexBuffer.cpp	2158	67	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/Material.cpp	849	39	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/Mesh.cpp	8414	175	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/MultisampleFramebuffer.cpp	20432	562	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/Renderer.cpp	8527	265	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/Shader.cpp	9586	314	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/Texture2D.cpp	10456	261	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/VertexArray.cpp	751	34	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/VertexBuffer.cpp	1191	43	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphics/src/graphics/Window.cpp	4782	175	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/manual_control/include/manual_control/GamepadCommandMapper.h	2304	59	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/manual_control/src/GamepadCommandMapper.cpp	3217	86	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/media/include/media/RecordedCaptureTransfer.h	2271	67	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/media/include/media/RtpVideoStream.h	3414	98	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/media/src/RecordedCaptureTransfer.cpp	29047	841	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/media/src/RtpVideoStream.cpp	26702	752	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/sensor/include/sensor/RgbFrame.h	1032	34	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/sensor/src/RgbFrame.cpp	1356	46	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/simulation_core/include/simulation_core/BatteryModel.h	1611	46	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/CommandRecording.h	2331	63	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/DroneModel.h	5322	133	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/EoCameraModel.h	4915	138	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/FormationPlanner.h	2929	82	simulation	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_SIMULATION.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+modules/simulation_core/include/simulation_core/InspectionSurfaceJson.h	676	19	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/PhysicsWorld.h	5757	146	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/QuadrotorFlightController.h	2031	51	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/QuadrotorModel.h	2173	60	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/ScenarioRunner.h	8213	167	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/ScopedDuration.h	1303	52	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/include/simulation_core/SimulationCore.h	10673	235	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/BatteryModel.cpp	2553	91	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/CollisionGeometry.cpp	11895	327	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/CollisionGeometry.h	3221	91	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/CommandRecording.cpp	1935	94	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/DroneModel.cpp	11094	315	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/EoCameraModel.cpp	13591	356	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/FormationPlanner.cpp	15918	413	simulation	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_SIMULATION.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+modules/simulation_core/src/InspectionSurfaceJson.cpp	5194	124	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/PhysicsWorld.cpp	52719	1270	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/QuadrotorFlightController.cpp	9227	233	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/QuadrotorModel.cpp	3850	67	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/ScenarioDefinition.cpp	58373	1329	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/ScenarioDefinition.h	4109	143	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/ScenarioRunner.cpp	71132	1624	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/simulation_core/src/SimulationCore.cpp	43880	1179	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapBridges.h	1538	46	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapBuildings.h	3186	87	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapFlightRoute.h	2624	65	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapRoads.h	1115	39	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapTrees.h	520	21	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/MapWaterBodies.h	866	25	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/TerrainGrid.h	2931	67	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/include/terrain/TrainingRangeTerrain.h	238	9	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapBridges.cpp	7539	215	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapBuildings.cpp	12723	336	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapFlightRoute.cpp	22850	595	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapGeometry.h	5565	164	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapRoads.cpp	6601	213	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapTrees.cpp	1998	60	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/MapWaterBodies.cpp	4453	132	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/TerrainGrid.cpp	18424	430	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/terrain/src/TrainingRangeTerrain.cpp	1948	53	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/vision/include/vision/RgbFrameQuality.h	1897	42	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/vision/include/vision/RgbFrameView.h	1052	22	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/vision/src/RgbFrameQuality.cpp	903	27	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/vision/src/RgbFrameView.cpp	452	17	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/fault-injection/fault-injection.json	561	21	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/flight/normal-flight.json	569	19	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/flight/physical-model-override.json	567	22	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/flight/rigid-body-flight.json	376	16	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/multi-drone/energy-and-outage-reallocation.json	2256	78	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/multi-drone/four-drone-survey-outage.json	4493	138	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/multi-drone/independent-flight.json	714	22	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/multi-drone/leader-following-outage.json	867	30	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/multi-drone/low-battery-reallocation.json	1384	57	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/multi-drone/rigid-body-energy-and-outage.json	2436	84	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+scenarios/multi-drone/two-point-survey.json	1101	43	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/communication/GroundControlClientTests.cpp	2161	67	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/communication/ProtocolTests.cpp	9257	205	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/communication/VirtualMeshNetworkTests.cpp	24803	594	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/data/px4_x500_position_replay_12_05.json	125413	1	infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/data/px4_x500_position_replay_2026_10_16_100s.json	152286	1	infra	METADATA_ONLY	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/graphics/CameraTests.cpp	9478	261	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/manual_control/GamepadCommandMapperTests.cpp	1805	48	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/media/RtpVideoStreamTests.cpp	5978	154	infra	REVIEWED	REMOVE	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/sensor/RgbFrameTests.cpp	1137	41	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/simulation_core/CommandRecordingTests.cpp	3519	98	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+tests/simulation_core/FormationPlannerTests.cpp	6116	140	simulation	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_SIMULATION.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+tests/simulation_core/PhysicsWorldTests.cpp	41092	888	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+tests/simulation_core/QuadrotorModelTests.cpp	5794	124	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+tests/simulation_core/ScenarioRunnerTests.cpp	86833	1688	simulation	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+tests/simulation_core/SimulationCoreTests.cpp	27167	642	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+tests/simulator/SimulatorSessionTests.cpp	44549	941	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
+tests/terrain/TerrainGridTests.cpp	10946	284	simulation	REVIEWED	KEEP	d6515b6e	no	AUDIT_SIMULATION.md 파일별 항목	정적 감사, 실행 시험은 별도
+tests/vision/RgbFrameQualityTests.cpp	1870	51	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+tests/vision/RgbFrameViewTests.cpp	810	31	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+third_party/coi-serviceworker.min.js	2272	2	infra	METADATA_ONLY	UNKNOWN	d6515b6e	no	FINDINGS.md 외부 코드와 보관 자료	메타데이터·참조 정적 조사; 외부 출처 독립 검증 안 함
+third_party/glad/include/KHR/khrplatform.h	11442	311	infra	METADATA_ONLY	KEEP	d6515b6e	no	FINDINGS.md 외부 코드와 보관 자료	메타데이터·참조 정적 조사; 외부 출처 독립 검증 안 함
+third_party/glad/include/glad/glad.h	931151	15926	infra	METADATA_ONLY	KEEP	d6515b6e	no	FINDINGS.md 외부 코드와 보관 자료	메타데이터·참조 정적 조사; 외부 출처 독립 검증 안 함
+third_party/glad/src/glad.c	610314	9086	infra	METADATA_ONLY	KEEP	d6515b6e	no	FINDINGS.md 외부 코드와 보관 자료	메타데이터·참조 정적 조사; 외부 출처 독립 검증 안 함
+third_party/stb_image_LICENSE.txt	2547	37	infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md 외부 코드와 보관 자료	메타데이터·참조 정적 조사; 외부 출처 독립 검증 안 함
+tools/px4/compare_reference.py	10187	225	infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md 도구와 의존성	본문 전체 정적 확인, 실행은 별도
+tools/px4/prepare_reference.py	25846	615	infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md 도구와 의존성	본문 전체 정적 확인, 실행은 별도
+tools/px4/test_compare_reference.py	6674	157	infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md 도구와 의존성	본문 전체 정적 확인, 실행은 별도
+tools/px4/test_prepare_reference.py	9285	212	infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md 도구와 의존성	본문 전체 정적 확인, 실행은 별도
+tools/terrain/convert_ascii_grid.cpp	1336	46	infra	REVIEWED	SIMPLIFY	d6515b6e	no	FINDINGS.md 도구와 의존성	본문 전체 정적 확인, 실행은 별도
+tools/web_runtime_smoke.cjs	27150	580	infra	REVIEWED	SIMPLIFY	d6515b6e	no	FINDINGS.md 도구와 의존성	본문 전체 정적 확인, 브라우저 실행은 별도
+vcpkg.json	657	25	infra	REVIEWED	SIMPLIFY	d6515b6e	no	FINDINGS.md 도구와 의존성	본문 전체 정적 확인, 실행은 별도
+.codex/agents/audit_app.toml	805		infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md Codex 설정	TOML 형식 및 설정 키 로딩 확인; 실제 새 세션 동작 미검증
+.codex/agents/audit_infra.toml	766		infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md Codex 설정	TOML 형식 및 설정 키 로딩 확인; 실제 새 세션 동작 미검증
+.codex/agents/audit_sim.toml	738		infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md Codex 설정	TOML 형식 및 설정 키 로딩 확인; 실제 새 세션 동작 미검증
+.codex/agents/critical_review.toml	685		infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md Codex 설정	TOML 형식 및 설정 키 로딩 확인; 실제 새 세션 동작 미검증
+.codex/agents/inventory_scan.toml	596		infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md Codex 설정	TOML 형식 및 설정 키 로딩 확인; 실제 새 세션 동작 미검증
+.codex/config.toml	410		infra	REVIEWED	KEEP	d6515b6e	no	FINDINGS.md Codex 설정	TOML 형식 및 설정 키 로딩 확인; 실제 새 세션 동작 미검증
+apps/graphify-out/cache/stat-index.json	1311		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/history/project-history.zip	225670		infra	METADATA_ONLY	KEEP	d6515b6e	no	FINDINGS.md 외부 코드와 보관 자료	메타데이터·참조 정적 조사; 외부 출처 독립 검증 안 함
+docs/internal/complexity-reduction/AUDIT_APP.md	12140		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/internal/complexity-reduction/AUDIT_SIMULATION.md	12544		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/internal/complexity-reduction/CHECKPOINT.md	735		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/internal/complexity-reduction/DECISIONS.md	122		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/internal/complexity-reduction/FINDINGS.md	115		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/internal/complexity-reduction/INVENTORY.tsv	20505		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/internal/complexity-reduction/VERIFICATION.md	940		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/private/개발기록.md	39909		infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/private/개발안내.md	7946		infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/private/기술설계.md	10345		infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+docs/private/문제해결.md	5334		infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+modules/graphify-out/cache/stat-index.json	5701		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tests/graphify-out/cache/stat-index.json	1082		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/maps/__pycache__/convert_ngii_buildings.cpython-312.pyc	69821		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/maps/__pycache__/convert_ngii_buildings.cpython-313.pyc	54111		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/maps/__pycache__/convert_ngii_buildings.cpython-314.pyc	81728		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/maps/__pycache__/convert_ngii_terrain.cpython-314.pyc	24307		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/maps/__pycache__/test_convert_ngii_buildings.cpython-312.pyc	19729		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/maps/__pycache__/test_convert_ngii_buildings.cpython-313.pyc	14365		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/maps/__pycache__/test_convert_ngii_buildings.cpython-314.pyc	15175		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/px4/__pycache__/compare_reference.cpython-314.pyc	15396		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/px4/__pycache__/prepare_reference.cpython-312.pyc	22570		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/px4/__pycache__/prepare_reference.cpython-314.pyc	40254		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/px4/__pycache__/test_compare_reference.cpython-314.pyc	10994		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+tools/px4/__pycache__/test_prepare_reference.cpython-314.pyc	13814		infra	GENERATED_EXCLUDED		d6515b6e	no	생성된 그래프·캐시 또는 이번 감사 기록	
+docs/internal/complexity-reduction/AUDIT_INFRA.md	47245		infra	GENERATED_EXCLUDED		d6515b6e	no	이번 작업의 감사·측정 기록	
+docs/internal/complexity-reduction/baseline-visible.json	4027		infra	GENERATED_EXCLUDED		d6515b6e	no	이번 작업의 감사·측정 기록	

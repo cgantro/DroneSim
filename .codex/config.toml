@@ -1,0 +1,11 @@
+# DroneSim Codex — ChatGPT Plus 사용량 절약 기본 구성
+# 이 파일은 기존 프로젝트 설정이 있다면 병합하세요. 기존 파일을 덮어쓰지 마세요.
+model = "gpt-6.1-sol"
+model_reasoning_effort = "medium"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 2
+default_subagent_model = "gpt-6.1-terra"
+default_subagent_reasoning_effort = "medium"
+interrupt_message = true

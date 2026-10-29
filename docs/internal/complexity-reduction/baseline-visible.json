@@ -1,0 +1,190 @@
+{
+  "application_frame_duration_us": {
+    "maximum": 14036.2,
+    "p50": 2398.5,
+    "p95": 4511.2,
+    "p99": 5573.3,
+    "samples": 1832
+  },
+  "configuration": "visible OpenGL window with VSync off; one drone; 18.8km x 23.7km SRTM terrain; 17 OSM building boxes; 49 park facilities; textured PX4 X500 and park facility meshes; EO pixel readback uses a 3-slot asynchronous PBO ring",
+  "elapsed_seconds": 5.0005346,
+  "eo_gl_buffer_map_call_us": {
+    "maximum": 0.1,
+    "p50": 0.0,
+    "p95": 0.1,
+    "p99": 0.1,
+    "samples": 300
+  },
+  "eo_gl_buffer_unmap_call_us": {
+    "maximum": 0.5,
+    "p50": 0.1,
+    "p95": 0.2,
+    "p99": 0.3,
+    "samples": 300
+  },
+  "eo_gl_fallback_finish_us": {
+    "maximum": 0.0,
+    "p50": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "samples": 0
+  },
+  "eo_gl_fence_creation_call_us": {
+    "maximum": 92.6,
+    "p50": 15.3,
+    "p95": 19.8,
+    "p99": 26.5,
+    "samples": 300
+  },
+  "eo_gl_fence_wait_call_us": {
+    "maximum": 68.3,
+    "p50": 0.0,
+    "p95": 1.2,
+    "p99": 1.5,
+    "samples": 1832
+  },
+  "eo_gl_pixel_pack_buffer_bind_us": {
+    "maximum": 1.2,
+    "p50": 0.4,
+    "p95": 0.7,
+    "p99": 0.9,
+    "samples": 300
+  },
+  "eo_gl_readpixels_call_us": {
+    "maximum": 6458.6,
+    "p50": 41.9,
+    "p95": 2052.8,
+    "p99": 2229.1,
+    "samples": 300
+  },
+  "eo_gl_state_restore_us": {
+    "maximum": 13.9,
+    "p50": 2.2,
+    "p95": 2.5,
+    "p99": 8.5,
+    "samples": 300
+  },
+  "eo_pixel_buffer_resize_us": {
+    "maximum": 0.2,
+    "p50": 0.0,
+    "p95": 0.1,
+    "p99": 0.1,
+    "samples": 300
+  },
+  "eo_pixel_buffer_setup_us": {
+    "maximum": 13.9,
+    "p50": 0.5,
+    "p95": 0.8,
+    "p99": 1.1,
+    "samples": 300
+  },
+  "eo_pixel_copy_us": {
+    "maximum": 378.1,
+    "p50": 190.7,
+    "p95": 235.6,
+    "p99": 292.9,
+    "samples": 300
+  },
+  "eo_pixel_readback_enqueue_duration_us": {
+    "maximum": 6468.7,
+    "p50": 63.3,
+    "p95": 2061.0,
+    "p99": 2235.2,
+    "samples": 300
+  },
+  "eo_pixel_readback_poll_duration_us": {
+    "maximum": 387.1,
+    "p50": 0.1,
+    "p95": 206.0,
+    "p99": 237.7,
+    "samples": 1832
+  },
+  "eo_pixel_readback_slot_setup_us": {
+    "maximum": 0.1,
+    "p50": 0.0,
+    "p95": 0.1,
+    "p99": 0.1,
+    "samples": 300
+  },
+  "eo_read_target_setup_us": {
+    "maximum": 10.3,
+    "p50": 2.6,
+    "p95": 2.9,
+    "p99": 3.5,
+    "samples": 300
+  },
+  "eo_readback_cleanup_us": {
+    "maximum": 75.1,
+    "p50": 7.8,
+    "p95": 9.2,
+    "p99": 12.2,
+    "samples": 300
+  },
+  "framebuffer": {
+    "height": 720,
+    "width": 1280
+  },
+  "opengl": {
+    "renderer": "NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2",
+    "version": "3.3.0 NVIDIA 581.42"
+  },
+  "physics_step_duration_us": {
+    "maximum": 89.4,
+    "p50": 30.1,
+    "p95": 34.0,
+    "p99": 37.8,
+    "samples": 300
+  },
+  "private_bytes": 567169024,
+  "process_cpu_percent_approx": 100.00930700489505,
+  "render_fps": 366.3608287001954,
+  "render_frame_duration_us": {
+    "maximum": 14030.1,
+    "p50": 2391.2,
+    "p95": 4502.4,
+    "p99": 5566.6,
+    "samples": 1832
+  },
+  "render_frame_with_eo_readback_duration_us": {
+    "maximum": 14030.1,
+    "p50": 3542.4,
+    "p95": 5337.9,
+    "p99": 6101.6,
+    "samples": 600
+  },
+  "render_frame_without_eo_readback_duration_us": {
+    "maximum": 8719.0,
+    "p50": 2390.9,
+    "p95": 2419.5,
+    "p99": 2595.4,
+    "samples": 1232
+  },
+  "rendered_frames": 1832,
+  "simulation_ticks": 300,
+  "slow_frames_over_16_67ms": [],
+  "source_revision": "d6515b6e-dirty",
+  "tick_duration_us": {
+    "deadline_misses_over_16_67ms": 0,
+    "maximum": 104.1,
+    "p50": 44.6,
+    "p95": 49.4,
+    "p99": 57.2,
+    "samples": 300
+  },
+  "vision_analysis": {
+    "duration_us": {
+      "maximum": 4325.2,
+      "p50": 3111.9,
+      "p95": 3642.7,
+      "p99": 4116.3,
+      "samples": 300
+    },
+    "mean_brightness": 181.55619488389758,
+    "mean_contrast": 17.83687938347079,
+    "mean_sharpness": 42.807210129046624,
+    "samples": 300
+  },
+  "warmup_seconds": 1.0,
+  "window_visible": true,
+  "working_set_bytes": 217739264
+}
