@@ -464,7 +464,7 @@ bool AeroSimLabApp::StartFleetReconnaissance(
         const auto home = homePositions.find(droneIds[index]);
         mission.startPositionMeters = home != homePositions.end()
             ? home->second : *start;
-        mission.routeWaypointsMeters.assign(route->begin() + 1, route->end());
+        mission.routeWaypointsMeters.assign(route->begin(), route->end());
         mission.status = takeOffDrones ? "출발 준비" : "정찰 이동 중";
         missions.push_back(std::move(mission));
     }
@@ -619,7 +619,7 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
             returnApproach, 3.0, cameraTransitAltitudeMeters_);
         if (!route)
             return false;
-        returnRoutes.emplace_back(route->begin() + 1, route->end());
+        returnRoutes.emplace_back(route->begin(), route->end());
     }
 
     if (takeOffDrones)
@@ -739,7 +739,7 @@ bool AeroSimLabApp::StartFleetRally()
             3.0, cameraTransitAltitudeMeters_);
         if (!route)
             return false;
-        rallyRoutes.emplace_back(route->begin() + 1, route->end());
+        rallyRoutes.emplace_back(route->begin(), route->end());
     }
 
     std::vector<DroneId> takingOff;
@@ -858,7 +858,7 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                     mission.lowBatteryReturn = true;
                     returnStarted = SendFleetRouteAssignment(droneId,
                         FleetMissionLeg::Returning, mission.targetIndex,
-                        std::vector<glm::dvec3>(route->begin() + 1, route->end()));
+                        std::vector<glm::dvec3>(route->begin(), route->end()));
                 }
                 if (!returnStarted)
                 {

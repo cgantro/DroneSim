@@ -47,6 +47,25 @@ namespace aerosimlab::simulator
 class AeroSimLabAppTestAccess
 {
 public:
+    static void VerifyReconnaissanceKeepsTheFirstWaypoint()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        const auto droneId = app.simulation_.PrimaryDroneId();
+        const auto expectedRoute = terrain::PlanMapFlightRoute(
+            app.terrainGrid_, app.routeBuildings_,
+            app.simulation_.State(droneId).positionMeters,
+            app.inspectionTargets_.front().approachPositionMeters,
+            3.0, app.cameraTransitAltitudeMeters_);
+        ASSERT_TRUE(expectedRoute);
+        ASSERT_FALSE(expectedRoute->empty());
+        ASSERT_TRUE(app.StartFleetReconnaissance());
+
+        // 경로 탐색 결과는 출발점을 제외하므로 첫 항목도 임무에 필요하다.
+        EXPECT_EQ(app.fleetReconnaissance_.at(droneId).routeWaypointsMeters,
+            *expectedRoute);
+    }
+
     static void UseConnectedNetworkForTest(AeroSimLabApp& app)
     {
         communication::VirtualMeshSettings settings;
@@ -940,4 +959,9 @@ TEST(SimulatorSessionTests, CoreScenarios)
 TEST(SimulatorSessionTests, FleetDroneReturnsWhenBatteryReachesReserve)
 {
     simulator::AeroSimLabAppTestAccess::VerifyFleetDroneReturnsWhenBatteryReachesReserve();
+}
+
+TEST(SimulatorSessionTests, ReconnaissanceKeepsTheFirstWaypoint)
+{
+    simulator::AeroSimLabAppTestAccess::VerifyReconnaissanceKeepsTheFirstWaypoint();
 }
