@@ -3,7 +3,6 @@
 #include "EoVideoRecorder.h"
 #include "FleetTelemetry.h"
 #include "FleetDroneSpawn.h"
-#include "FaultScenarioTimeline.h"
 
 #include "simulation_core/SimulationCore.h"
 #include "terrain/MapBuildings.h"
@@ -835,125 +834,6 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
 TEST(SimulatorSessionTests, CoreScenarios)
 {
-    {
-        const auto path = std::filesystem::temp_directory_path()
-            / "dronesim-fault-timeline-test.json";
-        std::error_code filesystemError;
-        std::filesystem::remove(path, filesystemError);
-
-        simulator::FaultScenarioTimeline recording;
-        recording.StartRecording(100U, {1U, 2U}, "complete");
-        recording.RecordPacketLoss(100U, 0.25);
-        recording.RecordLinkLatencyJitter(102U, 7U);
-        recording.RecordCameraFault(103U, 2U, true);
-        recording.RecordRotorMotorFault(103U, 2U, 3U, true);
-        recording.RecordLinkState(103U, 1U, 2U, true);
-        recording.RecordDirectedLinkState(103U, 2U, 1U, true);
-        recording.RecordRadioState(103U, 2U, false);
-        recording.StopRecording();
-
-        std::string error;
-        ASSERT_TRUE(recording.SaveRecording(path, error)) << error;
-
-        simulator::FaultScenarioTimeline replay;
-        ASSERT_TRUE(replay.LoadRecording(path, error)) << error;
-        EXPECT_FALSE(replay.StartReplay(500U, {1U, 2U}, "formation", error));
-        ASSERT_TRUE(replay.StartReplay(500U, {1U, 2U}, "complete", error)) << error;
-        const auto firstEvents = replay.TakeDueEvents(500U);
-        ASSERT_EQ(firstEvents.size(), 1U);
-        EXPECT_EQ(firstEvents.front().kind,
-            simulator::FaultScenarioTimeline::Event::Kind::PacketLoss);
-        EXPECT_DOUBLE_EQ(firstEvents.front().value, 0.25);
-        const auto jitterEvents = replay.TakeDueEvents(502U);
-        ASSERT_EQ(jitterEvents.size(), 1U);
-        EXPECT_EQ(jitterEvents.front().kind,
-            simulator::FaultScenarioTimeline::Event::Kind::LinkLatencyJitter);
-        EXPECT_EQ(jitterEvents.front().valueTicks, 7U);
-        EXPECT_TRUE(replay.TakeDueEvents(502U).empty());
-        const auto laterEvents = replay.TakeDueEvents(503U);
-        ASSERT_EQ(laterEvents.size(), 5U);
-        EXPECT_EQ(laterEvents[0].kind,
-            simulator::FaultScenarioTimeline::Event::Kind::CameraFault);
-        EXPECT_EQ(laterEvents[0].source, 2U);
-        EXPECT_TRUE(laterEvents[0].enabled);
-        EXPECT_EQ(laterEvents[1].kind,
-            simulator::FaultScenarioTimeline::Event::Kind::RotorMotorFault);
-        EXPECT_EQ(laterEvents[1].source, 2U);
-        EXPECT_EQ(laterEvents[1].rotorIndex, 3U);
-        EXPECT_TRUE(laterEvents[1].enabled);
-        EXPECT_EQ(laterEvents[2].kind,
-            simulator::FaultScenarioTimeline::Event::Kind::LinkState);
-        EXPECT_TRUE(laterEvents[2].enabled);
-        EXPECT_EQ(laterEvents[3].kind,
-            simulator::FaultScenarioTimeline::Event::Kind::DirectedLinkState);
-        EXPECT_EQ(laterEvents[3].source, 2U);
-        EXPECT_EQ(laterEvents[3].destination, 1U);
-        EXPECT_TRUE(laterEvents[3].enabled);
-        EXPECT_EQ(laterEvents[4].kind,
-            simulator::FaultScenarioTimeline::Event::Kind::RadioState);
-        EXPECT_FALSE(laterEvents[4].enabled);
-        EXPECT_TRUE(replay.ReplayFinished());
-
-        std::filesystem::remove(path, filesystemError);
-    }
-    {
-        simulator::FaultScenarioTimeline scheduled;
-        simulator::FaultScenarioTimeline::Event linkFault;
-        linkFault.kind = simulator::FaultScenarioTimeline::Event::Kind::LinkState;
-        linkFault.source = 1U;
-        linkFault.destination = 2U;
-        linkFault.enabled = true;
-        std::string error;
-        EXPECT_FALSE(scheduled.ScheduleEvent(
-            1000U, {1U, 2U}, "complete", 60U, 0U, linkFault, error));
-        EXPECT_FALSE(scheduled.IsReplaying());
-
-        ASSERT_TRUE(scheduled.ScheduleEvent(
-            1000U, {1U, 2U}, "complete", 60U, 120U, linkFault, error))
-            << error;
-        simulator::FaultScenarioTimeline::Event cameraFault;
-        cameraFault.kind = simulator::FaultScenarioTimeline::Event::Kind::CameraFault;
-        cameraFault.source = 2U;
-        cameraFault.enabled = true;
-        ASSERT_TRUE(scheduled.ScheduleEvent(
-            1000U, {1U, 2U}, "complete", 60U, 60U, cameraFault, error))
-            << error;
-        EXPECT_EQ(scheduled.ScheduledFaultCount(), 2U);
-        const auto pending = scheduled.PendingEvents(1000U);
-        ASSERT_EQ(pending.size(), 4U);
-        EXPECT_EQ(pending.front().tickOffset, 60U);
-        EXPECT_TRUE(scheduled.TakeDueEvents(1059U).empty());
-
-        const auto starts = scheduled.TakeDueEvents(1060U);
-        ASSERT_EQ(starts.size(), 2U);
-        EXPECT_TRUE(starts[0].enabled);
-        EXPECT_TRUE(starts[1].enabled);
-        const auto cameraRestore = scheduled.TakeDueEvents(1120U);
-        ASSERT_EQ(cameraRestore.size(), 1U);
-        EXPECT_EQ(cameraRestore.front().kind,
-            simulator::FaultScenarioTimeline::Event::Kind::CameraFault);
-        EXPECT_FALSE(cameraRestore.front().enabled);
-        const auto linkRestore = scheduled.TakeDueEvents(1180U);
-        ASSERT_EQ(linkRestore.size(), 1U);
-        EXPECT_EQ(linkRestore.front().kind,
-            simulator::FaultScenarioTimeline::Event::Kind::LinkState);
-        EXPECT_FALSE(linkRestore.front().enabled);
-        EXPECT_TRUE(scheduled.ReplayFinished());
-
-        const auto scheduledPath = std::filesystem::temp_directory_path()
-            / "dronesim-scheduled-faults-test.json";
-        ASSERT_TRUE(scheduled.SaveRecording(scheduledPath, error)) << error;
-        simulator::FaultScenarioTimeline reloaded;
-        ASSERT_TRUE(reloaded.LoadRecording(scheduledPath, error)) << error;
-        EXPECT_EQ(reloaded.ScheduledFaultCount(), 2U);
-        EXPECT_EQ(reloaded.EventCount(), 4U);
-        ASSERT_TRUE(reloaded.StartReplay(2000U, {1U, 2U}, "complete", error))
-            << error;
-        EXPECT_TRUE(reloaded.TakeDueEvents(2059U).empty());
-        EXPECT_EQ(reloaded.TakeDueEvents(2060U).size(), 2U);
-        std::error_code removeError;
-        std::filesystem::remove(scheduledPath, removeError);
-    }
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyGroundControlShowsOnlyDeliveredPeerPositions());
     EXPECT_NO_FATAL_FAILURE(

@@ -282,7 +282,6 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     apps/simulator/AeroSimLabAppMission.cpp
     apps/simulator/FleetMissionProgress.cpp
     apps/simulator/FleetDroneSpawn.cpp
-    apps/simulator/FaultScenarioTimeline.cpp
     apps/simulator/TrainingRangeScene.cpp
     apps/simulator/SimulationBenchmark.cpp
   )

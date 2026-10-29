@@ -522,9 +522,6 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
 
 void AeroSimLabApp::AdvanceSimulationTick()
 {
-#ifndef __EMSCRIPTEN__
-    ApplyDueFaultScenarioEvents();
-#endif
     AdvanceAmbientWind();
     AdvanceFleetNetwork();
     AdvanceFleetReconnaissance();
@@ -776,44 +773,6 @@ void AeroSimLabApp::RenderFrame()
             ApplyHudSessionCommand(
                 communication::SessionCommand::ReplayRecording);
         };
-        recordingControls.faultScenarioRecording = faultScenarioTimeline_.IsRecording();
-        recordingControls.faultScenarioReplaying = faultScenarioTimeline_.IsReplaying();
-        recordingControls.faultScenarioEventCount = faultScenarioTimeline_.EventCount();
-        recordingControls.canStartFaultScenarioRecording = formationNetworkActive
-            && !recordingControls.faultScenarioRecording
-            && !recordingControls.faultScenarioReplaying;
-        recordingControls.canStopFaultScenarioRecording =
-            recordingControls.faultScenarioRecording;
-        recordingControls.canSaveFaultScenario = !recordingControls.faultScenarioRecording
-            && recordingControls.faultScenarioEventCount > 0U;
-        recordingControls.canScheduleFault = formationNetworkActive
-            && !recordingControls.faultScenarioRecording;
-        recordingControls.scheduledFaultCount =
-            faultScenarioTimeline_.ScheduledFaultCount();
-        recordingControls.pendingFaultEvents =
-            faultScenarioTimeline_.PendingEvents(simulation_.TickCount());
-        recordingControls.canReplayFaultScenario = formationNetworkActive
-            && !recordingControls.faultScenarioRecording
-            && !recordingControls.faultScenarioReplaying;
-        recordingControls.faultScenarioStatus = faultScenarioStatus_;
-        recordingControls.startFaultScenarioRecording = [this]
-        {
-            StartFaultScenarioRecording();
-        };
-        recordingControls.stopFaultScenarioRecording = [this]
-        {
-            StopFaultScenarioRecording();
-        };
-        recordingControls.replayFaultScenario = [this]
-        {
-            StartFaultScenarioReplay();
-        };
-        recordingControls.scheduleFault = [this](
-            FaultScenarioTimeline::Event event, std::uint32_t delayTicks,
-            std::uint32_t durationTicks)
-        {
-            ScheduleFaultScenarioEvent(event, delayTicks, durationTicks);
-        };
         recordingControls.videoRecording = videoIsRecording;
         recordingControls.canStartVideoRecording = simulation_.Camera().status
                 == aerosimlab::simulation::CameraStatus::Active
@@ -855,8 +814,6 @@ void AeroSimLabApp::RenderFrame()
                 if (formationNetwork_)
                     formationNetwork_->SetPacketLossProbability(
                         static_cast<double>(percentage) / 100.0);
-                faultScenarioTimeline_.RecordPacketLoss(simulation_.TickCount(),
-                    static_cast<double>(percentage) / 100.0);
             },
             fleetLatencyJitterTicks_,
             [this](std::uint32_t maximumExtraTicks)
@@ -864,8 +821,6 @@ void AeroSimLabApp::RenderFrame()
                 fleetLatencyJitterTicks_ = static_cast<int>(maximumExtraTicks);
                 if (formationNetwork_)
                     formationNetwork_->SetLinkLatencyJitterTicks(maximumExtraTicks);
-                faultScenarioTimeline_.RecordLinkLatencyJitter(
-                    simulation_.TickCount(), maximumExtraTicks);
             },
             formationNetwork_.get(),
             [this, formationNetworkActive](aerosimlab::simulation::DroneId first,
@@ -874,8 +829,6 @@ void AeroSimLabApp::RenderFrame()
                 if (formationNetwork_ && formationNetworkActive)
                 {
                     formationNetwork_->SetLinkDisabled(first, second, disabled);
-                    faultScenarioTimeline_.RecordLinkState(
-                        simulation_.TickCount(), first, second, disabled);
                 }
             },
             [this, formationNetworkActive](aerosimlab::simulation::DroneId source,
@@ -885,8 +838,6 @@ void AeroSimLabApp::RenderFrame()
                 {
                     formationNetwork_->SetDirectedLinkDisabled(
                         source, destination, disabled);
-                    faultScenarioTimeline_.RecordDirectedLinkState(
-                        simulation_.TickCount(), source, destination, disabled);
                 }
             },
             [this, formationNetworkActive](aerosimlab::simulation::DroneId droneId,
@@ -895,23 +846,16 @@ void AeroSimLabApp::RenderFrame()
                 if (formationNetwork_ && formationNetworkActive)
                 {
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
-                    faultScenarioTimeline_.RecordRadioState(
-                        simulation_.TickCount(), droneId, enabled);
                 }
             },
             [this](aerosimlab::simulation::DroneId droneId, bool faulted)
             {
                 simulation_.SetCameraFault(droneId, faulted);
-                faultScenarioTimeline_.RecordCameraFault(
-                    simulation_.TickCount(), droneId, faulted);
             },
             [this](aerosimlab::simulation::DroneId droneId,
                 std::size_t rotorIndex, bool faulted)
             {
                 simulation_.SetRotorMotorFault(droneId, rotorIndex, faulted);
-                faultScenarioTimeline_.RecordRotorMotorFault(
-                    simulation_.TickCount(), droneId,
-                    static_cast<std::uint32_t>(rotorIndex), faulted);
             },
             recordingControls,
             [this](int width, int height) { return RenderScenePanel(width, height); },

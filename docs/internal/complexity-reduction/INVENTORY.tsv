@@ -31,8 +31,8 @@ apps/simulator/DroneScalingBenchmark.cpp	20963	480	app	REVIEWED	REMOVE	d6515b6e	
 apps/simulator/EoVideoRecorder.cpp	23461	659	app	REVIEWED	SIMPLIFY	7bfce7e7	no	AUDIT_APP.md 및 녹화 Stop 경쟁 수정	Release 빌드와 CoreScenarios 통과; sanitizer 미실시
 apps/simulator/EoVideoRecorder.h	3426	90	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
 apps/simulator/ExecutableDirectory.h	1113	36	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/FaultScenarioTimeline.cpp	20347	583	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/FaultScenarioTimeline.h	4093	101	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/FaultScenarioTimeline.cpp	20347	583	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도; 감사 후 장애 시간표 제거로 삭제됨
+apps/simulator/FaultScenarioTimeline.h	4093	101	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도; 감사 후 장애 시간표 제거로 삭제됨
 apps/simulator/FleetDroneSpawn.cpp	1096	37	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
 apps/simulator/FleetDroneSpawn.h	644	24	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
 apps/simulator/FleetMissionProgress.cpp	5456	119	app	REVIEWED	KEEP	535aebeb	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 관련 CTest 7개 통과; 직접 통신 미검증

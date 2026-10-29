@@ -4,10 +4,16 @@
 
 - 최신 제품 코드 변경: `d187de2d`, main. 실제 HEAD와 미커밋 내용은 `git status --short --branch`와 `git log -5 --oneline`으로 확인한다.
 - 목록 279개: 본문 검토 223개, 메타데이터 확인 32개, 생성물 제외 24개, UNREAD 0개. 범주별 근거와 미검증은 INVENTORY 및 AUDIT 기록을 확인한다.
-- Release 전체 빌드와 관련 CTest 7개 통과. 4대 정상 임무 시험은 아직 AdaptiveMesh를 사용한다. 직접 통신, 장애 중 경로 지속, 웹 실행, 실제 4대 저전력 임무는 미검증이다.
+- Release 전체 빌드와 CTest 39개 통과. 4대 정상 임무 시험은 아직 AdaptiveMesh를 사용한다. 직접 통신, 장애 중 경로 지속, 웹 실행, 실제 4대 저전력 임무는 미검증이다.
 - `vector too long`의 재현 입력·스택·원인 미확인. 초기 출력과 원본 기록을 찾지 못했으므로 수정했다고 주장하지 않는다.
 - 다음: HUD 장애 시간표와 가상망 호출 관계를 따라 제거 단위를 확정하고, 수동 단절을 보존하면서 직접 연결 모델을 구현한다. 관련 시험과 앱·헤드리스 빌드를 단계별로 실행한다.
 - 재개 명령: `git status --short --branch`; `git log -5 --oneline`; `rg -n "FaultScenarioTimeline|VirtualMeshMode|SendReliable|SendLatest" apps modules tests CMakeLists.txt`; `ctest --test-dir build-ninja-release --output-on-failure`.
+
+## 장애 시간표 제거
+
+- 예약·기록·재생을 HUD, 앱 Tick, 빌드와 전용 시험에서 제거했다. 수동 라디오 차단·복구와 영상 녹화는 유지했다.
+- Windows Release 전체 재빌드와 CTest 39개 통과. 화면 수동 조작과 직접 통신 기반 전체 임무는 별도로 확인해야 한다.
+- 다음: 직접 연결만 남기기 전에 앱·시나리오의 메시지 전달과 GCS 갱신 경로를 확인한다.
 
 ## 시작 당시 기록
 
