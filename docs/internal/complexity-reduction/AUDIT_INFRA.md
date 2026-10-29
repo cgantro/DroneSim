@@ -1,6 +1,6 @@
 # 인프라 감사 — 첫 25개
 
-기준: INVENTORY.tsv의 owner=infra, audit_status=UNREAD 행을 순서대로 25개 선택. 이 기록은 정적 확인이며 빌드·시험·렌더링을 실행하지 않았다. 텍스트 19개 완독, 바이너리 6개는 헤더·GLB JSON 메타데이터·호출 위치·같은 묶음의 출처/조건을 확인했다. 외부 원본의 라이선스는 독립 검증하지 않았다. 판정은 요청된 4대 V 편대→분산 정찰→복귀, 직접 통신, EO와 로컬 녹화에 대한 제안이며 실제 삭제 지시가 아니다. inventory 상태는 변경하지 않았다. 선택 당시 전체 infra UNREAD 171개 중 이후 146개는 이번 범위 밖이며 UNREAD다. 아래 호출 검색도 저장소 전체 의미 분석이 아니다.
+기준: INVENTORY.tsv의 owner=infra, audit_status=UNREAD 행을 순서대로 25개 선택. 이 기록은 정적 확인이며 빌드·시험·렌더링을 실행하지 않았다. 당시 판정은 EO 로컬 녹화를 포함한 기준선이었으나, 2026-10-29 사용자 요청에 따라 카메라 파일 저장은 제거 대상으로 바뀌었다. 현재 라이브 영상 경로는 유지한다. 그 밖의 판정은 제안이며 동작 검증을 뜻하지 않는다.
 
 ## 파일별 기록
 
@@ -12,9 +12,9 @@
 6. `.gitignore` — **KEEP**. 빌드 산출물, 개인 자료 및 로컬 설정 등을 Git 추적 후보에서 제외한다. Git이 소비하며 런타임 자원은 소유하지 않는다. 기존 추적 파일에는 소급 적용되지 않는다. 기존 빌드 위치와 중복되지 않는 보호 설정을 유지한다.
 7. `.vscode/settings.json` — **KEEP**. VS Code CMake 확장에서 preset 사용과 병렬 작업 수를 읽는다. 빌드 설정만 제공하고 실행 자원은 소유하지 않는다. CMakePresets와 역할이 다르며 별도 오류 처리 없다.
 8. `AGENTS.md` — **KEEP**. 저장소 작업 규칙과 기준 문서·검증·작업 공간 제약을 제공한다. 작업자가 읽으며 실행 자원이나 오류 처리 로직은 없다. 문제 해결 skill과 역할이 연결되나 범위가 달라 통합할 이유는 확인되지 않았다.
-9. `CMakeLists.txt` — **SIMPLIFY**. CMake가 소스·의존성·플랫폼 옵션을 입력받아 라이브러리, 시뮬레이터, 자산 복사 및 테스트 대상을 만든다. 빌드 시스템이 산출물을 소유한다. 누락된 네이티브 실행 자산은 configure에서 FATAL_ERROR 처리한다. `aerosimlab_media`에 RTP 및 기록 전송이 들어가고 앱에 여러 benchmark 소스가 포함되며 mesh 통신과 관련 시험도 등록되어 있다. 제거 대상 기능과 시험을 해당 구현 및 호출부 정리와 함께 빼고, EO 로컬 녹화에 필요한 OpenCV videoio와 임무 시험은 보존해야 한다. GStreamer 의존성은 영상 전송 제거 후 다른 사용처를 확인하고 판단한다. 현재 빌드 성공 여부는 미검증.
+9. `CMakeLists.txt` — **SIMPLIFY**. CMake가 소스·의존성·플랫폼 옵션을 입력받아 라이브러리, 시뮬레이터, 자산 복사 및 테스트 대상을 만든다. 누락된 네이티브 실행 자산은 configure에서 오류 처리한다. 2026-10-29에는 카메라 녹화기와 녹화물 전달 소스, OpenCV videoio 링크를 제거했다. GStreamer는 유지되는 라이브 RTP 영상 경로에서 사용한다. 변경 뒤 전체 빌드는 별도 검증 기록을 참조한다.
 10. `CMakePresets.json` — **SIMPLIFY**. CMake/IDE에 Windows Release, Linux debug·sanitizer·coverage 및 웹 구성/빌드 프리셋을 제공한다. 각 빌드 폴더에 출력하며 오류는 CMake에 맡긴다. 상속으로 설정 중복을 줄인다. 웹과 coverage는 사용자 지원 필요성에 맞춰 판단하고 전송 제거 시 desktop-video 의존성의 실제 구성을 재검토한다.
-11. `GOAL.md` — **SIMPLIFY**. 목표·대표 임무·완료 기준을 독자에게 제공하며 프로그램에 호출되지 않는다. 현재 중계·장애 대응·비교가 중심에 포함되어 요청된 새 MVP와 충돌한다. 네 대 임무·직접 통신·EO 로컬 녹화를 중심으로 갱신해야 하며, 구현 확인은 SPEC과 코드에서 별도로 해야 한다.
+11. `GOAL.md` — **SIMPLIFY**. 목표·대표 임무·완료 기준을 독자에게 제공하며 프로그램에 호출되지 않는다. 구현 확인은 SPEC과 코드에서 별도로 한다. 카메라 파일 저장은 사용자가 제거하도록 결정했다.
 12. `README.md` — **SIMPLIFY**. 실행 순서와 공개 문서 길잡이를 제공한다. 독자가 소비하고 런타임 소유권·오류 처리는 없다. 다중 홉·장애 대응·성능 측정 설명이 새 범위와 어긋난다. 제거 구현이 확정된 뒤 실행 안내와 함께 갱신해 상충을 피한다.
 13. `SPEC.md` — **SIMPLIFY**. 구현과 시험 상태·한계를 독자에게 제공한다. 실제 실행을 수행하는 파일은 아니다. 현재 중계 복구·장애 자동 대응 및 영상 전달 계획을 담아 새 범위와 충돌한다. 남길 동작의 기존 시험 근거와 미검증 표시는 보존하고 구현 변경 후 범위를 재기록한다. 이 문서의 과거 통과 주장은 이번 감사에서 재실행하지 않았다.
 14. `apps/ground_control/GroundControlClient.cpp` — **KEEP** (직접 UDP 명령이 MVP에서 필요하다는 조건). 호출자 소유 소켓과 주소·패킷·시간 제한·취소 토큰을 받아 400ms 간격 재전송, 상대 주소와 명령 ID/순번 확인 후 응답·왕복시간 반환. 잘못된 제한 시간, 통신/디코드 오류, 취소 및 시간 초과는 예외다. CMake 라이브러리 및 통신/시뮬레이터 시험에서 참조되며 검색된 제품 호출자는 확인되지 않았다. 목적지 확인·재시도 책임은 여기 있으므로 다른 통신 계층의 유사 재시도와 같은 의미인지 확인 전 합치지 않는다. 잘못된 응답 디코드 예외가 대기를 끝낼 가능성은 코드상 관찰이며 시험하지 않았다.
@@ -72,7 +72,7 @@
 47. `cmake/Dependencies.cmake` — **KEEP**. 최상위 CMake에서 함수를 호출해 GLM, Flecs, Eigen/AirSim, JSON, stb 및 플랫폼별 GLFW/OpenGL을 준비하고 대상에 연결한다. FetchContent가 빌드 폴더의 다운로드와 추출물을 관리하고 AirSim 아카이브는 추출 후 삭제한다. OpenGL 필수 탐색과 AirSim 해시 검증을 설정한다. 같은 의존성의 제품 측 중복 선언은 이 범위에서 확인되지 않았다. 네이티브 물리와 화면에 필요하므로 유지하되 실제 기능 제거 뒤 미사용 의존성만 재검토한다. 다운로드·빌드는 실행하지 않았다.
 48. `cmake/GenerateBuildRevision.cmake` — **SIMPLIFY**. 최상위 CMake가 Git 실행 파일·소스·경로·출력 위치를 전달해 짧은 revision과 지정 경로의 dirty 여부를 헤더로 생성한다. 출력 내용이 같으면 다시 쓰지 않는다. Git 오류 출력은 숨기고 빈 revision은 unknown으로 대체한다. Git status 실패는 명시적으로 구별하지 않아 clean처럼 보일 가능성이 있다(정적 추론). 빌드 식별이 필요하면 유지하되 광범위 벤치마크 제거 후 복잡한 추적이 여전히 필요한지 확인한다. 최상위 CMake의 의존 파일 추적과 책임은 분리된다.
 49. `docs/public/images/simulator-overview.jpg` — **SIMPLIFY** (연결 여부 확인 후). JPEG 73,017바이트, 1282×752 헤더 확인. 공개 문서와 README에서 파일명·이미지 경로 검색 결과 참조가 없었다. 문서용 이미지로 추정하며 생성 경위·라이선스·내용 및 다른 외부 참조는 미확인이다. 런타임 자원이 아니다. 즉시 삭제하지 말고 실제 사용처·최신성·권리를 확인해 유지 또는 정리한다.
-50. `docs/public/기술구조.md` — **SIMPLIFY**. 독자에게 입력→임무→통신→물리→화면과 기술 책임을 설명한다. 코드가 실행하는 문서는 아니며 오류 처리는 없다. 중계·장애 복구 설명이 새 MVP와 맞지 않고, 중계 전체 임무 검증 범위 문장은 SPEC의 최근 결과와 다르다. 또한 GStreamer가 녹화 파이프라인이라고 설명하지만 확인한 `EoVideoRecorder.cpp`는 `cv::VideoWriter`를 사용하고 GStreamer 코드는 RTP 전송에 있다. OpenCV 백엔드 의존성까지 추적하지 않았으므로 단정하지 말고 관련 구현 감사 후 문서와 SPEC을 함께 갱신한다. 기술 설명과 SPEC의 역할은 다르다.
+50. `docs/public/기술구조.md` — **SIMPLIFY**. 독자에게 입력→임무→통신→물리→화면과 기술 책임을 설명한다. 2026-10-29 변경에서 라이브 EO 설명과 카메라 파일 저장 제거를 반영했다. 기능 상태는 SPEC과 코드에서 확인한다.
 
 이번 묶음 이후 미확인 infra 경로는 선정 당시 121개다. inventory는 다른 작업자가 갱신할 수 있으므로 다음 선택에는 현재 UNREAD 중 이 보고서에 이미 기록한 경로를 제외한다.
 
@@ -115,7 +115,7 @@
 76. `docs/public/문제해결/화면과 카메라/카메라-재생-프레임.md` — **KEEP**. Tick 재설정 때 기존 GPU 읽기와 CPU 프레임의 수명을 정리한 과거 문제·한계를 독자에게 제공한다. 런타임 호출·자원 소유는 없고 명령 기록 글과 다른 GPU 문제다. 과거 10회 확인이며 현재 픽셀 회귀 시험이 없다고 밝힌다.
 77. `docs/public/문제해결/화면과 카메라/화면-프레임-지연.md` — **KEEP**. EO 픽셀 읽기, 지속 매핑과 남은 긴 프레임의 측정·원인 미확정을 설명한다. 사람을 위한 과거 기록이며 벤치마크 원자료는 삭제됐다고 명시한다. 광범위 벤치마크 기능을 유지할 근거는 아니고 EO 구현의 한계 기록으로 가치가 있다. 수치 재측정은 안 했다.
 78. `docs/public/성능검증.md` — **SIMPLIFY**. 비교 조건과 측정 항목을 독자에게 제공한다. 중계 복구·드론 수 확장 시험 항목이 새 목표 밖이다. 네 대 임무와 EO 녹화에 필요한 확인만 남기고 기록이 없는 기준선을 추정하지 않는다. 실행 코드나 자원 소유는 없다.
-79. `docs/public/시작하기.md` — **SIMPLIFY**. Windows 실행, 임무, 영상 저장과 장애 조작을 안내한다. 사용자가 입력을 제공하고 프로그램은 이 문서를 호출하지 않는다. 다중 홉·자동 복구 제거 후 화면에 맞게 안내를 정리하고 직접 통신·EO 로컬 저장은 보존한다. 안내된 화면을 실행해 확인하지 않았다.
+79. `docs/public/시작하기.md` — **SIMPLIFY**. Windows 실행, 임무와 장애 조작을 안내한다. 카메라 영상 저장 안내는 2026-10-29 제거했다. 안내된 화면의 현재 실행 여부는 별도 확인한다.
 80. `modules/communication/include/communication/Protocol.h` — **SIMPLIFY**. UDP 명령·응답 구조와 직렬화 계약, 순번 가드를 선언한다. 값·문자열·벡터를 소유하고 소켓은 소유하지 않는다. 앱·관제 클라이언트·ProtocolTests가 사용한다. 카메라 장애 명령 등 제거 기능에 연결된 변형을 구현/호출부와 함께 정리하되 비행·직접 명령·녹화는 보존한다. 오류는 디코더 예외이며 1200바이트·최대 8대 제한이다.
 81. `modules/communication/include/communication/UdpSocket.h` — **KEEP**. 비차단 IPv4 UDP 송수신 인터페이스; unique_ptr 구현체가 소켓 수명을 소유하며 복사·이동을 금지한다. 빈 수신은 optional, 시스템 오류는 구현에서 예외다. 비슷한 가상망은 실제 OS UDP가 아니므로 중복으로 합치지 않는다. 관제와 시험이 사용한다.
 82. `modules/communication/include/communication/UdpSocketPlatform.h` — **KEEP**. 플랫폼별 송수신 추상 인터페이스와 팩토리·IPv4 변환을 선언한다. unique_ptr 반환으로 구현체 소유권을 넘기며 가상 소멸자를 둔다. Windows/POSIX 구현과 공통 래퍼가 소비한다. 플랫폼 분기는 중복처럼 보여도 API가 달라 무작정 합치지 않는다.
@@ -167,11 +167,11 @@
 선정 당시 현재 inventory의 infra UNREAD에서 기존 감사 기록을 제외했다. 20개 텍스트 전체를 읽고 호출·시험 참조를 일부 검색했다. 빌드·시험·네트워크·영상 실행 및 외부 라이선스 원본은 확인하지 않았다. 시나리오는 ScenarioRunner/headless 또는 시험이 읽는 입력과 기대값이며 프로그램·자원을 소유하지 않는다. 판정은 MVP 제안이고 삭제 작업은 수행하지 않았다.
 
 116. `modules/manual_control/src/GamepadCommandMapper.cpp` — **KEEP**. 축 입력과 yaw로 데드존·감도 곡선 및 월드 속도/회전 목표를 반환하고 입력 소유권·연결 해제 시 정지/착륙을 선택한다. 값만 사용하고 `noexcept`다. 앱과 단위 시험이 호출한다. 연결 해제 정책은 영상 전송·다중 홉 자동 복구와 다른 수동 입력 책임이다. 비유한 축 입력은 명시적으로 거르지 않으며 실제 장치 실행은 미검증.
-117. `modules/media/include/media/RecordedCaptureTransfer.h` — **REMOVE**. 녹화 영상·메타데이터·목록을 TCP로 전송·수신하고 CRC 결과를 돌려주는 계약이다. 수신기는 구현체를 unique_ptr로 소유하고 실패는 bool과 오류 문자열로 전달한다. 앱 전송 호출과 통합 시험이 있다. 로컬 녹화와 분리된 영상 전송이므로 관련 호출·빌드·시험과 함께 제거 후보.
+117. `modules/media/include/media/RecordedCaptureTransfer.h` — **REMOVED 2026-10-29**. 녹화 영상·메타데이터를 주고받던 TCP 계약이다. 카메라 파일 저장과 함께 파일 전송 기능도 제거했다.
 118. `modules/media/include/media/RtpVideoStream.h` — **REMOVE**. EO RGB 프레임의 RTP/RTCP 송수신·최신 프레임 및 통계를 선언한다. 송수신기 구현체를 unique_ptr로 소유하며 실패를 bool/오류로 전달한다. 앱과 전송 시험이 사용한다. 로컬 프레임 보관과는 다른 전송 기능이다.
-119. `modules/media/src/RecordedCaptureTransfer.cpp` — **REMOVE**. 세 파일의 이름·크기·CRC 헤더와 TCP 바이트를 보내고 수신 작업자는 부분 파일에 저장·검증 후 확정한다. 소켓·스레드 및 결과를 관리하며 실패는 오류 문자열, 부분 파일은 실패 시 삭제한다. 앱과 테스트 호출을 함께 정리해야 한다. CRC는 손상 검출이지 인증이 아니다. 정적 관찰로 수신 파일 크기 상한과 총 수신 제한은 보이지 않는다; 실제 악용 가능성은 미검증. 로컬 MP4 녹화와 책임이 다르다.
-120. `modules/media/src/RtpVideoStream.cpp` — **REMOVE**. GStreamer H.264 RTP/RTCP 송신과 수신·디코딩, 최신 프레임 큐를 구현한다. 작업 스레드·파이프라인·버퍼를 관리하며 오류 문자열과 상태를 반환한다. 앱/통합 시험이 사용하므로 호출과 CMake GStreamer 의존성을 함께 정리한다. EO 로컬 녹화에 쓰는 OpenCV VideoWriter는 별도 경로다. 코덱·실제 전송 및 외부 라이선스는 미검증.
-121. `modules/sensor/include/sensor/RgbFrame.h` — **KEEP**. 프레임 크기·Tick·RGB 바이트와 행 순서를 값으로 소유하며 유효성 확인 및 뒤집기 계약을 제공한다. EO 캡처·분석·녹화에서 쓸 수 있는 공통 자료이며 전송 구조체와 중복이 아니다.
+119. `modules/media/src/RecordedCaptureTransfer.cpp` — **REMOVED 2026-10-29**. 녹화 영상·메타데이터 파일 전송 구현. 호출부·시험·CMake 등록과 함께 삭제했다.
+120. `modules/media/src/RtpVideoStream.cpp` — **KEEP**. GStreamer H.264 RTP/RTCP 라이브 영상 송수신과 디코딩을 맡는다. 사용 중인 라이브 화면 경로이므로 카메라 파일 저장 제거와 구분해 보존한다.
+121. `modules/sensor/include/sensor/RgbFrame.h` — **KEEP**. 프레임 크기·Tick·RGB 바이트와 행 순서를 값으로 소유하며 유효성 확인 및 뒤집기 계약을 제공한다. EO 캡처·분석·라이브 영상에 사용한다.
 122. `modules/sensor/src/RgbFrame.cpp` — **KEEP**. 크기 곱셈을 확인해 정확한 픽셀 수를 검사하고 유효한 프레임의 행을 뒤집는다. 잘못된 입력에서 뒤집기는 아무 작업을 하지 않는다. 픽셀 vector는 프레임이 소유한다. 시험 파일 존재, 실행하지 않았다.
 123. `modules/vision/include/vision/RgbFrameQuality.h` — **KEEP**. RGB의 밝기·표준편차·라플라시안 분산 분석 계약과 재사용 작업 영상을 제공한다. 인스턴스는 작업 Mat을 소유하므로 한 스레드에서 순차 호출해야 하고 잘못된 입력은 예외다. 품질 지표는 전송이나 자동 객체 판정과 다르다.
 124. `modules/vision/include/vision/RgbFrameView.h` — **KEEP**. 유효한 프레임을 복사 없이 OpenCV Mat으로 빌려 보여 준다. 픽셀 소유자는 원본이고 원본 수명·재할당 전까지만 유효하다. 행 순서와 RGB 해석은 호출자 책임, 오류는 예외다. 앱 EO 분석에서 호출한다.
@@ -196,14 +196,14 @@
 136. `scenarios/multi-drone/rigid-body-energy-and-outage.json` — **REMOVE**, 완독 1–84행. 강체 4기 저전력·단절 재배정과 최소 거리 기대값을 제공한다. ScenarioRunnerTests와 CooperativeMissionBenchmark가 읽는다. 자동 장애 재배정·광범위 benchmark 제거에 해당하며 정상 강체 비행 확인은 별도 유지한다. 입력 데이터로서 자원 소유나 자체 오류 처리는 없다.
 137. `scenarios/multi-drone/two-point-survey.json` — **KEEP**, 완독 1–43행. 두 기체의 정상 지점 분담 및 기대 위치를 제공하는 운동학 시나리오다. 검색에서 시나리오 이름 외 직접 참조는 확인하지 못했다. 4기 MVP 시험과 중복인지 전체 호출·실행을 확인한 뒤 판단한다. 자원 소유·자체 오류 처리는 없다.
 138. `tests/communication/GroundControlClientTests.cpp` — **KEEP**, 완독 1–67행. 로컬 UDP 소켓 두 개와 작업자를 사용해 명령·일치 응답 및 IPv4 변환을 확인한다. 소켓/스레드는 시험 범위 수명이며 실패는 GoogleTest 검사로 나타난다. 직접 통신 클라이언트가 유지되면 정상 응답 회귀가 필요하다. 재전송·취소·실제 네트워크는 다루지 않는다.
-139. `tests/communication/ProtocolTests.cpp` — **SIMPLIFY**, 완독 1–205행. 명령·응답 왕복, 크기·형식 거부, 중복·역순 판정을 검사한다. 자료는 시험 값이 소유하고 예상 오류는 예외 검사다. 카메라 장애 등 제거된 기능의 사례는 정리하되 직접 명령·로컬 녹화·응답 크기 검사는 유지한다.
+139. `tests/communication/ProtocolTests.cpp` — **SIMPLIFY**. 명령·응답 왕복, 크기·형식 거부, 중복·역순 판정을 검사한다. 카메라 녹화 명령은 2026-10-29 제거했다.
 140. `tests/communication/VirtualMeshNetworkTests.cpp` — **SIMPLIFY**, 완독 1–300행 및 301–594행. 가상망 경로 비교·대체 경로·중계·거리/가림·손실·재시도·중복 억제·큐 제한을 시험한다. 네트워크와 메시지는 시험 값이 소유하고 GoogleTest로 실패를 보고한다. 다중 홉·자동 복구 사례는 제거하되 직접 링크 전달·가림·필요한 확인 응답 사례를 분리해 보존한다. 실행은 미검증.
 141. `tests/data/px4_x500_position_replay_12_05.json` — **KEEP, METADATA_ONLY**. 전체 125,413바이트 JSON 파싱 성공; 드론 1개, 명령 240개, 참조 표본 241개 및 좌표·입력 메타데이터가 있다. 저장된 출처는 PX4 Flight Review이고 라이선스 표기는 CC-BY PX4다. ScenarioRunnerTests가 참조한다. 실제 비행 기록과 비교하는 기준 자료이며 유사한 다른 기록과 입력 출처가 다르다. 외부 원본·라이선스 독립 확인 및 개별 수치 검증은 하지 않았다.
 142. `tests/data/px4_x500_position_replay_2026_10_16_100s.json` — **KEEP, METADATA_ONLY**. 전체 152,286바이트 JSON 파싱 성공; 드론 1개, 명령 240개, 참조 표본 241개 및 ESC 회전수·지면 기준 메타데이터가 있다. 저장된 출처는 PX4 Flight Review, 라이선스 표기는 CC-BY PX4다. ScenarioRunnerTests가 참조한다. 앞 파일과 측정 입력이 다르므로 단순 중복이 아니다. 외부 원본·라이선스 독립 확인과 개별 수치는 미검증.
 143. `tests/graphics/CameraTests.cpp` — **KEEP**, 완독 1–261행. 카메라 위쪽 축, GLB 텍스처 좌표와 임시 GLB를 숨김 창에서 렌더링해 픽셀을 읽는 과정을 검사한다. 시험은 임시 파일·창·GPU 자원을 수명 순서로 관리하며 GoogleTest가 실패를 보고한다. EO/장면 유지에 유용하다. 실행과 실제 기체 카메라 화면 통합은 미검증.
 144. `tests/manual_control/GamepadCommandMapperTests.cpp` — **KEEP**, 완독 1–48행. 데드존·yaw 회전과 연결 해제 정책을 값 단위로 검사한다. 장치·창을 소유하지 않으며 실제 게임패드 분리와 입력 대기열은 확인하지 않는다. 수동 조종을 유지하면 독립 회귀 가치가 있다.
-145. `tests/media/RtpVideoStreamTests.cpp` — **REMOVE**, 완독 1–154행. 로컬 RTP 인코딩·수신과 TCP 녹화 파일 전달·CRC를 검사한다. 시험은 임시 폴더·송수신기·포트를 소유하며 실패는 assertion으로 보고한다. 영상 전송 제거 시 구현·CMake 대상과 함께 정리하고 로컬 녹화 시험을 별도 보존한다. 실행하지 않았다.
-146. `tests/sensor/RgbFrameTests.cpp` — **KEEP**, 완독 1–41행. RGB 크기 검사와 행 뒤집기·원상 복원 및 잘못된 큰 크기를 검사한다. 프레임 벡터를 시험이 소유하고 잘못된 입력은 유효하지 않다고 판정한다. EO 로컬 영상의 기본 회귀다.
+145. `tests/media/RtpVideoStreamTests.cpp` — **KEEP**. 라이브 RTP 영상 인코딩·수신을 확인한다. 녹화 파일 전달 시험과 관련 include만 제거했다. 라이브 영상은 계속 사용한다.
+146. `tests/sensor/RgbFrameTests.cpp` — **KEEP**, 완독 1–41행. RGB 크기 검사와 행 뒤집기·원상 복원 및 잘못된 큰 크기를 검사한다. 프레임 벡터를 시험이 소유하고 잘못된 입력은 유효하지 않다고 판정한다. 라이브 EO 프레임 처리의 기본 회귀다.
 147. `tests/vision/RgbFrameQualityTests.cpp` — **KEEP**, 완독 1–51행. 작은 RGB 입력의 밝기·대비·선명도와 위아래 반전 불변성·잘못된 형식 거부를 검사한다. 시험이 Mat을 소유하며 예외를 검사한다. 앱의 EO 품질 측정과 관련되고 대상 인식 시험은 아니다.
 148. `tests/vision/RgbFrameViewTests.cpp` — **KEEP**, 완독 1–31행. OpenCV 뷰가 원본 픽셀을 공유하고 잘못된 프레임을 거부하는지 검사한다. 원본이 픽셀을 소유하며 뷰는 빌린다. 품질 계산과 별개인 수명/공유 계약을 확인한다.
 149. `docs/private/개발기록.md` — **UNREAD**, 전체 파일 기계적 읽기만 완료. 이름상 개인 개발 기록이며 내용·호출·중복·오류·MVP 판정은 검토하지 않았다. 본문과 개인 정보를 이 보고서에 옮기지 않는다.
