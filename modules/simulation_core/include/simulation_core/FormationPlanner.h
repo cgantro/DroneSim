@@ -28,15 +28,6 @@ struct FormationRoutePlan
     std::vector<glm::dvec3> leaderWaypointsMeters;
     double requiredClearanceMeters = 0.0;
     double spacingMeters = 8.0;
-    FormationShape requestedShape = FormationShape::Vee;
-    double requestedSpacingMeters = 8.0;
-    struct ProfilePoint
-    {
-        double distanceMeters = 0.0;
-        FormationShape shape = FormationShape::Vee;
-        double spacingMeters = 8.0;
-    };
-    std::vector<ProfilePoint> profile;
 };
 
 /**
@@ -50,23 +41,10 @@ struct FormationRoutePlan
     FormationShape shape, std::size_t droneCount,
     double spacingMeters, double headingRadians);
 
-/** @brief 경로 진행 거리에 맞춰 대형을 부드럽게 바꾼 드론 위치를 계산한다. */
-[[nodiscard]] std::vector<glm::dvec2> FormationOffsetsAlongRoute(
-    const FormationRoutePlan& route,
-    std::size_t droneCount,
-    double headingRadians,
-    double distanceAlongRouteMeters);
-
-/** @brief 지정한 경로 위치에서 대형 간 전환 중인지 알려준다. */
-[[nodiscard]] bool IsFormationTransitionAtDistance(
-    const FormationRoutePlan& route,
-    double distanceAlongRouteMeters);
-
 /**
  * @brief 편대 전체가 통과할 수 있도록 장애물 여유를 넓혀 리더의 2.5D 경로를 찾는다.
- * @details 요청한 대형의 경로를 찾지 못하면, 드론 사이 간격을 기체 반지름과
- *          안전 여유를 반영한 최소값 이상으로 줄인 일렬 대형을 시도한다.
- *          반환 경로는 시작점을 빼고 목적지를 포함하며, 반환값에 실제 대형과 간격이 들어간다.
+ * @details 요청한 대형이 지나갈 경로가 없으면 빈 결과를 반환한다.
+ *          반환 경로는 시작점을 빼고 목적지를 포함한다.
  */
 [[nodiscard]] std::optional<FormationRoutePlan> PlanFormationRoute(
     const terrain::TerrainGrid& terrain,

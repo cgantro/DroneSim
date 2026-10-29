@@ -114,37 +114,6 @@ std::optional<glm::dvec3> DecodeWaypoint(const std::string& payload)
     return waypoint;
 }
 
-double DistanceAlongRouteMeters(
-    const glm::dvec3& routeStartMeters,
-    const std::vector<glm::dvec3>& route,
-    std::size_t segmentStartIndex,
-    const glm::dvec3& positionMeters)
-{
-    if (route.empty())
-        return 0.0;
-
-    const std::size_t lastIndex = route.size() - 1U;
-    const std::size_t segmentIndex = std::min(segmentStartIndex, lastIndex);
-    double distanceMeters = 0.0;
-    glm::dvec3 segmentStartMeters = routeStartMeters;
-    for (std::size_t index = 0U; index < segmentIndex; ++index)
-    {
-        distanceMeters += glm::distance(segmentStartMeters, route[index]);
-        segmentStartMeters = route[index];
-    }
-    if (segmentStartIndex >= route.size())
-        return distanceMeters;
-
-    const glm::dvec3 segment = route[segmentIndex] - segmentStartMeters;
-    const double segmentLengthSquared = glm::dot(segment, segment);
-    if (segmentLengthSquared <= 1.0e-12)
-        return distanceMeters;
-    const double fraction = std::clamp(glm::dot(
-        positionMeters - segmentStartMeters, segment) / segmentLengthSquared,
-        0.0, 1.0);
-    return distanceMeters + std::sqrt(segmentLengthSquared) * fraction;
-}
-
 struct FleetRouteMessage
 {
     std::uint8_t leg = 0;
@@ -1237,14 +1206,10 @@ bool AeroSimLabApp::StartFormationTransit(
     formationTransit_.lastAppliedSequence.clear();
     formationTransit_.lastNetworkNodeUpdateTick.reset();
     formationTransit_.active = true;
-    formationTransit_.status = route->shape == shape
-        ? std::string{"출발 준비 · "} + (shape == FormationShape::Vee ? "V자 대형"
+    formationTransit_.status = std::string{"출발 준비 · "}
+        + (shape == FormationShape::Vee ? "V자 대형"
             : shape == FormationShape::Column ? "일렬 대형" : "횡대")
-                + (route->profile.size() > 2U ? " · 좁은 구간에서 대형 전환" : "")
-                + " · " + inspectionTargets_.back().displayName
-        : std::string{"통로 폭에 맞춰 일렬 대형 · 간격 "}
-            + std::to_string(static_cast<int>(route->spacingMeters)) + "m · "
-            + inspectionTargets_.back().displayName;
+        + " · " + inspectionTargets_.back().displayName;
     externalControl_ = true;
     groundControlActive_ = true;
     pendingControllerAction_.reset();
@@ -1808,11 +1773,8 @@ void AeroSimLabApp::AdvanceFormationTransit()
             route[nextIndex].y - formationTransit_.route.leaderStartMeters.y};
     const double heading = glm::length(direction) > 1.0e-6
         ? std::atan2(direction.y, direction.x) : leader.yawRadians;
-    const double routeDistanceMeters = DistanceAlongRouteMeters(
-        formationTransit_.route.leaderStartMeters, route,
-        nextIndex, leader.positionMeters);
-    const auto offsets = FormationOffsetsAlongRoute(
-        formationTransit_.route, droneIds.size(), heading, routeDistanceMeters);
+    const auto offsets = FormationOffsets(formationTransit_.route.shape,
+        droneIds.size(), formationTransit_.route.spacingMeters, heading);
 
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
@@ -1895,10 +1857,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
         formationTransit_.status = "목적지 도착 · 편대 유지 중";
         return;
     }
-    formationTransit_.status = IsFormationTransitionAtDistance(
-            formationTransit_.route, routeDistanceMeters)
-        ? "이동 중 · 대형 전환 · 경유점 "
-        : "이동 중 · 경유점 ";
+    formationTransit_.status = "이동 중 · 경유점 ";
     formationTransit_.status += std::to_string(formationTransit_.waypointIndex + 1U)
         + "/" + std::to_string(route.size());
 }
