@@ -110,7 +110,8 @@ struct SimulationCore::EcsStorage
 #if !defined(__EMSCRIPTEN__)
         RegisterRigidBodySystem();
 #else
-        primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
+        throw std::invalid_argument(
+            "이 빌드에서는 AirSim 강체 물리를 사용할 수 없습니다.");
 #endif
     }
 
