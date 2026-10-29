@@ -709,7 +709,9 @@ communication::Telemetry AeroSimLabApp::CurrentTelemetry() const
             id, "드론 " + std::to_string(id), drone.mode, drone.positionMeters,
             mission == fleetReconnaissance_.end() ? std::string{}
                 : inspectionTargets_[mission->second.targetIndex].displayName,
-            mission == fleetReconnaissance_.end() ? std::string{} : mission->second.status});
+            mission == fleetReconnaissance_.end() ? std::string{}
+                : std::string(detail::FleetDroneStatusLabel(
+                    mission->second.status))});
     }
     return telemetry;
 }

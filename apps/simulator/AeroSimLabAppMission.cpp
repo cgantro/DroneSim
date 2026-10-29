@@ -1322,7 +1322,6 @@ bool AeroSimLabApp::SendFleetRouteAssignment(
     mission->second.pendingRouteSequence = sequence;
     mission->second.assignmentVersion = assignmentVersion;
     mission->second.assignmentLeaseExpiresAtTick = leaseExpiresAtTick;
-    mission->second.communicationLostAtTick = 0U;
     mission->second.pendingRoutePayload = payload;
     mission->second.routeSentAtTick = simulation_.TickCount();
     mission->second.lastRouteTransmissionTick = simulation_.TickCount();
@@ -1353,7 +1352,6 @@ void AeroSimLabApp::ApplyFleetRouteAssignment(
     mission->second.routeSequence = sequence;
     mission->second.assignmentVersion = assignmentVersion;
     mission->second.assignmentLeaseExpiresAtTick = assignmentLeaseExpiresAtTick;
-    mission->second.communicationLostAtTick = 0U;
     mission->second.routeSentAtTick = simulation_.TickCount();
     mission->second.routeWaypointsMeters = std::move(routeWaypointsMeters);
     mission->second.nextWaypoint = 0U;

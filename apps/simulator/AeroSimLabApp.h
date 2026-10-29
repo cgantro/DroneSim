@@ -492,7 +492,6 @@ private:
         std::uint32_t pendingRouteSequence = 0;
         std::uint64_t assignmentVersion = 0;
         std::uint64_t assignmentLeaseExpiresAtTick = 0;
-        std::uint64_t communicationLostAtTick = 0;
         std::uint32_t routeTransmissionCount = 0;
         std::uint64_t routeSentAtTick = 0;
         std::uint64_t lastRouteTransmissionTick = 0;
