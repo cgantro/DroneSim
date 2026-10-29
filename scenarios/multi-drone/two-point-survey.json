@@ -15,7 +15,6 @@
     "tasks": [
       {
         "name": "west-point",
-        "role": "west survey",
         "drone": "lead",
         "waypoints_meters": [[2, 0, 1.5]],
         "start_tick": 90,
@@ -24,7 +23,6 @@
       },
       {
         "name": "east-point",
-        "role": "east survey",
         "drone": "wing",
         "waypoints_meters": [[8, 0, 1.5]],
         "start_tick": 90,

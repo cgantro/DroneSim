@@ -75,8 +75,7 @@ void ValidateMission(const ScenarioDefinition& definition,
         const bool hasNegativeAltitude = std::any_of(task.waypointsMeters.begin(),
             task.waypointsMeters.end(),
             [](const glm::dvec3& point) { return point.z < 0.0; });
-        if (task.name.empty() || task.role.empty()
-            || !taskNames.insert(task.name).second
+        if (task.name.empty() || !taskNames.insert(task.name).second
             || !droneNames.contains(task.droneName))
             throw std::invalid_argument(
                 "임무 이름은 고유해야 하며 등록된 드론을 지정해야 합니다.");

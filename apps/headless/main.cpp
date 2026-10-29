@@ -105,7 +105,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
             const glm::dvec3& target = task.waypointsMeters.front();
             tasks.push_back({
                 {"name", task.name},
-                {"role", task.role},
                 {"drone", task.droneName},
                 {"target_position_meters", {target.x, target.y, target.z}},
                 {"waypoints_meters", std::move(waypoints)},

@@ -137,10 +137,10 @@ void Verify_ScenarioRunnerCompletesTasksAtWaypoints()
        {"tick":0,"drone":"east","type":"takeoff"},
        {"tick":0,"drone":"north","type":"takeoff"}],
      "mission":{"name":"two-drone-survey","tasks":[
-       {"name":"east-face","role":"survey","drone":"east",
+       {"name":"east-face","drone":"east",
         "waypoints_meters":[[0,0,1.5]],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1},
-       {"name":"north-face","role":"survey","drone":"north",
+       {"name":"north-face","drone":"north",
         "waypoints_meters":[[0,4,1.5]],"start_tick":110,
         "deadline_tick":145,"tolerance_meters":0.1}]},
      "expected":{"drones":[
@@ -758,10 +758,10 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
        {"drone":"scout","start_tick":122,"end_tick":145,"heartbeat_timeout_ticks":2},
        {"drone":"relay","start_tick":122,"end_tick":145,"heartbeat_timeout_ticks":2}],
      "mission":{"name":"unconfirmed-survey","tasks":[
-       {"name":"sector-1","role":"survey","drone":"scout",
+       {"name":"sector-1","drone":"scout",
         "waypoints_meters":[[100,0,1.5]],"start_tick":120,
         "deadline_tick":144,"tolerance_meters":0.1},
-       {"name":"sector-2","role":"survey","drone":"relay",
+       {"name":"sector-2","drone":"relay",
         "waypoints_meters":[[105,0,1.5]],"start_tick":120,
         "deadline_tick":144,"tolerance_meters":0.1}]},
      "expected":{"tolerance_meters":1000,"drones":[
@@ -794,10 +794,10 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
      "commands":[{"tick":0,"drone":"scout","type":"takeoff"},
        {"tick":0,"drone":"relay","type":"takeoff"}],
      "mission":{"name":"missed-survey","tasks":[
-       {"name":"sector-1","role":"survey","drone":"scout",
+       {"name":"sector-1","drone":"scout",
         "waypoints_meters":[[100,0,1.5]],"start_tick":120,
         "deadline_tick":121,"tolerance_meters":0.1},
-       {"name":"sector-2","role":"survey","drone":"relay",
+       {"name":"sector-2","drone":"relay",
         "waypoints_meters":[[105,0,1.5]],"start_tick":120,
         "deadline_tick":121,"tolerance_meters":0.1}]},
      "expected":{"tolerance_meters":1000,"drones":[
@@ -828,16 +828,16 @@ void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
        {"tick":0,"drone":"survey-3","type":"takeoff"},
        {"tick":0,"drone":"survey-4","type":"takeoff"}],
      "mission":{"name":"grid-survey","tasks":[
-       {"name":"sector-1","role":"survey","drone":"survey-1",
+       {"name":"sector-1","drone":"survey-1",
         "waypoints_meters":[[0,0,1.5],[4,0,1.5],[4,8,1.5],[0,8,1.5]],
         "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2},
-       {"name":"sector-2","role":"survey","drone":"survey-2",
+       {"name":"sector-2","drone":"survey-2",
         "waypoints_meters":[[4,0,1.5],[8,0,1.5],[8,8,1.5],[4,8,1.5]],
         "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2},
-       {"name":"sector-3","role":"survey","drone":"survey-3",
+       {"name":"sector-3","drone":"survey-3",
         "waypoints_meters":[[8,0,1.5],[12,0,1.5],[12,8,1.5],[8,8,1.5]],
         "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2},
-       {"name":"sector-4","role":"survey","drone":"survey-4",
+       {"name":"sector-4","drone":"survey-4",
         "waypoints_meters":[[12,0,1.5],[16,0,1.5],[16,8,1.5],[12,8,1.5]],
         "start_tick":100,"deadline_tick":470,"tolerance_meters":0.2}]},
      "expected":{"tolerance_meters":0.2,"drones":[
@@ -874,9 +874,9 @@ void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
      "collision_avoidance":{"safety_distance_meters":3,
        "prediction_horizon_seconds":2,"lateral_offset_meters":10},
      "mission":{"name":"crossing-flight","tasks":[
-       {"name":"west-to-east","role":"cross","drone":"west",
+       {"name":"west-to-east","drone":"west",
         "waypoints_meters":[[4,0,1.5]],"start_tick":100,"deadline_tick":580,"tolerance_meters":0.2},
-       {"name":"east-to-west","role":"cross","drone":"east",
+       {"name":"east-to-west","drone":"east",
         "waypoints_meters":[[-4,0,1.5]],"start_tick":100,"deadline_tick":580,"tolerance_meters":0.2}]},
      "expected":{"tolerance_meters":0.5,"minimum_drone_separation_meters":2.5,
        "drones":[
@@ -909,10 +909,10 @@ void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
      "collision_avoidance":{"safety_distance_meters":3,
        "prediction_horizon_seconds":2,"lateral_offset_meters":5},
      "mission":{"name":"pass-the-hovering-drone","tasks":[
-       {"name":"cross","role":"survey","drone":"worker",
+       {"name":"cross","drone":"worker",
         "waypoints_meters":[[4,0,1.5]],"start_tick":100,
         "deadline_tick":590,"tolerance_meters":0.2},
-       {"name":"support","role":"survey","drone":"support",
+       {"name":"support","drone":"support",
         "waypoints_meters":[[21,0,1.5]],"start_tick":100,
         "deadline_tick":590,"tolerance_meters":0.2}]},
      "expected":{"tolerance_meters":0.5,
@@ -1073,10 +1073,10 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     {"version":1,"dynamics":"kinematic","ticks":500,
      "commands":[{"tick":0,"type":"takeoff"}],
      "mission":{"name":"two-stop-survey","tasks":[
-       {"name":"first","role":"scan","drone":"drone",
+       {"name":"scan","drone":"drone",
         "waypoints_meters":[[0,0,1.5]],"start_tick":0,
         "deadline_tick":499,"tolerance_meters":0.1},
-       {"name":"second","role":"guard","drone":"drone",
+       {"name":"guard","drone":"drone",
         "waypoints_meters":[[2,0,1.5]],"start_tick":0,
         "deadline_tick":499,"tolerance_meters":0.1}]},
      "expected":{"drones":[
@@ -1092,7 +1092,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     {"version":1,"dynamics":"kinematic","ticks":2,
      "drones":[{"name":"lead"}],"commands":[],
      "mission":{"name":"survey","tasks":[
-       {"name":"first","role":"scan","drone":"lead",
+       {"name":"first","drone":"lead",
         "target_position_meters":[0,0,1],"start_tick":0,
         "deadline_tick":1,"tolerance_meters":0}]}}
     )json";

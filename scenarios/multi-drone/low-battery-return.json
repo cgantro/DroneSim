@@ -29,7 +29,6 @@
     "tasks": [
       {
         "name": "long-area",
-        "role": "survey",
         "drone": "low-charge",
         "waypoints_meters": [[30, 0, 1.5]],
         "start_tick": 90,
@@ -38,7 +37,6 @@
       },
       {
         "name": "near-area",
-        "role": "survey",
         "drone": "reserve",
         "waypoints_meters": [[21, 0, 1.5]],
         "start_tick": 90,

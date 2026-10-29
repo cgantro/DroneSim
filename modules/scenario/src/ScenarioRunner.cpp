@@ -261,7 +261,6 @@ ScenarioResult::Mission CreateMissionResult(ScenarioMission definition)
     {
         ScenarioResult::MissionTask runtimeTask;
         runtimeTask.name = std::move(task.name);
-        runtimeTask.role = std::move(task.role);
         runtimeTask.droneName = std::move(task.droneName);
         runtimeTask.waypointsMeters = std::move(task.waypointsMeters);
         runtimeTask.startTick = task.startTick;
@@ -402,7 +401,7 @@ void UpdateMissionCommands(
             if (!mission->startedTick)
                 mission->startedTick = tick;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + task.droneName + " 드론이 '" + task.role + "' 임무를 시작했습니다.");
+                + task.droneName + " 드론이 '" + task.name + "' 임무를 시작했습니다.");
         }
 
         const DroneCommand moveCommand{
@@ -759,7 +758,7 @@ void UpdateMissionResults(
         {
             task.completedTick = tick;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + task.droneName + " 드론이 '" + task.role + "' 임무를 마쳤습니다.");
+                + task.droneName + " 드론이 '" + task.name + "' 임무를 마쳤습니다.");
         }
         else if (tick >= task.deadlineTick)
         {

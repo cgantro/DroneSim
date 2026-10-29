@@ -488,3 +488,9 @@
 - `two-point-survey.json` headless 실행 결과 `outcome: passed`, `passed: true` 확인.
 - 네 대 통신 단절 예제는 `inconclusive` 결과를 의도하므로 CLI 종료 코드 1을 반환한다. 통신 장애 동작은 전체 CTest에서 통과했다.
 - 저장소 검색에서 제거한 시설·구역 식별값을 다시 참조하는 코드와 시험이 남지 않았다.
+
+## 임무 역할 필드 제거 — 2026-10-30
+
+- Windows Release headless·시나리오 시험 빌드 성공, 전체 CTest 28/28 통과.
+- `two-point-survey.json` headless 실행에서 `passed: true`, 작업 2개 결과 확인.
+- 시나리오 입력·결과·예시·시험 코드에 남은 `role` 참조가 없음을 검색으로 확인했다.

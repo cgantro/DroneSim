@@ -375,17 +375,14 @@ ScenarioMissionTask ReadMissionTask(
         throw std::invalid_argument("각 mission task는 JSON 객체여야 합니다.");
 
     const Json& taskNameValue = Required(taskValue, "name");
-    const Json& roleValue = Required(taskValue, "role");
     const Json& droneValue = Required(taskValue, "drone");
-    if (!taskNameValue.is_string() || !roleValue.is_string()
-        || !droneValue.is_string())
+    if (!taskNameValue.is_string() || !droneValue.is_string())
     {
-        throw std::invalid_argument("임무 name과 role은 문자열이어야 하고 drone을 지정해야 합니다.");
+        throw std::invalid_argument("임무 name과 drone은 문자열이어야 합니다.");
     }
 
     ScenarioMissionTask task;
     task.name = taskNameValue.get<std::string>();
-    task.role = roleValue.get<std::string>();
     task.droneName = droneValue.get<std::string>();
     const Json& waypoints = Required(taskValue, "waypoints_meters");
     if (!waypoints.is_array() || waypoints.empty())

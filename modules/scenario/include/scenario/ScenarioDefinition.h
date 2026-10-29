@@ -63,7 +63,6 @@ using EnergyModelSettings = BatteryModelParameters;
 struct ScenarioMissionTask
 {
     std::string name;
-    std::string role;
     std::string droneName;
     std::vector<glm::dvec3> waypointsMeters;
     std::uint64_t startTick = 0;

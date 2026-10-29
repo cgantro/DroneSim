@@ -99,7 +99,6 @@ struct ScenarioResult
     struct MissionTask
     {
         std::string name;
-        std::string role;
         std::string droneName;
         /** @brief 점 임무는 한 점, 구역 임무는 왕복 경로의 순서 있는 지점 목록이다. */
         std::vector<glm::dvec3> waypointsMeters;
