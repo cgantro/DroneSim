@@ -32,6 +32,14 @@ struct JoltBoxDefinition {
   double restitution = 0.0;
 };
 
+/** @brief 기체 충돌 모양의 기준 위치·자세와 표면 특성이다. */
+struct JoltRigidBodyDefinition {
+  glm::dvec3 positionMeters{0.0};
+  glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
+  double friction = 0.5;
+  double restitution = 0.0;
+};
+
 /** @brief 강체의 위치·자세와 ENU 기준 속도다. */
 struct JoltRigidBodyState {
   glm::dvec3 positionMeters{0.0};
@@ -74,7 +82,7 @@ public:
 
   /** @brief X500 질량·관성·로터 배치로 움직이는 기체를 만든다. */
   [[nodiscard]] JoltRigidBodyHandle
-  CreateQuadrotor(const JoltBoxDefinition &body,
+  CreateQuadrotor(const JoltRigidBodyDefinition &body,
                   const QuadrotorParameters &parameters);
 
   /** @brief 네 모터의 목표 회전 속도를 라디안/초로 지정한다. */

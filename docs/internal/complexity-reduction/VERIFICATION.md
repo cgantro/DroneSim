@@ -538,3 +538,9 @@
 - 두 부호를 맞춘 뒤 Jolt에서 X500이 이륙하고 지정 경유점으로 이동한 다음 지면에 착륙하는 시험을 통과했다. 로터 차등 추력의 동쪽 기울기와 자세·각속도 상태 재설정 확인도 포함했다.
 - Windows Release 전체 빌드 성공, 전체 CTest 34/34 통과.
 - 앱의 Flecs `SimulationCore`는 아직 AirSim을 사용한다. 웹 빌드는 실행하지 않았다.
+
+## Jolt 드론의 다중 충돌 상자 — 2026-10-30
+
+- 기체 한 덩어리만 감싸던 상자 충돌체를 X500 모델이 정의한 9개 충돌 상자로 바꿨다. `JoltRigidBodyDefinition`에는 기체 기준 위치·자세와 접촉 특성만 둔다.
+- 복합 충돌 형상으로 이륙·경유점 이동·착륙 시험을 통과했다. Windows Release 전체 빌드와 CTest 34/34 통과.
+- 실제 앱의 Flecs `SimulationCore`는 아직 AirSim을 사용한다.

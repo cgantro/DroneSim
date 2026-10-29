@@ -14,6 +14,7 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
@@ -177,6 +178,27 @@ public:
 
 JPH::RefConst<JPH::Shape> MakeBoxShape(const glm::dvec3 &halfExtentsMeters) {
   return new JPH::BoxShape(ToJoltHalfExtents(halfExtentsMeters));
+}
+
+JPH::RefConst<JPH::Shape>
+MakeQuadrotorShape(const QuadrotorParameters &parameters) {
+  JPH::StaticCompoundShapeSettings compound;
+  for (const RigidBodyBox &box : parameters.collisionBoxes) {
+    if (!HasPositiveComponents(glm::dvec3{box.halfExtentsMeters}) ||
+        !IsFinite(box.positionMeters) || !IsValidOrientation(box.orientation))
+      throw std::invalid_argument(
+          "드론 충돌 상자의 크기와 자세를 확인해 주세요.");
+
+    const JPH::RefConst<JPH::Shape> shape =
+        MakeBoxShape(glm::dvec3{box.halfExtentsMeters});
+    compound.AddShape(ToJoltVector(box.positionMeters),
+                      ToJoltRotation(box.orientation), shape.GetPtr());
+  }
+
+  auto shapeResult = compound.Create();
+  if (shapeResult.HasError())
+    throw std::runtime_error(shapeResult.GetError().c_str());
+  return shapeResult.Get();
 }
 
 double SignedArea(const std::vector<glm::dvec2> &outline) {
@@ -490,10 +512,9 @@ JoltPhysicsWorld::CreateDynamicBox(const JoltBoxDefinition &definition) {
 }
 
 JoltRigidBodyHandle
-JoltPhysicsWorld::CreateQuadrotor(const JoltBoxDefinition &body,
+JoltPhysicsWorld::CreateQuadrotor(const JoltRigidBodyDefinition &body,
                                   const QuadrotorParameters &parameters) {
   if (!IsFinite(body.positionMeters) || !IsValidOrientation(body.orientation) ||
-      !HasPositiveComponents(body.halfExtentsMeters) ||
       !std::isfinite(body.friction) || body.friction < 0.0 ||
       !std::isfinite(body.restitution) || body.restitution < 0.0 ||
       body.restitution > 1.0 || !std::isfinite(parameters.massKilograms) ||
@@ -521,7 +542,7 @@ JoltPhysicsWorld::CreateQuadrotor(const JoltBoxDefinition &body,
     throw std::invalid_argument("로터 위치를 확인해 주세요.");
   }
 
-  const auto shape = MakeBoxShape(body.halfExtentsMeters);
+  const auto shape = MakeQuadrotorShape(parameters);
   JPH::BodyCreationSettings settings(
       shape.GetPtr(), ToJoltVector(body.positionMeters),
       ToJoltRotation(body.orientation), JPH::EMotionType::Dynamic, movingLayer);

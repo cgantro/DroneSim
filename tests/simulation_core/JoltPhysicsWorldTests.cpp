@@ -137,9 +137,8 @@ TEST(JoltPhysicsWorldTests, EqualTorqueProducesInertiaDependentRotation) {
 TEST(JoltPhysicsWorldTests, X500RotorsProduceHoverAndClimbForces) {
   JoltPhysicsWorld world;
   const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-  JoltBoxDefinition definition;
+  JoltRigidBodyDefinition definition;
   definition.positionMeters = {0.0, 0.0, 20.0};
-  definition.halfExtentsMeters = {0.2, 0.2, 0.05};
   const JoltRigidBodyHandle drone =
       world.CreateQuadrotor(definition, parameters);
 
@@ -182,10 +181,9 @@ TEST(JoltPhysicsWorldTests, FlightControllerFliesTakeoffWaypointAndLanding) {
   static_cast<void>(world.AddStaticBox({0.0, 0.0, -0.25}, {20.0, 20.0, 0.25}));
 
   const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-  JoltBoxDefinition body;
+  JoltRigidBodyDefinition body;
   body.positionMeters.z =
       QuadrotorFlightController::groundedModelOriginHeightMeters;
-  body.halfExtentsMeters = parameters.bodySizeMeters * 0.5;
   const JoltRigidBodyHandle drone = world.CreateQuadrotor(body, parameters);
 
   DroneState state;
@@ -247,9 +245,8 @@ TEST(JoltPhysicsWorldTests, FlightControllerFliesTakeoffWaypointAndLanding) {
 TEST(JoltPhysicsWorldTests, RotorDifferentialTiltsTowardPositiveEast) {
   JoltPhysicsWorld world;
   const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
-  JoltBoxDefinition body;
+  JoltRigidBodyDefinition body;
   body.positionMeters.z = 20.0;
-  body.halfExtentsMeters = parameters.bodySizeMeters * 0.5;
   const auto drone = world.CreateQuadrotor(body, parameters);
   world.SetInitialMotorSpeeds(drone, {500.0, 600.0, 500.0, 600.0});
   world.StepFixed();
