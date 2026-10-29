@@ -15,7 +15,7 @@ namespace aerosimlab::communication
 {
 inline constexpr std::uint16_t defaultPort = 27015;
 inline constexpr std::size_t maximumDatagramBytes = 1200;
-inline constexpr std::size_t maximumFleetDroneCount = 8;
+inline constexpr std::size_t maximumFleetDroneCount = 4;
 
 /** @brief 지상통제가 카메라에 보낼 동작이다. */
 enum class CameraCommand
@@ -26,10 +26,9 @@ enum class CameraCommand
     Recover
 };
 
-/** @brief 시뮬레이터의 여러 드론을 추가하거나 상태를 조회한다. */
+/** @brief 편대 상태를 조회하거나 정찰 임무를 시작한다. */
 enum class FleetCommand
 {
-    AddDrone,
     GetStatus,
     DispatchReconnaissance
 };

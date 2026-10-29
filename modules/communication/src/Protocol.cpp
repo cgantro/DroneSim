@@ -283,9 +283,7 @@ Json EncodeCommandPayload(CameraCommand command)
 Json EncodeCommandPayload(FleetCommand command)
 {
     const char* action = "status";
-    if (command == FleetCommand::AddDrone)
-        action = "add_drone";
-    else if (command == FleetCommand::DispatchReconnaissance)
+    if (command == FleetCommand::DispatchReconnaissance)
         action = "dispatch_reconnaissance";
     return {{"target", "fleet"}, {"action", action}};
 }
@@ -343,8 +341,7 @@ CommandPacket DecodeCommand(std::string_view datagram)
     }
     if (target == "fleet")
     {
-        if (action == "add_drone") packet.command = FleetCommand::AddDrone;
-        else if (action == "status") packet.command = FleetCommand::GetStatus;
+        if (action == "status") packet.command = FleetCommand::GetStatus;
         else if (action == "dispatch_reconnaissance")
             packet.command = FleetCommand::DispatchReconnaissance;
         else throw std::invalid_argument("알 수 없는 편대 동작입니다.");

@@ -1,7 +1,6 @@
 #include "AeroSimLabApp.h"
 #include "FleetMissionProgress.h"
 #include "FleetTelemetry.h"
-#include "FleetDroneSpawn.h"
 #include "TrainingRangeScene.h"
 
 #include "simulation_core/SimulationCore.h"
@@ -622,20 +621,6 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
         FleetMissionProgress::Complete);
 }
 
-void Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain()
-{
-    terrain::TerrainGrid terrainGrid;
-    terrainGrid.sampleCount = 3;
-    terrainGrid.spacingXMeters = 2.0F;
-    terrainGrid.spacingYMeters = 2.0F;
-    terrainGrid.heightOffsetsMeters.resize(9U);
-
-    std::optional<simulator::detail::FleetDroneSpawnPose> spawn;
-    EXPECT_NO_THROW(spawn = simulator::detail::FindFleetDroneSpawnPose(
-        terrainGrid, glm::dvec3{0.0}, 0U));
-    EXPECT_FALSE(spawn.has_value());
-}
-
 void Verify_SimulatorSession_FlightCommandsOverUdp()
 {
     std::uint16_t simulatorPort = 0;
@@ -823,7 +808,6 @@ TEST(SimulatorSessionTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
-    EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
     EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_FlightCommandsOverUdp());
 }
 

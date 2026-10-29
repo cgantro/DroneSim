@@ -45,12 +45,6 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     EXPECT_EQ(std::get<CameraCommand>(DecodeCommand(EncodeCommand(camera)).command),
         CameraCommand::InjectFault);
 
-    CommandPacket addDrone;
-    addDrone.commandId = 10;
-    addDrone.sequence = 14;
-    addDrone.command = FleetCommand::AddDrone;
-    EXPECT_EQ(std::get<FleetCommand>(DecodeCommand(EncodeCommand(addDrone)).command),
-        FleetCommand::AddDrone);
     CommandPacket fleetStatus;
     fleetStatus.commandId = 11;
     fleetStatus.sequence = 15;
@@ -141,6 +135,11 @@ void Verify_Protocol_RejectsInvalidPacketsAndSequenceNumbers()
     wrongLength.replace(lengthPosition + 9, 1, "9");
     EXPECT_THROW(static_cast<void>(DecodeCommand(wrongLength)), std::invalid_argument);
     EXPECT_THROW(static_cast<void>(DecodeCommand("{}")), std::invalid_argument);
+    const std::string addDronePayload =
+        R"({"action":"add_drone","command_id":1,"sequence":1,"target":"fleet"})";
+    const std::string addDroneRequest = "{\"version\":1,\"type\":\"command\",\"length\":"
+        + std::to_string(addDronePayload.size()) + ",\"payload\":" + addDronePayload + "}";
+    EXPECT_THROW(static_cast<void>(DecodeCommand(addDroneRequest)), std::invalid_argument);
     EXPECT_THROW(static_cast<void>(DecodeCommand(std::string(maximumDatagramBytes + 1, 'x'))), std::invalid_argument);
 
     CommandReply oversizedFleet;

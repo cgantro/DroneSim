@@ -2,7 +2,6 @@
 #include "ExecutableDirectory.h"
 
 #include "graphics/MultisampleFramebuffer.h"
-#include "FleetDroneSpawn.h"
 #include "graphics/Window.h"
 
 #ifdef _WIN32
@@ -212,34 +211,6 @@ void AeroSimLabApp::ApplyCameraCommand(
     reply.status = "applied";
 }
 
-void AeroSimLabApp::ApplyAddDroneCommand(
-    communication::CommandReply& reply)
-{
-    if (simulation_.DroneCount() >= communication::maximumFleetDroneCount)
-    {
-        reply.accepted = false;
-        reply.status = "fleet_limit_reached";
-        return;
-    }
-
-    const glm::dvec3 primaryPosition = simulation_.State().positionMeters;
-    const auto spawn = detail::FindFleetDroneSpawnPose(
-        terrainGrid_, primaryPosition, simulation_.DroneCount() - 1U);
-    if (!spawn)
-    {
-        reply.accepted = false;
-        reply.status = "spawn_outside_terrain";
-        return;
-    }
-
-    const auto id = simulation_.AddDrone(
-        spawn->positionMeters, 0.0, spawn->groundElevationMeters);
-    ConfigureTrainingBattery(id);
-    fleetDroneIds_.push_back(id);
-    reply.accepted = true;
-    reply.status = "drone_added";
-}
-
 void AeroSimLabApp::ExpireGroundControlCommand()
 {
     const auto now = simulation_.TickCount();
@@ -287,9 +258,7 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         },
         [this, &reply](communication::FleetCommand command)
         {
-            if (command == communication::FleetCommand::AddDrone)
-                ApplyAddDroneCommand(reply);
-            else if (command == communication::FleetCommand::DispatchReconnaissance)
+            if (command == communication::FleetCommand::DispatchReconnaissance)
             {
                 reply.accepted = StartFleetReconnaissance();
                 reply.status = reply.accepted
