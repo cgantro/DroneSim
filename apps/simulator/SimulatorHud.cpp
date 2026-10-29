@@ -94,7 +94,7 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
                 observerDroneId = simulation.PrimaryDroneId();
 
             const std::string selectedName = DroneName(observerDroneId);
-            if (ImGui::BeginCombo("따라갈 드론", selectedName.c_str()))
+            if (ImGui::BeginCombo("장면 시점 드론", selectedName.c_str()))
             {
                 for (const simulation::DroneId droneId : droneIds)
                 {
@@ -122,10 +122,12 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
 
 void DrawCameraPanel(
     const simulation::SimulationCore& simulation,
+    simulation::DroneId& observerDroneId,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera)
 {
     if (ImGui::Begin("카메라##CameraViewV3"))
     {
+        ImGui::TextDisabled("드론 이름을 누르면 장면 시점이 바뀝니다.");
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const auto droneIds = simulation.DroneIds();
         if (droneIds.empty())
@@ -152,7 +154,14 @@ void DrawCameraPanel(
                     ImGui::TableNextColumn();
                     const auto& camera = simulation.Camera(droneId);
                     const std::string label = DroneName(droneId);
-                    ImGui::TextUnformatted(label.c_str());
+                    const bool selectedForScene = droneId == observerDroneId;
+                    const std::string selectableLabel = selectedForScene
+                        ? "> " + label : label;
+                    if (ImGui::Selectable(selectableLabel.c_str(), selectedForScene,
+                            ImGuiSelectableFlags_SpanAvailWidth))
+                    {
+                        observerDroneId = droneId;
+                    }
 
                     const int imageWidth = camera.model.imageWidthPixels;
                     const int imageHeight = camera.model.imageHeightPixels;
@@ -461,7 +470,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
     DrawScenePanel(simulation, observerDroneId, renderScene);
-    DrawCameraPanel(simulation, renderCamera);
+    DrawCameraPanel(simulation, observerDroneId, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
         fleetReturnCanStart, startFleetReturn,
         completeFleetMissionStatus, completeFleetMissionCanStart,
