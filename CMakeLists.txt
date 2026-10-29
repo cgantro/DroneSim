@@ -530,7 +530,7 @@ if(BUILD_TESTING)
   )
 
   add_test(NAME HeadlessScenarioSmoke
-    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/flight/rigid-body-flight.json")
+    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/flight/normal-flight.json")
   set_tests_properties(HeadlessScenarioSmoke PROPERTIES
     LABELS "INTEGRATION;simulation")
 
