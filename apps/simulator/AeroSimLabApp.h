@@ -230,14 +230,6 @@ private:
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
     void SetFleetNetworkMode(communication::VirtualMeshMode mode);
     void InitializeFleetLeadership();
-    void BeginFleetLeaderReplacement();
-    void SendFleetLeaderProbes();
-    void PromoteFleetLeader(aerosimlab::simulation::DroneId newLeaderId);
-    void FinishFleetLeaderReplacementIfReady();
-    void FailFleetLeaderReplacement();
-    void ReassignLostLeaderTarget();
-    void AdvanceFleetRelayRecovery();
-    [[nodiscard]] bool TryStartFleetRelayRecovery();
     void AdvanceFleetNetwork();
     [[nodiscard]] bool SendFleetRouteAssignment(
         aerosimlab::simulation::DroneId droneId,
@@ -531,20 +523,7 @@ private:
     std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>
         fleetReconnaissance_;
     aerosimlab::simulation::DroneId fleetLeaderId_ = 0;
-    std::vector<aerosimlab::simulation::DroneId> excludedFleetDroneIds_;
-    std::vector<aerosimlab::simulation::DroneId> leaderProbeAcknowledgements_;
-    std::uint64_t leaderReplacementStartedAtTick_ = 0;
-    std::uint64_t lastLeaderProbeSentAtTick_ = 0;
-    std::uint64_t lastLeaderHeartbeatSentAtTick_ = 0;
-    std::uint64_t lastLeaderHeartbeatTick_ = 0;
-    std::uint32_t fleetLeadershipEpoch_ = 0;
-    std::uint32_t leaderProbeSequence_ = 0;
-    std::uint32_t leaderProbeTransmissionCount_ = 0;
-    std::uint32_t leaderHeartbeatSequence_ = 0;
     std::uint64_t nextMissionAssignmentVersion_ = 1;
-    bool leaderReplacementPending_ = false;
-    bool leaderStateCollectionPending_ = false;
-    std::vector<std::size_t> pendingReassignedTargetIndices_;
     std::string fleetLeadershipStatus_ = "리더 대기 중";
     struct ReceivedPeerTelemetry
     {
@@ -560,18 +539,6 @@ private:
         lastTelemetrySentAtTick_;
     std::map<aerosimlab::simulation::DroneId, std::uint64_t>
         lastGroundControlTelemetrySentAtTick_;
-    struct FleetRelayRecovery
-    {
-        aerosimlab::simulation::DroneId relayDroneId = 0U;
-        aerosimlab::simulation::DroneId disconnectedDroneId = 0U;
-        aerosimlab::simulation::DroneId recoveredDroneId = 0U;
-        glm::dvec3 holdPositionMeters{0.0};
-        std::uint64_t startedAtTick = 0U;
-        std::uint64_t movementTimeoutAtTick = 0U;
-        bool waitingForTelemetry = false;
-        bool returnRoutesAssigned = false;
-        bool relayReturnAssignmentSent = false;
-    } fleetRelayRecovery_;
     std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
         peerTelemetryAtLeader_;
     std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>

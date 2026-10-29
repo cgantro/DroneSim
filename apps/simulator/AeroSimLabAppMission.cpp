@@ -47,7 +47,7 @@ std::optional<PeerTelemetry> DecodePeerTelemetry(const std::string& payload)
             >> std::quoted(telemetry.missionStatus)
             >> telemetry.assignmentVersion
             >> telemetry.assignmentLeaseExpiresAtTick)
-        || missionLeg > 3U
+        || missionLeg > 2U
         || !std::isfinite(telemetry.positionMeters.x)
         || !std::isfinite(telemetry.positionMeters.y)
         || !std::isfinite(telemetry.positionMeters.z))
@@ -181,7 +181,7 @@ std::optional<FleetRouteMessage> DecodeFleetRoute(const std::string& payload)
     std::size_t waypointCount = 0;
     if (!(values >> leg >> route.targetIndex >> route.assignmentVersion
             >> route.assignmentLeaseExpiresAtTick >> waypointCount)
-        || leg > 3U)
+        || leg > 2U)
         return std::nullopt;
 
     route.leg = static_cast<std::uint8_t>(leg);
@@ -225,12 +225,9 @@ bool AeroSimLabApp::RequestInspectionMission(
     std::optional<std::size_t> selectedTargetIndex)
 {
     if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
-        [this](const auto& entry)
+        [](const auto& entry)
         {
-            return detail::IsFleetMissionInProgress(entry.second.status)
-                && std::find(excludedFleetDroneIds_.begin(),
-                    excludedFleetDroneIds_.end(), entry.first)
-                    == excludedFleetDroneIds_.end();
+            return detail::IsFleetMissionInProgress(entry.second.status);
         }))
     {
         inspectionMission_.error = "편대 정찰이 진행 중일 때는 주 드론 임무를 시작할 수 없습니다.";
@@ -365,12 +362,9 @@ bool AeroSimLabApp::CompleteFleetMissionIsActive() const
 bool AeroSimLabApp::FleetReconnaissanceIsActive() const
 {
     return std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
-        [this](const auto& entry)
+        [](const auto& entry)
         {
-            return detail::IsFleetMissionInProgress(entry.second.status)
-                && std::find(excludedFleetDroneIds_.begin(),
-                    excludedFleetDroneIds_.end(), entry.first)
-                    == excludedFleetDroneIds_.end();
+            return detail::IsFleetMissionInProgress(entry.second.status);
         });
 }
 
@@ -564,13 +558,7 @@ bool AeroSimLabApp::FleetReturnCanStart() const
             && report->state.missionLeg
                 == static_cast<std::uint8_t>(FleetMissionLeg::Reconnaissance)
             && !detail::IsFleetMissionInProgress(report->state.missionStatus);
-        const bool holdingRelayPosition = report->state.mode
-                != aerosimlab::simulation::FlightMode::Grounded
-            && report->state.missionLeg
-                == static_cast<std::uint8_t>(FleetMissionLeg::Relaying)
-            && detail::ParseFleetDroneStatus(report->state.missionStatus)
-                == detail::FleetDroneStatus::RelayPositionSecured;
-        return finishedReconnaissance || holdingRelayPosition;
+        return finishedReconnaissance;
     });
 }
 
@@ -590,71 +578,6 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
     const DroneId leaderId = fleetLeaderId_;
     if (droneIds.empty() || leaderId == 0U)
         return false;
-    const bool hasRecoveredRelay = !takeOffDrones
-        && fleetRelayRecovery_.relayDroneId != 0U
-        && fleetRelayRecovery_.recoveredDroneId != 0U
-        && fleetRelayRecovery_.relayDroneId != fleetRelayRecovery_.recoveredDroneId;
-    const bool prepareRecoveredRelayHold = hasRecoveredRelay
-        && completeFleetMission_.stage == CompleteFleetMissionState::Stage::Regrouping
-        && !fleetRelayRecovery_.returnRoutesAssigned;
-    if (prepareRecoveredRelayHold)
-    {
-        if (!formationNetwork_)
-            return false;
-
-        const glm::dvec3 leaderHome =
-            completeFleetMission_.homePositionsMeters.at(leaderId);
-        const glm::dvec3 remoteHome = fleetReconnaissance_.at(
-            fleetRelayRecovery_.recoveredDroneId).startPositionMeters;
-        std::optional<std::vector<glm::dvec3>> relayRoute;
-        glm::dvec3 relayHoldPosition{0.0};
-        constexpr std::array<double, 3U> routeFractions{0.35, 0.5, 0.65};
-        constexpr std::array<double, 3U> altitudeOffsetsMeters{15.0, 30.0, 45.0};
-        for (const double fraction : routeFractions)
-        {
-            const glm::dvec2 horizontal = glm::mix(
-                glm::dvec2{leaderHome}, glm::dvec2{remoteHome}, fraction);
-            for (const double altitudeOffset : altitudeOffsetsMeters)
-            {
-                const glm::dvec3 candidate{horizontal,
-                    std::max(terrainGrid_.HeightAtLocalMeters(horizontal)
-                            + altitudeOffset,
-                        std::max(leaderHome.z, remoteHome.z))};
-                if (!formationNetwork_->CanExchangeAtPositions(
-                        leaderId, fleetRelayRecovery_.relayDroneId,
-                        leaderHome, candidate)
-                    || !formationNetwork_->CanExchangeAtPositions(
-                        fleetRelayRecovery_.relayDroneId,
-                        fleetRelayRecovery_.recoveredDroneId,
-                        candidate, remoteHome))
-                    continue;
-
-                const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-                    terrainGrid_, routeBuildings_,
-                    simulation_.State(fleetRelayRecovery_.relayDroneId).positionMeters,
-                    candidate, 3.0, cameraTransitAltitudeMeters_);
-                if (route)
-                {
-                    relayHoldPosition = candidate;
-                    relayRoute.emplace(route->begin() + 1, route->end());
-                    break;
-                }
-            }
-            if (relayRoute)
-                break;
-        }
-        if (!relayRoute)
-            return false;
-
-        fleetRelayRecovery_.holdPositionMeters = relayHoldPosition;
-        const auto& relayMission = fleetReconnaissance_.at(
-            fleetRelayRecovery_.relayDroneId);
-        return SendFleetRouteAssignment(fleetRelayRecovery_.relayDroneId,
-            FleetMissionLeg::Relaying, relayMission.targetIndex,
-            std::move(*relayRoute));
-    }
-
-    const bool holdRecoveredRelay = hasRecoveredRelay;
     std::vector<std::vector<glm::dvec3>> returnRoutes;
     returnRoutes.reserve(droneIds.size());
     for (const auto droneId : droneIds)
@@ -683,21 +606,12 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
             currentPosition = report->state.positionMeters;
             mode = report->state.mode;
         }
-        const bool holdingRelayPosition = mission.leg == FleetMissionLeg::Relaying
-            && detail::ParseFleetDroneStatus(mission.status)
-                == detail::FleetDroneStatus::RelayPositionSecured
-            && mode != FlightMode::Grounded && mode != FlightMode::Landing;
         const bool ready = takeOffDrones
-            ? (mode == FlightMode::Grounded || holdingRelayPosition)
+            ? mode == FlightMode::Grounded
             : (mode == FlightMode::Hovering || mode == FlightMode::Flying
                 || mode == FlightMode::FollowingWaypoint);
         if (!ready || mission.leg == FleetMissionLeg::Returning)
             return false;
-        if (holdRecoveredRelay && droneId == fleetRelayRecovery_.relayDroneId)
-        {
-            returnRoutes.emplace_back();
-            continue;
-        }
         glm::dvec3 returnApproach = mission.startPositionMeters;
         returnApproach.z += 5.0;
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
@@ -739,12 +653,6 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
             && detail::ParseFleetDroneStatus(mission.status)
                 == detail::FleetDroneStatus::LowBatteryReturnComplete)
             continue;
-        if (holdRecoveredRelay && droneIds[index] == fleetRelayRecovery_.relayDroneId)
-        {
-            mission.leg = FleetMissionLeg::Relaying;
-            mission.status = "중계 위치 확보";
-            continue;
-        }
         mission.leg = FleetMissionLeg::Returning;
         mission.status = "경로 전달 대기";
         if (!SendFleetRouteAssignment(droneIds[index],
@@ -754,8 +662,6 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
     }
     externalControl_ = true;
     groundControlActive_ = true;
-    if (holdRecoveredRelay)
-        fleetRelayRecovery_.returnRoutesAssigned = true;
     window_->SetTitle("DroneSim | 출발 지점으로 복귀 중");
     return true;
 }
@@ -815,27 +721,14 @@ bool AeroSimLabApp::StartFleetRally()
         else
         {
             const ReceivedPeerTelemetry* report = FreshPeerTelemetry(droneId);
-            const bool relayIsReady = report != nullptr
-                && report->state.missionLeg
-                    == static_cast<std::uint8_t>(FleetMissionLeg::Relaying)
-                && detail::ParseFleetDroneStatus(report->state.missionStatus)
-                    == detail::FleetDroneStatus::RelayPositionSecured
-                && report->state.mode != FlightMode::Grounded
-                && report->state.mode != FlightMode::Landing;
             if (report == nullptr
-                || (!relayIsReady
-                    && detail::ParseFleetDroneStatus(report->state.missionStatus)
-                        != detail::FleetDroneStatus::TargetReached))
+                || detail::ParseFleetDroneStatus(report->state.missionStatus)
+                    != detail::FleetDroneStatus::TargetReached)
                 return false;
             currentPosition = report->state.positionMeters;
             mode = report->state.mode;
         }
-        const auto& mission = fleetReconnaissance_.at(droneId);
-        const bool relayIsReady = mission.leg == FleetMissionLeg::Relaying
-            && detail::ParseFleetDroneStatus(mission.status)
-                == detail::FleetDroneStatus::RelayPositionSecured
-            && mode != FlightMode::Grounded && mode != FlightMode::Landing;
-        if (mode != FlightMode::Grounded && !relayIsReady)
+        if (mode != FlightMode::Grounded)
             return false;
         const glm::dvec3 rallyTarget{
             centerMeters.x + offsets[index].x,
@@ -885,8 +778,6 @@ std::string AeroSimLabApp::FleetReconnaissanceStatus() const
 {
     std::ostringstream status;
     status << fleetLeadershipStatus_ << '\n';
-    if (leaderReplacementPending_ || leaderStateCollectionPending_)
-        return status.str();
 
     for (const auto droneId : fleetDroneIds_)
     {
@@ -923,12 +814,6 @@ std::string AeroSimLabApp::FleetReconnaissanceStatus() const
                     : " · 경로 확인 대기");
         }
         status << '\n';
-    }
-    for (const auto droneId : excludedFleetDroneIds_)
-    {
-        const auto mission = fleetReconnaissance_.find(droneId);
-        if (mission != fleetReconnaissance_.end())
-            status << "드론 " << droneId << " · " << mission->second.status << '\n';
     }
     return status.str();
 }
@@ -1015,11 +900,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                 || droneStatus
                     == detail::FleetDroneStatus::LowBatteryReturnComplete;
             break;
-        case FleetMissionLeg::Relaying:
-            legIsFinished = droneStatus
-                    == detail::FleetDroneStatus::RelayPositionSecured
-                || droneStatus == detail::FleetDroneStatus::RelayFailed;
-            break;
         }
         if (legIsFinished)
             continue;
@@ -1039,18 +919,12 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                 detail::ParseFleetDroneStatus(mission.status);
             if (groundedStatus == detail::FleetDroneStatus::TakeoffReady
                 || groundedStatus == detail::FleetDroneStatus::ReturnPreparing
-                || groundedStatus == detail::FleetDroneStatus::RegroupPreparing
-                || groundedStatus == detail::FleetDroneStatus::RelayPreparing)
+                || groundedStatus == detail::FleetDroneStatus::RegroupPreparing)
                 continue;
 
             if (mission.leg == FleetMissionLeg::Regrouping)
             {
                 mission.status = "집결 실패";
-                continue;
-            }
-            if (mission.leg == FleetMissionLeg::Relaying)
-            {
-                mission.status = "중계 실패 · 안전 착륙";
                 continue;
             }
             const glm::dvec3& destination = mission.leg == FleetMissionLeg::Returning
@@ -1083,8 +957,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                     ? "저전력 복귀 중" : "복귀 중";
             else if (mission.leg == FleetMissionLeg::Regrouping)
                 mission.status = "집결 이동 중";
-            else if (mission.leg == FleetMissionLeg::Relaying)
-                mission.status = "중계 위치로 이동 중";
             else
                 mission.status = "정찰 이동 중";
         }
@@ -1093,13 +965,6 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
             if (mission.leg == FleetMissionLeg::Regrouping)
             {
                 mission.status = "재집결 완료";
-                continue;
-            }
-            if (mission.leg == FleetMissionLeg::Relaying)
-            {
-                mission.status = "중계 위치 확보";
-                fleetLeadershipStatus_ = "중계 위치 확보 · 드론 "
-                    + std::to_string(droneId);
                 continue;
             }
             const Command land{Command::Kind::Land};
@@ -1161,71 +1026,6 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
         completeFleetMission_.stage = Stage::Reconnaissance;
         completeFleetMission_.status = "M02 분산 정찰 중";
         return;
-    }
-
-    if (completeFleetMission_.stage == Stage::Returning
-        && fleetRelayRecovery_.recoveredDroneId != 0U
-        && !fleetRelayRecovery_.returnRoutesAssigned)
-    {
-        const auto relayMission = fleetReconnaissance_.find(
-            fleetRelayRecovery_.relayDroneId);
-        if (relayMission == fleetReconnaissance_.end()
-            || detail::ParseFleetDroneStatus(relayMission->second.status)
-                != detail::FleetDroneStatus::RelayPositionSecured)
-            return;
-        if (!StartFleetReturn(false))
-        {
-            FailCompleteFleetMission("중계 연결을 유지한 복귀 경로를 만들지 못했습니다.");
-            return;
-        }
-        return;
-    }
-
-    if (completeFleetMission_.stage == Stage::Returning
-        && fleetRelayRecovery_.recoveredDroneId != 0U
-        && !fleetRelayRecovery_.relayReturnAssignmentSent)
-    {
-        const auto recoveredTelemetry = peerTelemetryAtLeader_.find(
-            fleetRelayRecovery_.recoveredDroneId);
-        const auto recoveredMission = fleetReconnaissance_.find(
-            fleetRelayRecovery_.recoveredDroneId);
-        const auto relayMission = fleetReconnaissance_.find(
-            fleetRelayRecovery_.relayDroneId);
-        const bool recoveredDroneReturned = recoveredTelemetry
-                != peerTelemetryAtLeader_.end()
-            && recoveredMission != fleetReconnaissance_.end()
-            && recoveredTelemetry->second.state.assignmentVersion
-                == recoveredMission->second.assignmentVersion
-            && recoveredTelemetry->second.state.missionLeg
-                == static_cast<std::uint8_t>(FleetMissionLeg::Returning)
-            && detail::ParseFleetDroneStatus(
-                recoveredTelemetry->second.state.missionStatus)
-                == detail::FleetDroneStatus::ReturnComplete
-            && recoveredTelemetry->second.state.mode
-                == aerosimlab::simulation::FlightMode::Grounded;
-        const bool relayIsHolding = relayMission != fleetReconnaissance_.end()
-            && relayMission->second.leg == FleetMissionLeg::Relaying
-            && detail::ParseFleetDroneStatus(relayMission->second.status)
-                == detail::FleetDroneStatus::RelayPositionSecured;
-        if (recoveredDroneReturned && relayIsHolding)
-        {
-            glm::dvec3 returnApproach = relayMission->second.startPositionMeters;
-            returnApproach.z += 5.0;
-            const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-                terrainGrid_, routeBuildings_,
-                simulation_.State(fleetRelayRecovery_.relayDroneId).positionMeters,
-                returnApproach, 3.0, cameraTransitAltitudeMeters_);
-            if (!route || !SendFleetRouteAssignment(
-                    fleetRelayRecovery_.relayDroneId, FleetMissionLeg::Returning,
-                    relayMission->second.targetIndex,
-                    std::vector<glm::dvec3>(route->begin() + 1, route->end())))
-            {
-                FailCompleteFleetMission(
-                    "원거리 드론의 복귀 보고 뒤 중계 기체 경로를 만들지 못했습니다.");
-                return;
-            }
-            fleetRelayRecovery_.relayReturnAssignmentSent = true;
-        }
     }
 
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
@@ -1523,555 +1323,8 @@ void AeroSimLabApp::InitializeFleetLeadership()
     groundControlPositionMeters_ = simulation_.State().positionMeters;
     groundControlPositionMeters_.z = terrainGrid_.HeightAtLocalMeters(
         {groundControlPositionMeters_.x, groundControlPositionMeters_.y}) + 1.5;
-    excludedFleetDroneIds_.clear();
-    leaderProbeAcknowledgements_.clear();
-    pendingReassignedTargetIndices_.clear();
-    leaderReplacementPending_ = false;
-    leaderStateCollectionPending_ = false;
-    leaderReplacementStartedAtTick_ = simulation_.TickCount();
-    lastLeaderProbeSentAtTick_ = simulation_.TickCount();
-    leaderProbeTransmissionCount_ = 0U;
-    fleetRelayRecovery_ = {};
-    fleetLeadershipEpoch_ = 0U;
-    leaderProbeSequence_ = 0U;
-    leaderProbeTransmissionCount_ = 0U;
-    leaderHeartbeatSequence_ = 0U;
-    lastLeaderHeartbeatSentAtTick_ = simulation_.TickCount();
-    lastLeaderHeartbeatTick_ = simulation_.TickCount();
     fleetLeadershipStatus_ = fleetDroneIds_.empty()
         ? "리더 없음" : "리더 정상 · 드론 " + std::to_string(fleetLeaderId_);
-}
-
-void AeroSimLabApp::BeginFleetLeaderReplacement()
-{
-    if (leaderReplacementPending_ || leaderStateCollectionPending_
-        || !formationNetwork_ || fleetLeaderId_ == 0U)
-        return;
-
-    leaderReplacementPending_ = true;
-    leaderReplacementStartedAtTick_ = simulation_.TickCount();
-    lastLeaderHeartbeatSentAtTick_ = simulation_.TickCount();
-    lastLeaderHeartbeatTick_ = simulation_.TickCount();
-    leaderProbeAcknowledgements_.clear();
-    ++leaderProbeSequence_;
-    leaderProbeTransmissionCount_ = 0U;
-    fleetLeadershipStatus_ = "리더 통신 단절 · 지상통제소가 대체 기체를 확인 중";
-    SendFleetLeaderProbes();
-}
-
-void AeroSimLabApp::SendFleetLeaderProbes()
-{
-    if (!formationNetwork_ || !leaderReplacementPending_)
-        return;
-    for (const auto droneId : fleetDroneIds_)
-    {
-        if (droneId == fleetLeaderId_
-            || !formationNetwork_->IsNodeRadioEnabled(droneId))
-            continue;
-        static_cast<void>(formationNetwork_->Send(groundControlNodeId, droneId,
-            leaderProbeSequence_, "leader_probe", std::to_string(fleetLeadershipEpoch_ + 1U)));
-    }
-    lastLeaderProbeSentAtTick_ = simulation_.TickCount();
-    ++leaderProbeTransmissionCount_;
-}
-
-void AeroSimLabApp::PromoteFleetLeader(
-    aerosimlab::simulation::DroneId newLeaderId)
-{
-    if (newLeaderId == fleetLeaderId_
-        || std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), newLeaderId)
-            == fleetDroneIds_.end())
-        return;
-
-    const auto failedLeaderId = fleetLeaderId_;
-    const auto failedMission = fleetReconnaissance_.find(failedLeaderId);
-    const bool leaderHasReconAssignment = failedMission != fleetReconnaissance_.end()
-        && failedMission->second.leg == FleetMissionLeg::Reconnaissance
-        && detail::IsFleetMissionInProgress(failedMission->second.status)
-        && failedMission->second.assignmentLeaseExpiresAtTick
-            > simulation_.TickCount();
-    if (leaderHasReconAssignment)
-        failedMission->second.communicationLostAtTick = simulation_.TickCount();
-
-    excludedFleetDroneIds_.push_back(failedLeaderId);
-    std::erase(fleetDroneIds_, failedLeaderId);
-    const auto promoted = std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), newLeaderId);
-    std::rotate(fleetDroneIds_.begin(), promoted, promoted + 1);
-    fleetLeaderId_ = newLeaderId;
-    if (formationNetwork_)
-        formationNetwork_->SetLeaderNodeId(newLeaderId);
-    ++fleetLeadershipEpoch_;
-    leaderReplacementPending_ = false;
-    leaderStateCollectionPending_ = true;
-    leaderReplacementStartedAtTick_ = simulation_.TickCount();
-    lastLeaderHeartbeatSentAtTick_ = simulation_.TickCount();
-    lastLeaderHeartbeatTick_ = simulation_.TickCount();
-    leaderHeartbeatSequence_ = 0U;
-    leaderProbeAcknowledgements_.clear();
-
-    if (!leaderHasReconAssignment)
-    {
-        if (failedMission != fleetReconnaissance_.end())
-            failedMission->second.status = "리더 통신 장애 · 기체 안전 착륙";
-        const auto mode = simulation_.State(failedLeaderId).mode;
-        if (mode != aerosimlab::simulation::FlightMode::Grounded
-            && mode != aerosimlab::simulation::FlightMode::Landing)
-            static_cast<void>(simulation_.Apply(failedLeaderId,
-                {aerosimlab::simulation::DroneCommand::Kind::Land}));
-    }
-
-    peerTelemetryAtLeader_.clear();
-    lastTelemetrySentAtTick_.clear();
-    formationTransit_.sentFollowerTargets.clear();
-    formationTransit_.lastTargetSentAtTick.clear();
-    formationTransit_.lastAppliedSequence.clear();
-    formationTransit_.lastNetworkNodeUpdateTick.reset();
-    fleetLeadershipStatus_ = "새 리더 지정 · 드론 " + std::to_string(fleetLeaderId_)
-        + "의 상태 보고를 다시 모으는 중";
-}
-
-void AeroSimLabApp::FinishFleetLeaderReplacementIfReady()
-{
-    if (!leaderStateCollectionPending_)
-        return;
-
-    constexpr std::uint64_t stateCollectionTimeoutTicks = 180U;
-    for (const auto droneId : fleetDroneIds_)
-    {
-        if (droneId != fleetLeaderId_ && FreshPeerTelemetry(droneId) == nullptr)
-        {
-            if (simulation_.TickCount() >= leaderReplacementStartedAtTick_
-                    + stateCollectionTimeoutTicks)
-                FailFleetLeaderReplacement();
-            return;
-        }
-    }
-
-    if (formationTransit_.active)
-    {
-        if (fleetDroneIds_.size() < 2U
-            || formationTransit_.route.leaderWaypointsMeters.empty())
-        {
-            FailFleetLeaderReplacement();
-            return;
-        }
-        const auto route = aerosimlab::simulation::PlanFormationRoute(
-            terrainGrid_, routeBuildings_,
-            simulation_.State(fleetLeaderId_).positionMeters,
-            formationTransit_.route.leaderWaypointsMeters.back(),
-            fleetDroneIds_.size(), formationTransit_.route.requestedShape,
-            formationTransit_.route.requestedSpacingMeters, 1.5, 2.0,
-            cameraTransitAltitudeMeters_);
-        if (!route)
-        {
-            FailFleetLeaderReplacement();
-            return;
-        }
-        formationTransit_.route = *route;
-        formationTransit_.waypointIndex = 0U;
-    }
-
-    leaderStateCollectionPending_ = false;
-    fleetLeadershipStatus_ = "리더 교체 완료 · 드론 "
-        + std::to_string(fleetLeaderId_) + "이 최신 상태를 모았습니다";
-}
-
-void AeroSimLabApp::FailFleetLeaderReplacement()
-{
-    leaderReplacementPending_ = false;
-    leaderStateCollectionPending_ = false;
-    formationTransit_.active = false;
-    formationTransit_.status = "리더 교체 실패 · 안전 착륙";
-    fleetLeadershipStatus_ = "통신 가능한 새 리더를 찾지 못해 안전 착륙합니다";
-
-    if (CompleteFleetMissionIsActive())
-    {
-        FailCompleteFleetMission("리더 장애 뒤 통신 가능한 대체 기체를 찾지 못했습니다.");
-        return;
-    }
-    for (const auto droneId : simulation_.DroneIds())
-    {
-        const auto mode = simulation_.State(droneId).mode;
-        if (mode != aerosimlab::simulation::FlightMode::Grounded
-            && mode != aerosimlab::simulation::FlightMode::Landing)
-            static_cast<void>(simulation_.Apply(droneId,
-                {aerosimlab::simulation::DroneCommand::Kind::Land}));
-    }
-}
-
-void AeroSimLabApp::ReassignLostLeaderTarget()
-{
-    const std::uint64_t currentTick = simulation_.TickCount();
-    std::vector<aerosimlab::simulation::DroneId> assignmentOwners = fleetDroneIds_;
-    assignmentOwners.insert(assignmentOwners.end(), excludedFleetDroneIds_.begin(),
-        excludedFleetDroneIds_.end());
-    for (const auto droneId : assignmentOwners)
-    {
-        if (fleetRelayRecovery_.waitingForTelemetry
-            && droneId == fleetRelayRecovery_.disconnectedDroneId)
-            continue;
-        const bool excluded = std::find(excludedFleetDroneIds_.begin(),
-            excludedFleetDroneIds_.end(), droneId) != excludedFleetDroneIds_.end();
-        if (droneId == fleetLeaderId_ && !excluded)
-            continue;
-        auto mission = fleetReconnaissance_.find(droneId);
-        const auto telemetry = peerTelemetryAtLeader_.find(droneId);
-        if (mission == fleetReconnaissance_.end()
-            || mission->second.leg != FleetMissionLeg::Reconnaissance
-            || mission->second.assignmentLeaseExpiresAtTick == 0U
-            || mission->second.pendingRouteSequence != 0U)
-            continue;
-
-        const ReceivedPeerTelemetry* report = telemetry == peerTelemetryAtLeader_.end()
-            ? nullptr : &telemetry->second;
-        const bool reportMatchesAssignment = report != nullptr
-            && report->state.assignmentVersion == mission->second.assignmentVersion;
-        const std::uint64_t reportedLeaseExpiry = !reportMatchesAssignment
-            ? 0U : report->state.assignmentLeaseExpiresAtTick;
-        const bool faultReleasedLease = mission->second.status
-                == "기체 고장 · 안전 착륙"
-            || detail::ParseFleetDroneStatus(mission->second.status)
-                == detail::FleetDroneStatus::LeaderCommunicationFailureLanding
-            || detail::ParseFleetDroneStatus(mission->second.status)
-                == detail::FleetDroneStatus::BatteryReturnRouteFailed;
-        const std::uint64_t safeTransferTick = std::max(
-            mission->second.assignmentLeaseExpiresAtTick, reportedLeaseExpiry);
-        if (!faultReleasedLease && currentTick < safeTransferTick)
-            continue;
-
-        const bool agentReleasedLease = faultReleasedLease || mission->second.status
-                == "임무 권한 만료 · 안전 착륙"
-            || (reportMatchesAssignment
-                && detail::ParseFleetDroneStatus(report->state.missionStatus)
-                    == detail::FleetDroneStatus::AssignmentExpiredLanding);
-        const bool telemetryIsUnknown = reportMatchesAssignment
-            && currentTick > report->receivedAtTick + peerTelemetryUnknownAfterTicks
-            && detail::IsFleetMissionInProgress(report->state.missionStatus);
-        const bool excludedOwnerIsUnknown = excluded
-            && mission->second.communicationLostAtTick != 0U
-            && currentTick > mission->second.communicationLostAtTick
-                + peerTelemetryUnknownAfterTicks
-            && detail::IsFleetMissionInProgress(mission->second.status);
-        const bool agentIsUnknown = telemetryIsUnknown || excludedOwnerIsUnknown;
-        if (!agentReleasedLease && !agentIsUnknown)
-            continue;
-
-        if (std::find(pendingReassignedTargetIndices_.begin(),
-                pendingReassignedTargetIndices_.end(), mission->second.targetIndex)
-            == pendingReassignedTargetIndices_.end())
-            pendingReassignedTargetIndices_.push_back(mission->second.targetIndex);
-        // 한 번 넘긴 임무 권한은 다시 만료된 것으로 보지 않아야 같은 목표가 반복 배정되지 않습니다.
-        mission->second.assignmentLeaseExpiresAtTick = 0U;
-        if (!faultReleasedLease)
-            mission->second.status = "임무 권한 만료 · 재배정 대기";
-        fleetLeadershipStatus_ = "정찰 임무 권한이 끝나 재배정 중";
-    }
-
-    if (pendingReassignedTargetIndices_.empty())
-        return;
-
-    const std::size_t targetIndex = pendingReassignedTargetIndices_.front();
-    const auto& target = inspectionTargets_.at(targetIndex);
-    aerosimlab::simulation::DroneId selectedDroneId = 0U;
-    glm::dvec3 selectedPosition{0.0};
-    double nearestDistance = std::numeric_limits<double>::infinity();
-    for (const auto droneId : fleetDroneIds_)
-    {
-        const auto mission = fleetReconnaissance_.find(droneId);
-        if (mission == fleetReconnaissance_.end()
-            || mission->second.leg != FleetMissionLeg::Reconnaissance
-            || mission->second.pendingRouteSequence != 0U)
-            continue;
-
-        glm::dvec3 position{0.0};
-        if (droneId == fleetLeaderId_)
-        {
-            if (detail::ParseFleetDroneStatus(mission->second.status)
-                != detail::FleetDroneStatus::TargetReached)
-                continue;
-            position = simulation_.State(droneId).positionMeters;
-        }
-        else
-        {
-            const auto* report = FreshPeerTelemetry(droneId);
-            if (report == nullptr
-                || detail::ParseFleetDroneStatus(report->state.missionStatus)
-                    != detail::FleetDroneStatus::TargetReached
-                || report->state.mode != aerosimlab::simulation::FlightMode::Grounded)
-                continue;
-            position = report->state.positionMeters;
-        }
-
-        const double distance = glm::distance(position,
-            target.approachPositionMeters);
-        if (distance < nearestDistance)
-        {
-            selectedDroneId = droneId;
-            selectedPosition = position;
-            nearestDistance = distance;
-        }
-    }
-    if (selectedDroneId == 0U)
-    {
-        const bool allRemainingDronesFinished = !fleetDroneIds_.empty()
-            && std::all_of(fleetDroneIds_.begin(), fleetDroneIds_.end(),
-                [this](aerosimlab::simulation::DroneId droneId)
-                {
-                    const auto mission = fleetReconnaissance_.find(droneId);
-                    if (mission == fleetReconnaissance_.end())
-                        return false;
-
-                    const auto isFinished = [](const std::string& status)
-                    {
-                        const auto droneStatus =
-                            detail::ParseFleetDroneStatus(status);
-                        return droneStatus == detail::FleetDroneStatus::TargetReached
-                            || droneStatus == detail::FleetDroneStatus::RouteFailed
-                            || droneStatus == detail::FleetDroneStatus::OutsideTargetLanding
-                            || droneStatus == detail::FleetDroneStatus::DroneFailureLanding
-                            || droneStatus == detail::FleetDroneStatus::BatteryReturnRouteFailed
-                            || droneStatus == detail::FleetDroneStatus::LowBatteryReturnComplete
-                            || droneStatus == detail::FleetDroneStatus::LeaderCommunicationFailureLanding
-                            || droneStatus == detail::FleetDroneStatus::AssignmentExpiredLanding
-                            || droneStatus == detail::FleetDroneStatus::AssignmentExpiredWaiting;
-                    };
-                    if (droneId == fleetLeaderId_)
-                        return isFinished(mission->second.status);
-
-                    const auto telemetry = peerTelemetryAtLeader_.find(droneId);
-                    if (telemetry != peerTelemetryAtLeader_.end()
-                        && simulation_.TickCount() <= telemetry->second.receivedAtTick
-                            + peerTelemetryUnknownAfterTicks)
-                        return isFinished(telemetry->second.state.missionStatus);
-
-                    return mission->second.assignmentLeaseExpiresAtTick != 0U
-                        && simulation_.TickCount()
-                            >= mission->second.assignmentLeaseExpiresAtTick
-                        && isFinished(mission->second.status);
-                });
-        if (!allRemainingDronesFinished)
-            return;
-
-        pendingReassignedTargetIndices_.clear();
-        fleetLeadershipStatus_ = "미완료 정찰 지점을 다시 배정하지 못해 임무를 멈춥니다";
-        if (CompleteFleetMissionIsActive())
-            FailCompleteFleetMission("미완료 정찰 지점을 다시 배정하지 못했습니다.");
-        else
-        {
-            for (const auto droneId : fleetDroneIds_)
-            {
-                const auto mode = simulation_.State(droneId).mode;
-                if (mode != aerosimlab::simulation::FlightMode::Grounded
-                    && mode != aerosimlab::simulation::FlightMode::Landing)
-                    static_cast<void>(simulation_.Apply(droneId,
-                        {aerosimlab::simulation::DroneCommand::Kind::Land}));
-            }
-        }
-        return;
-    }
-
-    const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-        terrainGrid_, routeBuildings_, selectedPosition,
-        target.approachPositionMeters, 3.0, cameraTransitAltitudeMeters_);
-    if (!route)
-    {
-        pendingReassignedTargetIndices_.clear();
-        fleetLeadershipStatus_ = "미완료 정찰 지점까지 새 경로를 만들지 못했습니다";
-        if (CompleteFleetMissionIsActive())
-            FailCompleteFleetMission("미완료 정찰 지점의 새 경로를 만들지 못했습니다.");
-        else
-        {
-            for (const auto droneId : fleetDroneIds_)
-            {
-                const auto mode = simulation_.State(droneId).mode;
-                if (mode != aerosimlab::simulation::FlightMode::Grounded
-                    && mode != aerosimlab::simulation::FlightMode::Landing)
-                    static_cast<void>(simulation_.Apply(droneId,
-                        {aerosimlab::simulation::DroneCommand::Kind::Land}));
-            }
-        }
-        return;
-    }
-
-    auto& mission = fleetReconnaissance_.at(selectedDroneId);
-    if (SendFleetRouteAssignment(selectedDroneId,
-            FleetMissionLeg::Reconnaissance, targetIndex,
-            std::vector<glm::dvec3>(route->begin() + 1, route->end())))
-        pendingReassignedTargetIndices_.erase(pendingReassignedTargetIndices_.begin());
-    else
-        mission.status = "리더 임무 재배정 대기";
-}
-
-bool AeroSimLabApp::TryStartFleetRelayRecovery()
-{
-    using DroneId = aerosimlab::simulation::DroneId;
-    using FlightMode = aerosimlab::simulation::FlightMode;
-
-    if (!formationNetwork_ || fleetNetworkMode_
-            != communication::VirtualMeshMode::AdaptiveMesh
-        || fleetRelayRecovery_.relayDroneId != 0U || fleetLeaderId_ == 0U
-        || leaderReplacementPending_ || leaderStateCollectionPending_)
-        return false;
-
-    const glm::dvec3 leaderPosition = simulation_.State(fleetLeaderId_).positionMeters;
-    constexpr std::array<double, 5U> relayAltitudeOffsetsMeters{
-        0.0, 10.0, 25.0, 45.0, 70.0};
-
-    for (const DroneId disconnectedDroneId : fleetDroneIds_)
-    {
-        if (disconnectedDroneId == fleetLeaderId_)
-            continue;
-        const auto disconnectedReport = peerTelemetryAtLeader_.find(disconnectedDroneId);
-        const auto disconnectedMission = fleetReconnaissance_.find(disconnectedDroneId);
-        if (disconnectedReport == peerTelemetryAtLeader_.end()
-            || disconnectedMission == fleetReconnaissance_.end()
-            || disconnectedMission->second.leg != FleetMissionLeg::Reconnaissance
-            || !detail::IsFleetMissionInProgress(disconnectedReport->second.state.missionStatus)
-            || simulation_.TickCount() <= disconnectedReport->second.receivedAtTick
-                + peerTelemetryUnknownAfterTicks
-            || !formationNetwork_->IsNodeRadioEnabled(disconnectedDroneId))
-            continue;
-
-        struct RelayCandidate
-        {
-            DroneId droneId = 0U;
-            glm::dvec3 holdPositionMeters{0.0};
-            std::vector<glm::dvec3> waypointsMeters;
-            double routeLengthMeters = std::numeric_limits<double>::infinity();
-        };
-        std::optional<RelayCandidate> bestCandidate;
-
-        for (const DroneId candidateDroneId : fleetDroneIds_)
-        {
-            if (candidateDroneId == fleetLeaderId_
-                || candidateDroneId == disconnectedDroneId)
-                continue;
-            const auto candidateMission = fleetReconnaissance_.find(candidateDroneId);
-            const ReceivedPeerTelemetry* candidateReport = FreshPeerTelemetry(candidateDroneId);
-            if (candidateMission == fleetReconnaissance_.end()
-                || candidateMission->second.leg != FleetMissionLeg::Reconnaissance
-                || detail::ParseFleetDroneStatus(candidateMission->second.status)
-                    != detail::FleetDroneStatus::TargetReached
-                || candidateMission->second.pendingRouteSequence != 0U
-                || candidateReport == nullptr
-                || candidateReport->state.missionLeg
-                    != static_cast<std::uint8_t>(FleetMissionLeg::Reconnaissance)
-                || detail::ParseFleetDroneStatus(candidateReport->state.missionStatus)
-                    != detail::FleetDroneStatus::TargetReached
-                || candidateReport->state.mode != FlightMode::Grounded
-                || !formationNetwork_->IsNodeRadioEnabled(candidateDroneId))
-                continue;
-
-            const glm::dvec3& disconnectedPosition =
-                disconnectedReport->second.state.positionMeters;
-            const glm::dvec3& candidatePosition = candidateReport->state.positionMeters;
-            for (unsigned int segment = 1U; segment < 10U; ++segment)
-            {
-                const double fraction = static_cast<double>(segment) / 10.0;
-                const glm::dvec2 horizontal = glm::mix(
-                    glm::dvec2{leaderPosition.x, leaderPosition.y},
-                    glm::dvec2{disconnectedPosition.x, disconnectedPosition.y}, fraction);
-                const double baseAltitude = std::max(leaderPosition.z,
-                    disconnectedPosition.z);
-                for (const double altitudeOffset : relayAltitudeOffsetsMeters)
-                {
-                    const glm::dvec3 holdPosition{
-                        horizontal.x, horizontal.y, baseAltitude + altitudeOffset};
-                    if (!formationNetwork_->CanExchangeAtPositions(
-                            fleetLeaderId_, candidateDroneId,
-                            leaderPosition, holdPosition)
-                        || !formationNetwork_->CanExchangeAtPositions(
-                            candidateDroneId, disconnectedDroneId,
-                            holdPosition, disconnectedPosition))
-                        continue;
-
-                    const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-                        terrainGrid_, routeBuildings_, candidatePosition,
-                        holdPosition, 3.0, cameraTransitAltitudeMeters_);
-                    if (!route || route->size() < 2U)
-                        continue;
-                    double routeLengthMeters = 0.0;
-                    for (std::size_t index = 1U; index < route->size(); ++index)
-                        routeLengthMeters += glm::distance((*route)[index - 1U], (*route)[index]);
-                    if (bestCandidate
-                        && routeLengthMeters >= bestCandidate->routeLengthMeters)
-                        continue;
-
-                    bestCandidate = RelayCandidate{
-                        candidateDroneId, holdPosition,
-                        std::vector<glm::dvec3>(route->begin() + 1U, route->end()),
-                        routeLengthMeters};
-                }
-            }
-        }
-
-        if (!bestCandidate)
-            continue;
-        const auto mission = fleetReconnaissance_.find(bestCandidate->droneId);
-        if (mission == fleetReconnaissance_.end()
-            || !SendFleetRouteAssignment(bestCandidate->droneId,
-                FleetMissionLeg::Relaying, mission->second.targetIndex,
-                std::move(bestCandidate->waypointsMeters)))
-            continue;
-
-        fleetRelayRecovery_.relayDroneId = bestCandidate->droneId;
-        fleetRelayRecovery_.disconnectedDroneId = disconnectedDroneId;
-        fleetRelayRecovery_.holdPositionMeters = bestCandidate->holdPositionMeters;
-        fleetRelayRecovery_.startedAtTick = simulation_.TickCount();
-        const double estimatedTravelTicks = std::ceil(
-            bestCandidate->routeLengthMeters
-            / missionLeasePlanningSpeedMetersPerSecond * 60.0);
-        fleetRelayRecovery_.movementTimeoutAtTick =
-            fleetRelayRecovery_.startedAtTick
-            + static_cast<std::uint64_t>(estimatedTravelTicks)
-            + missionLeaseGraceTicks;
-        fleetRelayRecovery_.waitingForTelemetry = true;
-        fleetLeadershipStatus_ = "통신 단절 감지 · 드론 "
-            + std::to_string(bestCandidate->droneId) + "이 중계 위치로 이동 중";
-        return true;
-    }
-    return false;
-}
-
-void AeroSimLabApp::AdvanceFleetRelayRecovery()
-{
-    using FlightMode = aerosimlab::simulation::FlightMode;
-    using DroneCommand = aerosimlab::simulation::DroneCommand;
-
-    if (fleetRelayRecovery_.relayDroneId == 0U)
-    {
-        static_cast<void>(TryStartFleetRelayRecovery());
-        return;
-    }
-    if (!fleetRelayRecovery_.waitingForTelemetry)
-        return;
-
-    const ReceivedPeerTelemetry* report =
-        FreshPeerTelemetry(fleetRelayRecovery_.disconnectedDroneId);
-    if (report != nullptr
-        && report->receivedAtTick > fleetRelayRecovery_.startedAtTick)
-    {
-        fleetRelayRecovery_.recoveredDroneId = fleetRelayRecovery_.disconnectedDroneId;
-        fleetRelayRecovery_.waitingForTelemetry = false;
-        fleetRelayRecovery_.disconnectedDroneId = 0U;
-        fleetLeadershipStatus_ = "중계 경로 복구 · 드론 "
-            + std::to_string(fleetRelayRecovery_.relayDroneId) + " 위치 유지";
-        return;
-    }
-
-    if (simulation_.TickCount() < fleetRelayRecovery_.movementTimeoutAtTick)
-        return;
-
-    auto relayMission = fleetReconnaissance_.find(fleetRelayRecovery_.relayDroneId);
-    if (relayMission != fleetReconnaissance_.end())
-        relayMission->second.status = "중계 실패 · 안전 착륙";
-    const FlightMode mode = simulation_.State(fleetRelayRecovery_.relayDroneId).mode;
-    if (mode != FlightMode::Grounded && mode != FlightMode::Landing)
-        static_cast<void>(simulation_.Apply(fleetRelayRecovery_.relayDroneId,
-            {DroneCommand::Kind::Land}));
-    fleetRelayRecovery_.waitingForTelemetry = false;
-    fleetRelayRecovery_.disconnectedDroneId = 0U;
-    fleetLeadershipStatus_ = "중계 위치에서 연결을 복구하지 못해 정찰 임무를 다시 배정합니다";
 }
 
 bool AeroSimLabApp::SendFleetRouteAssignment(
@@ -2163,7 +1416,7 @@ void AeroSimLabApp::ApplyFleetRouteAssignment(
     mission->second.waypointCommanded = false;
 
     auto mode = simulation_.State(droneId).mode;
-    if ((leg == FleetMissionLeg::Reconnaissance || leg == FleetMissionLeg::Relaying)
+    if (leg == FleetMissionLeg::Reconnaissance
         && mode == aerosimlab::simulation::FlightMode::Grounded)
     {
         if (simulation_.Apply(droneId,
@@ -2188,9 +1441,6 @@ void AeroSimLabApp::ApplyFleetRouteAssignment(
     case FleetMissionLeg::Returning:
         mission->second.status = waitingForTakeoff ? "복귀 준비" : "복귀 중";
         break;
-    case FleetMissionLeg::Relaying:
-        mission->second.status = waitingForTakeoff ? "중계 준비" : "중계 위치로 이동 중";
-        break;
     }
 }
 
@@ -2199,19 +1449,8 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     using aerosimlab::simulation::DroneCommand;
     using aerosimlab::simulation::DroneId;
 
-    const bool relayIsHoldingPosition = std::any_of(
-        fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
-        [](const auto& entry)
-        {
-            return entry.second.leg == FleetMissionLeg::Relaying
-                && detail::ParseFleetDroneStatus(entry.second.status)
-                    == detail::FleetDroneStatus::RelayPositionSecured;
-        });
     if (!formationNetwork_ || (!formationTransit_.active
-        && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
-        && !leaderReplacementPending_ && !leaderStateCollectionPending_
-        && pendingReassignedTargetIndices_.empty()
-        && !fleetRelayRecovery_.waitingForTelemetry && !relayIsHoldingPosition))
+        && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()))
         return;
 
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
@@ -2459,8 +1698,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
 void AeroSimLabApp::AdvanceFormationTransit()
 {
     using namespace aerosimlab::simulation;
-    if (!formationTransit_.active || leaderReplacementPending_
-        || leaderStateCollectionPending_)
+    if (!formationTransit_.active)
         return;
 
     const std::vector<DroneId>& droneIds = fleetDroneIds_;

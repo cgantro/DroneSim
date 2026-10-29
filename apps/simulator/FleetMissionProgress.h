@@ -14,8 +14,7 @@ enum class FleetMissionLeg : std::uint8_t
 {
     Reconnaissance,
     Regrouping,
-    Returning,
-    Relaying
+    Returning
 };
 
 namespace detail
@@ -27,8 +26,6 @@ enum class FleetDroneStatus : std::uint8_t
     RoutePending,
     TakeoffReady,
     Reconnaissance,
-    RelayPreparing,
-    MovingToRelay,
     RegroupPreparing,
     Regrouping,
     ReturnPreparing,
@@ -38,7 +35,6 @@ enum class FleetDroneStatus : std::uint8_t
     Landing,
     ReturnLanding,
     TargetReached,
-    RelayPositionSecured,
     RegroupComplete,
     ReturnComplete,
     LowBatteryReturnComplete,
@@ -51,8 +47,7 @@ enum class FleetDroneStatus : std::uint8_t
     AssignmentExpiredWaiting,
     LeaderReassignmentWaiting,
     RegroupFailed,
-    ReturnFailed,
-    RelayFailed
+    ReturnFailed
 };
 
 /** @brief 통신으로 받은 표시 문구를 내부 판정 상태로 바꾼다. */

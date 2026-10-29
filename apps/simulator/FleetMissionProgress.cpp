@@ -8,8 +8,6 @@ FleetDroneStatus ParseFleetDroneStatus(std::string_view status) noexcept
     if (status == "출발 준비") return FleetDroneStatus::TakeoffReady;
     if (status == "정찰 이동 중" || status == "이동 중")
         return FleetDroneStatus::Reconnaissance;
-    if (status == "중계 준비") return FleetDroneStatus::RelayPreparing;
-    if (status == "중계 위치로 이동 중") return FleetDroneStatus::MovingToRelay;
     if (status == "집결 이동 중") return FleetDroneStatus::Regrouping;
     if (status == "재집결 준비") return FleetDroneStatus::RegroupPreparing;
     if (status == "복귀 준비") return FleetDroneStatus::ReturnPreparing;
@@ -19,7 +17,6 @@ FleetDroneStatus ParseFleetDroneStatus(std::string_view status) noexcept
     if (status == "착륙 중") return FleetDroneStatus::Landing;
     if (status == "복귀 착륙 중") return FleetDroneStatus::ReturnLanding;
     if (status == "정찰 위치 도착") return FleetDroneStatus::TargetReached;
-    if (status == "중계 위치 확보") return FleetDroneStatus::RelayPositionSecured;
     if (status == "재집결 완료") return FleetDroneStatus::RegroupComplete;
     if (status == "복귀 완료") return FleetDroneStatus::ReturnComplete;
     if (status == "저전력 복귀 완료") return FleetDroneStatus::LowBatteryReturnComplete;
@@ -39,7 +36,6 @@ FleetDroneStatus ParseFleetDroneStatus(std::string_view status) noexcept
         return FleetDroneStatus::LeaderReassignmentWaiting;
     if (status == "집결 실패") return FleetDroneStatus::RegroupFailed;
     if (status == "복귀 실패") return FleetDroneStatus::ReturnFailed;
-    if (status == "중계 실패 · 안전 착륙") return FleetDroneStatus::RelayFailed;
     return FleetDroneStatus::Other;
 }
 
@@ -50,8 +46,6 @@ bool IsFleetMissionInProgress(std::string_view status) noexcept
     case FleetDroneStatus::RoutePending:
     case FleetDroneStatus::TakeoffReady:
     case FleetDroneStatus::Reconnaissance:
-    case FleetDroneStatus::RelayPreparing:
-    case FleetDroneStatus::MovingToRelay:
     case FleetDroneStatus::RegroupPreparing:
     case FleetDroneStatus::Regrouping:
     case FleetDroneStatus::ReturnPreparing:
@@ -86,19 +80,6 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
                 || leg == FleetMissionLeg::Returning))
             continue;
 
-        if (leg == FleetMissionLeg::Reconnaissance
-            && report->leg == FleetMissionLeg::Relaying)
-        {
-            if (report->status == FleetDroneStatus::RelayFailed)
-                return {FleetMissionProgress::Failed,
-                    "통신 중계 위치를 확보하지 못했습니다."};
-            if (report->status != FleetDroneStatus::RelayPositionSecured
-                || report->mode == simulation::FlightMode::Grounded
-                || report->mode == simulation::FlightMode::Landing)
-                return {FleetMissionProgress::Waiting, {}};
-            continue;
-        }
-
         if (report->leg != leg)
             return {FleetMissionProgress::Waiting, {}};
 
@@ -128,8 +109,6 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
                 || report->status != FleetDroneStatus::ReturnComplete)
                 return {FleetMissionProgress::Waiting, {}};
             break;
-        case FleetMissionLeg::Relaying:
-            return {FleetMissionProgress::Waiting, {}};
         }
     }
 
