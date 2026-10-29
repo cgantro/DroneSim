@@ -63,6 +63,33 @@ function(aerosimlab_add_airsim_dependency)
   target_link_libraries(aerosimlab_airsim INTERFACE Eigen3::Eigen)
 endfunction()
 
+function(aerosimlab_add_jolt_dependency)
+  set(USE_ASSERTS OFF CACHE BOOL "Disable Jolt assertions in project builds" FORCE)
+  set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "Keep the project's compiler flags" FORCE)
+  set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "Keep Jolt separate from project LTO" FORCE)
+  set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "Use the project's warning policy" FORCE)
+  set(ENABLE_INSTALL OFF CACHE BOOL "Do not install a project-private dependency" FORCE)
+  set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "Use the project's floating-point policy" FORCE)
+  set(JPH_BUILD_SHARED_LIBS OFF CACHE BOOL "Build Jolt as a static library" FORCE)
+  set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "Use the project's dynamic MSVC runtime" FORCE)
+  set(ENABLE_OBJECT_STREAM OFF CACHE BOOL "Disable unused Jolt object serialization" FORCE)
+  set(JPH_USE_CPU_COMPUTE OFF CACHE BOOL "Disable unused Jolt compute shaders" FORCE)
+  set(JPH_USE_DX12 OFF CACHE BOOL "Disable unused Jolt DirectX compute" FORCE)
+  set(JPH_USE_VK OFF CACHE BOOL "Disable unused Jolt Vulkan compute" FORCE)
+  set(JPH_USE_MTL OFF CACHE BOOL "Disable unused Jolt Metal compute" FORCE)
+  set(DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "Disable unused Jolt debug renderer" FORCE)
+  set(PROFILER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "Disable unused Jolt profiler" FORCE)
+
+  FetchContent_Declare(
+    JoltPhysics
+    GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG e77f175595e64cb44218cc9d9d56fc365ad0e36a
+    GIT_SHALLOW TRUE
+    SOURCE_SUBDIR Build
+  )
+  FetchContent_MakeAvailable(JoltPhysics)
+endfunction()
+
 function(aerosimlab_add_scenario_dependencies)
   set(JSON_BuildTests OFF CACHE INTERNAL "Disable dependency tests")
   set(JSON_Install OFF CACHE INTERNAL "Do not install a project-private dependency")

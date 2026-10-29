@@ -39,6 +39,9 @@ aerosimlab_add_common_dependencies()
 aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
 aerosimlab_add_airsim_dependency()
+if(NOT EMSCRIPTEN)
+  aerosimlab_add_jolt_dependency()
+endif()
 
 add_library(aerosimlab_terrain STATIC
   modules/terrain/src/TerrainGrid.cpp
@@ -67,12 +70,20 @@ add_library(aerosimlab_simulation_core STATIC
 target_sources(aerosimlab_simulation_core PRIVATE
   modules/simulation_core/src/PhysicsWorld.cpp
 )
+if(NOT EMSCRIPTEN)
+  target_sources(aerosimlab_simulation_core PRIVATE
+    modules/simulation_core/src/JoltPhysicsWorld.cpp
+  )
+endif()
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm aerosimlab_terrain
   PRIVATE flecs::flecs_static
 )
 target_link_libraries(aerosimlab_simulation_core PRIVATE aerosimlab_airsim)
+if(NOT EMSCRIPTEN)
+  target_link_libraries(aerosimlab_simulation_core PRIVATE Jolt::Jolt)
+endif()
 
 add_library(aerosimlab_scenario STATIC
   modules/scenario/src/ScenarioRunner.cpp
@@ -460,7 +471,10 @@ if(BUILD_TESTING)
     AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   )
   if(NOT EMSCRIPTEN)
-    target_sources(aerosimlab_simulation_tests PRIVATE tests/simulation_core/PhysicsWorldTests.cpp)
+    target_sources(aerosimlab_simulation_tests PRIVATE
+      tests/simulation_core/PhysicsWorldTests.cpp
+      tests/simulation_core/JoltPhysicsWorldTests.cpp
+    )
   endif()
   target_link_libraries(aerosimlab_simulation_tests PRIVATE
     aerosimlab_simulation_core
