@@ -1018,12 +1018,6 @@ void SimulationCore::AddStaticObstaclePrism(
         || !std::isfinite(topMeters) || !(topMeters > bottomMeters))
         throw std::invalid_argument("건물 외곽선과 높이 범위를 확인해 주세요.");
 
-    for (const glm::dvec2& point : outlineMeters)
-    {
-        if (!std::isfinite(point.x) || !std::isfinite(point.y))
-            throw std::invalid_argument("건물 외곽선 좌표를 확인해 주세요.");
-    }
-
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {

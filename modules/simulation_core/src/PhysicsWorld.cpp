@@ -978,8 +978,6 @@ void PhysicsWorld::AddStaticObstaclePrism(
     glm::dvec2 maximum = minimum;
     for (const glm::dvec2& point : outlineMeters)
     {
-        if (!std::isfinite(point.x) || !std::isfinite(point.y))
-            throw std::invalid_argument("건물 외곽선 좌표를 확인해 주세요.");
         minimum = glm::min(minimum, point);
         maximum = glm::max(maximum, point);
     }

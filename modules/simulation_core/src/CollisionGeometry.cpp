@@ -107,10 +107,6 @@ std::optional<FootprintProjection> ProjectToFootprint(
     std::span<const glm::dvec2> outlineMeters,
     const glm::dvec2& centerMeters)
 {
-    if (!IsValidFootprint(outlineMeters)
-        || !std::isfinite(centerMeters.x) || !std::isfinite(centerMeters.y))
-        return std::nullopt;
-
     bool inside = false;
     double twiceArea = 0.0;
     double nearestDistanceSquared = std::numeric_limits<double>::infinity();
@@ -174,7 +170,9 @@ std::optional<FootprintContact> FindFootprintContact(
     const glm::dvec2& centerMeters,
     double horizontalRadiusMeters)
 {
-    if (!std::isfinite(horizontalRadiusMeters) || !(horizontalRadiusMeters > 0.0))
+    if (!IsValidFootprint(outlineMeters)
+        || !std::isfinite(centerMeters.x) || !std::isfinite(centerMeters.y)
+        || !std::isfinite(horizontalRadiusMeters) || !(horizontalRadiusMeters > 0.0))
         return std::nullopt;
 
     const auto projection = ProjectToFootprint(outlineMeters, centerMeters);
