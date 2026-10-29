@@ -95,6 +95,24 @@ public:
         EXPECT_GT(distance, 5.0F);
     }
 
+    static void VerifyObserverCameraCanFollowEachDrone()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+        const auto droneIds = app.simulation_.DroneIds();
+        ASSERT_EQ(droneIds.size(), 4U);
+
+        app.UpdateObserverCamera(1280, 720);
+        const glm::vec3 primaryTarget = app.observerCamera_->GetTarget();
+
+        app.observerDroneId_ = droneIds[2U];
+        app.UpdateObserverCamera(1280, 720);
+        const glm::vec3 selectedTarget = app.observerCamera_->GetTarget();
+        EXPECT_NE(primaryTarget, selectedTarget);
+        EXPECT_GT(glm::distance(
+            app.observerCamera_->GetPosition(), app.observerCamera_->GetTarget()), 5.0F);
+    }
+
     static void VerifyGroundControlShowsOnlyDeliveredPeerPositions()
     {
         AeroSimLabApp app({
@@ -739,6 +757,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::AeroSimLabAppTestAccess::VerifyGroundControlReceivesEachDroneDirectly());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyObserverCameraKeepsAUsableFollowDistance());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyObserverCameraCanFollowEachDrone());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
     EXPECT_NO_FATAL_FAILURE(

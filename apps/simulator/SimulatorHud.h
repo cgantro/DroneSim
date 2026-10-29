@@ -58,6 +58,7 @@ public:
     SimulatorHud& operator=(const SimulatorHud&) = delete;
 
     void Render(const simulation::SimulationCore& simulation,
+        simulation::DroneId& observerDroneId,
         bool gamepadConnected, bool groundControlConnected,
         bool fleetReturnCanStart,
         const std::function<void()>& startFleetReturn,

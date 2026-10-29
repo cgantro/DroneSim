@@ -604,7 +604,7 @@ void AeroSimLabApp::RenderFrame()
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
-        hud_->Render(simulation_, gamepadConnected_, groundControlConnected,
+        hud_->Render(simulation_, observerDroneId_, gamepadConnected_, groundControlConnected,
             fleetReturnCanStart,
             [this] { static_cast<void>(StartFleetReturn()); },
             CompleteFleetMissionStatus(), completeFleetMissionCanStart,
@@ -648,7 +648,9 @@ void AeroSimLabApp::RenderFrame()
 
 void AeroSimLabApp::UpdateObserverCamera(int width, int height)
 {
-    const auto& state = simulation_.State();
+    const auto& state = observerDroneId_ == 0U
+        ? simulation_.State()
+        : simulation_.State(observerDroneId_);
     const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
     const glm::vec3 up{0.0F, 1.0F, 0.0F};
     const glm::dvec3 forwardMeters{

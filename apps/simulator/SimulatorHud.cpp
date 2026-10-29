@@ -81,10 +81,34 @@ void CreateDefaultDockspace(ImGuiViewport* viewport)
     ImGui::DockSpaceOverViewport(dockspaceId, viewport);
 }
 
-void DrawScenePanel(const std::function<std::uint32_t(int, int)>& renderScene)
+void DrawScenePanel(const simulation::SimulationCore& simulation,
+    simulation::DroneId& observerDroneId,
+    const std::function<std::uint32_t(int, int)>& renderScene)
 {
     if (ImGui::Begin("장면##SceneViewV3"))
     {
+        const auto droneIds = simulation.DroneIds();
+        if (!droneIds.empty())
+        {
+            if (observerDroneId == 0U)
+                observerDroneId = simulation.PrimaryDroneId();
+
+            const std::string selectedName = DroneName(observerDroneId);
+            if (ImGui::BeginCombo("따라갈 드론", selectedName.c_str()))
+            {
+                for (const simulation::DroneId droneId : droneIds)
+                {
+                    const std::string name = DroneName(droneId);
+                    const bool selected = droneId == observerDroneId;
+                    if (ImGui::Selectable(name.c_str(), selected))
+                        observerDroneId = droneId;
+                    if (selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+        }
+
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const ImVec2 imageSize{
             std::max(1.0F, available.x), std::max(1.0F, available.y)};
@@ -409,6 +433,7 @@ void SimulatorHud::CollectCompletedGpuTimings(HudRenderTimings* timings)
 }
 
 void SimulatorHud::Render(const simulation::SimulationCore& simulation,
+    simulation::DroneId& observerDroneId,
     bool gamepadConnected, bool groundControlConnected,
     bool fleetReturnCanStart,
     const std::function<void()>& startFleetReturn,
@@ -435,7 +460,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
-    DrawScenePanel(renderScene);
+    DrawScenePanel(simulation, observerDroneId, renderScene);
     DrawCameraPanel(simulation, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
         fleetReturnCanStart, startFleetReturn,

@@ -376,6 +376,8 @@ private:
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneCameraModel_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
+    /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
+    aerosimlab::simulation::DroneId observerDroneId_ = 0;
     glm::dvec3 groundControlPositionMeters_{0.0};
     struct FleetReconnaissanceState
     {
