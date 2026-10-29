@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <numbers>
 #include <string_view>
 
 namespace aerosimlab::simulation
@@ -26,12 +25,6 @@ glm::dvec3 ClampLength(const glm::dvec3& value, double maximumLength) noexcept
         return value;
     }
     return value * (maximumLength / length);
-}
-
-glm::dvec3 ApproachVelocity(
-    const glm::dvec3& current, const glm::dvec3& target, double maximumChange) noexcept
-{
-    return current + ClampLength(target - current, maximumChange);
 }
 
 struct FlightModeName
@@ -81,7 +74,6 @@ CommandResult DroneModel::Apply(
             return CommandResult::InvalidFlightMode;
         }
         state.mode = FlightMode::TakingOff;
-        state.velocityMetersPerSecond = {0.0, 0.0, climbSpeedMetersPerSecond};
         control.commandedYawRateRadiansPerSecond = 0.0;
         return CommandResult::Accepted;
 
@@ -91,7 +83,6 @@ CommandResult DroneModel::Apply(
             return CommandResult::InvalidFlightMode;
         }
         state.mode = FlightMode::Landing;
-        state.velocityMetersPerSecond = {0.0, 0.0, -climbSpeedMetersPerSecond};
         control.commandedYawRateRadiansPerSecond = 0.0;
         return CommandResult::Accepted;
 
@@ -188,125 +179,6 @@ double DroneModel::YawRadians(const DroneState& state) noexcept
     return std::atan2(
         2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
         1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z));
-}
-
-void DroneModel::AdvanceOneTick(DroneState& state, DroneControlState& control,
-    const glm::dvec3& windVelocityMetersPerSecond) noexcept
-{
-    constexpr double step = fixedStepSeconds;
-    constexpr double windInfluence = 0.18;
-    const glm::dvec3 windDrift = windVelocityMetersPerSecond * windInfluence;
-    const bool wasAirborne = state.mode != FlightMode::Grounded;
-    const double groundElevation = control.groundElevationMeters;
-    const double takeoffTarget = groundElevation + takeoffHeightMeters;
-    double yawRate = control.commandedYawRateRadiansPerSecond;
-    if (state.mode == FlightMode::FollowingWaypoint && yawRate == 0.0)
-    {
-        constexpr double waypointYawGain = 2.0;
-        const double yawError = std::remainder(
-            control.desiredYawRadians - state.yawRadians, 2.0 * std::numbers::pi);
-        yawRate = std::clamp(
-            yawError * waypointYawGain,
-            -maximumYawRateRadiansPerSecond,
-            maximumYawRateRadiansPerSecond);
-    }
-    state.yawRadians += yawRate * step;
-    state.orientation = glm::angleAxis(state.yawRadians, glm::dvec3{0.0, 0.0, 1.0});
-    state.angularVelocityRadiansPerSecond = {
-        0.0, 0.0, yawRate};
-
-    switch (state.mode)
-    {
-    case FlightMode::Grounded:
-        state.velocityMetersPerSecond = glm::dvec3{0.0};
-        break;
-
-    case FlightMode::Hovering:
-        state.velocityMetersPerSecond = ApproachVelocity(
-            state.velocityMetersPerSecond, windDrift,
-            maximumAccelerationMetersPerSecondSquared * step);
-        state.positionMeters += state.velocityMetersPerSecond * step;
-        break;
-
-    case FlightMode::TakingOff:
-        if (takeoffTarget - state.positionMeters.z
-            <= climbSpeedMetersPerSecond * step + altitudeToleranceMeters)
-        {
-            state.positionMeters.z = takeoffTarget;
-            state.velocityMetersPerSecond = glm::dvec3{0.0};
-            state.mode = FlightMode::Hovering;
-        }
-        else
-        {
-            state.positionMeters.z += climbSpeedMetersPerSecond * step;
-        }
-        break;
-
-    case FlightMode::Flying:
-        state.velocityMetersPerSecond = ApproachVelocity(
-            state.velocityMetersPerSecond,
-            control.targetVelocityMetersPerSecond + windDrift,
-            maximumAccelerationMetersPerSecondSquared * step);
-        state.positionMeters += state.velocityMetersPerSecond * step;
-        if (glm::length(state.velocityMetersPerSecond) < 0.05
-            && glm::length(control.targetVelocityMetersPerSecond) < 0.05)
-        {
-            state.velocityMetersPerSecond = glm::dvec3{0.0};
-            state.mode = FlightMode::Hovering;
-        }
-        break;
-
-    case FlightMode::FollowingWaypoint:
-    {
-        const glm::dvec3 offset = control.waypointMeters - state.positionMeters;
-        const double distance = glm::length(offset);
-        const double stepDistance = maximumSpeedMetersPerSecond * step;
-        if (distance <= std::max(waypointToleranceMeters, stepDistance))
-        {
-            state.positionMeters = control.waypointMeters;
-            state.velocityMetersPerSecond = glm::dvec3{0.0};
-            state.mode = FlightMode::Hovering;
-            break;
-        }
-
-        state.velocityMetersPerSecond = offset * (maximumSpeedMetersPerSecond / distance)
-            + windDrift;
-        state.positionMeters += state.velocityMetersPerSecond * step;
-        break;
-    }
-
-    case FlightMode::Landing:
-        if (state.positionMeters.z <= groundElevation
-            + climbSpeedMetersPerSecond * step + altitudeToleranceMeters)
-        {
-            state.positionMeters.z = groundElevation;
-            state.velocityMetersPerSecond = glm::dvec3{0.0};
-            state.mode = FlightMode::Grounded;
-        }
-        else
-        {
-            state.positionMeters.z -= climbSpeedMetersPerSecond * step;
-        }
-        break;
-    }
-
-    if (IsAirborne(state) && state.positionMeters.z <= groundElevation)
-    {
-        state.positionMeters.z = groundElevation;
-        state.velocityMetersPerSecond = glm::dvec3{0.0};
-        state.angularVelocityRadiansPerSecond = glm::dvec3{0.0};
-        state.mode = FlightMode::Grounded;
-        control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
-        control.commandedYawRateRadiansPerSecond = 0.0;
-    }
-
-    // 운동학 모델에는 공기역학이 없으므로, 상승·하강 중에도 같은 바람 편류를 더한다.
-    if (wasAirborne && (state.mode == FlightMode::TakingOff
-        || state.mode == FlightMode::Landing))
-    {
-        state.positionMeters.x += windDrift.x * step;
-        state.positionMeters.y += windDrift.y * step;
-    }
 }
 
 void DroneModel::Reset(DroneState& state, DroneControlState& control) noexcept

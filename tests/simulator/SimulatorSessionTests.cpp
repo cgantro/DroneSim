@@ -122,7 +122,6 @@ public:
     {
         AeroSimLabApp app({
             .smokeTest = true,
-            .simulationDynamics = simulation::SimulationDynamics::Kinematic,
             .networkEnabled = false});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
@@ -187,7 +186,6 @@ public:
     {
         AeroSimLabApp app({
             .smokeTest = true,
-            .simulationDynamics = simulation::SimulationDynamics::Kinematic,
             .networkEnabled = false});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
@@ -285,7 +283,6 @@ public:
         using FormationPhase = AeroSimLabApp::FormationTransitState::Phase;
         using MissionStage = AeroSimLabApp::CompleteFleetMissionState::Stage;
         AeroSimLabApp app({.smokeTest = true,
-            .simulationDynamics = simulation::SimulationDynamics::Kinematic,
             .networkEnabled = false});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
@@ -451,7 +448,6 @@ public:
     {
         AeroSimLabApp app({
             .smokeTest = true,
-            .simulationDynamics = simulation::SimulationDynamics::Kinematic,
             .networkEnabled = false});
         app.InitializeGraphics();
         ASSERT_TRUE(app.StartFleetReconnaissance());

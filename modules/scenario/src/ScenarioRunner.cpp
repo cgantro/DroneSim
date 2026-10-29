@@ -433,20 +433,8 @@ glm::dvec3 MissionVelocityIntent(
         ? avoidanceTarget->second
         : CurrentWaypoint(*task);
 
-    glm::dvec3 targetVelocity{0.0};
-    if (definition.dynamics == SimulationDynamics::RigidBody)
-    {
-        targetVelocity = QuadrotorFlightController::WaypointVelocityTarget(
-            state, waypoint, definition.controllerParameters);
-    }
-    else
-    {
-        const glm::dvec3 offset = waypoint - state.positionMeters;
-        const double distance = glm::length(offset);
-        if (distance > 1.0e-9)
-            targetVelocity = offset
-                * (DroneModel::maximumSpeedMetersPerSecond / distance);
-    }
+    glm::dvec3 targetVelocity = QuadrotorFlightController::WaypointVelocityTarget(
+        state, waypoint, definition.controllerParameters);
 
     if (definition.windVelocity)
         targetVelocity += *definition.windVelocity;
@@ -778,26 +766,23 @@ void PopulateFinalSnapshot(
     result.tickCount = simulation.TickCount();
     result.simulationTimeSeconds = simulation.SimulationTimeSeconds();
     result.windVelocityMetersPerSecond = definition.windVelocity;
-    if (definition.dynamics == SimulationDynamics::RigidBody)
-    {
-        const QuadrotorParameters& model = definition.quadrotorParameters;
-        result.physicalModel = ScenarioResult::PhysicalModel{
-            model.massKilograms,
-            model.principalInertiaKilogramMetersSquared,
-            model.thrustCoefficientNewtonsPerSpeedSquared,
-            model.momentToThrustRatio,
-            model.motorTimeConstantUpSeconds,
-            model.motorTimeConstantDownSeconds,
-            model.maximumMotorSpeedRadiansPerSecond,
-            definition.quadrotorParametersCustomized};
-        const QuadrotorControllerParameters& controller = definition.controllerParameters;
-        result.controllerSettings = ScenarioResult::ControllerSettings{
-            controller.positionGain,
-            controller.velocityGain,
-            controller.attitudeGain,
-            controller.angularRateGain,
-            definition.controllerParametersCustomized};
-    }
+    const QuadrotorParameters& model = definition.quadrotorParameters;
+    result.physicalModel = ScenarioResult::PhysicalModel{
+        model.massKilograms,
+        model.principalInertiaKilogramMetersSquared,
+        model.thrustCoefficientNewtonsPerSpeedSquared,
+        model.momentToThrustRatio,
+        model.motorTimeConstantUpSeconds,
+        model.motorTimeConstantDownSeconds,
+        model.maximumMotorSpeedRadiansPerSecond,
+        definition.quadrotorParametersCustomized};
+    const QuadrotorControllerParameters& controller = definition.controllerParameters;
+    result.controllerSettings = ScenarioResult::ControllerSettings{
+        controller.positionGain,
+        controller.velocityGain,
+        controller.attitudeGain,
+        controller.angularRateGain,
+        definition.controllerParametersCustomized};
     const auto appendDrone = [&](const std::string& droneName)
     {
         const ScenarioDroneRuntime& runtime = drones.at(droneName);
@@ -952,7 +937,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
     ScenarioDefinition definition = detail::ParseScenarioDefinition(jsonText);
     detail::ValidateScenarioDefinition(definition);
     const std::uint64_t tickCount = definition.tickCount;
-    SimulationCore simulation{definition.dynamics,
+    SimulationCore simulation{
         definition.quadrotorParameters, definition.controllerParameters};
     if (definition.windVelocity)
         simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);

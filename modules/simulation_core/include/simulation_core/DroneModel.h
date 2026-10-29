@@ -90,26 +90,17 @@ enum class CommandResult
     Accepted,
     InvalidValue,
     InvalidFlightMode,
-    UnsupportedDynamics,
     SimulationPaused,
     DroneNotFound
 };
 
-/**
- * @brief 현재 비행 규칙을 드론 상태 데이터에 적용한다.
- * @details 실제 공기 흐름이나 모터 힘은 계산하지 않는다. 이 규칙은 시나리오·명령 흐름을 시험하기 위한 것으로,
- * 실제 비행 성능을 예측하지 않는다.
- */
+/** @brief 비행 명령을 확인해 드론의 목표와 상태에 반영한다. */
 class DroneModel
 {
 public:
     static constexpr double fixedStepSeconds = 1.0 / 60.0;
     static constexpr double takeoffHeightMeters = 1.5;
-    /** @brief 운동학 기준 모델의 수직 상승·하강 속도다. */
-    static constexpr double climbSpeedMetersPerSecond = 1.0;
     static constexpr double maximumSpeedMetersPerSecond = 5.0;
-    /** @brief 운동학 모델의 한 단계당 속도 변화 한계다. 단위는 m/s²다. */
-    static constexpr double maximumAccelerationMetersPerSecondSquared = 2.0;
     static constexpr double maximumYawRateRadiansPerSecond = 1.5;
 
     /** @brief 허용되는 비행 상태와 입력 값인지 확인한 뒤 명령을 적용한다. */
@@ -119,16 +110,11 @@ public:
     /** @brief 자세 쿼터니언에서 월드 Z축 기준 방향각을 라디안으로 구한다. */
     [[nodiscard]] static double YawRadians(const DroneState& state) noexcept;
 
-    /** @brief 고정된 1/60초만큼 위치와 방향을 갱신하고, 지면에 닿으면 정지시킨다. */
-    static void AdvanceOneTick(DroneState& state, DroneControlState& control,
-        const glm::dvec3& windVelocityMetersPerSecond) noexcept;
-
     /** @brief 드론을 원점의 지상 상태로 되돌린다. */
     static void Reset(DroneState& state, DroneControlState& control) noexcept;
 
 private:
     static constexpr double waypointToleranceMeters = 0.05;
-    static constexpr double altitudeToleranceMeters = 1.0e-12;
 
     [[nodiscard]] static bool IsAirborne(const DroneState& state) noexcept;
 };

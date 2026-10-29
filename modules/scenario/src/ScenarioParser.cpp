@@ -473,20 +473,6 @@ CameraStatus ReadCameraStatus(const Json& value)
     throw std::invalid_argument("알 수 없는 카메라 상태입니다: " + status);
 }
 
-SimulationDynamics ReadDynamics(const Json& document)
-{
-    const auto found = document.find("dynamics");
-    if (found == document.end())
-        return defaultSimulationDynamics;
-    if (!found->is_string())
-        throw std::invalid_argument("dynamics는 kinematic 또는 rigid_body 문자열이어야 합니다.");
-
-    const std::string name = found->get<std::string>();
-    if (name == "kinematic") return SimulationDynamics::Kinematic;
-    if (name == "rigid_body") return SimulationDynamics::RigidBody;
-    throw std::invalid_argument("알 수 없는 dynamics 설정입니다: " + name);
-}
-
 Json ParseScenarioDocument(std::string_view jsonText)
 {
     Json document;
@@ -506,7 +492,6 @@ Json ParseScenarioDocument(std::string_view jsonText)
 
 void ReadEnvironmentSettings(const Json& document, ScenarioDefinition& definition)
 {
-    definition.dynamics = ReadDynamics(document);
     if (document.contains("wind_velocity_meters_per_second"))
     {
         definition.windVelocity = ReadVector(

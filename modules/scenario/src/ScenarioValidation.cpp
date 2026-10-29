@@ -99,40 +99,6 @@ void ValidateMission(const ScenarioDefinition& definition,
     }
 }
 
-/** @brief 강체 물리에서만 계산할 수 있는 초기 상태와 조종 입력을 걸러낸다. */
-void ValidateRigidBodySettings(const ScenarioDefinition& definition)
-{
-    // 바람은 운동학·강체 모델 모두에서 상태 이동에 반영하므로 여기서 제한하지 않는다.
-    // 자세·속도·모터 등 전체 초기 상태는 강체 물리에서만 반영할 수 있다.
-    for (const ScenarioDrone& drone : definition.drones)
-    {
-        if (drone.hasExtendedInitialState
-            && definition.dynamics != SimulationDynamics::RigidBody)
-            throw std::invalid_argument(
-                "세부 초기 상태는 rigid_body 시나리오에서만 사용할 수 있습니다.");
-    }
-
-    const bool hasRotorCommand = std::any_of(
-        definition.commands.begin(), definition.commands.end(),
-        [](const TickCommand& command)
-        {
-            return command.command.kind == DroneCommand::Kind::SetRotorThrusts;
-        });
-    if (hasRotorCommand && definition.dynamics != SimulationDynamics::RigidBody)
-        throw std::invalid_argument(
-            "로터 추력 재생 명령은 rigid_body 시나리오에서만 사용할 수 있습니다.");
-
-    if (definition.quadrotorParametersCustomized
-        && definition.dynamics != SimulationDynamics::RigidBody)
-        throw std::invalid_argument(
-            "quadrotor_model은 rigid_body 시나리오의 JSON 객체여야 합니다.");
-
-    if (definition.controllerParametersCustomized
-        && definition.dynamics != SimulationDynamics::RigidBody)
-        throw std::invalid_argument(
-            "controller_gains는 rigid_body 시나리오의 JSON 객체여야 합니다.");
-}
-
 /** @brief 기록할 모든 드론 궤적 표본 수가 메모리 한도 안에 있는지 확인한다. */
 void ValidateTrajectorySize(const ScenarioDefinition& definition)
 {
@@ -276,8 +242,9 @@ void ValidateEnergySettings(const ScenarioDefinition& definition)
     constexpr double secondsPerHour = 3'600.0;
     // 귀환 지점은 이륙 높이에서 시작한다. 수직 하강 시간 동안의 비행 전력과
     // 착륙 명령이 다음 Tick에 반영될 때까지의 한 Tick 전력을 예비량으로 잡는다.
+    constexpr double assumedDescentSpeedMetersPerSecond = 1.0;
     const double descentTimeSeconds = DroneModel::takeoffHeightMeters
-        / DroneModel::climbSpeedMetersPerSecond;
+        / assumedDescentSpeedMetersPerSecond;
     const double landingEnergyWattHours = settings.flightPowerWatts
         * (descentTimeSeconds + DroneModel::fixedStepSeconds) / secondsPerHour;
     for (const ScenarioDrone& drone : definition.drones)
@@ -311,7 +278,6 @@ void ValidateScenarioDefinition(const ScenarioDefinition& definition)
     ValidateCommands(definition, droneNames);
     ValidateCommunicationOutages(definition, droneNames);
     ValidateMission(definition, droneNames);
-    ValidateRigidBodySettings(definition);
     ValidateTrajectorySize(definition);
     ValidateMultiDroneSettings(definition);
     ValidateEnergySettings(definition);

@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "dynamics": "kinematic",
   "ticks": 300,
   "commands": [
     {"tick": 0, "type": "takeoff"},

@@ -1,5 +1,4 @@
 #include "simulation_core/SimulationCore.h"
-#include "simulation_core/KinematicCollisionWorld.h"
 #include "simulation_core/PhysicsWorld.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
@@ -48,7 +47,6 @@ struct SimulationCore::EcsStorage
         RigidBodyHandle handle;
     };
 
-    SimulationDynamics dynamics;
     QuadrotorControllerParameters controllerParameters;
     QuadrotorParameters quadrotorParameters;
     /** @brief Flecs 콜백이 참조하므로 Flecs 월드보다 나중에 정리한다. */
@@ -57,8 +55,6 @@ struct SimulationCore::EcsStorage
     std::map<DroneId, flecs::entity> drones;
     DroneId primaryDroneId = 0;
     DroneId nextDroneId = 1;
-    KinematicCollisionWorld kinematicCollision;
-    glm::dvec3 windVelocityMetersPerSecond{0.0};
     bool measurePhysicsStepDuration = false;
     double lastPhysicsStepDurationMicroseconds = 0.0;
     std::uint64_t tickCount = 0;
@@ -76,49 +72,14 @@ struct SimulationCore::EcsStorage
     }
 
     explicit EcsStorage(
-        SimulationDynamics selectedDynamics,
         QuadrotorParameters selectedQuadrotorParameters,
         QuadrotorControllerParameters selectedControllerParameters = {})
-        : dynamics(selectedDynamics)
-        , controllerParameters(selectedControllerParameters)
+        : controllerParameters(selectedControllerParameters)
         , quadrotorParameters(std::move(selectedQuadrotorParameters))
     {
-        RegisterDroneSystem();
+        RegisterRigidBodySystem();
         RegisterCameraSystem();
         SynchronizeCameraPoses();
-    }
-
-    void RegisterDroneSystem()
-    {
-        if (dynamics == SimulationDynamics::Kinematic)
-        {
-            RegisterKinematicSystem();
-            return;
-        }
-        RegisterRigidBodySystem();
-    }
-
-    void RegisterKinematicSystem()
-    {
-        primaryDroneId = CreateDrone(glm::dvec3{0.0}, 0.0);
-        world.system<DroneState, DroneControlState>("AdvanceKinematicDrone")
-            .kind(flecs::OnUpdate)
-            .run([this](flecs::iter& iterator)
-            {
-                while (iterator.next())
-                {
-                    auto states = iterator.field<DroneState>(0);
-                    auto controls = iterator.field<DroneControlState>(1);
-                    for (const std::size_t row : iterator)
-                    {
-                        const glm::dvec3 previousPosition = states[row].positionMeters;
-                        DroneModel::AdvanceOneTick(
-                            states[row], controls[row], windVelocityMetersPerSecond);
-                        kinematicCollision.Resolve(
-                            states[row], controls[row], previousPosition);
-                    }
-                }
-            });
     }
 
     void RegisterRigidBodySystem()
@@ -179,15 +140,12 @@ struct SimulationCore::EcsStorage
                 .set<CameraState>({});
             EoCameraModel::UpdatePose(
                 drone.get_mut<CameraState>(), drone.get<DroneState>());
-            if (dynamics == SimulationDynamics::RigidBody)
-            {
-                RigidBodyDefinition definition;
-                definition.positionMeters = positionMeters;
-                definition.orientation = initialState.orientation;
-                createdBody = physics->CreateQuadrotor(definition, quadrotorParameters);
-                drone.set<PhysicsBody>({*createdBody});
-                CopyPhysicsState(drone.get_mut<DroneState>(), *createdBody);
-            }
+            RigidBodyDefinition definition;
+            definition.positionMeters = positionMeters;
+            definition.orientation = initialState.orientation;
+            createdBody = physics->CreateQuadrotor(definition, quadrotorParameters);
+            drone.set<PhysicsBody>({*createdBody});
+            CopyPhysicsState(drone.get_mut<DroneState>(), *createdBody);
 
             drones.emplace(id, drone);
         }
@@ -241,8 +199,7 @@ struct SimulationCore::EcsStorage
         if (found == drones.end())
             return false;
 
-        if (dynamics == SimulationDynamics::RigidBody
-            && !physics->DestroyBody(found->second.get<PhysicsBody>().handle))
+        if (!physics->DestroyBody(found->second.get<PhysicsBody>().handle))
             return false;
 
         found->second.destruct();
@@ -271,8 +228,7 @@ struct SimulationCore::EcsStorage
             drone.get_mut<DroneState>(),
             drone.get_mut<DroneControlState>(),
             initialPose);
-        if (dynamics == SimulationDynamics::RigidBody)
-            ResetPhysicsBody(drone);
+        ResetPhysicsBody(drone);
     }
 
     void ApplyRigidBodyForces(
@@ -392,22 +348,22 @@ std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
     return tickCount;
 }
 
-SimulationCore::SimulationCore(SimulationDynamics dynamics)
-    : SimulationCore(dynamics, QuadrotorParameters::X500MotorTableEstimate(), {})
+SimulationCore::SimulationCore()
+    : SimulationCore(QuadrotorParameters::X500MotorTableEstimate(), {})
 {
 }
 
 SimulationCore::SimulationCore(
-    SimulationDynamics dynamics, QuadrotorParameters quadrotorParameters)
-    : SimulationCore(dynamics, std::move(quadrotorParameters), {})
+    QuadrotorParameters quadrotorParameters)
+    : SimulationCore(std::move(quadrotorParameters), {})
 {
 }
 
-SimulationCore::SimulationCore(SimulationDynamics dynamics,
+SimulationCore::SimulationCore(
     QuadrotorParameters quadrotorParameters,
     const QuadrotorControllerParameters& controllerParameters)
     : ecs_(std::make_unique<EcsStorage>(
-        dynamics, std::move(quadrotorParameters), controllerParameters))
+        std::move(quadrotorParameters), controllerParameters))
 {
 }
 
@@ -431,14 +387,8 @@ CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command
     flecs::entity& drone = found->second;
     DroneState& state = drone.get_mut<DroneState>();
     DroneControlState& control = drone.get_mut<DroneControlState>();
-    if (command.kind == DroneCommand::Kind::SetRotorThrusts
-        && ecs_->dynamics != SimulationDynamics::RigidBody)
-    {
-        return CommandResult::UnsupportedDynamics;
-    }
     const CommandResult result = DroneModel::Apply(state, control, command);
-    if (result == CommandResult::Accepted
-        && ecs_->dynamics == SimulationDynamics::RigidBody)
+    if (result == CommandResult::Accepted)
     {
         ecs_->CopyPhysicsState(state, drone.get<EcsStorage::PhysicsBody>().handle);
     }
@@ -463,9 +413,8 @@ void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yaw
         throw std::invalid_argument("드론 시작 위치와 방향은 유한한 값이어야 합니다.");
 
     flecs::entity& drone = ecs_->FindDrone(ecs_->primaryDroneId);
-    const double groundElevationMeters = ecs_->dynamics == SimulationDynamics::RigidBody
-        ? positionMeters.z - QuadrotorFlightController::groundedModelOriginHeightMeters
-        : positionMeters.z;
+    const double groundElevationMeters = positionMeters.z
+        - QuadrotorFlightController::groundedModelOriginHeightMeters;
     const EcsStorage::InitialPose initialPose{
         positionMeters, yawRadians, groundElevationMeters};
     drone.set<EcsStorage::InitialPose>(initialPose);
@@ -492,8 +441,6 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
         state.motorSpeedsRadiansPerSecond.begin(),
         state.motorSpeedsRadiansPerSecond.end(),
         [](double speed) { return speed > 0.0; });
-    if (hasInitialMotorSpeed && ecs_->dynamics != SimulationDynamics::RigidBody)
-        throw std::invalid_argument("초기 로터 속도는 강체 물리 모드에서만 지정할 수 있습니다.");
     if (std::any_of(state.motorSpeedsRadiansPerSecond.begin(),
         state.motorSpeedsRadiansPerSecond.end(), [&](double speed)
         {
@@ -512,21 +459,18 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     control.targetVelocityMetersPerSecond = normalized.velocityMetersPerSecond;
     control.groundElevationMeters = normalized.positionMeters.z
         - QuadrotorFlightController::groundedModelOriginHeightMeters;
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-    {
-        const RigidBodyState rigidBodyState{
-            normalized.positionMeters,
-            normalized.orientation,
-            normalized.velocityMetersPerSecond,
-            normalized.angularVelocityRadiansPerSecond};
-        ecs_->physics->SetState(
-            drone.get<EcsStorage::PhysicsBody>().handle, rigidBodyState);
-        ecs_->physics->SetInitialMotorSpeeds(
-            drone.get<EcsStorage::PhysicsBody>().handle,
-            normalized.motorSpeedsRadiansPerSecond);
-        ecs_->CopyPhysicsState(normalized, drone.get<EcsStorage::PhysicsBody>().handle);
-        normalized.mode = state.mode;
-    }
+    const RigidBodyState rigidBodyState{
+        normalized.positionMeters,
+        normalized.orientation,
+        normalized.velocityMetersPerSecond,
+        normalized.angularVelocityRadiansPerSecond};
+    ecs_->physics->SetState(
+        drone.get<EcsStorage::PhysicsBody>().handle, rigidBodyState);
+    ecs_->physics->SetInitialMotorSpeeds(
+        drone.get<EcsStorage::PhysicsBody>().handle,
+        normalized.motorSpeedsRadiansPerSecond);
+    ecs_->CopyPhysicsState(normalized, drone.get<EcsStorage::PhysicsBody>().handle);
+    normalized.mode = state.mode;
     drone.set<DroneState>(normalized);
     ecs_->SynchronizeCameraPose(drone);
 }
@@ -592,8 +536,7 @@ void SimulationCore::AdvanceOneTick()
     }
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
     ecs_->world.progress(DroneModel::fixedStepSeconds);
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-        ecs_->AdvancePhysicsWorld();
+    ecs_->AdvancePhysicsWorld();
     // 배터리 컴포넌트가 붙은 드론만 골라, 물리 계산 뒤의 비행 상태로 잔량을 갱신한다.
     ecs_->world.each(
         [](BatteryModel& battery, const DroneState& state)
@@ -685,12 +628,7 @@ void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
     if (!HasFiniteVector(velocity))
         throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-    {
-        ecs_->physics->SetWindVelocityMetersPerSecond(velocity);
-        return;
-    }
-    ecs_->windVelocityMetersPerSecond = velocity;
+    ecs_->physics->SetWindVelocityMetersPerSecond(velocity);
 }
 
 void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept
@@ -707,47 +645,26 @@ double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 void SimulationCore::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-    {
-        ecs_->physics->AddStaticObstacleBox(centerMeters, halfExtentsMeters);
-        return;
-    }
-    ecs_->kinematicCollision.AddStaticObstacleBox(centerMeters, halfExtentsMeters);
+    ecs_->physics->AddStaticObstacleBox(centerMeters, halfExtentsMeters);
 }
 
 void SimulationCore::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)
 {
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-    {
-        ecs_->physics->AddStaticObstaclePrism(
-            outlineMeters, bottomMeters, topMeters);
-        return;
-    }
-    ecs_->kinematicCollision.AddStaticObstaclePrism(
+    ecs_->physics->AddStaticObstaclePrism(
         outlineMeters, bottomMeters, topMeters);
 }
 
 void SimulationCore::AddStaticObstacleFootprint(
     const std::vector<glm::dvec2>& outlineMeters)
 {
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-    {
-        ecs_->physics->AddStaticObstacleFootprint(outlineMeters);
-        return;
-    }
-    ecs_->kinematicCollision.AddStaticObstacleFootprint(outlineMeters);
+    ecs_->physics->AddStaticObstacleFootprint(outlineMeters);
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
 {
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-    {
-        ecs_->physics->SetTerrain(std::move(terrain));
-        return;
-    }
-    ecs_->kinematicCollision.SetTerrain(std::move(terrain));
+    ecs_->physics->SetTerrain(std::move(terrain));
 }
 
 std::uint64_t SimulationCore::TickCount() const noexcept

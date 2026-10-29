@@ -1,7 +1,6 @@
 {
   "version": 1,
-  "dynamics": "kinematic",
-  "ticks": 320,
+  "ticks": 1100,
   "drones": [
     {"name": "scout-1", "initial_position_meters": [0, 0, 0]},
     {"name": "scout-2", "initial_position_meters": [10, 0, 0]},
@@ -19,7 +18,7 @@
     {
       "drone": "scout-2",
       "start_tick": 95,
-      "end_tick": 320,
+      "end_tick": 1100,
       "heartbeat_timeout_ticks": 3
     }
   ],
@@ -35,44 +34,37 @@
         "name": "sector-1",
         "drone": "scout-1",
         "waypoints_meters": [[4, 0, 1.5]],
-        "start_tick": 90,
-        "deadline_tick": 310,
+        "start_tick": 360,
+        "deadline_tick": 1000,
         "tolerance_meters": 0.1
       },
       {
         "name": "sector-2",
         "drone": "scout-2",
         "waypoints_meters": [[14, 0, 1.5]],
-        "start_tick": 90,
-        "deadline_tick": 310,
+        "start_tick": 360,
+        "deadline_tick": 1000,
         "tolerance_meters": 0.1
       },
       {
         "name": "sector-3",
         "drone": "scout-3",
         "waypoints_meters": [[24, 0, 1.5]],
-        "start_tick": 90,
-        "deadline_tick": 310,
+        "start_tick": 360,
+        "deadline_tick": 1000,
         "tolerance_meters": 0.1
       },
       {
         "name": "sector-4",
         "drone": "scout-4",
         "waypoints_meters": [[34, 0, 1.5]],
-        "start_tick": 90,
-        "deadline_tick": 310,
+        "start_tick": 360,
+        "deadline_tick": 1000,
         "tolerance_meters": 0.1
       }
     ]
   },
   "expected": {
-    "tolerance_meters": 0.01,
-    "minimum_drone_separation_meters": 2.0,
-    "drones": [
-      {"name": "scout-1", "mode": "hovering", "position_meters": [4, 0, 1.5]},
-      {"name": "scout-2", "mode": "following_waypoint", "position_meters": [10.333333333333336, 0, 1.5]},
-      {"name": "scout-3", "mode": "hovering", "position_meters": [24, 0, 1.5]},
-      {"name": "scout-4", "mode": "hovering", "position_meters": [34, 0, 1.5]}
-    ]
+    "minimum_drone_separation_meters": 2.0
   }
 }

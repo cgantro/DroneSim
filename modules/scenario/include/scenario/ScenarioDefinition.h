@@ -121,8 +121,6 @@ struct ScenarioDefinition
     std::optional<EnergyModelSettings> energyModel;
     /** @brief 설정된 경우 드론별 경유점 임무를 실행한다. */
     std::optional<ScenarioMission> mission;
-    /** @brief 운동학 또는 강체 물리 중 시나리오가 사용할 비행 계산 방식이다. */
-    SimulationDynamics dynamics = defaultSimulationDynamics;
     QuadrotorParameters quadrotorParameters =
         QuadrotorParameters::X500MotorTableEstimate();
     bool quadrotorParametersCustomized = false;

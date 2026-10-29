@@ -176,9 +176,7 @@ AeroSimLabApp::AeroSimLabApp(Options options)
       benchmarkMode_(options.benchmarkMode || options.visibleBenchmarkMode),
       visibleBenchmarkMode_(options.visibleBenchmarkMode),
       groundControlCommandTimeoutTicks_(options.groundControlCommandTimeoutTicks),
-      udpPort_(options.udpPort),
-      simulation_(options.simulationDynamics.value_or(
-          aerosimlab::simulation::defaultSimulationDynamics))
+      udpPort_(options.udpPort)
 {
     if (groundControlCommandTimeoutTicks_ == 0)
         throw std::invalid_argument("지상통제 명령 유효기간은 1 Tick 이상이어야 합니다.");

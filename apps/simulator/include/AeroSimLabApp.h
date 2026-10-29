@@ -63,8 +63,6 @@ public:
     struct Options
     {
         bool smokeTest = false;
-        /** @brief 별도 지정이 없으면 플랫폼 기본 비행 계산을 사용한다. */
-        std::optional<aerosimlab::simulation::SimulationDynamics> simulationDynamics;
         std::uint16_t udpPort = communication::defaultPort;
         bool demoMode = false;
         bool networkEnabled = true;
@@ -445,7 +443,6 @@ private:
     glm::dvec3 windVelocityMetersPerSecond_{0.0};
     glm::dvec3 windTargetMetersPerSecond_{0.0};
     std::uint32_t windGustTicksRemaining_ = 0U;
-    aerosimlab::simulation::SimulationCore simulation_{
-        aerosimlab::simulation::defaultSimulationDynamics};
+    aerosimlab::simulation::SimulationCore simulation_{};
 };
 }
