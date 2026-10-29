@@ -47,6 +47,13 @@ public:
         ASSERT_EQ(app.simulation_.DroneIds().size(), 4U);
         EXPECT_TRUE(app.CompleteFleetMissionCanStart());
 
+        app.fleetReconnaissance_[app.simulation_.PrimaryDroneId()].status =
+            detail::FleetDroneStatus::Reconnaissance;
+        EXPECT_FALSE(app.FleetReconnaissanceCanStart());
+        EXPECT_FALSE(app.CompleteFleetMissionCanStart());
+        app.fleetReconnaissance_.clear();
+        EXPECT_TRUE(app.CompleteFleetMissionCanStart());
+
         const auto extraDrone = app.simulation_.AddDrone({0.0, 0.0, 0.0});
         EXPECT_FALSE(app.CompleteFleetMissionCanStart());
         ASSERT_TRUE(app.simulation_.RemoveDrone(extraDrone));

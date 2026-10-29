@@ -175,21 +175,10 @@ std::optional<FleetRouteMessage> DecodeFleetRoute(const std::string& payload)
 
 }
 
-bool AeroSimLabApp::FleetReconnaissanceCanStart() const
+bool AeroSimLabApp::FleetIsReadyForMission() const
 {
-    const auto stage = completeFleetMission_.stage;
-    const bool sequenceActive = stage == CompleteFleetMissionState::Stage::FormationTransit
-        || stage == CompleteFleetMissionState::Stage::Reconnaissance
-        || stage == CompleteFleetMissionState::Stage::Regrouping
-        || stage == CompleteFleetMissionState::Stage::Returning;
-    if (CompleteFleetMissionIsActive() || formationTransit_.active || sequenceActive
-        || reconTargets_.empty())
-        return false;
-    if (std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
-        [](const auto& entry)
-        {
-            return detail::IsFleetMissionInProgress(entry.second.status);
-        }))
+    if (CompleteFleetMissionIsActive() || formationTransit_.active
+        || reconTargets_.empty() || FleetReconnaissanceIsActive())
         return false;
 
     const auto droneIds = simulation_.DroneIds();
@@ -199,6 +188,11 @@ bool AeroSimLabApp::FleetReconnaissanceCanStart() const
             return simulation_.State(id).mode
                 == aerosimlab::simulation::FlightMode::Grounded;
         });
+}
+
+bool AeroSimLabApp::FleetReconnaissanceCanStart() const
+{
+    return FleetIsReadyForMission();
 }
 
 const AeroSimLabApp::ReceivedPeerTelemetry* AeroSimLabApp::FreshPeerTelemetry(
@@ -215,22 +209,7 @@ const AeroSimLabApp::ReceivedPeerTelemetry* AeroSimLabApp::FreshPeerTelemetry(
 
 bool AeroSimLabApp::CompleteFleetMissionCanStart() const
 {
-    using Stage = CompleteFleetMissionState::Stage;
-    const bool sequenceActive = completeFleetMission_.stage == Stage::FormationTransit
-        || completeFleetMission_.stage == Stage::Reconnaissance
-        || completeFleetMission_.stage == Stage::Regrouping
-        || completeFleetMission_.stage == Stage::Returning;
-    if (sequenceActive || CompleteFleetMissionIsActive() || formationTransit_.active
-        || reconTargets_.empty())
-        return false;
-
-    const auto droneIds = simulation_.DroneIds();
-    return droneIds.size() == 4U && std::all_of(droneIds.begin(), droneIds.end(),
-        [this](aerosimlab::simulation::DroneId id)
-        {
-            return simulation_.State(id).mode
-                == aerosimlab::simulation::FlightMode::Grounded;
-        });
+    return simulation_.DroneCount() == 4U && FleetIsReadyForMission();
 }
 
 bool AeroSimLabApp::CompleteFleetMissionIsActive() const
@@ -400,11 +379,7 @@ bool AeroSimLabApp::StartFleetReconnaissance(
 bool AeroSimLabApp::FleetReturnCanStart() const
 {
     if (fleetReconnaissance_.empty() || CompleteFleetMissionIsActive()
-        || formationTransit_.active
-        || completeFleetMission_.stage == CompleteFleetMissionState::Stage::FormationTransit
-        || completeFleetMission_.stage == CompleteFleetMissionState::Stage::Reconnaissance
-        || completeFleetMission_.stage == CompleteFleetMissionState::Stage::Regrouping
-        || completeFleetMission_.stage == CompleteFleetMissionState::Stage::Returning)
+        || formationTransit_.active)
         return false;
 
     const auto& droneIds = fleetDroneIds_;

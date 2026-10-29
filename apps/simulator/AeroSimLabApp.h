@@ -174,6 +174,8 @@ private:
     /** @brief 스모크 검사에서 마지막으로 읽은 EO 영상과 카메라 Tick을 확인한다. */
     [[nodiscard]] int ValidateSmokeTestOutput() const;
     void AdvanceManualControlTick();
+    /** @brief 임무·정찰 지점·드론 상태가 새 임무를 시작할 수 있는지 확인한다. */
+    [[nodiscard]] bool FleetIsReadyForMission() const;
     [[nodiscard]] bool FleetReconnaissanceCanStart() const;
     [[nodiscard]] bool FleetReconnaissanceIsActive() const;
     [[nodiscard]] bool CompleteFleetMissionCanStart() const;
