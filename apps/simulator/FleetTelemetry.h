@@ -1,5 +1,6 @@
 #pragma once
 
+#include "FleetMissionProgress.h"
 #include "simulation_core/DroneModel.h"
 
 #include <glm/glm.hpp>
@@ -15,7 +16,7 @@ struct PeerTelemetry
     glm::dvec3 positionMeters{0.0};
     simulation::FlightMode mode = simulation::FlightMode::Grounded;
     std::uint8_t missionLeg = 0;
-    std::string missionStatus;
+    FleetDroneStatus missionStatus = FleetDroneStatus::Other;
     std::uint64_t assignmentVersion = 0;
     std::uint64_t assignmentLeaseExpiresAtTick = 0;
 };
@@ -24,7 +25,7 @@ struct PeerTelemetry
     const glm::dvec3& positionMeters,
     simulation::FlightMode mode,
     std::uint8_t missionLeg,
-    const std::string& missionStatus,
+    FleetDroneStatus missionStatus,
     std::uint64_t assignmentVersion,
     std::uint64_t assignmentLeaseExpiresAtTick);
 

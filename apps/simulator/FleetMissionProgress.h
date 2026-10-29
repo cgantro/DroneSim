@@ -46,19 +46,12 @@ enum class FleetDroneStatus : std::uint8_t
     ReturnFailed
 };
 
-/** @brief 통신에서 받은 상태 문구를 내부 상태로 바꾼다. */
-[[nodiscard]] FleetDroneStatus ParseFleetDroneStatus(
-    std::string_view status) noexcept;
-
 /** @brief 내부 상태를 화면과 통신에 쓸 한국어 문구로 바꾼다. */
 [[nodiscard]] std::string_view FleetDroneStatusLabel(
     FleetDroneStatus status) noexcept;
 
 /** @brief 드론 임무가 진행 중인지 내부 상태로 판단한다. */
 [[nodiscard]] bool IsFleetMissionInProgress(FleetDroneStatus status) noexcept;
-
-/** @brief 통신으로 받은 상태 문구가 진행 중인지 확인한다. */
-[[nodiscard]] bool IsFleetMissionInProgress(std::string_view status) noexcept;
 
 /** @brief 한 드론이 리더에게 보고한 임무 진행 정보다. */
 struct FleetMissionReport

@@ -429,25 +429,31 @@ public:
 };
 }
 
-void Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg()
+void Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues()
 {
     const glm::dvec3 positionMeters{12.5, -7.25, 31.0};
+    using simulator::detail::FleetDroneStatus;
     const std::string payload = simulator::detail::EncodePeerTelemetry(
-        positionMeters, simulation::FlightMode::Hovering, 2U, "복귀 착륙 중",
+        positionMeters, simulation::FlightMode::Hovering, 2U,
+        FleetDroneStatus::ReturnLanding,
         17U, 2400U);
     const auto telemetry = simulator::detail::DecodePeerTelemetry(payload);
     ASSERT_TRUE(telemetry.has_value());
     EXPECT_EQ(telemetry->positionMeters, positionMeters);
     EXPECT_EQ(telemetry->mode, simulation::FlightMode::Hovering);
     EXPECT_EQ(telemetry->missionLeg, 2U);
-    EXPECT_EQ(telemetry->missionStatus, "복귀 착륙 중");
+    EXPECT_EQ(telemetry->missionStatus, FleetDroneStatus::ReturnLanding);
     EXPECT_EQ(telemetry->assignmentVersion, 17U);
     EXPECT_EQ(telemetry->assignmentLeaseExpiresAtTick, 2400U);
 
     EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
         simulator::detail::EncodePeerTelemetry(positionMeters,
-            simulation::FlightMode::Hovering, 3U, "잘못된 단계", 17U, 2400U))
-        .has_value());
+            simulation::FlightMode::Hovering, 3U, FleetDroneStatus::Other,
+            17U, 2400U)).has_value());
+    EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
+        simulator::detail::EncodePeerTelemetry(positionMeters,
+            simulation::FlightMode::Hovering, 2U,
+            static_cast<FleetDroneStatus>(255U), 17U, 2400U)).has_value());
 }
 
 void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
@@ -458,16 +464,12 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     using simulator::detail::FleetDroneStatus;
     using simulation::FlightMode;
 
-    EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress("정찰 이동 중"));
-    EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress("저전력 복귀 중"));
     EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress(
         FleetDroneStatus::Reconnaissance));
     EXPECT_EQ(simulator::detail::FleetDroneStatusLabel(
         FleetDroneStatus::TargetReached), "정찰 위치 도착");
-    EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress("정찰 위치 도착"));
-    EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress("전체 임무 완료"));
-    EXPECT_EQ(simulator::detail::ParseFleetDroneStatus("경로 오류"),
-        FleetDroneStatus::RouteFailed);
+    EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress(
+        FleetDroneStatus::TargetReached));
 
     std::vector<std::optional<FleetMissionReport>> reports{
         FleetMissionReport{FlightMode::Grounded,
@@ -912,7 +914,7 @@ TEST(SimulatorSessionTests, CoreScenarios)
         simulator::AeroSimLabAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyCompleteFleetMissionFinishesAndLands());
-    EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesMissionStateAndRejectsInvalidLeg());
+    EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
     EXPECT_NO_FATAL_FAILURE(Verify_EoVideoRecorderStoresH264AndFrameMetadata());

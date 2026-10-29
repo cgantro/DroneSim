@@ -22,7 +22,7 @@ std::string EncodePeerTelemetry(
     const glm::dvec3& positionMeters,
     aerosimlab::simulation::FlightMode mode,
     std::uint8_t missionLeg,
-    const std::string& missionStatus,
+    FleetDroneStatus missionStatus,
     std::uint64_t assignmentVersion,
     std::uint64_t assignmentLeaseExpiresAtTick)
 {
@@ -31,7 +31,7 @@ std::string EncodePeerTelemetry(
         << positionMeters.y << ' ' << positionMeters.z << ' '
         << aerosimlab::simulation::ToString(mode) << ' '
         << static_cast<unsigned int>(missionLeg) << ' '
-        << std::quoted(missionStatus) << ' '
+        << static_cast<unsigned int>(missionStatus) << ' '
         << assignmentVersion << ' ' << assignmentLeaseExpiresAtTick;
     return payload.str();
 }
@@ -42,12 +42,14 @@ std::optional<PeerTelemetry> DecodePeerTelemetry(const std::string& payload)
     PeerTelemetry telemetry;
     std::string modeName;
     unsigned int missionLeg = 0;
+    unsigned int missionStatus = 0;
     if (!(values >> telemetry.positionMeters.x >> telemetry.positionMeters.y
             >> telemetry.positionMeters.z >> modeName >> missionLeg
-            >> std::quoted(telemetry.missionStatus)
+            >> missionStatus
             >> telemetry.assignmentVersion
             >> telemetry.assignmentLeaseExpiresAtTick)
         || missionLeg > 2U
+        || missionStatus > static_cast<unsigned int>(FleetDroneStatus::ReturnFailed)
         || !std::isfinite(telemetry.positionMeters.x)
         || !std::isfinite(telemetry.positionMeters.y)
         || !std::isfinite(telemetry.positionMeters.z))
@@ -61,6 +63,7 @@ std::optional<PeerTelemetry> DecodePeerTelemetry(const std::string& payload)
         return std::nullopt;
     telemetry.mode = *mode;
     telemetry.missionLeg = static_cast<std::uint8_t>(missionLeg);
+    telemetry.missionStatus = static_cast<FleetDroneStatus>(missionStatus);
     return telemetry;
 }
 }
@@ -518,7 +521,7 @@ bool AeroSimLabApp::FleetReturnCanStart() const
         if (report == nullptr)
             return false;
         if (mission->second.lowBatteryReturn
-                    && detail::ParseFleetDroneStatus(report->state.missionStatus)
+                    && report->state.missionStatus
                         == detail::FleetDroneStatus::LowBatteryReturnComplete
             && report->state.mode == aerosimlab::simulation::FlightMode::Grounded)
             return true;
@@ -690,7 +693,7 @@ bool AeroSimLabApp::StartFleetRally()
         {
             const ReceivedPeerTelemetry* report = FreshPeerTelemetry(droneId);
             if (report == nullptr
-                || detail::ParseFleetDroneStatus(report->state.missionStatus)
+                || report->state.missionStatus
                     != detail::FleetDroneStatus::TargetReached)
                 return false;
             currentPosition = report->state.positionMeters;
@@ -1044,15 +1047,13 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
                 const bool returnedAfterBatteryReserve = mission->second.lowBatteryReturn
                     && cached->second.state.missionLeg
                         == static_cast<std::uint8_t>(FleetMissionLeg::Returning)
-                    && detail::ParseFleetDroneStatus(
-                        cached->second.state.missionStatus)
+                    && cached->second.state.missionStatus
                         == detail::FleetDroneStatus::LowBatteryReturnComplete;
                 const bool returnedToBase =
                     completeFleetMission_.stage == Stage::Returning
                     && cached->second.state.missionLeg
                         == static_cast<std::uint8_t>(FleetMissionLeg::Returning)
-                    && detail::ParseFleetDroneStatus(
-                        cached->second.state.missionStatus)
+                    && cached->second.state.missionStatus
                         == detail::FleetDroneStatus::ReturnComplete;
                 if (returnedAfterBatteryReserve || returnedToBase)
                     telemetry = &cached->second;
@@ -1065,7 +1066,7 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
         }
         reports.emplace_back(detail::FleetMissionReport{telemetry->state.mode,
             static_cast<FleetMissionLeg>(telemetry->state.missionLeg),
-            detail::ParseFleetDroneStatus(telemetry->state.missionStatus)});
+            telemetry->state.missionStatus});
     }
 
     const auto missionLeg = completeFleetMission_.stage == Stage::Reconnaissance
@@ -1572,8 +1573,8 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         const auto mission = fleetReconnaissance_.find(droneId);
         const std::uint8_t leg = mission == fleetReconnaissance_.end()
             ? 0U : static_cast<std::uint8_t>(mission->second.leg);
-        const std::string status = mission == fleetReconnaissance_.end()
-            ? std::string{} : std::string(detail::FleetDroneStatusLabel(mission->second.status));
+        const detail::FleetDroneStatus status = mission == fleetReconnaissance_.end()
+            ? detail::FleetDroneStatus::Other : mission->second.status;
         if (formationNetwork_->Send(droneId, groundControlNodeId,
                 nextGroundControlTelemetrySequence_++, "ground_control_telemetry",
                 detail::EncodePeerTelemetry(state.positionMeters, state.mode,
@@ -1593,8 +1594,9 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         const auto mission = fleetReconnaissance_.find(droneId);
         const std::uint8_t missionLeg = mission == fleetReconnaissance_.end()
             ? 0U : static_cast<std::uint8_t>(mission->second.leg);
-        const std::string missionStatus = mission == fleetReconnaissance_.end()
-            ? std::string{} : std::string(detail::FleetDroneStatusLabel(mission->second.status));
+        const detail::FleetDroneStatus missionStatus =
+            mission == fleetReconnaissance_.end()
+            ? detail::FleetDroneStatus::Other : mission->second.status;
         const std::uint64_t assignmentVersion = mission == fleetReconnaissance_.end()
             ? 0U : mission->second.assignmentVersion;
         const std::uint64_t leaseExpiresAtTick = mission == fleetReconnaissance_.end()

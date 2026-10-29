@@ -2,35 +2,6 @@
 
 namespace aerosimlab::simulator::detail
 {
-FleetDroneStatus ParseFleetDroneStatus(std::string_view status) noexcept
-{
-    if (status == "경로 전달 대기") return FleetDroneStatus::RoutePending;
-    if (status == "출발 준비") return FleetDroneStatus::TakeoffReady;
-    if (status == "정찰 이동 중" || status == "이동 중")
-        return FleetDroneStatus::Reconnaissance;
-    if (status == "집결 이동 중") return FleetDroneStatus::Regrouping;
-    if (status == "재집결 준비") return FleetDroneStatus::RegroupPreparing;
-    if (status == "복귀 준비") return FleetDroneStatus::ReturnPreparing;
-    if (status == "복귀 중") return FleetDroneStatus::Returning;
-    if (status == "저전력 복귀 중") return FleetDroneStatus::LowBatteryReturning;
-    if (status == "저전력 착륙 중") return FleetDroneStatus::LowBatteryLanding;
-    if (status == "착륙 중") return FleetDroneStatus::Landing;
-    if (status == "복귀 착륙 중") return FleetDroneStatus::ReturnLanding;
-    if (status == "정찰 위치 도착") return FleetDroneStatus::TargetReached;
-    if (status == "재집결 완료") return FleetDroneStatus::RegroupComplete;
-    if (status == "복귀 완료") return FleetDroneStatus::ReturnComplete;
-    if (status == "저전력 복귀 완료") return FleetDroneStatus::LowBatteryReturnComplete;
-    if (status == "경로 오류") return FleetDroneStatus::RouteFailed;
-    if (status == "목표 외 착륙") return FleetDroneStatus::OutsideTargetLanding;
-    if (status == "배터리 부족 · 복귀 경로 오류")
-        return FleetDroneStatus::BatteryReturnRouteFailed;
-    if (status == "임무 권한 만료 · 안전 착륙")
-        return FleetDroneStatus::AssignmentExpiredLanding;
-    if (status == "집결 실패") return FleetDroneStatus::RegroupFailed;
-    if (status == "복귀 실패") return FleetDroneStatus::ReturnFailed;
-    return FleetDroneStatus::Other;
-}
-
 std::string_view FleetDroneStatusLabel(FleetDroneStatus status) noexcept
 {
     switch (status)
@@ -82,11 +53,6 @@ bool IsFleetMissionInProgress(FleetDroneStatus status) noexcept
     default:
         return false;
     }
-}
-
-bool IsFleetMissionInProgress(std::string_view status) noexcept
-{
-    return IsFleetMissionInProgress(ParseFleetDroneStatus(status));
 }
 
 FleetMissionProgressDecision EvaluateFleetMissionProgress(
