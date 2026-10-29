@@ -10,7 +10,7 @@
         "CMAKE_BUILD_TYPE": "Release",
         "AEROSIMLAB_BUILD_GRAPHICS": "ON",
         "BUILD_TESTING": "OFF",
-        "VCPKG_MANIFEST_FEATURES": "desktop-video"
+        "VCPKG_MANIFEST_FEATURES": "desktop-vision"
       }
     },
     {

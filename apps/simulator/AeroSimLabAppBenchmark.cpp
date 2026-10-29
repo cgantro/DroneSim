@@ -102,30 +102,6 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     }
 #endif
     nlohmann::json report = BuildViewerBenchmarkReport(std::move(measurements));
-#ifndef __EMSCRIPTEN__
-    if (visibleBenchmarkMode_)
-    {
-        SaveViewerBenchmarkReport(report);
-        return;
-    }
-
-    report["drone_memory_scaling"] = {
-        {"kinematic", MeasureDroneMemoryScaling(
-            aerosimlab::simulation::SimulationDynamics::Kinematic)},
-        {"rigid_body", MeasureDroneMemoryScaling(
-            aerosimlab::simulation::SimulationDynamics::RigidBody)}};
-    report["entity_scaling"] = {
-        {"kinematic", MeasureDroneScaling(
-            aerosimlab::simulation::SimulationDynamics::Kinematic,
-            DroneScalingLayout::Separated)},
-        {"rigid_body", MeasureDroneScaling(
-            aerosimlab::simulation::SimulationDynamics::RigidBody,
-            DroneScalingLayout::Separated)},
-        {"rigid_body_compact", MeasureDroneScaling(
-            aerosimlab::simulation::SimulationDynamics::RigidBody,
-            DroneScalingLayout::Compact)}};
-    report["cooperative_mission_scaling"] = MeasureCooperativeMissionScaling();
-#endif
     SaveViewerBenchmarkReport(report);
 }
 }

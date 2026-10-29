@@ -8,19 +8,8 @@
 #include <string>
 #include <vector>
 
-namespace aerosimlab::simulation
-{
-enum class SimulationDynamics;
-}
-
 namespace aerosimlab::simulator
 {
-enum class DroneScalingLayout
-{
-    Separated,
-    Compact
-};
-
 /** @brief GPU에서 끝난 HUD 그리기 시간과 해당 화면 프레임 번호다. */
 struct HudGpuTiming
 {
@@ -115,15 +104,4 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
 void SaveViewerBenchmarkReport(
     const nlohmann::json& report, const std::filesystem::path& outputPath = {});
 
-#ifndef __EMSCRIPTEN__
-/** @brief 선택한 비행 계산 방식과 드론 배치에서 화면 없이 측정한다. */
-nlohmann::json MeasureDroneScaling(
-    simulation::SimulationDynamics dynamics, DroneScalingLayout layout);
-
-/** @brief 같은 모의에 드론을 차례로 추가해 프로세스 메모리 증가를 추정한다. */
-nlohmann::json MeasureDroneMemoryScaling(simulation::SimulationDynamics dynamics);
-
-/** @brief 실제 시나리오 실행 경로에서 여러 드론의 공동 임무를 측정한다. */
-nlohmann::json MeasureCooperativeMissionScaling();
-#endif
 }

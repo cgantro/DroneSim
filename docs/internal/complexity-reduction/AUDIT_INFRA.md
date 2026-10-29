@@ -1,6 +1,6 @@
 # 인프라 감사 — 첫 25개
 
-기준: INVENTORY.tsv의 owner=infra, audit_status=UNREAD 행을 순서대로 25개 선택. 이 기록은 정적 확인이며 빌드·시험·렌더링을 실행하지 않았다. 당시 판정은 EO 로컬 녹화를 포함한 기준선이었으나, 2026-10-29 사용자 요청에 따라 카메라 파일 저장은 제거 대상으로 바뀌었다. 현재 라이브 영상 경로는 유지한다. 그 밖의 판정은 제안이며 동작 검증을 뜻하지 않는다.
+기준: INVENTORY.tsv의 owner=infra, audit_status=UNREAD 행을 순서대로 25개 선택. 이 기록은 정적 확인이며 빌드·시험·렌더링을 실행하지 않았다. 당시에는 EO 로컬 녹화와 라이브 영상 전송이 남아 있었으나, 2026-10-29 사용자 요청으로 둘 다 제거했다. 아래 파일별 판정은 당시 조사 기록이며, 현재 상태는 마지막의 변경 기록을 따른다.
 
 ## 파일별 기록
 
@@ -12,8 +12,8 @@
 6. `.gitignore` — **KEEP**. 빌드 산출물, 개인 자료 및 로컬 설정 등을 Git 추적 후보에서 제외한다. Git이 소비하며 런타임 자원은 소유하지 않는다. 기존 추적 파일에는 소급 적용되지 않는다. 기존 빌드 위치와 중복되지 않는 보호 설정을 유지한다.
 7. `.vscode/settings.json` — **KEEP**. VS Code CMake 확장에서 preset 사용과 병렬 작업 수를 읽는다. 빌드 설정만 제공하고 실행 자원은 소유하지 않는다. CMakePresets와 역할이 다르며 별도 오류 처리 없다.
 8. `AGENTS.md` — **KEEP**. 저장소 작업 규칙과 기준 문서·검증·작업 공간 제약을 제공한다. 작업자가 읽으며 실행 자원이나 오류 처리 로직은 없다. 문제 해결 skill과 역할이 연결되나 범위가 달라 통합할 이유는 확인되지 않았다.
-9. `CMakeLists.txt` — **SIMPLIFY**. CMake가 소스·의존성·플랫폼 옵션을 입력받아 라이브러리, 시뮬레이터, 자산 복사 및 테스트 대상을 만든다. 누락된 네이티브 실행 자산은 configure에서 오류 처리한다. 2026-10-29에는 카메라 녹화기와 녹화물 전달 소스, OpenCV videoio 링크를 제거했다. GStreamer는 유지되는 라이브 RTP 영상 경로에서 사용한다. 변경 뒤 전체 빌드는 별도 검증 기록을 참조한다.
-10. `CMakePresets.json` — **SIMPLIFY**. CMake/IDE에 Windows Release, Linux debug·sanitizer·coverage 및 웹 구성/빌드 프리셋을 제공한다. 각 빌드 폴더에 출력하며 오류는 CMake에 맡긴다. 상속으로 설정 중복을 줄인다. 웹과 coverage는 사용자 지원 필요성에 맞춰 판단하고 전송 제거 시 desktop-video 의존성의 실제 구성을 재검토한다.
+9. `CMakeLists.txt` — **SIMPLIFY**. CMake가 소스·의존성·플랫폼 옵션을 입력받아 라이브러리, 시뮬레이터, 자산 복사 및 테스트 대상을 만든다. 누락된 네이티브 실행 자산은 configure에서 오류 처리한다. 2026-10-29에는 카메라 파일 저장·전송 소스, GStreamer 링크를 제거했다. 변경 뒤 전체 빌드는 별도 검증 기록을 참조한다.
+10. `CMakePresets.json` — **SIMPLIFY**. CMake/IDE에 Windows Release, Linux debug·sanitizer·coverage 및 웹 구성/빌드 프리셋을 제공한다. 각 빌드 폴더에 출력하며 오류는 CMake에 맡긴다. 상속으로 설정 중복을 줄인다. 영상 전송용 GStreamer 기능은 제거했다.
 11. `GOAL.md` — **SIMPLIFY**. 목표·대표 임무·완료 기준을 독자에게 제공하며 프로그램에 호출되지 않는다. 구현 확인은 SPEC과 코드에서 별도로 한다. 카메라 파일 저장은 사용자가 제거하도록 결정했다.
 12. `README.md` — **SIMPLIFY**. 실행 순서와 공개 문서 길잡이를 제공한다. 독자가 소비하고 런타임 소유권·오류 처리는 없다. 다중 홉·장애 대응·성능 측정 설명이 새 범위와 어긋난다. 제거 구현이 확정된 뒤 실행 안내와 함께 갱신해 상충을 피한다.
 13. `SPEC.md` — **SIMPLIFY**. 구현과 시험 상태·한계를 독자에게 제공한다. 실제 실행을 수행하는 파일은 아니다. 현재 중계 복구·장애 자동 대응 및 영상 전달 계획을 담아 새 범위와 충돌한다. 남길 동작의 기존 시험 근거와 미검증 표시는 보존하고 구현 변경 후 범위를 재기록한다. 이 문서의 과거 통과 주장은 이번 감사에서 재실행하지 않았다.
@@ -32,7 +32,7 @@
 
 ## 남은 확인
 
-다음 대상은 inventory의 26번째 infra UNREAD부터다. 위 판정은 각 파일 정적 확인과 일부 참조 검색을 바탕으로 했으며 다른 파일의 전체 호출 관계, 런타임 동작, 외부 라이선스 원본 및 실제 빌드/시험 결과는 확인하지 않았다. 특히 GStreamer 제거 가능 여부와 관제 클라이언트의 제품 필요성은 관련 나머지 파일 감사 후 결정한다.
+다음 대상은 inventory의 26번째 infra UNREAD부터다. 위 판정은 각 파일 정적 확인과 일부 참조 검색을 바탕으로 했으며 다른 파일의 전체 호출 관계, 런타임 동작, 외부 라이선스 원본 및 실제 빌드/시험 결과는 확인하지 않았다. 관제 클라이언트의 제품 필요성은 별도 검토한다.
 
 ## 두 번째 묶음 — 기존 기록 다음 25개
 
@@ -168,10 +168,10 @@
 
 116. `modules/manual_control/src/GamepadCommandMapper.cpp` — **KEEP**. 축 입력과 yaw로 데드존·감도 곡선 및 월드 속도/회전 목표를 반환하고 입력 소유권·연결 해제 시 정지/착륙을 선택한다. 값만 사용하고 `noexcept`다. 앱과 단위 시험이 호출한다. 연결 해제 정책은 영상 전송·다중 홉 자동 복구와 다른 수동 입력 책임이다. 비유한 축 입력은 명시적으로 거르지 않으며 실제 장치 실행은 미검증.
 117. `modules/media/include/media/RecordedCaptureTransfer.h` — **REMOVED 2026-10-29**. 녹화 영상·메타데이터를 주고받던 TCP 계약이다. 카메라 파일 저장과 함께 파일 전송 기능도 제거했다.
-118. `modules/media/include/media/RtpVideoStream.h` — **REMOVE**. EO RGB 프레임의 RTP/RTCP 송수신·최신 프레임 및 통계를 선언한다. 송수신기 구현체를 unique_ptr로 소유하며 실패를 bool/오류로 전달한다. 앱과 전송 시험이 사용한다. 로컬 프레임 보관과는 다른 전송 기능이다.
+118. `modules/media/include/media/RtpVideoStream.h` — **REMOVED 2026-10-29**. EO RGB 프레임의 RTP/RTCP 송수신을 선언했다. 사용자가 영상 전송을 제거해 앱 연결과 전송 시험에서 함께 삭제했다.
 119. `modules/media/src/RecordedCaptureTransfer.cpp` — **REMOVED 2026-10-29**. 녹화 영상·메타데이터 파일 전송 구현. 호출부·시험·CMake 등록과 함께 삭제했다.
-120. `modules/media/src/RtpVideoStream.cpp` — **KEEP**. GStreamer H.264 RTP/RTCP 라이브 영상 송수신과 디코딩을 맡는다. 사용 중인 라이브 화면 경로이므로 카메라 파일 저장 제거와 구분해 보존한다.
-121. `modules/sensor/include/sensor/RgbFrame.h` — **KEEP**. 프레임 크기·Tick·RGB 바이트와 행 순서를 값으로 소유하며 유효성 확인 및 뒤집기 계약을 제공한다. EO 캡처·분석·라이브 영상에 사용한다.
+120. `modules/media/src/RtpVideoStream.cpp` — **REMOVED 2026-10-29**. GStreamer H.264 RTP/RTCP 송수신과 디코딩 구현이었다. 전송 기능 및 의존성과 함께 삭제했다.
+121. `modules/sensor/include/sensor/RgbFrame.h` — **KEEP**. 프레임 크기·Tick·RGB 바이트와 행 순서를 값으로 소유하며 유효성 확인 및 뒤집기 계약을 제공한다. EO 프레임 분석에 사용한다.
 122. `modules/sensor/src/RgbFrame.cpp` — **KEEP**. 크기 곱셈을 확인해 정확한 픽셀 수를 검사하고 유효한 프레임의 행을 뒤집는다. 잘못된 입력에서 뒤집기는 아무 작업을 하지 않는다. 픽셀 vector는 프레임이 소유한다. 시험 파일 존재, 실행하지 않았다.
 123. `modules/vision/include/vision/RgbFrameQuality.h` — **KEEP**. RGB의 밝기·표준편차·라플라시안 분산 분석 계약과 재사용 작업 영상을 제공한다. 인스턴스는 작업 Mat을 소유하므로 한 스레드에서 순차 호출해야 하고 잘못된 입력은 예외다. 품질 지표는 전송이나 자동 객체 판정과 다르다.
 124. `modules/vision/include/vision/RgbFrameView.h` — **KEEP**. 유효한 프레임을 복사 없이 OpenCV Mat으로 빌려 보여 준다. 픽셀 소유자는 원본이고 원본 수명·재할당 전까지만 유효하다. 행 순서와 RGB 해석은 호출자 책임, 오류는 예외다. 앱 EO 분석에서 호출한다.
@@ -202,7 +202,7 @@
 142. `tests/data/px4_x500_position_replay_2026_10_16_100s.json` — **KEEP, METADATA_ONLY**. 전체 152,286바이트 JSON 파싱 성공; 드론 1개, 명령 240개, 참조 표본 241개 및 ESC 회전수·지면 기준 메타데이터가 있다. 저장된 출처는 PX4 Flight Review, 라이선스 표기는 CC-BY PX4다. ScenarioRunnerTests가 참조한다. 앞 파일과 측정 입력이 다르므로 단순 중복이 아니다. 외부 원본·라이선스 독립 확인과 개별 수치는 미검증.
 143. `tests/graphics/CameraTests.cpp` — **KEEP**, 완독 1–261행. 카메라 위쪽 축, GLB 텍스처 좌표와 임시 GLB를 숨김 창에서 렌더링해 픽셀을 읽는 과정을 검사한다. 시험은 임시 파일·창·GPU 자원을 수명 순서로 관리하며 GoogleTest가 실패를 보고한다. EO/장면 유지에 유용하다. 실행과 실제 기체 카메라 화면 통합은 미검증.
 144. `tests/manual_control/GamepadCommandMapperTests.cpp` — **KEEP**, 완독 1–48행. 데드존·yaw 회전과 연결 해제 정책을 값 단위로 검사한다. 장치·창을 소유하지 않으며 실제 게임패드 분리와 입력 대기열은 확인하지 않는다. 수동 조종을 유지하면 독립 회귀 가치가 있다.
-145. `tests/media/RtpVideoStreamTests.cpp` — **KEEP**. 라이브 RTP 영상 인코딩·수신을 확인한다. 녹화 파일 전달 시험과 관련 include만 제거했다. 라이브 영상은 계속 사용한다.
+145. `tests/media/RtpVideoStreamTests.cpp` — **REMOVED 2026-10-29**. 라이브 RTP 영상 인코딩·수신 시험이었다. 사용자가 영상 전송을 제거해 구현과 함께 삭제했다.
 146. `tests/sensor/RgbFrameTests.cpp` — **KEEP**, 완독 1–41행. RGB 크기 검사와 행 뒤집기·원상 복원 및 잘못된 큰 크기를 검사한다. 프레임 벡터를 시험이 소유하고 잘못된 입력은 유효하지 않다고 판정한다. 라이브 EO 프레임 처리의 기본 회귀다.
 147. `tests/vision/RgbFrameQualityTests.cpp` — **KEEP**, 완독 1–51행. 작은 RGB 입력의 밝기·대비·선명도와 위아래 반전 불변성·잘못된 형식 거부를 검사한다. 시험이 Mat을 소유하며 예외를 검사한다. 앱의 EO 품질 측정과 관련되고 대상 인식 시험은 아니다.
 148. `tests/vision/RgbFrameViewTests.cpp` — **KEEP**, 완독 1–31행. OpenCV 뷰가 원본 픽셀을 공유하고 잘못된 프레임을 거부하는지 검사한다. 원본이 픽셀을 소유하며 뷰는 빌린다. 품질 계산과 별개인 수명/공유 계약을 확인한다.

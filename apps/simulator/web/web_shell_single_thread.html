@@ -35,7 +35,7 @@
       .panel-title { display: flex; align-items: center; padding: 0 13px; color: #dce8ed; border-bottom: 1px solid var(--border); font-weight: 650; letter-spacing: .01em; }
       #web-eo-live { display: grid; grid-template-rows: 28px minmax(0, 1fr); min-height: 0; padding: 9px; gap: 5px; }
       #web-eo-live-status { color: var(--muted); font-size: 12px; }
-      #web-eo-live video { display: block; width: 100%; height: 100%; min-height: 0; background: #05090c; object-fit: contain; border-radius: 5px; }
+      #web-eo-live-canvas { display: block; width: 100%; height: 100%; min-height: 0; background: #05090c; object-fit: contain; border-radius: 5px; }
       #startup-status { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 24px; color: var(--text); background: #0a1015f2; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
       #startup-status[hidden] { display: none; }
       #startup-message { max-width: 560px; }
@@ -129,8 +129,8 @@
         <section id="camera-panel" class="view-panel" aria-label="드론 카메라 영상">
           <div class="panel-title">드론 카메라 · 1280 × 960</div>
           <div id="web-eo-live" aria-live="polite">
-            <strong id="web-eo-live-status">영상 연결 준비 중</strong>
-            <video id="web-eo-live-video" autoplay muted playsinline></video>
+            <strong id="web-eo-live-status">카메라 화면 준비 중</strong>
+            <canvas id="web-eo-live-canvas" aria-label="드론 카메라 화면"></canvas>
           </div>
         </section>
       </aside>
@@ -181,15 +181,12 @@
           startupStatus.hidden = false;
         }
       }, 20000);
-      var eoStreamCanvas = document.createElement("canvas");
-      var eoStreamContext = eoStreamCanvas.getContext("2d");
+      var eoPanelCanvas = document.querySelector("#web-eo-live-canvas");
+      var eoPanelContext = eoPanelCanvas.getContext("2d");
       var eoViewport = null;
       var eoCanvasCopyActive = false;
       var eoLastCanvasCopyAt = -Infinity;
       var eoCanvasCopyIntervalMilliseconds = 1000 / 24;
-      var eoWebRtcStream = null;
-      var eoWebRtcSender = null;
-      var eoWebRtcReceiver = null;
 
       function showStartupError(message) {
         window.clearTimeout(startupTimeout);
@@ -221,10 +218,8 @@
           button.disabled = false;
         });
         document.querySelector("#inspection-target").disabled = false;
-        startEoWebRtcLoopback().catch(function (error) {
-          closeEoWebRtc();
-          setEoLiveStatus("EO 영상 · WebRTC 연결 실패: " + error.message);
-        });
+        startEoViewportCopy();
+        setEoLiveStatus("시뮬레이터 카메라 화면을 표시하고 있습니다.");
       };
 
       window.copyDroneSimEoViewport = function (x, y, width, height) {
@@ -249,102 +244,7 @@
         document.querySelector("#web-eo-live-status").textContent = message;
       }
 
-      function waitForIceGathering(pc) {
-        if (pc.iceGatheringState === "complete")
-          return Promise.resolve();
-        return new Promise(function (resolve, reject) {
-          var timeout = window.setTimeout(function () {
-            pc.removeEventListener("icegatheringstatechange", checkState);
-            reject(new Error("ICE 후보 수집 시간이 초과됐습니다."));
-          }, 10000);
-          function checkState() {
-            if (pc.iceGatheringState !== "complete")
-              return;
-            window.clearTimeout(timeout);
-            pc.removeEventListener("icegatheringstatechange", checkState);
-            resolve();
-          }
-          pc.addEventListener("icegatheringstatechange", checkState);
-        });
-      }
-
-      function waitForRtcConnection(pc) {
-        if (pc.connectionState === "connected")
-          return Promise.resolve();
-        return new Promise(function (resolve, reject) {
-          var timeout = window.setTimeout(function () {
-            pc.removeEventListener("connectionstatechange", checkState);
-            reject(new Error("영상 수신 연결 시간이 초과됐습니다."));
-          }, 10000);
-          function checkState() {
-            if (pc.connectionState === "connected") {
-              window.clearTimeout(timeout);
-              pc.removeEventListener("connectionstatechange", checkState);
-              resolve();
-            } else if (pc.connectionState === "failed") {
-              window.clearTimeout(timeout);
-              pc.removeEventListener("connectionstatechange", checkState);
-              reject(new Error("브라우저 WebRTC 연결이 실패했습니다."));
-            }
-          }
-          pc.addEventListener("connectionstatechange", checkState);
-          checkState();
-        });
-      }
-
-      function closeEoWebRtc() {
-        if (eoWebRtcSender) {
-          if (eoWebRtcSender.signalingState !== "closed")
-            eoWebRtcSender.close();
-        }
-        if (eoWebRtcReceiver) {
-          if (eoWebRtcReceiver.signalingState !== "closed")
-            eoWebRtcReceiver.close();
-        }
-        if (eoWebRtcStream) {
-          eoWebRtcStream.getTracks().forEach(function (track) { track.stop(); });
-        }
-      }
-
-      async function startEoWebRtcLoopback() {
-        if (!window.RTCPeerConnection || !HTMLCanvasElement.prototype.captureStream)
-          throw new Error("이 브라우저는 WebRTC 영상 수신을 지원하지 않습니다.");
-        if (!eoStreamContext)
-          throw new Error("EO 영상 캔버스를 만들지 못했습니다.");
-
-        setEoLiveStatus("EO 영상 · 전송 경로 연결 중");
-        startEoViewportCopy();
-        eoWebRtcStream = eoStreamCanvas.captureStream(24);
-        eoWebRtcSender = new RTCPeerConnection({ iceServers: [] });
-        eoWebRtcReceiver = new RTCPeerConnection({ iceServers: [] });
-        var liveVideo = document.querySelector("#web-eo-live-video");
-        eoWebRtcSender.addEventListener("connectionstatechange", function () {
-          if (eoWebRtcSender.connectionState === "disconnected"
-              || eoWebRtcSender.connectionState === "failed")
-            setEoLiveStatus("EO 영상 · WebRTC 연결 끊김");
-        });
-        eoWebRtcReceiver.addEventListener("track", function (event) {
-          liveVideo.srcObject = event.streams[0];
-          void liveVideo.play().catch(function () {});
-        });
-        eoWebRtcStream.getTracks().forEach(function (track) {
-          eoWebRtcSender.addTrack(track, eoWebRtcStream);
-        });
-
-        await eoWebRtcSender.setLocalDescription(
-          await eoWebRtcSender.createOffer());
-        await waitForIceGathering(eoWebRtcSender);
-        await eoWebRtcReceiver.setRemoteDescription(eoWebRtcSender.localDescription);
-        await eoWebRtcReceiver.setLocalDescription(
-          await eoWebRtcReceiver.createAnswer());
-        await waitForIceGathering(eoWebRtcReceiver);
-        await eoWebRtcSender.setRemoteDescription(eoWebRtcReceiver.localDescription);
-        await waitForRtcConnection(eoWebRtcSender);
-        setEoLiveStatus("EO 영상 · 로컬 WebRTC 수신 연결됨");
-      }
-
       window.addEventListener("beforeunload", function () {
-        closeEoWebRtc();
         eoCanvasCopyActive = false;
       });
 
@@ -355,17 +255,17 @@
       function copyEoViewport(timestamp) {
         if (timestamp - eoLastCanvasCopyAt >= eoCanvasCopyIntervalMilliseconds) {
           eoLastCanvasCopyAt = timestamp;
-          if (Module.canvas && eoStreamContext && eoViewport
+          if (Module.canvas && eoPanelContext && eoViewport
               && eoViewport.width > 0 && eoViewport.height > 0) {
             var source = Module.canvas;
-            if (eoStreamCanvas.width !== eoViewport.width
-                || eoStreamCanvas.height !== eoViewport.height) {
-              eoStreamCanvas.width = eoViewport.width;
-              eoStreamCanvas.height = eoViewport.height;
+            if (eoPanelCanvas.width !== eoViewport.width
+                || eoPanelCanvas.height !== eoViewport.height) {
+              eoPanelCanvas.width = eoViewport.width;
+              eoPanelCanvas.height = eoViewport.height;
             }
             if (eoViewport.x + eoViewport.width <= source.width
                 && eoViewport.y + eoViewport.height <= source.height) {
-              eoStreamContext.drawImage(source,
+              eoPanelContext.drawImage(source,
                 eoViewport.x, eoViewport.y, eoViewport.width, eoViewport.height,
                 0, 0, eoViewport.width, eoViewport.height);
             }

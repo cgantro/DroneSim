@@ -2,7 +2,6 @@
 
 #include "graphics/Camera.h"
 #include "graphics/MultisampleFramebuffer.h"
-#include "media/RtpVideoStream.h"
 #include "graphics/Renderer.h"
 #include "graphics/Window.h"
 #include "simulation_core/ScopedDuration.h"
@@ -236,11 +235,6 @@ void AeroSimLabApp::ProcessEoPixels(std::uint64_t simulationTick)
         benchmarkMeasurements_.visionDurationsMicroseconds.push_back(
             analysisDurationMicroseconds);
 
-    if (eoVideoSender_ && eoVideoSender_->IsRunning())
-    {
-        std::string error;
-        static_cast<void>(eoVideoSender_->PushFrame(eoFrame_, error));
-    }
 }
 
 void AeroSimLabApp::DrainEoReadbacks()
