@@ -2,7 +2,7 @@
 
 ## 현재 상태
 
-- 원격 `main`의 최신 변경은 `241dda06`이다. 자동 재배정과 사용하지 않던 Simulation Core 계측을 제거했고, `AddDrone`의 중복 진입점도 합쳤다.
+- 원격 `main`의 최신 변경은 `88bc66fe`이다. 자동 재배정과 사용하지 않던 Simulation Core 계측을 제거했고, `AddDrone`의 중복 진입점과 드론별 중복 바람 상태를 정리했다.
 - Windows Release 전체 빌드와 CTest 29/29가 통과했다.
 - 사용자가 미리 삭제한 `assets/models/source/x500-v2/README.md`는 미커밋 상태로 남겨 두었다.
 - 다음은 Simulation Core가 맡은 책임과 Flecs 시스템의 데이터 흐름을 다시 보고, 이해하기 어려운 결합을 작은 단위로 줄이는 것이다.
@@ -13,6 +13,12 @@
 - 호출부의 인자 수와 동작은 유지한다. 실제 지면 높이를 아는 곳은 세 번째 인자로 계속 전달할 수 있다.
 - Windows Release 전체 빌드 성공, 전체 CTest 29/29 통과.
 - 최초 링크에서는 이전 API 심볼을 참조하는 오래된 시험 목적 파일이 남아 실패했다. SimulationCore·시나리오·통합 시험 타깃의 생성 파일을 다시 만든 뒤 전체 빌드와 시험을 통과했다.
+
+## 바람을 공통 환경 상태로 관리 — 2026-10-29
+
+- 같은 바람 값을 각 `DroneControlState`에 복사하던 필드를 제거했다. 코어에 저장된 환경 바람을 운동학 계산에 직접 전달하며, AirSim 강체 모드에는 기존처럼 `PhysicsWorld`에 전달한다.
+- 바람이 켜진 운동학 드론이 무풍 드론보다 이동하는지 기존 SimulationCore 시험 묶음에 확인을 추가했다.
+- Release 증분 빌드가 컴포넌트 크기 변경 뒤 `QuadrotorFlightController.cpp`를 재컴파일하지 않아 물리 회피 시험이 실패했다. SimulationCore 시험 타깃을 정리하고 의존 목적 파일을 다시 만든 뒤 전체 빌드와 CTest 29/29가 통과했다.
 
 ### 감사 시작 시점의 기록
 
