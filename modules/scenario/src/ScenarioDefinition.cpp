@@ -434,13 +434,11 @@ ScenarioResult::MissionTask ReadMissionTask(
         task.waypointsMeters.reserve(waypoints->size());
         for (const Json& waypoint : *waypoints)
             task.waypointsMeters.push_back(ReadVector(waypoint, "waypoints_meters 항목"));
-        task.targetPositionMeters = task.waypointsMeters.front();
     }
     else
     {
-        task.targetPositionMeters = ReadVector(
-            Required(taskValue, "target_position_meters"), "target_position_meters");
-        task.waypointsMeters.push_back(task.targetPositionMeters);
+        task.waypointsMeters.push_back(ReadVector(
+            Required(taskValue, "target_position_meters"), "target_position_meters"));
     }
     task.startTick = ReadUnsigned(Required(taskValue, "start_tick"), "start_tick");
     task.deadlineTick = ReadUnsigned(
@@ -549,7 +547,6 @@ std::vector<ScenarioResult::MissionTask> GenerateSurveyTasks(
             task.waypointsMeters.emplace_back(firstX, rowYValues[row], altitude);
             task.waypointsMeters.emplace_back(secondX, rowYValues[row], altitude);
         }
-        task.targetPositionMeters = task.waypointsMeters.front();
         tasks.push_back(std::move(task));
     }
     return tasks;

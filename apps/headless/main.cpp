@@ -98,6 +98,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
             {
                 waypoints.push_back({waypoint.x, waypoint.y, waypoint.z});
             }
+            const glm::dvec3& target = task.waypointsMeters.front();
             tasks.push_back({
                 {"name", task.name},
                 {"role", task.role},
@@ -106,10 +107,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                 {"inspection_zone_id", task.inspectionZoneId.empty()
                         ? nlohmann::json(nullptr) : nlohmann::json(task.inspectionZoneId)},
                 {"drone", task.droneName},
-                {"target_position_meters", {
-                    task.targetPositionMeters.x,
-                    task.targetPositionMeters.y,
-                    task.targetPositionMeters.z}},
+                {"target_position_meters", {target.x, target.y, target.z}},
                 {"waypoints_meters", std::move(waypoints)},
                 {"current_waypoint_index", task.currentWaypointIndex},
                 {"started", task.started},

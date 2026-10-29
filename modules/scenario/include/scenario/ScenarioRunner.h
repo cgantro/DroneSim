@@ -106,7 +106,6 @@ struct ScenarioResult
         std::string facilityId;
         std::string inspectionZoneId;
         std::string droneName;
-        glm::dvec3 targetPositionMeters{0.0};
         /** @brief 점 임무는 한 점, 구역 임무는 왕복 경로의 순서 있는 지점 목록이다. */
         std::vector<glm::dvec3> waypointsMeters;
         std::size_t currentWaypointIndex = 0;
