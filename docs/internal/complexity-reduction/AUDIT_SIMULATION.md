@@ -120,3 +120,11 @@
 - JSON의 `formation_links`는 leader 위치에 오프셋을 더해 follower에게 매 Tick 새 경유점을 주고, 별도 링크 단절 구간을 적용했다. 시뮬레이터 앱이나 다른 시나리오가 이 기능을 부르지 않았고, 직접 통신 단절 모의도 따로 있었다.
 - 정의 구조, JSON 파서·검증, Tick 처리, 전용 시험, headless 연기 시험과 `leader-following-outage.json`을 함께 제거했다. 총 268줄을 덜었다. 직접 상태 보고 장애(`communication_outages`)와 앱의 V자 편대 경로는 변경하지 않았다.
 - Release의 `aerosimlab_headless`, `aerosimlab_scenario_tests` 타깃 빌드 성공. 전체 CTest 28/28 통과. 시나리오와 앱 임무가 별도 구현이라는 기존 경계는 그대로라서, 앱 임무 동작이 이 시험으로 검증된다고 볼 수 없다.
+
+## 시나리오 명령 전달 모형 축소 — 2026-10-29
+
+- 기존 JSON 명령은 `delay_ticks`, `drop`, `duplicate`를 받아 Runner 안에서 전달 시각을 다시 만들고, 순번 검사를 한 뒤 적용·유실·중복 결과를 별도로 기록했다. 이는 직접 통신 상태를 모의하는 `communication_outages`와 별개의 패킷 전달 구현이었다.
+- 명령은 지정된 Tick에 한 번 적용하는 구조로 줄였다. Runner의 순번 맵과 지연·유실·중복 처리 함수를 없앴고, `independent-flight.json`도 즉시 전달 규칙을 사용한다.
+- 이전 fault-injection fixture는 제거된 명령 필드에 기대고 있었다. 이를 두 드론의 직접 통신 단절 사례로 바꾸고 CTest 이름도 실제 범위를 나타내도록 고쳤다. stale 상태와 마지막 보고 위치가 유지되는 점을 확인한다.
+- 첫 검증은 예상 비행 시간과 다중 드론 `expected.drones` 누락으로 실패했다. 입력과 기대값을 현재 Tick 규칙에 맞춘 뒤 관련 시험 2/2, 전체 CTest 28/28 통과.
+- 변경은 JSON Runner에 한정된다. 앱 가상 통신망과 명령 전송 코드는 건드리지 않았으며, 시나리오 통과가 앱 통신의 동일 동작을 보증하지 않는다.

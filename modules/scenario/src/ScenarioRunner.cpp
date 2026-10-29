@@ -31,7 +31,7 @@ using detail::ScenarioDrone;
 using detail::CollisionAvoidanceSettings;
 using detail::EnergyModelSettings;
 using detail::ScheduledCameraEvent;
-using detail::ScheduledCommand;
+using detail::TickCommand;
 using detail::DroneCommunicationOutage;
 using DroneIds = std::unordered_map<std::string, DroneId>;
 using DroneHomePositions = std::unordered_map<std::string, glm::dvec3>;
@@ -373,96 +373,32 @@ void RecordMinimumDroneSeparation(
         result.minimumDroneSeparationMeters = std::sqrt(*minimumDistanceSquaredMeters);
 }
 
-/**
- * @brief 통신 장애와 명령 순서를 반영해 이번 명령을 전달할지 결정한다.
- * @details 유실된 명령은 순서 번호를 갱신하지 않는다. 전달 대상으로 정해지면
- *          시뮬레이터가 명령을 받아들이는지와 별개로 마지막 전달 순서를 갱신한다.
- */
-bool PrepareScheduledCommandDelivery(
-    std::uint64_t tick,
-    const ScheduledCommand& scheduled,
-    const DroneObservations& observations,
-    std::unordered_map<std::string, std::uint64_t>& lastDeliveredSequence,
-    ScenarioResult& result)
-{
-    if (!IsConnected(observations, scheduled.droneName))
-    {
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-            + scheduled.droneName + " 드론에 명령을 전달하지 못했습니다. 마지막 위치는 이전 보고값입니다.");
-        return false;
-    }
-    if (scheduled.dropped)
-    {
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-            + scheduled.droneName + " 드론 명령을 통신 장애로 버렸습니다.");
-        return false;
-    }
-
-    std::uint64_t& lastSequence = lastDeliveredSequence[scheduled.droneName];
-    if (scheduled.sequence <= lastSequence)
-    {
-        result.issues.push_back("tick " + std::to_string(tick) + "에서 "
-            + scheduled.droneName + " 드론의 역순 명령을 거부했습니다.");
-        return false;
-    }
-    lastSequence = scheduled.sequence;
-
-    if (scheduled.delayTicks > 0)
-    {
-        result.eventLog.push_back(scheduled.droneName + " 드론에 tick "
-            + std::to_string(scheduled.sendTick)
-            + "에 보낸 명령을 " + std::to_string(scheduled.delayTicks)
-            + " Tick 늦게 전달했습니다.");
-    }
-    return true;
-}
-
-/** @brief 전달이 결정된 명령을 한 번 적용하고 결과를 기록한다. */
-void ApplyDeliveredCommand(
-    std::uint64_t tick,
-    const ScheduledCommand& scheduled,
-    SimulationCore& simulation,
-    const DroneIds& droneIds,
-    ScenarioResult& result)
-{
-    const CommandResult commandResult = simulation.Apply(
-        droneIds.at(scheduled.droneName), scheduled.command);
-    if (commandResult != CommandResult::Accepted)
-    {
-        result.issues.push_back("tick " + std::to_string(tick) + "에서 "
-            + scheduled.droneName + " 드론 명령을 적용하지 못했습니다.");
-    }
-    else
-    {
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-            + scheduled.droneName + " 드론 명령을 적용했습니다.");
-    }
-    if (scheduled.duplicated)
-    {
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-            + scheduled.droneName + " 드론의 중복 재전송 명령을 한 번만 처리했습니다.");
-    }
-}
-
 void ApplyScheduledCommands(
     std::uint64_t tick,
-    const std::vector<ScheduledCommand>& commands,
+    const std::vector<TickCommand>& commands,
     SimulationCore& simulation,
     const DroneIds& droneIds,
     const DroneObservations& observations,
     std::size_t& nextCommand,
-    std::unordered_map<std::string, std::uint64_t>& lastDeliveredSequence,
     ScenarioResult& result)
 {
     while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
     {
-        const ScheduledCommand& scheduled = commands[nextCommand++];
-        if (!PrepareScheduledCommandDelivery(
-                tick, scheduled, observations, lastDeliveredSequence, result))
+        const TickCommand& command = commands[nextCommand++];
+        if (!IsConnected(observations, command.droneName))
         {
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
+                + command.droneName
+                + " 드론에 명령을 전달하지 못했습니다. 마지막 위치는 이전 보고값입니다.");
             continue;
         }
-        ApplyDeliveredCommand(tick, scheduled, simulation, droneIds, result);
+
+        if (simulation.Apply(droneIds.at(command.droneName), command.command)
+            != CommandResult::Accepted)
+        {
+            result.issues.push_back("tick " + std::to_string(tick) + "에서 "
+                + command.droneName + " 드론 명령을 적용하지 못했습니다.");
+        }
     }
 }
 
@@ -1301,7 +1237,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
     }
     std::size_t nextCommand = 0;
     std::size_t nextCameraEvent = 0;
-    std::unordered_map<std::string, std::uint64_t> lastDeliveredSequence;
     DroneNameSet dronesAvoiding;
     std::unordered_map<std::string, glm::dvec3> activeAvoidanceDirections;
     std::unordered_map<std::string, glm::dvec3> activeAvoidanceTargets;
@@ -1318,7 +1253,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         UpdateDroneObservations(tick, definition, simulation, droneIds,
             observations, result);
         ApplyScheduledCommands(tick, definition.commands, simulation, droneIds,
-            observations, nextCommand, lastDeliveredSequence, result);
+            observations, nextCommand, result);
         if (definition.energyModel)
         {
             UpdateEnergyPolicy(tick, result.mission,

@@ -597,16 +597,6 @@ std::optional<ScenarioResult::Mission> ReadMission(
     return mission;
 }
 
-bool ReadOptionalBoolean(const Json& object, const char* name)
-{
-    const auto value = object.find(name);
-    if (value == object.end())
-        return false;
-    if (!value->is_boolean())
-        throw std::invalid_argument("drop과 duplicate는 true 또는 false여야 합니다.");
-    return value->get<bool>();
-}
-
 std::string ReadCommandDroneName(
     const Json& command,
     const std::string& defaultDroneName,
@@ -625,7 +615,7 @@ std::string ReadCommandDroneName(
     return droneName;
 }
 
-std::vector<ScheduledCommand> ReadCommands(
+std::vector<TickCommand> ReadCommands(
     const Json& commands,
     std::uint64_t tickCount,
     const std::string& defaultDroneName,
@@ -636,7 +626,7 @@ std::vector<ScheduledCommand> ReadCommands(
         throw std::invalid_argument("commands는 배열이어야 합니다.");
     }
 
-    std::vector<ScheduledCommand> result;
+    std::vector<TickCommand> result;
     result.reserve(commands.size());
     std::uint64_t previousTick = 0;
     bool hasPreviousTick = false;
@@ -651,25 +641,12 @@ std::vector<ScheduledCommand> ReadCommands(
         {
             throw std::invalid_argument("명령은 tick 순서대로 작성해야 합니다.");
         }
-        const std::uint64_t delay = item.contains("delay_ticks")
-            ? ReadUnsigned(item["delay_ticks"], "delay_ticks")
-            : 0;
-        if (delay >= tickCount - tick)
-            throw std::invalid_argument("통신 지연 뒤 명령이 시나리오 실행 범위를 벗어납니다.");
-        const bool dropped = ReadOptionalBoolean(item, "drop");
-        const bool duplicated = ReadOptionalBoolean(item, "duplicate");
         std::string droneName = ReadCommandDroneName(
             item, defaultDroneName, droneNames);
-        result.push_back({tick + delay, tick, delay,
-            static_cast<std::uint64_t>(result.size()) + 1, std::move(droneName),
-            ReadCommand(item), dropped, duplicated});
+        result.push_back({tick, std::move(droneName), ReadCommand(item)});
         previousTick = tick;
         hasPreviousTick = true;
     }
-    std::stable_sort(result.begin(), result.end(), [](const auto& left, const auto& right)
-    {
-        return left.tick < right.tick;
-    });
     return result;
 }
 
@@ -1143,7 +1120,7 @@ ScenarioDefinition ReadScenarioDefinition(std::string_view jsonText)
     }
     if (definition.dynamics != SimulationDynamics::RigidBody
         && std::any_of(definition.commands.begin(), definition.commands.end(),
-            [](const ScheduledCommand& command)
+            [](const TickCommand& command)
             {
                 return command.command.kind == DroneCommand::Kind::SetRotorThrusts;
             }))

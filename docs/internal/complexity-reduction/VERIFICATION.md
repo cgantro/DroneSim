@@ -311,3 +311,10 @@
 
 - Windows Release 전체 빌드 성공, 전체 CTest 29/29 통과.
 - 주 드론 제거 후 주 식별값만 바뀌고 남은 기체 상태는 그대로이므로 카메라 전체 갱신을 생략했다. 드론 생성·이동·초기화 경로의 카메라 갱신은 보존했다.
+
+## 시나리오 명령 전달 단순화 — 2026-10-29
+
+- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 첫 시험 실행은 예상 비행 시간과 다중 드론 기대 결과가 맞지 않아 실패했고, 수정 후 재실행했다.
+- `Scenario.ScenarioRunnerTests.CoreScenarios`와 `HeadlessCommunicationOutageSmoke` 2/2 통과.
+- 전체 CTest 28/28 통과. 직접 통신 단절 시험에서 scout 상태가 `stale`로 표시되고, 기준 위치·비행 결과 기대값도 통과했다.
+- CTest가 확인한 것은 JSON Runner 동작이다. 앱 가상망과 네이티브 시뮬레이터의 통신 장애 화면은 이번 변경에서 수정하거나 별도 실행하지 않았다.

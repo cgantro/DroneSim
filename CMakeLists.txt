@@ -588,9 +588,11 @@ if(BUILD_TESTING)
     LABELS "INTEGRATION;simulation"
     PASS_REGULAR_EXPRESSION "\\\"tick\\\": 600;\\\"angular_velocity_radians_per_second\\\"")
 
-  add_test(NAME HeadlessFaultScenarioSmoke
-    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/fault-injection/fault-injection.json")
-  set_tests_properties(HeadlessFaultScenarioSmoke PROPERTIES LABELS "INTEGRATION;simulation")
+  add_test(NAME HeadlessCommunicationOutageSmoke
+    COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/communication-outage.json")
+  set_tests_properties(HeadlessCommunicationOutageSmoke PROPERTIES
+    LABELS "INTEGRATION;simulation"
+    PASS_REGULAR_EXPRESSION "communication_status.*stale")
 
   add_test(NAME HeadlessMultiDroneSmoke
     COMMAND aerosimlab_headless --scenario "${CMAKE_SOURCE_DIR}/scenarios/multi-drone/independent-flight.json")

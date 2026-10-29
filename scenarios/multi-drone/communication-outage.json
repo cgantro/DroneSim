@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "dynamics": "kinematic",
+  "ticks": 100,
+  "drones": [
+    {"name": "lead", "initial_position_meters": [0, 0, 0]},
+    {"name": "scout", "initial_position_meters": [10, 0, 0]}
+  ],
+  "commands": [
+    {"tick": 0, "drone": "lead", "type": "takeoff"},
+    {"tick": 0, "drone": "scout", "type": "takeoff"}
+  ],
+  "communication_outages": [
+    {
+      "drone": "scout",
+      "start_tick": 80,
+      "end_tick": 100,
+      "heartbeat_timeout_ticks": 60,
+      "on_timeout": "continue_last_command"
+    }
+  ],
+  "expected": {
+    "tolerance_meters": 0.001,
+    "drones": [
+      {"name": "lead", "mode": "hovering", "position_meters": [0, 0, 1.5]},
+      {"name": "scout", "mode": "hovering", "position_meters": [10, 0, 1.5]}
+    ]
+  }
+}

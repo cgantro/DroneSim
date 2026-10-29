@@ -685,7 +685,7 @@ void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
 }
 }
 
-void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder()
+void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommands()
 {
     constexpr std::string_view scenario = R"json(
     {"version":1,"dynamics":"kinematic","ticks":180,
@@ -693,7 +693,7 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
        {"name":"lead","initial_position_meters":[0,0,0]},
        {"name":"scout","initial_position_meters":[10,0,0],"initial_yaw_radians":1.2}],
      "commands":[
-       {"tick":0,"drone":"lead","type":"takeoff","delay_ticks":5},
+       {"tick":0,"drone":"lead","type":"takeoff"},
        {"tick":0,"drone":"scout","type":"takeoff"},
        {"tick":90,"drone":"scout","type":"set_waypoint",
         "position_meters":[10.724715508953347,1.8640781719344526,1.5]}],
@@ -720,11 +720,10 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
         1.8640781719344526, 1.0e-12);
     EXPECT_NEAR(result.drones[0].flightDistanceMeters, 1.5, 1.0e-9);
     EXPECT_NEAR(result.drones[1].flightDistanceMeters, 3.5, 1.0e-9);
-    EXPECT_NEAR(result.drones[0].flightTimeSeconds, 175.0 / 60.0, 1.0e-12);
+    EXPECT_NEAR(result.drones[0].flightTimeSeconds, 3.0, 1.0e-12);
     EXPECT_NEAR(result.drones[1].flightTimeSeconds, 3.0, 1.0e-12);
     EXPECT_EQ(result.finalState.positionMeters, result.drones[0].finalState.positionMeters);
-    ASSERT_GE(result.eventLog.size(), 3);
-    EXPECT_NE(result.eventLog[1].find("늦게 전달"), std::string::npos);
+    EXPECT_TRUE(result.eventLog.empty());
     ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
     EXPECT_NEAR(*result.minimumDroneSeparationMeters, 10.0, 1.0e-12);
 
@@ -745,26 +744,6 @@ void Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrde
     ASSERT_EQ(wrongOrientationResult.issues.size(), 1);
     EXPECT_NE(wrongOrientationResult.issues.front().find("최종 자세"), std::string::npos);
 
-    constexpr std::string_view communicationFaultScenario = R"json(
-    {"version":1,"dynamics":"kinematic","ticks":100,
-     "commands":[
-       {"tick":0,"type":"takeoff","delay_ticks":10},
-       {"tick":1,"type":"takeoff","drop":true},
-       {"tick":2,"type":"takeoff","duplicate":true}],
-     "expected":{"mode":"hovering","position_meters":[0,0,1.5],
-       "tolerance_meters":0.000001}}
-    )json";
-
-    const ScenarioResult communicationFaults = RunScenario(communicationFaultScenario);
-    EXPECT_FALSE(communicationFaults.passed);
-    EXPECT_EQ(communicationFaults.outcome, ScenarioResult::Outcome::Failed);
-    ASSERT_EQ(communicationFaults.issues.size(), 1);
-    EXPECT_NE(communicationFaults.issues.front().find("역순 명령"), std::string::npos);
-    ASSERT_EQ(communicationFaults.eventLog.size(), 3);
-    EXPECT_NE(communicationFaults.eventLog[0].find("통신 장애"), std::string::npos);
-    EXPECT_NE(communicationFaults.eventLog[1].find("명령을 적용했습니다"), std::string::npos);
-    EXPECT_NE(communicationFaults.eventLog[2].find("중복 재전송"), std::string::npos);
-    EXPECT_EQ(communicationFaults.finalState.mode, FlightMode::Hovering);
 }
 
 void Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones()
@@ -1098,7 +1077,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     }
     EXPECT_FALSE(TryParseFlightMode("unknown_mode").has_value());
 
-    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommandsAndDeliveryOrder());
+    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsNamedDronesWithIndependentCommands());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios());

@@ -25,16 +25,11 @@ struct ExpectedDrone
     std::optional<glm::dquat> orientation;
 };
 
-struct ScheduledCommand
+struct TickCommand
 {
     std::uint64_t tick;
-    std::uint64_t sendTick;
-    std::uint64_t delayTicks;
-    std::uint64_t sequence;
     std::string droneName;
     DroneCommand command;
-    bool dropped;
-    bool duplicated;
 };
 
 struct ScenarioDrone
@@ -101,7 +96,7 @@ struct ScenarioDefinition
     std::vector<ScenarioDrone> drones;
     std::string primaryDroneName;
     CameraModel defaultCameraModel;
-    std::vector<ScheduledCommand> commands;
+    std::vector<TickCommand> commands;
     std::vector<DroneCommunicationOutage> communicationOutages;
     std::optional<CollisionAvoidanceSettings> collisionAvoidance;
     std::optional<EnergyModelSettings> energyModel;
