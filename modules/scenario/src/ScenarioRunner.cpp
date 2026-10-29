@@ -501,7 +501,6 @@ void UpdateCollisionAvoidance(
     std::optional<ScenarioResult::Mission>& mission,
     SimulationCore& simulation,
     const ScenarioDrones& drones,
-    DroneNameSet& dronesAvoiding,
     std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
     ScenarioResult& result)
 {
@@ -672,8 +671,9 @@ void UpdateCollisionAvoidance(
             continue;
 
         // 충돌 지점을 지나서 비켜서도록 목표를 잡고, 위험이 끝날 때까지 유지한다.
-        const auto avoidanceTarget = activeAvoidanceTargets.try_emplace(
-            droneName, avoidanceTargets.at(droneName)).first;
+        const auto [avoidanceTarget, newlyAvoiding] =
+            activeAvoidanceTargets.try_emplace(
+                droneName, avoidanceTargets.at(droneName));
         const CommandResult commandResult = simulation.Apply(drones.at(droneName).id,
             {DroneCommand::Kind::SetWaypoint, avoidanceTarget->second});
         if (commandResult != CommandResult::Accepted)
@@ -681,7 +681,7 @@ void UpdateCollisionAvoidance(
             result.issues.push_back(droneName + " 드론에 충돌 회피 경로를 전달하지 못했습니다.");
             continue;
         }
-        if (!dronesAvoiding.contains(droneName))
+        if (newlyAvoiding)
         {
             ++result.collisionAvoidanceEvents;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
@@ -689,8 +689,9 @@ void UpdateCollisionAvoidance(
         }
     }
 
-    for (const std::string& droneName : dronesAvoiding)
+    for (const auto& entry : activeAvoidanceTargets)
     {
+        const std::string& droneName = entry.first;
         if (!currentlyAvoiding.contains(droneName))
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
@@ -702,7 +703,6 @@ void UpdateCollisionAvoidance(
         {
             return !currentlyAvoiding.contains(entry.first);
         });
-    dronesAvoiding = std::move(currentlyAvoiding);
 }
 
 void UpdateMissionResults(
@@ -971,7 +971,6 @@ ScenarioResult RunScenario(std::string_view jsonText)
         result.trajectory.reserve(static_cast<std::size_t>(sampleCount));
     }
     std::size_t nextCommand = 0;
-    DroneNameSet dronesAvoiding;
     std::unordered_map<std::string, glm::dvec3> activeAvoidanceTargets;
     std::vector<glm::dvec3> dronePositionsMeters;
     if (definition.minimumDroneSeparationMeters)
@@ -993,7 +992,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         }
         UpdateMissionCommands(tick, result.mission, simulation, drones, result);
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
-            drones, dronesAvoiding, activeAvoidanceTargets, result);
+            drones, activeAvoidanceTargets, result);
         for (auto& [droneName, drone] : drones)
         {
             if (simulation.State(drone.id).mode != FlightMode::Grounded)
