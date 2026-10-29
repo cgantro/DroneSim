@@ -238,3 +238,8 @@
 
 - Windows Release 전체 빌드 성공, 전체 CTest 29/29 통과.
 - 드론 초기화가 ID 맵 대신 `DroneState`·`DroneControlState`·`CameraState`가 함께 붙은 엔티티를 조회한다. 같은 조회에서 카메라 초기화와 새 자세 반영까지 마쳐 재순회를 없앴다. SimulationCore의 초기 자세·배터리 초기화·다중 드론 생성·제거 시험이 포함된 전체 시험을 통과했다.
+
+## 기본 드론 API 경로 통합 — 2026-10-29
+
+- Windows Release 전체 빌드 성공, 전체 CTest 29/29 통과.
+- 기본 드론의 상태 조회, 카메라 조회·켜기/끄기가 ID 지정 API를 재사용한다. 기본 드론 선택 로직과 ID별 엔티티 조회를 중복 구현하지 않는다.
