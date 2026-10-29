@@ -988,7 +988,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     {
         for (const auto& [droneId, mission] : fleetReconnaissance_)
         {
-            const auto missionStatus = detail::ParseFleetDroneStatus(mission.status);
+            const auto missionStatus = mission.status;
             if (missionStatus != detail::FleetDroneStatus::TakeoffReady
                 && missionStatus != detail::FleetDroneStatus::Reconnaissance
                 && missionStatus != detail::FleetDroneStatus::Landing)

@@ -497,7 +497,7 @@ private:
         std::uint64_t routeSentAtTick = 0;
         std::uint64_t lastRouteTransmissionTick = 0;
         std::size_t nextWaypoint = 0;
-        std::string status;
+        detail::FleetDroneStatus status = detail::FleetDroneStatus::Other;
         bool routeReceived = false;
         bool waypointCommanded = false;
         bool lowBatteryReturn = false;

@@ -299,7 +299,8 @@ public:
                     + std::to_string(droneId) + " 목표 "
                     + std::to_string(mission.targetIndex) + " 버전 "
                     + std::to_string(mission.assignmentVersion) + " 상태 "
-                    + mission.status);
+                    + std::string(simulator::detail::FleetDroneStatusLabel(
+                        mission.status)));
                 lastVersion = mission.assignmentVersion;
             }
             sawReconnaissance = sawReconnaissance
@@ -348,7 +349,8 @@ public:
                 const auto mission = app.fleetReconnaissance_.find(droneId);
                 if (mission != app.fleetReconnaissance_.end())
                     failureContext << ", 목표 " << mission->second.targetIndex
-                        << ", 상태 " << mission->second.status;
+                        << ", 상태 " << simulator::detail::FleetDroneStatusLabel(
+                            mission->second.status);
             }
             const auto& metrics = app.formationNetwork_->Metrics();
             failureContext << "; 통신 통계 전달 " << metrics.deliveredMessages
@@ -400,7 +402,8 @@ public:
             app.AdvanceSimulationTick();
             const auto& mission = app.fleetReconnaissance_.at(lowBatteryDroneId);
             if (mission.lowBatteryReturn
-                && mission.status == "저전력 복귀 완료")
+                && mission.status
+                    == simulator::detail::FleetDroneStatus::LowBatteryReturnComplete)
                 break;
         }
 
@@ -409,7 +412,8 @@ public:
             .IsReturningForLowBattery());
         EXPECT_TRUE(mission.lowBatteryReturn);
         EXPECT_EQ(mission.leg, simulator::FleetMissionLeg::Returning);
-        EXPECT_EQ(mission.status, "저전력 복귀 완료");
+        EXPECT_EQ(mission.status,
+            simulator::detail::FleetDroneStatus::LowBatteryReturnComplete);
         EXPECT_LE(glm::distance(app.simulation_.State(lowBatteryDroneId).positionMeters,
             mission.startPositionMeters), 5.0);
         const bool targetWasReassigned = std::any_of(app.fleetDroneIds_.begin(),
@@ -456,6 +460,10 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
 
     EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress("정찰 이동 중"));
     EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress("저전력 복귀 중"));
+    EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress(
+        FleetDroneStatus::Reconnaissance));
+    EXPECT_EQ(simulator::detail::FleetDroneStatusLabel(
+        FleetDroneStatus::TargetReached), "정찰 위치 도착");
     EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress("정찰 위치 도착"));
     EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress("전체 임무 완료"));
     EXPECT_EQ(simulator::detail::ParseFleetDroneStatus("경로 오류"),

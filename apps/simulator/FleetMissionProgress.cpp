@@ -22,26 +22,50 @@ FleetDroneStatus ParseFleetDroneStatus(std::string_view status) noexcept
     if (status == "저전력 복귀 완료") return FleetDroneStatus::LowBatteryReturnComplete;
     if (status == "경로 오류") return FleetDroneStatus::RouteFailed;
     if (status == "목표 외 착륙") return FleetDroneStatus::OutsideTargetLanding;
-    if (status == "기체 고장 · 안전 착륙")
-        return FleetDroneStatus::DroneFailureLanding;
-    if (status == "리더 통신 장애 · 기체 안전 착륙")
-        return FleetDroneStatus::LeaderCommunicationFailureLanding;
     if (status == "배터리 부족 · 복귀 경로 오류")
         return FleetDroneStatus::BatteryReturnRouteFailed;
     if (status == "임무 권한 만료 · 안전 착륙")
         return FleetDroneStatus::AssignmentExpiredLanding;
-    if (status == "임무 권한 만료 · 재배정 대기")
-        return FleetDroneStatus::AssignmentExpiredWaiting;
-    if (status == "리더 임무 재배정 대기")
-        return FleetDroneStatus::LeaderReassignmentWaiting;
     if (status == "집결 실패") return FleetDroneStatus::RegroupFailed;
     if (status == "복귀 실패") return FleetDroneStatus::ReturnFailed;
     return FleetDroneStatus::Other;
 }
 
-bool IsFleetMissionInProgress(std::string_view status) noexcept
+std::string_view FleetDroneStatusLabel(FleetDroneStatus status) noexcept
 {
-    switch (ParseFleetDroneStatus(status))
+    switch (status)
+    {
+    case FleetDroneStatus::RoutePending: return "경로 전달 대기";
+    case FleetDroneStatus::TakeoffReady: return "출발 준비";
+    case FleetDroneStatus::Reconnaissance: return "정찰 이동 중";
+    case FleetDroneStatus::RegroupPreparing: return "재집결 준비";
+    case FleetDroneStatus::Regrouping: return "집결 이동 중";
+    case FleetDroneStatus::ReturnPreparing: return "복귀 준비";
+    case FleetDroneStatus::Returning: return "복귀 중";
+    case FleetDroneStatus::LowBatteryReturning: return "저전력 복귀 중";
+    case FleetDroneStatus::LowBatteryLanding: return "저전력 착륙 중";
+    case FleetDroneStatus::Landing: return "착륙 중";
+    case FleetDroneStatus::ReturnLanding: return "복귀 착륙 중";
+    case FleetDroneStatus::TargetReached: return "정찰 위치 도착";
+    case FleetDroneStatus::RegroupComplete: return "재집결 완료";
+    case FleetDroneStatus::ReturnComplete: return "복귀 완료";
+    case FleetDroneStatus::LowBatteryReturnComplete: return "저전력 복귀 완료";
+    case FleetDroneStatus::RouteFailed: return "경로 오류";
+    case FleetDroneStatus::OutsideTargetLanding: return "목표 외 착륙";
+    case FleetDroneStatus::BatteryReturnRouteFailed:
+        return "배터리 부족 · 복귀 경로 오류";
+    case FleetDroneStatus::AssignmentExpiredLanding:
+        return "임무 권한 만료 · 안전 착륙";
+    case FleetDroneStatus::RegroupFailed: return "집결 실패";
+    case FleetDroneStatus::ReturnFailed: return "복귀 실패";
+    case FleetDroneStatus::Other: return {};
+    }
+    return {};
+}
+
+bool IsFleetMissionInProgress(FleetDroneStatus status) noexcept
+{
+    switch (status)
     {
     case FleetDroneStatus::RoutePending:
     case FleetDroneStatus::TakeoffReady:
@@ -58,6 +82,11 @@ bool IsFleetMissionInProgress(std::string_view status) noexcept
     default:
         return false;
     }
+}
+
+bool IsFleetMissionInProgress(std::string_view status) noexcept
+{
+    return IsFleetMissionInProgress(ParseFleetDroneStatus(status));
 }
 
 FleetMissionProgressDecision EvaluateFleetMissionProgress(
