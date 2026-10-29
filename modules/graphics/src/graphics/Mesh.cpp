@@ -3,37 +3,15 @@
 #include "graphics/IndexBuffer.h"
 #include "graphics/VertexArray.h"
 #include "graphics/VertexBuffer.h"
-#include "graphics/GlbData.h"
 
 #include "graphics/GlApi.h"
 
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
-#include <vector>
 
 namespace aerosimlab::graphics
 {
-namespace
-{
-const glb_detail::Json& ReadSingleTrianglePrimitive(const glb_detail::Json& document)
-{
-    const glb_detail::Json& meshes = document.at("meshes");
-    const glb_detail::Json& nodes = document.at("nodes");
-    if (meshes.size() != 1U || meshes.at(0).at("primitives").size() != 1U
-        || nodes.size() != 1U || nodes.at(0).value("mesh", 1U) != 0U
-        || nodes.at(0).contains("matrix") || nodes.at(0).contains("translation")
-        || nodes.at(0).contains("rotation") || nodes.at(0).contains("scale"))
-        throw std::runtime_error("GLB 모델은 메시 하나와 삼각형 묶음 하나로 저장해야 합니다.");
-
-    const glb_detail::Json& primitive = meshes.at(0).at("primitives").at(0);
-    if (primitive.value("mode", 4U) != 4U)
-        throw std::runtime_error("GLB 모델은 삼각형으로 저장해야 합니다.");
-    return primitive;
-}
-}
-
-
 Mesh::Mesh(const Vertex* vertices, std::uint32_t vertexCount,
            const std::uint32_t* indices, std::uint32_t indexCount)
 {
@@ -154,22 +132,6 @@ std::unique_ptr<Mesh> Mesh::CreateCube(float sideLengthMeters)
         vertex.position *= sideLengthMeters;
 
     return std::make_unique<Mesh>(vertices, 24U, indices, 36U);
-}
-
-std::unique_ptr<Mesh> Mesh::LoadGlb(const std::string& path)
-{
-    glb_detail::Document source = glb_detail::ReadDocument(path);
-    const glb_detail::Json& primitive = ReadSingleTrianglePrimitive(source.json);
-    if (!primitive.at("attributes").contains("NORMAL")
-        || !primitive.contains("indices"))
-        throw std::runtime_error("GLB 지형에는 표면 방향과 삼각형 번호가 필요합니다.");
-    std::vector<Vertex> vertices = glb_detail::ReadVertices(
-        source.json, primitive, source.binary);
-    std::vector<std::uint32_t> triangles = glb_detail::ReadTriangleIndices(
-        source.json, primitive, source.binary, vertices.size());
-    return std::make_unique<Mesh>(
-        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
-        triangles.data(), static_cast<std::uint32_t>(triangles.size()));
 }
 
 } // namespace aerosimlab::graphics

@@ -650,9 +650,6 @@ if(BUILD_TESTING)
         tests/simulator/SimulatorSessionTests.cpp
         tests/graphics/CameraTests.cpp
       )
-      target_include_directories(aerosimlab_simulator_integration_tests PRIVATE
-        modules/graphics/src/graphics
-      )
       target_compile_definitions(aerosimlab_simulator_integration_tests PRIVATE
         AEROSIMLAB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
       )

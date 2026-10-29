@@ -85,13 +85,6 @@ public:
      */
     static std::unique_ptr<Mesh> CreateCube(float sideLengthMeters = 1.0F);
 
-    /**
-     * @brief 위치·법선·UV 좌표·삼각형 번호가 하나의 메시로 저장된 GLB 모델을 GPU에 올린다.
-     * @param path 읽을 GLB 파일 경로다. 위치와 방향은 모델 기준이며 변환이 미리 적용되어 있어야 한다.
-     * @throws std::runtime_error 파일이 손상됐거나 지원하지 않는 GLB 구조인 경우.
-     */
-    static std::unique_ptr<Mesh> LoadGlb(const std::string& path);
-
 private:
     // 화면 그리기 때 읽을 속성 형식과 꼭짓점 연결 번호 배열을 기억한다. 실제 데이터는 아래 GPU 배열에 있다.
     std::unique_ptr<VertexArray> vertexArray_;

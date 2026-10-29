@@ -243,7 +243,7 @@ bool AeroSimLabApp::RequestInspectionMission(
     if (firstTarget.routeAutomaticallyPlanned)
     {
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-            terrainGrid_, routeBuildings_, simulation_.State().positionMeters,
+            terrainGrid_, trainingRangeScene_->Obstacles(), simulation_.State().positionMeters,
             firstTarget.approachPositionMeters, 3.0,
             cameraTransitAltitudeMeters_);
         if (!route)
@@ -424,7 +424,7 @@ bool AeroSimLabApp::StartFleetReconnaissance(
             start = &report->state.positionMeters;
         }
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-            terrainGrid_, routeBuildings_, *start, target.approachPositionMeters,
+            terrainGrid_, trainingRangeScene_->Obstacles(), *start, target.approachPositionMeters,
             3.0, cameraTransitAltitudeMeters_);
         if (!route)
             return false;
@@ -587,7 +587,7 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
         glm::dvec3 returnApproach = mission.startPositionMeters;
         returnApproach.z += 5.0;
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-            terrainGrid_, routeBuildings_, currentPosition,
+            terrainGrid_, trainingRangeScene_->Obstacles(), currentPosition,
             returnApproach, 3.0, cameraTransitAltitudeMeters_);
         if (!route)
             return false;
@@ -706,7 +706,7 @@ bool AeroSimLabApp::StartFleetRally()
             centerMeters.y + offsets[index].y,
             centerMeters.z};
         const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-            terrainGrid_, routeBuildings_, currentPosition, rallyTarget,
+            terrainGrid_, trainingRangeScene_->Obstacles(), currentPosition, rallyTarget,
             3.0, cameraTransitAltitudeMeters_);
         if (!route)
             return false;
@@ -815,7 +815,7 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                 glm::dvec3 returnApproach = mission.startPositionMeters;
                 returnApproach.z += 5.0;
                 const auto route = aerosimlab::terrain::PlanMapFlightRoute(
-                    terrainGrid_, routeBuildings_,
+                    terrainGrid_, trainingRangeScene_->Obstacles(),
                     simulation_.State(droneId).positionMeters, returnApproach,
                     3.0, cameraTransitAltitudeMeters_);
                 bool returnStarted = route.has_value();
@@ -1165,7 +1165,7 @@ bool AeroSimLabApp::StartFormationTransit()
         terrainGrid_.HeightAtLocalMeters(stagingPosition) + 15.0,
         cameraTransitAltitudeMeters_);
     const glm::dvec3 destination{stagingPosition, stagingAltitude};
-    const auto route = PlanFormationRoute(terrainGrid_, routeBuildings_,
+    const auto route = PlanFormationRoute(terrainGrid_, trainingRangeScene_->Obstacles(),
         simulation_.State(droneIds.front()).positionMeters, destination,
         droneIds.size(), 8.0, 1.5, 2.0,
         cameraTransitAltitudeMeters_);
@@ -1239,8 +1239,9 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
         communication::VirtualMeshNetwork>(settings);
 
     formationRadioObstacles_.clear();
-    formationRadioObstacles_.reserve(routeBuildings_.size());
-    for (const aerosimlab::terrain::MapBuilding& building : routeBuildings_)
+    const auto& buildings = trainingRangeScene_->Obstacles();
+    formationRadioObstacles_.reserve(buildings.size());
+    for (const aerosimlab::terrain::MapBuilding& building : buildings)
     {
         if (building.outlineMeters.size() < 3U || building.heightMeters <= 0.0)
             continue;

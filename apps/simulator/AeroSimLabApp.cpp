@@ -380,12 +380,11 @@ void AeroSimLabApp::LoadMapFeatures()
     SetStartupDetail("훈련장 시설물과 충돌 모양을 준비하고 있습니다.");
     trainingRangeScene_ = std::make_unique<TrainingRangeScene>();
     trainingRangeScene_->Load(AssetPath(""), terrainGrid_, simulation_);
-    routeBuildings_ = trainingRangeScene_->Obstacles();
     cameraTransitAltitudeMeters_ = trainingRangeCameraTransitAltitudeMeters;
     inspectionTargets_.clear();
     inspectionOccluders_.clear();
 
-    for (const auto& obstacle : routeBuildings_)
+    for (const auto& obstacle : trainingRangeScene_->Obstacles())
     {
         double bottomMeters = obstacle.groundElevationsMeters.front();
         for (const double height : obstacle.groundElevationsMeters)
@@ -827,7 +826,8 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
         + glm::dvec3{0.0, 0.0, followHeightMeters};
     const auto isInsideMapBuilding = [this](const glm::dvec3& position)
     {
-        return std::any_of(routeBuildings_.begin(), routeBuildings_.end(),
+        const auto& buildings = trainingRangeScene_->Obstacles();
+        return std::any_of(buildings.begin(), buildings.end(),
             [&position](const aerosimlab::terrain::MapBuilding& building)
             {
                 return aerosimlab::terrain::ContainsMapBuildingVolume(

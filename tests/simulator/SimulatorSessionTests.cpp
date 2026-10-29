@@ -2,6 +2,7 @@
 #include "FleetMissionProgress.h"
 #include "FleetTelemetry.h"
 #include "FleetDroneSpawn.h"
+#include "TrainingRangeScene.h"
 
 #include "simulation_core/SimulationCore.h"
 #include "terrain/MapBuildings.h"
@@ -60,7 +61,7 @@ public:
         app.InitializeGraphics();
         const auto droneId = app.simulation_.PrimaryDroneId();
         const auto expectedRoute = terrain::PlanMapFlightRoute(
-            app.terrainGrid_, app.routeBuildings_,
+            app.terrainGrid_, app.trainingRangeScene_->Obstacles(),
             app.simulation_.State(droneId).positionMeters,
             app.inspectionTargets_.front().approachPositionMeters,
             3.0, app.cameraTransitAltitudeMeters_);
