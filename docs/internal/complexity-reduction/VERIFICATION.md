@@ -155,3 +155,9 @@
 - Release 빌드 성공: `aerosimlab_simulation_tests`, `aerosimlab_headless`, `aerosimlab_simulator`.
 - 관련 CTest 5/5 통과: SimulationCore, 두 편대 계획 시험, SimulatorSession, ViewerSmoke.
 - 전체 CTest와 웹 빌드·브라우저 실행은 확인하지 않았다.
+
+## 배터리 ECS 전환 검토 — 2026-10-29
+
+- `BatteryModel`을 드론 컴포넌트로 저장하는 임시 변경은 Flecs의 기본 생성자 요구로 코어·시나리오 시험에서 중단됐다. 임시 변경을 되돌린 뒤 Release 빌드는 성공했다.
+- 원복된 최종 코드에서 관련 CTest 10/10 통과: 코어, 편대 계획 2개, 시나리오, 앱 세션 4개, 헤드리스 임무, ViewerSmoke.
+- 전환 코드는 남기지 않았다. 별도 배터리 맵을 유지하기로 한 판단과 이유를 구조 문서에 기록했다.
