@@ -25,7 +25,7 @@
 - `modules/simulation_core/include/simulation_core/PhysicsWorld.h`: KEEP — 확인 1–146. AirSim에 강체 생성·모터·지형·장애물·틱을 제공하며 Impl을 unique_ptr로 소유하고 복사를 금지한다(68–145). 잘못된 핸들의 DestroyBody는 false, 비유한 모터 입력은 거부(95,125). 충돌·좌표 계약 보존; 내부 수명은 구현 미완독.
 - `modules/simulation_core/include/simulation_core/QuadrotorFlightController.h`: KEEP — 확인 1–51. 상태·목표·물성·이득을 받아 경유 속도와 4개 로터 목표를 값 반환(35–49). 자체 가변 상태 없음. 오류 동작은 구현 미확인; 강체 비행 제어에 필요.
 - `modules/simulation_core/include/simulation_core/QuadrotorModel.h`: KEEP — 확인 1–60. 질량·관성·로터·충돌 상자·모터 계수를 값으로 소유하며 X500 기본 및 추정값을 반환한다(32–57). 오류·실제 호출은 구현 미확인. 별도 추정 모델은 MVP 사용 확인 후 정리 후보.
-- `modules/scenario/include/scenario/ScenarioRunner.h` (당시 `simulation_core/ScenarioRunner.h`): SIMPLIFY — RunScenario가 JSON을 받아 드론·임무·궤적 결과를 값으로 돌려준다. 잘못된 문법·필수값은 예외로 알린다. 자동 촬영 재시도와 구도 판정 결과는 2026-10-29 제거했다. 임무 경로 재배정은 별도 정리 대상이다.
+- `modules/scenario/include/scenario/ScenarioRunner.h` (당시 `simulation_core/ScenarioRunner.h`): SIMPLIFY — RunScenario가 JSON을 받아 드론·임무·궤적 결과를 값으로 돌려준다. 잘못된 문법·필수값은 예외로 알린다. 자동 촬영 재시도, 구도 판정 결과, 임무 배정 이력은 2026-10-29 제거했다. 임무 담당 드론은 입력에서 고정한다.
 - `modules/simulation_core/include/simulation_core/ScopedDuration.h`: KEEP — 확인 1–52. 생성 때 시간 시작, 소멸 때 전달받은 double에 시간 대입·누적한다(21–38). 포인터는 비소유이며 대상이 범위보다 오래 살아야 한다. null은 측정 생략. 벤치마크 소비자 확인 후 제거 가능성 검토.
 - `modules/simulation_core/include/simulation_core/SimulationCore.h`: KEEP — 확인 1–235. FixedTickAccumulator(55–66)는 잔여 시간을 소유하고 프레임 입력을 100ms로 제한한다. SimulationCore(72–234)는 ECS를 unique_ptr로 소유하고 명령·드론·카메라·배터리·충돌·틱 API를 제공한다. 없는 드론·배터리는 일부 예외, 마지막 드론은 제거 불가. 네이티브 AirSim과 웹 운동학 선택(31–38)은 호출 환경 확인 후 정리.
 - `modules/simulation_core/src/BatteryModel.cpp`: KEEP — 1–91. 생성자(9)는 설정 범위 오류에 예외를 던지고 Advance(33)는 모드별 평균 전력과 고정 틱으로 잔량을 갱신한다. Reset(46)은 초기량과 복귀 표시를 복원한다. 복귀 자체는 실행하지 않는다.
@@ -41,7 +41,7 @@
 - `modules/simulation_core/src/QuadrotorModel.cpp`: KEEP — 확인 1–67; 남은 줄 없음. X500Gazebo(7)는 기체·로터 관성 및 9개 충돌 상자를 값으로 구성하고 X500MotorTableEstimate(56)는 계수 세 개를 추정값으로 대체한다. 가변 상태·오류 처리 없음. 별도 추정값이 필요한지 소비자 확인.
 - `modules/scenario/src/ScenarioDefinition.cpp`: SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1329; 남은 줄 없음. ReadScenarioDefinition(1254)은 JSON을 검증해 값 소유 정의를 반환하고 잘못된 입력은 예외. GenerateSurveyTasks(610)는 드론별 영역과 왕복 경로를 생성; 앱 임무 생성과 중복 여부 확인. 시설 점검·재시도 및 통신 장애·물성 변경 설정은 범위 정리 후보이며 필수 조사 경로와 구분.
 - `modules/scenario/src/ScenarioDefinition.h`: SIMPLIFY — 확인 1–143; 남은 줄 없음. 시나리오 정의는 드론·예약 명령·통신 장애·편대·임무 등을 vector/optional 값으로 소유하고 파서 결과를 실행기에 전달한다(104–141). 고급 재할당 관련 결과 모델과 확장 설정은 소비자 확인 후 축소 후보.
-- `modules/scenario/src/ScenarioRunner.cpp`: SIMPLIFY — RunScenario는 시나리오 정의를 읽고 관측, 명령, 에너지, 임무, 편대, 회피와 Tick을 진행한다. 임무 완료는 경유점 도착으로 확인한다. 자동 촬영 판정·재시도는 2026-10-29 제거했다. UpdateMissionCommands에는 통신·배터리 조건의 임무 재배정이 남아 있으며 별도 축소 후보이다. 앱에도 임무 실행이 있어 중복 책임 검토가 필요하다.
+- `modules/scenario/src/ScenarioRunner.cpp`: SIMPLIFY — RunScenario는 시나리오 정의를 읽고 관측, 명령, 에너지, 임무, 편대, 회피와 Tick을 진행한다. 임무 완료는 경유점 도착으로 확인한다. 자동 촬영 판정·재시도와 통신·배터리 조건의 임무 재배정은 2026-10-29 제거했다. 통신 단절 작업은 원래 담당 드론에 남아 미확정으로 끝나며, 저전력 귀환은 해당 작업을 미완료 실패로 끝낸다. 앱 임무와 기능이 겹치는지는 별도 검토가 필요하다.
 - `modules/simulation_core/src/SimulationCore.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1179; 남은 줄 없음. EcsStorage(37)는 Flecs 엔티티와 물리 월드를 소유한다. 배터리는 설정된 드론 엔티티의 선택형 `BatteryModel` 컴포넌트다. AdvanceOneTick(895)은 ECS 진행 후 물리, 배터리, tick, 카메라 자세를 갱신하고 일시정지 시 반환. 생성 실패 시 물리 강체와 엔티티 정리(407). 운동학과 강체의 접촉 처리는 서로 다른 구현이며 플랫폼 요구 확인 후 축소 판단.
 
 ## Simulation Core의 실제 책임과 경계

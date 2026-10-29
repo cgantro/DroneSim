@@ -639,24 +639,31 @@ void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
         - calm.finalState.positionMeters.x), 0.01);
 }
 
-void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
+void Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss()
 {
     const ScenarioResult result = RunScenario(
         ReadScenarioFixture("scenarios/multi-drone/four-drone-survey-outage.json"));
-    EXPECT_TRUE(result.passed)
-        << (result.issues.empty() ? "" : result.issues.front());
+    EXPECT_FALSE(result.passed);
     ASSERT_TRUE(result.minimumDroneSeparationMeters.has_value());
     EXPECT_GE(*result.minimumDroneSeparationMeters, 2.0);
-    EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Passed);
+    EXPECT_EQ(result.outcome, ScenarioResult::Outcome::Inconclusive);
     ASSERT_TRUE(result.mission.has_value());
-    ASSERT_TRUE(result.mission->passed);
-    EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Passed);
-    EXPECT_EQ(result.mission->completedTaskCount, 4U);
+    EXPECT_FALSE(result.mission->passed);
+    EXPECT_EQ(result.mission->outcome, ScenarioResult::Outcome::Inconclusive);
+    EXPECT_EQ(result.mission->completedTaskCount, 3U);
     ASSERT_TRUE(result.mission->startedTick.has_value());
     EXPECT_EQ(*result.mission->startedTick, 90U);
     for (const ScenarioResult::MissionTask& task : result.mission->tasks)
     {
-        EXPECT_TRUE(task.completed) << task.name;
+        if (task.name == "sector-2")
+        {
+            EXPECT_FALSE(task.completed);
+            EXPECT_EQ(task.droneName, "scout-2");
+        }
+        else
+        {
+            EXPECT_TRUE(task.completed) << task.name;
+        }
     }
 
     const auto disconnectedDrone = std::find_if(result.drones.begin(), result.drones.end(),
@@ -670,57 +677,11 @@ void Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss()
             return event.find("현재 위치를 유지합니다") != std::string::npos;
         }));
 
-    const auto reassignedTask = std::find_if(result.mission->tasks.begin(),
+    const auto assignedTask = std::find_if(result.mission->tasks.begin(),
         result.mission->tasks.end(),
         [](const ScenarioResult::MissionTask& task) { return task.name == "sector-2"; });
-    ASSERT_NE(reassignedTask, result.mission->tasks.end());
-    EXPECT_TRUE(reassignedTask->completed);
-    EXPECT_FALSE(reassignedTask->failed);
-    EXPECT_EQ(reassignedTask->initialDroneName, "scout-2");
-    EXPECT_EQ(reassignedTask->droneName, "scout-3");
-    ASSERT_EQ(reassignedTask->assignmentHistory.size(), 2U);
-    EXPECT_EQ(reassignedTask->assignmentHistory[0], "scout-2");
-    EXPECT_EQ(reassignedTask->assignmentHistory[1], "scout-3");
-
-#if !defined(__EMSCRIPTEN__)
-    std::string physicalScenario =
-        ReadScenarioFixture("scenarios/multi-drone/four-drone-survey-outage.json");
-    constexpr std::string_view kinematicMode = "\"dynamics\": \"kinematic\"";
-    const std::size_t dynamicsPosition = physicalScenario.find(kinematicMode);
-    ASSERT_NE(dynamicsPosition, std::string::npos);
-    physicalScenario.replace(dynamicsPosition, kinematicMode.size(),
-        "\"dynamics\": \"rigid_body\"");
-    ASSERT_TRUE(ReplaceAll(physicalScenario,
-        "\"ticks\": 320", "\"ticks\": 1800"));
-    ASSERT_TRUE(ReplaceAll(physicalScenario,
-        "\"end_tick\": 320", "\"end_tick\": 1800"));
-    ASSERT_TRUE(ReplaceAll(physicalScenario,
-        "\"deadline_tick\": 310", "\"deadline_tick\": 1790"));
-    ASSERT_TRUE(ReplaceAll(physicalScenario,
-        "\"tolerance_meters\": 0.1", "\"tolerance_meters\": 0.5"));
-    ASSERT_TRUE(ReplaceAll(physicalScenario,
-        "\"tolerance_meters\": 0.01", "\"tolerance_meters\": 1000"));
-    const ScenarioResult physicalResult = RunScenario(physicalScenario);
-    EXPECT_EQ(physicalResult.outcome, ScenarioResult::Outcome::Passed)
-        << (physicalResult.issues.empty() ? "" : physicalResult.issues.front())
-        << " minimum=" << physicalResult.minimumDroneSeparationMeters.value_or(-1.0)
-        << " predicted=" << physicalResult.minimumPredictedDroneSeparationMeters.value_or(-1.0)
-        << " avoidance_events=" << physicalResult.collisionAvoidanceEvents;
-    ASSERT_TRUE(physicalResult.minimumDroneSeparationMeters.has_value());
-    EXPECT_GE(*physicalResult.minimumDroneSeparationMeters, 2.0);
-    EXPECT_EQ(physicalResult.collisionAvoidanceEvents, 0U);
-    ASSERT_TRUE(physicalResult.mission.has_value());
-    EXPECT_EQ(physicalResult.mission->outcome, ScenarioResult::Outcome::Passed);
-    for (const ScenarioResult::MissionTask& task : physicalResult.mission->tasks)
-    {
-        EXPECT_TRUE(task.completed) << task.name;
-    }
-    ASSERT_TRUE(physicalResult.mission->startedTick.has_value());
-    EXPECT_GT(*physicalResult.mission->startedTick, 90U);
-    EXPECT_EQ(physicalResult.mission->completedTaskCount, 4U);
-    EXPECT_EQ(physicalResult.mission->tasks[1].assignmentHistory,
-        (std::vector<std::string>{"scout-2", "scout-3"}));
-#endif
+    ASSERT_NE(assignedTask, result.mission->tasks.end());
+    EXPECT_FALSE(assignedTask->failed);
 }
 }
 
@@ -891,7 +852,7 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     {
         EXPECT_FALSE(task.completed);
         EXPECT_FALSE(task.failed);
-        EXPECT_TRUE(task.droneName.empty());
+        EXPECT_FALSE(task.droneName.empty());
     }
     ASSERT_EQ(result.drones.size(), 2U);
     EXPECT_EQ(result.drones.front().communicationStatus,
@@ -924,147 +885,8 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     EXPECT_FALSE(failedResult.issues.empty());
 }
 
-void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
+void Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios()
 {
-    constexpr std::string_view scenario = R"json(
-    {"version":1,"dynamics":"kinematic","ticks":320,
-     "drones":[
-       {"name":"scout-1","initial_position_meters":[0,0,0]},
-       {"name":"scout-2","initial_position_meters":[10,0,0]},
-       {"name":"scout-3","initial_position_meters":[20,0,0]},
-       {"name":"scout-4","initial_position_meters":[30,0,0]}],
-     "commands":[
-       {"tick":0,"drone":"scout-1","type":"takeoff"},
-       {"tick":0,"drone":"scout-2","type":"takeoff"},
-       {"tick":0,"drone":"scout-3","type":"takeoff"},
-       {"tick":0,"drone":"scout-4","type":"takeoff"}],
-     "communication_outages":[
-       {"drone":"scout-2","start_tick":95,"end_tick":320,"heartbeat_timeout_ticks":3}],
-     "mission":{"name":"four-sector-survey","tasks":[
-       {"name":"sector-1","role":"survey","drone":"scout-1",
-        "target_position_meters":[4,0,1.5],"start_tick":90,"deadline_tick":310,"tolerance_meters":0.1},
-       {"name":"sector-2","role":"survey","drone":"scout-2",
-        "target_position_meters":[14,0,1.5],"start_tick":90,"deadline_tick":310,"tolerance_meters":0.1},
-       {"name":"sector-3","role":"survey","drone":"scout-3",
-        "target_position_meters":[24,0,1.5],"start_tick":90,"deadline_tick":310,"tolerance_meters":0.1},
-       {"name":"sector-4","role":"survey","drone":"scout-4",
-        "target_position_meters":[34,0,1.5],"start_tick":90,"deadline_tick":310,"tolerance_meters":0.1}]},
-     "expected":{"tolerance_meters":0.01,"drones":[
-       {"name":"scout-1","mode":"hovering","position_meters":[4,0,1.5]},
-       {"name":"scout-2","mode":"following_waypoint","position_meters":[10.333333333333336,0,1.5]},
-       {"name":"scout-3","mode":"hovering","position_meters":[14,0,1.5]},
-       {"name":"scout-4","mode":"hovering","position_meters":[24,0,1.5]}]}}
-    )json";
-
-    const ScenarioResult result = RunScenario(scenario);
-    ASSERT_TRUE(result.passed) << (result.issues.empty() ? "" : result.issues.front());
-    ASSERT_TRUE(result.mission.has_value());
-    EXPECT_TRUE(result.mission->passed);
-    ASSERT_EQ(result.mission->tasks.size(), 4);
-    EXPECT_EQ(result.mission->completedTaskCount, 4U);
-    EXPECT_DOUBLE_EQ(result.mission->completionPercent, 100.0);
-    EXPECT_DOUBLE_EQ(result.mission->coveragePercent, 100.0);
-    ASSERT_TRUE(result.mission->startedTick.has_value());
-    EXPECT_EQ(*result.mission->startedTick, 90U);
-    ASSERT_TRUE(result.mission->completedTick.has_value());
-    EXPECT_LT(*result.mission->completedTick, result.tickCount);
-    const auto& reassignedTask = result.mission->tasks[1];
-    EXPECT_TRUE(reassignedTask.completed);
-    EXPECT_EQ(reassignedTask.droneName, "scout-3");
-    EXPECT_EQ(reassignedTask.reassignmentCount, 1U);
-    ASSERT_EQ(reassignedTask.assignmentHistory.size(), 2U);
-    EXPECT_EQ(reassignedTask.assignmentHistory[0], "scout-2");
-    EXPECT_EQ(reassignedTask.assignmentHistory[1], "scout-3");
-
-    const auto lostDrone = std::find_if(result.drones.begin(), result.drones.end(),
-        [](const ScenarioResult::Drone& drone) { return drone.name == "scout-2"; });
-    ASSERT_NE(lostDrone, result.drones.end());
-    EXPECT_EQ(lostDrone->communicationStatus,
-        ScenarioResult::Drone::CommunicationStatus::Unknown);
-    EXPECT_LT(lostDrone->lastHeartbeatTick, result.tickCount);
-    EXPECT_LT(lostDrone->finalState.positionMeters.x, 14.0);
-
-    constexpr std::string_view recoveredLinkScenario = R"json(
-    {"version":1,"dynamics":"kinematic","ticks":10,
-     "drones":[{"name":"scout","initial_position_meters":[0,0,0]}],
-     "commands":[],
-     "communication_outages":[
-       {"drone":"scout","start_tick":3,"end_tick":6,"heartbeat_timeout_ticks":2}],
-     "expected":{"drones":[
-       {"name":"scout","mode":"grounded","position_meters":[0,0,0]}]}}
-    )json";
-    const ScenarioResult recoveredResult = RunScenario(recoveredLinkScenario);
-    ASSERT_TRUE(recoveredResult.passed);
-    ASSERT_EQ(recoveredResult.drones.size(), 1);
-    EXPECT_EQ(recoveredResult.drones.front().communicationStatus,
-        ScenarioResult::Drone::CommunicationStatus::Connected);
-    EXPECT_EQ(recoveredResult.drones.front().lastHeartbeatTick, 10U);
-    EXPECT_TRUE(std::any_of(recoveredResult.eventLog.begin(), recoveredResult.eventLog.end(),
-        [](const std::string& event)
-        {
-            return event.find("통신이 복구") != std::string::npos;
-        }));
-
-    constexpr std::string_view recoveredMissionScenario = R"json(
-    {"version":1,"dynamics":"kinematic","ticks":320,
-     "drones":[
-       {"name":"scout","initial_position_meters":[0,0,0]},
-       {"name":"reserve","initial_position_meters":[10,0,0]},
-       {"name":"worker","initial_position_meters":[20,0,0]},
-       {"name":"spare","initial_position_meters":[30,0,0]}],
-     "commands":[
-       {"tick":0,"drone":"scout","type":"takeoff"},
-       {"tick":0,"drone":"reserve","type":"takeoff"},
-       {"tick":0,"drone":"worker","type":"takeoff"},
-       {"tick":0,"drone":"spare","type":"takeoff"}],
-     "communication_outages":[
-       {"drone":"scout","start_tick":95,"end_tick":250,
-        "heartbeat_timeout_ticks":3,"on_timeout":"hold_position"}],
-     "mission":{"name":"four-sector-recovered-link-survey","tasks":[
-       {"name":"sector-1","role":"survey","drone":"scout",
-        "target_position_meters":[1,0,1.5],"start_tick":90,
-        "deadline_tick":310,"tolerance_meters":0.1},
-       {"name":"sector-2","role":"survey","drone":"reserve",
-        "target_position_meters":[11,0,1.5],"start_tick":90,
-        "deadline_tick":310,"tolerance_meters":0.1},
-       {"name":"sector-3","role":"survey","drone":"worker",
-        "target_position_meters":[21,0,1.5],"start_tick":90,
-        "deadline_tick":310,"tolerance_meters":0.1},
-       {"name":"sector-4","role":"survey","drone":"spare",
-        "target_position_meters":[31,0,1.5],"start_tick":90,
-        "deadline_tick":310,"tolerance_meters":0.1}]},
-     "expected":{"tolerance_meters":1000,"drones":[
-       {"name":"scout","mode":"hovering","position_meters":[0,0,0]},
-       {"name":"reserve","mode":"hovering","position_meters":[0,0,0]},
-       {"name":"worker","mode":"hovering","position_meters":[0,0,0]},
-       {"name":"spare","mode":"hovering","position_meters":[0,0,0]}]}}
-    )json";
-    const ScenarioResult recoveredMissionResult = RunScenario(recoveredMissionScenario);
-    ASSERT_TRUE(recoveredMissionResult.passed)
-        << (recoveredMissionResult.issues.empty()
-            ? "" : recoveredMissionResult.issues.front());
-    ASSERT_TRUE(recoveredMissionResult.mission.has_value());
-    ASSERT_EQ(recoveredMissionResult.mission->tasks.size(), 4U);
-    EXPECT_EQ(recoveredMissionResult.mission->completedTaskCount, 4U);
-    EXPECT_DOUBLE_EQ(recoveredMissionResult.mission->completionPercent, 100.0);
-    const auto& recoveredTask = recoveredMissionResult.mission->tasks.front();
-    EXPECT_TRUE(recoveredTask.completed);
-    EXPECT_EQ(recoveredTask.droneName, "reserve");
-    EXPECT_EQ(recoveredTask.assignmentHistory,
-        (std::vector<std::string>{"scout", "reserve"}));
-    const auto recoveredScout = std::find_if(
-        recoveredMissionResult.drones.begin(), recoveredMissionResult.drones.end(),
-        [](const ScenarioResult::Drone& drone) { return drone.name == "scout"; });
-    ASSERT_NE(recoveredScout, recoveredMissionResult.drones.end());
-    EXPECT_EQ(recoveredScout->communicationStatus,
-        ScenarioResult::Drone::CommunicationStatus::Connected);
-    EXPECT_EQ(recoveredScout->lastHeartbeatTick, 320U);
-    EXPECT_TRUE(std::any_of(recoveredMissionResult.eventLog.begin(),
-        recoveredMissionResult.eventLog.end(), [](const std::string& event)
-        {
-            return event.find("통신이 복구") != std::string::npos;
-        }));
-
     constexpr std::string_view dividedSurveyScenario = R"json(
     {"version":1,"dynamics":"kinematic","ticks":480,
      "drones":[
@@ -1236,180 +1058,23 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     EXPECT_GE(*physicalAvoidanceResult.minimumDroneSeparationMeters, 8.0);
 #endif
 
-    const std::string lowBatteryScenario = ReadScenarioFixture(
-        "scenarios/multi-drone/low-battery-reallocation.json");
-    const ScenarioResult energyResult = RunScenario(lowBatteryScenario);
-    ASSERT_TRUE(energyResult.passed)
-        << (energyResult.issues.empty() ? "" : energyResult.issues.front());
+    const ScenarioResult energyResult = RunScenario(ReadScenarioFixture(
+        "scenarios/multi-drone/low-battery-return.json"));
+    EXPECT_FALSE(energyResult.passed);
     ASSERT_TRUE(energyResult.mission.has_value());
-    EXPECT_TRUE(energyResult.mission->passed);
-    ASSERT_EQ(energyResult.mission->tasks.size(), 2);
-    EXPECT_EQ(energyResult.mission->tasks[0].droneName, "reserve");
-    EXPECT_EQ(energyResult.mission->tasks[0].reassignmentCount, 1U);
-    ASSERT_EQ(energyResult.drones.size(), 2);
+    EXPECT_EQ(energyResult.mission->outcome, ScenarioResult::Outcome::Failed);
+    ASSERT_EQ(energyResult.mission->tasks.size(), 2U);
+    EXPECT_EQ(energyResult.mission->tasks[0].droneName, "low-charge");
+    EXPECT_TRUE(energyResult.mission->tasks[0].failed);
+    EXPECT_EQ(energyResult.mission->tasks[1].droneName, "reserve");
+    EXPECT_TRUE(energyResult.mission->tasks[1].completed);
+    ASSERT_EQ(energyResult.drones.size(), 2U);
     const auto& depletedDrone = energyResult.drones[0];
     EXPECT_TRUE(depletedDrone.returnedForLowBattery);
     ASSERT_TRUE(depletedDrone.batteryPercent.has_value());
-    ASSERT_TRUE(depletedDrone.energyConsumedWattHours.has_value());
-    EXPECT_LT(*depletedDrone.batteryPercent, 40.0);
-    EXPECT_GT(*depletedDrone.batteryPercent, 0.0);
-    EXPECT_GT(*depletedDrone.energyConsumedWattHours, 0.0);
     EXPECT_EQ(depletedDrone.finalState.mode, FlightMode::Grounded);
     EXPECT_NEAR(depletedDrone.finalState.positionMeters.x, 0.0, 0.2);
-    const auto& healthyDrone = energyResult.drones[1];
-    EXPECT_FALSE(healthyDrone.returnedForLowBattery);
-    ASSERT_TRUE(healthyDrone.batteryPercent.has_value());
-    EXPECT_GT(*healthyDrone.batteryPercent, 40.0);
-    EXPECT_NEAR(healthyDrone.finalState.positionMeters.x, 30.0, 0.2);
-
-    const ScenarioResult mixedFaultResult = RunScenario(ReadScenarioFixture(
-        "scenarios/multi-drone/energy-and-outage-reallocation.json"));
-    ASSERT_TRUE(mixedFaultResult.passed)
-        << (mixedFaultResult.issues.empty() ? "" : mixedFaultResult.issues.front());
-    ASSERT_TRUE(mixedFaultResult.mission.has_value());
-    EXPECT_EQ(mixedFaultResult.mission->outcome, ScenarioResult::Outcome::Passed);
-    EXPECT_EQ(mixedFaultResult.mission->completedTaskCount, 3U);
-    ASSERT_EQ(mixedFaultResult.mission->tasks.size(), 3U);
-
-    const auto findTask = [&](std::string_view name)
-        -> const ScenarioResult::MissionTask*
-    {
-        const auto task = std::find_if(
-            mixedFaultResult.mission->tasks.begin(),
-            mixedFaultResult.mission->tasks.end(),
-            [name](const ScenarioResult::MissionTask& item)
-            {
-                return item.name == name;
-            });
-        return task == mixedFaultResult.mission->tasks.end() ? nullptr : &*task;
-    };
-    const auto* lowBatteryTask = findTask("long-area");
-    ASSERT_NE(lowBatteryTask, nullptr);
-    EXPECT_EQ(lowBatteryTask->initialDroneName, "low-charge");
-    EXPECT_EQ(lowBatteryTask->droneName, "reserve-2");
-    EXPECT_EQ(lowBatteryTask->assignmentHistory,
-        (std::vector<std::string>{"low-charge", "reserve-2"}));
-    const auto* unconfirmedTask = findTask("unconfirmed-area");
-    ASSERT_NE(unconfirmedTask, nullptr);
-    EXPECT_EQ(unconfirmedTask->initialDroneName, "lost-link");
-    EXPECT_EQ(unconfirmedTask->droneName, "reserve-1");
-    EXPECT_TRUE(unconfirmedTask->completed);
-    EXPECT_FALSE(unconfirmedTask->failed);
-    EXPECT_EQ(unconfirmedTask->assignmentHistory,
-        (std::vector<std::string>{"lost-link", "reserve-1"}));
-    const auto* displacedTask = findTask("near-area");
-    ASSERT_NE(displacedTask, nullptr);
-    EXPECT_EQ(displacedTask->droneName, "reserve-2");
-    EXPECT_EQ(displacedTask->assignmentHistory,
-        (std::vector<std::string>{"reserve-1", "reserve-2"}));
-
-    ASSERT_EQ(mixedFaultResult.drones.size(), 4U);
-    const auto& lowBatteryDrone = mixedFaultResult.drones[0];
-    EXPECT_TRUE(lowBatteryDrone.returnedForLowBattery);
-    EXPECT_EQ(lowBatteryDrone.finalState.mode, FlightMode::Grounded);
-    const auto& disconnectedDrone = mixedFaultResult.drones[1];
-    EXPECT_EQ(disconnectedDrone.communicationStatus,
-        ScenarioResult::Drone::CommunicationStatus::Unknown);
-    EXPECT_EQ(disconnectedDrone.lastHeartbeatTick, 94U);
-    // 통신 단절 기체의 위치는 마지막 수신값이므로 실제 현재 상태로 단정하지 않는다.
-    EXPECT_EQ(disconnectedDrone.finalState.mode, FlightMode::FollowingWaypoint);
-    EXPECT_NEAR(disconnectedDrone.finalState.positionMeters.x, 10.3333333333, 1.0e-6);
-    ASSERT_TRUE(disconnectedDrone.batteryPercent.has_value());
-    ASSERT_TRUE(disconnectedDrone.reportedBatteryPercent.has_value());
-    EXPECT_GT(*disconnectedDrone.reportedBatteryPercent,
-        *disconnectedDrone.batteryPercent);
-
-    struct ReplayCondition
-    {
-        int reservePercent;
-        int outageStartTick;
-        int heartbeatTimeoutTicks;
-        int expectedCompletionTick;
-    };
-    constexpr std::array<ReplayCondition, 4> replayConditions{{
-        {40, 95, 3, 322},
-        {30, 95, 3, 376},
-        {40, 115, 8, 217},
-        {50, 95, 8, 171}}};
-    const auto baseMixedFaultScenario = nlohmann::json::parse(ReadScenarioFixture(
-        "scenarios/multi-drone/energy-and-outage-reallocation.json"));
-    for (const ReplayCondition& condition : replayConditions)
-    {
-        auto scenarioVariant = baseMixedFaultScenario;
-        scenarioVariant["energy_model"]["reserve_percent"] = condition.reservePercent;
-        scenarioVariant["communication_outages"][0]["start_tick"] =
-            condition.outageStartTick;
-        scenarioVariant["communication_outages"][0]["heartbeat_timeout_ticks"] =
-            condition.heartbeatTimeoutTicks;
-        scenarioVariant["expected"]["tolerance_meters"] = 1000.0;
-
-        for (int repeat = 0; repeat < 3; ++repeat)
-        {
-            const ScenarioResult repeatedResult = RunScenario(scenarioVariant.dump());
-            ASSERT_TRUE(repeatedResult.passed)
-                << (repeatedResult.issues.empty() ? "" : repeatedResult.issues.front());
-            ASSERT_TRUE(repeatedResult.mission.has_value());
-            EXPECT_EQ(repeatedResult.mission->completedTaskCount, 3U);
-            ASSERT_TRUE(repeatedResult.mission->completedTick.has_value());
-            EXPECT_EQ(*repeatedResult.mission->completedTick,
-                static_cast<std::uint64_t>(condition.expectedCompletionTick));
-            ASSERT_EQ(repeatedResult.drones.size(), 4U);
-            EXPECT_TRUE(repeatedResult.drones[0].returnedForLowBattery);
-            EXPECT_EQ(repeatedResult.drones[1].communicationStatus,
-                ScenarioResult::Drone::CommunicationStatus::Unknown);
-            EXPECT_EQ(repeatedResult.drones[1].lastHeartbeatTick,
-                static_cast<std::uint64_t>(condition.outageStartTick - 1));
-        }
-    }
-
-#if !defined(__EMSCRIPTEN__)
-    // 강체 비행의 응답 지연을 고려해 계획 간격은 2.1m로 두고, 실제 간격이 2m를 지키는지 본다.
-    const std::string rigidBodyMixedFaultScenario = ReadScenarioFixture(
-        "scenarios/multi-drone/rigid-body-energy-and-outage.json");
-    for (int repeat = 0; repeat < 3; ++repeat)
-    {
-        const ScenarioResult rigidBodyResult = RunScenario(rigidBodyMixedFaultScenario);
-        ASSERT_TRUE(rigidBodyResult.passed)
-            << (rigidBodyResult.issues.empty() ? "" : rigidBodyResult.issues.front());
-        ASSERT_TRUE(rigidBodyResult.mission.has_value());
-        EXPECT_EQ(rigidBodyResult.mission->outcome, ScenarioResult::Outcome::Passed);
-        EXPECT_EQ(rigidBodyResult.mission->completedTaskCount, 3U);
-        ASSERT_TRUE(rigidBodyResult.mission->startedTick.has_value());
-        EXPECT_GT(*rigidBodyResult.mission->startedTick, 90U);
-        EXPECT_LE(*rigidBodyResult.mission->startedTick, 512U);
-        ASSERT_TRUE(rigidBodyResult.mission->completedTick.has_value());
-        EXPECT_LE(*rigidBodyResult.mission->completedTick, 1200U);
-        ASSERT_EQ(rigidBodyResult.mission->tasks.size(), 3U);
-        ASSERT_TRUE(rigidBodyResult.mission->tasks[0].completedTick.has_value());
-        EXPECT_LE(*rigidBodyResult.mission->tasks[0].completedTick, 512U);
-        EXPECT_EQ(rigidBodyResult.mission->tasks[0].assignmentHistory,
-            (std::vector<std::string>{"low-charge", "reserve-2"}));
-        ASSERT_TRUE(rigidBodyResult.mission->tasks[1].completedTick.has_value());
-        EXPECT_LE(*rigidBodyResult.mission->tasks[1].completedTick, 1200U);
-        EXPECT_EQ(rigidBodyResult.mission->tasks[1].assignmentHistory,
-            (std::vector<std::string>{"lost-link", "reserve-2"}));
-        EXPECT_GT(rigidBodyResult.collisionAvoidanceEvents, 0U);
-        ASSERT_TRUE(rigidBodyResult.minimumDroneSeparationMeters.has_value());
-        EXPECT_GE(*rigidBodyResult.minimumDroneSeparationMeters, 2.0);
-        ASSERT_EQ(rigidBodyResult.drones.size(), 4U);
-        EXPECT_TRUE(rigidBodyResult.drones[0].returnedForLowBattery);
-        EXPECT_EQ(rigidBodyResult.drones[0].finalState.mode, FlightMode::Grounded);
-        ASSERT_TRUE(rigidBodyResult.drones[0].batteryPercent.has_value());
-        EXPECT_GT(*rigidBodyResult.drones[0].batteryPercent, 0.0);
-        EXPECT_LT(*rigidBodyResult.drones[0].batteryPercent, 50.0);
-        EXPECT_EQ(rigidBodyResult.drones[1].communicationStatus,
-            ScenarioResult::Drone::CommunicationStatus::Unknown);
-        EXPECT_EQ(rigidBodyResult.drones[1].lastHeartbeatTick, 179U);
-        EXPECT_NEAR(rigidBodyResult.drones[1].finalState.positionMeters.x,
-            10.0, 0.01);
-        EXPECT_TRUE(std::any_of(rigidBodyResult.eventLog.begin(),
-            rigidBodyResult.eventLog.end(), [](const std::string& event)
-            {
-                return event.find("tick 185: lost-link 드론의 상태를 확인할 수 없어")
-                    != std::string::npos;
-            }));
-    }
-#endif
+    EXPECT_NEAR(energyResult.drones[1].finalState.positionMeters.x, 21.0, 0.2);
 
     constexpr std::string_view insufficientLandingReserve = R"json(
     {"version":1,"dynamics":"kinematic","ticks":10,
@@ -1425,81 +1090,6 @@ void Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea()
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(insufficientLandingReserve)),
         std::invalid_argument);
-}
-
-void Verify_ScenarioRunner_CompletesTasksAfterSimultaneousOutage()
-{
-    using Json = nlohmann::json;
-    constexpr std::uint64_t missionStartTick = 90U;
-    constexpr std::uint64_t missionDeadlineTick = missionStartTick + 600U;
-    constexpr std::uint64_t scenarioTicks = missionDeadlineTick + 30U;
-    constexpr std::array droneCounts{4U, 16U, 64U, 256U};
-    for (const std::size_t droneCount : droneCounts)
-    {
-        Json drones = Json::array();
-        Json commands = Json::array();
-        Json tasks = Json::array();
-        Json expectedDrones = Json::array();
-        Json outages = Json::array();
-        const std::size_t outageCount = droneCount / 4U;
-        for (std::size_t index = 0; index < droneCount; ++index)
-        {
-            const std::string name = "drone-" + std::to_string(index);
-            const double startX = static_cast<double>(index) * 5.0;
-            drones.push_back({
-                {"name", name},
-                {"initial_position_meters", {startX, 0.0, 0.0}}});
-            commands.push_back({{"tick", 0}, {"drone", name}, {"type", "takeoff"}});
-            tasks.push_back({
-                {"name", "task-" + std::to_string(index)},
-                {"role", "survey"},
-                {"drone", name},
-                {"target_position_meters", {startX + 0.5, 0.0, 1.5}},
-                {"start_tick", missionStartTick},
-                {"deadline_tick", missionDeadlineTick},
-                {"tolerance_meters", 0.05}});
-            expectedDrones.push_back({
-                {"name", name},
-                {"mode", "hovering"},
-                {"position_meters", {startX + 0.5, 0.0, 1.5}}});
-            if (index % 4U == 0U)
-            {
-                outages.push_back({
-                    {"drone", name},
-                    {"start_tick", missionStartTick - 5U},
-                    {"end_tick", scenarioTicks},
-                    {"heartbeat_timeout_ticks", 3U},
-                    {"on_timeout", "hold_position"}});
-            }
-        }
-
-        const Json scenario{
-            {"version", 1},
-            {"dynamics", "kinematic"},
-            {"ticks", scenarioTicks},
-            {"drones", std::move(drones)},
-            {"commands", std::move(commands)},
-            {"communication_outages", std::move(outages)},
-            {"mission", {{"name", "reallocation"}, {"tasks", std::move(tasks)}}},
-            {"expected", {
-                {"tolerance_meters", 10'000.0},
-                {"drones", std::move(expectedDrones)}}}};
-
-        const ScenarioResult result = RunScenario(scenario.dump());
-        ASSERT_TRUE(result.passed) << "drone_count=" << droneCount << ": "
-            << (result.issues.empty() ? "임무가 완료되지 않았습니다." : result.issues.front());
-        ASSERT_TRUE(result.mission.has_value());
-        EXPECT_TRUE(result.mission->passed) << "drone_count=" << droneCount;
-        EXPECT_EQ(result.mission->completedTaskCount, droneCount)
-            << "drone_count=" << droneCount;
-        const std::size_t reassignedTaskCount = static_cast<std::size_t>(std::count_if(
-            result.mission->tasks.begin(), result.mission->tasks.end(),
-            [](const ScenarioResult::MissionTask& task)
-            {
-                return task.reassignmentCount > 0U;
-            }));
-        EXPECT_GE(reassignedTaskCount, outageCount) << "drone_count=" << droneCount;
-    }
 }
 
 TEST(ScenarioRunnerTests, CoreScenarios)
@@ -1521,7 +1111,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(
         Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath());
     EXPECT_NO_FATAL_FAILURE(
-        Verify_ScenarioRunner_ReassignsFourDroneSurveyAfterHeartbeatLoss());
+        Verify_ScenarioRunner_KeepsAssignmentDuringHeartbeatLoss());
     constexpr std::array flightModes{
         FlightMode::Grounded,
         FlightMode::TakingOff,
@@ -1541,9 +1131,7 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FollowerHoldsItsLastTargetDuringLinkOutageAndResumesAfterward());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_FindsClosestPairAcrossThreeDrones());
     EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive());
-    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_ReassignsAnUnconfirmedSurveyArea());
-    EXPECT_NO_FATAL_FAILURE(
-        Verify_ScenarioRunner_CompletesTasksAfterSimultaneousOutage());
+    EXPECT_NO_FATAL_FAILURE(Verify_ScenarioRunner_RunsSurveyAndCollisionScenarios());
 
     constexpr std::string_view duplicateMissionAssignment = R"json(
     {"version":1,"dynamics":"kinematic","ticks":2,

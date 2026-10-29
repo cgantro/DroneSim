@@ -106,9 +106,6 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                 {"inspection_zone_id", task.inspectionZoneId.empty()
                         ? nlohmann::json(nullptr) : nlohmann::json(task.inspectionZoneId)},
                 {"drone", task.droneName},
-                {"initial_drone", task.initialDroneName},
-                {"assignment_history", task.assignmentHistory},
-                {"reassignment_count", task.reassignmentCount},
                 {"target_position_meters", {
                     task.targetPositionMeters.x,
                     task.targetPositionMeters.y,

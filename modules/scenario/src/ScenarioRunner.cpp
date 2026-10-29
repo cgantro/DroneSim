@@ -100,7 +100,7 @@ void UpdateEnergyPolicy(
 
             energy.MarkReturningForLowBattery();
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + droneName + " 드론이 배터리 예비량에 도달해 임무를 넘기고 출발 지점으로 돌아갑니다.");
+                + droneName + " 드론이 배터리 예비량에 도달해 출발 지점으로 돌아갑니다.");
 
             if (mission)
             {
@@ -108,10 +108,9 @@ void UpdateEnergyPolicy(
                 {
                     if (task.droneName != droneName || task.completed || task.failed)
                         continue;
-                    task.droneName.clear();
-                    task.started = false;
-                    result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-                        + task.name + "' 임무를 대기열에 돌려놓았습니다.");
+                    task.failed = true;
+            result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
+                + task.name + "' 임무는 미완료로 남습니다.");
                 }
             }
         }
@@ -149,11 +148,6 @@ void UpdateEnergyPolicy(
 bool IsConnected(const DroneObservations& observations, const std::string& droneName)
 {
     return observations.at(droneName).status == DroneCommunicationStatus::Connected;
-}
-
-bool IsUnknown(const DroneObservations& observations, const std::string& droneName)
-{
-    return observations.at(droneName).status == DroneCommunicationStatus::Unknown;
 }
 
 const glm::dvec3& CurrentWaypoint(const ScenarioResult::MissionTask& task)
@@ -480,129 +474,17 @@ void UpdateMissionCommands(
     SimulationCore& simulation,
     const DroneIds& droneIds,
     const DroneObservations& observations,
-    const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
     if (!mission)
         return;
-
-    const auto findNearestDrone = [&](
-        const glm::dvec3& target,
-        bool allowBusy,
-        std::string_view excludedDrone) -> std::optional<std::string>
-    {
-        std::optional<std::string> nearest;
-        double nearestDistanceSquared = std::numeric_limits<double>::infinity();
-        const auto considerDrone = [&](const std::string& droneName)
-        {
-            if (droneName == excludedDrone || !IsConnected(observations, droneName))
-                return;
-            if (simulation.HasBattery(droneIds.at(droneName))
-                && simulation.Battery(droneIds.at(droneName)).IsReturningForLowBattery())
-                return;
-            const bool isFormationFollower = std::any_of(
-                definition.formationLinks.begin(), definition.formationLinks.end(),
-                [&droneName](const FormationLink& link)
-                {
-                    return link.followerName == droneName;
-                });
-            if (isFormationFollower)
-                return;
-            const auto activeTask = std::find_if(
-                mission->tasks.begin(), mission->tasks.end(),
-                [&droneName](const ScenarioResult::MissionTask& candidate)
-                {
-                    return candidate.droneName == droneName
-                        && !candidate.completed && !candidate.failed;
-                });
-            if (!allowBusy && activeTask != mission->tasks.end())
-                return;
-
-            const DroneState& state = simulation.State(droneIds.at(droneName));
-            if (!CanReceiveWaypoint(state.mode))
-                return;
-            const glm::dvec3 offset = state.positionMeters - target;
-            const double distanceSquared = glm::dot(offset, offset);
-            if (distanceSquared < nearestDistanceSquared)
-            {
-                nearest = droneName;
-                nearestDistanceSquared = distanceSquared;
-            }
-        };
-
-        if (definition.drones.empty())
-            considerDrone(definition.primaryDroneName);
-        else
-            for (const ScenarioDrone& drone : definition.drones)
-                considerDrone(drone.name);
-        return nearest;
-    };
-
-    for (ScenarioResult::MissionTask& task : mission->tasks)
-    {
-        if (task.completed || task.failed || task.droneName.empty()
-            || !IsUnknown(observations, task.droneName))
-            continue;
-
-        const std::string unreachableDrone = task.droneName;
-        task.droneName.clear();
-        task.started = false;
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-            + task.name + "' 임무는 " + unreachableDrone
-            + " 드론의 완료 보고를 받지 못해 미확정으로 남았습니다.");
-
-        const std::optional<std::string> replacement =
-            findNearestDrone(CurrentWaypoint(task), true, {});
-        if (!replacement)
-            continue;
-
-        const auto displacedTask = std::find_if(
-            mission->tasks.begin(), mission->tasks.end(),
-            [&replacement](const ScenarioResult::MissionTask& candidate)
-            {
-                return candidate.droneName == *replacement
-                    && !candidate.completed && !candidate.failed;
-            });
-        if (displacedTask != mission->tasks.end())
-        {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-                + displacedTask->name + "' 임무는 " + *replacement
-                + " 드론이 다른 구역을 맡아 대기열로 돌아갔습니다.");
-            displacedTask->droneName.clear();
-            displacedTask->started = false;
-        }
-
-        task.droneName = *replacement;
-        task.assignmentHistory.push_back(*replacement);
-        ++task.reassignmentCount;
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-            + task.name + "' 미완료 구역을 " + *replacement
-            + " 드론에 다시 배정했습니다.");
-    }
-
-    for (ScenarioResult::MissionTask& task : mission->tasks)
-    {
-        if (task.completed || task.failed || !task.droneName.empty()
-            || tick < task.startTick)
-            continue;
-        const std::optional<std::string> availableDrone =
-            findNearestDrone(CurrentWaypoint(task), false, {});
-        if (!availableDrone)
-            continue;
-        task.droneName = *availableDrone;
-        task.assignmentHistory.push_back(*availableDrone);
-        ++task.reassignmentCount;
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-            + task.name + "' 대기 중인 구역을 " + *availableDrone
-            + " 드론에 배정했습니다.");
-    }
 
     for (auto taskIterator = mission->tasks.begin();
          taskIterator != mission->tasks.end(); ++taskIterator)
     {
         ScenarioResult::MissionTask& task = *taskIterator;
         if (task.completed || task.failed || tick < task.startTick
-            || task.droneName.empty() || !IsConnected(observations, task.droneName))
+            || !IsConnected(observations, task.droneName))
             continue;
         const bool earlierTaskIsActive = std::any_of(mission->tasks.begin(),
             taskIterator, [&task](const ScenarioResult::MissionTask& previous)
@@ -1502,7 +1384,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
                 simulation, droneIds, homePositions, definition, result);
         }
         UpdateMissionCommands(tick, result.mission, simulation, droneIds,
-            observations, definition, result);
+            observations, result);
         UpdateFormationLinks(tick, definition.formationLinks, simulation, droneIds,
             observations, result);
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,

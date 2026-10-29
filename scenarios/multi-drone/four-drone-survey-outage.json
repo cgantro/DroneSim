@@ -83,8 +83,8 @@
     "drones": [
       {"name": "scout-1", "mode": "hovering", "position_meters": [4, 0, 1.5]},
       {"name": "scout-2", "mode": "following_waypoint", "position_meters": [10.333333333333336, 0, 1.5]},
-      {"name": "scout-3", "mode": "hovering", "position_meters": [14, 0, 1.5]},
-      {"name": "scout-4", "mode": "hovering", "position_meters": [24, 0, 1.5]}
+      {"name": "scout-3", "mode": "hovering", "position_meters": [24, 0, 1.5]},
+      {"name": "scout-4", "mode": "hovering", "position_meters": [34, 0, 1.5]}
     ]
   }
 }

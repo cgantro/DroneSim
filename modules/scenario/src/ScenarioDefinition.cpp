@@ -509,8 +509,6 @@ ScenarioResult::MissionTask ReadMissionTask(
     task.name = taskNameValue.get<std::string>();
     task.role = roleValue.get<std::string>();
     task.droneName = droneValue.get<std::string>();
-    task.initialDroneName = task.droneName;
-    task.assignmentHistory.push_back(task.droneName);
     if (!taskNames.insert(task.name).second || !droneNames.contains(task.droneName))
     {
         throw std::invalid_argument("임무 이름은 고유해야 하며 등록된 드론을 지정해야 합니다.");
@@ -627,8 +625,6 @@ std::vector<ScenarioResult::MissionTask> GenerateSurveyTasks(
         task.name = nameValue.get<std::string>() + "-" + droneNames[droneIndex];
         task.role = "area_survey";
         task.droneName = droneNames[droneIndex];
-        task.initialDroneName = task.droneName;
-        task.assignmentHistory.push_back(task.droneName);
         task.startTick = startTick;
         task.deadlineTick = deadlineTick;
         task.toleranceMeters = tolerance;

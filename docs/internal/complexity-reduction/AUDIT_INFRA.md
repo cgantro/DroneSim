@@ -181,11 +181,11 @@
 128. `scenarios/flight/normal-flight.json` — **KEEP**. 한 기체의 이륙·경유·착륙과 카메라 상태 기대값을 제공한다. 비행 기초 회귀 자료이며 장애 시나리오와 다르다. 이번 검색에서 직접 호출 위치는 확인하지 못했다; 사용 여부와 실제 실행은 미검증.
 129. `scenarios/flight/physical-model-override.json` — **KEEP**. 강체 제원 재정의·이륙 입력과 허용 위치를 제공하며 ScenarioRunnerTests가 참조한다. 물리 제원 입력 경로를 검증하는 독립 사례다. 기대 위치 허용치가 넓으므로 정확한 물리 성능 증거는 아니다.
 130. `scenarios/flight/rigid-body-flight.json` — **KEEP**. 강체 모드의 바람·이륙·착륙 및 예상 위치를 제공하며 CMake headless smoke가 참조한다. 편대 임무와 다른 기초 물리 확인이다. 실행 결과는 미검증.
-131. `scenarios/multi-drone/energy-and-outage-reallocation.json` — **REMOVE**. 저전력·통신 단절에서 임무 재배정을 시험하는 네 기체 입력과 기대값이다. ScenarioRunnerTests와 CooperativeMissionBenchmark가 참조한다. 자동 장애 복구와 광범위 benchmark 제거 때 관련 테스트와 함께 정리한다.
-132. `scenarios/multi-drone/four-drone-survey-outage.json` — **SIMPLIFY**. 네 기체 정찰·통신 단절·재배정·최소 간격 기대값을 제공하며 headless smoke와 ScenarioRunnerTests가 참조한다. 점검면 촬영 조건은 2026-10-29 제거하고 경유점 도착으로 임무 완료를 판단하도록 바꿨다. 자동 재배정은 별도 축소 대상이다.
+131. `scenarios/multi-drone/energy-and-outage-reallocation.json` — **REMOVED 2026-10-29**. 저전력·통신 단절에서 자동 임무 재배정을 기대하던 네 기체 입력이었다. 재배정 기능과 대규모 성능 시험을 제거하며 함께 지웠다.
+132. `scenarios/multi-drone/four-drone-survey-outage.json` — **KEEP, UPDATED 2026-10-29**. 네 기체 정찰과 한 기체 통신 단절을 확인한다. 연결이 끊긴 드론의 작업은 원래 담당자에게 남고, 결과는 미확정이다. 정상 임무 스모크는 `two-point-survey.json`에서 확인한다.
 133. `scenarios/multi-drone/independent-flight.json` — **KEEP**. 두 기체의 독립 이륙·이동과 최소 간격을 기술하며 CMake smoke가 참조한다. 정상 다중 기체 기본 동작과 장애 재배정은 다른 범위다.
 134. `scenarios/multi-drone/leader-following-outage.json` — **SIMPLIFY**. 리더·추종 오프셋과 일시 단절, 최종 위치를 기술하며 CMake smoke가 참조한다. 정상 편대 추종은 필요하지만 장애 복구 요구는 제외하므로 직접 통신의 정상 추종 확인과 분리한다.
-135. `scenarios/multi-drone/low-battery-reallocation.json` — **REMOVE**. 저전력 착륙과 다른 기체의 목표 인수를 위한 입력/기대값이며 ScenarioRunnerTests가 참조한다. 자동 장애 재배정 제거 범위에 해당한다. 정상 비행의 배터리 표시·기본 동작까지 삭제한다는 뜻은 아니다.
+135. `scenarios/multi-drone/low-battery-reallocation.json` — **REPLACED 2026-10-29** by `low-battery-return.json`. 시험은 배터리 예비량 도달 시 복귀와 담당 작업 미완료를 확인한다. 다른 드론의 자동 인수는 시험하지 않는다.
 
 선정 당시 미기록 infra UNREAD 43개 중 이번 20개 이후 23개가 미확인이다. 외부 라이선스·실행·모든 호출 관계는 미검증이며 조사하지 않은 파일은 UNREAD다.
 
@@ -193,7 +193,7 @@
 
 선정 시 현재 inventory의 infra UNREAD 중 보고서에 없는 17개였다. 일반 텍스트 11개는 전체 구간을 읽었다. 두 수치 JSON은 파일 전체를 로컬 JSON 파싱해 구조·표본 수·출처·참조를 확인한 **METADATA_ONLY**이며 숫자 배열의 개별 값은 감사하지 않았다. 비공개 문서 4개는 전체 파일을 기계적으로 읽어 크기·줄 수만 확인했으며 본문 내용 감사는 **UNREAD**다. 외부 원본·라이선스, 빌드·시험·실행은 검증하지 않았다. 다음 판정은 제안이며 제품 변경을 뜻하지 않는다.
 
-136. `scenarios/multi-drone/rigid-body-energy-and-outage.json` — **REMOVE**, 완독 1–84행. 강체 4기 저전력·단절 재배정과 최소 거리 기대값을 제공한다. ScenarioRunnerTests와 CooperativeMissionBenchmark가 읽는다. 자동 장애 재배정·광범위 benchmark 제거에 해당하며 정상 강체 비행 확인은 별도 유지한다. 입력 데이터로서 자원 소유나 자체 오류 처리는 없다.
+136. `scenarios/multi-drone/rigid-body-energy-and-outage.json` — **REMOVED 2026-10-29**. 강체 네 기체의 저전력·통신 단절 재배정을 기대하던 시험 입력이다. 정상 강체 비행과 충돌 시험은 별도로 남겼다.
 137. `scenarios/multi-drone/two-point-survey.json` — **KEEP**, 완독 1–43행. 두 기체의 정상 지점 분담 및 기대 위치를 제공하는 운동학 시나리오다. 검색에서 시나리오 이름 외 직접 참조는 확인하지 못했다. 4기 MVP 시험과 중복인지 전체 호출·실행을 확인한 뒤 판단한다. 자원 소유·자체 오류 처리는 없다.
 138. `tests/communication/GroundControlClientTests.cpp` — **KEEP**, 완독 1–67행. 로컬 UDP 소켓 두 개와 작업자를 사용해 명령·일치 응답 및 IPv4 변환을 확인한다. 소켓/스레드는 시험 범위 수명이며 실패는 GoogleTest 검사로 나타난다. 직접 통신 클라이언트가 유지되면 정상 응답 회귀가 필요하다. 재전송·취소·실제 네트워크는 다루지 않는다.
 139. `tests/communication/ProtocolTests.cpp` — **SIMPLIFY**. 명령·응답 왕복, 크기·형식 거부, 중복·역순 판정을 검사한다. 카메라 녹화 명령은 2026-10-29 제거했다.
