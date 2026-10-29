@@ -1089,9 +1089,11 @@ void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
 {
 #if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
-        ecs_->physics->SetTerrain(terrain);
+    {
+        ecs_->physics->SetTerrain(std::move(terrain));
+        return;
+    }
 #endif
-
     ecs_->terrainGrid = std::move(terrain);
 }
 
