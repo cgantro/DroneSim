@@ -934,15 +934,7 @@ void SimulationCore::Reset()
     {
         (void)id;
         ecs_->ResetDrone(drone);
-    }
-    for (auto& [id, drone] : ecs_->drones)
-    {
-        (void)id;
         EoCameraModel::Reset(drone.get_mut<CameraState>());
-    }
-    for (auto& [id, drone] : ecs_->drones)
-    {
-        (void)id;
         if (drone.has<BatteryModel>())
             drone.get_mut<BatteryModel>().Reset();
     }
