@@ -75,10 +75,14 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
         const bool returnedForLowBattery =
             report->status == FleetDroneStatus::LowBatteryReturnComplete
             && report->mode == simulation::FlightMode::Grounded;
-        if (returnedForLowBattery
-            && (leg == FleetMissionLeg::Reconnaissance
-                || leg == FleetMissionLeg::Returning))
-            continue;
+        if (returnedForLowBattery)
+        {
+            if (leg == FleetMissionLeg::Reconnaissance)
+                return {FleetMissionProgress::Failed,
+                    "배터리 예비량에 도달해 정찰을 중단했습니다."};
+            if (leg == FleetMissionLeg::Returning)
+                continue;
+        }
 
         if (report->leg != leg)
             return {FleetMissionProgress::Waiting, {}};

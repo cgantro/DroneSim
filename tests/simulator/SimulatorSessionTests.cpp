@@ -464,7 +464,7 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
             FleetMissionLeg::Reconnaissance, FleetDroneStatus::TargetReached}};
     EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
         FleetMissionLeg::Reconnaissance, reports).progress,
-        FleetMissionProgress::Advance);
+        FleetMissionProgress::Failed);
     reports.back() = FleetMissionReport{
         FlightMode::Grounded, FleetMissionLeg::Returning,
         FleetDroneStatus::LowBatteryReturnComplete};
