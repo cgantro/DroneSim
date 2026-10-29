@@ -107,8 +107,7 @@ void AeroSimLabApp::ProcessGroundDatagram(const std::string& datagram,
     }
 
     externalControl_ = true;
-    if (!std::holds_alternative<communication::SessionCommand>(packet.command)
-        && !std::holds_alternative<communication::FleetCommand>(packet.command))
+    if (!std::holds_alternative<communication::FleetCommand>(packet.command))
     {
         groundControlActive_ = true;
         window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
@@ -152,134 +151,18 @@ bool AeroSimLabApp::ReplyToUnqueueableGroundCommand(
 }
 #endif
 
-bool AeroSimLabApp::ApplySessionCommand(
-    communication::SessionCommand command,
-    communication::CommandReply& reply)
-{
-    using Command = communication::SessionCommand;
-    using FlightMode = aerosimlab::simulation::FlightMode;
-    const auto resetSimulationState = [this]
-    {
-#ifndef __EMSCRIPTEN__
-        // Tick이 0으로 돌아가기 전에 이전 GPU 읽기를 끝내고 프레임 번호 기준을 초기화한다.
-        DrainEoReadbacks();
-        lastQueuedEoFrameTick_ = 0;
-#endif
-        simulation_.Reset();
-        eoFrame_ = {};
-        groundControlCommandExpiresAtTick_.clear();
-    };
-
-    switch (command)
-    {
-    case Command::StartRecording:
-        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
-        {
-            reply.status = "recording_unavailable";
-            return false;
-        }
-        if (simulation_.State().mode != FlightMode::Grounded)
-        {
-            reply.status = "recording_requires_grounded";
-            return false;
-        }
-
-        resetSimulationState();
-        (void)commandRecording_.StartRecording();
-        externalControl_ = true;
-        window_->SetTitle("AeroSimLab | 입력 기록 중");
-        reply.accepted = true;
-        reply.status = "recording_started";
-        return false;
-
-    case Command::StopRecording:
-        if (!commandRecording_.IsRecording())
-        {
-            reply.status = "recording_not_active";
-            return false;
-        }
-
-        (void)commandRecording_.StopRecording();
-        window_->SetTitle("AeroSimLab | 입력 기록 완료");
-        reply.accepted = true;
-        reply.status = "recording_stopped";
-        return false;
-
-    case Command::ReplayRecording:
-        if (commandRecording_.IsRecording() || commandRecording_.IsReplaying())
-        {
-            reply.status = "recording_unavailable";
-            return false;
-        }
-        if (!commandRecording_.StartReplay())
-        {
-            reply.status = "recording_empty";
-            return false;
-        }
-
-        resetSimulationState();
-        smokeReplayStarted_ = smokeTest_;
-        pendingControllerAction_.reset();
-        pendingPilotCommand_.reset();
-        window_->SetTitle("AeroSimLab | 입력 기록 재생 중");
-        AdvanceReplayTick();
-        reply.accepted = true;
-        reply.status = "recording_replay_started";
-        return true;
-    }
-
-    return false;
-}
-
-void AeroSimLabApp::ApplyHudSessionCommand(
-    communication::SessionCommand command)
-{
-    communication::CommandReply reply;
-    static_cast<void>(ApplySessionCommand(command, reply));
-
-    if (reply.accepted)
-    {
-        switch (command)
-        {
-        case communication::SessionCommand::StartRecording:
-            sessionControlStatus_ = "조종 입력을 기록하고 있습니다.";
-            break;
-        case communication::SessionCommand::StopRecording:
-            sessionControlStatus_ = "조종 입력 기록을 마쳤습니다.";
-            break;
-        case communication::SessionCommand::ReplayRecording:
-            sessionControlStatus_ = "조종 입력을 처음부터 다시 재생합니다.";
-            break;
-        }
-        return;
-    }
-
-    if (reply.status == "recording_requires_grounded")
-        sessionControlStatus_ = "기록은 모든 드론이 지상에 있을 때 시작할 수 있습니다.";
-    else if (reply.status == "recording_empty")
-        sessionControlStatus_ = "다시 재생할 조종 입력이 없습니다.";
-    else
-        sessionControlStatus_ = "다른 기록이나 재생 작업이 진행 중입니다.";
-}
-
 void AeroSimLabApp::ApplyDroneCommand(
     aerosimlab::simulation::DroneId droneId,
     const aerosimlab::simulation::DroneCommand& command,
     communication::CommandReply& reply)
 {
-    if (commandRecording_.IsReplaying())
+    const auto result = ApplySimulationCommand(droneId, command);
+    if (result == aerosimlab::simulation::CommandResult::Accepted
+        && smokeTest_
+        && command.kind == aerosimlab::simulation::DroneCommand::Kind::TakeOff)
     {
-        commandRecording_.StopReplay();
-        window_->SetTitle("AeroSimLab | 지상통제 입력 사용 중");
+        smokeFlightCommandObserved_ = true;
     }
-
-    if (droneId != simulation_.PrimaryDroneId() && commandRecording_.IsRecording())
-    {
-        reply.status = "recording_secondary_unsupported";
-        return;
-    }
-
-    const auto result = ApplyAndRecordCommand(droneId, command);
     reply.accepted = result == aerosimlab::simulation::CommandResult::Accepted;
     if (reply.accepted)
     {
@@ -371,7 +254,7 @@ void AeroSimLabApp::ExpireGroundControlCommand()
 
         const aerosimlab::simulation::DroneCommand stop{
             aerosimlab::simulation::DroneCommand::Kind::Stop};
-        static_cast<void>(ApplyAndRecordCommand(command->first, stop));
+        static_cast<void>(ApplySimulationCommand(command->first, stop));
         command = groundControlCommandExpiresAtTick_.erase(command);
     }
 }
@@ -390,8 +273,6 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
     reply.sequence = pending.packet.sequence;
     reply.receivedAtMilliseconds = pending.receivedAtMilliseconds;
 
-    const bool wasRecordingAtTickStart = commandRecording_.IsRecording();
-    bool replayTickAdvanced = false;
     std::visit(Overloaded{
         [](std::monostate) {},
         [this, &reply](const aerosimlab::simulation::DroneCommand& command)
@@ -403,11 +284,6 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         [this, &reply](communication::CameraCommand command)
         {
             ApplyCameraCommand(command, reply);
-        },
-        [this, &reply, &replayTickAdvanced](
-            communication::SessionCommand command)
-        {
-            replayTickAdvanced = ApplySessionCommand(command, reply);
         },
         [this, &reply](communication::InspectionCommand command)
         {
@@ -452,9 +328,7 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
         }
     }, pending.packet.command);
 
-    if (!replayTickAdvanced)
-        simulation_.AdvanceOneTick();
-    commandRecording_.FinishTick(wasRecordingAtTickStart);
+    simulation_.AdvanceOneTick();
 
     reply.appliedTick = simulation_.TickCount();
     reply.telemetry = CurrentTelemetry();
@@ -475,14 +349,6 @@ bool AeroSimLabApp::ProcessPendingGroundCommand()
     pendingCommand_.reset();
     return true;
 #endif
-}
-
-void AeroSimLabApp::ApplyRecordedCommands()
-{
-    for (const auto& entry : commandRecording_.CommandsForReplayTick())
-    {
-        (void)simulation_.Apply(entry.command);
-    }
 }
 
 communication::Telemetry AeroSimLabApp::CurrentTelemetry() const

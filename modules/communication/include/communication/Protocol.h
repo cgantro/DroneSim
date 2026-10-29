@@ -26,14 +26,6 @@ enum class CameraCommand
     Recover
 };
 
-/** @brief 시뮬레이터의 게임 입력 기록과 재생을 제어한다. */
-enum class SessionCommand
-{
-    StartRecording,
-    StopRecording,
-    ReplayRecording
-};
-
 /** @brief 등록된 정찰 위치를 순서대로 방문해 영상을 수집한다. */
 enum class InspectionCommand
 {
@@ -51,11 +43,11 @@ enum class FleetCommand
     DispatchReconnaissance
 };
 
-/** @brief UDP로 받은 비행·카메라·기록·편대 명령 중 하나를 보관한다. */
+/** @brief UDP로 받은 비행·카메라·임무·편대 명령 중 하나를 보관한다. */
 struct CommandPacket
 {
     using Command = std::variant<std::monostate, simulation::DroneCommand,
-        CameraCommand, SessionCommand, InspectionCommand, FleetCommand>;
+        CameraCommand, InspectionCommand, FleetCommand>;
 
     std::uint32_t commandId = 0;
     std::uint32_t sequence = 0;

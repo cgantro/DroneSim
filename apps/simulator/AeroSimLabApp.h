@@ -8,7 +8,6 @@
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "sensor/RgbFrame.h"
-#include "simulation_core/CommandRecording.h"
 #include "simulation_core/EoCameraModel.h"
 #include "simulation_core/FormationPlanner.h"
 #include "terrain/MapBuildings.h"
@@ -181,7 +180,6 @@ private:
     [[nodiscard]] bool SmokeTestIsComplete() const;
     /** @brief 스모크 검사에서 마지막으로 읽은 EO 영상과 카메라 Tick을 확인한다. */
     [[nodiscard]] int ValidateSmokeTestOutput() const;
-    void AdvanceReplayTick();
     void AdvanceManualControlTick();
     [[nodiscard]] bool RequestInspectionMission(
         std::optional<std::size_t> selectedTargetIndex = std::nullopt);
@@ -228,10 +226,10 @@ private:
     void AdvanceFormationTransit();
     void FailInspectionMission(const std::string& reason);
     [[nodiscard]] std::string InspectionMissionStatus() const;
-    /** @brief 명령을 적용하고 성공한 명령만 입력 기록에 남긴다. */
-    [[nodiscard]] aerosimlab::simulation::CommandResult ApplyAndRecordCommand(
+    /** @brief 지정한 드론에 비행 명령을 적용한다. */
+    [[nodiscard]] aerosimlab::simulation::CommandResult ApplySimulationCommand(
         const aerosimlab::simulation::DroneCommand& command);
-    [[nodiscard]] aerosimlab::simulation::CommandResult ApplyAndRecordCommand(
+    [[nodiscard]] aerosimlab::simulation::CommandResult ApplySimulationCommand(
         aerosimlab::simulation::DroneId droneId,
         const aerosimlab::simulation::DroneCommand& command);
     void PollGroundControl();
@@ -253,14 +251,6 @@ private:
      */
     void HandleGamepadConnected(bool takeoffPressed, bool landPressed,
         const std::optional<aerosimlab::manual_control::GamepadAxes>& pilotAxes);
-    /**
-     * @brief 기록 시작·정지·재생 명령을 적용한다.
-     * @return true면 재생 시작 과정에서 첫 Tick까지 진행했으므로 바깥에서 한 번 더 진행하지 않는다.
-     */
-    [[nodiscard]] bool ApplySessionCommand(
-        communication::SessionCommand command,
-        communication::CommandReply& reply);
-    void ApplyHudSessionCommand(communication::SessionCommand command);
     void ApplyDroneCommand(aerosimlab::simulation::DroneId droneId,
         const aerosimlab::simulation::DroneCommand& command,
         communication::CommandReply& reply);
@@ -271,7 +261,6 @@ private:
     /** @brief 대기 중인 지상통제 요청을 처리하고 이번 Tick을 진행했는지 반환한다. */
     [[nodiscard]] bool ProcessPendingGroundCommand();
     void ExpireGroundControlCommand();
-    void ApplyRecordedCommands();
     void WriteBenchmarkReport(double elapsedSeconds) const;
     [[nodiscard]] communication::Telemetry CurrentTelemetry() const;
     void RenderFrame();
@@ -377,7 +366,7 @@ private:
     std::optional<aerosimlab::manual_control::PilotCommand> pendingPilotCommand_;
     aerosimlab::sensor::RgbFrame eoFrame_;
     bool networkEnabled_ = false;
-    bool smokeReplayStarted_ = false;
+    bool smokeFlightCommandObserved_ = false;
     bool benchmarkMode_ = false;
     bool visibleBenchmarkMode_ = false;
     std::uint64_t groundControlCommandTimeoutTicks_ = 60;
@@ -409,8 +398,6 @@ private:
     std::chrono::steady_clock::time_point lastWebTelemetryUpdate_;
 #endif
     std::uint16_t udpPort_ = 0;
-    aerosimlab::simulation::CommandRecording commandRecording_;
-    std::string sessionControlStatus_;
 #ifndef __EMSCRIPTEN__
     struct PendingGroundCommand
     {

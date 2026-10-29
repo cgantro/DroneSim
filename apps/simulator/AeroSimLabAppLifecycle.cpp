@@ -294,10 +294,15 @@ bool AeroSimLabApp::SmokeTestIsComplete() const
     if (!networkEnabled_)
         return renderedFrames_ >= smokeTestFrameLimit;
 
-    return smokeReplayStarted_
-        && !commandRecording_.IsRecording()
-        && !commandRecording_.IsReplaying()
-        && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded;
+    if (!smokeFlightCommandObserved_)
+        return false;
+
+    const auto droneIds = simulation_.DroneIds();
+    return std::all_of(droneIds.begin(), droneIds.end(), [this](auto droneId)
+    {
+        return simulation_.State(droneId).mode
+            == aerosimlab::simulation::FlightMode::Grounded;
+    });
 }
 
 int AeroSimLabApp::ValidateSmokeTestOutput() const

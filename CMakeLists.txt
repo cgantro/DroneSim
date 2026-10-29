@@ -63,7 +63,6 @@ target_link_libraries(aerosimlab_terrain PUBLIC glm::glm PRIVATE nlohmann_json::
 add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/BatteryModel.cpp
   modules/simulation_core/src/DroneModel.cpp
-  modules/simulation_core/src/CommandRecording.cpp
   modules/simulation_core/src/EoCameraModel.cpp
   modules/simulation_core/src/InspectionSurfaceJson.cpp
   modules/simulation_core/src/ScenarioRunner.cpp
@@ -467,7 +466,6 @@ if(BUILD_TESTING)
 
   include(GoogleTest)
   add_executable(aerosimlab_simulation_tests
-    tests/simulation_core/CommandRecordingTests.cpp
     tests/simulation_core/SimulationCoreTests.cpp
     tests/simulation_core/ScenarioRunnerTests.cpp
     tests/simulation_core/FormationPlannerTests.cpp

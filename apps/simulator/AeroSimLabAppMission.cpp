@@ -1854,7 +1854,7 @@ bool AeroSimLabApp::PauseInspectionMission()
 
     const aerosimlab::simulation::DroneCommand stop{
         aerosimlab::simulation::DroneCommand::Kind::Stop};
-    if (ApplyAndRecordCommand(stop) != aerosimlab::simulation::CommandResult::Accepted)
+    if (ApplySimulationCommand(stop) != aerosimlab::simulation::CommandResult::Accepted)
         return false;
 
     inspectionMission_.pausedStage = inspectionMission_.stage;
@@ -1876,7 +1876,7 @@ bool AeroSimLabApp::ResumeInspectionMission()
         aerosimlab::simulation::DroneCommand waypoint;
         waypoint.kind = aerosimlab::simulation::DroneCommand::Kind::SetWaypoint;
         waypoint.vector = inspectionMission_.goalMeters;
-        if (ApplyAndRecordCommand(waypoint)
+        if (ApplySimulationCommand(waypoint)
             != aerosimlab::simulation::CommandResult::Accepted)
         {
             FailInspectionMission("정찰 경로를 다시 시작하지 못했습니다.");
@@ -1897,7 +1897,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
     if (inspectionMission_.stage == Stage::StartRequested)
     {
         const aerosimlab::simulation::DroneCommand takeoff{CommandKind::TakeOff};
-        if (ApplyAndRecordCommand(takeoff)
+        if (ApplySimulationCommand(takeoff)
             != aerosimlab::simulation::CommandResult::Accepted)
         {
             FailInspectionMission("이륙 명령을 적용하지 못했습니다.");
@@ -1927,7 +1927,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
             aerosimlab::simulation::DroneCommand waypoint;
             waypoint.kind = CommandKind::SetWaypoint;
             waypoint.vector = inspectionMission_.goalMeters;
-            if (ApplyAndRecordCommand(waypoint)
+            if (ApplySimulationCommand(waypoint)
                 != aerosimlab::simulation::CommandResult::Accepted)
             {
                 FailInspectionMission("정찰 위치 이동 명령을 적용하지 못했습니다.");
@@ -1956,7 +1956,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
                 aerosimlab::simulation::DroneCommand waypoint;
                 waypoint.kind = CommandKind::SetWaypoint;
                 waypoint.vector = inspectionMission_.goalMeters;
-                if (ApplyAndRecordCommand(waypoint)
+                if (ApplySimulationCommand(waypoint)
                     != aerosimlab::simulation::CommandResult::Accepted)
                 {
                     FailInspectionMission("다음 정찰 경유점 이동 명령을 적용하지 못했습니다.");
@@ -1985,7 +1985,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
         {
             const aerosimlab::simulation::DroneCommand stopYaw{
                 CommandKind::SetYawRate, glm::dvec3{0.0}, 0.0};
-            static_cast<void>(ApplyAndRecordCommand(stopYaw));
+            static_cast<void>(ApplySimulationCommand(stopYaw));
             inspectionMission_.captureStartFrame = simulation_.Camera().lastFrameTick;
             inspectionMission_.stage = Stage::Capturing;
         }
@@ -1994,7 +1994,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
             const aerosimlab::simulation::DroneCommand alignYaw{
                 CommandKind::SetYawRate, glm::dvec3{0.0},
                 std::clamp(yawErrorRadians * 2.0, -1.0, 1.0)};
-            if (ApplyAndRecordCommand(alignYaw)
+            if (ApplySimulationCommand(alignYaw)
                 != aerosimlab::simulation::CommandResult::Accepted)
             {
                 FailInspectionMission("정찰 대상에 카메라 방향을 맞추지 못했습니다.");
@@ -2040,7 +2040,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
                 aerosimlab::simulation::DroneCommand waypoint;
                 waypoint.kind = CommandKind::SetWaypoint;
                 waypoint.vector = inspectionMission_.goalMeters;
-                if (ApplyAndRecordCommand(waypoint)
+                if (ApplySimulationCommand(waypoint)
                     != aerosimlab::simulation::CommandResult::Accepted)
                 {
                     FailInspectionMission("다음 정찰 위치 이동 명령을 적용하지 못했습니다.");
@@ -2054,7 +2054,7 @@ void AeroSimLabApp::AdvanceInspectionMission()
             }
 
             const aerosimlab::simulation::DroneCommand land{CommandKind::Land};
-            if (ApplyAndRecordCommand(land)
+            if (ApplySimulationCommand(land)
                 != aerosimlab::simulation::CommandResult::Accepted)
             {
                 FailInspectionMission("촬영 후 착륙 명령을 적용하지 못했습니다.");
@@ -2080,7 +2080,7 @@ void AeroSimLabApp::FailInspectionMission(const std::string& reason)
     {
         const aerosimlab::simulation::DroneCommand land{
             aerosimlab::simulation::DroneCommand::Kind::Land};
-        static_cast<void>(ApplyAndRecordCommand(land));
+        static_cast<void>(ApplySimulationCommand(land));
     }
 }
 

@@ -166,54 +166,6 @@ void DrawCameraPanel(
     ImGui::End();
 }
 
-void DrawRecordingPanel(const SessionCommandControls& controls)
-{
-    if (!ImGui::CollapsingHeader("기록과 다시 보기"))
-        return;
-
-    if (controls.commandRecording)
-    {
-        ImGui::Text("명령 기록 중 · %llu Tick",
-            static_cast<unsigned long long>(controls.recordedTicks));
-        if (ImGui::Button("명령 기록 마치기"))
-            controls.stopCommandRecording();
-    }
-    else if (controls.commandReplay)
-    {
-        ImGui::Text("명령 기록 재생 중 · %llu Tick",
-            static_cast<unsigned long long>(controls.recordedTicks));
-    }
-    else if (controls.canStartCommandRecording
-        && ImGui::Button("조종 입력 기록 시작"))
-    {
-        controls.startCommandRecording();
-    }
-    else
-    {
-        ImGui::TextDisabled("모든 드론이 지상에 있고 다른 기록·임무가 없을 때 시작할 수 있습니다.");
-    }
-
-    if (controls.hasRecordedCommands)
-    {
-        ImGui::Text("기록된 입력: %llu Tick",
-            static_cast<unsigned long long>(controls.recordedTicks));
-        if (!controls.commandRecording && !controls.commandReplay
-            && controls.canReplayCommands
-            && ImGui::Button("처음부터 다시 재생"))
-        {
-            controls.replayCommands();
-        }
-    }
-    else
-    {
-        ImGui::TextDisabled("기록된 조종 입력이 없습니다.");
-    }
-    ImGui::TextDisabled("조종 기록은 프로그램을 닫으면 사라집니다.");
-    if (!controls.commandStatus.empty())
-        ImGui::TextWrapped("%s", controls.commandStatus.c_str());
-
-}
-
 void DrawFlightStatusPanel(
     const simulation::SimulationCore& simulation,
     bool gamepadConnected,
@@ -227,7 +179,7 @@ void DrawFlightStatusPanel(
     int& selectedFaultSource,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-    const SessionCommandControls& recordingControls)
+    const GroundControlStatus& groundControlStatus)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
     {
@@ -266,8 +218,8 @@ void DrawFlightStatusPanel(
                     ImGui::Text("%.1f, %.1f, %.1f",
                         actual.x, actual.y, actual.z);
                     ImGui::TableNextColumn();
-                    if (index >= recordingControls.groundControlPositions.size()
-                        || !recordingControls.groundControlPositions[index].hasReport)
+                    if (index >= groundControlStatus.groundControlPositions.size()
+                        || !groundControlStatus.groundControlPositions[index].hasReport)
                     {
                         ImGui::TextDisabled("아직 받지 못함");
                         ImGui::TableNextColumn();
@@ -275,7 +227,7 @@ void DrawFlightStatusPanel(
                         continue;
                     }
 
-                    const auto& report = recordingControls.groundControlPositions[index];
+                    const auto& report = groundControlStatus.groundControlPositions[index];
                     ImGui::Text("%.1f, %.1f, %.1f",
                         report.lastReceivedPositionMeters.x,
                         report.lastReceivedPositionMeters.y,
@@ -352,7 +304,6 @@ void DrawFlightStatusPanel(
             }
         }
         ImGui::Separator();
-        DrawRecordingPanel(recordingControls);
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();
         ImGui::Text("게임패드: %s   지상통제: %s",
@@ -468,7 +419,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const communication::VirtualMeshNetwork* formationNetwork,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-        const SessionCommandControls& recordingControls,
+        const GroundControlStatus& groundControlStatus,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
     HudRenderTimings* timings)
@@ -492,7 +443,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         completeFleetMissionStatus, completeFleetMissionCanStart,
         startCompleteFleetMission,
         formationNetwork, selectedFaultSource_, setFormationNodeRadioEnabled,
-        recordingControls);
+        groundControlStatus);
 
     if (timings != nullptr)
     {

@@ -42,20 +42,10 @@ struct GroundControlDronePosition
     bool hasReport = false;
 };
 
-/** @brief 상태 패널에서 조작할 명령·영상 기록 기능이다. */
-struct SessionCommandControls
+/** @brief 지상통제소가 마지막으로 받은 각 드론의 위치다. */
+struct GroundControlStatus
 {
     std::vector<GroundControlDronePosition> groundControlPositions;
-    bool commandRecording = false;
-    bool commandReplay = false;
-    bool canStartCommandRecording = false;
-    bool canReplayCommands = false;
-    bool hasRecordedCommands = false;
-    std::uint64_t recordedTicks = 0;
-    std::string commandStatus;
-    std::function<void()> startCommandRecording;
-    std::function<void()> stopCommandRecording;
-    std::function<void()> replayCommands;
 };
 
 /** @brief 비행 상태와 편대 요약을 3D 화면 위에 표시한다. */
@@ -78,7 +68,7 @@ public:
         const communication::VirtualMeshNetwork* formationNetwork,
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
-        const SessionCommandControls& recordingControls,
+        const GroundControlStatus& groundControlStatus,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
         HudRenderTimings* timings = nullptr);

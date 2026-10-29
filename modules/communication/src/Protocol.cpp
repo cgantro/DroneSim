@@ -207,14 +207,6 @@ CameraCommand ReadCameraCommand(std::string_view action)
     throw std::invalid_argument("알 수 없는 카메라 명령입니다.");
 }
 
-SessionCommand ReadSessionCommand(std::string_view action)
-{
-    if (action == "record_start") return SessionCommand::StartRecording;
-    if (action == "record_stop") return SessionCommand::StopRecording;
-    if (action == "record_replay") return SessionCommand::ReplayRecording;
-    throw std::invalid_argument("알 수 없는 기록 제어 명령입니다.");
-}
-
 InspectionCommand ReadInspectionCommand(std::string_view action)
 {
     if (action == "start") return InspectionCommand::Start;
@@ -304,18 +296,6 @@ Json EncodeCommandPayload(CameraCommand command)
     return {{"target", "camera"}, {"action", action}};
 }
 
-Json EncodeCommandPayload(SessionCommand command)
-{
-    const char* action = nullptr;
-    switch (command)
-    {
-    case SessionCommand::StartRecording: action = "record_start"; break;
-    case SessionCommand::StopRecording: action = "record_stop"; break;
-    case SessionCommand::ReplayRecording: action = "record_replay"; break;
-    }
-    return {{"target", "session"}, {"action", action}};
-}
-
 Json EncodeCommandPayload(InspectionCommand command)
 {
     switch (command)
@@ -391,11 +371,6 @@ CommandPacket DecodeCommand(std::string_view datagram)
     if (target == "camera")
     {
         packet.command = ReadCameraCommand(action);
-        return packet;
-    }
-    if (target == "session")
-    {
-        packet.command = ReadSessionCommand(action);
         return packet;
     }
     if (target == "inspection_mission")

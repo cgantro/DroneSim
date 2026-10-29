@@ -45,13 +45,6 @@ void Verify_Protocol_RoundTripsCommandsAndReplyTelemetry()
     EXPECT_EQ(std::get<CameraCommand>(DecodeCommand(EncodeCommand(camera)).command),
         CameraCommand::InjectFault);
 
-    CommandPacket recording;
-    recording.commandId = 9;
-    recording.sequence = 13;
-    recording.command = SessionCommand::ReplayRecording;
-    EXPECT_EQ(std::get<SessionCommand>(DecodeCommand(EncodeCommand(recording)).command),
-        SessionCommand::ReplayRecording);
-
     CommandPacket inspection;
     inspection.commandId = 13;
     inspection.sequence = 17;

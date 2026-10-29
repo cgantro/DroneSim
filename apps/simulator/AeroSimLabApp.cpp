@@ -210,8 +210,7 @@ void AeroSimLabApp::QueueWebFlightCommand(
     externalControl_ = true;
     if (InspectionMissionIsActive())
         return;
-    if (!commandRecording_.IsReplaying())
-        pendingControllerAction_ = aerosimlab::simulation::DroneCommand{kind};
+    pendingControllerAction_ = aerosimlab::simulation::DroneCommand{kind};
 }
 
 bool AeroSimLabApp::StartWebInspectionMission(int targetIndex)
@@ -256,8 +255,7 @@ void AeroSimLabApp::SetWebPilotAxes(
         pendingPilotCommand_.reset();
         return;
     }
-    if (!commandRecording_.IsReplaying())
-        webPilotAxes_ = axes;
+    webPilotAxes_ = axes;
 }
 #endif
 
@@ -538,15 +536,9 @@ void AeroSimLabApp::AdvanceSimulationTick()
             ? "AeroSimLab | 게임패드 연결됨"
             : "AeroSimLab | 드론 관찰 · EO 영상");
     }
-    // 지상통제 명령이 이 Tick을 이미 진행했다면 재생·게임패드 입력을 더 적용하지 않는다.
+    // 지상통제 명령이 이 Tick을 이미 진행했다면 게임패드 입력을 더 적용하지 않는다.
     if (groundControlTickAdvanced)
         return;
-
-    if (commandRecording_.IsReplaying())
-    {
-        AdvanceReplayTick();
-        return;
-    }
 
     AdvanceManualControlTick();
 }
@@ -570,19 +562,6 @@ void AeroSimLabApp::AdvanceAmbientWind()
     simulation_.SetWindVelocityMetersPerSecond(windVelocityMetersPerSecond_);
 }
 
-void AeroSimLabApp::AdvanceReplayTick()
-{
-    ApplyRecordedCommands();
-    simulation_.AdvanceOneTick();
-    commandRecording_.AdvanceReplayTick();
-    if (commandRecording_.ReplayFinished())
-    {
-        commandRecording_.StopReplay();
-        sessionControlStatus_ = "조종 입력 재생을 마쳤습니다.";
-        window_->SetTitle("AeroSimLab | 기록 재생 완료");
-    }
-}
-
 void AeroSimLabApp::AdvanceManualControlTick()
 {
     const bool inspectionMissionActive =
@@ -596,7 +575,6 @@ void AeroSimLabApp::AdvanceManualControlTick()
     if (inspectionMissionActive)
     {
         simulation_.AdvanceOneTick();
-        commandRecording_.FinishTick();
         return;
     }
 
@@ -618,7 +596,7 @@ void AeroSimLabApp::AdvanceManualControlTick()
 #endif
     if (!groundControlActive_ && pendingControllerAction_)
     {
-        static_cast<void>(ApplyAndRecordCommand(*pendingControllerAction_));
+        static_cast<void>(ApplySimulationCommand(*pendingControllerAction_));
         pendingControllerAction_.reset();
     }
     if (!groundControlActive_ && pendingPilotCommand_)
@@ -634,32 +612,25 @@ void AeroSimLabApp::AdvanceManualControlTick()
                 aerosimlab::simulation::DroneCommand::Kind::SetYawRate,
                 glm::dvec3{0.0},
                 pendingPilotCommand_->yawRateRadiansPerSecond};
-            static_cast<void>(ApplyAndRecordCommand(velocityCommand));
-            static_cast<void>(ApplyAndRecordCommand(yawCommand));
+            static_cast<void>(ApplySimulationCommand(velocityCommand));
+            static_cast<void>(ApplySimulationCommand(yawCommand));
         }
     }
 
     simulation_.AdvanceOneTick();
-    commandRecording_.FinishTick();
 }
 
-aerosimlab::simulation::CommandResult AeroSimLabApp::ApplyAndRecordCommand(
+aerosimlab::simulation::CommandResult AeroSimLabApp::ApplySimulationCommand(
     const aerosimlab::simulation::DroneCommand& command)
 {
-    return ApplyAndRecordCommand(simulation_.PrimaryDroneId(), command);
+    return ApplySimulationCommand(simulation_.PrimaryDroneId(), command);
 }
 
-aerosimlab::simulation::CommandResult AeroSimLabApp::ApplyAndRecordCommand(
+aerosimlab::simulation::CommandResult AeroSimLabApp::ApplySimulationCommand(
     aerosimlab::simulation::DroneId droneId,
     const aerosimlab::simulation::DroneCommand& command)
 {
-    const auto result = simulation_.Apply(droneId, command);
-    if (result == aerosimlab::simulation::CommandResult::Accepted)
-    {
-        if (droneId == simulation_.PrimaryDroneId())
-            commandRecording_.Record(command);
-    }
-    return result;
+    return simulation_.Apply(droneId, command);
 }
 
 void AeroSimLabApp::RenderFrame()
@@ -706,60 +677,25 @@ void AeroSimLabApp::RenderFrame()
         const bool formationNetworkActive = formationTransit_.active
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
         const auto droneIds = simulation_.DroneIds();
-        const bool everyDroneIsGrounded = !droneIds.empty()
-            && std::all_of(droneIds.begin(), droneIds.end(), [this](auto id)
-            {
-                return simulation_.State(id).mode
-                    == aerosimlab::simulation::FlightMode::Grounded;
-            });
-        const bool noMissionIsActive = !InspectionMissionIsActive()
-            && !FleetReconnaissanceIsActive()
-            && !CompleteFleetMissionIsActive()
-            && !formationTransit_.active;
-        SessionCommandControls recordingControls;
-        recordingControls.groundControlPositions.reserve(droneIds.size());
+        GroundControlStatus groundControlStatus;
+        groundControlStatus.groundControlPositions.reserve(droneIds.size());
         for (const aerosimlab::simulation::DroneId droneId : droneIds)
         {
             const auto report = telemetryAtGroundControl_.find(droneId);
             if (report == telemetryAtGroundControl_.end())
             {
-                recordingControls.groundControlPositions.push_back({
+                groundControlStatus.groundControlPositions.push_back({
                     .droneId = droneId});
                 continue;
             }
 
-            recordingControls.groundControlPositions.push_back({
+            groundControlStatus.groundControlPositions.push_back({
                 .droneId = droneId,
                 .lastReceivedPositionMeters = report->second.state.positionMeters,
                 .ageTicks = simulation_.TickCount() >= report->second.receivedAtTick
                     ? simulation_.TickCount() - report->second.receivedAtTick : 0U,
                 .hasReport = true});
         }
-        recordingControls.commandRecording = commandRecording_.IsRecording();
-        recordingControls.commandReplay = commandRecording_.IsReplaying();
-        recordingControls.recordedTicks = commandRecording_.TickCount();
-        recordingControls.hasRecordedCommands = recordingControls.recordedTicks > 0U;
-        recordingControls.canStartCommandRecording = everyDroneIsGrounded
-            && noMissionIsActive && !recordingControls.commandRecording
-            && !recordingControls.commandReplay;
-        recordingControls.canReplayCommands = noMissionIsActive
-            && !recordingControls.commandRecording && !recordingControls.commandReplay;
-        recordingControls.commandStatus = sessionControlStatus_;
-        recordingControls.startCommandRecording = [this]
-        {
-            ApplyHudSessionCommand(
-                communication::SessionCommand::StartRecording);
-        };
-        recordingControls.stopCommandRecording = [this]
-        {
-            ApplyHudSessionCommand(
-                communication::SessionCommand::StopRecording);
-        };
-        recordingControls.replayCommands = [this]
-        {
-            ApplyHudSessionCommand(
-                communication::SessionCommand::ReplayRecording);
-        };
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
@@ -780,7 +716,7 @@ void AeroSimLabApp::RenderFrame()
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
                 }
             },
-            recordingControls,
+            groundControlStatus,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this](aerosimlab::simulation::DroneId droneId)
             {

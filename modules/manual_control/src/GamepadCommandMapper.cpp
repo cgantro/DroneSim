@@ -79,8 +79,4 @@ GamepadDisconnectAction ResolveGamepadDisconnectAction(
     return GamepadDisconnectAction::ClearPendingAction;
 }
 
-bool CanGamepadControlSimulation(bool groundControlActive, bool replaying) noexcept
-{
-    return !groundControlActive && !replaying;
-}
 }

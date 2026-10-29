@@ -47,9 +47,6 @@ enum class GamepadDisconnectAction
 /** @brief 축의 작은 흔들림은 무시하고 입력 범위를 -1부터 1까지 다시 맞춘다. */
 [[nodiscard]] double ApplyDeadZone(double value) noexcept;
 
-/** @brief 지상통제나 기록 재생이 진행 중이면 게임패드 명령을 막는다. */
-[[nodiscard]] bool CanGamepadControlSimulation(bool groundControlActive, bool replaying) noexcept;
-
 /**
  * @brief 연결이 끊긴 순간에 실행할 동작을 고른다.
  * @details 이전 상태가 이미 끊김이면 NoChange를 반환해 대기 중인 정지·착륙 명령을 유지한다.

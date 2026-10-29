@@ -563,7 +563,7 @@ void Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain()
     EXPECT_FALSE(spawn.has_value());
 }
 
-void Verify_SimulatorSession_RecordingReplayOverUdp()
+void Verify_SimulatorSession_FlightCommandsOverUdp()
 {
     std::uint16_t simulatorPort = 0;
     {
@@ -631,95 +631,66 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
             require(beforeStatus.appliedTick == beforeStatus.telemetry.tick,
                 "초기 상태 응답의 Tick 값이 서로 다릅니다.");
 
-            const auto start = send("기록 시작", [](communication::CommandPacket& packet)
-            {
-                packet.command = communication::SessionCommand::StartRecording;
-            });
-            require(start.accepted && start.status == "recording_started",
-                "기록을 시작하지 못했습니다.");
-
-            const auto takeoff = send("이륙", [](communication::CommandPacket& packet)
+            const auto primaryTakeoff = send("주 드론 이륙",
+                [](communication::CommandPacket& packet)
             {
                 packet.command = simulation::DroneCommand{
                     simulation::DroneCommand::Kind::TakeOff};
             });
-            require(takeoff.accepted && takeoff.status == "applied",
-                "이륙 명령을 적용하지 못했습니다.");
+            require(primaryTakeoff.accepted && primaryTakeoff.status == "applied",
+                "주 드론 이륙 명령을 적용하지 못했습니다.");
 
-            const auto land = send("착륙", [](communication::CommandPacket& packet)
+            const auto secondary = std::find_if(
+                beforeStatus.telemetry.drones.begin(),
+                beforeStatus.telemetry.drones.end(),
+                [&beforeStatus](const communication::DroneTelemetry& drone)
             {
-                packet.command = simulation::DroneCommand{
-                    simulation::DroneCommand::Kind::Land};
+                return drone.id != beforeStatus.telemetry.primaryDroneId;
             });
-            require(land.accepted && land.status == "applied",
-                "착륙 명령을 적용하지 못했습니다.");
-
-            const auto added = send("드론 추가", [](communication::CommandPacket& packet)
+            require(secondary != beforeStatus.telemetry.drones.end(),
+                "주 드론 외에 시험할 드론이 없습니다.");
+            const auto secondaryId = secondary->id;
+            const auto secondaryTakeoff = send("보조 드론 이륙",
+                [secondaryId](communication::CommandPacket& packet)
             {
-                packet.command = communication::FleetCommand::AddDrone;
-            });
-            require(added.accepted && added.status == "drone_added",
-                "다섯 번째 드론을 추가하지 못했습니다.");
-            require(added.telemetry.drones.size() == 5U,
-                "드론 추가 응답에 다섯 대가 있어야 합니다.");
-            const communication::DroneTelemetry& addedDrone =
-                added.telemetry.drones.back();
-            const auto addedDroneId = addedDrone.id;
-            require(addedDrone.name == "드론 5",
-                "추가된 드론 이름이 예상과 다릅니다.");
-            require(addedDrone.mode == simulation::FlightMode::Grounded,
-                "추가된 드론이 지상 상태가 아닙니다.");
-            require(addedDrone.positionMeters.x
-                    > added.telemetry.drones[0].positionMeters.x,
-                "추가된 드론이 기존 드론과 겹친 위치에 있습니다.");
-            const auto unrecordedSecondaryTakeoff = send("기록 중 두 번째 드론 이륙",
-                [&addedDroneId](communication::CommandPacket& packet)
-            {
-                packet.droneId = addedDroneId;
-                packet.command = simulation::DroneCommand{
-                    simulation::DroneCommand::Kind::TakeOff};
-            });
-            require(!unrecordedSecondaryTakeoff.accepted
-                    && unrecordedSecondaryTakeoff.status == "recording_secondary_unsupported",
-                "기록에 남지 않는 추가 드론 명령을 허용했습니다.");
-
-            const auto stop = send("기록 종료", [](communication::CommandPacket& packet)
-            {
-                packet.command = communication::SessionCommand::StopRecording;
-            });
-            require(stop.accepted && stop.status == "recording_stopped",
-                "기록을 종료하지 못했습니다.");
-
-            const auto secondaryTakeoff = send("두 번째 드론 이륙",
-                [&addedDroneId](communication::CommandPacket& packet)
-            {
-                packet.droneId = addedDroneId;
+                packet.droneId = secondaryId;
                 packet.command = simulation::DroneCommand{
                     simulation::DroneCommand::Kind::TakeOff};
             });
             require(secondaryTakeoff.accepted,
-                "선택한 추가 드론에 이륙 명령을 보내지 못했습니다.");
+                "선택한 보조 드론에 이륙 명령을 보내지 못했습니다.");
             const auto selectedDrone = std::find_if(
                 secondaryTakeoff.telemetry.drones.begin(),
                 secondaryTakeoff.telemetry.drones.end(),
-                [&addedDroneId](const communication::DroneTelemetry& drone)
+                [secondaryId](const communication::DroneTelemetry& drone)
                 {
-                    return drone.id == addedDroneId;
+                    return drone.id == secondaryId;
                 });
             require(selectedDrone != secondaryTakeoff.telemetry.drones.end()
                     && selectedDrone->mode
                     == simulation::FlightMode::TakingOff,
                 "선택한 드론이 이륙 상태로 바뀌지 않았습니다.");
-            require(secondaryTakeoff.telemetry.drone.mode
-                    != simulation::FlightMode::TakingOff,
-                "두 번째 드론 명령이 주 드론 상태를 바꿨습니다.");
 
-            const auto replay = send("기록 재생", [](communication::CommandPacket& packet)
+            const auto landPrimary = send("주 드론 착륙",
+                [](communication::CommandPacket& packet)
             {
-                packet.command = communication::SessionCommand::ReplayRecording;
+                packet.command = simulation::DroneCommand{
+                    simulation::DroneCommand::Kind::Land};
             });
-            require(replay.accepted && replay.status == "recording_replay_started",
-                "기록을 재생하지 못했습니다.");
+            require(landPrimary.accepted && landPrimary.status == "applied",
+                "주 드론 착륙 명령을 적용하지 못했습니다.");
+            const auto landSecondary = send("보조 드론 착륙",
+                [secondaryId](communication::CommandPacket& packet)
+            {
+                packet.droneId = secondaryId;
+                packet.command = simulation::DroneCommand{
+                    simulation::DroneCommand::Kind::Land};
+            });
+            require(landSecondary.accepted && landSecondary.status == "applied",
+                "보조 드론 착륙 명령을 적용하지 못했습니다.");
+
+            // 스모크 앱은 시작된 모든 드론이 지상에 돌아오면 스스로 종료한다.
+            // 종료 직전 상태 조회를 보내면 앱이 응답 전에 닫힐 수 있어 여기서 기다리지 않는다.
         }
         catch (...)
         {
@@ -741,7 +712,7 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
 
     groundControlThread.join();
     EXPECT_EQ(simulatorExitCode, 0)
-        << "기록 재생이 끝나고 드론이 지상에 도달하면 숨김 시뮬레이터가 종료되어야 합니다.";
+        << "두 드론의 착륙이 끝나면 숨김 시뮬레이터가 정상 종료되어야 합니다.";
 
     const auto reportFailure = [](const char* context, std::exception_ptr failure)
     {
@@ -757,7 +728,7 @@ void Verify_SimulatorSession_RecordingReplayOverUdp()
         }
     };
     reportFailure("시뮬레이터 실행 실패: ", simulatorFailure);
-    reportFailure("UDP 기록·재생 명령 실패: ", commandFailure);
+    reportFailure("UDP 비행 명령 실패: ", commandFailure);
 }
 
 TEST(SimulatorSessionTests, CoreScenarios)
@@ -776,7 +747,7 @@ TEST(SimulatorSessionTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetDroneSpawnRejectsAPositionOutsideTheTerrain());
-    EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_RecordingReplayOverUdp());
+    EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_FlightCommandsOverUdp());
 }
 
 TEST(SimulatorSessionTests, FleetDroneReturnsWhenBatteryReachesReserve)

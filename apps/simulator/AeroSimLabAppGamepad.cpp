@@ -119,7 +119,7 @@ void AeroSimLabApp::HandleGamepadDisconnected()
 {
     using DisconnectAction = aerosimlab::manual_control::GamepadDisconnectAction;
     const auto action = aerosimlab::manual_control::ResolveGamepadDisconnectAction(
-        gamepadConnected_, groundControlActive_ || commandRecording_.IsReplaying(), simulation_.State().mode);
+        gamepadConnected_, groundControlActive_, simulation_.State().mode);
     if (action == DisconnectAction::NoChange)
         return;
 
@@ -156,8 +156,7 @@ void AeroSimLabApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed
     gamepadConnected_ = true;
     externalControl_ = true;
 
-    if (aerosimlab::manual_control::CanGamepadControlSimulation(
-            groundControlActive_, commandRecording_.IsReplaying()))
+    if (!groundControlActive_)
     {
         if (takeoffPressed && !previousTakeoffButton_
             && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
@@ -176,12 +175,6 @@ void AeroSimLabApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed
             pendingPilotCommand_ = aerosimlab::manual_control::MapAxes(
                 *pilotAxes, simulation_.State().yawRadians);
     }
-    else if (commandRecording_.IsReplaying())
-    {
-        pendingControllerAction_.reset();
-        pendingPilotCommand_.reset();
-    }
-
     previousTakeoffButton_ = takeoffPressed;
     previousLandButton_ = landPressed;
 }
