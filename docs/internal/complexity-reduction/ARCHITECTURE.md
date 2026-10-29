@@ -66,28 +66,36 @@ TrainingRangeScene 배치 목록
 | 배터리 | `EcsStorage::batteries` 맵 | 앱 임무 표시·복귀 판단 | 현재는 ECS 드론 컴포넌트와 별도 관리한다. 정리 전 API 사용처 확인이 필요하다. |
 | 카메라 픽셀 | GPU 프레임버퍼/PBO, 완료 후 앱의 `eoFrame_` | OpenCV 분석용 빌린 화면, 송신 버퍼 | GPU 비동기 읽기와 실시간 전송을 이어간다. 저장 기능은 없다. |
 | 임무 진행 | 앱의 `inspectionMission_`, `fleetReconnaissance_`, `completeFleetMission_`, `formationTransit_` | 화면 표시 상태 | 단일 카메라 정찰, 드론별 정찰, 전체 임무, 편대 이동을 각각 나타낸다. 목적은 다르지만 앱 클래스의 멤버에 함께 있어 어느 값이 기준인지 찾기 어렵다. |
-| 건물·정찰 환경 | `TrainingRangeScene` 배치와 생성한 `obstacles_` | `routeBuildings_`, `inspectionOccluders_`, `formationRadioObstacles_`, `inspectionTargets_`, SimulationCore 장애물 | 경로·가림·통신·충돌이 각자 다른 모양의 자료를 쓴다. 이 자료들은 화면의 원본 상태가 아니라 파생 자료다. |
+| 건물·정찰 환경 | `TrainingRangeScene` 배치와 생성한 `obstacles_` | `inspectionOccluders_`, `formationRadioObstacles_`, `inspectionTargets_`, SimulationCore 장애물 | 경로는 장면의 건물 목록을 직접 읽는다. 가림·통신·충돌은 목적별 모양의 파생 자료다. |
 | 네트워크 노드 위치 | Simulation Core의 현재 위치 | `VirtualMeshNetwork::nodes_` | 약 6 Tick마다 전달한 위치로 링크 거리·가림을 판정한다. 갱신 주기만큼 오래된 샘플일 수 있다. |
 | 관제·리더 텔레메트리 | 실제 비행 상태는 Simulation Core | `telemetryAtGroundControl_`, `peerTelemetryAtLeader_` | 메시지가 끊긴 동안 마지막으로 받은 위치를 유지한다. 실제 현재 상태와 구분해야 하므로 의도된 사본이다. |
 
 사본이 있다는 사실만으로 중복 구현은 아니다. 마지막 수신 텔레메트리, 비동기 프레임 Tick, 네트워크 위치는 지연이나 처리 시점을 나타내므로 별도 보관이 필요하다. 혼란을 줄이는 핵심은 **원본 상태인지, 시점이 고정된 사본인지, 계산해 만든 파생 자료인지** 이름과 갱신 위치에서 구분하는 것이다.
 
-가장 정리가 필요한 곳은 임무 상태와 환경 자료다. 고정 4대 임무에서 더 이상 쓰지 않는 단일 드론 정찰 상태나 기능을 제거하고, 남는 단계별 상태를 어디서 갱신하는지 명확히 해야 한다. 환경 자료는 장면 배치가 원본인지 `MapBuilding` 목록이 원본인지 먼저 정하고, 나머지를 파생 자료로 취급해야 한다.
+가장 정리가 필요한 곳은 임무 상태와 파생 환경 자료다. 고정 4대 임무에서 더 이상 쓰지 않는 상태나 기능을 제거하고, 남는 단계별 상태를 어디서 갱신하는지 명확히 해야 한다. 건물은 현재 `TrainingRangeScene::Obstacles()`가 경로 계획과 앱의 파생 계산에 쓰이는 기준 자료다.
 
 ## 파일 배치와 이름
 
 - 공개 모듈 헤더는 대부분 `modules/<모듈>/include/<모듈>/`에 있고 구현은 `src/` 아래에 있다.
 - `modules/simulation_core/src/CollisionGeometry.h`, `ScenarioDefinition.h`, `modules/terrain/src/MapGeometry.h`는 여러 내부 구현 파일이 공유하는 비공개 헤더다. `include`는 외부에 약속하는 공개 인터페이스 위치다. 이 헤더를 모두 `include`로 옮기면 구현 세부를 공개 API로 노출하게 된다. 현재처럼 `src`에 두거나, 한 파일에서만 쓴다면 해당 `.cpp` 안으로 합치는 편이 맞다. 별도 `detail` 폴더를 만들 필요는 없다.
-- `GlbData.h`는 GLB 내부 파서인데 현재 `graphics/include`에 있다. 외부 공개용이 아니라면 `include`에 둔 것은 공개 범위가 넓다. `Mesh::LoadGlb()`와 `GlbModel::Load()`도 GLB 진입점이 두 개다. 사용 여부를 확인해 하나를 지우거나, 파서 코드를 구현 파일 안으로 옮기는 것이 우선이다.
-- 통합 시험의 그래픽스 소스 include 경로에 이전 `modules/graphics/src/graphics` 경로가 남아 있다. 파일 위치 변경 후에도 필요한지 CMake에서 확인할 후보다.
+- `Mesh::LoadGlb()`는 저장소 안에서 호출되지 않아 제거했다. `GlbModel::Load()`가 현재 GLB 모델을 불러오는 진입점이다.
+- `GlbData.h`는 GLB 내부 파서인데 현재 `graphics/include`에 있다. 외부 공개용이 아니라면 `include`에 둔 것은 공개 범위가 넓다. 내부 파서 위치는 별도로 검토해야 한다.
+- 그래픽스 시험의 include 경로에서 이전 `modules/graphics/src/graphics` 경로를 제거했다.
 - `ScenarioRunner`와 `ScenarioDefinition`은 시뮬레이션 코어 라이브러리에 포함되지만 JSON 시나리오를 조립·실행하는 별도 책임이다. 앱 임무와 중복되는지 확인하지 않은 상태에서 새 모듈로 옮기지 않는다.
 
 ## 우선 정리 순서
 
-1. **환경 자료 원본을 하나로 정한다.** 배치 목록에서 화면·충돌·가림·통신용 자료를 만드는 경로를 찾아, 파생 자료와 갱신 시점을 이름과 주석으로 드러낸다.
+1. **환경 자료의 파생 과정을 분명히 한다.** 건물 기준 목록은 장면에서 직접 읽도록 바꿨다. 촬영 가림막과 통신 장애물은 목적별 파생 자료로 남아 있으므로, 생성 위치와 갱신 시점을 확인하며 정리한다.
 2. **임무 상태의 기준을 정한다.** 단일 정찰, 드론별 정찰, 편대 이동, 전체 임무의 실제 사용처를 확인하고 더 이상 활성 목표에 필요하지 않은 상태부터 정리한다.
 3. **의도된 사본에 이름을 붙인다.** 관제와 리더의 마지막 수신 상태, 네트워크 위치 샘플, 카메라 Tick 스냅샷은 최신 실제 상태와 헷갈리지 않게 이름·주석을 정리한다.
-4. **GLB 중복 진입점을 확인한다.** `Mesh::LoadGlb()` 호출처가 없다면 제거 후보로 삼고, 내부 파서를 공개 `include`에서 감출 방법을 검토한다.
+4. **GLB 파서의 공개 범위를 검토한다.** 중복 로더를 제거했다. 내부 파서를 공개 `include`에서 감출 방법은 아직 남은 후보다.
 5. **Simulation Core의 배터리 저장 방식을 소비자와 함께 검토한다.** API와 참조 사용을 조사한 뒤 ECS 컴포넌트가 실제로 더 읽기 쉬운지 결정한다.
 
 새 계층을 추가하거나 모듈을 쪼개는 일은 위 정리로 책임을 설명할 수 없는 문제가 남을 때만 검토한다. 이번 감사는 코드·빌드 설정·호출 관계를 정적으로 읽었다. GUI에서 장면을 바꾸거나 통신·프레임 지연을 실행해 확인하지는 않았다.
+
+## 확인한 단순화
+
+- `Mesh::LoadGlb()`는 선언·구현만 있고 호출처가 없어 삭제했다. 이에 붙어 있던 GLB 단일 메시 제한 검사와 파서 호출도 함께 제거했다.
+- 앱이 `TrainingRangeScene::Obstacles()`를 통째로 복사해 들고 있던 `routeBuildings_`를 없앴다. 경로 계획, 시점 충돌 검사, 무선 장애물 생성은 장면의 건물 목록을 직접 참조한다. 카메라 가림막과 무선 장애물은 자료 형식이 달라 계산 결과를 계속 보관한다.
+- 시험 코드도 장면의 기준 건물 목록을 직접 읽도록 바꿨다. 사용처 검색에서 `routeBuildings_`와 `Mesh::LoadGlb()`가 남지 않았다.
+- Windows Release 전체 빌드 성공, CTest 31/31 통과. 헤더 변경 뒤 최초 증분 시험에서 앱 개체 파일 일부가 이전 클래스 배치를 유지해 접근 위반이 났다. 앱 소스와 시뮬레이터 시험을 다시 컴파일한 뒤 모두 통과했다.
