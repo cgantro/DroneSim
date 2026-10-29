@@ -100,7 +100,6 @@ struct ScenarioDefinition
     std::optional<std::uint64_t> trajectorySampleEveryTicks;
     std::vector<ScheduledCameraEvent> cameraEvents;
     std::vector<ExpectedDrone> expectedDrones;
-    bool hasExpectedDrones = false;
     double toleranceMeters = 0.01;
     double orientationToleranceRadians = 0.01;
     std::optional<double> minimumDroneSeparationMeters;

@@ -373,3 +373,9 @@
 
 - 제거한 `passed` 저장 필드를 사용하는 곳이 남지 않았는지 앱·모듈·시험에서 검색했다. C++ 호출부는 `IsPassed()`를 쓰고, headless 결과 JSON의 기존 `passed` 항목은 그대로 출력한다.
 - Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+
+## 시나리오 기대 상태 입력 통일 — 2026-10-30
+
+- 단일 드론 시나리오에서는 기대 상태를 `mode`·`position_meters`로 직접 적고, 다중 드론은 `expected.drones` 목록을 쓰던 두 형식을 하나로 합쳤다. 이제 모든 기대 상태에 드론 이름을 포함한 `expected.drones` 목록이 필요하다.
+- 저장소의 세 비행 예제와 시나리오 단위 시험 입력을 새 형식으로 바꿨다. 옛 단일 드론 형식을 거부하는 검사도 추가했다.
+- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.

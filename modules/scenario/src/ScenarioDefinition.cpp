@@ -875,33 +875,6 @@ void ReadEnergyModelSettings(const Json& document, ScenarioDefinition& definitio
     definition.energyModel = settings;
 }
 
-void ReadExpectedDroneStates(const Json& expected, ScenarioDefinition& definition)
-{
-    definition.hasExpectedDrones = expected.contains("drones");
-    if (definition.hasExpectedDrones
-        && (expected.contains("mode") || expected.contains("position_meters")
-            || expected.contains("orientation_quaternion_wxyz")))
-        throw std::invalid_argument(
-            "expected에는 drones 목록 또는 단일 드론 상태 중 하나만 적어야 합니다.");
-    if (!definition.hasExpectedDrones && !definition.drones.empty())
-        throw std::invalid_argument("여러 드론을 지정한 시나리오는 expected.drones가 필요합니다.");
-
-    if (definition.hasExpectedDrones)
-    {
-        definition.expectedDrones = ReadExpectedDrones(expected["drones"]);
-        return;
-    }
-
-    std::optional<glm::dquat> orientation;
-    if (expected.contains("orientation_quaternion_wxyz"))
-        orientation = ReadOrientationQuaternion(expected["orientation_quaternion_wxyz"]);
-    definition.expectedDrones.push_back({
-        definition.primaryDroneName,
-        ReadFlightMode(Required(expected, "mode")),
-        ReadVector(Required(expected, "position_meters"), "position_meters"),
-        orientation});
-}
-
 void ReadExpectedLimitsAndCamera(const Json& expected, ScenarioDefinition& definition)
 {
     if (expected.contains("tolerance_meters"))
@@ -944,7 +917,7 @@ void ReadExpectedResults(const Json& document, ScenarioDefinition& definition)
     if (!expected.is_object())
         throw std::invalid_argument("expected는 JSON 객체여야 합니다.");
 
-    ReadExpectedDroneStates(expected, definition);
+    definition.expectedDrones = ReadExpectedDrones(Required(expected, "drones"));
     ReadExpectedLimitsAndCamera(expected, definition);
 }
 

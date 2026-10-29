@@ -975,31 +975,20 @@ void PopulateFinalSnapshot(
 }
 
 /** @brief 단일 드론 형식과 이름별 형식에 맞는 비행 상태 오류 문구를 만든다. */
-std::string FlightModeMismatchMessage(
-    const ExpectedDrone& expectedDrone,
-    const ScenarioResult::Drone& actualDrone,
-    bool hasNamedDroneExpectations)
+std::string FlightModeMismatchMessage(const ExpectedDrone& expectedDrone)
 {
-    if (hasNamedDroneExpectations)
-        return expectedDrone.name + " 드론의 최종 비행 상태가 예상과 다릅니다.";
-
-    return "예상 비행 상태는 " + std::string(ToString(expectedDrone.mode))
-        + "이지만 실제 상태는 "
-        + std::string(ToString(actualDrone.finalState.mode)) + "입니다.";
+    return expectedDrone.name + " 드론의 최종 비행 상태가 예상과 다릅니다.";
 }
 
 void CheckExpectedDroneResults(
     const ScenarioDefinition& definition,
     ScenarioResult& result)
 {
+    // 결과 이름을 복사하지 않고 빌려 쓰는 색인으로 반복 검색을 줄인다.
     std::unordered_map<std::string_view, std::size_t> resultIndexByName;
-    if (!definition.expectedDrones.empty())
-    {
-        // 결과 이름을 복사하지 않고 빌려 쓰는 색인으로 반복 검색을 줄인다.
-        resultIndexByName.reserve(result.drones.size());
-        for (std::size_t index = 0; index < result.drones.size(); ++index)
-            resultIndexByName.emplace(result.drones[index].name, index);
-    }
+    resultIndexByName.reserve(result.drones.size());
+    for (std::size_t index = 0; index < result.drones.size(); ++index)
+        resultIndexByName.emplace(result.drones[index].name, index);
 
     for (const ExpectedDrone& expectedDrone : definition.expectedDrones)
     {
@@ -1013,12 +1002,9 @@ void CheckExpectedDroneResults(
         const ScenarioResult::Drone& drone = result.drones[found->second];
         if (drone.communicationStatus != DroneCommunicationStatus::Connected)
             continue;
-        const std::string dronePrefix = definition.hasExpectedDrones
-            ? expectedDrone.name + " 드론의 "
-            : "";
+        const std::string dronePrefix = expectedDrone.name + " 드론의 ";
         if (drone.finalState.mode != expectedDrone.mode)
-            result.issues.push_back(FlightModeMismatchMessage(
-                expectedDrone, drone, definition.hasExpectedDrones));
+            result.issues.push_back(FlightModeMismatchMessage(expectedDrone));
         if (glm::length(drone.finalState.positionMeters - expectedDrone.positionMeters)
             > definition.toleranceMeters)
         {
@@ -1031,8 +1017,7 @@ void CheckExpectedDroneResults(
             result.issues.push_back(dronePrefix + "최종 자세가 허용 각도 오차를 벗어났습니다.");
         }
     }
-    if (definition.hasExpectedDrones
-        && definition.expectedDrones.size() != result.drones.size())
+    if (definition.expectedDrones.size() != result.drones.size())
     {
         result.issues.push_back("expected.drones 개수가 시나리오 드론 수와 다릅니다.");
     }

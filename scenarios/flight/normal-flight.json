@@ -10,8 +10,9 @@
     {"tick": 150, "type": "land"}
   ],
   "expected": {
-    "mode": "grounded",
-    "position_meters": [0.0, 1.0, 0.0],
+    "drones": [
+      {"name": "drone", "mode": "grounded", "position_meters": [0.0, 1.0, 0.0]}
+    ],
     "tolerance_meters": 0.000001,
     "camera_status": "active",
     "camera_frame_count": 300

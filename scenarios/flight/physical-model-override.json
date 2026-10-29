@@ -15,8 +15,9 @@
     "maximum_motor_speed_radians_per_second": 900
   },
   "expected": {
-    "mode": "hovering",
-    "position_meters": [0, 0, 1.5],
+    "drones": [
+      {"name": "drone", "mode": "hovering", "position_meters": [0, 0, 1.5]}
+    ],
     "tolerance_meters": 10
   }
 }

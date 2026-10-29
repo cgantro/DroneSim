@@ -256,7 +256,8 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
     {"version":1,"dynamics":"kinematic","ticks":1,
      "commands":[{"tick":0,"type":"set_rotor_thrusts",
        "normalized_thrust":[0,0,0,0]}],
-     "expected":{"mode":"grounded","position_meters":[0,0,0]}}
+     "expected":{"drones":[{"name":"drone","mode":"grounded",
+       "position_meters":[0,0,0]}]}}
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(kinematicRotorInput)),
         std::invalid_argument);
@@ -265,7 +266,8 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
     {"version":1,"dynamics":"rigid_body","ticks":1,
      "drones":[{"name":"x500","initial_position_meters":[0,0,2],
        "initial_motor_speeds_radians_per_second":[100,200,300]}],
-     "commands":[],"expected":{"mode":"grounded","position_meters":[0,0,2]}}
+     "commands":[],"expected":{"drones":[{"name":"x500","mode":"grounded",
+       "position_meters":[0,0,2]}]}}
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(invalidInitialMotorSpeeds)),
         std::invalid_argument);
@@ -510,7 +512,8 @@ void Verify_ScenarioRunner_ChangesWaypointResponseWhenControllerGainsChange()
        {"tick":2401,"type":"set_waypoint","position_meters":[2,0,1.5]}],
      "controller_gains":{"position":POSITION_GAIN,"velocity":2.5,
        "attitude":25,"angular_rate":8.5},
-     "expected":{"mode":"following_waypoint","position_meters":[0,0,1.5],
+     "expected":{"drones":[{"name":"drone","mode":"following_waypoint",
+       "position_meters":[0,0,1.5]}],
        "tolerance_meters":10}}
     )json";
     std::string lowGainScenario{scenarioTemplate};
@@ -618,7 +621,8 @@ void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
     {"version":1,"dynamics":"rigid_body","ticks":1200,
      "commands":[{"tick":0,"type":"takeoff"},
        {"tick":600,"type":"set_waypoint","position_meters":[0,0,1.5]}],
-     "expected":{"mode":"hovering","position_meters":[0,0,1.5],
+     "expected":{"drones":[{"name":"drone","mode":"hovering",
+       "position_meters":[0,0,1.5]}],
        "tolerance_meters":10}}
     )json";
     constexpr std::string_view windScenario = R"json(
@@ -626,7 +630,8 @@ void Verify_ScenarioRunner_RecordsWindAndChangesTheFlightPath()
      "wind_velocity_meters_per_second":[2,0,0],
      "commands":[{"tick":0,"type":"takeoff"},
        {"tick":600,"type":"set_waypoint","position_meters":[0,0,1.5]}],
-     "expected":{"mode":"hovering","position_meters":[0,0,1.5],
+     "expected":{"drones":[{"name":"drone","mode":"hovering",
+       "position_meters":[0,0,1.5]}],
        "tolerance_meters":10}}
     )json";
 
@@ -1126,6 +1131,13 @@ TEST(ScenarioRunnerTests, CoreScenarios)
         "deadline_tick":1,"tolerance_meters":0}]}}
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(targetPositionAlias)), std::invalid_argument);
+
+    constexpr std::string_view singleDroneExpectedState = R"json(
+    {"version":1,"dynamics":"kinematic","ticks":1,"commands":[],
+     "expected":{"mode":"grounded","position_meters":[0,0,0]}}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(singleDroneExpectedState)),
+        std::invalid_argument);
 }
 
 }
