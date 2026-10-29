@@ -4,8 +4,7 @@
 #include "TrainingRangeScene.h"
 
 #include "simulation_core/SimulationCore.h"
-#include "terrain/MapBuildings.h"
-#include "terrain/MapFlightRoute.h"
+#include "flight_planning/RoutePlanner.h"
 #include "terrain/TerrainGrid.h"
 
 #include "GroundControlClient.h"
@@ -66,8 +65,8 @@ public:
         AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
         app.InitializeGraphics();
         const auto droneId = app.simulation_.PrimaryDroneId();
-        const auto expectedRoute = terrain::PlanMapFlightRoute(
-            app.terrainGrid_, app.trainingRangeScene_->Obstacles(),
+        const auto expectedRoute = flight_planning::PlanRoute(
+            app.terrainGrid_, app.trainingRangeScene_->BuildingObstacles(),
             app.simulation_.State(droneId).positionMeters,
             app.reconTargets_.front().approachPositionMeters,
             3.0, app.cameraTransitAltitudeMeters_);

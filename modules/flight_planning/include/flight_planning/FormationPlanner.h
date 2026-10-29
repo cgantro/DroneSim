@@ -1,6 +1,6 @@
 #pragma once
 
-#include "terrain/MapBuildings.h"
+#include "flight_planning/BuildingObstacle.h"
 #include "terrain/TerrainGrid.h"
 
 #include <glm/vec2.hpp>
@@ -37,7 +37,7 @@ struct FormationRoutePlan
  */
 [[nodiscard]] std::optional<FormationRoutePlan> PlanFormationRoute(
     const terrain::TerrainGrid& terrain,
-    const std::vector<terrain::MapBuilding>& obstacles,
+    const std::vector<BuildingObstacle>& obstacles,
     const glm::dvec3& leaderStartMeters,
     const glm::dvec3& destinationMeters,
     std::size_t droneCount,

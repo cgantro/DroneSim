@@ -1,6 +1,6 @@
 #include "flight_planning/FormationPlanner.h"
 
-#include "terrain/MapFlightRoute.h"
+#include "flight_planning/RoutePlanner.h"
 
 #include <algorithm>
 #include <cmath>
@@ -66,7 +66,7 @@ std::vector<glm::dvec2> FormationOffsets(
 
 std::optional<FormationRoutePlan> PlanFormationRoute(
     const terrain::TerrainGrid& terrain,
-    const std::vector<terrain::MapBuilding>& obstacles,
+    const std::vector<BuildingObstacle>& obstacles,
     const glm::dvec3& leaderStartMeters,
     const glm::dvec3& destinationMeters,
     std::size_t droneCount,
@@ -83,7 +83,7 @@ std::optional<FormationRoutePlan> PlanFormationRoute(
     // 편대 전체가 통과할 여유를 확보하지 못하면 대형을 바꾸지 않고 실패한다.
     const double clearance = RequiredClearance(droneCount,
         spacingMeters, droneRadiusMeters, safetyMarginMeters);
-    const auto route = terrain::PlanMapFlightRoute(terrain, obstacles,
+    const auto route = PlanRoute(terrain, obstacles,
         leaderStartMeters, destinationMeters, clearance,
         minimumTransitAltitudeMeters);
     if (!route)

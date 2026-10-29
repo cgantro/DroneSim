@@ -1,0 +1,44 @@
+#include "flight_planning/BuildingObstacle.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace aerosimlab::flight_planning
+{
+namespace
+{
+bool ContainsPoint(const std::vector<glm::dvec2>& outline,
+    const glm::dvec2& point) noexcept
+{
+    bool inside = false;
+    for (std::size_t first = 0, previous = outline.size() - 1U;
+         first < outline.size(); previous = first++)
+    {
+        const glm::dvec2& a = outline[first];
+        const glm::dvec2& b = outline[previous];
+        const bool crosses = (a.y > point.y) != (b.y > point.y);
+        if (crosses && point.x < (b.x - a.x) * (point.y - a.y)
+                / (b.y - a.y) + a.x)
+            inside = !inside;
+    }
+    return inside;
+}
+}
+
+bool ContainsBuildingVolume(
+    const BuildingObstacle& building, const glm::dvec3& positionMeters) noexcept
+{
+    if (building.outlineMeters.size() < 3U
+        || !std::isfinite(positionMeters.x) || !std::isfinite(positionMeters.y)
+        || !std::isfinite(positionMeters.z))
+        return false;
+
+    const double ground = building.groundElevationsMeters.empty()
+        ? 0.0 : *std::min_element(building.groundElevationsMeters.begin(),
+            building.groundElevationsMeters.end());
+    return positionMeters.z >= ground
+        && positionMeters.z <= ground + building.heightMeters
+        && ContainsPoint(building.outlineMeters,
+            {positionMeters.x, positionMeters.y});
+}
+}

@@ -6,7 +6,6 @@
 #ifdef _WIN32
 #include <Windows.h>
 #endif
-
 #include "graphics/Camera.h"
 #include "graphics/GlbModel.h"
 #include "graphics/Mesh.h"
@@ -22,7 +21,7 @@
 #endif
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
-#include "terrain/MapBuildings.h"
+#include "flight_planning/BuildingObstacle.h"
 #include "terrain/TerrainGrid.h"
 #include "terrain/TrainingRangeTerrain.h"
 #include <glm/geometric.hpp>
@@ -286,7 +285,7 @@ void AeroSimLabApp::InitializeWindow()
 {
     window_ = std::make_unique<aerosimlab::graphics::Window>(
         aerosimlab::graphics::Window::Properties{windowWidth, windowHeight,
-            "AeroSimLab | 드론 관찰 · EO 영상 | © OpenStreetMap contributors",
+            "DroneSim | 드론 관찰 · EO 영상",
             !smokeTest_ && !benchmarkMode_,
             !smokeTest_ && (!benchmarkMode_ || visibleBenchmarkMode_)});
     window_->GetFramebufferSize(framebufferWidth_, framebufferHeight_);
@@ -655,24 +654,24 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     glm::dvec3 observerPositionMeters = state.positionMeters
         - forwardMeters * followDistanceMeters
         + glm::dvec3{0.0, 0.0, followHeightMeters};
-    const auto isInsideMapBuilding = [this](const glm::dvec3& position)
+    const auto isInsideBuilding = [this](const glm::dvec3& position)
     {
-        const auto& buildings = trainingRangeScene_->Obstacles();
+        const auto& buildings = trainingRangeScene_->BuildingObstacles();
         return std::any_of(buildings.begin(), buildings.end(),
-            [&position](const aerosimlab::terrain::MapBuilding& building)
+            [&position](const aerosimlab::flight_planning::BuildingObstacle& building)
             {
-                return aerosimlab::terrain::ContainsMapBuildingVolume(
+                return aerosimlab::flight_planning::ContainsBuildingVolume(
                     building, position);
             });
     };
     // 건물 안에 걸리면 드론 쪽으로 당기지 않고, 시야가 열릴 때까지 뒤로 물러난다.
-    if (isInsideMapBuilding(observerPositionMeters))
+    if (isInsideBuilding(observerPositionMeters))
     {
         for (double retreatMeters = 1.0; retreatMeters <= 24.0; retreatMeters += 1.0)
         {
             const glm::dvec3 candidate = observerPositionMeters
                 - forwardMeters * retreatMeters;
-            if (!isInsideMapBuilding(candidate))
+            if (!isInsideBuilding(candidate))
             {
                 observerPositionMeters = candidate;
                 break;

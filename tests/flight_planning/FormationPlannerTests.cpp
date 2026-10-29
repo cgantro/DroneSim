@@ -42,23 +42,21 @@ TEST(FormationPlannerTests, RejectsNarrowRouteInsteadOfChangingFormation)
     const double halfWidth = narrowTerrain.HalfWidthMeters();
     const double halfDepth = narrowTerrain.HalfDepthMeters();
     constexpr double corridorHalfWidthMeters = 17.0;
-    const std::vector<terrain::MapBuilding> walls{
+    const std::vector<BuildingObstacle> walls{
         {
-            .osmId = "south-wall",
+            .name = "south-wall",
             .outlineMeters = {{-halfWidth, -halfDepth}, {halfWidth, -halfDepth},
                 {halfWidth, -corridorHalfWidthMeters},
                 {-halfWidth, -corridorHalfWidthMeters}},
             .groundElevationsMeters = {0.0, 0.0, 0.0, 0.0},
-            .heightMeters = 100.0,
-            .heightSource = terrain::BuildingHeightSource::OsmHeightTag},
+            .heightMeters = 100.0},
         {
-            .osmId = "north-wall",
+            .name = "north-wall",
             .outlineMeters = {{-halfWidth, corridorHalfWidthMeters},
                 {halfWidth, corridorHalfWidthMeters},
                 {halfWidth, halfDepth}, {-halfWidth, halfDepth}},
             .groundElevationsMeters = {0.0, 0.0, 0.0, 0.0},
-            .heightMeters = 100.0,
-            .heightSource = terrain::BuildingHeightSource::OsmHeightTag}
+            .heightMeters = 100.0}
     };
 
     // V자 대형이 지나갈 수 없으면 간격이나 모양을 임의로 바꾸지 않는다.

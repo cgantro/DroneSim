@@ -41,17 +41,16 @@ aerosimlab_add_scenario_dependencies()
 aerosimlab_add_airsim_dependency()
 
 add_library(aerosimlab_terrain STATIC
-  modules/terrain/src/MapBridges.cpp
-  modules/terrain/src/MapBuildings.cpp
-  modules/terrain/src/MapFlightRoute.cpp
   modules/terrain/src/TerrainGrid.cpp
   modules/terrain/src/TrainingRangeTerrain.cpp
 )
 target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
-target_link_libraries(aerosimlab_terrain PUBLIC glm::glm PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(aerosimlab_terrain PUBLIC glm::glm)
 
 add_library(aerosimlab_flight_planning STATIC
+  modules/flight_planning/src/BuildingObstacle.cpp
   modules/flight_planning/src/FormationPlanner.cpp
+  modules/flight_planning/src/RoutePlanner.cpp
 )
 target_include_directories(aerosimlab_flight_planning PUBLIC modules/flight_planning/include)
 target_link_libraries(aerosimlab_flight_planning PUBLIC glm::glm aerosimlab_terrain)

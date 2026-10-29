@@ -1,7 +1,6 @@
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
-#include "terrain/MapBuildings.h"
 #include "terrain/TerrainGrid.h"
 
 #include <gtest/gtest.h>

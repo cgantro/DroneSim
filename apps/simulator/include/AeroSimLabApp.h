@@ -9,7 +9,7 @@
 #include "manual_control/GamepadCommandMapper.h"
 #include "simulation_core/EoCameraModel.h"
 #include "flight_planning/FormationPlanner.h"
-#include "terrain/MapBuildings.h"
+#include "flight_planning/BuildingObstacle.h"
 #ifndef __EMSCRIPTEN__
 #include "communication/UdpSocket.h"
 #endif

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "graphics/GlbModel.h"
+#include "flight_planning/BuildingObstacle.h"
 #include "simulation_core/SimulationCore.h"
-#include "terrain/MapBuildings.h"
 #include "terrain/TerrainGrid.h"
 
 #include <filesystem>
@@ -41,7 +41,8 @@ public:
         const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition) const;
 
-    [[nodiscard]] const std::vector<aerosimlab::terrain::MapBuilding>& Obstacles() const noexcept;
+    [[nodiscard]] const std::vector<aerosimlab::flight_planning::BuildingObstacle>&
+    BuildingObstacles() const noexcept;
     [[nodiscard]] const std::vector<ReconPoint>& ReconPoints() const noexcept;
     /** @brief M01 편대가 정찰을 시작하기 전에 모일 지점이다. */
     [[nodiscard]] glm::dvec2 FormationStagingPositionMeters() const noexcept;
@@ -53,7 +54,7 @@ private:
     };
 
     std::vector<ModelGroup> models_;
-    std::vector<aerosimlab::terrain::MapBuilding> obstacles_;
+    std::vector<aerosimlab::flight_planning::BuildingObstacle> buildingObstacles_;
     std::vector<ReconPoint> reconPoints_;
 };
 }

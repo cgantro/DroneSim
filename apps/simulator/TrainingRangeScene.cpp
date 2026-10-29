@@ -70,7 +70,7 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
     aerosimlab::simulation::SimulationCore& simulation)
 {
     std::map<std::string, std::vector<glm::mat4>> instancesByModel;
-    obstacles_.clear();
+    buildingObstacles_.clear();
     reconPoints_.clear();
 
     for (const Placement& placement : placements)
@@ -81,12 +81,9 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
         simulation.AddStaticObstacleBox(centerMeters,
             glm::vec3{placement.collisionHalfExtents});
 
-        aerosimlab::terrain::MapBuilding obstacle;
-        obstacle.osmId = std::string{placement.model};
+        aerosimlab::flight_planning::BuildingObstacle obstacle;
         obstacle.name = std::string{placement.model};
         obstacle.heightMeters = placement.collisionHalfExtents.z * 2.0;
-        obstacle.heightSource =
-            aerosimlab::terrain::BuildingHeightSource::EstimatedFromFootprint;
         const double halfWidth = placement.collisionHalfExtents.x;
         const double halfDepth = placement.collisionHalfExtents.y;
         obstacle.outlineMeters = {
@@ -97,7 +94,7 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
         for (const glm::dvec2& corner : obstacle.outlineMeters)
             obstacle.groundElevationsMeters.push_back(
                 terrain.HeightAtLocalMeters(corner));
-        obstacles_.push_back(std::move(obstacle));
+        buildingObstacles_.push_back(std::move(obstacle));
 
         glm::mat4 transform = glm::translate(glm::mat4{1.0F},
             ToRenderPosition({placement.position.x, placement.position.y,
@@ -130,10 +127,10 @@ void TrainingRangeScene::Draw(aerosimlab::graphics::Renderer& renderer,
             view, projection, cameraPosition);
 }
 
-const std::vector<aerosimlab::terrain::MapBuilding>&
-TrainingRangeScene::Obstacles() const noexcept
+const std::vector<aerosimlab::flight_planning::BuildingObstacle>&
+TrainingRangeScene::BuildingObstacles() const noexcept
 {
-    return obstacles_;
+    return buildingObstacles_;
 }
 
 const std::vector<TrainingRangeScene::ReconPoint>&

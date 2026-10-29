@@ -1,6 +1,3 @@
-#include "terrain/MapBridges.h"
-#include "terrain/MapBuildings.h"
-#include "terrain/MapFlightRoute.h"
 #include "terrain/TerrainGrid.h"
 #include "terrain/TrainingRangeTerrain.h"
 #include "simulation_core/EoCameraModel.h"
@@ -33,7 +30,6 @@ void Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief()
     EXPECT_GT(*std::max_element(terrain.heightOffsetsMeters.begin(),
         terrain.heightOffsetsMeters.end()), 30.0F);
 }
-
 void Verify_TerrainGridConvertsLocalCoordinatesAndInterpolatesHeight()
 {
     TerrainGrid terrain;
@@ -138,131 +134,6 @@ void Verify_AsciiGridRejectsMissingHeightSamples()
     std::filesystem::remove(path, ignored);
 }
 
-void Verify_MapFlightRouteGoesAroundBuildingFootprints()
-{
-    TerrainGrid terrain;
-    terrain.sampleCount = 41;
-    terrain.spacingXMeters = 5.0F;
-    terrain.spacingYMeters = 5.0F;
-    terrain.referenceElevationMeters = 0.0F;
-    terrain.heightOffsetsMeters.assign(41U * 41U, 0.0F);
-    const std::vector<MapBuilding> buildings{{
-        .osmId = "test-building",
-        .outlineMeters = {{-5.0, -20.0}, {5.0, -20.0},
-            {5.0, 20.0}, {-5.0, 20.0}},
-        .groundElevationsMeters = {0.0, 0.0, 0.0, 0.0},
-        .heightMeters = 0.0}};
-
-    const auto route = PlanMapFlightRoute(
-        terrain, buildings, {-40.0, 0.0, 5.0}, {40.0, 0.0, 5.0});
-
-    ASSERT_TRUE(route.has_value());
-    ASSERT_GT(route->size(), 1U);
-    EXPECT_EQ(route->back(), glm::dvec3(40.0, 0.0, 5.0));
-    EXPECT_TRUE(std::any_of(route->begin(), route->end(), [](const glm::dvec3& point)
-    {
-        return std::abs(point.y) > 22.0;
-    }));
-
-    MapBuilding estimatedBuilding{
-        .osmId = "estimated-building",
-        .outlineMeters = {{-5.0, -20.0}, {5.0, -20.0},
-            {5.0, 20.0}, {-5.0, 20.0}},
-        .groundElevationsMeters = {0.0, 0.0, 0.0, 0.0},
-        .heightMeters = 28.0,
-        .heightSource = BuildingHeightSource::EstimatedFromFootprint};
-    const auto descendingRoute = PlanMapFlightRoute(
-        terrain, {estimatedBuilding}, {-40.0, 0.0, 48.0},
-        {40.0, 0.0, 5.0}, 3.0, 48.0);
-
-    ASSERT_TRUE(descendingRoute.has_value());
-    ASSERT_GE(descendingRoute->size(), 2U);
-    EXPECT_EQ((*descendingRoute)[descendingRoute->size() - 2U],
-        glm::dvec3(40.0, 0.0, 48.0));
-    for (std::size_t segment = 1; segment < descendingRoute->size(); ++segment)
-    {
-        const glm::dvec3 start = (*descendingRoute)[segment - 1U];
-        const glm::dvec3 end = (*descendingRoute)[segment];
-        const std::size_t sampleCount = static_cast<std::size_t>(
-            std::ceil(glm::length(end - start) / 0.25));
-        for (std::size_t sample = 0; sample <= sampleCount; ++sample)
-        {
-            const double fraction = sampleCount > 0U
-                ? static_cast<double>(sample) / static_cast<double>(sampleCount)
-                : 0.0;
-            EXPECT_FALSE(ContainsMapBuildingVolume(estimatedBuilding,
-                glm::mix(start, end, fraction)))
-                << "segment=" << segment << " sample=" << sample;
-        }
-    }
-}
-
-void Verify_MapFlightRouteReportsABuildingWallWithoutAnOpening()
-{
-    TerrainGrid terrain;
-    terrain.sampleCount = 41;
-    terrain.spacingXMeters = 5.0F;
-    terrain.spacingYMeters = 5.0F;
-    terrain.referenceElevationMeters = 0.0F;
-    terrain.heightOffsetsMeters.assign(41U * 41U, 0.0F);
-    const std::vector<MapBuilding> buildings{{
-        .osmId = "blocking-wall",
-        .outlineMeters = {{-5.0, -110.0}, {5.0, -110.0},
-            {5.0, 110.0}, {-5.0, 110.0}},
-        .groundElevationsMeters = {0.0, 0.0, 0.0, 0.0},
-        .heightMeters = 12.0}};
-
-    const auto route = PlanMapFlightRoute(
-        terrain, buildings, {-40.0, 0.0, 5.0}, {40.0, 0.0, 5.0});
-
-    EXPECT_FALSE(route.has_value());
-}
-
-void Verify_MapBuildingFacadeFollowsASlopedFootprintEdge()
-{
-    const MapBuilding building{
-        .outlineMeters = {{0.0, 0.0}, {4.0, 0.0}, {1.0, 3.0}},
-        .groundElevationsMeters = {10.0, 20.0, 30.0},
-        .heightMeters = 6.0};
-
-    const MapBuildingFacade facade = GetNearestMapBuildingFacade(
-        building, {3.0, 5.0});
-
-    EXPECT_NEAR(facade.centerMeters.x, 2.5, 1.0e-9);
-    EXPECT_NEAR(facade.centerMeters.y, 1.5, 1.0e-9);
-    EXPECT_NEAR(facade.centerMeters.z, 28.0, 1.0e-9);
-    EXPECT_NEAR(facade.widthMeters, std::sqrt(18.0), 1.0e-9);
-    EXPECT_NEAR(facade.heightMeters, 6.0, 1.0e-9);
-    EXPECT_GT(glm::dot(facade.outwardNormal,
-        glm::dvec3{2.0, 2.0, 0.0}), 0.0);
-}
-
-void Verify_BridgeOutsideTerrainIsSkipped()
-{
-    TerrainGrid terrain;
-    terrain.sampleCount = 3;
-    terrain.spacingXMeters = 10.0F;
-    terrain.spacingYMeters = 10.0F;
-    terrain.centerLatitudeDegrees = 37.0;
-    terrain.centerLongitudeDegrees = 127.0;
-    terrain.referenceElevationMeters = 0.0F;
-    terrain.heightOffsetsMeters.assign(9U, 0.0F);
-
-    const auto path = std::filesystem::temp_directory_path()
-        / "dronesim-bridge-outside-terrain-test.geojson";
-    {
-        std::ofstream output(path);
-        ASSERT_TRUE(output);
-        output << R"json({"features":[{"geometry":{"type":"Polygon","coordinates":[[[128.0,38.0],[128.001,38.0],[128.001,38.001],[128.0,38.0]]]},"properties":{"osm_id":"outside","tags":{"man_made":"bridge","name":"시험 교량"}}}]})json";
-    }
-
-    const std::vector<MapBridgeFootprint> bridges =
-        LoadMapBridgeFootprints(path, terrain);
-    std::error_code ignored;
-    std::filesystem::remove(path, ignored);
-    EXPECT_TRUE(bridges.empty());
-}
-
 TEST(TerrainGridTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
@@ -272,10 +143,6 @@ TEST(TerrainGridTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_RenderedTerrainHeightUsesTheSameTriangleAsTheMesh());
     EXPECT_NO_FATAL_FAILURE(Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips());
     EXPECT_NO_FATAL_FAILURE(Verify_AsciiGridRejectsMissingHeightSamples());
-    EXPECT_NO_FATAL_FAILURE(Verify_MapFlightRouteGoesAroundBuildingFootprints());
-    EXPECT_NO_FATAL_FAILURE(Verify_MapFlightRouteReportsABuildingWallWithoutAnOpening());
-    EXPECT_NO_FATAL_FAILURE(Verify_MapBuildingFacadeFollowsASlopedFootprintEdge());
-    EXPECT_NO_FATAL_FAILURE(Verify_BridgeOutsideTerrainIsSkipped());
 }
 
 }
