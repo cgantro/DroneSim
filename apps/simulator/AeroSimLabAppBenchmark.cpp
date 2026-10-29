@@ -83,6 +83,8 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     measurements.processCpuSeconds = static_cast<double>(
         std::clock() - benchmarkCpuStart_) / CLOCKS_PER_SEC;
     nlohmann::json report = BuildViewerBenchmarkReport(std::move(measurements));
+    report["drone_count"] = simulation_.DroneCount();
+    report["demo_mode"] = demoMode_;
     SaveViewerBenchmarkReport(report);
 }
 }

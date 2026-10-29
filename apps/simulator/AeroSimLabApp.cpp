@@ -370,16 +370,27 @@ void AeroSimLabApp::InitializeStartingState()
             aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
         initialYawRadians);
     ConfigureTrainingBattery(simulation_.PrimaryDroneId());
-    for (const glm::dvec2 offset : std::array<glm::dvec2, 3>{
-             glm::dvec2{10.0, 0.0}, glm::dvec2{0.0, 10.0}, glm::dvec2{10.0, 10.0}})
+    const bool singleDroneBenchmark = benchmarkMode_ && !demoMode_;
+    if (singleDroneBenchmark)
     {
-        const glm::dvec2 position = demoDroneStartMeters + offset;
-        const double groundMeters = terrainGrid_.HeightAtLocalMeters(position);
-        const auto droneId = simulation_.AddDrone(
-            {position, groundMeters
-                + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
-            initialYawRadians, groundMeters);
-        ConfigureTrainingBattery(droneId);
+        const auto result = simulation_.Apply({
+            aerosimlab::simulation::DroneCommand::Kind::TakeOff});
+        if (result != aerosimlab::simulation::CommandResult::Accepted)
+            throw std::runtime_error("단일 기체 성능 시험의 이륙 명령을 시작하지 못했습니다.");
+    }
+    else
+    {
+        for (const glm::dvec2 offset : std::array<glm::dvec2, 3>{
+                 glm::dvec2{10.0, 0.0}, glm::dvec2{0.0, 10.0}, glm::dvec2{10.0, 10.0}})
+        {
+            const glm::dvec2 position = demoDroneStartMeters + offset;
+            const double groundMeters = terrainGrid_.HeightAtLocalMeters(position);
+            const auto droneId = simulation_.AddDrone(
+                {position, groundMeters
+                    + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
+                initialYawRadians, groundMeters);
+            ConfigureTrainingBattery(droneId);
+        }
     }
     fleetDroneIds_ = simulation_.DroneIds();
 }
