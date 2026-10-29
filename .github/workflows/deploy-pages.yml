@@ -71,13 +71,13 @@ jobs:
 
       - name: Check and prepare Pages files
         run: |
-          test -s build-emscripten-single-thread/aerosimlab_simulator.html
-          test -s build-emscripten-single-thread/aerosimlab_simulator.js
-          test -s build-emscripten-single-thread/aerosimlab_simulator.wasm
+          test -s build-emscripten-single-thread/DroneSim.html
+          test -s build-emscripten-single-thread/DroneSim.js
+          test -s build-emscripten-single-thread/DroneSim.wasm
           mkdir -p _site
-          cp build-emscripten-single-thread/aerosimlab_simulator.html _site/index.html
-          cp build-emscripten-single-thread/aerosimlab_simulator.js _site/
-          cp build-emscripten-single-thread/aerosimlab_simulator.wasm _site/
+          cp build-emscripten-single-thread/DroneSim.html _site/index.html
+          cp build-emscripten-single-thread/DroneSim.js _site/
+          cp build-emscripten-single-thread/DroneSim.wasm _site/
           sed -i "s/__SIMULATOR_VERSION__/${GITHUB_SHA}/g" _site/index.html
           touch _site/.nojekyll
 
