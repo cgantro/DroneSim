@@ -1438,25 +1438,16 @@ void AeroSimLabApp::AdvanceFleetNetwork()
     for (const auto& delivered : formationNetwork_->DeliveredMessages())
     {
         const auto& message = delivered.message;
-        constexpr std::string_view groundControlTelemetryPrefix =
-            "ground_control_telemetry_";
         if (message.destination == groundControlNodeId
-            && message.source == leaderId
-            && message.kind.starts_with(groundControlTelemetryPrefix))
+            && message.kind == "ground_control_telemetry")
         {
-            const std::string droneIdText = message.kind.substr(
-                groundControlTelemetryPrefix.size());
-            std::istringstream droneIdInput(droneIdText);
-            DroneId droneId = 0U;
-            std::string extraText;
-            const auto telemetry = detail::DecodePeerTelemetry(message.payload);
-            if (!(droneIdInput >> droneId) || (droneIdInput >> extraText)
-                || std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), droneId)
-                    == fleetDroneIds_.end()
-                || !telemetry)
+            if (std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), message.source)
+                == fleetDroneIds_.end())
                 continue;
-
-            auto& latest = telemetryAtGroundControl_[droneId];
+            const auto telemetry = detail::DecodePeerTelemetry(message.payload);
+            if (!telemetry)
+                continue;
+            auto& latest = telemetryAtGroundControl_[message.source];
             if (message.sequence > latest.sequence)
             {
                 latest.state = *telemetry;
@@ -1478,11 +1469,6 @@ void AeroSimLabApp::AdvanceFleetNetwork()
                 latest.state = *telemetry;
                 latest.receivedAtTick = delivered.deliveredAtTick;
                 latest.sequence = message.sequence;
-                static_cast<void>(formationNetwork_->SendLatest(leaderId,
-                    groundControlNodeId,
-                    nextGroundControlTelemetrySequence_++,
-                    "ground_control_telemetry_"
-                        + std::to_string(message.source), message.payload));
             }
             continue;
         }
@@ -1583,26 +1569,26 @@ void AeroSimLabApp::AdvanceFleetNetwork()
 
     constexpr std::uint64_t telemetryIntervalTicks = 6U;
 
-    if (leaderId != 0U)
+    // 관제소는 각 기체에서 직접 받은 상태만 표시한다.
+    for (const DroneId droneId : droneIds)
     {
-        const auto lastSent = lastGroundControlTelemetrySentAtTick_.find(leaderId);
-        if (lastSent == lastGroundControlTelemetrySentAtTick_.end()
-            || currentTick >= lastSent->second + telemetryIntervalTicks)
-        {
-            const auto& state = simulation_.State(leaderId);
-            const std::string missionStatus = fleetReconnaissance_.contains(leaderId)
-                ? fleetReconnaissance_.at(leaderId).status : std::string{};
-            const std::uint8_t missionLeg = fleetReconnaissance_.contains(leaderId)
-                ? static_cast<std::uint8_t>(fleetReconnaissance_.at(leaderId).leg)
-                : 0U;
-            const std::string kind = "ground_control_telemetry_"
-                + std::to_string(leaderId);
-            if (formationNetwork_->SendLatest(leaderId, groundControlNodeId,
-                    nextGroundControlTelemetrySequence_++, kind,
-                    detail::EncodePeerTelemetry(state.positionMeters, state.mode,
-                        missionLeg, missionStatus, 0U, 0U)))
-                lastGroundControlTelemetrySentAtTick_[leaderId] = currentTick;
-        }
+        if (!formationNetwork_->HasRecentNeighbor(droneId, groundControlNodeId))
+            continue;
+        const auto lastSent = lastGroundControlTelemetrySentAtTick_.find(droneId);
+        if (lastSent != lastGroundControlTelemetrySentAtTick_.end()
+            && currentTick < lastSent->second + telemetryIntervalTicks)
+            continue;
+        const auto& state = simulation_.State(droneId);
+        const auto mission = fleetReconnaissance_.find(droneId);
+        const std::uint8_t leg = mission == fleetReconnaissance_.end()
+            ? 0U : static_cast<std::uint8_t>(mission->second.leg);
+        const std::string status = mission == fleetReconnaissance_.end()
+            ? std::string{} : mission->second.status;
+        if (formationNetwork_->SendLatest(droneId, groundControlNodeId,
+                nextGroundControlTelemetrySequence_++, "ground_control_telemetry",
+                detail::EncodePeerTelemetry(state.positionMeters, state.mode,
+                    leg, status, 0U, 0U)))
+            lastGroundControlTelemetrySentAtTick_[droneId] = currentTick;
     }
 
     for (const DroneId droneId : droneIds)

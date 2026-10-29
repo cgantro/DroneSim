@@ -159,6 +159,46 @@ public:
             app.simulation_.State(disconnectedDroneId).positionMeters,
             received.state.positionMeters), 1.0);
         EXPECT_GT(app.simulation_.TickCount() - received.receivedAtTick, 0U);
+        const auto lastReceivedTick = received.receivedAtTick;
+        for (const auto droneId : droneIds)
+            app.formationNetwork_->SetDirectedLinkDisabled(
+                droneId, groundControlNodeId, false);
+        for (int tick = 0; tick < 360; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+        EXPECT_GT(app.telemetryAtGroundControl_.at(disconnectedDroneId).receivedAtTick,
+            lastReceivedTick);
+    }
+
+    static void VerifyGroundControlReceivesEachDroneDirectly()
+    {
+        AeroSimLabApp app({
+            .smokeTest = true,
+            .simulationDynamics = simulation::SimulationDynamics::Kinematic,
+            .networkEnabled = false});
+        app.InitializeGraphics();
+        ASSERT_TRUE(app.PrepareFleetNetwork(true));
+        app.fleetNetworkMode_ = communication::VirtualMeshMode::Direct;
+        UseConnectedNetworkForTest(app);
+        app.formationTransit_.active = true;
+
+        const auto droneIds = app.fleetDroneIds_;
+        ASSERT_EQ(droneIds.size(), 4U);
+        const auto groundControlNodeId = std::numeric_limits<
+            communication::NetworkNodeId>::max();
+        app.formationNetwork_->SetDirectedLinkDisabled(
+            droneIds.front(), groundControlNodeId, true);
+        for (int tick = 0; tick < 240; ++tick)
+        {
+            app.AdvanceFleetNetwork();
+            app.simulation_.AdvanceOneTick();
+        }
+
+        EXPECT_FALSE(app.telemetryAtGroundControl_.contains(droneIds.front()));
+        for (std::size_t i = 1; i < droneIds.size(); ++i)
+            EXPECT_TRUE(app.telemetryAtGroundControl_.contains(droneIds[i]));
     }
 
     static void VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing()
@@ -836,6 +876,8 @@ TEST(SimulatorSessionTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyGroundControlShowsOnlyDeliveredPeerPositions());
+    EXPECT_NO_FATAL_FAILURE(
+        simulator::AeroSimLabAppTestAccess::VerifyGroundControlReceivesEachDroneDirectly());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyObserverCameraKeepsAUsableFollowDistance());
     EXPECT_NO_FATAL_FAILURE(
