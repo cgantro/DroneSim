@@ -66,6 +66,13 @@ OrientedBox ToWorldBox(
     const RigidBodyBox& box);
 
 /**
+ * @brief 월드 좌표의 기체 상자와 지면 사이에서 가장 깊은 접촉을 찾는다.
+ * @details 지형이 없으면 높이 0인 평면을 사용한다. 반올림으로 생긴 아주 작은 틈도 접촉으로 본다.
+ */
+std::optional<BoxContact> FindTerrainContact(
+    std::span<const OrientedBox> boxes, const terrain::TerrainGrid* terrain);
+
+/**
  * @brief 두 회전 상자의 겹침, 바깥쪽 방향과 기체 쪽 접촉점을 찾는다.
  * @details 분리축 정리는 상자 면 방향과 두 상자의 모서리 방향을 확인한다. 첫 번째 상자의 법선은 두 번째 상자에서 바깥을 향한다.
  */

@@ -371,27 +371,6 @@ void KeepDeeperContact(
     current = ContactCandidate{contact, objectName, objectId};
 }
 
-/**
- * @brief 지면 높이를 검사할 충돌 상자 꼭짓점을 고른다.
- * @details 높이 격자에서는 여덟 꼭짓점을 차례로 검사하고, 평지에서는 Z축 기준 최저 꼭짓점만 고른다.
- */
-glm::dvec3 GroundSampleCorner(
-    const OrientedBox& box, unsigned int cornerIndex, bool sampleAllCorners)
-{
-    glm::dvec3 corner = box.centerMeters;
-    for (std::size_t axisIndex = 0; axisIndex < box.axes.size(); ++axisIndex)
-    {
-        const bool usePositiveSide = sampleAllCorners
-            ? (cornerIndex & (1U << axisIndex)) != 0U
-            : !(box.axes[axisIndex].z >= 0.0);
-        const double direction = usePositiveSide ? 1.0 : -1.0;
-        corner += box.axes[axisIndex]
-            * (direction * box.halfExtentsMeters[
-                static_cast<glm::length_t>(axisIndex)]);
-    }
-    return corner;
-}
-
 }
 
 struct PhysicsWorld::Impl
@@ -629,82 +608,24 @@ struct PhysicsWorld::Impl
         }
     }
 
-    double GroundHeight(const glm::dvec2& position) const
-    {
-        if (!terrain)
-            return 0.0;
-        return terrain->HeightAtLocalMeters(position);
-    }
-
-    /** @brief 높이 격자의 주변 변화량으로 그 지점의 바깥쪽 방향을 구한다. */
-    glm::dvec3 GroundNormal(const glm::dvec2& position) const
-    {
-        if (!terrain)
-            return {0.0, 0.0, 1.0};
-
-        const double halfWidth = terrain->HalfWidthMeters();
-        const double halfDepth = terrain->HalfDepthMeters();
-        const double west = std::max(position.x - terrain->spacingXMeters, -halfWidth);
-        const double east = std::min(position.x + terrain->spacingXMeters, halfWidth);
-        const double south = std::max(position.y - terrain->spacingYMeters, -halfDepth);
-        const double north = std::min(position.y + terrain->spacingYMeters, halfDepth);
-        const double slopeEast = east > west
-            ? (GroundHeight({east, position.y}) - GroundHeight({west, position.y}))
-                / (east - west)
-            : 0.0;
-        const double slopeNorth = north > south
-            ? (GroundHeight({position.x, north}) - GroundHeight({position.x, south}))
-                / (north - south)
-            : 0.0;
-        return glm::normalize(glm::dvec3{-slopeEast, -slopeNorth, 1.0});
-    }
-
-    /**
-     * @brief 기체 충돌 상자의 꼭짓점에서 지면과 겹치는 정도를 찾는다.
-     * @details 부동소수점 반올림으로 생긴 아주 작은 틈도 접촉으로 본다.
-     * 실제 겹친 깊이는 0보다 작게 AirSim에 전달하지 않는다.
-     */
+    /** @brief 공통 지면 접촉 결과를 AirSim이 받는 좌표와 형식으로 바꾼다. */
     std::optional<msr::airlib::CollisionInfo> FindTerrainContact(
         const Body& body, std::uint64_t timestamp) const
     {
-        std::optional<msr::airlib::CollisionInfo> contactInfo;
-        double greatestPenetration = -std::numeric_limits<double>::infinity();
-        const RigidBodyState& state = body.collisionState;
-        for (const OrientedBox& worldBox : body.worldCollisionBoxes)
-        {
-            // 높이 격자가 없으면 바닥은 z=0인 평면이므로 가장 낮은 꼭짓점만 확인한다.
-            const unsigned int cornerCount = terrain ? 8U : 1U;
-            for (unsigned int cornerIndex = 0; cornerIndex < cornerCount; ++cornerIndex)
-            {
-                const glm::dvec3 corner = GroundSampleCorner(
-                    worldBox, cornerIndex, terrain.has_value());
-                const glm::dvec2 samplePosition{corner.x, corner.y};
-                if (terrain && !terrain->ContainsLocalPositionMeters(samplePosition))
-                    continue;
+        const auto contact = collision::FindTerrainContact(
+            body.worldCollisionBoxes, terrain ? &*terrain : nullptr);
+        if (!contact)
+            return std::nullopt;
 
-                const double ground = GroundHeight(samplePosition);
-                const double penetration = ground - corner.z;
-                const double roundingTolerance = 2.0
-                    * std::numeric_limits<float>::epsilon()
-                    * std::max({1.0, std::abs(ground), std::abs(corner.z)});
-                if (penetration < -roundingTolerance)
-                    continue;
-                if (penetration <= greatestPenetration)
-                    continue;
-
-                greatestPenetration = penetration;
-                contactInfo = msr::airlib::CollisionInfo{
-                    true,
-                    ToAirSimWorldVector(GroundNormal({corner.x, corner.y})),
-                    ToAirSimWorldVector({corner.x, corner.y, ground}),
-                    ToAirSimWorldVector(state.positionMeters),
-                    ToAirSimFloat(std::max(penetration, 0.0)),
-                    timestamp,
-                    "ground",
-                    0};
-            }
-        }
-        return contactInfo;
+        return msr::airlib::CollisionInfo{
+            true,
+            ToAirSimWorldVector(contact->normal),
+            ToAirSimWorldVector(contact->impactPointMeters),
+            ToAirSimWorldVector(body.collisionState.positionMeters),
+            ToAirSimFloat(contact->penetrationMeters),
+            timestamp,
+            "ground",
+            0};
     }
 
     /** @brief DEM 바깥으로 기체가 나가지 않도록 충돌 상자 전체를 경계 안에 둔다. */

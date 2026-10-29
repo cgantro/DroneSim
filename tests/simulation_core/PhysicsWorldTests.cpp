@@ -508,6 +508,33 @@ void Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes()
     EXPECT_LT(std::abs(state.positionMeters.x - definition.positionMeters.x), 0.01);
 }
 
+void Verify_TerrainContactGeometry_UsesGroundHeightAndSlope()
+{
+    const RigidBodyBox shape{glm::vec3{0.25F}, glm::dvec3{0.0},
+        glm::dquat{1.0, 0.0, 0.0, 0.0}};
+    const glm::dquat identity{1.0, 0.0, 0.0, 0.0};
+    const std::array planeBoxes{
+        collision::ToWorldBox({0.0, 0.0, 0.25 + 1.0e-8}, identity, shape)};
+    const auto planeContact = collision::FindTerrainContact(planeBoxes, nullptr);
+    ASSERT_TRUE(planeContact);
+    EXPECT_DOUBLE_EQ(planeContact->penetrationMeters, 0.0);
+    EXPECT_EQ(planeContact->normal, glm::dvec3(0.0, 0.0, 1.0));
+
+    terrain::TerrainGrid terrainGrid;
+    terrainGrid.sampleCount = 3U;
+    terrainGrid.spacingXMeters = 1.0F;
+    terrainGrid.spacingYMeters = 1.0F;
+    terrainGrid.heightOffsetsMeters = {1.0F, 1.0F, 1.0F,
+        2.0F, 2.0F, 2.0F, 3.0F, 3.0F, 3.0F};
+    const std::array slopeBoxes{
+        collision::ToWorldBox({0.0, 0.0, 2.0}, identity, shape)};
+    const auto slopeContact = collision::FindTerrainContact(slopeBoxes, &terrainGrid);
+    ASSERT_TRUE(slopeContact);
+    EXPECT_NEAR(slopeContact->penetrationMeters, 0.5, 1.0e-6);
+    EXPECT_NEAR(slopeContact->normal.y, std::sqrt(0.5), 1.0e-6);
+    EXPECT_NEAR(slopeContact->normal.z, std::sqrt(0.5), 1.0e-6);
+}
+
 void Verify_AirSimPhysics_TerrainContactStopsTheDrone()
 {
     const auto verifyGroundContact = [](double terrainHeightMeters, bool useHeightGrid)
@@ -873,6 +900,7 @@ TEST(PhysicsWorldTests, CoreScenarios)
         Verify_AirSimPhysics_YawResponseScalesWithMomentToThrustRatio());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysics_UsesEastNorthUpWorldAndForwardLeftUpBodyAxes());
+    EXPECT_NO_FATAL_FAILURE(Verify_TerrainContactGeometry_UsesGroundHeightAndSlope());
     EXPECT_NO_FATAL_FAILURE(Verify_AirSimPhysics_TerrainContactStopsTheDrone());
     EXPECT_NO_FATAL_FAILURE(
         Verify_AirSimPhysicsKeepsContactAcrossMicroscopicGroundGaps());

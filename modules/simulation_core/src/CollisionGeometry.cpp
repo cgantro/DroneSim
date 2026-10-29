@@ -23,6 +23,52 @@ glm::dvec3 AxisAlignedHalfExtents(
             + std::abs(axes[1].z) * halfExtents.y
             + std::abs(axes[2].z) * halfExtents.z};
 }
+
+// 높이 격자에서는 여덟 꼭짓점을 확인하고, 평지에서는 가장 낮은 꼭짓점만 고른다.
+glm::dvec3 GroundSampleCorner(
+    const OrientedBox& box, unsigned int cornerIndex, bool sampleAllCorners)
+{
+    glm::dvec3 corner = box.centerMeters;
+    for (std::size_t axisIndex = 0; axisIndex < box.axes.size(); ++axisIndex)
+    {
+        const bool usePositiveSide = sampleAllCorners
+            ? (cornerIndex & (1U << axisIndex)) != 0U
+            : !(box.axes[axisIndex].z >= 0.0);
+        const double direction = usePositiveSide ? 1.0 : -1.0;
+        corner += box.axes[axisIndex]
+            * (direction * box.halfExtentsMeters[
+                static_cast<glm::length_t>(axisIndex)]);
+    }
+    return corner;
+}
+
+double GroundHeight(const terrain::TerrainGrid* terrain, const glm::dvec2& position)
+{
+    return terrain ? terrain->HeightAtLocalMeters(position) : 0.0;
+}
+
+// 격자 주변 높이 차이로 지면 바깥쪽 방향을 구한다.
+glm::dvec3 GroundNormal(const terrain::TerrainGrid* terrain, const glm::dvec2& position)
+{
+    if (!terrain)
+        return {0.0, 0.0, 1.0};
+
+    const double halfWidth = terrain->HalfWidthMeters();
+    const double halfDepth = terrain->HalfDepthMeters();
+    const double west = std::max(position.x - terrain->spacingXMeters, -halfWidth);
+    const double east = std::min(position.x + terrain->spacingXMeters, halfWidth);
+    const double south = std::max(position.y - terrain->spacingYMeters, -halfDepth);
+    const double north = std::min(position.y + terrain->spacingYMeters, halfDepth);
+    const double slopeEast = east > west
+        ? (GroundHeight(terrain, {east, position.y})
+            - GroundHeight(terrain, {west, position.y})) / (east - west)
+        : 0.0;
+    const double slopeNorth = north > south
+        ? (GroundHeight(terrain, {position.x, north})
+            - GroundHeight(terrain, {position.x, south})) / (north - south)
+        : 0.0;
+    return glm::normalize(glm::dvec3{-slopeEast, -slopeNorth, 1.0});
+}
 }
 
 double CollisionRadius(std::span<const RigidBodyBox> boxes)
@@ -75,6 +121,40 @@ OrientedBox ToWorldBox(
         axes,
         AxisAlignedHalfExtents(axes, halfExtents),
         glm::length(halfExtents)};
+}
+
+std::optional<BoxContact> FindTerrainContact(
+    std::span<const OrientedBox> boxes, const terrain::TerrainGrid* terrain)
+{
+    std::optional<BoxContact> contact;
+    double greatestPenetration = -std::numeric_limits<double>::infinity();
+    for (const OrientedBox& box : boxes)
+    {
+        const unsigned int cornerCount = terrain ? 8U : 1U;
+        for (unsigned int cornerIndex = 0; cornerIndex < cornerCount; ++cornerIndex)
+        {
+            const glm::dvec3 corner = GroundSampleCorner(
+                box, cornerIndex, terrain != nullptr);
+            const glm::dvec2 samplePosition{corner.x, corner.y};
+            if (terrain && !terrain->ContainsLocalPositionMeters(samplePosition))
+                continue;
+
+            const double ground = GroundHeight(terrain, samplePosition);
+            const double penetration = ground - corner.z;
+            const double roundingTolerance = 2.0
+                * std::numeric_limits<float>::epsilon()
+                * std::max({1.0, std::abs(ground), std::abs(corner.z)});
+            if (penetration < -roundingTolerance || penetration <= greatestPenetration)
+                continue;
+
+            greatestPenetration = penetration;
+            contact = BoxContact{
+                GroundNormal(terrain, samplePosition),
+                {corner.x, corner.y, ground},
+                std::max(penetration, 0.0)};
+        }
+    }
+    return contact;
 }
 
 bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept
