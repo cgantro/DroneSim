@@ -1,8 +1,6 @@
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/KinematicCollisionWorld.h"
-#if !defined(__EMSCRIPTEN__)
 #include "simulation_core/PhysicsWorld.h"
-#endif
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 
@@ -45,21 +43,16 @@ struct SimulationCore::EcsStorage
         double groundElevationMeters = 0.0;
     };
 
-#if !defined(__EMSCRIPTEN__)
     struct PhysicsBody
     {
         RigidBodyHandle handle;
     };
 
-#endif
-
     SimulationDynamics dynamics;
     QuadrotorControllerParameters controllerParameters;
-#if !defined(__EMSCRIPTEN__)
     QuadrotorParameters quadrotorParameters;
     /** @brief Flecs 콜백이 참조하므로 Flecs 월드보다 나중에 정리한다. */
     std::unique_ptr<PhysicsWorld> physics;
-#endif
     flecs::world world;
     std::map<DroneId, flecs::entity> drones;
     DroneId primaryDroneId = 0;
@@ -88,13 +81,8 @@ struct SimulationCore::EcsStorage
         QuadrotorControllerParameters selectedControllerParameters = {})
         : dynamics(selectedDynamics)
         , controllerParameters(selectedControllerParameters)
-#if !defined(__EMSCRIPTEN__)
         , quadrotorParameters(std::move(selectedQuadrotorParameters))
-#endif
     {
-#if defined(__EMSCRIPTEN__)
-        static_cast<void>(selectedQuadrotorParameters);
-#endif
         RegisterDroneSystem();
         RegisterCameraSystem();
         SynchronizeCameraPoses();
@@ -107,12 +95,7 @@ struct SimulationCore::EcsStorage
             RegisterKinematicSystem();
             return;
         }
-#if !defined(__EMSCRIPTEN__)
         RegisterRigidBodySystem();
-#else
-        throw std::invalid_argument(
-            "이 빌드에서는 AirSim 강체 물리를 사용할 수 없습니다.");
-#endif
     }
 
     void RegisterKinematicSystem()
@@ -138,7 +121,6 @@ struct SimulationCore::EcsStorage
             });
     }
 
-#if !defined(__EMSCRIPTEN__)
     void RegisterRigidBodySystem()
     {
         physics = std::make_unique<PhysicsWorld>();
@@ -162,7 +144,6 @@ struct SimulationCore::EcsStorage
                 }
             });
     }
-#endif
 
     void RegisterCameraSystem()
     {
@@ -188,9 +169,7 @@ struct SimulationCore::EcsStorage
         DroneControlState initialControl;
         ApplyInitialPose(initialState, initialControl, initialPose);
         flecs::entity drone = world.entity();
-#if !defined(__EMSCRIPTEN__)
         std::optional<RigidBodyHandle> createdBody;
-#endif
 
         try
         {
@@ -200,7 +179,6 @@ struct SimulationCore::EcsStorage
                 .set<CameraState>({});
             EoCameraModel::UpdatePose(
                 drone.get_mut<CameraState>(), drone.get<DroneState>());
-#if !defined(__EMSCRIPTEN__)
             if (dynamics == SimulationDynamics::RigidBody)
             {
                 RigidBodyDefinition definition;
@@ -210,16 +188,13 @@ struct SimulationCore::EcsStorage
                 drone.set<PhysicsBody>({*createdBody});
                 CopyPhysicsState(drone.get_mut<DroneState>(), *createdBody);
             }
-#endif
 
             drones.emplace(id, drone);
         }
         catch (...)
         {
-#if !defined(__EMSCRIPTEN__)
             if (createdBody)
                 static_cast<void>(physics->DestroyBody(*createdBody));
-#endif
             // ECS에만 남은 엔티티가 다음 시스템 실행에 섞이지 않도록 함께 지운다.
             drone.destruct();
             throw;
@@ -266,11 +241,9 @@ struct SimulationCore::EcsStorage
         if (found == drones.end())
             return false;
 
-#if !defined(__EMSCRIPTEN__)
         if (dynamics == SimulationDynamics::RigidBody
             && !physics->DestroyBody(found->second.get<PhysicsBody>().handle))
             return false;
-#endif
 
         found->second.destruct();
         const bool removedPrimary = id == primaryDroneId;
@@ -280,7 +253,6 @@ struct SimulationCore::EcsStorage
         return true;
     }
 
-#if !defined(__EMSCRIPTEN__)
     void ResetPhysicsBody(flecs::entity& drone)
     {
         const DroneState& droneState = drone.get<DroneState>();
@@ -291,7 +263,6 @@ struct SimulationCore::EcsStorage
         physics->SetState(body, initialState);
         CopyPhysicsState(drone.get_mut<DroneState>(), body);
     }
-#endif
 
     void ResetDrone(flecs::entity& drone)
     {
@@ -300,13 +271,10 @@ struct SimulationCore::EcsStorage
             drone.get_mut<DroneState>(),
             drone.get_mut<DroneControlState>(),
             initialPose);
-#if !defined(__EMSCRIPTEN__)
         if (dynamics == SimulationDynamics::RigidBody)
             ResetPhysicsBody(drone);
-#endif
     }
 
-#if !defined(__EMSCRIPTEN__)
     void ApplyRigidBodyForces(
         DroneState& state,
         DroneControlState& control,
@@ -406,7 +374,6 @@ struct SimulationCore::EcsStorage
                 drone.get<PhysicsBody>().handle);
         }
     }
-#endif
 };
 
 std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
@@ -464,23 +431,17 @@ CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command
     flecs::entity& drone = found->second;
     DroneState& state = drone.get_mut<DroneState>();
     DroneControlState& control = drone.get_mut<DroneControlState>();
-#if defined(__EMSCRIPTEN__)
-    if (ecs_->dynamics == SimulationDynamics::RigidBody)
-        return CommandResult::UnsupportedDynamics;
-#endif
     if (command.kind == DroneCommand::Kind::SetRotorThrusts
         && ecs_->dynamics != SimulationDynamics::RigidBody)
     {
         return CommandResult::UnsupportedDynamics;
     }
     const CommandResult result = DroneModel::Apply(state, control, command);
-#if !defined(__EMSCRIPTEN__)
     if (result == CommandResult::Accepted
         && ecs_->dynamics == SimulationDynamics::RigidBody)
     {
         ecs_->CopyPhysicsState(state, drone.get<EcsStorage::PhysicsBody>().handle);
     }
-#endif
     return result;
 }
 
@@ -531,7 +492,6 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
         state.motorSpeedsRadiansPerSecond.begin(),
         state.motorSpeedsRadiansPerSecond.end(),
         [](double speed) { return speed > 0.0; });
-#if !defined(__EMSCRIPTEN__)
     if (hasInitialMotorSpeed && ecs_->dynamics != SimulationDynamics::RigidBody)
         throw std::invalid_argument("초기 로터 속도는 강체 물리 모드에서만 지정할 수 있습니다.");
     if (std::any_of(state.motorSpeedsRadiansPerSecond.begin(),
@@ -542,10 +502,6 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     {
         throw std::invalid_argument("초기 로터 속도가 기체의 최대 속도를 넘었습니다.");
     }
-#else
-    if (hasInitialMotorSpeed)
-        throw std::invalid_argument("초기 로터 속도는 강체 물리 모드에서만 지정할 수 있습니다.");
-#endif
 
     flecs::entity& drone = ecs_->FindDrone(droneId);
     DroneState normalized = state;
@@ -556,7 +512,6 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     control.targetVelocityMetersPerSecond = normalized.velocityMetersPerSecond;
     control.groundElevationMeters = normalized.positionMeters.z
         - QuadrotorFlightController::groundedModelOriginHeightMeters;
-#if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
         const RigidBodyState rigidBodyState{
@@ -572,7 +527,6 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
         ecs_->CopyPhysicsState(normalized, drone.get<EcsStorage::PhysicsBody>().handle);
         normalized.mode = state.mode;
     }
-#endif
     drone.set<DroneState>(normalized);
     ecs_->SynchronizeCameraPose(drone);
 }
@@ -638,10 +592,8 @@ void SimulationCore::AdvanceOneTick()
     }
     ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
     ecs_->world.progress(DroneModel::fixedStepSeconds);
-#if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
         ecs_->AdvancePhysicsWorld();
-#endif
     // 배터리 컴포넌트가 붙은 드론만 골라, 물리 계산 뒤의 비행 상태로 잔량을 갱신한다.
     ecs_->world.each(
         [](BatteryModel& battery, const DroneState& state)
@@ -733,13 +685,11 @@ void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
     if (!HasFiniteVector(velocity))
         throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
-#if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
         ecs_->physics->SetWindVelocityMetersPerSecond(velocity);
         return;
     }
-#endif
     ecs_->windVelocityMetersPerSecond = velocity;
 }
 
@@ -757,13 +707,11 @@ double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 void SimulationCore::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-#if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
         ecs_->physics->AddStaticObstacleBox(centerMeters, halfExtentsMeters);
         return;
     }
-#endif
     ecs_->kinematicCollision.AddStaticObstacleBox(centerMeters, halfExtentsMeters);
 }
 
@@ -771,14 +719,12 @@ void SimulationCore::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)
 {
-#if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
         ecs_->physics->AddStaticObstaclePrism(
             outlineMeters, bottomMeters, topMeters);
         return;
     }
-#endif
     ecs_->kinematicCollision.AddStaticObstaclePrism(
         outlineMeters, bottomMeters, topMeters);
 }
@@ -786,25 +732,21 @@ void SimulationCore::AddStaticObstaclePrism(
 void SimulationCore::AddStaticObstacleFootprint(
     const std::vector<glm::dvec2>& outlineMeters)
 {
-#if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
         ecs_->physics->AddStaticObstacleFootprint(outlineMeters);
         return;
     }
-#endif
     ecs_->kinematicCollision.AddStaticObstacleFootprint(outlineMeters);
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
 {
-#if !defined(__EMSCRIPTEN__)
     if (ecs_->dynamics == SimulationDynamics::RigidBody)
     {
         ecs_->physics->SetTerrain(std::move(terrain));
         return;
     }
-#endif
     ecs_->kinematicCollision.SetTerrain(std::move(terrain));
 }
 

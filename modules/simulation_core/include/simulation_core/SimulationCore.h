@@ -28,14 +28,9 @@ enum class SimulationDynamics
     RigidBody
 };
 
-/** @brief 네이티브는 AirSim, WebAssembly는 운동학 기준선을 기본으로 사용한다. */
-#if defined(__EMSCRIPTEN__)
-inline constexpr SimulationDynamics defaultSimulationDynamics =
-    SimulationDynamics::Kinematic;
-#else
+/** @brief 모든 실행 환경에서 AirSim 강체 물리를 기본으로 사용한다. */
 inline constexpr SimulationDynamics defaultSimulationDynamics =
     SimulationDynamics::RigidBody;
-#endif
 
 /** @brief 한 시뮬레이션 안에서 드론 하나를 식별한다. */
 using DroneId = std::uint64_t;

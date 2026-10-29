@@ -38,9 +38,7 @@ endif()
 aerosimlab_add_common_dependencies()
 aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
-if(NOT EMSCRIPTEN)
-  aerosimlab_add_airsim_dependency()
-endif()
+aerosimlab_add_airsim_dependency()
 
 add_library(aerosimlab_terrain STATIC
   modules/terrain/src/MapBridges.cpp
@@ -68,19 +66,15 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/QuadrotorModel.cpp
   modules/simulation_core/src/QuadrotorFlightController.cpp
 )
-if(NOT EMSCRIPTEN)
-  target_sources(aerosimlab_simulation_core PRIVATE
-    modules/simulation_core/src/PhysicsWorld.cpp
-  )
-endif()
+target_sources(aerosimlab_simulation_core PRIVATE
+  modules/simulation_core/src/PhysicsWorld.cpp
+)
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm aerosimlab_terrain
   PRIVATE flecs::flecs_static
 )
-if(NOT EMSCRIPTEN)
-  target_link_libraries(aerosimlab_simulation_core PRIVATE aerosimlab_airsim)
-endif()
+target_link_libraries(aerosimlab_simulation_core PRIVATE aerosimlab_airsim)
 
 add_library(aerosimlab_scenario STATIC
   modules/scenario/src/ScenarioRunner.cpp
