@@ -253,7 +253,6 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
                 {state.positionMeters.x, state.positionMeters.y});
         const bool cameraActive = simulation_.Camera().status
             == aerosimlab::simulation::CameraStatus::Active;
-        const auto& camera = simulation_.Camera();
         const std::string missionStatus = CompleteFleetMissionStatus();
         const std::uint64_t simulationTick = simulation_.TickCount();
         EM_ASM({

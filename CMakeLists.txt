@@ -237,7 +237,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       apps/simulator/SimulatorHud.cpp
     )
   endif()
-  target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator)
+  target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator/include)
   set(_aerosimlab_generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
   set(_aerosimlab_build_revision_header
     "${_aerosimlab_generated_dir}/AeroSimLabBuildRevision.h")

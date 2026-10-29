@@ -26,10 +26,8 @@
 #include <optional>
 #include <random>
 #include <string>
-#include <vector>
-#ifndef __EMSCRIPTEN__
 #include <unordered_map>
-#endif
+#include <vector>
 
 namespace aerosimlab::graphics
 {

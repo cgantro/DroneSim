@@ -1,7 +1,5 @@
 #include "AeroSimLabApp.h"
-#include "ExecutableDirectory.h"
 
-#include "graphics/MultisampleFramebuffer.h"
 #include "graphics/Window.h"
 
 #ifdef _WIN32
