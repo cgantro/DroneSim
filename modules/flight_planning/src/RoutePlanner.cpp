@@ -164,6 +164,16 @@ Cell NearestCell(const Grid& grid, const glm::dvec2& position)
             static_cast<double>(grid.columns - 1U)))};
 }
 
+/**
+ * @brief A*로 격자에서 시작 칸부터 목표 칸까지의 수평 경로를 찾는다.
+ * @details A*는 시작점부터 쌓인 실제 이동 비용 g와 목표까지의 추정 비용 h를
+ *          더한 f = g + h가 가장 작은 후보를 먼저 살펴본다.
+ *          이 함수에서는 distance가 g, 목표까지의 직선거리가 h,
+ *          pending이 f 순서의 미방문 후보 목록, closed가 방문 완료 칸,
+ *          previous가 경로 복원용 이전 칸을 맡는다. 대각선 이동은 모서리
+ *          양쪽 칸도 확인해 건물 모서리를 가로질러 통과하지 못하게 한다.
+ * @return 시작 칸과 목표 칸을 포함한 경로. 막혀 있으면 빈 값을 반환한다.
+ */
 std::optional<std::vector<Cell>> FindGridPath(
     const Grid& grid,
     Cell start,
@@ -172,9 +182,11 @@ std::optional<std::vector<Cell>> FindGridPath(
     double clearanceSquared)
 {
     const std::size_t cellCount = grid.rows * grid.columns;
+    // g 비용, 이전 칸, 방문 완료 여부를 칸 번호로 바로 찾도록 같은 크기로 둔다.
     std::vector<double> distance(cellCount, std::numeric_limits<double>::infinity());
     std::vector<std::size_t> previous(cellCount, cellCount);
     std::vector<bool> closed(cellCount, false);
+    // 우선순위 큐의 첫 값이 f = g + h이며, 가장 작은 예상 총비용부터 꺼낸다.
     using Candidate = std::pair<double, std::size_t>;
     std::priority_queue<Candidate, std::vector<Candidate>, std::greater<>> pending;
     const std::size_t startIndex = Index(grid, start);
@@ -185,6 +197,7 @@ std::optional<std::vector<Cell>> FindGridPath(
     constexpr std::array<std::pair<int, int>, 8> neighbors{{
         {-1, -1}, {-1, 0}, {-1, 1}, {0, -1},
         {0, 1}, {1, -1}, {1, 0}, {1, 1}}};
+    // 가장 낮은 f 후보를 하나씩 확정하면서 인접한 칸의 더 나은 경로를 갱신한다.
     while (!pending.empty())
     {
         const std::size_t currentIndex = pending.top().second;
@@ -221,6 +234,7 @@ std::optional<std::vector<Cell>> FindGridPath(
             }
 
             const std::size_t nextIndex = Index(grid, next);
+            // 직선 이동은 한 칸, 대각선 이동은 한 칸의 대각선 길이만큼 비용을 더한다.
             const double stepCost = rowOffset != 0 && columnOffset != 0
                 ? routeCellSizeMeters * std::sqrt(2.0)
                 : routeCellSizeMeters;
@@ -230,6 +244,7 @@ std::optional<std::vector<Cell>> FindGridPath(
 
             previous[nextIndex] = currentIndex;
             distance[nextIndex] = candidateDistance;
+            // 장애물이 없는 공간에서 목표까지 갈 때의 하한인 직선거리를 h로 쓴다.
             const double heuristic = glm::length(
                 Position(grid, next) - Position(grid, goal));
             pending.emplace(candidateDistance + heuristic, nextIndex);
@@ -239,6 +254,7 @@ std::optional<std::vector<Cell>> FindGridPath(
     if (!closed[goalIndex])
         return std::nullopt;
 
+    // 목표에서 previous를 거꾸로 따라간 뒤 순서를 뒤집어 출발점부터 정렬한다.
     std::vector<Cell> path;
     for (std::size_t current = goalIndex; current != startIndex;
          current = previous[current])
