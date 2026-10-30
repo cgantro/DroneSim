@@ -1,5 +1,7 @@
 #pragma once
 
+#include "communication/DroneSocket.h"
+
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -14,20 +16,18 @@
 namespace aerosimlab::communication
 {
 using NetworkNodeId = std::uint64_t;
-using VirtualPort = std::uint16_t;
 
-/** @brief 시뮬레이션 안에서 드론 통신 대상을 구분하는 주소다. */
-struct VirtualEndpoint
+/** @brief 드론과 그 드론이 실제로 열어 둔 통신 포트다. */
+struct DroneEndpoint
 {
     NetworkNodeId node = 0;
-    VirtualPort port = 0;
+    SocketPort port = 0;
 };
 
-/** @brief 한 드론의 현재 통신 상태와 가상 포트다. */
+/** @brief 통신망에 등록할 드론의 위치다. 소켓은 통신망이 소유한다. */
 struct NetworkNodeSnapshot
 {
     NetworkNodeId id = 0;
-    VirtualPort port = 0;
     glm::dvec3 positionMeters{0.0};
 };
 
@@ -50,8 +50,8 @@ struct VirtualMeshMessage
     std::uint64_t id = 0;
     NetworkNodeId source = 0;
     NetworkNodeId destination = 0;
-    VirtualPort sourcePort = 0;
-    VirtualPort destinationPort = 0;
+    SocketPort sourcePort = 0;
+    SocketPort destinationPort = 0;
     std::uint32_t sequence = 0;
     std::string kind;
     std::string payload;
@@ -104,12 +104,12 @@ public:
     /** @brief 한 노드의 송수신을 끊거나 복구한다. */
     void SetNodeRadioEnabled(NetworkNodeId node, bool enabled);
     [[nodiscard]] bool IsNodeRadioEnabled(NetworkNodeId node) const noexcept;
-    [[nodiscard]] std::optional<VirtualPort> PortFor(
+    [[nodiscard]] std::optional<SocketPort> PortFor(
         NetworkNodeId node) const noexcept;
 
     /** @brief 직접 연결이 가능한 메시지를 보내고 메시지 ID를 돌려준다. */
     [[nodiscard]] std::optional<std::uint64_t> Send(
-        VirtualEndpoint source, VirtualEndpoint destination,
+        DroneEndpoint source, DroneEndpoint destination,
         std::uint32_t sequence, std::string kind, std::string payload);
 
     /** @brief 모의 시간을 진행하고 도착한 메시지를 처리한다. */
@@ -126,7 +126,14 @@ public:
         const glm::dvec3& secondPositionMeters) const;
 
 private:
-    struct Transmission
+    struct PendingMessage
+    {
+        std::uint64_t dueTick = 0;
+        NetworkNodeId sender = 0;
+        NetworkNodeId receiver = 0;
+    };
+
+    struct ReceivedMessage
     {
         std::uint64_t dueTick = 0;
         NetworkNodeId sender = 0;
@@ -141,16 +148,17 @@ private:
         const glm::dvec3& receiverPositionMeters) const;
     [[nodiscard]] bool HasLineOfSight(
         const glm::dvec3& start, const glm::dvec3& end) const;
-    void Transmit(NetworkNodeId sender, NetworkNodeId receiver,
-        VirtualMeshMessage message);
+    void ReceiveDatagrams();
     void RecordEvent(MeshEventKind kind, NetworkNodeId source,
         NetworkNodeId destination, std::string detail);
 
     VirtualMeshSettings settings_;
     std::map<NetworkNodeId, NetworkNodeSnapshot> nodes_;
+    std::map<NetworkNodeId, DroneSocket> sockets_;
     std::vector<RadioObstacle> obstacles_;
     std::set<NetworkNodeId> radioDisabledNodes_;
-    std::vector<Transmission> transmissions_;
+    std::map<std::uint64_t, PendingMessage> pendingMessages_;
+    std::vector<ReceivedMessage> receivedMessages_;
     std::vector<DeliveredMeshMessage> deliveredMessages_;
     std::vector<MeshEvent> events_;
     VirtualMeshMetrics metrics_;

@@ -1,5 +1,7 @@
 #include "communication/VirtualMeshNetwork.h"
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -12,8 +14,10 @@ namespace aerosimlab::communication
 {
 namespace
 {
+using Json = nlohmann::json;
 constexpr double geometryTolerance = 1.0e-9;
 constexpr std::size_t maximumRecordedEvents = 64U;
+constexpr std::size_t maximumDatagramBytes = 65507U;
 
 double Cross(const glm::dvec2& first, const glm::dvec2& second)
 {
@@ -69,7 +73,6 @@ void VirtualMeshNetwork::UpdateNodes(
     std::span<const RadioObstacle> obstacles)
 {
     std::map<NetworkNodeId, NetworkNodeSnapshot> updated;
-    std::set<VirtualPort> updatedPorts;
     for (const NetworkNodeSnapshot& node : nodes)
     {
         if (!std::isfinite(node.positionMeters.x)
@@ -78,16 +81,37 @@ void VirtualMeshNetwork::UpdateNodes(
             throw std::invalid_argument("통신 노드 위치는 유한한 좌표여야 합니다.");
         if (!updated.emplace(node.id, node).second)
             throw std::invalid_argument("통신 노드 ID가 중복되었습니다.");
-        if (node.port == 0U)
-            throw std::invalid_argument("가상 통신 포트는 1 이상이어야 합니다.");
-        if (!updatedPorts.insert(node.port).second)
-            throw std::invalid_argument("가상 통신 포트가 중복되었습니다.");
     }
+
+    std::map<NetworkNodeId, DroneSocket> newSockets;
+    for (const auto& [id, node] : updated)
+    {
+        static_cast<void>(node);
+        if (!sockets_.contains(id))
+            newSockets.try_emplace(id);
+    }
+
+    std::erase_if(sockets_, [&updated](const auto& entry)
+    {
+        return !updated.contains(entry.first);
+    });
+    for (auto& [id, socket] : newSockets)
+        sockets_.emplace(id, std::move(socket));
+
     nodes_ = std::move(updated);
     obstacles_.assign(obstacles.begin(), obstacles.end());
     std::erase_if(radioDisabledNodes_, [this](NetworkNodeId id)
     {
         return !nodes_.contains(id);
+    });
+    std::erase_if(pendingMessages_, [this](const auto& entry)
+    {
+        return !nodes_.contains(entry.second.sender)
+            || !nodes_.contains(entry.second.receiver);
+    });
+    std::erase_if(receivedMessages_, [this](const ReceivedMessage& entry)
+    {
+        return !nodes_.contains(entry.sender) || !nodes_.contains(entry.receiver);
     });
 }
 
@@ -109,30 +133,33 @@ bool VirtualMeshNetwork::IsNodeRadioEnabled(NetworkNodeId node) const noexcept
     return nodes_.contains(node) && !radioDisabledNodes_.contains(node);
 }
 
-std::optional<VirtualPort> VirtualMeshNetwork::PortFor(
+std::optional<SocketPort> VirtualMeshNetwork::PortFor(
     NetworkNodeId node) const noexcept
 {
-    const auto found = nodes_.find(node);
-    if (found == nodes_.end())
+    const auto found = sockets_.find(node);
+    if (found == sockets_.end())
         return std::nullopt;
-    return found->second.port;
+    return found->second.LocalPort();
 }
 
 std::optional<std::uint64_t> VirtualMeshNetwork::Send(
-    VirtualEndpoint source, VirtualEndpoint destination,
+    DroneEndpoint source, DroneEndpoint destination,
     std::uint32_t sequence, std::string kind, std::string payload)
 {
     const auto sourceNode = nodes_.find(source.node);
     const auto destinationNode = nodes_.find(destination.node);
+    const auto sourceSocket = sockets_.find(source.node);
+    const auto destinationSocket = sockets_.find(destination.node);
     if (source.node == destination.node || kind.empty()
         || sourceNode == nodes_.end() || destinationNode == nodes_.end()
-        || sourceNode->second.port != source.port
-        || destinationNode->second.port != destination.port
+        || sourceSocket == sockets_.end() || destinationSocket == sockets_.end()
+        || sourceSocket->second.LocalPort() != source.port
+        || destinationSocket->second.LocalPort() != destination.port
         || !LinkAvailable(source.node, destination.node))
     {
         ++metrics_.droppedMessages;
         RecordEvent(MeshEventKind::PacketDropped, source.node, destination.node,
-            "가상 포트가 없거나 직접 연결이 없어 메시지를 보내지 못했습니다.");
+            "드론 소켓 주소가 맞지 않거나 직접 연결이 없어 메시지를 보내지 못했습니다.");
         return std::nullopt;
     }
 
@@ -146,7 +173,29 @@ std::optional<std::uint64_t> VirtualMeshNetwork::Send(
         .kind = std::move(kind),
         .payload = std::move(payload)};
     const std::uint64_t id = message.id;
-    Transmit(source.node, destination.node, std::move(message));
+    const std::uint64_t maximumTick = std::numeric_limits<std::uint64_t>::max();
+    const std::uint64_t dueTick = currentTick_ == maximumTick
+        ? maximumTick : currentTick_ + 1U;
+    const Json packet{
+        {"id", message.id},
+        {"source", message.source},
+        {"destination", message.destination},
+        {"sourcePort", message.sourcePort},
+        {"destinationPort", message.destinationPort},
+        {"sequence", message.sequence},
+        {"kind", message.kind},
+        {"payload", message.payload}};
+    const std::string datagram = packet.dump();
+    if (datagram.size() > maximumDatagramBytes)
+    {
+        ++metrics_.droppedMessages;
+        RecordEvent(MeshEventKind::PacketDropped, source.node, destination.node,
+            "UDP 메시지가 데이터그램 크기 제한을 넘었습니다.");
+        return std::nullopt;
+    }
+
+    sourceSocket->second.SendTo(destination.port, datagram);
+    pendingMessages_.emplace(id, PendingMessage{dueTick, source.node, destination.node});
     return id;
 }
 
@@ -156,28 +205,130 @@ void VirtualMeshNetwork::Advance(std::uint64_t tick)
         throw std::invalid_argument("가상 통신망 시간은 뒤로 갈 수 없습니다.");
     currentTick_ = tick;
     deliveredMessages_.clear();
-    // 전송은 현재 Tick에 쌓고 다음 Advance에서 처리하므로 보낸 순서가 유지된다.
-    auto split = std::upper_bound(transmissions_.begin(), transmissions_.end(), tick,
-        [](std::uint64_t current, const Transmission& transmission)
-        {
-            return current < transmission.dueTick;
-        });
-    for (auto item = transmissions_.begin(); item != split; ++item)
+    ReceiveDatagrams();
+
+    std::vector<ReceivedMessage> waiting;
+    for (ReceivedMessage& received : receivedMessages_)
     {
-        if (!LinkAvailable(item->sender, item->receiver))
+        if (received.dueTick > tick)
+        {
+            waiting.push_back(std::move(received));
+            continue;
+        }
+
+        if (!LinkAvailable(received.sender, received.receiver))
         {
             ++metrics_.droppedMessages;
-            RecordEvent(MeshEventKind::PacketDropped, item->sender, item->receiver,
-                "전송 중 직접 연결이 끊겼습니다.");
+            RecordEvent(MeshEventKind::PacketDropped, received.sender, received.receiver,
+                "UDP 전송 중 직접 연결이 끊겼습니다.");
             continue;
         }
         RecordEvent(MeshEventKind::MessageDelivered,
-            item->message.source, item->message.destination,
-            item->message.kind + " 메시지가 도착했습니다.");
-        deliveredMessages_.push_back({std::move(item->message), currentTick_});
+            received.message.source, received.message.destination,
+            received.message.kind + " 메시지가 도착했습니다.");
+        deliveredMessages_.push_back({std::move(received.message), currentTick_});
         ++metrics_.deliveredMessages;
     }
-    transmissions_.erase(transmissions_.begin(), split);
+    receivedMessages_ = std::move(waiting);
+
+    std::erase_if(pendingMessages_, [this](const auto& entry)
+    {
+        const PendingMessage& pending = entry.second;
+        if (currentTick_ <= pending.dueTick
+            || currentTick_ - pending.dueTick <= 4U)
+            return false;
+        ++metrics_.droppedMessages;
+        RecordEvent(MeshEventKind::PacketDropped, pending.sender, pending.receiver,
+            "UDP 데이터그램을 제한 시간 안에 받지 못했습니다.");
+        return true;
+    });
+}
+
+void VirtualMeshNetwork::ReceiveDatagrams()
+{
+    for (auto& [receiverId, socket] : sockets_)
+    {
+        while (std::optional<ReceivedDatagram> datagram = socket.Receive())
+        {
+            Json packet = Json::parse(datagram->payload, nullptr, false);
+            if (packet.is_discarded() || !packet.is_object()
+                || !packet.contains("id") || !packet["id"].is_number_unsigned()
+                || !packet.contains("source") || !packet["source"].is_number_unsigned()
+                || !packet.contains("destination")
+                || !packet["destination"].is_number_unsigned()
+                || !packet.contains("sourcePort")
+                || !packet["sourcePort"].is_number_unsigned()
+                || !packet.contains("destinationPort")
+                || !packet["destinationPort"].is_number_unsigned()
+                || !packet.contains("sequence") || !packet["sequence"].is_number_unsigned()
+                || !packet.contains("kind") || !packet["kind"].is_string()
+                || !packet.contains("payload") || !packet["payload"].is_string())
+            {
+                ++metrics_.droppedMessages;
+                RecordEvent(MeshEventKind::PacketDropped, 0U, receiverId,
+                    "형식이 맞지 않는 UDP 데이터그램을 버렸습니다.");
+                continue;
+            }
+
+            const std::uint64_t id = packet["id"].get<std::uint64_t>();
+            const auto pending = pendingMessages_.find(id);
+            const auto sender = nodes_.find(packet["source"].get<NetworkNodeId>());
+            const auto receiver = nodes_.find(receiverId);
+            if (pending == pendingMessages_.end() || sender == nodes_.end()
+                || receiver == nodes_.end()
+                || pending->second.sender != sender->first
+                || pending->second.receiver != receiverId
+                || packet["destination"].get<NetworkNodeId>() != receiverId
+                || packet["sourcePort"].get<SocketPort>() != datagram->sourcePort
+                || packet["destinationPort"].get<SocketPort>()
+                    != sockets_.at(receiverId).LocalPort())
+            {
+                ++metrics_.droppedMessages;
+                RecordEvent(MeshEventKind::PacketDropped,
+                    sender == nodes_.end() ? 0U : sender->first, receiverId,
+                    "보낸 드론이나 받은 드론이 맞지 않는 UDP 데이터그램을 버렸습니다.");
+                if (pending != pendingMessages_.end())
+                    pendingMessages_.erase(pending);
+                continue;
+            }
+
+            const std::uint64_t sourcePort = packet["sourcePort"].get<std::uint64_t>();
+            const std::uint64_t destinationPort = packet["destinationPort"].get<std::uint64_t>();
+            const std::uint64_t sequence = packet["sequence"].get<std::uint64_t>();
+            if (sourcePort != sockets_.at(sender->first).LocalPort()
+                || destinationPort > std::numeric_limits<SocketPort>::max()
+                || sequence > std::numeric_limits<std::uint32_t>::max())
+            {
+                ++metrics_.droppedMessages;
+                RecordEvent(MeshEventKind::PacketDropped, sender->first, receiverId,
+                    "UDP 데이터그램의 포트나 순번이 허용 범위를 벗어났습니다.");
+                pendingMessages_.erase(pending);
+                continue;
+            }
+
+            VirtualMeshMessage message{
+                .id = id,
+                .source = sender->first,
+                .destination = receiverId,
+                .sourcePort = static_cast<SocketPort>(sourcePort),
+                .destinationPort = static_cast<SocketPort>(destinationPort),
+                .sequence = static_cast<std::uint32_t>(sequence),
+                .kind = packet["kind"].get<std::string>(),
+                .payload = packet["payload"].get<std::string>()};
+            if (message.kind.empty())
+            {
+                ++metrics_.droppedMessages;
+                RecordEvent(MeshEventKind::PacketDropped, sender->first, receiverId,
+                    "종류가 비어 있는 UDP 데이터그램을 버렸습니다.");
+                pendingMessages_.erase(pending);
+                continue;
+            }
+
+            receivedMessages_.push_back({pending->second.dueTick,
+                sender->first, receiverId, std::move(message)});
+            pendingMessages_.erase(pending);
+        }
+    }
 }
 
 std::span<const DeliveredMeshMessage>
@@ -288,15 +439,6 @@ bool VirtualMeshNetwork::HasLineOfSight(
         }
     }
     return true;
-}
-
-void VirtualMeshNetwork::Transmit(NetworkNodeId sender, NetworkNodeId receiver,
-    VirtualMeshMessage message)
-{
-    const std::uint64_t maximumTick = std::numeric_limits<std::uint64_t>::max();
-    const std::uint64_t nextTick = currentTick_ == maximumTick
-        ? maximumTick : currentTick_ + 1U;
-    transmissions_.push_back({nextTick, sender, receiver, std::move(message)});
 }
 
 void VirtualMeshNetwork::RecordEvent(MeshEventKind kind,

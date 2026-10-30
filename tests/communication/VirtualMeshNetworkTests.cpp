@@ -18,15 +18,27 @@ VirtualMeshNetwork MakeNetwork()
 void AddTwoNodes(VirtualMeshNetwork& network)
 {
     const std::array nodes{
-        NetworkNodeSnapshot{1U, 1U, {0.0, 0.0, 10.0}},
-        NetworkNodeSnapshot{2U, 2U, {30.0, 0.0, 10.0}}};
+        NetworkNodeSnapshot{1U, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2U, {30.0, 0.0, 10.0}}};
     network.UpdateNodes(nodes, {});
 }
 
-VirtualEndpoint Endpoint(NetworkNodeId node)
+DroneEndpoint Endpoint(const VirtualMeshNetwork& network, NetworkNodeId node)
 {
-    return {node, static_cast<VirtualPort>(node)};
+    return {node, network.PortFor(node).value()};
 }
+}
+
+TEST(VirtualMeshNetworkTests, OpensOneSocketForEveryDrone)
+{
+    auto network = MakeNetwork();
+    AddTwoNodes(network);
+
+    const SocketPort firstPort = network.PortFor(1U).value();
+    const SocketPort secondPort = network.PortFor(2U).value();
+    EXPECT_NE(firstPort, 0U);
+    EXPECT_NE(secondPort, 0U);
+    EXPECT_NE(firstPort, secondPort);
 }
 
 TEST(VirtualMeshNetworkTests, DeliversMessageOnTheNextNetworkUpdate)
@@ -34,7 +46,8 @@ TEST(VirtualMeshNetworkTests, DeliversMessageOnTheNextNetworkUpdate)
     auto network = MakeNetwork();
     AddTwoNodes(network);
 
-    ASSERT_TRUE(network.Send(Endpoint(1U), Endpoint(2U), 7U, "state", "position"));
+    ASSERT_TRUE(network.Send(Endpoint(network, 1U), Endpoint(network, 2U),
+        7U, "state", "position"));
     network.Advance(1U);
     ASSERT_EQ(network.DeliveredMessages().size(), 1U);
     const auto& message = network.DeliveredMessages().front().message;
@@ -42,18 +55,21 @@ TEST(VirtualMeshNetworkTests, DeliversMessageOnTheNextNetworkUpdate)
     EXPECT_EQ(message.destination, 2U);
     EXPECT_EQ(message.sequence, 7U);
     EXPECT_EQ(message.kind, "state");
+    EXPECT_EQ(message.sourcePort, network.PortFor(1U).value());
+    EXPECT_EQ(message.destinationPort, network.PortFor(2U).value());
 }
 
 TEST(VirtualMeshNetworkTests, DoesNotForwardThroughAnIntermediateDrone)
 {
     auto network = MakeNetwork();
     const std::array nodes{
-        NetworkNodeSnapshot{1U, 1U, {0.0, 0.0, 10.0}},
-        NetworkNodeSnapshot{2U, 2U, {80.0, 0.0, 10.0}},
-        NetworkNodeSnapshot{3U, 3U, {160.0, 0.0, 10.0}}};
+        NetworkNodeSnapshot{1U, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2U, {80.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{3U, {160.0, 0.0, 10.0}}};
     network.UpdateNodes(nodes, {});
 
-    EXPECT_FALSE(network.Send(Endpoint(1U), Endpoint(3U), 1U, "state", "unreachable"));
+    EXPECT_FALSE(network.Send(Endpoint(network, 1U), Endpoint(network, 3U),
+        1U, "state", "unreachable"));
     EXPECT_TRUE(network.DeliveredMessages().empty());
 }
 
@@ -61,13 +77,16 @@ TEST(VirtualMeshNetworkTests, RadioOutageStopsQueuedAndNewMessages)
 {
     auto network = MakeNetwork();
     AddTwoNodes(network);
-    ASSERT_TRUE(network.Send(Endpoint(1U), Endpoint(2U), 1U, "state", "in flight"));
+    ASSERT_TRUE(network.Send(Endpoint(network, 1U), Endpoint(network, 2U),
+        1U, "state", "in flight"));
     network.SetNodeRadioEnabled(2U, false);
     network.Advance(1U);
     EXPECT_TRUE(network.DeliveredMessages().empty());
-    EXPECT_FALSE(network.Send(Endpoint(1U), Endpoint(2U), 2U, "state", "radio off"));
+    EXPECT_FALSE(network.Send(Endpoint(network, 1U), Endpoint(network, 2U),
+        2U, "state", "radio off"));
     network.SetNodeRadioEnabled(2U, true);
-    ASSERT_TRUE(network.Send(Endpoint(1U), Endpoint(2U), 3U, "state", "restored"));
+    ASSERT_TRUE(network.Send(Endpoint(network, 1U), Endpoint(network, 2U),
+        3U, "state", "restored"));
     network.Advance(2U);
     EXPECT_EQ(network.DeliveredMessages().size(), 1U);
     EXPECT_EQ(network.DeliveredMessages().front().message.payload, "restored");
@@ -77,26 +96,29 @@ TEST(VirtualMeshNetworkTests, BuildingBlocksDirectConnection)
 {
     auto network = MakeNetwork();
     const std::array nodes{
-        NetworkNodeSnapshot{1U, 1U, {0.0, 0.0, 10.0}},
-        NetworkNodeSnapshot{2U, 2U, {60.0, 0.0, 10.0}}};
+        NetworkNodeSnapshot{1U, {0.0, 0.0, 10.0}},
+        NetworkNodeSnapshot{2U, {60.0, 0.0, 10.0}}};
     const std::array obstacles{
         RadioObstacle{{{-10.0, -10.0}, {10.0, -10.0},
             {10.0, 10.0}, {-10.0, 10.0}}, 0.0, 20.0}};
     network.UpdateNodes(nodes, obstacles);
-    EXPECT_FALSE(network.Send(Endpoint(1U), Endpoint(2U), 1U, "state", "blocked by building"));
+    EXPECT_FALSE(network.Send(Endpoint(network, 1U), Endpoint(network, 2U),
+        1U, "state", "blocked by building"));
     EXPECT_TRUE(network.CanExchangeAtPositions(1U, 2U,
         {0.0, 0.0, 30.0}, {60.0, 0.0, 30.0}));
     EXPECT_FALSE(network.CanExchangeAtPositions(1U, 3U,
         {0.0, 0.0, 30.0}, {60.0, 0.0, 30.0}));
 }
 
-TEST(VirtualMeshNetworkTests, RejectsUnknownVirtualPorts)
+TEST(VirtualMeshNetworkTests, RejectsUnregisteredSocketPorts)
 {
     auto network = MakeNetwork();
     AddTwoNodes(network);
 
-    EXPECT_FALSE(network.Send({1U, 99U}, Endpoint(2U), 1U, "state", "wrong port"));
-    EXPECT_FALSE(network.Send(Endpoint(1U), {2U, 99U}, 2U, "state", "wrong port"));
+    EXPECT_FALSE(network.Send({1U, 99U}, Endpoint(network, 2U),
+        1U, "state", "wrong port"));
+    EXPECT_FALSE(network.Send(Endpoint(network, 1U), {2U, 99U},
+        2U, "state", "wrong port"));
     EXPECT_EQ(network.Metrics().droppedMessages, 2U);
 }
 

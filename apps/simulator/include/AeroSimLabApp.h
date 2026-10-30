@@ -167,7 +167,7 @@ private:
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
-    [[nodiscard]] communication::VirtualEndpoint EndpointFor(
+    [[nodiscard]] communication::DroneEndpoint EndpointFor(
         aerosimlab::simulation::DroneId droneId) const;
     void InitializeFleetLeadership();
     void AdvanceFleetNetwork();
@@ -295,9 +295,9 @@ private:
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     aerosimlab::simulation::DroneId observerDroneId_ = 0;
-    /** @brief 각 드론에 배정한 가상 통신 포트다. 운영체제 UDP 포트와는 무관하다. */
-    std::map<aerosimlab::simulation::DroneId, communication::VirtualPort>
-        virtualPorts_;
+    /** @brief 각 드론 소켓에 운영체제가 배정한 UDP 포트다. */
+    std::map<aerosimlab::simulation::DroneId, communication::SocketPort>
+        droneSocketPorts_;
     struct FleetReconnaissanceState
     {
         std::size_t targetIndex = 0;

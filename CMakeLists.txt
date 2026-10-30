@@ -86,7 +86,24 @@ add_library(aerosimlab_communication STATIC
   modules/communication/src/VirtualMeshNetwork.cpp
 )
 target_include_directories(aerosimlab_communication PUBLIC modules/communication/include)
-target_link_libraries(aerosimlab_communication PUBLIC aerosimlab_simulation_core)
+target_link_libraries(aerosimlab_communication
+  PUBLIC aerosimlab_simulation_core
+  PRIVATE nlohmann_json::nlohmann_json
+)
+if(EMSCRIPTEN)
+  target_sources(aerosimlab_communication PRIVATE
+    modules/communication/src/DroneSocketInProcess.cpp
+  )
+elseif(WIN32)
+  target_sources(aerosimlab_communication PRIVATE
+    modules/communication/src/DroneSocketWindows.cpp
+  )
+  target_link_libraries(aerosimlab_communication PUBLIC ws2_32)
+else()
+  target_sources(aerosimlab_communication PRIVATE
+    modules/communication/src/DroneSocketPosix.cpp
+  )
+endif()
 
 add_library(aerosimlab_manual_control STATIC
   modules/manual_control/src/GamepadCommandMapper.cpp

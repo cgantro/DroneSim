@@ -238,7 +238,7 @@ void DrawFlightStatusPanel(
         if (formationNetwork != nullptr)
         {
             ImGui::Separator();
-            ImGui::Text("가상 통신: 드론 간 직접 연결");
+            ImGui::Text("드론 간 UDP 통신: 직접 연결");
             const auto droneIds = simulation.DroneIds();
             if (!droneIds.empty())
             {
@@ -262,7 +262,7 @@ void DrawFlightStatusPanel(
                 const bool linked = isLeader
                     || formationNetwork->HasDirectLink(droneId, leaderId);
                 const auto port = formationNetwork->PortFor(droneId);
-                ImGui::Text("가상 포트: %u · 편대 연결: %s",
+                ImGui::Text("소켓 포트: %u · 편대 연결: %s",
                     port ? static_cast<unsigned int>(*port) : 0U,
                     isLeader ? "리더" : (radioEnabled && linked ? "연결됨" : "끊김"));
                 if (radioEnabled)

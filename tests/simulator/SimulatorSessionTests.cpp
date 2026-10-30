@@ -154,19 +154,20 @@ public:
             app.observerCamera_->GetPosition(), app.observerCamera_->GetTarget()), 5.0F);
     }
 
-    static void VerifyEveryDroneHasAVirtualPort()
+    static void VerifyEveryDroneHasAnUdpSocket()
     {
         AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
-        ASSERT_EQ(app.virtualPorts_.size(), app.simulation_.DroneCount());
+        ASSERT_EQ(app.droneSocketPorts_.size(), app.simulation_.DroneCount());
 
-        std::vector<communication::VirtualPort> ports;
+        std::vector<communication::SocketPort> ports;
         for (const auto droneId : app.simulation_.DroneIds())
         {
             const auto port = app.formationNetwork_->PortFor(droneId);
             ASSERT_TRUE(port.has_value());
-            EXPECT_EQ(*port, app.virtualPorts_.at(droneId));
+            EXPECT_NE(*port, 0U);
+            EXPECT_EQ(*port, app.droneSocketPorts_.at(droneId));
             ports.push_back(*port);
         }
         std::sort(ports.begin(), ports.end());
@@ -546,7 +547,7 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
 TEST(SimulatorSessionTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyEveryDroneHasAVirtualPort());
+    simulator::AeroSimLabAppTestAccess::VerifyEveryDroneHasAnUdpSocket());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyObserverCameraKeepsAUsableFollowDistance());
     EXPECT_NO_FATAL_FAILURE(

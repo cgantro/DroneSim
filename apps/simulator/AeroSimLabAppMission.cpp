@@ -1063,7 +1063,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     InitializeFleetLeadership();
 
     nextTelemetrySequence_ = 1U;
-    virtualPorts_.clear();
+    droneSocketPorts_.clear();
     lastTelemetrySentAtTick_.clear();
     peerTelemetryAtLeader_.clear();
 
@@ -1090,22 +1090,21 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     std::vector<communication::NetworkNodeSnapshot> nodes;
     const auto droneIds = simulation_.DroneIds();
     nodes.reserve(droneIds.size());
-    for (std::size_t index = 0; index < droneIds.size(); ++index)
+    for (const auto droneId : droneIds)
     {
-        const auto droneId = droneIds[index];
-        const auto port = static_cast<communication::VirtualPort>(index + 1U);
-        virtualPorts_.emplace(droneId, port);
-        nodes.push_back({droneId, port, simulation_.State(droneId).positionMeters});
+        nodes.push_back({droneId, simulation_.State(droneId).positionMeters});
     }
     formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
+    for (const auto droneId : droneIds)
+        droneSocketPorts_.emplace(droneId, *formationNetwork_->PortFor(droneId));
     formationTransit_.lastNetworkNodeUpdateTick = simulation_.TickCount();
     return !nodes.empty();
 }
 
-communication::VirtualEndpoint AeroSimLabApp::EndpointFor(
+communication::DroneEndpoint AeroSimLabApp::EndpointFor(
     aerosimlab::simulation::DroneId droneId) const
 {
-    return {droneId, virtualPorts_.at(droneId)};
+    return {droneId, droneSocketPorts_.at(droneId)};
 }
 
 void AeroSimLabApp::InitializeFleetLeadership()
@@ -1260,7 +1259,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         for (const DroneId droneId : allDroneIds)
         {
             const auto& drone = simulation_.State(droneId);
-            nodes.push_back({droneId, virtualPorts_.at(droneId), drone.positionMeters});
+            nodes.push_back({droneId, drone.positionMeters});
         }
         formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
         formationTransit_.lastNetworkNodeUpdateTick = currentTick;
