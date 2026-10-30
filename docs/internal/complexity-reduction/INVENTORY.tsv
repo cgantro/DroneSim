@@ -23,29 +23,32 @@ apps/simulator/AeroSimLabAppGamepad.cpp	6642	188	app	REVIEWED	KEEP	d6515b6e	no	A
 apps/simulator/AeroSimLabAppInput.cpp	30699	863	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
 apps/simulator/AeroSimLabAppLifecycle.cpp	12653	337	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
 apps/simulator/AeroSimLabAppMission.cpp	92771	2240	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
-apps/simulator/BenchmarkProcessMemory.h	924	36	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/BuildRevision.cpp	199	11	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/BuildRevision.h	186	9	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/BuildRevision.cpp	199	11	app	REVIEWED	REMOVE	d6515b6e	yes	AUDIT_APP.md 파일별 항목	벤치마크 리비전 필드와 생성 빌드 규칙 제거
+apps/simulator/include/BuildRevision.h	186	9	app	REVIEWED	REMOVE	d6515b6e	yes	AUDIT_APP.md 파일별 항목	사용처 제거 후 삭제
 apps/simulator/CooperativeMissionBenchmark.cpp	24232	563	app	REMOVED	REMOVE	d6515b6e	no	2026-10-29 고정 4대 목표에 불필요한 확장 임무 벤치마크 제거	Release 전체 빌드 및 CTest 31/31 통과
 apps/simulator/DroneScalingBenchmark.cpp	20963	480	app	REMOVED	REMOVE	d6515b6e	no	2026-10-29 1~1024대 확장 벤치마크 제거	Release 전체 빌드 및 CTest 31/31 통과
 apps/simulator/EoVideoRecorder.cpp	23461	659	app	REVIEWED	SIMPLIFY	7bfce7e7	no	AUDIT_APP.md 및 녹화 Stop 경쟁 수정	Release 빌드와 CoreScenarios 통과; sanitizer 미실시
 apps/simulator/EoVideoRecorder.h	3426	90	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/ExecutableDirectory.h	1113	36	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+apps/simulator/include/ExecutableDirectory.h	1113	36	app	REVIEWED	REMOVE	d6515b6e	yes	AUDIT_APP.md 파일별 항목	실행 파일 위치 검색을 없애고 실행 작업 폴더 기준 상대 경로 사용
 apps/simulator/FaultScenarioTimeline.cpp	20347	583	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도; 감사 후 장애 시간표 제거로 삭제됨
 apps/simulator/FaultScenarioTimeline.h	4093	101	app	REVIEWED	REMOVE	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도; 감사 후 장애 시간표 제거로 삭제됨
 apps/simulator/FleetDroneSpawn.cpp	1096	37	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
 apps/simulator/FleetDroneSpawn.h	644	24	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/FleetMissionProgress.cpp	5456	119	app	REVIEWED	KEEP	535aebeb	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 관련 CTest 7개 통과; 직접 통신 미검증
-apps/simulator/FleetMissionProgress.h	2346	92	app	REVIEWED	KEEP	b8a3bb7f	no	AUDIT_APP.md 파일별 항목	Release 빌드 및 관련 CTest 3개 통과; 직접 통신 별도 검증 필요
-apps/simulator/FleetTelemetry.h	838	33	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-modules/performance/src/SimulationBenchmark.cpp			module	REVIEWED	KEEP	33af145b	no	AUDIT_APP.md 파일별 항목	성능 측정 모듈로 이동; Release 전체 빌드 및 CTest 35개 통과
-modules/performance/include/performance/SimulationBenchmark.h			module	REVIEWED	KEEP	33af145b	no	AUDIT_APP.md 파일별 항목	성능 측정 모듈로 이동; Release 전체 빌드 및 CTest 35개 통과
-modules/performance/src/BenchmarkSession.cpp			module	REVIEWED	KEEP	33af145b	no	AUDIT_APP.md 파일별 항목	성능 측정 표본과 보고서 저장 책임을 소유
+modules/mission/include/FleetMission.h	2393	76	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 상태·텔레메트리·장면 모듈 이동	정찰 경로·편대 이동·전체 임무의 상태 자료를 앱 헤더에서 이동
+modules/mission/src/FleetMissionProgress.cpp	5241	113	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 상태·텔레메트리·장면 모듈 이동	임무 단계 표시와 완료·실패 판정
+modules/mission/include/FleetMissionProgress.h	2196	75	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 상태·텔레메트리·장면 모듈 이동	임무 상태와 진행 판정 자료 계약
+modules/mission/include/FleetTelemetry.h	2051	55	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 상태·텔레메트리·장면 모듈 이동	텔레메트리 인코딩과 최근 수신 상태 저장 계약
+modules/mission/src/FleetTelemetry.cpp	2899	81	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 상태·텔레메트리·장면 모듈 이동	상태 변환, 순서 검사, 마지막 수신값과 최신성 관리
+modules/performance/src/SimulationBenchmark.cpp	5896	124	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 파일별 항목	성능 측정 표본과 요약 보고서를 소유
+modules/performance/include/SimulationBenchmark.h	2256	58	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 파일별 항목	성능 측정 결과와 보고서 생성 계약
+modules/performance/src/BenchmarkSession.cpp	4534	102	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 파일별 항목	측정 세션과 보고서 저장 책임을 소유
+modules/performance/include/BenchmarkSession.h	2373	68	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 파일별 항목	화면·Tick 측정 세션 계약
+modules/performance/include/BenchmarkProcessMemory.h	965	35	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 파일별 항목	운영체제별 프로세스 메모리 조회 계약
 modules/manual_control/src/GamepadController.cpp			module	REVIEWED	KEEP	33af145b	no	AUDIT_APP.md 파일별 항목	게임패드 입력 구현을 수동 조종 모듈로 이동
 apps/simulator/SimulatorHud.cpp	55330	1203	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
 apps/simulator/SimulatorHud.h	5387	143	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
-apps/simulator/TrainingRangeScene.cpp	6227	149	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/TrainingRangeScene.h	1734	59	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/scene/src/TrainingRangeScene.cpp	10837	253	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 상태·텔레메트리·장면 모듈 이동	훈련장 모델·바닥·충돌 장애물·정찰 지점 준비
+modules/scene/include/TrainingRangeScene.h	1988	51	module	REVIEWED	KEEP	d6515b6e	yes	AUDIT_APP.md 상태·텔레메트리·장면 모듈 이동	장면 준비 및 렌더링 인터페이스
 apps/simulator/main.cpp	7185	214	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
 apps/simulator/web/web_shell_single_thread.html	65648	1335	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
 assets/models/drones/x500/LICENSE	1532	29	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
@@ -80,7 +83,7 @@ assets/models/environment/nature/tree_pineTallA_detailed.glb	10708		infra	METADA
 assets/models/source/x500-v2/README.md	595	8	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
 assets/shaders/Scene.glsl	7717	196	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
 cmake/Dependencies.cmake	3708	109	infra	REVIEWED	KEEP	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
-cmake/GenerateBuildRevision.cmake	1201	40	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
+cmake/GenerateBuildRevision.cmake	1201	40	infra	REVIEWED	REMOVE	d6515b6e	yes	AUDIT_INFRA.md 파일별 항목	자동 리비전 표시 중단에 따라 생성 규칙 삭제
 docs/public/images/simulator-overview.jpg	73017		infra	METADATA_ONLY	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
 docs/public/기술구조.md	8623	100	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
 docs/public/문제해결.md	5210	45	infra	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_INFRA.md 파일별 항목	정적 감사, 실행은 별도
