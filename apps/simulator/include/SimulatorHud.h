@@ -1,6 +1,5 @@
 #pragma once
 
-#include "communication/Protocol.h"
 #include "communication/VirtualMeshNetwork.h"
 #include "SimulationBenchmark.h"
 #include "simulation_core/SimulationCore.h"
@@ -33,20 +32,6 @@ struct HudRenderTimings
     std::size_t completedGpuFrameCount = 0;
 };
 
-struct GroundControlDronePosition
-{
-    simulation::DroneId droneId = 0U;
-    glm::dvec3 lastReceivedPositionMeters{0.0};
-    std::uint64_t ageTicks = 0U;
-    bool hasReport = false;
-};
-
-/** @brief 지상통제소가 마지막으로 받은 각 드론의 위치다. */
-struct GroundControlStatus
-{
-    std::vector<GroundControlDronePosition> groundControlPositions;
-};
-
 /** @brief 비행 상태와 편대 요약을 3D 화면 위에 표시한다. */
 class SimulatorHud
 {
@@ -59,7 +44,7 @@ public:
 
     void Render(const simulation::SimulationCore& simulation,
         simulation::DroneId& observerDroneId,
-        bool gamepadConnected, bool groundControlConnected,
+        bool gamepadConnected,
         bool fleetReturnCanStart,
         const std::function<void()>& startFleetReturn,
         const std::string& completeFleetMissionStatus,
@@ -68,7 +53,6 @@ public:
         const communication::VirtualMeshNetwork* formationNetwork,
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
-        const GroundControlStatus& groundControlStatus,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
         HudRenderTimings* timings = nullptr);

@@ -28,7 +28,7 @@
       #runtime-badge[data-state="error"] { color: #ffc0b8; border-color: #a94e48; }
       #sim-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); min-height: 0; gap: 10px; }
       #right-rail { display: grid; grid-template-rows: minmax(0, .8fr) minmax(0, 1.2fr); min-height: 0; gap: 10px; }
-      .view-panel, #web-gcs { min-width: 0; min-height: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+      .view-panel, #sim-control { min-width: 0; min-height: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
       #scene-panel { display: grid; grid-template-rows: 40px minmax(0, 1fr); }
       #scene-panel canvas { display: block; width: 150%; max-width: none; height: 100%; outline: none; }
       #camera-panel { display: grid; width: auto; max-width: 100%; height: 100%; aspect-ratio: 4 / 3; justify-self: end; align-self: stretch; grid-template-rows: 40px minmax(0, 1fr); }
@@ -40,41 +40,41 @@
       #startup-status[hidden] { display: none; }
       #startup-message { max-width: 560px; }
       #flight-status-panel { display: grid; min-height: 0; grid-template-rows: 40px minmax(0, 1fr); }
-      #web-gcs-status { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 8px; overflow: auto; }
+      #sim-control-status { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 8px; overflow: auto; }
       .status-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .status-heading strong { font-size: 15px; }
-      #web-gcs-clock { color: var(--muted); font: 11px/1.4 ui-monospace, monospace; white-space: nowrap; }
+      #sim-control-clock { color: var(--muted); font: 11px/1.4 ui-monospace, monospace; white-space: nowrap; }
       .telemetry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
       .telemetry-card { display: grid; gap: 2px; min-width: 0; padding: 5px 7px; background: var(--panel-raised); border: 1px solid #243641; border-radius: 7px; }
       .telemetry-card span { color: var(--muted); font-size: 11px; }
       .telemetry-card strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-      #web-gcs-mission-card { grid-column: 1 / -1; }
-      #web-gcs-capture { margin: 0; color: #d3e0e5; font-size: 11px; }
-      #web-gcs { display: grid; grid-template-columns: minmax(230px, .75fr) minmax(0, 2fr); align-items: stretch; gap: 12px; padding: 11px; font: 13px/1.4 system-ui, sans-serif; }
+      #sim-control-mission-card { grid-column: 1 / -1; }
+      #sim-control-capture { margin: 0; color: #d3e0e5; font-size: 11px; }
+      #sim-control { display: grid; grid-template-columns: minmax(230px, .75fr) minmax(0, 2fr); align-items: stretch; gap: 12px; padding: 11px; font: 13px/1.4 system-ui, sans-serif; }
       .control-group { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 10px; background: var(--panel-raised); border: 1px solid #243641; border-radius: 8px; }
       .control-group h3 { margin: 0; color: var(--text); font-size: 13px; font-weight: 650; }
-      #web-gcs-controls { display: grid; grid-template-columns: minmax(190px, .9fr) minmax(0, 1.5fr); align-content: stretch; gap: 10px; min-height: 0; }
+      #sim-control-controls { display: grid; grid-template-columns: minmax(190px, .9fr) minmax(0, 1.5fr); align-content: stretch; gap: 10px; min-height: 0; }
       .control-group { align-content: center; }
       .control-group h3 { color: #b8c8cf; }
       #mission-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
       #flight-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-      #web-gcs button { min-width: 0; min-height: 36px; padding: 6px 8px; color: var(--text); background: #263741; border: 1px solid #3a505c; border-radius: 6px; font: inherit; font-size: 12px; white-space: nowrap; touch-action: none; transition: background-color .12s ease, border-color .12s ease; }
-      #web-gcs button:hover:not(:disabled) { background: #36505d; border-color: #5b7a87; }
-      #web-gcs button:focus-visible, #web-gcs select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-      #web-gcs button:disabled { opacity: .48; }
-      #web-gcs [data-command="0"] { background: #176b50; border-color: #2f9471; }
-      #web-gcs [data-command="2"], #web-gcs [data-stop-fleet] { background: #713b3b; border-color: #99504a; }
-      #web-gcs [data-start-fleet] { background: #245d79; border-color: #3980a2; }
+      #sim-control button { min-width: 0; min-height: 36px; padding: 6px 8px; color: var(--text); background: #263741; border: 1px solid #3a505c; border-radius: 6px; font: inherit; font-size: 12px; white-space: nowrap; touch-action: none; transition: background-color .12s ease, border-color .12s ease; }
+      #sim-control button:hover:not(:disabled) { background: #36505d; border-color: #5b7a87; }
+      #sim-control button:focus-visible, #sim-control select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      #sim-control button:disabled { opacity: .48; }
+      #sim-control [data-command="0"] { background: #176b50; border-color: #2f9471; }
+      #sim-control [data-command="2"], #sim-control [data-stop-fleet] { background: #713b3b; border-color: #99504a; }
+      #sim-control [data-start-fleet] { background: #245d79; border-color: #3980a2; }
       @media (min-width: 1001px) {
         .telemetry-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        #web-gcs-mission-card { grid-column: span 2; }
+        #sim-control-mission-card { grid-column: span 2; }
       }
       @media (max-width: 1000px) {
         body { grid-template-rows: 42px minmax(0, 1fr) minmax(240px, 32vh); gap: 8px; padding: 8px; }
         #sim-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 8px; }
         #right-rail { gap: 8px; }
         #right-rail { grid-template-rows: repeat(2, minmax(0, 1fr)); }
-        #web-gcs { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+        #sim-control { grid-template-columns: minmax(0, 1fr); overflow: auto; }
       }
       @media (max-width: 650px) {
         body { grid-template-rows: 40px minmax(0, 1fr) minmax(260px, 42vh); gap: 7px; padding: 7px; }
@@ -86,8 +86,8 @@
         #camera-panel .panel-title { writing-mode: vertical-rl; justify-content: center; padding: 6px; }
         #web-eo-live { grid-template-rows: minmax(0, 1fr); }
         #web-eo-live-status { display: none; }
-        #web-gcs { grid-template-columns: minmax(0, 1fr); gap: 7px; }
-        #web-gcs-controls { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+        #sim-control { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+        #sim-control-controls { grid-template-columns: minmax(0, 1fr); gap: 7px; }
         #mission-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         #flight-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       }
@@ -98,7 +98,7 @@
       <div id="startup-message">시뮬레이터를 불러오고 있습니다.</div>
     </div>
     <header id="app-header">
-      <div id="app-brand"><strong>DRONESIM</strong><span>영상 정찰 · 지상통제</span></div>
+      <div id="app-brand"><strong>DRONESIM</strong><span>영상 정찰 · 비행 조작</span></div>
       <span id="runtime-badge" data-state="loading" title="네이티브와 웹은 Jolt 물리 엔진을 사용합니다.">시뮬레이터 준비 중</span>
     </header>
     <main id="sim-workspace">
@@ -109,19 +109,19 @@
       <aside id="right-rail" aria-label="비행 정보와 카메라">
         <section id="flight-status-panel" class="view-panel" aria-label="비행 상태">
           <div class="panel-title">비행 상태</div>
-          <div id="web-gcs-status" aria-live="polite">
+          <div id="sim-control-status" aria-live="polite">
             <div class="status-heading">
-              <strong id="web-gcs-mode">상태 대기 중</strong>
-              <span id="web-gcs-clock">T+0.0 s</span>
+              <strong id="sim-control-mode">상태 대기 중</strong>
+              <span id="sim-control-clock">T+0.0 s</span>
             </div>
             <div class="telemetry-grid">
-              <div class="telemetry-card"><span>위치 · 동 / 북</span><strong id="web-gcs-position">0.0 / 0.0 m</strong></div>
-              <div class="telemetry-card"><span>지면 위 고도</span><strong id="web-gcs-altitude">0.0 m</strong></div>
-              <div class="telemetry-card"><span>이동 속도</span><strong id="web-gcs-speed">0.0 m/s</strong></div>
-              <div class="telemetry-card"><span>EO 카메라</span><strong id="web-gcs-camera">준비 중</strong></div>
-              <div class="telemetry-card" id="web-gcs-mission-card"><span>편대 임무</span><strong id="web-gcs-mission">대기 중</strong></div>
+              <div class="telemetry-card"><span>위치 · 동 / 북</span><strong id="sim-control-position">0.0 / 0.0 m</strong></div>
+              <div class="telemetry-card"><span>지면 위 고도</span><strong id="sim-control-altitude">0.0 m</strong></div>
+              <div class="telemetry-card"><span>이동 속도</span><strong id="sim-control-speed">0.0 m/s</strong></div>
+              <div class="telemetry-card"><span>EO 카메라</span><strong id="sim-control-camera">준비 중</strong></div>
+              <div class="telemetry-card" id="sim-control-mission-card"><span>편대 임무</span><strong id="sim-control-mission">대기 중</strong></div>
             </div>
-            <p id="web-gcs-capture">영상은 지상통제소에서 확인하고, 파손 여부는 사람이 판단합니다.</p>
+            <p id="sim-control-capture">영상은 화면에서 확인하고, 시설물 상태는 사람이 판단합니다.</p>
           </div>
         </section>
         <section id="camera-panel" class="view-panel" aria-label="드론 카메라 영상">
@@ -133,8 +133,8 @@
         </section>
       </aside>
     </main>
-    <section id="web-gcs" aria-label="웹 지상통제">
-      <div id="web-gcs-controls">
+    <section id="sim-control" aria-label="비행 조작과 상태">
+      <div id="sim-control-controls">
         <section class="control-group" aria-label="편대 임무">
           <h3>네 대 편대 임무</h3>
           <div id="mission-actions">
@@ -205,7 +205,7 @@
         var badge = document.getElementById("runtime-badge");
         badge.textContent = "Jolt 물리 · 실행 중";
         badge.dataset.state = "ready";
-        document.querySelectorAll("#web-gcs button").forEach(function (button) {
+        document.querySelectorAll("#sim-control button").forEach(function (button) {
           button.disabled = false;
         });
         startEoViewportCopy();
@@ -251,21 +251,21 @@
         }
       }
 
-      window.updateDroneSimGroundControl = function (mode, x, y, z, speed, cameraActive,
+      window.updateDroneSimStatus = function (mode, x, y, z, speed, cameraActive,
           missionStatus, simulationTick, missionActive, missionCanStart, grounded) {
-        document.getElementById("web-gcs-mode").textContent = mode;
-        document.getElementById("web-gcs-clock").textContent = "T+"
+        document.getElementById("sim-control-mode").textContent = mode;
+        document.getElementById("sim-control-clock").textContent = "T+"
           + (Number(simulationTick) / 60).toFixed(1) + " s · "
           + simulationTick + " Tick";
-        document.getElementById("web-gcs-position").textContent = x.toFixed(1)
+        document.getElementById("sim-control-position").textContent = x.toFixed(1)
           + " / " + y.toFixed(1) + " m";
-        document.getElementById("web-gcs-altitude").textContent = z.toFixed(1) + " m";
-        document.getElementById("web-gcs-speed").textContent = speed.toFixed(1) + " m/s";
-        document.getElementById("web-gcs-camera").textContent = cameraActive ? "켜짐" : "꺼짐";
-        document.getElementById("web-gcs-mission").textContent = missionStatus;
+        document.getElementById("sim-control-altitude").textContent = z.toFixed(1) + " m";
+        document.getElementById("sim-control-speed").textContent = speed.toFixed(1) + " m/s";
+        document.getElementById("sim-control-camera").textContent = cameraActive ? "켜짐" : "꺼짐";
+        document.getElementById("sim-control-mission").textContent = missionStatus;
 
         var canStart = Boolean(missionCanStart) && Boolean(grounded);
-        document.querySelectorAll("#web-gcs [data-command], #web-gcs [data-axis]")
+        document.querySelectorAll("#sim-control [data-command], #sim-control [data-axis]")
           .forEach(function (button) { button.disabled = missionActive; });
         document.querySelector("[data-start-fleet]").disabled = !canStart;
         document.querySelector("[data-stop-fleet]").disabled = !missionActive;
@@ -283,24 +283,24 @@
           sendAxes();
         }
 
-        document.querySelectorAll("#web-gcs [data-command]").forEach(function (button) {
+        document.querySelectorAll("#sim-control [data-command]").forEach(function (button) {
           button.addEventListener("click", function () {
             if (typeof Module._DroneSimWebFlightCommand === "function")
               Module._DroneSimWebFlightCommand(Number(button.dataset.command));
           });
         });
-        document.querySelector("#web-gcs [data-start-fleet]").addEventListener(
+        document.querySelector("#sim-control [data-start-fleet]").addEventListener(
             "click", function () {
           releaseAll();
           if (typeof Module._DroneSimWebStartFleetMission === "function")
             Module._DroneSimWebStartFleetMission();
         });
-        document.querySelector("#web-gcs [data-stop-fleet]").addEventListener(
+        document.querySelector("#sim-control [data-stop-fleet]").addEventListener(
             "click", function () {
           if (typeof Module._DroneSimWebStopFleetMission === "function")
             Module._DroneSimWebStopFleetMission();
         });
-        document.querySelectorAll("#web-gcs [data-axis]").forEach(function (button) {
+        document.querySelectorAll("#sim-control [data-axis]").forEach(function (button) {
           var parts = button.dataset.axis.split(":");
           var axis = parts[0];
           var value = Number(parts[1]);

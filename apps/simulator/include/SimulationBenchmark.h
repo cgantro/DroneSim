@@ -25,7 +25,6 @@ struct ViewerBenchmarkMeasurements
         std::uint64_t frameIndex = 0;
         double applicationMicroseconds = 0.0;
         double eventPollingMicroseconds = 0.0;
-        double groundControlPollingMicroseconds = 0.0;
         double gamepadPollingMicroseconds = 0.0;
         double simulationUpdateMicroseconds = 0.0;
         double renderMicroseconds = 0.0;

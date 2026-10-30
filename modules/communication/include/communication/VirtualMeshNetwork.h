@@ -14,11 +14,20 @@
 namespace aerosimlab::communication
 {
 using NetworkNodeId = std::uint64_t;
+using VirtualPort = std::uint16_t;
 
-/** @brief 한 드론 또는 지상통제소의 현재 통신 상태다. */
+/** @brief 시뮬레이션 안에서 드론 통신 대상을 구분하는 주소다. */
+struct VirtualEndpoint
+{
+    NetworkNodeId node = 0;
+    VirtualPort port = 0;
+};
+
+/** @brief 한 드론의 현재 통신 상태와 가상 포트다. */
 struct NetworkNodeSnapshot
 {
     NetworkNodeId id = 0;
+    VirtualPort port = 0;
     glm::dvec3 positionMeters{0.0};
 };
 
@@ -41,6 +50,8 @@ struct VirtualMeshMessage
     std::uint64_t id = 0;
     NetworkNodeId source = 0;
     NetworkNodeId destination = 0;
+    VirtualPort sourcePort = 0;
+    VirtualPort destinationPort = 0;
     std::uint32_t sequence = 0;
     std::string kind;
     std::string payload;
@@ -93,10 +104,12 @@ public:
     /** @brief 한 노드의 송수신을 끊거나 복구한다. */
     void SetNodeRadioEnabled(NetworkNodeId node, bool enabled);
     [[nodiscard]] bool IsNodeRadioEnabled(NetworkNodeId node) const noexcept;
+    [[nodiscard]] std::optional<VirtualPort> PortFor(
+        NetworkNodeId node) const noexcept;
 
     /** @brief 직접 연결이 가능한 메시지를 보내고 메시지 ID를 돌려준다. */
     [[nodiscard]] std::optional<std::uint64_t> Send(
-        NetworkNodeId source, NetworkNodeId destination,
+        VirtualEndpoint source, VirtualEndpoint destination,
         std::uint32_t sequence, std::string kind, std::string payload);
 
     /** @brief 모의 시간을 진행하고 도착한 메시지를 처리한다. */

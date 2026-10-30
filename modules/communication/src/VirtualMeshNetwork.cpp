@@ -69,6 +69,7 @@ void VirtualMeshNetwork::UpdateNodes(
     std::span<const RadioObstacle> obstacles)
 {
     std::map<NetworkNodeId, NetworkNodeSnapshot> updated;
+    std::set<VirtualPort> updatedPorts;
     for (const NetworkNodeSnapshot& node : nodes)
     {
         if (!std::isfinite(node.positionMeters.x)
@@ -77,6 +78,10 @@ void VirtualMeshNetwork::UpdateNodes(
             throw std::invalid_argument("통신 노드 위치는 유한한 좌표여야 합니다.");
         if (!updated.emplace(node.id, node).second)
             throw std::invalid_argument("통신 노드 ID가 중복되었습니다.");
+        if (node.port == 0U)
+            throw std::invalid_argument("가상 통신 포트는 1 이상이어야 합니다.");
+        if (!updatedPorts.insert(node.port).second)
+            throw std::invalid_argument("가상 통신 포트가 중복되었습니다.");
     }
     nodes_ = std::move(updated);
     obstacles_.assign(obstacles.begin(), obstacles.end());
@@ -104,28 +109,44 @@ bool VirtualMeshNetwork::IsNodeRadioEnabled(NetworkNodeId node) const noexcept
     return nodes_.contains(node) && !radioDisabledNodes_.contains(node);
 }
 
+std::optional<VirtualPort> VirtualMeshNetwork::PortFor(
+    NetworkNodeId node) const noexcept
+{
+    const auto found = nodes_.find(node);
+    if (found == nodes_.end())
+        return std::nullopt;
+    return found->second.port;
+}
+
 std::optional<std::uint64_t> VirtualMeshNetwork::Send(
-    NetworkNodeId source, NetworkNodeId destination,
+    VirtualEndpoint source, VirtualEndpoint destination,
     std::uint32_t sequence, std::string kind, std::string payload)
 {
-    if (source == destination || kind.empty()
-        || !LinkAvailable(source, destination))
+    const auto sourceNode = nodes_.find(source.node);
+    const auto destinationNode = nodes_.find(destination.node);
+    if (source.node == destination.node || kind.empty()
+        || sourceNode == nodes_.end() || destinationNode == nodes_.end()
+        || sourceNode->second.port != source.port
+        || destinationNode->second.port != destination.port
+        || !LinkAvailable(source.node, destination.node))
     {
         ++metrics_.droppedMessages;
-        RecordEvent(MeshEventKind::PacketDropped, source, destination,
-            "직접 연결이 없어 메시지를 보내지 못했습니다.");
+        RecordEvent(MeshEventKind::PacketDropped, source.node, destination.node,
+            "가상 포트가 없거나 직접 연결이 없어 메시지를 보내지 못했습니다.");
         return std::nullopt;
     }
 
     VirtualMeshMessage message{
         .id = nextMessageId_++,
-        .source = source,
-        .destination = destination,
+        .source = source.node,
+        .destination = destination.node,
+        .sourcePort = source.port,
+        .destinationPort = destination.port,
         .sequence = sequence,
         .kind = std::move(kind),
         .payload = std::move(payload)};
     const std::uint64_t id = message.id;
-    Transmit(source, destination, std::move(message));
+    Transmit(source.node, destination.node, std::move(message));
     return id;
 }
 

@@ -108,14 +108,9 @@ glm::quat ToRenderOrientation(const glm::dquat& orientation)
 
 AeroSimLabApp::AeroSimLabApp(Options options)
     : smokeTest_(options.smokeTest), demoMode_(options.demoMode),
-      networkEnabled_(options.networkEnabled),
       benchmarkMode_(options.benchmarkMode || options.visibleBenchmarkMode),
-      visibleBenchmarkMode_(options.visibleBenchmarkMode),
-      groundControlCommandTimeoutTicks_(options.groundControlCommandTimeoutTicks),
-      udpPort_(options.udpPort)
+      visibleBenchmarkMode_(options.visibleBenchmarkMode)
 {
-    if (groundControlCommandTimeoutTicks_ == 0)
-        throw std::invalid_argument("지상통제 명령 유효기간은 1 Tick 이상이어야 합니다.");
     if (benchmarkMode_)
         simulation_.SetPhysicsStepTimingEnabled(true);
 #ifdef __EMSCRIPTEN__
@@ -153,7 +148,7 @@ bool AeroSimLabApp::StopWebFleetMission()
     if (!CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
         && !formationTransit_.IsActive())
         return false;
-    FailCompleteFleetMission("지상통제소에서 전체 임무를 중단했습니다.");
+    FailCompleteFleetMission("화면에서 전체 임무를 중단했습니다.");
     return true;
 }
 
@@ -391,27 +386,15 @@ void AeroSimLabApp::AdvanceSimulationTick()
     AdvanceCompleteFleetMission();
     if (demoMode_ && !externalControl_ && CompleteFleetMissionCanStart())
         static_cast<void>(StartCompleteFleetMission());
-    ExpireGroundControlCommand();
-    const bool groundControlTickAdvanced = ProcessPendingGroundCommand();
-    const bool fleetMissionActive = std::any_of(
-        fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
-        [](const auto& entry)
-        {
-            return detail::IsFleetMissionInProgress(entry.second.status);
-        });
-    if (!groundControlTickAdvanced
-        && groundControlCommandExpiresAtTick_.empty()
-        && groundControlActive_ && !fleetMissionActive)
+    const bool missionActive = formationTransit_.IsActive()
+        || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
+    if (!missionActive && missionControlOwnsInput_)
     {
-        groundControlActive_ = false;
+        missionControlOwnsInput_ = false;
         window_->SetTitle(gamepadConnected_
             ? "AeroSimLab | 게임패드 연결됨"
             : "AeroSimLab | 드론 관찰 · EO 영상");
     }
-    // 지상통제 명령이 이 Tick을 이미 진행했다면 게임패드 입력을 더 적용하지 않는다.
-    if (groundControlTickAdvanced)
-        return;
-
     AdvanceManualControlTick();
 }
 
@@ -436,7 +419,8 @@ void AeroSimLabApp::AdvanceAmbientWind()
 
 void AeroSimLabApp::AdvanceManualControlTick()
 {
-    if (CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive())
+    if (missionControlOwnsInput_ || CompleteFleetMissionIsActive()
+        || FleetReconnaissanceIsActive() || formationTransit_.IsActive())
     {
         simulation_.AdvanceOneTick();
         return;
@@ -458,12 +442,12 @@ void AeroSimLabApp::AdvanceManualControlTick()
         }
     }
 #endif
-    if (!groundControlActive_ && pendingControllerAction_)
+    if (pendingControllerAction_)
     {
         static_cast<void>(ApplySimulationCommand(*pendingControllerAction_));
         pendingControllerAction_.reset();
     }
-    if (!groundControlActive_ && pendingPilotCommand_)
+    if (pendingPilotCommand_)
     {
         const auto mode = simulation_.State().mode;
         if (mode == aerosimlab::simulation::FlightMode::Hovering
@@ -533,37 +517,14 @@ void AeroSimLabApp::RenderFrame()
 #else
     if (hud_)
     {
-        const bool groundControlConnected = lastGroundControlMessage_
-            && std::chrono::steady_clock::now() - *lastGroundControlMessage_
-                < std::chrono::seconds(2);
         const bool fleetReturnCanStart = FleetReturnCanStart();
         const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
         const bool formationNetworkActive = formationTransit_.IsActive()
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
-        const auto droneIds = simulation_.DroneIds();
-        GroundControlStatus groundControlStatus;
-        groundControlStatus.groundControlPositions.reserve(droneIds.size());
-        for (const aerosimlab::simulation::DroneId droneId : droneIds)
-        {
-            const auto report = telemetryAtGroundControl_.find(droneId);
-            if (report == telemetryAtGroundControl_.end())
-            {
-                groundControlStatus.groundControlPositions.push_back({
-                    .droneId = droneId});
-                continue;
-            }
-
-            groundControlStatus.groundControlPositions.push_back({
-                .droneId = droneId,
-                .lastReceivedPositionMeters = report->second.state.positionMeters,
-                .ageTicks = simulation_.TickCount() >= report->second.receivedAtTick
-                    ? simulation_.TickCount() - report->second.receivedAtTick : 0U,
-                .hasReport = true});
-        }
         HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
-        hud_->Render(simulation_, observerDroneId_, gamepadConnected_, groundControlConnected,
+        hud_->Render(simulation_, observerDroneId_, gamepadConnected_,
             fleetReturnCanStart,
             [this] { static_cast<void>(StartFleetReturn()); },
             CompleteFleetMissionStatus(), completeFleetMissionCanStart,
@@ -580,7 +541,6 @@ void AeroSimLabApp::RenderFrame()
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
                 }
             },
-            groundControlStatus,
             [this](int width, int height) { return RenderScenePanel(width, height); },
             [this](aerosimlab::simulation::DroneId droneId)
             {

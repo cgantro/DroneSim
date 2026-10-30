@@ -98,7 +98,6 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             {"frame_index", frame.frameIndex},
             {"application_us", frame.applicationMicroseconds},
             {"event_polling_us", frame.eventPollingMicroseconds},
-            {"ground_control_polling_us", frame.groundControlPollingMicroseconds},
             {"gamepad_polling_us", frame.gamepadPollingMicroseconds},
             {"simulation_update_us", frame.simulationUpdateMicroseconds},
             {"render_us", frame.renderMicroseconds},

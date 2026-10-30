@@ -6,7 +6,6 @@
 #include <shellapi.h>
 #endif
 #include <exception>
-#include <charconv>
 #include <iostream>
 #ifdef __EMSCRIPTEN__
 #include <memory>
@@ -26,10 +25,8 @@ inline constexpr std::string_view smokeTestOption = "--smoke-test";
 inline constexpr std::string_view demoOption = "--demo";
 inline constexpr std::string_view benchmarkOption = "--benchmark";
 inline constexpr std::string_view visibleBenchmarkOption = "--benchmark-visible";
-inline constexpr std::string_view portOption = "--udp-port";
 inline constexpr std::string_view usage =
     "시뮬레이터 실행 옵션\n"
-    "--udp-port 번호: 지상통제 연결 포트 (기본값 27015)\n"
     "--demo: 자동 비행 시연\n"
     "--benchmark: 창을 숨기고 화면 성능을 5초 측정\n"
     "--benchmark-visible: 실제 창을 띄워 화면만 5초 측정 (--demo를 함께 쓰면 자동 비행)\n"
@@ -75,16 +72,9 @@ int RunSimulator(int argc, char** argv)
     bool smokeTest = false;
     try
     {
-#ifdef __EMSCRIPTEN__
         bool demoMode = false;
-        bool networkEnabled = false;
-#else
-        bool demoMode = false;
-        bool networkEnabled = true;
-#endif
         bool benchmarkMode = false;
         bool visibleBenchmarkMode = false;
-        std::uint16_t udpPort = aerosimlab::communication::defaultPort;
         for (int i = 1; i < argc; ++i)
         {
             const std::string_view argument = argv[i];
@@ -97,7 +87,6 @@ int RunSimulator(int argc, char** argv)
             if (argument == command_line::smokeTestOption)
             {
                 smokeTest = true;
-                networkEnabled = false;
                 continue;
             }
 
@@ -110,29 +99,12 @@ int RunSimulator(int argc, char** argv)
             if (argument == command_line::benchmarkOption)
             {
                 benchmarkMode = true;
-                networkEnabled = false;
                 continue;
             }
 
             if (argument == command_line::visibleBenchmarkOption)
             {
                 visibleBenchmarkMode = true;
-                networkEnabled = false;
-                continue;
-            }
-
-            if (argument == command_line::portOption && i + 1 < argc)
-            {
-                const std::string_view value(argv[++i]);
-                unsigned int port = 0;
-                const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), port);
-                if (error != std::errc{} || end != value.data() + value.size() || port == 0 || port > 65535)
-                {
-                    ShowStartupMessage("UDP 포트는 1부터 65535 사이여야 합니다.", MessageKind::Error);
-                    return 2;
-                }
-                udpPort = static_cast<std::uint16_t>(port);
-                networkEnabled = true;
                 continue;
             }
 
@@ -142,9 +114,7 @@ int RunSimulator(int argc, char** argv)
         }
         aerosimlab::simulator::AeroSimLabApp::Options options{
             .smokeTest = smokeTest,
-            .udpPort = udpPort,
             .demoMode = demoMode,
-            .networkEnabled = networkEnabled,
             .benchmarkMode = benchmarkMode,
             .visibleBenchmarkMode = visibleBenchmarkMode
         };

@@ -31,10 +31,6 @@ if(POLICY CMP0169)
   cmake_policy(SET CMP0169 OLD)
 endif()
 
-if(NOT EMSCRIPTEN AND BUILD_TESTING)
-  find_package(Threads REQUIRED)
-endif()
-
 aerosimlab_add_common_dependencies()
 aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
@@ -87,43 +83,16 @@ target_link_libraries(aerosimlab_scenario
 )
 
 add_library(aerosimlab_communication STATIC
-  modules/communication/src/Protocol.cpp
   modules/communication/src/VirtualMeshNetwork.cpp
 )
-if(NOT EMSCRIPTEN)
-  target_sources(aerosimlab_communication PRIVATE
-    modules/communication/src/UdpSocket.cpp
-  )
-  if(WIN32)
-    target_sources(aerosimlab_communication PRIVATE
-      modules/communication/src/UdpSocketWindows.cpp
-    )
-  else()
-    target_sources(aerosimlab_communication PRIVATE
-      modules/communication/src/UdpSocketPosix.cpp
-    )
-  endif()
-endif()
 target_include_directories(aerosimlab_communication PUBLIC modules/communication/include)
 target_link_libraries(aerosimlab_communication PUBLIC aerosimlab_simulation_core)
-target_link_libraries(aerosimlab_communication PRIVATE nlohmann_json::nlohmann_json)
-if(WIN32)
-  target_link_libraries(aerosimlab_communication PUBLIC ws2_32)
-endif()
 
 add_library(aerosimlab_manual_control STATIC
   modules/manual_control/src/GamepadCommandMapper.cpp
 )
 target_include_directories(aerosimlab_manual_control PUBLIC modules/manual_control/include)
 target_link_libraries(aerosimlab_manual_control PUBLIC aerosimlab_simulation_core)
-
-if(NOT EMSCRIPTEN)
-  add_library(aerosimlab_ground_control_client STATIC
-    apps/ground_control/GroundControlClient.cpp
-  )
-  target_include_directories(aerosimlab_ground_control_client PUBLIC apps/ground_control)
-  target_link_libraries(aerosimlab_ground_control_client PUBLIC aerosimlab_communication)
-endif()
 
 add_executable(aerosimlab_headless apps/headless/main.cpp)
 target_link_libraries(aerosimlab_headless PRIVATE
@@ -216,7 +185,6 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     apps/simulator/AeroSimLabAppBenchmark.cpp
     apps/simulator/BuildRevision.cpp
     apps/simulator/AeroSimLabAppGamepad.cpp
-    apps/simulator/AeroSimLabAppInput.cpp
     apps/simulator/AeroSimLabAppMission.cpp
     apps/simulator/FleetMissionProgress.cpp
     apps/simulator/TrainingRangeScene.cpp
@@ -470,24 +438,12 @@ if(BUILD_TESTING)
   )
 
   add_executable(aerosimlab_communication_tests
-    tests/communication/ProtocolTests.cpp
     tests/communication/VirtualMeshNetworkTests.cpp
   )
-  if(NOT EMSCRIPTEN)
-    target_sources(aerosimlab_communication_tests PRIVATE
-      tests/communication/GroundControlClientTests.cpp
-    )
-    target_link_libraries(aerosimlab_communication_tests PRIVATE
-      aerosimlab_ground_control_client
-    )
-  endif()
   target_link_libraries(aerosimlab_communication_tests PRIVATE
     aerosimlab_communication
     GTest::gtest_main
   )
-  if(NOT EMSCRIPTEN)
-    target_link_libraries(aerosimlab_communication_tests PRIVATE Threads::Threads)
-  endif()
   gtest_discover_tests(aerosimlab_communication_tests
     TEST_PREFIX "Communication."
     DISCOVERY_TIMEOUT 60
@@ -550,10 +506,8 @@ if(BUILD_TESTING)
       )
       target_link_libraries(aerosimlab_simulator_integration_tests PRIVATE
         aerosimlab_simulator_app
-        aerosimlab_ground_control_client
         nlohmann_json::nlohmann_json
         GTest::gtest_main
-        Threads::Threads
       )
       gtest_discover_tests(aerosimlab_simulator_integration_tests
         TEST_PREFIX "Simulator."

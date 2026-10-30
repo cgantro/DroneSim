@@ -42,7 +42,6 @@ void AeroSimLabApp::RecordBenchmarkFrame(double applicationMicroseconds)
         .frameIndex = static_cast<std::uint64_t>(renderedFrames_),
         .applicationMicroseconds = applicationMicroseconds,
         .eventPollingMicroseconds = frameMeasurements_.eventPollingMicroseconds,
-        .groundControlPollingMicroseconds = frameMeasurements_.groundControlPollingMicroseconds,
         .gamepadPollingMicroseconds = frameMeasurements_.gamepadPollingMicroseconds,
         .simulationUpdateMicroseconds = frameMeasurements_.simulationUpdateMicroseconds,
         .renderMicroseconds = frameMeasurements_.renderMicroseconds,

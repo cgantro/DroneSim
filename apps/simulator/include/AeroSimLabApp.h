@@ -3,16 +3,12 @@
 #include "SimulationBenchmark.h"
 #include "FleetTelemetry.h"
 #include "FleetMissionProgress.h"
-#include "communication/Protocol.h"
 #include "communication/VirtualMeshNetwork.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "simulation_core/EoCameraModel.h"
 #include "flight_planning/FormationPlanner.h"
 #include "flight_planning/BuildingObstacle.h"
-#ifndef __EMSCRIPTEN__
-#include "communication/UdpSocket.h"
-#endif
 #include "simulation_core/SimulationCore.h"
 
 #include <glm/glm.hpp>
@@ -58,19 +54,15 @@ class AeroSimLabApp
 public:
     /**
      * @brief 시뮬레이터의 실행 방식을 정한다.
-     * @details 검사·시연·측정 목적과 통신 설정을 이름 있는 값으로 전달해, 여러 참·거짓 인자의 순서를 외우지 않게 한다.
+     * @details 검사·시연·측정 목적을 이름 있는 값으로 전달해 여러 참·거짓 인자의 순서를 외우지 않게 한다.
      */
     struct Options
     {
         bool smokeTest = false;
-        std::uint16_t udpPort = communication::defaultPort;
         bool demoMode = false;
-        bool networkEnabled = true;
         bool benchmarkMode = false;
         /** @brief 전체 확장성 시험 없이 보이는 창에서 프레임만 측정한다. */
         bool visibleBenchmarkMode = false;
-        /** @brief 지상통제의 연속 명령을 유지할 시뮬레이션 Tick 수다. 기본값은 1초다. */
-        std::uint64_t groundControlCommandTimeoutTicks = 60;
     };
 
     explicit AeroSimLabApp(Options options);
@@ -80,7 +72,7 @@ public:
     int Run();
 
 #ifdef __EMSCRIPTEN__
-    /** @brief 웹 지상통제 버튼에서 비행 명령을 예약한다. */
+    /** @brief 웹 비행 조작 화면에서 비행 명령을 예약한다. */
     void QueueWebFlightCommand(aerosimlab::simulation::DroneCommand::Kind kind);
     /** @brief 네 대가 편대 이동·정찰·복귀를 하는 전체 임무를 시작한다. */
     [[nodiscard]] bool StartWebFleetMission();
@@ -100,7 +92,6 @@ private:
     struct CurrentFrameMeasurements
     {
         double eventPollingMicroseconds = 0.0;
-        double groundControlPollingMicroseconds = 0.0;
         double gamepadPollingMicroseconds = 0.0;
         double simulationUpdateMicroseconds = 0.0;
         double renderFrameMicroseconds = 0.0;
@@ -176,6 +167,8 @@ private:
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
+    [[nodiscard]] communication::VirtualEndpoint EndpointFor(
+        aerosimlab::simulation::DroneId droneId) const;
     void InitializeFleetLeadership();
     void AdvanceFleetNetwork();
     [[nodiscard]] bool SendFleetRouteAssignment(
@@ -201,16 +194,6 @@ private:
     [[nodiscard]] aerosimlab::simulation::CommandResult ApplySimulationCommand(
         aerosimlab::simulation::DroneId droneId,
         const aerosimlab::simulation::DroneCommand& command);
-    void PollGroundControl();
-#ifndef __EMSCRIPTEN__
-    void ProcessGroundDatagram(const std::string& datagram,
-        const communication::UdpPeer& peer);
-    /** @brief 중복·역순·처리 중인 명령에 응답하고 새 명령 접수 여부를 돌려준다. */
-    [[nodiscard]] bool ReplyToUnqueueableGroundCommand(
-        const communication::CommandPacket& packet,
-        const communication::UdpPeer& peer,
-        communication::SequenceGuard::Decision decision);
-#endif
     void PollGamepad();
     /** @brief 연결이 끊긴 뒤 남은 조종 입력을 지우고 필요한 정지 명령을 예약한다. */
     void HandleGamepadDisconnected();
@@ -220,16 +203,7 @@ private:
      */
     void HandleGamepadConnected(bool takeoffPressed, bool landPressed,
         const std::optional<aerosimlab::manual_control::GamepadAxes>& pilotAxes);
-    void ApplyDroneCommand(aerosimlab::simulation::DroneId droneId,
-        const aerosimlab::simulation::DroneCommand& command,
-        communication::CommandReply& reply);
-    void ApplyCameraCommand(communication::CameraCommand command,
-        communication::CommandReply& reply);
-    /** @brief 대기 중인 지상통제 요청을 처리하고 이번 Tick을 진행했는지 반환한다. */
-    [[nodiscard]] bool ProcessPendingGroundCommand();
-    void ExpireGroundControlCommand();
     void WriteBenchmarkReport(double elapsedSeconds) const;
-    [[nodiscard]] communication::Telemetry CurrentTelemetry() const;
     void RenderFrame();
     /** @brief 화면 크기에 맞춰 관찰 카메라의 시야 비율을 갱신한다. */
     void UpdateObserverCamera(int width, int height);
@@ -266,8 +240,7 @@ private:
     /** @brief 정찰 중 카메라 시야가 나무 수관에 가리지 않도록 확보한 통과 고도다. */
     double cameraTransitAltitudeMeters_ = 0.0;
     bool externalControl_ = false;
-    bool groundControlActive_ = false;
-    std::optional<std::chrono::steady_clock::time_point> lastGroundControlMessage_;
+    bool missionControlOwnsInput_ = false;
     bool gamepadConnected_ = false;
     bool previousTakeoffButton_ = false;
     bool previousLandButton_ = false;
@@ -275,13 +248,8 @@ private:
     int unsupportedJoystickId_ = -1;
     std::optional<aerosimlab::simulation::DroneCommand> pendingControllerAction_;
     std::optional<aerosimlab::manual_control::PilotCommand> pendingPilotCommand_;
-    bool networkEnabled_ = false;
-    bool smokeFlightCommandObserved_ = false;
     bool benchmarkMode_ = false;
     bool visibleBenchmarkMode_ = false;
-    std::uint64_t groundControlCommandTimeoutTicks_ = 60;
-    std::unordered_map<aerosimlab::simulation::DroneId, std::uint64_t>
-        groundControlCommandExpiresAtTick_;
     std::size_t renderedFrames_ = 0;
     std::size_t benchmarkStartRenderedFrames_ = 0;
     std::uint64_t benchmarkStartSimulationTicks_ = 0;
@@ -299,20 +267,6 @@ private:
 #ifdef __EMSCRIPTEN__
     std::chrono::steady_clock::time_point webPreviousFrame_;
     std::chrono::steady_clock::time_point lastWebTelemetryUpdate_;
-#endif
-    std::uint16_t udpPort_ = 0;
-#ifndef __EMSCRIPTEN__
-    struct PendingGroundCommand
-    {
-        communication::CommandPacket packet;
-        communication::UdpPeer peer;
-        std::uint64_t receivedAtMilliseconds = 0;
-    };
-    std::optional<PendingGroundCommand> pendingCommand_;
-    std::optional<communication::UdpPeer> activePeer_;
-    std::optional<communication::CommandReply> lastReply_;
-    communication::SequenceGuard sequenceGuard_;
-    std::unique_ptr<communication::UdpSocket> udpSocket_;
 #endif
     std::unique_ptr<aerosimlab::graphics::Window> window_;
 #ifndef __EMSCRIPTEN__
@@ -341,7 +295,9 @@ private:
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     aerosimlab::simulation::DroneId observerDroneId_ = 0;
-    glm::dvec3 groundControlPositionMeters_{0.0};
+    /** @brief 각 드론에 배정한 가상 통신 포트다. 운영체제 UDP 포트와는 무관하다. */
+    std::map<aerosimlab::simulation::DroneId, communication::VirtualPort>
+        virtualPorts_;
     struct FleetReconnaissanceState
     {
         std::size_t targetIndex = 0;
@@ -375,15 +331,10 @@ private:
     [[nodiscard]] const ReceivedPeerTelemetry* FreshPeerTelemetry(
         aerosimlab::simulation::DroneId droneId) const noexcept;
     std::uint32_t nextTelemetrySequence_ = 1;
-    std::uint32_t nextGroundControlTelemetrySequence_ = 1;
     std::map<aerosimlab::simulation::DroneId, std::uint64_t>
         lastTelemetrySentAtTick_;
-    std::map<aerosimlab::simulation::DroneId, std::uint64_t>
-        lastGroundControlTelemetrySentAtTick_;
     std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
         peerTelemetryAtLeader_;
-    std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
-        telemetryAtGroundControl_;
     struct FormationTransitState
     {
         /** @brief 화면 문구를 바꿔도 편대 이동의 결과 판정이 달라지지 않게 한다. */

@@ -12,7 +12,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
-#include <limits>
 #include <stdexcept>
 #include <string>
 #include <chrono>
@@ -22,9 +21,6 @@ namespace aerosimlab::simulator
 {
 namespace
 {
-constexpr communication::NetworkNodeId groundControlNodeId =
-    std::numeric_limits<communication::NetworkNodeId>::max();
-
 void LoadWindowsKoreanFont()
 {
     const char* windowsDirectory = std::getenv("WINDIR");
@@ -48,8 +44,6 @@ std::string DroneName(simulation::DroneId id)
 
 std::string NetworkNodeName(communication::NetworkNodeId id)
 {
-    if (id == groundControlNodeId)
-        return "지상통제소";
     return DroneName(id);
 }
 
@@ -211,7 +205,6 @@ void DrawCameraPanel(
 void DrawFlightStatusPanel(
     const simulation::SimulationCore& simulation,
     bool gamepadConnected,
-    bool groundControlConnected,
     bool fleetReturnCanStart,
     const std::function<void()>& startFleetReturn,
     const std::string& completeFleetMissionStatus,
@@ -220,8 +213,7 @@ void DrawFlightStatusPanel(
     const communication::VirtualMeshNetwork* formationNetwork,
     int& selectedFaultSource,
     const std::function<void(simulation::DroneId, bool)>&
-        setFormationNodeRadioEnabled,
-    const GroundControlStatus& groundControlStatus)
+        setFormationNodeRadioEnabled)
 {
     if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
     {
@@ -233,57 +225,6 @@ void DrawFlightStatusPanel(
         ImGui::Text("모의 시간: %.2f초   진행 Tick: %llu",
             simulation.SimulationTimeSeconds(),
             static_cast<unsigned long long>(simulation.TickCount()));
-        if (ImGui::CollapsingHeader("실제 위치와 지상통제 수신 위치",
-                ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::TextDisabled(
-                "시뮬 위치는 현재 값이고, 지상통제 위치는 통신망으로 마지막에 받은 값입니다.");
-            if (ImGui::BeginTable("GroundControlPositions", 4,
-                    ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg
-                        | ImGuiTableFlags_SizingStretchSame))
-            {
-                ImGui::TableSetupColumn("드론");
-                ImGui::TableSetupColumn("시뮬 위치 [m]");
-                ImGui::TableSetupColumn("마지막 수신 [m]");
-                ImGui::TableSetupColumn("상태");
-                ImGui::TableHeadersRow();
-                const auto droneIds = simulation.DroneIds();
-                for (std::size_t index = 0; index < droneIds.size(); ++index)
-                {
-                    const simulation::DroneId droneId = droneIds[index];
-                    const auto& actual = simulation.State(droneId).positionMeters;
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    const std::string droneName = DroneName(droneId);
-                    ImGui::TextUnformatted(droneName.c_str());
-                    ImGui::TableNextColumn();
-                    ImGui::Text("%.1f, %.1f, %.1f",
-                        actual.x, actual.y, actual.z);
-                    ImGui::TableNextColumn();
-                    if (index >= groundControlStatus.groundControlPositions.size()
-                        || !groundControlStatus.groundControlPositions[index].hasReport)
-                    {
-                        ImGui::TextDisabled("아직 받지 못함");
-                        ImGui::TableNextColumn();
-                        ImGui::TextDisabled("미수신");
-                        continue;
-                    }
-
-                    const auto& report = groundControlStatus.groundControlPositions[index];
-                    ImGui::Text("%.1f, %.1f, %.1f",
-                        report.lastReceivedPositionMeters.x,
-                        report.lastReceivedPositionMeters.y,
-                        report.lastReceivedPositionMeters.z);
-                    ImGui::TableNextColumn();
-                    const double ageSeconds = static_cast<double>(report.ageTicks)
-                        / 60.0;
-                    const char* reportState = report.ageTicks <= 30U ? "최신"
-                        : report.ageTicks <= 180U ? "지연" : "끊김";
-                    ImGui::Text("%s · %.2f초 전", reportState, ageSeconds);
-                }
-                ImGui::EndTable();
-            }
-        }
         ImGui::Separator();
         ImGui::Text("임무: %s", completeFleetMissionStatus.c_str());
         if (completeFleetMissionCanStart
@@ -297,14 +238,14 @@ void DrawFlightStatusPanel(
         if (formationNetwork != nullptr)
         {
             ImGui::Separator();
-            ImGui::Text("가상 통신: 드론과 지상통제소 사이 직접 연결");
+            ImGui::Text("가상 통신: 드론 간 직접 연결");
             const auto droneIds = simulation.DroneIds();
             if (!droneIds.empty())
             {
                 selectedFaultSource = std::clamp(selectedFaultSource, 0,
                     static_cast<int>(droneIds.size() - 1U));
-                std::array<std::string, communication::maximumFleetDroneCount> names;
-                std::array<const char*, communication::maximumFleetDroneCount> namePointers{};
+                std::vector<std::string> names(droneIds.size());
+                std::vector<const char*> namePointers(droneIds.size());
                 for (std::size_t index = 0; index < droneIds.size(); ++index)
                 {
                     names[index] = DroneName(droneIds[index]);
@@ -316,10 +257,14 @@ void DrawFlightStatusPanel(
                 const simulation::DroneId droneId = droneIds[
                     static_cast<std::size_t>(selectedFaultSource)];
                 const bool radioEnabled = formationNetwork->IsNodeRadioEnabled(droneId);
-                const bool linked = formationNetwork->HasDirectLink(
-                    droneId, groundControlNodeId);
-                ImGui::Text("지상통제 연결: %s",
-                    radioEnabled && linked ? "직접 연결" : "끊김");
+                const simulation::DroneId leaderId = simulation.PrimaryDroneId();
+                const bool isLeader = droneId == leaderId;
+                const bool linked = isLeader
+                    || formationNetwork->HasDirectLink(droneId, leaderId);
+                const auto port = formationNetwork->PortFor(droneId);
+                ImGui::Text("가상 포트: %u · 편대 연결: %s",
+                    port ? static_cast<unsigned int>(*port) : 0U,
+                    isLeader ? "리더" : (radioEnabled && linked ? "연결됨" : "끊김"));
                 if (radioEnabled)
                 {
                     if (ImGui::Button("이 드론 통신 차단"))
@@ -348,12 +293,10 @@ void DrawFlightStatusPanel(
         ImGui::Separator();
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
         ImGui::Separator();
-        ImGui::Text("게임패드: %s   지상통제: %s",
-            gamepadConnected ? "연결됨" : "연결 안 됨",
-            groundControlConnected ? "최근 입력 수신" : "최근 입력 없음");
+        ImGui::Text("게임패드: %s",
+            gamepadConnected ? "연결됨" : "연결 안 됨");
         ImGui::Separator();
-        ImGui::Text("편대 상태 (%zu / %zu)",
-            simulation.DroneCount(), communication::maximumFleetDroneCount);
+        ImGui::Text("편대 상태 (%zu대)", simulation.DroneCount());
         for (const simulation::DroneId id : simulation.DroneIds())
         {
             const auto& drone = simulation.State(id);
@@ -453,7 +396,7 @@ void SimulatorHud::CollectCompletedGpuTimings(HudRenderTimings* timings)
 
 void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     simulation::DroneId& observerDroneId,
-    bool gamepadConnected, bool groundControlConnected,
+    bool gamepadConnected,
     bool fleetReturnCanStart,
     const std::function<void()>& startFleetReturn,
     const std::string& completeFleetMissionStatus,
@@ -462,7 +405,6 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const communication::VirtualMeshNetwork* formationNetwork,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-        const GroundControlStatus& groundControlStatus,
     const std::function<std::uint32_t(int, int)>& renderScene,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
     HudRenderTimings* timings)
@@ -481,12 +423,11 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     CreateDefaultDockspace(viewport);
     DrawScenePanel(simulation, observerDroneId, renderScene);
     DrawCameraPanel(simulation, observerDroneId, renderCamera);
-    DrawFlightStatusPanel(simulation, gamepadConnected, groundControlConnected,
+    DrawFlightStatusPanel(simulation, gamepadConnected,
         fleetReturnCanStart, startFleetReturn,
         completeFleetMissionStatus, completeFleetMissionCanStart,
         startCompleteFleetMission,
-        formationNetwork, selectedFaultSource_, setFormationNodeRadioEnabled,
-        groundControlStatus);
+        formationNetwork, selectedFaultSource_, setFormationNodeRadioEnabled);
 
     if (timings != nullptr)
     {

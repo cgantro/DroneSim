@@ -69,8 +69,8 @@ void AeroSimLabApp::PollGamepad()
         }
         else if (scan.unsupportedJoystickId < 0 && unsupportedJoystickId_ >= 0)
         {
-            window_->SetTitle(groundControlActive_
-                ? "AeroSimLab | 지상통제 입력 사용 중"
+            window_->SetTitle(gamepadConnected_
+                ? "AeroSimLab | 게임패드 연결됨"
                 : "AeroSimLab | 드론 관찰 · EO 영상");
             unsupportedJoystickId_ = -1;
         }
@@ -90,7 +90,7 @@ void AeroSimLabApp::PollGamepad()
     const bool takeoffPressed = scan.state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
     const bool landPressed = scan.state.buttons[GLFW_GAMEPAD_BUTTON_B] == GLFW_PRESS;
     std::optional<aerosimlab::manual_control::GamepadAxes> pilotAxes;
-    if (!groundControlActive_)
+    if (!missionControlOwnsInput_)
     {
         const auto mode = simulation_.State().mode;
         const bool airborne = mode == aerosimlab::simulation::FlightMode::Hovering
@@ -119,13 +119,13 @@ void AeroSimLabApp::HandleGamepadDisconnected()
 {
     using DisconnectAction = aerosimlab::manual_control::GamepadDisconnectAction;
     const auto action = aerosimlab::manual_control::ResolveGamepadDisconnectAction(
-        gamepadConnected_, groundControlActive_, simulation_.State().mode);
+        gamepadConnected_, missionControlOwnsInput_, simulation_.State().mode);
     if (action == DisconnectAction::NoChange)
         return;
 
     pendingControllerAction_.reset();
-    window_->SetTitle(groundControlActive_
-        ? "AeroSimLab | 지상통제 입력 사용 중"
+    window_->SetTitle(missionControlOwnsInput_
+        ? "AeroSimLab | 자율 임무 진행 중"
         : "AeroSimLab | 드론 관찰 · EO 영상");
     switch (action)
     {
@@ -141,7 +141,7 @@ void AeroSimLabApp::HandleGamepadDisconnected()
     case DisconnectAction::ClearPendingAction:
         break;
     }
-    if (!groundControlActive_)
+    if (!missionControlOwnsInput_)
         pendingPilotCommand_.reset();
     gamepadConnected_ = false;
     previousTakeoffButton_ = false;
@@ -151,12 +151,12 @@ void AeroSimLabApp::HandleGamepadDisconnected()
 void AeroSimLabApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed,
     const std::optional<aerosimlab::manual_control::GamepadAxes>& pilotAxes)
 {
-    if (!gamepadConnected_ && !groundControlActive_)
+    if (!gamepadConnected_ && !missionControlOwnsInput_)
         window_->SetTitle("AeroSimLab | 게임패드 연결됨");
     gamepadConnected_ = true;
     externalControl_ = true;
 
-    if (!groundControlActive_)
+    if (!missionControlOwnsInput_)
     {
         if (takeoffPressed && !previousTakeoffButton_
             && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)

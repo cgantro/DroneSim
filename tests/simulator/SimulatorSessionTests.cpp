@@ -8,9 +8,6 @@
 #include "flight_planning/RoutePlanner.h"
 #include "terrain/TerrainGrid.h"
 
-#include "GroundControlClient.h"
-#include "communication/Protocol.h"
-#include "communication/UdpSocket.h"
 #include "graphics/Camera.h"
 
 #include <glm/glm.hpp>
@@ -18,18 +15,15 @@
 #include <gtest/gtest.h>
 
 #include <array>
-#include <chrono>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <exception>
 #include <limits>
 #include <map>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -42,7 +36,7 @@ class AeroSimLabAppTestAccess
 public:
     static void VerifyCompleteMissionRequiresFourDrones()
     {
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_EQ(app.simulation_.DroneIds().size(), 4U);
         ASSERT_FALSE(app.trainingRangeScene_->BuildingObstacles().empty());
@@ -86,7 +80,7 @@ public:
 
     static void VerifyFallingDroneLandsOnLoadedMapFloor()
     {
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         const glm::dvec2 openGround =
             app.trainingRangeScene_->FormationStagingPositionMeters();
@@ -104,7 +98,7 @@ public:
 
     static void VerifyReconnaissanceKeepsTheFirstWaypoint()
     {
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneId = app.simulation_.PrimaryDroneId();
         const auto expectedRoute = flight_planning::PlanRoute(
@@ -133,7 +127,7 @@ public:
 
     static void VerifyObserverCameraKeepsAUsableFollowDistance()
     {
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         app.UpdateObserverCamera(1280, 720);
 
@@ -144,7 +138,7 @@ public:
 
     static void VerifyObserverCameraCanFollowEachDrone()
     {
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneIds = app.simulation_.DroneIds();
         ASSERT_EQ(droneIds.size(), 4U);
@@ -160,132 +154,27 @@ public:
             app.observerCamera_->GetPosition(), app.observerCamera_->GetTarget()), 5.0F);
     }
 
-    static void VerifyGroundControlShowsOnlyDeliveredPeerPositions()
+    static void VerifyEveryDroneHasAVirtualPort()
     {
-        AeroSimLabApp app({
-            .smokeTest = true,
-            .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
-        UseConnectedNetworkForTest(app);
-        app.formationTransit_.phase = AeroSimLabApp::FormationTransitState::Phase::InProgress;
+        ASSERT_EQ(app.virtualPorts_.size(), app.simulation_.DroneCount());
 
-        const auto droneIds = app.fleetDroneIds_;
-        ASSERT_EQ(droneIds.size(), 4U);
-        const auto disconnectedDroneId = droneIds[2U];
-        ASSERT_EQ(app.simulation_.Apply(disconnectedDroneId,
-            {simulation::DroneCommand::Kind::TakeOff}),
-            simulation::CommandResult::Accepted);
-        for (int tick = 0; tick < 360; ++tick)
+        std::vector<communication::VirtualPort> ports;
+        for (const auto droneId : app.simulation_.DroneIds())
         {
-            app.AdvanceFleetNetwork();
-            app.simulation_.AdvanceOneTick();
+            const auto port = app.formationNetwork_->PortFor(droneId);
+            ASSERT_TRUE(port.has_value());
+            EXPECT_EQ(*port, app.virtualPorts_.at(droneId));
+            ports.push_back(*port);
         }
-        ASSERT_EQ(app.telemetryAtGroundControl_.size(), droneIds.size());
-
-        const auto mode = app.simulation_.State(disconnectedDroneId).mode;
-        ASSERT_TRUE(mode == simulation::FlightMode::Hovering
-            || mode == simulation::FlightMode::Flying
-            || mode == simulation::FlightMode::FollowingWaypoint);
-        const auto originalReport = app.telemetryAtGroundControl_.at(
-            disconnectedDroneId).state.positionMeters;
-        for (const auto droneId : droneIds)
-            app.formationNetwork_->SetNodeRadioEnabled(droneId, false);
-
-        simulation::DroneCommand waypoint;
-        waypoint.kind = simulation::DroneCommand::Kind::SetWaypoint;
-        waypoint.vector = app.simulation_.State(disconnectedDroneId).positionMeters
-            + glm::dvec3{35.0, 0.0, 0.0};
-        ASSERT_EQ(app.simulation_.Apply(disconnectedDroneId, waypoint),
-            simulation::CommandResult::Accepted);
-        for (int tick = 0; tick < 300; ++tick)
-        {
-            app.AdvanceFleetNetwork();
-            app.simulation_.AdvanceOneTick();
-        }
-
-        const auto& received = app.telemetryAtGroundControl_.at(disconnectedDroneId);
-        EXPECT_DOUBLE_EQ(received.state.positionMeters.x, originalReport.x);
-        EXPECT_DOUBLE_EQ(received.state.positionMeters.y, originalReport.y);
-        EXPECT_DOUBLE_EQ(received.state.positionMeters.z, originalReport.z);
-        EXPECT_GT(glm::distance(
-            app.simulation_.State(disconnectedDroneId).positionMeters,
-            received.state.positionMeters), 1.0);
-        EXPECT_GT(app.simulation_.TickCount() - received.receivedAtTick, 0U);
-        const auto lastReceivedTick = received.receivedAtTick;
-        for (const auto droneId : droneIds)
-            app.formationNetwork_->SetNodeRadioEnabled(droneId, true);
-        for (int tick = 0; tick < 360; ++tick)
-        {
-            app.AdvanceFleetNetwork();
-            app.simulation_.AdvanceOneTick();
-        }
-        EXPECT_GT(app.telemetryAtGroundControl_.at(disconnectedDroneId).receivedAtTick,
-            lastReceivedTick);
+        std::sort(ports.begin(), ports.end());
+        EXPECT_EQ(std::adjacent_find(ports.begin(), ports.end()), ports.end());
     }
-
-    static void VerifyGroundControlReceivesEachDroneDirectly()
-    {
-        AeroSimLabApp app({
-            .smokeTest = true,
-            .networkEnabled = false});
-        app.InitializeGraphics();
-        ASSERT_TRUE(app.PrepareFleetNetwork(true));
-        UseConnectedNetworkForTest(app);
-        app.formationTransit_.phase = AeroSimLabApp::FormationTransitState::Phase::InProgress;
-
-        const auto droneIds = app.fleetDroneIds_;
-        ASSERT_EQ(droneIds.size(), 4U);
-        // 시험용 통신망은 연결 설정만 있고 노드 목록은 첫 갱신 때 만들어진다.
-        // 한 번 상태를 주고받은 뒤 차단해야 차단 직전 전송분이 결과에 섞이지 않는다.
-        app.AdvanceFleetNetwork();
-        app.simulation_.AdvanceOneTick();
-        app.AdvanceFleetNetwork();
-        app.telemetryAtGroundControl_.clear();
-        app.formationNetwork_->SetNodeRadioEnabled(droneIds.front(), false);
-        for (int tick = 0; tick < 240; ++tick)
-        {
-            app.AdvanceFleetNetwork();
-            app.simulation_.AdvanceOneTick();
-        }
-
-        EXPECT_FALSE(app.telemetryAtGroundControl_.contains(droneIds.front()));
-        for (std::size_t i = 1; i < droneIds.size(); ++i)
-            ASSERT_TRUE(app.telemetryAtGroundControl_.contains(droneIds[i]));
-
-        const auto blockedDroneId = droneIds[2];
-        app.formationNetwork_->SetNodeRadioEnabled(blockedDroneId, false);
-        // 이미 전송 중인 메시지가 정리된 뒤 마지막 수신 시각을 확인한다.
-        for (int tick = 0; tick < 30; ++tick)
-        {
-            app.AdvanceFleetNetwork();
-            app.simulation_.AdvanceOneTick();
-        }
-        const auto lastReceivedTick =
-            app.telemetryAtGroundControl_.at(blockedDroneId).receivedAtTick;
-        for (int tick = 0; tick < 120; ++tick)
-        {
-            app.AdvanceFleetNetwork();
-            app.simulation_.AdvanceOneTick();
-        }
-        EXPECT_EQ(app.telemetryAtGroundControl_.at(blockedDroneId).receivedAtTick,
-            lastReceivedTick);
-        EXPECT_GT(app.telemetryAtGroundControl_.at(droneIds[1]).receivedAtTick,
-            lastReceivedTick);
-
-        app.formationNetwork_->SetNodeRadioEnabled(blockedDroneId, true);
-        for (int tick = 0; tick < 480; ++tick)
-        {
-            app.AdvanceFleetNetwork();
-            app.simulation_.AdvanceOneTick();
-        }
-        EXPECT_GT(app.telemetryAtGroundControl_.at(blockedDroneId).receivedAtTick,
-            lastReceivedTick);
-    }
-
     static void VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing()
     {
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
 
@@ -324,8 +213,7 @@ public:
     {
         using FormationPhase = AeroSimLabApp::FormationTransitState::Phase;
         using MissionStage = AeroSimLabApp::CompleteFleetMissionState::Stage;
-        AeroSimLabApp app({.smokeTest = true,
-            .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
 
@@ -369,7 +257,7 @@ public:
     static void VerifyCompleteFleetMissionFinishesAndLands()
     {
         using Stage = AeroSimLabApp::CompleteFleetMissionState::Stage;
-        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneIds = app.simulation_.DroneIds();
 
@@ -427,9 +315,7 @@ public:
             failureContext << ", 리더 ID " << app.fleetLeaderId_ << " 위치: ("
                 << leader.positionMeters.x << ", "
                 << leader.positionMeters.y << ", " << leader.positionMeters.z
-                << "), GCS 위치: (" << app.groundControlPositionMeters_.x << ", "
-                << app.groundControlPositionMeters_.y << ", "
-                << app.groundControlPositionMeters_.z << "), 임무 단계 "
+                << "), 임무 단계 "
                 << static_cast<int>(app.completeFleetMission_.stage);
             for (const auto droneId : droneIds)
             {
@@ -489,8 +375,7 @@ public:
     static void VerifyFleetDroneReturnsWhenBatteryReachesReserve()
     {
         AeroSimLabApp app({
-            .smokeTest = true,
-            .networkEnabled = false});
+            .smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.StartFleetReconnaissance());
         const auto lowBatteryDroneId = app.fleetDroneIds_.at(1U);
@@ -658,180 +543,10 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
         FleetMissionProgress::Complete);
 }
 
-void Verify_SimulatorSession_FlightCommandsOverUdp()
-{
-    std::uint16_t simulatorPort = 0;
-    {
-        communication::UdpSocket availablePort(0);
-        simulatorPort = availablePort.LocalPort();
-    }
-
-    communication::UdpSocket clientSocket(0);
-    simulator::AeroSimLabApp app({
-        .smokeTest = true,
-        .udpPort = simulatorPort,
-        .demoMode = false,
-        .networkEnabled = true,
-        .benchmarkMode = false,
-        .groundControlCommandTimeoutTicks = 10
-    });
-
-    std::uint32_t sequence = 0;
-    std::exception_ptr commandFailure;
-    std::jthread groundControlThread([&]
-    {
-        const auto send = [&](const char* operation, const auto& setCommand,
-            std::chrono::milliseconds timeout = std::chrono::seconds(5))
-        {
-            communication::CommandPacket packet;
-            packet.commandId = ++sequence;
-            packet.sequence = sequence;
-            setCommand(packet);
-            try
-            {
-                return ground_control::SendCommand(
-                    "127.0.0.1", simulatorPort, packet, clientSocket, timeout).reply;
-            }
-            catch (const std::exception& error)
-            {
-                throw std::runtime_error(std::string{operation} + ": " + error.what());
-            }
-        };
-        const auto require = [](bool condition, const char* message)
-        {
-            if (!condition)
-                throw std::runtime_error(message);
-        };
-
-        try
-        {
-            // 초기 그래픽 준비가 끝나고 응답할 때까지 상태 조회를 기다린다.
-            const auto beforeStatus = send("초기 상태 조회",
-                [](communication::CommandPacket& packet)
-            {
-                packet.command = communication::FleetCommand::GetStatus;
-            }, std::chrono::seconds(15));
-            require(beforeStatus.accepted, "초기 상태 조회가 거부되었습니다.");
-            require(beforeStatus.telemetry.drones.size() == 4U,
-                "훈련장 시작 편대에 드론 네 대가 있어야 합니다.");
-            const auto primaryDrone = std::find_if(
-                beforeStatus.telemetry.drones.begin(),
-                beforeStatus.telemetry.drones.end(),
-                [&beforeStatus](const communication::DroneTelemetry& drone)
-                {
-                    return drone.id == beforeStatus.telemetry.primaryDroneId;
-                });
-            require(primaryDrone != beforeStatus.telemetry.drones.end(),
-                "주 드론 식별값이 편대 목록과 일치해야 합니다.");
-            require(beforeStatus.appliedTick == beforeStatus.telemetry.tick,
-                "초기 상태 응답의 Tick 값이 서로 다릅니다.");
-
-            const auto primaryTakeoff = send("주 드론 이륙",
-                [](communication::CommandPacket& packet)
-            {
-                packet.command = simulation::DroneCommand{
-                    simulation::DroneCommand::Kind::TakeOff};
-            });
-            require(primaryTakeoff.accepted && primaryTakeoff.status == "applied",
-                "주 드론 이륙 명령을 적용하지 못했습니다.");
-
-            const auto secondary = std::find_if(
-                beforeStatus.telemetry.drones.begin(),
-                beforeStatus.telemetry.drones.end(),
-                [&beforeStatus](const communication::DroneTelemetry& drone)
-            {
-                return drone.id != beforeStatus.telemetry.primaryDroneId;
-            });
-            require(secondary != beforeStatus.telemetry.drones.end(),
-                "주 드론 외에 시험할 드론이 없습니다.");
-            const auto secondaryId = secondary->id;
-            const auto secondaryTakeoff = send("보조 드론 이륙",
-                [secondaryId](communication::CommandPacket& packet)
-            {
-                packet.droneId = secondaryId;
-                packet.command = simulation::DroneCommand{
-                    simulation::DroneCommand::Kind::TakeOff};
-            });
-            require(secondaryTakeoff.accepted,
-                "선택한 보조 드론에 이륙 명령을 보내지 못했습니다.");
-            const auto selectedDrone = std::find_if(
-                secondaryTakeoff.telemetry.drones.begin(),
-                secondaryTakeoff.telemetry.drones.end(),
-                [secondaryId](const communication::DroneTelemetry& drone)
-                {
-                    return drone.id == secondaryId;
-                });
-            require(selectedDrone != secondaryTakeoff.telemetry.drones.end()
-                    && selectedDrone->mode
-                    == simulation::FlightMode::TakingOff,
-                "선택한 드론이 이륙 상태로 바뀌지 않았습니다.");
-
-            const auto landPrimary = send("주 드론 착륙",
-                [](communication::CommandPacket& packet)
-            {
-                packet.command = simulation::DroneCommand{
-                    simulation::DroneCommand::Kind::Land};
-            });
-            require(landPrimary.accepted && landPrimary.status == "applied",
-                "주 드론 착륙 명령을 적용하지 못했습니다.");
-            const auto landSecondary = send("보조 드론 착륙",
-                [secondaryId](communication::CommandPacket& packet)
-            {
-                packet.droneId = secondaryId;
-                packet.command = simulation::DroneCommand{
-                    simulation::DroneCommand::Kind::Land};
-            });
-            require(landSecondary.accepted && landSecondary.status == "applied",
-                "보조 드론 착륙 명령을 적용하지 못했습니다.");
-
-            // 스모크 앱은 시작된 모든 드론이 지상에 돌아오면 스스로 종료한다.
-            // 종료 직전 상태 조회를 보내면 앱이 응답 전에 닫힐 수 있어 여기서 기다리지 않는다.
-        }
-        catch (...)
-        {
-            commandFailure = std::current_exception();
-        }
-    });
-
-    int simulatorExitCode = -1;
-    std::exception_ptr simulatorFailure;
-    try
-    {
-        // GLFW 창과 이벤트는 GLFW가 요구하는 메인 스레드에서만 다룬다.
-        simulatorExitCode = app.Run();
-    }
-    catch (...)
-    {
-        simulatorFailure = std::current_exception();
-    }
-
-    groundControlThread.join();
-    EXPECT_EQ(simulatorExitCode, 0)
-        << "두 드론의 착륙이 끝나면 숨김 시뮬레이터가 정상 종료되어야 합니다.";
-
-    const auto reportFailure = [](const char* context, std::exception_ptr failure)
-    {
-        if (!failure)
-            return;
-        try
-        {
-            std::rethrow_exception(failure);
-        }
-        catch (const std::exception& error)
-        {
-            ADD_FAILURE() << context << error.what();
-        }
-    };
-    reportFailure("시뮬레이터 실행 실패: ", simulatorFailure);
-    reportFailure("UDP 비행 명령 실패: ", commandFailure);
-}
-
 TEST(SimulatorSessionTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyGroundControlShowsOnlyDeliveredPeerPositions());
-    EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyGroundControlReceivesEachDroneDirectly());
+        simulator::AeroSimLabAppTestAccess::VerifyEveryDroneHasAVirtualPort());
     EXPECT_NO_FATAL_FAILURE(
         simulator::AeroSimLabAppTestAccess::VerifyObserverCameraKeepsAUsableFollowDistance());
     EXPECT_NO_FATAL_FAILURE(
@@ -845,7 +560,6 @@ TEST(SimulatorSessionTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
-    EXPECT_NO_FATAL_FAILURE(Verify_SimulatorSession_FlightCommandsOverUdp());
 }
 
 TEST(SimulatorSessionTests, FleetDroneReturnsWhenBatteryReachesReserve)

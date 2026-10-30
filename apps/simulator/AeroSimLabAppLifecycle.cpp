@@ -20,21 +20,12 @@ namespace
 {
 // 화면 스모크는 프레임마다 한 Tick만 실행해 짧게 끝낸다.
 constexpr std::size_t smokeTestFrameLimit = 8;
-// 네트워크 스모크는 느린 화면에 모의 진행이 묶이지 않도록 따라잡기 Tick을 실행한다.
-constexpr std::size_t networkSmokeSimulationBatchesPerFrame = 5;
 constexpr double benchmarkDurationSeconds = 5.0;
 }
 
 int AeroSimLabApp::Run()
 {
 #ifndef __EMSCRIPTEN__
-    if (networkEnabled_)
-    {
-        udpSocket_ = std::make_unique<communication::UdpSocket>(udpPort_);
-    }
-#endif
-#ifndef __EMSCRIPTEN__
-    // 그래픽 자산을 불러오는 동안 도착한 UDP 요청도 소켓 수신 큐에 남긴다.
     InitializeGraphics();
 #endif
     startTime_ = std::chrono::steady_clock::now();
@@ -109,9 +100,6 @@ int AeroSimLabApp::Run()
 
         if (smokeTest_ && SmokeTestIsComplete())
             break;
-        if (smokeTest_ && networkEnabled_
-            && std::chrono::steady_clock::now() - startTime_ > std::chrono::seconds(30))
-            return 4;
         if (benchmarkMode_ &&
             std::chrono::steady_clock::now() - startTime_ >= std::chrono::duration<double>(benchmarkDurationSeconds))
             break;
@@ -152,11 +140,6 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         window_->PollEvents();
     }
     {
-        aerosimlab::simulation::ScopedDuration measureGroundControl(
-            benchmarkMode_ ? &frameMeasurements_.groundControlPollingMicroseconds : nullptr);
-        PollGroundControl();
-    }
-    {
         aerosimlab::simulation::ScopedDuration measureGamepad(
             benchmarkMode_ ? &frameMeasurements_.gamepadPollingMicroseconds : nullptr);
         PollGamepad();
@@ -172,21 +155,14 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     double frameSeconds = elapsedSeconds;
     if (smokeTest_ && !benchmarkMode_)
     {
-        frameSeconds = networkEnabled_
-            ? aerosimlab::simulation::FixedTickAccumulator::maximumFrameSeconds
-            : aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds;
+        frameSeconds = aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds;
     }
     previousFrame = now;
 
-    const std::size_t simulationBatches = smokeTest_ && networkEnabled_
-        && !benchmarkMode_
-        ? networkSmokeSimulationBatchesPerFrame
-        : 1U;
     {
         aerosimlab::simulation::ScopedDuration measureSimulation(
             benchmarkMode_ ? &frameMeasurements_.simulationUpdateMicroseconds : nullptr);
-        for (std::size_t batch = 0; batch < simulationBatches; ++batch)
-            AdvanceSimulation(frameSeconds);
+        AdvanceSimulation(frameSeconds);
     }
 #ifdef __EMSCRIPTEN__
     const auto simulationComplete = collectWebFrameTimings
@@ -256,8 +232,8 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         const std::string missionStatus = CompleteFleetMissionStatus();
         const std::uint64_t simulationTick = simulation_.TickCount();
         EM_ASM({
-            if (window.updateDroneSimGroundControl) {
-                window.updateDroneSimGroundControl(
+            if (window.updateDroneSimStatus) {
+                window.updateDroneSimStatus(
                     UTF8ToString($0), $1, $2, $3, $4, $5,
                     UTF8ToString($6), $7, $8, $9, $10);
             }
@@ -284,18 +260,7 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
 
 bool AeroSimLabApp::SmokeTestIsComplete() const
 {
-    if (!networkEnabled_)
-        return renderedFrames_ >= smokeTestFrameLimit;
-
-    if (!smokeFlightCommandObserved_)
-        return false;
-
-    const auto droneIds = simulation_.DroneIds();
-    return std::all_of(droneIds.begin(), droneIds.end(), [this](auto droneId)
-    {
-        return simulation_.State(droneId).mode
-            == aerosimlab::simulation::FlightMode::Grounded;
-    });
+    return renderedFrames_ >= smokeTestFrameLimit;
 }
 
 int AeroSimLabApp::ValidateSmokeTestOutput() const

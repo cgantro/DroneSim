@@ -126,11 +126,11 @@ async function run() {
     if (webGlErrors.length > 0)
       throw new Error(`WebGL 초기화 중 그래픽 오류가 발생했습니다: ${webGlErrors.join(" | ")}`);
 
-    const telemetry = page.locator("#web-gcs-status");
+    const telemetry = page.locator("#sim-control-status");
     await page.waitForFunction(
       () => {
-        return document.querySelector("#web-gcs-mode")?.textContent === "grounded"
-          && document.querySelector("#web-gcs-capture")?.textContent
+        return document.querySelector("#sim-control-mode")?.textContent === "grounded"
+          && document.querySelector("#sim-control-capture")?.textContent
             .includes("파손 여부는 사람이 판단합니다.");
       },
       null,
@@ -180,7 +180,7 @@ async function run() {
     console.log("Chromium에서 같은 페이지의 EO 카메라 패널 표시를 확인했습니다.");
     await page.getByRole("button", { name: "이륙" }).click();
     await page.waitForFunction(
-      () => document.querySelector("#web-gcs-mode")?.textContent !== "grounded",
+      () => document.querySelector("#sim-control-mode")?.textContent !== "grounded",
       null,
       { timeout: 10000 }
     );
@@ -189,7 +189,7 @@ async function run() {
         && !takeoffState.includes("flying"))
       throw new Error(`이륙 버튼 뒤 비행 상태가 바뀌지 않았습니다: ${takeoffState}`);
     await page.waitForFunction(
-      () => document.querySelector("#web-gcs-mode")?.textContent.includes("hovering"),
+      () => document.querySelector("#sim-control-mode")?.textContent.includes("hovering"),
       null,
       { timeout: 10000 }
     );
@@ -199,9 +199,9 @@ async function run() {
     await page.mouse.down();
     await page.waitForFunction(
       () => {
-        const mode = document.querySelector("#web-gcs-mode")?.textContent || "";
+        const mode = document.querySelector("#sim-control-mode")?.textContent || "";
         const speed = Number.parseFloat(
-          document.querySelector("#web-gcs-speed")?.textContent || "0");
+          document.querySelector("#sim-control-speed")?.textContent || "0");
         return mode === "flying" && speed > 0.1;
       },
       null,
@@ -211,7 +211,7 @@ async function run() {
     await page.mouse.up();
     await page.getByRole("button", { name: "착륙" }).click();
     await page.waitForFunction(
-      () => document.querySelector("#web-gcs-mode")?.textContent.includes("landing"),
+      () => document.querySelector("#sim-control-mode")?.textContent.includes("landing"),
       null,
       { timeout: 5000 }
     );
@@ -311,7 +311,7 @@ async function run() {
       { timeout: 45000 }
     );
     await page.waitForFunction(
-      () => document.querySelector("#web-gcs-mode")?.textContent === "grounded",
+      () => document.querySelector("#sim-control-mode")?.textContent === "grounded",
       null,
       { timeout: 10000 }
     );
@@ -328,7 +328,7 @@ async function run() {
     await page.getByRole("button", { name: "정찰 시작" }).click();
     await page.waitForFunction(
       () => {
-        const status = document.querySelector("#web-gcs-status")?.textContent || "";
+        const status = document.querySelector("#sim-control-status")?.textContent || "";
         return status.includes("촬영 위치로 이동 중")
           || status.includes("카메라 방향을 맞추는 중");
       },
@@ -345,7 +345,7 @@ async function run() {
       throw new Error("정찰 임무 중 목표 선택 또는 임무 중단 상태가 올바르지 않습니다.");
     await page.getByRole("button", { name: "일시 정지" }).click();
     await page.waitForFunction(
-      () => document.querySelector("#web-gcs-mission")?.textContent
+      () => document.querySelector("#sim-control-mission")?.textContent
         .includes("목표 1/1: 일시 정지"),
       null,
       { timeout: 5000 }
@@ -353,7 +353,7 @@ async function run() {
     await page.getByRole("button", { name: "재개" }).click();
     await page.waitForFunction(
       () => {
-        const status = document.querySelector("#web-gcs-status")?.textContent || "";
+        const status = document.querySelector("#sim-control-status")?.textContent || "";
         return status.includes("촬영 위치로 이동 중")
           || status.includes("카메라 방향을 맞추는 중");
       },
@@ -363,7 +363,7 @@ async function run() {
     try {
       await page.waitForFunction(
         () => {
-          const status = document.querySelector("#web-gcs-mission")?.textContent || "";
+          const status = document.querySelector("#sim-control-mission")?.textContent || "";
           return status.includes("정찰 완료")
             || status.includes("실패:");
         },
