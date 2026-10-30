@@ -367,11 +367,10 @@ void DroneSimApp::AdvanceSimulation(double elapsedSeconds)
         }
         if (benchmarkMode_)
         {
-            benchmarkMeasurements_.tickDurationsMicroseconds.push_back(
-                tickDurationMicroseconds);
+            benchmarkSession_.AddTick(tickDurationMicroseconds);
 #ifndef __EMSCRIPTEN__
             if (simulation_.TickCount() != previousSimulationTick)
-                benchmarkMeasurements_.physicsStepDurationsMicroseconds.push_back(
+                benchmarkSession_.AddPhysicsStep(
                     simulation_.LastPhysicsStepDurationMicroseconds());
 #endif
         }
@@ -392,7 +391,7 @@ void DroneSimApp::AdvanceSimulationTick()
     if (!missionActive && missionControlOwnsInput_)
     {
         missionControlOwnsInput_ = false;
-        window_->SetTitle(gamepadConnected_
+        window_->SetTitle(gamepadController_.IsConnected()
             ? "DroneSim | 게임패드 연결됨"
             : "DroneSim | 드론 관찰 · EO 영상");
     }
@@ -525,7 +524,7 @@ void DroneSimApp::RenderFrame()
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
-        hud_->Render(simulation_, observerDroneId_, gamepadConnected_,
+        hud_->Render(simulation_, observerDroneId_, gamepadController_.IsConnected(),
             fleetReturnCanStart,
             [this] { static_cast<void>(StartFleetReturn()); },
             CompleteFleetMissionStatus(), completeFleetMissionCanStart,
@@ -554,8 +553,8 @@ void DroneSimApp::RenderFrame()
                         DrawWorld(view, projection, cameraPosition,
                             showMissionGuides, hiddenDroneId);
                     },
-                    benchmarkMode_
-                        ? &frameMeasurements_.scenePanelRenderMicroseconds : nullptr);
+                    benchmarkMode_ ? &benchmarkSession_.CurrentFrame()
+                        .scenePanelRenderMicroseconds : nullptr);
             },
             [this](dronesim::simulation::DroneId droneId)
             {
@@ -567,23 +566,26 @@ void DroneSimApp::RenderFrame()
                         DrawWorld(view, projection, cameraPosition,
                             showMissionGuides, hiddenDroneId);
                     },
-                    benchmarkMode_
-                        ? &frameMeasurements_.cameraSceneRenderMicroseconds : nullptr);
+                    benchmarkMode_ ? &benchmarkSession_.CurrentFrame()
+                        .cameraSceneRenderMicroseconds : nullptr);
             },
             benchmarkMode_ ? &hudTimings : nullptr);
-        frameMeasurements_.hudInterfaceBuildMicroseconds = hudTimings.interfaceBuildMicroseconds;
-        frameMeasurements_.hudFinalizeMicroseconds = hudTimings.frameFinalizeMicroseconds;
-        frameMeasurements_.hudBackendDrawMicroseconds = hudTimings.backendDrawMicroseconds;
-        frameMeasurements_.hudDrawListCount = hudTimings.drawListCount;
-        frameMeasurements_.hudDrawCommandCount = hudTimings.drawCommandCount;
-        frameMeasurements_.hudVertexCount = hudTimings.vertexCount;
-        frameMeasurements_.hudIndexCount = hudTimings.indexCount;
-        frameMeasurements_.completedHudGpuTimingCount = std::min(
-            hudTimings.completedGpuFrameCount, completedHudGpuTimings_.size());
+        auto& frame = benchmarkSession_.CurrentFrame();
+        frame.hudInterfaceBuildMicroseconds = hudTimings.interfaceBuildMicroseconds;
+        frame.hudFinalizeMicroseconds = hudTimings.frameFinalizeMicroseconds;
+        frame.hudBackendDrawMicroseconds = hudTimings.backendDrawMicroseconds;
+        frame.hudDrawListCount = hudTimings.drawListCount;
+        frame.hudDrawCommandCount = hudTimings.drawCommandCount;
+        frame.hudVertexCount = hudTimings.vertexCount;
+        frame.hudIndexCount = hudTimings.indexCount;
+        frame.completedHudGpuTimingCount = std::min(
+            hudTimings.completedGpuFrameCount,
+            benchmarkSession_.CompletedHudGpuTimings().size());
         for (std::size_t index = 0;
-             index < frameMeasurements_.completedHudGpuTimingCount; ++index)
+             index < frame.completedHudGpuTimingCount; ++index)
         {
-            completedHudGpuTimings_[index] = hudTimings.completedGpuFrames[index];
+            benchmarkSession_.CompletedHudGpuTimings()[index]
+                = hudTimings.completedGpuFrames[index];
         }
     }
 #endif

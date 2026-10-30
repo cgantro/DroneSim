@@ -1,6 +1,8 @@
 #pragma once
 
 #include "SimulationBenchmark.h"
+#include "BenchmarkSession.h"
+#include "GamepadController.h"
 #include "gui/SimulatorHud.h"
 #include "FleetTelemetry.h"
 #include "FleetMissionProgress.h"
@@ -90,33 +92,8 @@ private:
     friend class DroneSimAppTestAccess;
 
 
-    static constexpr double benchmarkWarmupDurationSeconds = 1.0;
-
-    /** @brief 입력부터 화면 출력까지 현재 프레임에서만 쓰는 측정값이다. */
-    struct CurrentFrameMeasurements
-    {
-        double eventPollingMicroseconds = 0.0;
-        double gamepadPollingMicroseconds = 0.0;
-        double simulationUpdateMicroseconds = 0.0;
-        double renderFrameMicroseconds = 0.0;
-        double renderMicroseconds = 0.0;
-        double bufferSwapMicroseconds = 0.0;
-        double scenePanelRenderMicroseconds = 0.0;
-        double cameraSceneRenderMicroseconds = 0.0;
-        double hudInterfaceBuildMicroseconds = 0.0;
-        double hudFinalizeMicroseconds = 0.0;
-        double hudBackendDrawMicroseconds = 0.0;
-        std::size_t hudDrawListCount = 0;
-        std::size_t hudDrawCommandCount = 0;
-        std::size_t hudVertexCount = 0;
-        std::size_t hudIndexCount = 0;
-        std::size_t completedHudGpuTimingCount = 0;
-    };
-
     /** @brief 입력을 읽고 시뮬레이션과 화면을 한 프레임 진행한다. */
     void RunFrame(std::chrono::steady_clock::time_point& previousFrame);
-    /** @brief 이번 프레임 측정값을 요약 목록과 긴 프레임 기록에 추가한다. */
-    void RecordBenchmarkFrame(double applicationMicroseconds);
     /** @brief 창과 그래픽 자원을 준비한다. */
     void InitializeGraphics();
 #ifdef __EMSCRIPTEN__
@@ -198,14 +175,10 @@ private:
         const dronesim::simulation::DroneCommand& command);
     void PollGamepad();
     /** @brief 연결이 끊긴 뒤 남은 조종 입력을 지우고 필요한 정지 명령을 예약한다. */
-    void HandleGamepadDisconnected();
     /**
      * @brief 버튼의 새 입력과 현재 비행 조작값을 반영한다.
      * @details 이륙·착륙 버튼은 눌린 순간 한 번 처리하고, 스틱 값은 비행 중 계속 갱신한다.
      */
-    void HandleGamepadConnected(bool takeoffPressed, bool landPressed,
-        const std::optional<dronesim::manual_control::GamepadAxes>& pilotAxes);
-    void WriteBenchmarkReport(double elapsedSeconds) const;
     void RenderFrame();
 #ifdef __EMSCRIPTEN__
     /** @brief 웹 화면 크기에 맞춰 관찰 카메라의 시야 비율을 갱신한다. */
@@ -234,22 +207,13 @@ private:
     double cameraTransitAltitudeMeters_ = 0.0;
     bool externalControl_ = false;
     bool missionControlOwnsInput_ = false;
-    bool gamepadConnected_ = false;
-    bool previousTakeoffButton_ = false;
-    bool previousLandButton_ = false;
-    int gamepadJoystickId_ = -1;
-    int unsupportedJoystickId_ = -1;
+    GamepadController gamepadController_;
     std::optional<dronesim::simulation::DroneCommand> pendingControllerAction_;
     std::optional<dronesim::manual_control::PilotCommand> pendingPilotCommand_;
     bool benchmarkMode_ = false;
     bool visibleBenchmarkMode_ = false;
     std::size_t renderedFrames_ = 0;
-    std::size_t benchmarkStartRenderedFrames_ = 0;
-    std::uint64_t benchmarkStartSimulationTicks_ = 0;
-    std::clock_t benchmarkCpuStart_ = 0;
-    CurrentFrameMeasurements frameMeasurements_;
-    std::array<dronesim::gui::HudGpuTiming, 4> completedHudGpuTimings_{};
-    ViewerBenchmarkMeasurements benchmarkMeasurements_;
+    BenchmarkSession benchmarkSession_;
     int framebufferWidth_ = 0;
     int framebufferHeight_ = 0;
     std::chrono::steady_clock::time_point startTime_;

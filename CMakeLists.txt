@@ -211,8 +211,9 @@ if(DRONESIM_BUILD_GRAPHICS)
 
   add_library(dronesim_simulator_app STATIC
     apps/simulator/DroneSimApp.cpp
+    apps/simulator/GamepadController.cpp
     apps/simulator/DroneSimAppLifecycle.cpp
-    apps/simulator/DroneSimAppBenchmark.cpp
+    apps/simulator/BenchmarkSession.cpp
     apps/simulator/BuildRevision.cpp
     apps/simulator/DroneSimAppGamepad.cpp
     apps/simulator/DroneSimAppMission.cpp

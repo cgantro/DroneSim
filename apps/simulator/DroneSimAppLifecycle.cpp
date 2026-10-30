@@ -73,23 +73,19 @@ int DroneSimApp::Run()
     }, this, 0, false);
     return 0;
 #else
-    benchmarkCpuStart_ = std::clock();
     auto previousFrame = startTime_;
 
     if (benchmarkMode_)
     {
         while (!window_->ShouldClose()
             && std::chrono::steady_clock::now() - startTime_
-                < std::chrono::duration<double>(benchmarkWarmupDurationSeconds))
+                < std::chrono::duration<double>(BenchmarkSession::warmupSeconds))
         {
             RunFrame(previousFrame);
         }
 
         // 초기 셰이더·버퍼 생성 지연은 측정 구간에서 빼고, 워밍업 뒤 기준값부터 기록한다.
-        benchmarkMeasurements_ = {};
-        benchmarkStartRenderedFrames_ = renderedFrames_;
-        benchmarkStartSimulationTicks_ = simulation_.TickCount();
-        benchmarkCpuStart_ = std::clock();
+        benchmarkSession_.ResetMeasurements(renderedFrames_, simulation_.TickCount());
         startTime_ = std::chrono::steady_clock::now();
         previousFrame = startTime_;
     }
@@ -114,7 +110,8 @@ int DroneSimApp::Run()
     {
         const double elapsedSeconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - startTime_).count();
-        WriteBenchmarkReport(elapsedSeconds);
+        benchmarkSession_.WriteReport(*window_, simulation_, demoMode_,
+            visibleBenchmarkMode_, elapsedSeconds, renderedFrames_);
     }
     return 0;
 #endif
@@ -133,15 +130,16 @@ void DroneSimApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
     const auto applicationFrameStart = benchmarkMode_
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    frameMeasurements_ = {};
+    benchmarkSession_.ResetFrame();
+    auto& frame = benchmarkSession_.CurrentFrame();
     {
         dronesim::simulation::ScopedDuration measureEvents(
-            benchmarkMode_ ? &frameMeasurements_.eventPollingMicroseconds : nullptr);
+            benchmarkMode_ ? &frame.eventPollingMicroseconds : nullptr);
         window_->PollEvents();
     }
     {
         dronesim::simulation::ScopedDuration measureGamepad(
-            benchmarkMode_ ? &frameMeasurements_.gamepadPollingMicroseconds : nullptr);
+            benchmarkMode_ ? &frame.gamepadPollingMicroseconds : nullptr);
         PollGamepad();
     }
 #ifdef __EMSCRIPTEN__
@@ -161,7 +159,7 @@ void DroneSimApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
 
     {
         dronesim::simulation::ScopedDuration measureSimulation(
-            benchmarkMode_ ? &frameMeasurements_.simulationUpdateMicroseconds : nullptr);
+            benchmarkMode_ ? &frame.simulationUpdateMicroseconds : nullptr);
         AdvanceSimulation(frameSeconds);
     }
 #ifdef __EMSCRIPTEN__
@@ -172,10 +170,10 @@ void DroneSimApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
 #endif
     {
         dronesim::simulation::ScopedDuration measureRenderFrame(
-            benchmarkMode_ ? &frameMeasurements_.renderFrameMicroseconds : nullptr);
+            benchmarkMode_ ? &frame.renderFrameMicroseconds : nullptr);
         {
             dronesim::simulation::ScopedDuration measureRender(
-                benchmarkMode_ ? &frameMeasurements_.renderMicroseconds : nullptr);
+                benchmarkMode_ ? &frame.renderMicroseconds : nullptr);
             RenderFrame();
         }
 #ifdef __EMSCRIPTEN__
@@ -185,7 +183,7 @@ void DroneSimApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
 #endif
         {
             dronesim::simulation::ScopedDuration measureBufferSwap(
-                benchmarkMode_ ? &frameMeasurements_.bufferSwapMicroseconds : nullptr);
+                benchmarkMode_ ? &frame.bufferSwapMicroseconds : nullptr);
             window_->SwapBuffers();
         }
     }
@@ -254,7 +252,7 @@ void DroneSimApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
     {
         const double applicationMicroseconds = std::chrono::duration<double, std::micro>(
             std::chrono::steady_clock::now() - applicationFrameStart).count();
-        RecordBenchmarkFrame(applicationMicroseconds);
+        benchmarkSession_.RecordFrame(applicationMicroseconds, renderedFrames_);
     }
 }
 
