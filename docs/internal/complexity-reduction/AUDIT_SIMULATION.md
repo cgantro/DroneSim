@@ -11,23 +11,23 @@
 - ScenarioRunner.cpp:475–598 검색에서 임무 재할당을 확인했다. UpdateEnergyPolicy(81)에도 저배터리 복귀 정책이 있다. apps/simulator/AeroSimLabAppMission.cpp:273,456,617에서 앱도 경로 계획을 호출한다. 임무 책임의 중복 여부는 본문·호출 흐름 전체 미확인이라 결론을 보류한다.
 - FormationPlanner.cpp:387–408은 요청 편대 경로 실패 때 Column을 시도한다. 고정 V 요구와 다르므로 단순화 후보이지만 경로 없음과 장애물 여유를 처리해야 한다.
 - DroneModel.h:108의 1/60초와 SimulationCore.cpp:660–662,907,914의 누적·ECS 진행·배터리 갱신이 연결된다. SimulationCore.cpp에서 진행 순서와 소유권을 확인했으며 실행 검증은 하지 않았다.
-- PhysicsWorld.cpp:49–53,485–487,915–916에서 좌표 변환, 전역 AirSim 시계, 별도 접촉 계산을 확인했다. 수명·동시 월드 및 충돌 정확성은 미검증이다.
+- PhysicsWorld.cpp:49–53,485–487,915–916에서 좌표 변환, 전역 이전 물리 구현 시계, 별도 접촉 계산을 확인했다. 수명·동시 월드 및 충돌 정확성은 미검증이다.
 - MapFlightRoute.cpp:164,281에 우선순위 큐와 경로 계획 함수가 있다. A*의 장애물 판정과 실패 반환을 확인했으며 경로 중간 지형 높이는 별도 검증이 필요하다.
 
 ## 파일별 범위와 판정
 - `apps/headless/main.cpp`: SIMPLIFY — 현재 main은 입력 JSON으로 RunScenario를 호출하고 결과를 출력한다. 임무 결과에는 배정·경유점·완료 상태를 담는다. 과거 점검면·촬영 판정 필드는 2026-10-29 제거했다.
 - `modules/simulation_core/include/simulation_core/BatteryModel.h`: KEEP — 1–46. 배터리 설정을 입력받아 고정 틱 소비량·잔량·복귀 조건을 제공하고 에너지와 복귀 표시를 소유한다(41–44). 오류 검사는 구현 참조.
 - `modules/simulation_core/include/simulation_core/CommandRecording.h`: REMOVED — 당시 명령과 Tick을 저장하고 재생 범위를 span으로 빌려주던 기능이다. 2026-10-29 조종 명령 기록·재생 제품 기능 제거와 함께 삭제했다.
-- `modules/simulation_core/include/simulation_core/DroneModel.h`: KEEP — 1–133. 명령·상태·제어값과 결과 유형, Apply 및 AdvanceOneTick을 정의한다(77–126). 위치 ENU, 각속도 FLU, tick은 1/60초(108). AirSim과 운동학 이중 경로의 실제 빌드 요구는 확인 필요.
+- `modules/simulation_core/include/simulation_core/DroneModel.h`: KEEP — 1–133. 명령·상태·제어값과 결과 유형, Apply 및 AdvanceOneTick을 정의한다(77–126). 위치 ENU, 각속도 FLU, tick은 1/60초(108). 이전 물리 구현과 운동학 이중 경로의 실제 빌드 요구는 확인 필요.
 - `modules/simulation_core/include/simulation_core/EoCameraModel.h`: SIMPLIFY — 현재는 카메라 모델·상태, Tick 프레임 증가, 기체에 붙은 카메라 자세, 켜기·끄기·고장·초기화를 제공한다. 과거 점검면·가림 형상과 촬영 가능 판정은 2026-10-29 제거했다.
 - `modules/flight_planning/include/flight_planning/FormationPlanner.h`: 분리 완료 — 편대 위치와 편대 경로 계획의 공개 입력·결과를 선언한다. Simulation Core 자료형을 사용하지 않는다.
 - `modules/scenario/include/scenario/ScenarioJson.h` (당시 `simulation_core/InspectionSurfaceJson.h`): REMOVED — 시나리오 JSON 안의 점검면 기하를 읽던 헤더. 자동 촬영 판정을 제거하면서 파서와 함께 삭제했다.
-- `modules/simulation_core/include/simulation_core/PhysicsWorld.h`: KEEP — 확인 1–146. AirSim에 강체 생성·모터·지형·장애물·틱을 제공하며 Impl을 unique_ptr로 소유하고 복사를 금지한다(68–145). 잘못된 핸들의 DestroyBody는 false, 비유한 모터 입력은 거부(95,125). 충돌·좌표 계약 보존; 내부 수명은 구현 미완독.
+- `modules/simulation_core/include/simulation_core/PhysicsWorld.h`: KEEP — 확인 1–146. 이전 물리 구현에 강체 생성·모터·지형·장애물·틱을 제공하며 Impl을 unique_ptr로 소유하고 복사를 금지한다(68–145). 잘못된 핸들의 DestroyBody는 false, 비유한 모터 입력은 거부(95,125). 충돌·좌표 계약 보존; 내부 수명은 구현 미완독.
 - `modules/simulation_core/include/simulation_core/QuadrotorFlightController.h`: KEEP — 확인 1–51. 상태·목표·물성·이득을 받아 경유 속도와 4개 로터 목표를 값 반환(35–49). 자체 가변 상태 없음. 오류 동작은 구현 미확인; 강체 비행 제어에 필요.
 - `modules/simulation_core/include/simulation_core/QuadrotorModel.h`: KEEP — 확인 1–60. 질량·관성·로터·충돌 상자·모터 계수를 값으로 소유하며 X500 기본 및 추정값을 반환한다(32–57). 오류·실제 호출은 구현 미확인. 별도 추정 모델은 MVP 사용 확인 후 정리 후보.
 - `modules/scenario/include/scenario/ScenarioRunner.h` (당시 `simulation_core/ScenarioRunner.h`): SIMPLIFY — RunScenario가 JSON을 받아 드론·임무·궤적 결과를 값으로 돌려준다. 잘못된 문법·필수값은 예외로 알린다. 자동 촬영 재시도, 구도 판정 결과, 임무 배정 이력은 2026-10-29 제거했다. 임무 담당 드론은 입력에서 고정한다.
 - `modules/simulation_core/include/simulation_core/ScopedDuration.h`: KEEP — 확인 1–52. 생성 때 시간 시작, 소멸 때 전달받은 double에 시간 대입·누적한다(21–38). 포인터는 비소유이며 대상이 범위보다 오래 살아야 한다. null은 측정 생략. 벤치마크 소비자 확인 후 제거 가능성 검토.
-- `modules/simulation_core/include/simulation_core/SimulationCore.h`: KEEP — 확인 1–235. FixedTickAccumulator(55–66)는 잔여 시간을 소유하고 프레임 입력을 100ms로 제한한다. SimulationCore(72–234)는 ECS를 unique_ptr로 소유하고 명령·드론·카메라·배터리·충돌·틱 API를 제공한다. 없는 드론·배터리는 일부 예외, 마지막 드론은 제거 불가. 네이티브 AirSim과 웹 운동학 선택(31–38)은 호출 환경 확인 후 정리.
+- `modules/simulation_core/include/simulation_core/SimulationCore.h`: KEEP — 확인 1–235. FixedTickAccumulator(55–66)는 잔여 시간을 소유하고 프레임 입력을 100ms로 제한한다. SimulationCore(72–234)는 ECS를 unique_ptr로 소유하고 명령·드론·카메라·배터리·충돌·틱 API를 제공한다. 없는 드론·배터리는 일부 예외, 마지막 드론은 제거 불가. 네이티브 이전 물리 구현과 웹 운동학 선택(31–38)은 호출 환경 확인 후 정리.
 - `modules/simulation_core/src/BatteryModel.cpp`: KEEP — 1–91. 생성자(9)는 설정 범위 오류에 예외를 던지고 Advance(33)는 모드별 평균 전력과 고정 틱으로 잔량을 갱신한다. Reset(46)은 초기량과 복귀 표시를 복원한다. 복귀 자체는 실행하지 않는다.
 - `modules/simulation_core/src/CollisionGeometry.cpp`: KEEP — 확인 1–200, 201–327. 외접구·AABB 및 분리축으로 상자 접촉을 계산하고(39,253), 외곽선 투영으로 footprint·prism 접촉을 반환한다(106,172,194). 유효하지 않거나 겹치지 않으면 nullopt; 값 기반 지역 상태. EO의 별도 다각형 판정과 목적이 달라 통합 전 경계 규칙 검토 필요.
 - `modules/simulation_core/include/simulation_core/CollisionGeometry.h`: KEEP — 강체 상자·외곽선의 접촉 계산과 입력 유효성 검사를 선언한다. span은 비소유다. 접촉 실패와 일부 잘못된 입력이 `nullopt`로 합쳐지는 의미에 주의한다. 호출 모듈이 함께 사용하는 공개 포함 경로에 둔다.
@@ -36,7 +36,7 @@
 - `modules/simulation_core/src/EoCameraModel.cpp`: SIMPLIFY — 현재는 카메라 프레임·자세·상태를 갱신한다. 과거의 점검면 거리·각도·화면·해상도·건물 가림 판정은 2026-10-29 제거했다. 카메라 고장 상태에서 켜기 요청을 무시하는 동작은 유지한다.
 - `modules/flight_planning/src/FormationPlanner.cpp`: 분리 완료 — V자 오프셋을 진행 방향에 맞춰 회전하고, 편대 전체 폭을 반영한 여유값으로 지형 경로를 요청한다. 현재 구현에서 다른 대형 전환 기능은 확인되지 않았다.
 - `modules/scenario/src/ScenarioJson.cpp` (당시 `simulation_core/InspectionSurfaceJson.cpp`): REMOVED — 점검면 기하 JSON 파서. 촬영 조건 판정과 함께 2026-10-29 삭제했다.
-- `modules/simulation_core/src/PhysicsWorld.cpp`: KEEP — 확인 1–200, 201–400, 401–600, 601–800, 801–1000, 1001–1200, 1201–1270; 남은 줄 없음. Impl은 강체와 AirSim 시계를 소유하고 엔진에 강체 주소를 빌려준다(403–510); 소멸 전 clear. Step(1150)은 접촉·모터·엔진을 순서대로 실행하며 좌표 변환과 지형·장애물 접촉을 처리한다. 입력 오류와 미존재 핸들은 예외. 전역 시계의 동시 월드 실행 안전성은 미검증.
+- `modules/simulation_core/src/PhysicsWorld.cpp`: KEEP — 확인 1–200, 201–400, 401–600, 601–800, 801–1000, 1001–1200, 1201–1270; 남은 줄 없음. Impl은 강체와 이전 물리 구현 시계를 소유하고 엔진에 강체 주소를 빌려준다(403–510); 소멸 전 clear. Step(1150)은 접촉·모터·엔진을 순서대로 실행하며 좌표 변환과 지형·장애물 접촉을 처리한다. 입력 오류와 미존재 핸들은 예외. 전역 시계의 동시 월드 실행 안전성은 미검증.
 - `modules/simulation_core/src/QuadrotorFlightController.cpp`: KEEP — 확인 1–233; 남은 줄 없음. WaypointVelocityTarget(150)은 위치에서 제한 속도를 반환하고 MotorTargets(170)는 상태·제어·물성에서 자세 토크와 로터 속도를 계산한다. 상태는 소유하지 않으며 로터 연립식이 특이하면 예외(127). 강체 제어와 운동학의 목표 동작 차이는 유지 여부 확인.
 - `modules/simulation_core/src/QuadrotorModel.cpp`: KEEP — 확인 1–67; 남은 줄 없음. X500Gazebo(7)는 기체·로터 관성 및 9개 충돌 상자를 값으로 구성하고 X500MotorTableEstimate(56)는 계수 세 개를 추정값으로 대체한다. 가변 상태·오류 처리 없음. 별도 추정값이 필요한지 소비자 확인.
 - `modules/scenario/src/ScenarioDefinition.cpp`: SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1329; 남은 줄 없음. ReadScenarioDefinition(1254)은 JSON을 검증해 값 소유 정의를 반환하고 잘못된 입력은 예외. GenerateSurveyTasks(610)는 드론별 영역과 왕복 경로를 생성; 앱 임무 생성과 중복 여부 확인. 시설 점검·재시도 및 통신 장애·물성 변경 설정은 범위 정리 후보이며 필수 조사 경로와 구분.
@@ -47,10 +47,10 @@
 ## Simulation Core의 실제 책임과 경계
 
 - `SimulationCore`는 Flecs 세계와 드론 엔티티를 만들고, 명령 적용 및 단일 1/60초 틱을 외부에 제공한다. Flecs 컴포넌트는 별도 타입을 많이 두기보다 드론 상태·제어 목표·카메라 상태를 엔티티에 붙인다. 배터리도 기본 생성자를 제공한 `BatteryModel` 컴포넌트로 옮겼다. 식별자→엔티티 맵은 컴포넌트 데이터 복제가 아니라 외부의 연속 `DroneId`를 Flecs 엔티티로 찾는 색인이라 유지한다. 지형, 바람, 충돌 장애물과 계측값은 코어 소유 자료다. 바람은 모든 드론에 같은 환경값이므로 `DroneControlState`에 반복 저장하지 않는다. 운동학 모드에서는 코어가, 강체 모드에서는 `PhysicsWorld`가 각자 바람 값을 보유한다. 모든 시뮬레이션 데이터를 ECS로 표현하지는 않는다.
-- Flecs 시스템은 운동학 모드에서 `DroneState`와 `DroneControlState`를 순회해 운동학 계산과 접촉 처리를 한다. 카메라 시스템은 `CameraState`를 갱신한다. 강체 모드에서는 Flecs 시스템이 목표 로터 속도를 AirSim의 물리 월드에 전달하고, `AdvanceOneTick()` 뒤 물리 월드를 한 번 진행해 결과를 각 드론 상태에 복사한다. 현재 구조는 ECS 시스템이 전체 물리 적분을 맡는 형태가 아니라, ECS가 드론 상태·제어를 보유하고 별도 `PhysicsWorld`가 강체를 소유하는 혼합 구조다.
-- `AdvanceOneTick()`의 순서는 일시정지 확인 → Flecs 진행(제어·운동학/로터 입력·카메라 tick) → 강체 모드의 AirSim 적분과 상태 동기화 → 배터리 갱신 → Tick 증가 → 카메라 자세 동기화다. 배터리는 물리 갱신 뒤 `BatteryModel`과 `DroneState`가 함께 붙은 엔티티만 Flecs 조회로 순회한다. 이 순서는 앱·헤드리스 양쪽에서 공유된다.
+- Flecs 시스템은 운동학 모드에서 `DroneState`와 `DroneControlState`를 순회해 운동학 계산과 접촉 처리를 한다. 카메라 시스템은 `CameraState`를 갱신한다. 강체 모드에서는 Flecs 시스템이 목표 로터 속도를 이전 물리 구현의 물리 월드에 전달하고, `AdvanceOneTick()` 뒤 물리 월드를 한 번 진행해 결과를 각 드론 상태에 복사한다. 현재 구조는 ECS 시스템이 전체 물리 적분을 맡는 형태가 아니라, ECS가 드론 상태·제어를 보유하고 별도 `PhysicsWorld`가 강체를 소유하는 혼합 구조다.
+- `AdvanceOneTick()`의 순서는 일시정지 확인 → Flecs 진행(제어·운동학/로터 입력·카메라 tick) → 강체 모드의 이전 물리 구현 적분과 상태 동기화 → 배터리 갱신 → Tick 증가 → 카메라 자세 동기화다. 배터리는 물리 갱신 뒤 `BatteryModel`과 `DroneState`가 함께 붙은 엔티티만 Flecs 조회로 순회한다. 이 순서는 앱·헤드리스 양쪽에서 공유된다.
 - 화면 장면과 렌더링은 Simulation Core에 있지 않다. `TrainingRangeScene`과 그래픽 모듈이 장면 자산·그리기 데이터를 다루고, 앱이 시뮬레이션 상태를 렌더러 입력으로 넘긴다. 상세 모듈 책임·파일 배치·장면 관리 조사는 사용자 요청에 따라 다음 단계의 별도 구조 감사에서 한다.
-- 공개 API는 명령·드론 생성/삭제·배터리·카메라·바람·로터 고장·물리 시간 계측·장애물·지형·시간을 한 `SimulationCore`에 모아 둔다. 사용처가 없던 Flecs 시스템별 시간, 전체 Flecs 진행 시간, 접촉 자료 생성 시간 측정 API는 2026-10-29 제거했다. 앱에서 보여 주는 AirSim 물리 단계 시간은 유지한다.
+- 공개 API는 명령·드론 생성/삭제·배터리·카메라·바람·로터 고장·물리 시간 계측·장애물·지형·시간을 한 `SimulationCore`에 모아 둔다. 사용처가 없던 Flecs 시스템별 시간, 전체 Flecs 진행 시간, 접촉 자료 생성 시간 측정 API는 2026-10-29 제거했다. 앱에서 보여 주는 이전 물리 단계 시간은 유지한다.
 - `Dynamics()`, `IsPaused()`, `SetRotorMotorFault()`와 `IsRotorMotorFaulted()`는 저장소 호출처가 없어 SimulationCore 공개 API에서 제거했다. 실제 로터 고장 동작과 직접 시험은 `PhysicsWorld`에 남겨 두었다. 모드 선택은 생성자에 남아 있고, 일시정지는 `Pause()`·`Resume()` 동작으로 제어한다.
 - `AddDrone`의 두 인자 오버로드는 지면 높이 0을 넣어 세 인자 오버로드를 다시 호출하던 얇은 중복이었다. 기본 지면 높이 인자를 둔 한 함수로 합쳤다. 인자 세 개를 넘겨 실제 지면 높이를 지정하는 호출도 유지된다.
 - 강체 모드의 지형은 `PhysicsWorld`가 접촉 계산에 사용한다. `SimulationCore`에도 같은 격자를 복사해 두고 있었지만 강체 경로에서는 읽지 않았다. 이제 강체 모드에서는 소유권을 물리 월드로 넘기고, 운동학 모드에서만 코어가 지형을 보관한다. 따라서 강체 모드의 불필요한 격자 사본 하나와 복사 한 번을 없앴다.
@@ -76,7 +76,7 @@
 - `modules/terrain/src/TrainingRangeTerrain.cpp`: KEEP — 확인 1–53; 남은 줄 없음. CreateTrainingRangeTerrain(8)은 101×101 높이 vector에 언덕·능선 값을 채우고 최솟값을 0으로 조정해 반환한다. 외부 입력·상태 없음. 시험 지형 소비자를 확인해 실제 사용 범위에 맞춰 유지.
 - `tests/simulation_core/CommandRecordingTests.cpp`: REMOVED — 명령 기록·재생 전용 시험이다. 제품 기능 삭제와 함께 삭제했으며, JSON 시나리오 시험은 유지한다.
 - `tests/flight_planning/FormationPlannerTests.cpp`: 편대 계획 시험 — 4대 V 배치와 좁은 경로 거부를 확인한다. 경로·대형 알고리즘을 바꿀 때 이 모듈과 함께 검증한다.
-- `tests/simulation_core/PhysicsWorldTests.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–888; 남은 줄 없음. 모터·제어·좌표계·지면·장애물·드론 충돌과 범위 오류를 확인한다(44,274,489,511,582,744,782). AirSim 접촉과 수명 변경 시 중요한 회귀 범위이며 고장 주입 시험은 기능 범위 결정 후 정리. 실행하지 않음.
+- `tests/simulation_core/PhysicsWorldTests.cpp`: KEEP — 확인 1–250, 251–500, 501–750, 751–888; 남은 줄 없음. 모터·제어·좌표계·지면·장애물·드론 충돌과 범위 오류를 확인한다(44,274,489,511,582,744,782). 이전 물리 구현 접촉과 수명 변경 시 중요한 회귀 범위이며 고장 주입 시험은 기능 범위 결정 후 정리. 실행하지 않음.
 - `tests/simulation_core/QuadrotorModelTests.cpp`: KEEP — 확인 1–124; 남은 줄 없음. 제조사 표의 추정 계수와 X500 질량·관성·로터 배치(12,86)를 확인한다. 해당 모델을 유지할 때 물성 변경 검증에 필요. 실행하지 않음.
 - `tests/scenario/ScenarioRunnerTests.cpp` (당시 `tests/simulation_core`): SIMPLIFY — 확인 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1500, 1501–1688; 남은 줄 없음. 시나리오·카메라·물성·통신·4대 분산 조사·충돌 회피·저배터리와 재할당을 검사한다(160,762,1000,1250,1568). 16–256대 확장 및 재할당 기대는 제거 후보; 4대 조사·통신 단절의 미확정 처리·복귀·충돌 안전 시험은 요구에 맞게 보존. 실행하지 않음.
 - `tests/simulation_core/SimulationCoreTests.cpp`: KEEP — 기준선 시험은 배터리·고정 틱·운동학 장애물·지형·ECS 및 드론별 카메라 상태를 확인했다. 점검면 촬영 판정 시험은 기능 제거와 함께 삭제했다. 현재 시험 실행 결과는 `VERIFICATION.md`에 기록한다.
@@ -250,7 +250,7 @@
 
 ### 실행 흐름과 핵심 판단
 
-`SimulationCore::AdvanceOneTick()`이 `EcsStorage::AdvanceOneTick()`을 호출한다. 이 저장소는 운동학 모드에서 Flecs 시스템을 실행해 `DroneModel::AdvanceOneTick()`으로 상태를 전진시키고, 강체 모드에서는 비행 상태를 `QuadrotorFlightController::MotorTargets()`에 전달해 모터 목표를 만든다. 이어 `PhysicsWorld::Step(1/60)`이 AirSim 물리를 진행하고, 물리 상태를 ECS의 `DroneState`에 복사한다. 그 뒤 배터리, Tick, 카메라 자세를 갱신한다. 명령도 `SimulationCore::Apply()`에서 기본 입력을 확인한 다음 `DroneModel::Apply()`에 위임한다.
+`SimulationCore::AdvanceOneTick()`이 `EcsStorage::AdvanceOneTick()`을 호출한다. 이 저장소는 운동학 모드에서 Flecs 시스템을 실행해 `DroneModel::AdvanceOneTick()`으로 상태를 전진시키고, 강체 모드에서는 비행 상태를 `QuadrotorFlightController::MotorTargets()`에 전달해 모터 목표를 만든다. 이어 `PhysicsWorld::Step(1/60)`이 이전 물리를 진행하고, 물리 상태를 ECS의 `DroneState`에 복사한다. 그 뒤 배터리, Tick, 카메라 자세를 갱신한다. 명령도 `SimulationCore::Apply()`에서 기본 입력을 확인한 다음 `DroneModel::Apply()`에 위임한다.
 
 따라서 “SimulationCore가 수학 계산까지 전부 직접 한다”는 판단은 맞지 않는다. 비행 이동 계산은 `DroneModel`, 강체 자세·추력 제어는 `QuadrotorFlightController`, 강체 적분과 좌표 변환은 `PhysicsWorld`, SAT·다각형 투영은 `CollisionGeometry`가 맡는다. 다만 `SimulationCore.cpp`의 내부 저장소가 ECS 수명·물리 세계·두 비행 모드 연결뿐 아니라 운동학 모드의 지형/건물 접촉 보정과 속도 제거까지 직접 수행한다. 특히 한 파일에 통합·접촉 정책이 함께 있어 역할을 좁힐 여지는 확인된다.
 
@@ -265,20 +265,20 @@
 | `include/simulation_core/EoCameraModel.h` | 카메라 모델·상태와 장착/광축/위쪽 축 계산의 공개 API를 정의한다. | 센서 상태 자료와 API로 위치가 적절하다. 프레임 파일 저장 기능은 현재 책임이 아니다. 카메라 상태와 프레임 진행은 SimulationCore 시험 및 렌더러 직접 호출에서 확인된다. |
 | `src/EoCameraModel.cpp` | 고정 기체 장착 위치·방향(기체 기준 m), 드론 쿼터니언으로 월드 자세를 계산하고 켜기/고장/복구 상태를 갱신한다. | 카메라 기하/상태만 담당해 모듈명과 맞는다. 모델 수치 유효성 검사는 `CameraModel::IsValid()`에서 한다. 독립 전용 시험 파일은 없고 SimulationCore 카메라 시험 및 앱 렌더 경로가 호출한다. |
 | `include/simulation_core/PhysicsWorld.h` | 강체 핸들, 위치·자세·속도 상태, 모터/바람/지형/장애물/틱 API를 공개한다. | SimulationCore가 PhysicsWorld 구현을 직접 노출하지 않도록 인터페이스 경계 역할을 한다. 입력 오류 계약과 복사 금지는 선언에 있다. 전용 시험은 `PhysicsWorldTests.cpp`. |
-| `src/PhysicsWorld.cpp` | AirSim API·기체 파라미터 어댑터, ENU/FLU↔NED/FRD 변환, 강체 수명, 모터 지연·고장, 충돌 후보와 AirSim 접촉, 지형 및 Tick을 구현한다. AirSim 객체는 `unique_ptr`가 소유되고 엔진에는 주소를 빌려준다. | 물리 연동 역할은 맞지만 어댑터·수명·좌표 변환·환경 충돌·모터 상태가 한 구현 파일에 모여 있다. 좌표·float 표현 가능성 확인은 AirSim 경계에 필요한 검사다. 1,256줄 규모지만 각 계산은 AirSim 연결 순서에 얽혀 있으므로 단순히 파일 분할부터 하는 것은 이득이 불확실하다. 광범위한 동역학·좌표·접촉 시험은 `PhysicsWorldTests.cpp`. |
+| `src/PhysicsWorld.cpp` | 이전 물리 구현 API·기체 파라미터 어댑터, ENU/FLU↔NED/FRD 변환, 강체 수명, 모터 지연·고장, 충돌 후보와 이전 물리 구현 접촉, 지형 및 Tick을 구현한다. 이전 물리 구현 객체는 `unique_ptr`가 소유되고 엔진에는 주소를 빌려준다. | 물리 연동 역할은 맞지만 어댑터·수명·좌표 변환·환경 충돌·모터 상태가 한 구현 파일에 모여 있다. 좌표·float 표현 가능성 확인은 이전 물리 구현 경계에 필요한 검사다. 1,256줄 규모지만 각 계산은 이전 물리 구현 연결 순서에 얽혀 있으므로 단순히 파일 분할부터 하는 것은 이득이 불확실하다. 광범위한 동역학·좌표·접촉 시험은 `PhysicsWorldTests.cpp`. |
 | `include/simulation_core/QuadrotorFlightController.h` | 목표 경유점 속도와 4개 로터 목표를 계산하는 무상태 함수 및 제어 상수를 선언한다. | 비행 제어 API로 적합하다. 고정 쿼드로터 형식임이 API에서 드러난다. 시험은 `PhysicsWorldTests.cpp`의 직접 제어 입력/목표 확인과 SimulationCore 강체 케이스. |
 | `src/QuadrotorFlightController.cpp` | 위치·속도 오차로 가속도를 제한하고, 추력 방향/헤딩으로 목표 자세를 만든다. 쿼터니언 자세 오차와 각속도 피드백으로 토크를 산출하고, 4×4 피벗 소거로 로터 추력을 구해 추력 계수로 RPM으로 바꾼다. | 수계산은 이 전용 파일에 있다. 책임 이름과 맞고 SimulationCore에 중복 구현된 제어식은 확인되지 않았다. 특이 연립식은 오류 처리한다. 수식·축 기준 설명을 보강할 여지는 있으나 core로 옮길 근거는 없다. 시험은 제어 입력, 이득, 관성/토크 반응 시험. |
 | `include/simulation_core/QuadrotorModel.h` | 기체 질량·관성·로터 배치·모터 계수·충돌 상자를 값으로 보유하는 파라미터 타입과 X500 생성 API다. | 현재 X500 시뮬레이터 범위의 모델 정의로 역할이 명확하다. 충돌 모양까지 파라미터에 들어가는 것은 PhysicsWorld 생성에 필요하다. 시험은 `QuadrotorModelTests.cpp`. |
 | `src/QuadrotorModel.cpp` | 공개 X500/Gazebo 기준값으로 관성·로터·충돌 상자를 구성하고, 별도 모터표 추정 설정을 만든다. | 기체 제원만 구성한다. 두 번째 추정 모델이 실제 시연 경로에서 필요한지는 앱 설정 호출과 요구 범위에 따라 판단할 후보이며, 코드만으로 dead code라 할 수 없다. 제원/배치/계수 시험 존재. |
 | `include/simulation_core/ScopedDuration.h` | 범위 진입부터 종료까지 시간을 측정해 외부 double에 누적하는 RAII 도구다. 대상 포인터는 빌려 쓴다. | 계측 역할은 단순하다. 공개 헤더지만 앱 그래픽 코드도 사용하므로 core에 위치하는 것이 자연스러운지는 경계 검토 후보. null 대상은 측정 생략. 시험은 전용 CoreScenarios에 시간 성능 단언이 있는지 별도 확인 필요; 현재 사용은 PhysicsWorld와 앱. |
 | `include/simulation_core/SimulationCore.h` | 외부가 사용하는 통합 API, 고정 틱 누산기, 드론/카메라/배터리/물리 환경 접근을 선언한다. ECS 내부 저장소는 `unique_ptr`로 감춘다. | 공개 조립 API로 위치가 맞으나 타입별 API가 넓다. `FixedTickAccumulator`는 틱 분수 상태와 프레임 경과시간을 보유하고 최대 0.1초를 소비한다. 시험은 전체 시뮬레이션 시험과 앱 세션 시험. |
-| `src/SimulationCore.cpp` | `EcsStorage`가 Flecs 월드, 엔티티 ID 맵, 시스템, 선택형 배터리 컴포넌트와 카메라·물리 객체 연결을 맡는다. 운동학 충돌 자료와 접촉 보정은 `KinematicCollisionWorld`에 맡긴다. 공개 생성·초기화·명령·환경 API는 경계 입력을 확인한 뒤 적절한 모델이나 저장소를 호출한다. | 핵심 조립 지점이지만 긴 편이고, AirSim 강체 처리와 운동학 처리 사이의 플랫폼 분기가 많다. 제어·기하·적분 수식은 전용 코드에 있다. 유한 수치 검사는 서로 다른 외부 API 경계에 있어 전부 같은 중복으로 보지는 않는다. 접촉·틱·리셋·입력 오류·ECS/물리 동기화 시험은 `SimulationCoreTests.cpp`. |
+| `src/SimulationCore.cpp` | `EcsStorage`가 Flecs 월드, 엔티티 ID 맵, 시스템, 선택형 배터리 컴포넌트와 카메라·물리 객체 연결을 맡는다. 운동학 충돌 자료와 접촉 보정은 `KinematicCollisionWorld`에 맡긴다. 공개 생성·초기화·명령·환경 API는 경계 입력을 확인한 뒤 적절한 모델이나 저장소를 호출한다. | 핵심 조립 지점이지만 긴 편이고, 이전 물리 처리와 운동학 처리 사이의 플랫폼 분기가 많다. 제어·기하·적분 수식은 전용 코드에 있다. 유한 수치 검사는 서로 다른 외부 API 경계에 있어 전부 같은 중복으로 보지는 않는다. 접촉·틱·리셋·입력 오류·ECS/물리 동기화 시험은 `SimulationCoreTests.cpp`. |
 | `include/simulation_core/CollisionGeometry.h` | 상자·외곽선·프리즘이 유효한지 검사하고 접촉 깊이·방향 또는 `optional` 결과를 계산하는 API다. span은 비소유다. | 강체·운동학 충돌 경로와 시험이 함께 쓰므로 공개 포함 경로에 뒀다. `collision` 네임스페이스로 용도를 드러낸다. |
 | `src/CollisionGeometry.cpp` | 외접구/AABB broadphase, OBB SAT, footprint 투영, prism 높이 범위 접촉을 값으로 계산한다. | 충돌 기하 계산을 전용 파일에 둔 것은 적절하다. `FindPrismContact`→`ProjectToFootprint` 경로가 동일 외곽선 유효성 검사를 겹쳐 한다. `FindFootprintContact`도 매번 검사한다. 저장 시 검증된 기하를 재사용할 수 있는지는 호출 계약과 간결성 비교 후 판단할 최적화/단순화 후보다. 직접 시험은 SimulationCore/PhysicsWorld의 접촉 시나리오이며 별도 CollisionGeometry 시험은 확인되지 않았다. |
 
 ### ECS, 모듈 경계, 중복 후보
 
-- Flecs는 실제로 사용된다. 위치/속도/자세/비행 모드와 제어 목표, 카메라, 선택 배터리를 컴포넌트로 만들고 시스템/반복문으로 갱신한다. 따라서 “Component를 전혀 쓰지 않는다”는 인상과 달리 드론의 반복 갱신 데이터는 컴포넌트다. 반면 정적 장애물·지형·AirSim 핸들 맵은 월드 자원 성격의 소유 데이터라 별도 저장한다. 이를 억지로 엔티티로 쪼개야 한다는 근거는 없다.
+- Flecs는 실제로 사용된다. 위치/속도/자세/비행 모드와 제어 목표, 카메라, 선택 배터리를 컴포넌트로 만들고 시스템/반복문으로 갱신한다. 따라서 “Component를 전혀 쓰지 않는다”는 인상과 달리 드론의 반복 갱신 데이터는 컴포넌트다. 반면 정적 장애물·지형·이전 물리 구현 핸들 맵은 월드 자원 성격의 소유 데이터라 별도 저장한다. 이를 억지로 엔티티로 쪼개야 한다는 근거는 없다.
 - 공개 헤더는 `include/simulation_core`, 구현은 `src`에 둔다. 공통 충돌 기하 헤더를 공개 포함 경로로 옮겼으므로 시험 타깃에만 붙던 `src` 직접 포함 경로도 제거했다. CMake 루트에서 공개 헤더 경로를 등록하며 `PhysicsWorld.cpp`와 해당 시험만 Emscripten 빌드에서 제외된다.
 - 직접 호출자는 Simulator 앱/장면/HUD, Scenario, Manual Control, Communication, Ground Control 및 테스트다. 이 중 Scenario는 `QuadrotorFlightController::WaypointVelocityTarget()`을 직접 호출해 경유점 속도를 계산한다. 따라서 시나리오·시뮬레이션 간 제어 규칙 공유가 존재한다. 이는 같은 식을 두 번 구현한 중복은 아니지만, 임무 경로 계산이 물리 모듈 구현을 직접 참조하는 의존 경계다.
 - 상자·프리즘 입력 검사가 두 물리 경로에 중복되어 있던 부분은 `collision::IsValidObstacleBox()`와 `collision::IsValidPrism()`으로 모았다. 외곽선 유효성도 `IsValidFootprint()`를 함께 쓴다. 위치·속도·자세 입력의 유한성 검사는 각 공개 경계에서 맡는 대상이 달라 유지한다.
@@ -288,7 +288,7 @@
 
 `tests/simulation_core/SimulationCoreTests.cpp`는 배터리 소모/설정 오류, 고정 틱, 바람, 이륙·이동·착륙, 상자/기둥/지형 접촉, 명령 입력 오류, 초기 상태, 강체 모터 입력 제한, Flecs·PhysicsWorld 동시 생성/삭제, 개별 카메라를 포함한다. `QuadrotorModelTests.cpp`는 질량·관성·로터 배치·모터표 추정값, `PhysicsWorldTests.cpp`는 모터 지연/고장, 추력·중력·질량 영향, 제어기 응답, 좌표 변환, 지형/건물/드론 접촉, float 표현 한계를 다룬다. GoogleTest 묶음 수와 시나리오 함수 수는 별개이므로 테스트 개수만으로 중복·가치를 판정하지 않았다.
 
-정적 읽기로 호출 순서와 자료형은 확인했지만, 실제 AirSim 적분 결과, 브라우저/네이티브 분기 동작, 동시 PhysicsWorld 안전성, 화면 표시와 성능은 런타임 확인하지 않았다. 다음 코드 변경 전에는 이 감사와 기존 테스트를 기준으로 “줄일 검사”와 “필수 경계 조건”을 구별해야 한다.
+정적 읽기로 호출 순서와 자료형은 확인했지만, 실제 이전 물리 구현 적분 결과, 브라우저/네이티브 분기 동작, 동시 PhysicsWorld 안전성, 화면 표시와 성능은 런타임 확인하지 않았다. 다음 코드 변경 전에는 이 감사와 기존 테스트를 기준으로 “줄일 검사”와 “필수 경계 조건”을 구별해야 한다.
 
 ### 감사 후 판단과 첫 수정
 
@@ -303,24 +303,24 @@
 
 `SimulationCore.cpp`에는 `#if` 24개와 `#else` 2개가 있다. 이들은 크게 세 가지 일을 한다.
 
-1. **AirSim 전용 코드 제외:** 헤더 포함, 강체 핸들과 `PhysicsWorld` 저장, 강체 생성·삭제·초기화, 로터 제어, 물리 상태 복사와 적분을 웹 빌드에서 제외한다.
+1. **이전 물리 전용 코드 제외:** 헤더 포함, 강체 핸들과 `PhysicsWorld` 저장, 강체 생성·삭제·초기화, 로터 제어, 물리 상태 복사와 적분을 웹 빌드에서 제외한다.
 2. **지원 차이를 명시:** 웹에서는 강체 모드를 지원하지 않는다. `Apply()`는 로터 명령에 `UnsupportedDynamics`를 반환한다. 이번 재확인 전에는 생성자에 강체 모드를 직접 지정하면 드론만 만들어지고 물리 시스템은 등록되지 않아 Tick이 진행되지 않는 경로가 남아 있었다. 이를 발견해 웹 빌드에서 강체 모드 선택 시 생성자에서 오류를 내도록 고쳤다. 초기 로터 속도도 강체 모드에서만 허용한다.
-3. **환경 입력을 실제 계산 경로로 전달:** 바람·지형·장애물은 네이티브 강체 모드라면 AirSim에, 운동학 모드라면 `KinematicCollisionWorld`에 보낸다. Tick 갱신도 각 모드에 맞는 실행 경로를 사용한다.
+3. **환경 입력을 실제 계산 경로로 전달:** 바람·지형·장애물은 네이티브 강체 모드라면 이전 물리 구현에, 운동학 모드라면 `KinematicCollisionWorld`에 보낸다. Tick 갱신도 각 모드에 맞는 실행 경로를 사용한다.
 
-루트 CMake는 네이티브에서만 `PhysicsWorld.cpp`와 AirSim 연결을 넣는다. 그래서 `SimulationCore.cpp`가 해당 타입을 직접 쓰는 곳에는 컴파일 분기가 필요하다. 공개 헤더의 기본 동역학 선택도 네이티브는 강체, 웹은 운동학으로 다르다. 즉 분기는 플랫폼과 물리 기능의 실제 차이를 표현하며, 단순히 같은 코드를 여러 번 감싼 장식은 아니다.
+루트 CMake는 네이티브에서만 `PhysicsWorld.cpp`와 이전 물리 구현 연결을 넣는다. 그래서 `SimulationCore.cpp`가 해당 타입을 직접 쓰는 곳에는 컴파일 분기가 필요하다. 공개 헤더의 기본 동역학 선택도 네이티브는 강체, 웹은 운동학으로 다르다. 즉 분기는 플랫폼과 물리 기능의 실제 차이를 표현하며, 단순히 같은 코드를 여러 번 감싼 장식은 아니다.
 
 ### 구현 선택지와 권고
 
 | 선택 | 장점 | 부담·위험 |
 |---|---|---|
-| 현재의 네이티브 분기 유지 | 기존 구조와 “웹은 운동학, 네이티브는 AirSim” 동작이 바로 드러난다. 새 타입이나 가짜 물리 구현이 필요 없다. | 물리 객체의 생성·동기화·환경 전달 주변에 분기가 여러 번 보인다. |
-| 별도 물리 인터페이스와 팩토리 도입 | 플랫폼 코드와 시뮬레이션 코드를 나눌 수 있다. | 현재는 물리 구현이 AirSim 하나뿐이다. 인터페이스·팩토리·구현체를 추가해도 런타임의 두 계산 경로는 사라지지 않아 구조가 더 어려워질 수 있다. |
+| 현재의 네이티브 분기 유지 | 기존 구조와 “웹은 운동학, 네이티브는 이전 물리 구현” 동작이 바로 드러난다. 새 타입이나 가짜 물리 구현이 필요 없다. | 물리 객체의 생성·동기화·환경 전달 주변에 분기가 여러 번 보인다. |
+| 별도 물리 인터페이스와 팩토리 도입 | 플랫폼 코드와 시뮬레이션 코드를 나눌 수 있다. | 현재는 물리 구현이 이전 물리 구현 하나뿐이다. 인터페이스·팩토리·구현체를 추가해도 런타임의 두 계산 경로는 사라지지 않아 구조가 더 어려워질 수 있다. |
 | 공통 `PhysicsWorld` API와 웹 대체 구현 | CMake가 네이티브 구현 또는 웹 구현을 고르면 `SimulationCore.cpp`의 컴파일 분기를 줄일 수 있다. | 웹 대체 구현이 강체 기능을 조용히 무시하면 물리 결과를 잘못 믿게 된다. 현재 공개 API는 동작별 실패 반환이 충분하지 않아, 명시적 미지원 계약과 그에 맞는 호출 처리가 먼저 필요하다. |
 
-**권고:** 지금은 현재 분기를 유지한다. 각 분기는 AirSim이 없는 웹에서 강체 코드가 링크되지 않게 하거나, 웹의 강체 요청을 명시적으로 거부한다. 이를 없애려고 물리 인터페이스나 팩토리를 추가하면 초심자가 따라가야 할 개념만 늘 수 있다. 특히 웹 대체 구현이 실제 강체 물리를 하는 것처럼 보이거나 입력을 버리는 형태는 허용하면 안 된다.
+**권고:** 지금은 현재 분기를 유지한다. 각 분기는 이전 물리 구현이 없는 웹에서 강체 코드가 링크되지 않게 하거나, 웹의 강체 요청을 명시적으로 거부한다. 이를 없애려고 물리 인터페이스나 팩토리를 추가하면 초심자가 따라가야 할 개념만 늘 수 있다. 특히 웹 대체 구현이 실제 강체 물리를 하는 것처럼 보이거나 입력을 버리는 형태는 허용하면 안 된다.
 
-향후 분기 수를 줄이는 작업을 별도로 한다면 세 번째 선택지만 다시 검토한다. `PhysicsWorld`와 같은 메서드 모양을 갖추는 데 그치지 말고, 웹에서 강체 계산을 요청했을 때 명확한 오류로 끝나는 계약을 먼저 정해야 한다. 그 계약을 기존 API에 작은 수정으로 담을 수 없다면 현재 분기를 두는 편이 낫다. 물리 동작을 보존하기 위해 남겨야 하는 분기는 **AirSim 전용 타입·함수의 컴파일 제외, 웹 강체 모드 거부, 모드별 적분/환경 입력 전달**이다.
+향후 분기 수를 줄이는 작업을 별도로 한다면 세 번째 선택지만 다시 검토한다. `PhysicsWorld`와 같은 메서드 모양을 갖추는 데 그치지 말고, 웹에서 강체 계산을 요청했을 때 명확한 오류로 끝나는 계약을 먼저 정해야 한다. 그 계약을 기존 API에 작은 수정으로 담을 수 없다면 현재 분기를 두는 편이 낫다. 물리 동작을 보존하기 위해 남겨야 하는 분기는 **이전 물리 전용 타입·함수의 컴파일 제외, 웹 강체 모드 거부, 모드별 적분/환경 입력 전달**이다.
 
-충돌 처리를 별도 객체로 옮긴 것은 기존 코드를 이동한 것이며, `PhysicsWorld`의 강체 충돌 코드를 복사한 작업은 아니다. `PhysicsWorld`는 접촉 정보를 AirSim에 넘겨 강체 반응을 계산하게 하고, `KinematicCollisionWorld`는 계산된 위치를 직접 밀어내고 안쪽 속도를 제거한다. 두 경로는 응답 방식이 다르며, 접촉 기하는 `CollisionGeometry`를 함께 쓴다. 환경 자료는 현재 동역학 모드에 해당하는 한 경로로 전달된다. 상자·프리즘 입력 검사는 이번에 공통 함수로 모았다. 각 경로의 충돌 형상 저장과 지형 등록은 구현 상태와 수명 방식이 다르므로 더 합치지 않았다.
+충돌 처리를 별도 객체로 옮긴 것은 기존 코드를 이동한 것이며, `PhysicsWorld`의 강체 충돌 코드를 복사한 작업은 아니다. `PhysicsWorld`는 접촉 정보를 이전 물리 구현에 넘겨 강체 반응을 계산하게 하고, `KinematicCollisionWorld`는 계산된 위치를 직접 밀어내고 안쪽 속도를 제거한다. 두 경로는 응답 방식이 다르며, 접촉 기하는 `CollisionGeometry`를 함께 쓴다. 환경 자료는 현재 동역학 모드에 해당하는 한 경로로 전달된다. 상자·프리즘 입력 검사는 이번에 공통 함수로 모았다. 각 경로의 충돌 형상 저장과 지형 등록은 구현 상태와 수명 방식이 다르므로 더 합치지 않았다.
 
 웹의 강체 요청 오류 처리는 코드로 고쳤다. Windows Release에서 시뮬레이션 시험 6/6, 시뮬레이터 통합 시험 5/5 통과했다. 네이티브 빌드와 시험으로 웹 전용 오류 경로를 직접 확인할 수는 없으므로, Emscripten 빌드와 해당 경로 실행은 미검증이다.
