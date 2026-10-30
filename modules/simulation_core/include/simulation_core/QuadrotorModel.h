@@ -2,7 +2,7 @@
 
 #include <glm/vec3.hpp>
 
-#include "simulation_core/PhysicsWorld.h"
+#include "simulation_core/RigidBodyTypes.h"
 
 #include <array>
 #include <cstddef>

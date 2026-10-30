@@ -1,6 +1,7 @@
 #pragma once
 
-#include "simulation_core/PhysicsWorld.h"
+#include "simulation_core/RigidBodyTypes.h"
+#include "terrain/TerrainGrid.h"
 
 #include <array>
 #include <optional>

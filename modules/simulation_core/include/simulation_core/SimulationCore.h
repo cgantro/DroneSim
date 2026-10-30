@@ -147,7 +147,7 @@ public:
     /** @brief 벤치마크에서 물리 단계 시간 측정을 켜거나 끈다. */
     void SetPhysicsStepTimingEnabled(bool enabled) noexcept;
 
-    /** @brief 마지막 Tick의 AirSim 물리 계산 시간을 마이크로초로 반환한다. */
+    /** @brief 마지막 Tick의 물리 계산 시간을 마이크로초로 반환한다. */
     [[nodiscard]] double LastPhysicsStepDurationMicroseconds() const noexcept;
 
     /** @brief 지도 건물처럼 움직이지 않는 상자 장애물을 추가한다. */
@@ -158,10 +158,6 @@ public:
     void AddStaticObstaclePrism(
         const std::vector<glm::dvec2>& outlineMeters,
         double bottomMeters, double topMeters);
-
-    /** @brief 높이를 확인할 수 없는 구조물 외곽선을 비행 금지 구역으로 등록한다. */
-    void AddStaticObstacleFootprint(
-        const std::vector<glm::dvec2>& outlineMeters);
 
     /** @brief 지형 높이 자료를 설정해 비행체가 지면 아래로 내려가지 않게 한다. */
     void SetTerrain(terrain::TerrainGrid terrain);

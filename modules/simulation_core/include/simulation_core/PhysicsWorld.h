@@ -4,6 +4,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "simulation_core/RigidBodyTypes.h"
 #include "terrain/TerrainGrid.h"
 
 #include <cstdint>
@@ -15,36 +16,6 @@
 namespace aerosimlab::simulation
 {
 struct QuadrotorParameters;
-
-/** @brief 물리엔진에서 만든 강체를 가리킨다. */
-struct RigidBodyHandle
-{
-    std::uint32_t value = 0;
-};
-
-/** @brief 강체 기준 위치·자세에 놓을 상자 충돌 형상이다. */
-struct RigidBodyBox
-{
-    glm::vec3 halfExtentsMeters{0.1F};
-    glm::dvec3 positionMeters{0.0};
-    glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
-};
-
-/** @brief 드론 강체를 만들 때 필요한 시작 위치와 자세다. */
-struct RigidBodyDefinition
-{
-    glm::dvec3 positionMeters{0.0};
-    glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
-};
-
-/** @brief 한 Tick 뒤 강체의 상태다. 위치·선속도는 월드 기준, 각속도는 기체 축 기준이다. */
-struct RigidBodyState
-{
-    glm::dvec3 positionMeters{0.0};
-    glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
-    glm::dvec3 linearVelocityMetersPerSecond{0.0};
-    glm::dvec3 angularVelocityRadiansPerSecond{0.0};
-};
 
 /** @brief AirSim이 마지막 Tick에서 사용한 힘·중력·가속도다. */
 struct PhysicsDynamicsSample

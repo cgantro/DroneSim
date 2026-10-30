@@ -1,5 +1,5 @@
 #include "simulation_core/SimulationCore.h"
-#include "simulation_core/PhysicsWorld.h"
+#include "simulation_core/SimulationPhysics.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 
@@ -50,7 +50,7 @@ struct SimulationCore::EcsStorage
     QuadrotorControllerParameters controllerParameters;
     QuadrotorParameters quadrotorParameters;
     /** @brief Flecs 콜백이 참조하므로 Flecs 월드보다 나중에 정리한다. */
-    std::unique_ptr<PhysicsWorld> physics;
+    std::unique_ptr<SimulationPhysics> physics;
     flecs::world world;
     std::map<DroneId, flecs::entity> drones;
     DroneId primaryDroneId = 0;
@@ -84,7 +84,7 @@ struct SimulationCore::EcsStorage
 
     void RegisterRigidBodySystem()
     {
-        physics = std::make_unique<PhysicsWorld>();
+        physics = std::make_unique<SimulationPhysics>();
         primaryDroneId = CreateDrone(glm::dvec3{
             0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters}, 0.0);
         world.system<DroneState, DroneControlState, PhysicsBody>(
@@ -253,7 +253,7 @@ struct SimulationCore::EcsStorage
         std::array<double, 4> targets{};
         for (std::size_t index = 0; index < targets.size(); ++index)
         {
-            // AirSim은 속도 제곱에 비례해 추력을 계산하므로 비율의 제곱근을 속도로 바꾼다.
+            // 추력은 모터 속도의 제곱에 비례하므로 비율의 제곱근을 목표 속도로 바꾼다.
             targets[index] = quadrotorParameters.maximumMotorSpeedRadiansPerSecond
                 * std::sqrt(thrustRatios[index]);
         }
@@ -318,7 +318,7 @@ struct SimulationCore::EcsStorage
 
     void AdvancePhysicsWorld()
     {
-        physics->Step(DroneModel::fixedStepSeconds,
+        physics->StepFixed(
             measurePhysicsStepDuration ? &lastPhysicsStepDurationMicroseconds : nullptr);
 
         for (auto& [id, drone] : drones)
@@ -654,12 +654,6 @@ void SimulationCore::AddStaticObstaclePrism(
 {
     ecs_->physics->AddStaticObstaclePrism(
         outlineMeters, bottomMeters, topMeters);
-}
-
-void SimulationCore::AddStaticObstacleFootprint(
-    const std::vector<glm::dvec2>& outlineMeters)
-{
-    ecs_->physics->AddStaticObstacleFootprint(outlineMeters);
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)

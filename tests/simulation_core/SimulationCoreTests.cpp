@@ -1,8 +1,10 @@
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/BatteryModel.h"
+#include "simulation_core/QuadrotorFlightController.h"
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <stdexcept>
 
 namespace aerosimlab::simulation
@@ -75,12 +77,61 @@ void VerifyBatteryUsesThePostPhysicsFlightState()
     EXPECT_EQ(simulation.State(drone).mode, FlightMode::Hovering);
 }
 
+void VerifyFourDronesTakeOffMoveAndLandIndependently()
+{
+    SimulationCore simulation;
+    const std::array<DroneId, 4> drones{
+        simulation.PrimaryDroneId(),
+        simulation.AddDrone({8.0, 0.0, 0.24}),
+        simulation.AddDrone({0.0, 8.0, 0.24}),
+        simulation.AddDrone({8.0, 8.0, 0.24})};
+
+    for (const DroneId drone : drones)
+        ASSERT_EQ(simulation.Apply(drone, {DroneCommand::Kind::TakeOff}),
+            CommandResult::Accepted);
+
+    for (int tick = 0; tick < 360; ++tick)
+        simulation.AdvanceOneTick();
+    for (const DroneId drone : drones)
+    {
+        EXPECT_EQ(simulation.State(drone).mode, FlightMode::Hovering);
+        EXPECT_GT(simulation.State(drone).positionMeters.z, 1.0);
+    }
+
+    for (std::size_t index = 0; index < drones.size(); ++index)
+    {
+        DroneCommand waypoint;
+        waypoint.kind = DroneCommand::Kind::SetWaypoint;
+        waypoint.vector = simulation.State(drones[index]).positionMeters
+            + glm::dvec3{1.0, 0.0, 0.0};
+        ASSERT_EQ(simulation.Apply(drones[index], waypoint), CommandResult::Accepted);
+    }
+    for (int tick = 0; tick < 600; ++tick)
+        simulation.AdvanceOneTick();
+    for (const DroneId drone : drones)
+        EXPECT_EQ(simulation.State(drone).mode, FlightMode::Hovering);
+
+    for (const DroneId drone : drones)
+        ASSERT_EQ(simulation.Apply(drone, {DroneCommand::Kind::Land}),
+            CommandResult::Accepted);
+    for (int tick = 0; tick < 360; ++tick)
+        simulation.AdvanceOneTick();
+    for (const DroneId drone : drones)
+    {
+        const DroneState& state = simulation.State(drone);
+        EXPECT_EQ(state.mode, FlightMode::Grounded);
+        EXPECT_NEAR(state.positionMeters.z,
+            QuadrotorFlightController::groundedModelOriginHeightMeters, 0.08);
+    }
+}
+
 TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(VerifyTakeoffAndCameraAdvanceTogether());
     EXPECT_NO_FATAL_FAILURE(VerifyWaypointCommandMovesTheRigidBody());
     EXPECT_NO_FATAL_FAILURE(VerifyDroneAndPhysicsBodyAreRemovedTogether());
     EXPECT_NO_FATAL_FAILURE(VerifyBatteryUsesThePostPhysicsFlightState());
+    EXPECT_NO_FATAL_FAILURE(VerifyFourDronesTakeOffMoveAndLandIndependently());
 }
 }
 }

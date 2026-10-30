@@ -38,7 +38,10 @@ endif()
 aerosimlab_add_common_dependencies()
 aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
-aerosimlab_add_airsim_dependency()
+if(EMSCRIPTEN OR BUILD_TESTING)
+  # 웹 구현과 이전 물리 비교 시험에서만 AirSim 코드를 빌드한다.
+  aerosimlab_add_airsim_dependency()
+endif()
 if(NOT EMSCRIPTEN)
   aerosimlab_add_jolt_dependency()
 endif()
@@ -67,23 +70,24 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/QuadrotorModel.cpp
   modules/simulation_core/src/QuadrotorFlightController.cpp
 )
-target_sources(aerosimlab_simulation_core PRIVATE
-  modules/simulation_core/src/PhysicsWorld.cpp
-)
-if(NOT EMSCRIPTEN)
+if(EMSCRIPTEN)
+  target_sources(aerosimlab_simulation_core PRIVATE
+    modules/simulation_core/src/PhysicsWorld.cpp
+    modules/simulation_core/src/SimulationPhysicsAirSim.cpp
+  )
+  target_link_libraries(aerosimlab_simulation_core PRIVATE aerosimlab_airsim)
+else()
   target_sources(aerosimlab_simulation_core PRIVATE
     modules/simulation_core/src/JoltPhysicsWorld.cpp
+    modules/simulation_core/src/SimulationPhysicsJolt.cpp
   )
+  target_link_libraries(aerosimlab_simulation_core PRIVATE Jolt::Jolt)
 endif()
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm aerosimlab_terrain
   PRIVATE flecs::flecs_static
 )
-target_link_libraries(aerosimlab_simulation_core PRIVATE aerosimlab_airsim)
-if(NOT EMSCRIPTEN)
-  target_link_libraries(aerosimlab_simulation_core PRIVATE Jolt::Jolt)
-endif()
 
 add_library(aerosimlab_scenario STATIC
   modules/scenario/src/ScenarioRunner.cpp
@@ -474,7 +478,9 @@ if(BUILD_TESTING)
     target_sources(aerosimlab_simulation_tests PRIVATE
       tests/simulation_core/PhysicsWorldTests.cpp
       tests/simulation_core/JoltPhysicsWorldTests.cpp
+      modules/simulation_core/src/PhysicsWorld.cpp
     )
+    target_link_libraries(aerosimlab_simulation_tests PRIVATE aerosimlab_airsim)
   endif()
   target_link_libraries(aerosimlab_simulation_tests PRIVATE
     aerosimlab_simulation_core
