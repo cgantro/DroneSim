@@ -15,7 +15,7 @@
 
 ## 영상 품질 분석 경로 제거 — 2026-10-30
 
-- Windows MSVC Release에서 `aerosimlab_simulator`, `aerosimlab_headless`, `aerosimlab_scenario_tests`, `aerosimlab_simulator_integration_tests`를 빌드했다.
+- Windows MSVC Release에서 `dronesim_simulator`, `dronesim_headless`, `dronesim_scenario_tests`, `dronesim_simulator_integration_tests`를 빌드했다.
 - 전체 Release CTest 25/25 통과. `ViewerSmoke`, 그래픽 카메라 시험, 시나리오 시험을 포함한다.
 - CMake 구성 중 기존 빌드 캐시에 남은 `desktop-vision` 선택 경고가 나와 프리셋에서 이 설정을 제거했다. 빌드 시 vcpkg가 OpenCV와 그 전용 패키지를 제거했다.
 - 첫 빌드에서는 종료 스모크가 CPU 영상 픽셀을 검사하고 있어 실패했다. CPU 버퍼 대신 카메라 상태와 마지막 영상 Tick이 갱신됐는지 확인하도록 바꾸고 다시 빌드했다. 이 검사는 실제 픽셀 색이나 화면 구도를 판정하지 않는다.
@@ -24,57 +24,57 @@
 ## 시나리오 자동 구역 분할 제거 — 2026-10-30
 
 - `survey_area` 입력으로 구역을 드론 수만큼 자동 분할하고 지그재그 경로를 만드는 기능을 제거했다. 저장소 시나리오나 앱에서는 쓰지 않았고 시험 한 곳에서만 호출했다. 시험은 같은 네 구역과 경유점을 명시해 임무 완료와 100% 경유점 진행을 계속 확인한다.
-- Windows MSVC Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows MSVC Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 통신 단절 뒤 정지 동작 제거 — 2026-10-30
 
 - `on_timeout`은 통신 두절 뒤 제자리 정지 또는 마지막 명령 지속을 선택하게 했다. 요구한 동작은 이미 받은 경로를 계속 비행하는 것이므로 선택지와 정지 코드를 제거했다.
 - 처음에는 최종 위치만 보고 시험이 실패했다. 최종 드론 상태는 GCS가 마지막으로 받은 위치였고, 임무 완료도 새 상태 보고가 있어야 갱신됐다. 실제 비행 궤적과 GCS 보고값을 각각 확인하도록 시험을 고쳤다. 단절 중 드론은 목표까지 비행하지만 GCS 상태와 임무 완료 판정은 미확정이다.
-- Windows MSVC Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 시나리오 시험 1/1, 전체 CTest 28/28 통과.
+- Windows MSVC Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 시나리오 시험 1/1, 전체 CTest 28/28 통과.
 
 ## 시나리오 임무 입력 형식 통일 — 2026-10-30
 
 - 단일 목표와 경유점 목록의 중복 입력 형식을 없애고 모든 임무가 한 점 이상을 담은 `waypoints_meters` 목록을 사용하게 했다. 기존 단일 목표 입력이 거부되는지도 확인했다. Headless 결과 JSON의 목표 좌표 항목은 유지했다.
-- 확인: Windows, MSVC Release, Ninja. `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공, 전체 CTest 28/28 통과. Headless 임무 연기 시험 3개도 전체 CTest에 포함됐다.
+- 확인: Windows, MSVC Release, Ninja. `dronesim_headless`와 `dronesim_scenario_tests` 빌드 성공, 전체 CTest 28/28 통과. Headless 임무 연기 시험 3개도 전체 CTest에 포함됐다.
 
 ## 임무 판정 계산 — 2026-10-30
 
 - `Mission`의 결과 열거형은 완료·실패 작업 상태에서 계산할 수 있었다. 별도 필드를 제거하고 `GetOutcome()`에서 작업 목록으로 판정하도록 바꿨다. Headless JSON의 `outcome`과 `passed` 키는 유지한다.
-- Windows Release `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows Release `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 시나리오 드론 시작 상태 통합 — 2026-10-30
 
 - 시나리오 정의에서 드론 시작 상태를 위치·방향·속도·자세·모터·모드 필드로 나눠 저장하고, 실행 중 다시 `DroneState`를 조립하던 부분을 제거했다. 이제 같은 형식을 그대로 보관하고 Simulation Core에 전달한다.
-- Windows Release `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과. 강체 초기 속도·자세·로터 상태를 확인하는 기존 시나리오 시험이 포함됐다.
+- Windows Release `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과. 강체 초기 속도·자세·로터 상태를 확인하는 기존 시나리오 시험이 포함됐다.
 
 ## 부분 완료 임무의 완료 시각 수정 — 2026-10-30
 
 - 직접 통신 단절로 4개 작업 중 3개만 완료되는 경우, 이전에는 가장 늦게 끝난 작업의 시각이 전체 임무 완료 시각으로 노출됐다. 이제 전체 작업이 끝나지 않으면 `completed_tick`과 `completion_time_seconds`를 비운다.
 - 기존 heartbeat 단절 시험에 전체 완료 시각이 없는지 확인을 추가했다. Headless 출력은 `inconclusive`, 3/4 완료, `completed_tick` 없음, `completion_time_seconds` 없음으로 확인했다. 이 시나리오 실행 파일은 미확정 결과를 반환하므로 종료 코드 1이 정상이다.
-- Windows Release `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows Release `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 임무 완료 상태 중복 제거 — 2026-10-30
 
 - `MissionTask`의 `completed` 불리언은 완료되는 순간에만 `completedTick`과 함께 설정됐다. 불리언을 제거하고 `IsCompleted()`가 완료 Tick의 유무를 확인하도록 했다. JSON의 `completed` 항목은 같은 의미로 계속 출력한다.
-- Windows Release `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows Release `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 최상위 기본 드론 상태 중복 제거 — 2026-10-30
 
 - `ScenarioResult`와 Headless JSON에서 첫 드론의 상태·카메라를 중복 출력하던 최상위 항목을 제거했다. 이제 상태와 카메라는 `drones` 배열 안에서만 확인한다. 저장소 안에 최상위 항목을 읽는 코드가 없어 출력 형식도 함께 단순화했다.
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 - `two-point-survey.json` 실행에서 `outcome: passed`, 드론 2대와 임무 `passed`를 확인했다.
 
 ## 시나리오 목표 좌표 중복 제거 — 2026-10-29
 
 - `MissionTask`에서 첫 경유점과 같은 값을 따로 저장하던 목표 위치를 제거했다. Headless JSON은 기존 `target_position_meters` 형식을 유지하고 첫 경유점 값을 출력한다.
 - 첫 시험에서 구조체 헤더 변경이 시험 객체에 반영되지 않아 오래된 ABI로 실행되는 문제가 드러났다. Ninja 의존성 기록이 `#deps 0`이었고, CMake가 MSVC의 `참고: 포함 파일:` 출력을 잘못된 문자로 기록한 것이 원인이었다.
-- UTF-8 콘솔에서 Ninja Release 빌드 설정을 다시 만들자 시험 객체의 헤더 의존성이 230개 기록됐다. 이후 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공, 전체 CTest 28/28 통과.
+- UTF-8 콘솔에서 Ninja Release 빌드 설정을 다시 만들자 시험 객체의 헤더 의존성이 230개 기록됐다. 이후 `dronesim_headless`와 `dronesim_scenario_tests` 빌드 성공, 전체 CTest 28/28 통과.
 - 확인 환경: Windows, MSVC Release, Ninja. 웹 빌드는 이번 변경에서 확인하지 않았다.
 
 ## 시나리오의 리더 추종 링크 모의 제거 — 2026-10-29
 
 - JSON 파서·실행기의 리더 추종 링크와 별도 단절 구간, 전용 사례를 제거했다. 직접 통신 장애와 화면 앱의 편대 경로에는 손대지 않았다.
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과. 기존 ViewerSmoke도 포함됐다.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과. 기존 ViewerSmoke도 포함됐다.
 - 처음에는 Visual Studio 개발자 환경을 불러오지 않은 셸에서 MSVC 표준 헤더를 찾지 못했다. 개발자 명령 환경을 불러온 뒤 다시 빌드해 성공했다.
 
 ## 편대 임무 시작 조건 통합 — 2026-10-29
@@ -278,7 +278,7 @@
 
 ## 자동 촬영 합격 판정 제거 — 2026-10-29
 
-- Windows Release 빌드 성공: `aerosimlab_simulation_tests`, `aerosimlab_scenario_tests`, `aerosimlab_headless`, `aerosimlab_simulator`.
+- Windows Release 빌드 성공: `dronesim_simulation_tests`, `dronesim_scenario_tests`, `dronesim_headless`, `dronesim_simulator`.
 - 관련 CTest 3/3 통과: `Simulation.SimulationCoreTests.CoreScenarios`, `Scenario.ScenarioRunnerTests.CoreScenarios`, `HeadlessFormationOutageSmoke`.
 - 코드·시나리오·시험·headless 결과에서 `InspectionSurface`, `CaptureAssessment`, `inspection_surface`, `inspection_occluders`, `max_capture_retries` 참조가 남지 않은 것을 검색으로 확인했다.
 - 전체 CTest, 웹 빌드·브라우저 실행은 확인하지 않았다.
@@ -286,7 +286,7 @@
 ## 편대 경로 계산 모듈 분리 — 2026-10-29
 
 - `FormationPlanner` 구현·공개 헤더·시험을 `flight_planning` 경계로 옮기고, `simulation_core` 타깃의 소스 목록에서 제거했다.
-- Release 빌드 성공: `aerosimlab_simulation_tests`, `aerosimlab_headless`, `aerosimlab_simulator`.
+- Release 빌드 성공: `dronesim_simulation_tests`, `dronesim_headless`, `dronesim_simulator`.
 - 관련 CTest 5/5 통과: SimulationCore, 두 편대 계획 시험, SimulatorSession, ViewerSmoke.
 - 전체 CTest와 웹 빌드·브라우저 실행은 확인하지 않았다.
 
@@ -385,7 +385,7 @@
 
 ## 시나리오 명령 전달 단순화 — 2026-10-29
 
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 첫 시험 실행은 예상 비행 시간과 다중 드론 기대 결과가 맞지 않아 실패했고, 수정 후 재실행했다.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 첫 시험 실행은 예상 비행 시간과 다중 드론 기대 결과가 맞지 않아 실패했고, 수정 후 재실행했다.
 - `Scenario.ScenarioRunnerTests.CoreScenarios`와 `HeadlessCommunicationOutageSmoke` 2/2 통과.
 - 전체 CTest 28/28 통과. 직접 통신 단절 시험에서 scout 상태가 `stale`로 표시되고, 기준 위치·비행 결과 기대값도 통과했다.
 - CTest가 확인한 것은 JSON Runner 동작이다. 앱 가상망과 네이티브 시뮬레이터의 통신 장애 화면은 이번 변경에서 수정하거나 별도 실행하지 않았다.
@@ -393,23 +393,23 @@
 ## 시나리오 결과 상태 정리 — 2026-10-29
 
 - 제거한 `passed` 저장 필드를 사용하는 곳이 남지 않았는지 앱·모듈·시험에서 검색했다. C++ 호출부는 `IsPassed()`를 쓰고, headless 결과 JSON의 기존 `passed` 항목은 그대로 출력한다.
-- Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 시나리오 기대 상태 입력 통일 — 2026-10-30
 
 - 단일 드론 시나리오에서는 기대 상태를 `mode`·`position_meters`로 직접 적고, 다중 드론은 `expected.drones` 목록을 쓰던 두 형식을 하나로 합쳤다. 이제 모든 기대 상태에 드론 이름을 포함한 `expected.drones` 목록이 필요하다.
 - 저장소의 세 비행 예제와 시나리오 단위 시험 입력을 새 형식으로 바꿨다. 옛 단일 드론 형식을 거부하는 검사도 추가했다.
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 예약형 카메라 장애 제거 — 2026-10-30
 
 - 기본 임무에 쓰이지 않던 시나리오 전용 카메라 켜기·끄기·고장·복구 시간표를 제거했다. 카메라 상태 및 프레임 수 기대값, 기본 카메라 동작은 남겼다.
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 시나리오 충돌 위험 추정 단순화 — 2026-10-30
 
 - 경유점에서 멈추는 경우까지 나눠 예측하던 계산을 현재 목표 속도가 일정 시간 유지된다는 단순 계산으로 바꿨다. 회피 목표를 정하는 데 필요한 상대 위치, 속도, 최근접 시각만 남겼다.
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과. 두 드론 교차, 정지 드론 회피, 강체 비행 회피를 포함한 기존 시나리오 시험이 통과했다.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과. 두 드론 교차, 정지 드론 회피, 강체 비행 회피를 포함한 기존 시나리오 시험이 통과했다.
 - 이 검증은 간단한 가상 시나리오 동작만 다룬다. 목표 지점 도착 뒤 감속·정지와 실제 비행 안전성은 시험하지 않았다.
 
 ## 임무 요약 상태 중복 제거 — 2026-10-30
@@ -421,41 +421,41 @@
 
 - 임무 명령 적용 때 앞선 작업을 매번 다시 검색하던 코드를 목록 한 번만 도는 방식으로 바꿨다. 각 드론은 앞 작업이 완료되거나 실패한 뒤 다음 작업을 처리한다.
 - 이름만 `duplicateMissionAssignment`였던 검사는 필수 경유점이 빠진 입력을 던져 실제 배정 규칙을 확인하지 못했다. 유효한 경로 두 개를 같은 드론에 지정해 차례로 끝내는 시험으로 바꾸었다.
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 해당 시나리오 시험 2/2 및 전체 CTest 28/28 통과.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 해당 시나리오 시험 2/2 및 전체 CTest 28/28 통과.
 
 ## 충돌 회피의 임무 검색 통합 — 2026-10-30
 
 - 진행 중인 작업을 찾는 조건을 공통 함수로 모았다. 드론 쌍의 위험 계산과 회피 명령 적용이 같은 작업 기준을 사용한다.
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 드론별 회피 입력 재사용 — 2026-10-30
 
 - 충돌 회피에서 드론 쌍을 검사할 때마다 연결 상태와 현재 임무를 다시 검색하던 처리를 없앴다. 회피 갱신 시작 때 드론별 정보를 한 번만 모아 쌍별 계산과 회피 명령에서 재사용한다.
-- Windows Release에서 `aerosimlab_headless`, `aerosimlab_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
+- Windows Release에서 `dronesim_headless`, `dronesim_scenario_tests` 빌드 성공. 전체 CTest 28/28 통과.
 
 ## 시나리오 드론별 실행 상태 통합 — 2026-10-30
 
 - 변경: `ScenarioRunner.cpp`의 드론별 ID, 귀환 위치, 관측 상태, 이전 위치, 비행 거리와 시간을 하나의 실행 상태 맵으로 통합했다.
-- 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
+- 빌드: Windows Release에서 `dronesim_headless`와 `dronesim_scenario_tests` 성공.
 - 시험: 전체 Release CTest 28/28 통과.
 - 범위: 시나리오 동작과 JSON 형식은 바꾸지 않았다. 웹 실행은 확인하지 않았다.
 
 ## 시나리오 설정 읽기와 조합 검증 분리 — 2026-10-30
 
 - 변경: 항목 자체의 JSON 형식과 값 검사는 각 읽기 함수에 두고, 비행 방식·드론 수·배터리 예비량처럼 여러 설정을 함께 봐야 하는 규칙은 읽기가 끝난 뒤 한 단계에서 확인한다. 검사 규칙은 제거하지 않았다.
-- 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
+- 빌드: Windows Release에서 `dronesim_headless`와 `dronesim_scenario_tests` 성공.
 - 시험: 전체 Release CTest 28/28 통과.
 - 범위: 기존 시나리오 JSON 형식과 정상 실행 결과를 바꾸지 않았다. 웹 실행은 확인하지 않았다.
 
 ## 기본 드론 경로 통합 — 2026-10-30
 
 - 변경: 드론 목록을 생략하는 JSON은 파서에서 기본 `drone` 항목으로 정규화한다. 실행기는 기존 SimulationCore 기본 기체를 재사용하고, 관측·배터리·궤적·결과 처리는 목록 하나를 순회한다.
-- 빌드: Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 성공.
+- 빌드: Windows Release에서 `dronesim_headless`와 `dronesim_scenario_tests` 성공.
 - 시험: 전체 Release CTest 28/28 통과.
 - 범위: 기존 JSON 문법과 기본 드론 동작을 유지했다. 시뮬레이터 앱의 별도 임무 처리는 바꾸지 않았다.
 ## 시나리오 설정 검사 분리 — 2026-10-30
 
-- Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공.
+- Windows Release에서 `dronesim_headless`와 `dronesim_scenario_tests` 빌드 성공.
 - 전체 CTest 28/28 통과.
 - `git diff --check` 통과.
 - 이 변경은 JSON 시나리오의 설정 조합 검사 위치만 옮겼다. 앱 화면이나 웹 브라우저 동작은 이번 확인 범위가 아니다.
@@ -487,13 +487,13 @@
 
 ## 시나리오 입력과 규칙 검사 분리 — 2026-10-30
 
-- Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공.
+- Windows Release에서 `dronesim_headless`와 `dronesim_scenario_tests` 빌드 성공.
 - 전체 Release CTest 28/28 통과. 잘못된 명령·통신 단절·임무 입력을 포함한 기존 시나리오 시험을 그대로 실행했다.
 - `git diff --check` 통과. 웹 브라우저는 확인하지 않았다.
 
 ## 임무 입력과 실행 결과 분리 — 2026-10-30
 
-- Windows Release에서 `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공.
+- Windows Release에서 `dronesim_headless`와 `dronesim_scenario_tests` 빌드 성공.
 - 전체 Release CTest 28/28 통과. 임무 완료·실패·미확정 결과를 포함한 시나리오 시험을 기존 입력으로 확인했다.
 - 실행 결과의 외부 형식은 바꾸지 않았다. 웹 브라우저는 확인하지 않았다.
 - 내부 정의 헤더 위치를 옮긴 뒤에도 Release 실행기·시험 빌드와 전체 CTest 28/28 통과.
@@ -505,7 +505,7 @@
 
 ## 시설물 점검 식별값 제거 — 2026-10-30
 
-- Windows Release `aerosimlab_headless`와 `aerosimlab_scenario_tests` 빌드 성공, 전체 CTest 28/28 통과.
+- Windows Release `dronesim_headless`와 `dronesim_scenario_tests` 빌드 성공, 전체 CTest 28/28 통과.
 - `two-point-survey.json` headless 실행 결과 `outcome: passed`, `passed: true` 확인.
 - 네 대 통신 단절 예제는 `inconclusive` 결과를 의도하므로 CLI 종료 코드 1을 반환한다. 통신 장애 동작은 전체 CTest에서 통과했다.
 - 저장소 검색에서 제거한 시설·구역 식별값을 다시 참조하는 코드와 시험이 남지 않았다.
@@ -554,7 +554,7 @@
 
 ## PX4 참조 구간 재검토 — 2026-10-30
 
-- 확인: Release `aerosimlab_headless`로 두 PX4 시나리오를 실행하고 0·1·2·3·4초 고도와 수직 속도를 읽었다.
+- 확인: Release `dronesim_headless`로 두 PX4 시나리오를 실행하고 0·1·2·3·4초 고도와 수직 속도를 읽었다.
 - 2026-10-16 자료는 0초 0.976m에서 1초 0.217m로 내려가고 4초까지 그 고도에 머물렀다. 시작 높이만 100m 올린 실행은 최저 41.90m까지 떨어졌다.
 - 초기 ESC 회전수와 저장된 질량·추력 계수로 계산한 총 추력은 9.62N, 기체 무게는 20.24N이다. 평균 입력 비율은 0.278, 해당 모형의 호버 추력 비율은 약 0.592다.
 - 원본은 PX4 Flight Review의 4초 구간이며 메타데이터는 초기 높이 0.976m와 ESC RPM 기반 추력 환산을 적고 있다. X500 모터 상수는 [PX4 공식 모델](https://github.com/PX4/PX4-gazebo-models/blob/main/models/x500/model.sdf)과 대조했다.
@@ -564,7 +564,7 @@
 
 ## 2026-10-30 네이티브 Jolt 및 4대 임무 재검증
 
-- 빌드: MSVC Release에서 `aerosimlab_simulator` 성공.
+- 빌드: MSVC Release에서 `dronesim_simulator` 성공.
 - Jolt: `Simulation.JoltPhysicsWorldTests.*` 8/8 통과. 강체 운동, 지형·건물 접촉, 질량·관성 영향, X500 로터, 제어기 비행, 잘못된 연산을 확인했다.
 - 통합: `Simulator.SimulatorSessionTests.*` 4/4 및 `HeadlessFourDroneSurveySmoke` 1/1 통과.
 - 화면 시작: `ViewerSmoke` 1/1 통과. 화면에서 차량과 드론의 상대 크기는 직접 확인하지 않았다.
@@ -572,7 +572,7 @@
 
 ## 2026-10-30 네이티브 60초 호버 시험
 
-- `aerosimlab_simulation_tests` Release 빌드 성공.
+- `dronesim_simulation_tests` Release 빌드 성공.
 - `Simulation.SimulationCoreTests.CoreScenarios` 통과. 6초 이륙 후 추가 60초 동안 Hovering을 유지했고, 마지막 위치는 목표 고도에서 0.2m 이내, 속도 크기는 0.2m/s 미만, 각속도 크기는 0.2rad/s 미만이었다.
 - 이 시험은 현재 Jolt 기반 제어 경로의 안정성 확인이다. PX4 참조 로그와의 정확도 비교는 포함하지 않는다.
 
@@ -630,3 +630,10 @@
 - MSVC Release 시뮬레이터 링크 성공. 현재 빌드의 `ViewerSmoke` 1/1 통과.
 - 새 실행 파일을 실제 창으로 실행해 지도와 네 대의 드론이 표시되고 바닥판 오류가 나오지 않는 것을 확인했다.
 - `SimulatorSessionTests`는 CMake의 `BUILD_TESTING=OFF` 설정 때문에 현재 소스에서 재빌드되지 않았다. 실행된 파일은 이전 바이너리(13:06 빌드)였으며, 해당 실패를 수정 후 코드의 실패로 보지 않는다.
+
+## 2026-10-30 프로젝트 이름과 화면 책임 정리
+
+- MSVC Release에서 `DroneSim` 시뮬레이터, 헤드리스 실행 파일, 물리·시나리오·통신·게임패드 시험과 시뮬레이터 통합 시험을 빌드했다.
+- CTest 전체 35/35 통과. 시뮬레이터 통합 시험에는 장면 카메라가 드론을 따라가는 검사와 기존 임무·지면 충돌 검사가 포함됐다. `ViewerSmoke`도 통과했다.
+- 확인 범위는 Windows Release다. Emscripten 빌드와 웹 브라우저 실행은 확인하지 않았다.
+- 이름 검색에서 제품 코드·CMake 설정에 `AeroSimLab` 계열 참조가 남지 않았다. 과거 파일명을 보존한 감사 인벤토리와 문제 해결 기록은 역사 자료라 그대로 뒀다.

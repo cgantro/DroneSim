@@ -7,7 +7,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 void Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference()
 {

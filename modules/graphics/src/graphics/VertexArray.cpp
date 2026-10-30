@@ -2,7 +2,7 @@
 
 #include "graphics/GlApi.h"
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 VertexArray::VertexArray()
@@ -31,4 +31,4 @@ void VertexArray::UnBind() const
     glBindVertexArray(0);
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

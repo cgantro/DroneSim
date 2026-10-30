@@ -2,7 +2,7 @@
 
 #include <glm/gtc/quaternion.hpp>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 QuadrotorParameters QuadrotorParameters::X500Gazebo()
 {

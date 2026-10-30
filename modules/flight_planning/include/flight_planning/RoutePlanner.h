@@ -6,7 +6,7 @@
 #include <optional>
 #include <vector>
 
-namespace aerosimlab::flight_planning
+namespace dronesim::flight_planning
 {
 /**
  * @brief 지형과 건물 배치를 고려해 출발점에서 목표점까지의 경로를 찾는다.

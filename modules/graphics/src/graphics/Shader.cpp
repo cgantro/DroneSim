@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 namespace
 {

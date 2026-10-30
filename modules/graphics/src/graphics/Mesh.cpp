@@ -10,7 +10,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 Mesh::Mesh(const Vertex* vertices, std::uint32_t vertexCount,
            const std::uint32_t* indices, std::uint32_t indexCount)
@@ -134,4 +134,4 @@ std::unique_ptr<Mesh> Mesh::CreateCube(float sideLengthMeters)
     return std::make_unique<Mesh>(vertices, 24U, indices, 36U);
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

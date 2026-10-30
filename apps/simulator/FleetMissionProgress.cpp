@@ -1,6 +1,6 @@
 #include "FleetMissionProgress.h"
 
-namespace aerosimlab::simulator::detail
+namespace dronesim::simulator::detail
 {
 /** @brief 내부 임무 상태를 HUD에서 읽을 수 있는 한국어 문구로 바꾼다. */
 std::string_view FleetDroneStatusLabel(FleetDroneStatus status) noexcept

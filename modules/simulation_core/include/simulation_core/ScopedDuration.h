@@ -2,7 +2,7 @@
 
 #include <chrono>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 
 /**
@@ -49,4 +49,4 @@ private:
     Clock::time_point startedAt_;
 };
 
-} // namespace aerosimlab::simulation
+} // namespace dronesim::simulation

@@ -11,7 +11,7 @@
 
 #include <glm/geometric.hpp>
 
-namespace aerosimlab::flight_planning
+namespace dronesim::flight_planning
 {
 namespace
 {

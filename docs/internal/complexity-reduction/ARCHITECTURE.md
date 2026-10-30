@@ -4,11 +4,12 @@
 
 ## 구조 한눈에 보기
 
-DroneSim은 여러 정적 라이브러리를 CMake로 묶은 한 프로그램이다. 시뮬레이션 상태와 비행 계산은 `simulation_core`, 편대 배치와 경로 계획은 `flight_planning`, 시험 입력과 실행은 `scenario`, 높이 격자와 좌표 변환은 `terrain`, 화면 그리기는 `graphics`, 통신은 `communication`, 프로그램 조립과 임무 진행은 `apps/simulator`가 맡는다.
+DroneSim은 여러 정적 라이브러리를 CMake로 묶은 한 프로그램이다. 시뮬레이션 상태와 비행 계산은 `simulation_core`, 편대 배치와 경로 계획은 `flight_planning`, 시험 입력과 실행은 `scenario`, 높이 격자와 좌표 변환은 `terrain`, 그래픽 자원은 `graphics`, HUD와 화면 패널·카메라는 `gui`, 통신은 `communication`, 실행 시작과 임무 연결은 `apps/simulator`가 맡는다.
 
 ```text
 apps/headless ──▶ scenario ──▶ simulation_core ──▶ terrain
 apps/simulator ──▶ graphics
+      ├─────────▶ gui ──────────▶ graphics
       ├─────────▶ communication ──▶ simulation_core
       ├─────────▶ manual_control ─▶ simulation_core
       └─────────▶ flight_planning ─▶ terrain
@@ -30,7 +31,8 @@ apps/simulator ──▶ graphics
 | `communication` | 명령 형식·UDP 소켓·직접 가상 통신 | 현재는 순환 의존이 없다. 메시지 형식이 시뮬레이션 자료형을 직접 사용해 Simulation Core와 강하게 묶여 있다. |
 | `manual_control` | 게임패드 축을 비행 명령으로 바꾸는 계산 | GLFW 입력 수집은 앱에 있고 계산은 모듈에 있어 경계가 비교적 명확하다. |
 | `media` | 삭제됨 | 사용자가 라이브 영상 전송도 제거하도록 요청했다. 화면 패널 표시는 그래픽스 안에서 직접 처리한다. |
-| 앱 | 창·GUI·임무·환경 연결·텔레메트리 표시 | 프로그램 연결을 맡는 위치다. 다만 임무와 상태가 한 앱 클래스에 모여 있어 찾아가기 어렵다. |
+| `gui` | HUD 입력·표시, 장면·EO 패널 카메라와 렌더 타깃 | 화면 표시와 패널 렌더 준비를 맡는다. 실제 장면의 드론·임무 표시 내용은 앱에서 전달한다. |
+| 앱 | 창·시뮬레이션 초기화와 임무·환경 연결 | 실행 객체를 만들고 모듈을 연결한다. 화면 패널 카메라는 `gui::SimulatorView`가 맡는다. 임무 진행과 장면의 드론·경로 그리기는 아직 `DroneSimApp` 안에 남아 있어 후속 분리 범위다. |
 
 주요 빌드 경계는 최상위 CMake 설정에 있다. `scenario`는 시험 조건을 읽고 검증한 뒤 Simulation Core를 실행한다. `flight_planning`은 편대 배치와 장애물을 고려한 경로 계산을 맡고, 지형 높이 조회가 필요할 때만 `terrain`을 참조한다. `terrain`은 경로를 찾거나 건물 모양을 만드는 책임을 맡지 않는다. JSON은 시나리오 입력과 통신 메시지에서 쓰며, `simulation_core`에는 들어가지 않는다.
 
@@ -50,7 +52,7 @@ Flecs는 실제로 사용한다. 각 드론 엔티티에 비행 상태와 제어
 
 ## 장면은 어디서 관리하나
 
-화면용 장면은 앱이 `TrainingRangeScene`으로 관리한다. 배치 목록에서 GLB 모델 인스턴스, SimulationCore 충돌 상자, 경로 계획용 건물 장애물, 정찰 지점을 만든다.
+화면용 장면 자료는 앱이 `TrainingRangeScene`으로 관리한다. 배치 목록에서 GLB 모델 인스턴스, SimulationCore 충돌 상자, 경로 계획용 건물 장애물, 정찰 지점을 만든다. 패널 크기와 관찰·EO 카메라 및 출력 프레임버퍼는 `gui::SimulatorView`가 맡는다. 앱은 해당 패널에 어떤 드론·임무 상태를 보여줄지 연결한다.
 
 현재 데이터 흐름은 다음과 같다.
 
@@ -89,8 +91,8 @@ TrainingRangeScene 배치 목록
 |---|---|---|
 | 지도·모델 원본 | `assets/` | 프로그램이 읽는 입력 자료다. 실행 중 생성하지 않는다. |
 | 임무와 시험 설정 | `scenarios/`, `tests/data/` | 사람이 관리하는 시나리오와 시험 입력이다. 실행 결과가 이 파일들을 덮어쓰지 않는다. |
-| 화면 배치 | Windows의 `%LOCALAPPDATA%/AeroSimLab/imgui.ini` | ImGui가 패널 위치와 크기를 저장한다. 사용자 설정이므로 빌드 폴더와 분리되어 있다. |
-| 성능 측정 결과 | Windows는 실행 파일 옆의 `benchmark-latest.json`, 그 외에는 현재 실행 폴더의 같은 이름 파일 | 벤치마크가 결과를 쓴다. `AEROSIMLAB_BENCHMARK_OUTPUT` 환경 변수로 저장 경로를 바꿀 수도 있다. |
+| 화면 배치 | Windows의 `%LOCALAPPDATA%/DroneSim/imgui.ini` | ImGui가 패널 위치와 크기를 저장한다. 사용자 설정이므로 빌드 폴더와 분리되어 있다. |
+| 성능 측정 결과 | Windows는 실행 파일 옆의 `benchmark-latest.json`, 그 외에는 현재 실행 폴더의 같은 이름 파일 | 벤치마크가 결과를 쓴다. `DRONESIM_BENCHMARK_OUTPUT` 환경 변수로 저장 경로를 바꿀 수도 있다. |
 | 변환한 지형 격자 | 변환 도구를 실행할 때 지정한 출력 경로 | `terrain_grid_converter`가 ASCII 격자를 `.aerotrn`으로 바꿔 저장한다. 앱은 준비된 지형 파일을 읽고, 변환 도구와 시험만 파일을 쓴다. |
 | 수동 조종 명령 | 실행 중 입력 큐와 명령 패킷 | 통신 응답·드론 상태 | 입력은 적용 후 버린다. 앱 내 기록·재생 기능은 제거했다. 반복 시험은 JSON 시나리오가 맡는다. |
 

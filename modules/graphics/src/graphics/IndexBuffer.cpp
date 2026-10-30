@@ -6,7 +6,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 IndexBuffer::IndexBuffer(const std::uint32_t* indices, std::uint32_t count)
@@ -64,4 +64,4 @@ void IndexBuffer::UnBind() const
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

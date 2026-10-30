@@ -4,7 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 /** @brief 배터리 설정과 시작 잔량으로 사용 가능 에너지를 초기화한다. */
 BatteryModel::BatteryModel(

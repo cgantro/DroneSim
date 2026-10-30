@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 namespace
 {
@@ -206,7 +206,7 @@ void Verify_GlbModelDrawsEmbeddedBaseColorPngWithoutOpenGlErrors()
     Renderer renderer;
     renderer.Init(properties.width, properties.height);
     MultisampleFramebuffer target(properties.width, properties.height);
-    Shader shader((std::filesystem::path{AEROSIMLAB_SOURCE_DIR}
+    Shader shader((std::filesystem::path{DRONESIM_SOURCE_DIR}
         / "assets/shaders/Scene.glsl").string());
     Camera camera{{0.0F, 0.0F, 1.0F}, {0.0F, 0.0F, 0.0F}, 1.0F};
 

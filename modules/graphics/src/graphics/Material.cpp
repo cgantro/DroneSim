@@ -1,6 +1,6 @@
 #include "graphics/Material.h"
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 // 재질은 색과 금속성·거칠기 값을 보관한다. 실제로 쓸 수 있는 범위는 셰이더가 정한다.
@@ -36,4 +36,4 @@ Material::SurfaceEffect Material::Effect() const
     return m_SurfaceEffect;
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

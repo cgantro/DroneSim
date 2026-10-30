@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <fstream>
 
-namespace aerosimlab::terrain
+namespace dronesim::terrain
 {
 // 격자 중심과 경계 좌표가 올바르고 표본 사이 높이를 보간하는지 확인한다.
 void Verify_TerrainGridBoundsAndInterpolatesHeight()

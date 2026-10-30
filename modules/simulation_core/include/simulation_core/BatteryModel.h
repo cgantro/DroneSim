@@ -2,7 +2,7 @@
 
 #include "simulation_core/DroneModel.h"
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 /** @brief 배터리 소모 계산에 사용하는 기체별 기준값이다. */
 struct BatteryModelParameters

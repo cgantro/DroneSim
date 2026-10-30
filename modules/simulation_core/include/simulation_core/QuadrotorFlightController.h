@@ -5,7 +5,7 @@
 
 #include <array>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 /** @brief 비행 제어기의 응답 속도를 정하는 이득이다.
  * @details 위치·자세 이득의 단위는 1/s², 속도·각속도 이득의 단위는 1/s다.

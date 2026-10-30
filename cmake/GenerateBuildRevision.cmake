@@ -29,7 +29,7 @@ if(worktree_dirty)
   string(APPEND revision "-dirty")
 endif()
 
-set(header "#pragma once\n\n#include <string_view>\n\nnamespace aerosimlab::build_info\n{\ninline constexpr std::string_view sourceRevision = \"${revision}\";\n}\n")
+set(header "#pragma once\n\n#include <string_view>\n\nnamespace dronesim::build_info\n{\ninline constexpr std::string_view sourceRevision = \"${revision}\";\n}\n")
 if(EXISTS "${OUTPUT}")
   file(READ "${OUTPUT}" existing_header)
 endif()

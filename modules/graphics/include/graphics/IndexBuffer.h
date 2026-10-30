@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 /**
@@ -51,4 +51,4 @@ private:
     std::uint32_t m_Count = 0;
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

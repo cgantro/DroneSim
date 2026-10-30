@@ -16,16 +16,16 @@
 #include <string_view>
 #include <vector>
 
-namespace aerosimlab::scenario
+namespace dronesim::scenario
 {
-using namespace aerosimlab::simulation;
+using namespace dronesim::simulation;
 
 namespace
 {
 std::string ReadScenarioFixture(std::string_view relativePath)
 {
     const std::filesystem::path path =
-        std::filesystem::path{AEROSIMLAB_SOURCE_DIR} / relativePath;
+        std::filesystem::path{DRONESIM_SOURCE_DIR} / relativePath;
     std::ifstream input(path, std::ios::binary);
     if (!input)
         throw std::runtime_error("시나리오 시험 자료를 열지 못했습니다.");

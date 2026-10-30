@@ -31,7 +31,7 @@ int main(int argc, char** argv)
 
     try
     {
-        const auto grid = aerosimlab::terrain::TerrainGrid::LoadAsciiGrid(
+        const auto grid = dronesim::terrain::TerrainGrid::LoadAsciiGrid(
             argv[1], static_cast<float>(ReadNumber(argv[3], "기준 높이")));
         grid.Save(argv[2]);
         std::cout << "지형 격자를 저장했습니다: " << grid.sampleCount << " x "

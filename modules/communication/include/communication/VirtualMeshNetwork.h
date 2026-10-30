@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace aerosimlab::communication
+namespace dronesim::communication
 {
 /** @brief 통신망에 등록할 드론의 위치다. */
 struct NetworkNodeSnapshot

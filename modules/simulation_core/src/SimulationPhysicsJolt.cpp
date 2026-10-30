@@ -5,7 +5,7 @@
 #include <optional>
 #include <utility>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 // 공개 물리 API와 Jolt의 전용 타입 사이에서 변환을 맡는다.
 struct SimulationPhysics::Impl

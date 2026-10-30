@@ -1,4 +1,5 @@
-#include "AeroSimLabApp.h"
+#include "DroneSimApp.h"
+#include "gui/SimulatorView.h"
 #include "FleetMissionProgress.h"
 #include "FleetTelemetry.h"
 #include "TrainingRangeScene.h"
@@ -27,16 +28,16 @@
 #include <utility>
 #include <vector>
 
-using namespace aerosimlab;
+using namespace dronesim;
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
-class AeroSimLabAppTestAccess
+class DroneSimAppTestAccess
 {
 public:
     static void VerifyCompleteMissionRequiresFourDrones()
     {
-        AeroSimLabApp app({.smokeTest = true});
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_EQ(app.simulation_.DroneIds().size(), 4U);
         ASSERT_FALSE(app.trainingRangeScene_->BuildingObstacles().empty());
@@ -80,7 +81,7 @@ public:
 
     static void VerifyFallingDroneLandsOnLoadedMapFloor()
     {
-        AeroSimLabApp app({.smokeTest = true});
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const glm::dvec2 openGround =
             app.trainingRangeScene_->FormationStagingPositionMeters();
@@ -98,7 +99,7 @@ public:
 
     static void VerifyReconnaissanceKeepsTheFirstWaypoint()
     {
-        AeroSimLabApp app({.smokeTest = true});
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneId = app.simulation_.PrimaryDroneId();
         const auto expectedRoute = flight_planning::PlanRoute(
@@ -115,7 +116,7 @@ public:
             *expectedRoute);
     }
 
-    static void UseConnectedNetworkForTest(AeroSimLabApp& app)
+    static void UseConnectedNetworkForTest(DroneSimApp& app)
     {
         communication::VirtualMeshSettings settings;
         settings.maximumLinkRangeMeters = 1'000.0;
@@ -127,36 +128,41 @@ public:
 
     static void VerifyObserverCameraKeepsAUsableFollowDistance()
     {
-        AeroSimLabApp app({.smokeTest = true});
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
-        app.UpdateObserverCamera(1280, 720);
+        app.view_->UpdateObserverCamera(app.simulation_, app.observerDroneId_,
+            app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
 
         const auto distance = glm::distance(
-            app.observerCamera_->GetPosition(), app.observerCamera_->GetTarget());
+            app.view_->observerCamera_->GetPosition(),
+            app.view_->observerCamera_->GetTarget());
         EXPECT_GT(distance, 5.0F);
     }
 
     static void VerifyObserverCameraCanFollowEachDrone()
     {
-        AeroSimLabApp app({.smokeTest = true});
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneIds = app.simulation_.DroneIds();
         ASSERT_EQ(droneIds.size(), 4U);
 
-        app.UpdateObserverCamera(1280, 720);
-        const glm::vec3 primaryTarget = app.observerCamera_->GetTarget();
+        app.view_->UpdateObserverCamera(app.simulation_, app.observerDroneId_,
+            app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
+        const glm::vec3 primaryTarget = app.view_->observerCamera_->GetTarget();
 
         app.observerDroneId_ = droneIds[2U];
-        app.UpdateObserverCamera(1280, 720);
-        const glm::vec3 selectedTarget = app.observerCamera_->GetTarget();
+        app.view_->UpdateObserverCamera(app.simulation_, app.observerDroneId_,
+            app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
+        const glm::vec3 selectedTarget = app.view_->observerCamera_->GetTarget();
         EXPECT_NE(primaryTarget, selectedTarget);
         EXPECT_GT(glm::distance(
-            app.observerCamera_->GetPosition(), app.observerCamera_->GetTarget()), 5.0F);
+            app.view_->observerCamera_->GetPosition(),
+            app.view_->observerCamera_->GetTarget()), 5.0F);
     }
 
     static void VerifyEveryDroneHasAnUdpSocket()
     {
-        AeroSimLabApp app({.smokeTest = true});
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
         std::vector<communication::SocketPort> ports;
@@ -172,7 +178,7 @@ public:
     }
     static void VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing()
     {
-        AeroSimLabApp app({.smokeTest = true});
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
 
@@ -186,20 +192,20 @@ public:
             app.simulation_.SetInitialState(droneId, state);
         }
 
-        app.formationTransit_.phase = AeroSimLabApp::FormationTransitState::Phase::InProgress;
+        app.formationTransit_.phase = DroneSimApp::FormationTransitState::Phase::InProgress;
         app.formationTransit_.route.leaderStartMeters =
             app.simulation_.State(droneIds.front()).positionMeters;
         app.formationTransit_.route.leaderWaypointsMeters.push_back(
             app.formationTransit_.route.leaderStartMeters + glm::dvec3{10.0, 0.0, 0.0});
         app.completeFleetMission_.stage =
-            AeroSimLabApp::CompleteFleetMissionState::Stage::FormationTransit;
+            DroneSimApp::CompleteFleetMissionState::Stage::FormationTransit;
 
         app.AdvanceFormationTransit();
 
         EXPECT_EQ(app.formationTransit_.phase,
-            AeroSimLabApp::FormationTransitState::Phase::Failed);
+            DroneSimApp::FormationTransitState::Phase::Failed);
         EXPECT_EQ(app.completeFleetMission_.stage,
-            AeroSimLabApp::CompleteFleetMissionState::Stage::Failed);
+            DroneSimApp::CompleteFleetMissionState::Stage::Failed);
         EXPECT_EQ(app.completeFleetMission_.status,
             "추종 드론 상태 보고가 끊겨 편대를 안전 착륙시킵니다.");
         for (const auto droneId : droneIds)
@@ -209,9 +215,9 @@ public:
 
     static void VerifyFormationResultDoesNotDependOnStatusText()
     {
-        using FormationPhase = AeroSimLabApp::FormationTransitState::Phase;
-        using MissionStage = AeroSimLabApp::CompleteFleetMissionState::Stage;
-        AeroSimLabApp app({.smokeTest = true});
+        using FormationPhase = DroneSimApp::FormationTransitState::Phase;
+        using MissionStage = DroneSimApp::CompleteFleetMissionState::Stage;
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
 
@@ -224,7 +230,7 @@ public:
             app.completeFleetMission_.homePositionsMeters[droneId] = state.positionMeters;
             if (droneId != app.fleetLeaderId_)
             {
-                AeroSimLabApp::ReceivedPeerTelemetry report;
+                DroneSimApp::ReceivedPeerTelemetry report;
                 report.state.positionMeters = state.positionMeters;
                 report.state.mode = state.mode;
                 report.receivedAtTick = app.simulation_.TickCount();
@@ -254,8 +260,8 @@ public:
 
     static void VerifyCompleteFleetMissionFinishesAndLands()
     {
-        using Stage = AeroSimLabApp::CompleteFleetMissionState::Stage;
-        AeroSimLabApp app({.smokeTest = true});
+        using Stage = DroneSimApp::CompleteFleetMissionState::Stage;
+        DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneIds = app.simulation_.DroneIds();
 
@@ -372,7 +378,7 @@ public:
 
     static void VerifyFleetDroneReturnsWhenBatteryReachesReserve()
     {
-        AeroSimLabApp app({
+        DroneSimApp app({
             .smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.StartFleetReconnaissance());
@@ -544,17 +550,17 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
 TEST(SimulatorSessionTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(
-    simulator::AeroSimLabAppTestAccess::VerifyEveryDroneHasAnUdpSocket());
+    simulator::DroneSimAppTestAccess::VerifyEveryDroneHasAnUdpSocket());
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyObserverCameraKeepsAUsableFollowDistance());
+        simulator::DroneSimAppTestAccess::VerifyObserverCameraKeepsAUsableFollowDistance());
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyObserverCameraCanFollowEachDrone());
+        simulator::DroneSimAppTestAccess::VerifyObserverCameraCanFollowEachDrone());
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
+        simulator::DroneSimAppTestAccess::VerifyFormationTransitSafelyLandsWhenFollowerTelemetryIsMissing());
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyFormationResultDoesNotDependOnStatusText());
+        simulator::DroneSimAppTestAccess::VerifyFormationResultDoesNotDependOnStatusText());
     EXPECT_NO_FATAL_FAILURE(
-        simulator::AeroSimLabAppTestAccess::VerifyCompleteFleetMissionFinishesAndLands());
+        simulator::DroneSimAppTestAccess::VerifyCompleteFleetMissionFinishesAndLands());
     EXPECT_NO_FATAL_FAILURE(Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressWaitsForEveryCurrentReport());
     EXPECT_NO_FATAL_FAILURE(Verify_FleetMissionProgressRequiresLandedReturnReports());
@@ -562,20 +568,20 @@ TEST(SimulatorSessionTests, CoreScenarios)
 
 TEST(SimulatorSessionTests, FleetDroneReturnsWhenBatteryReachesReserve)
 {
-    simulator::AeroSimLabAppTestAccess::VerifyFleetDroneReturnsWhenBatteryReachesReserve();
+    simulator::DroneSimAppTestAccess::VerifyFleetDroneReturnsWhenBatteryReachesReserve();
 }
 
 TEST(SimulatorSessionTests, ReconnaissanceKeepsTheFirstWaypoint)
 {
-    simulator::AeroSimLabAppTestAccess::VerifyReconnaissanceKeepsTheFirstWaypoint();
+    simulator::DroneSimAppTestAccess::VerifyReconnaissanceKeepsTheFirstWaypoint();
 }
 
 TEST(SimulatorSessionTests, CompleteMissionRequiresFourDrones)
 {
-    simulator::AeroSimLabAppTestAccess::VerifyCompleteMissionRequiresFourDrones();
+    simulator::DroneSimAppTestAccess::VerifyCompleteMissionRequiresFourDrones();
 }
 
 TEST(SimulatorSessionTests, FallingDroneLandsOnLoadedMapFloor)
 {
-    simulator::AeroSimLabAppTestAccess::VerifyFallingDroneLandsOnLoadedMapFloor();
+    simulator::DroneSimAppTestAccess::VerifyFallingDroneLandsOnLoadedMapFloor();
 }

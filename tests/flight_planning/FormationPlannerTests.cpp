@@ -9,7 +9,7 @@
 #include <cmath>
 #include <vector>
 
-namespace aerosimlab::flight_planning
+namespace dronesim::flight_planning
 {
 TEST(FormationPlannerTests, PlacesFourDronesBehindLeaderAndRotatesWithRoute)
 {

@@ -19,7 +19,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 namespace
@@ -268,4 +268,4 @@ void Texture2D::Unbind() const
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

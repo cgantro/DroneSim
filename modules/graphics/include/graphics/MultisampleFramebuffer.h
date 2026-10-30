@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 /**
@@ -97,4 +97,4 @@ private:
 
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace aerosimlab::communication
+namespace dronesim::communication
 {
 using NetworkNodeId = std::uint64_t;
 

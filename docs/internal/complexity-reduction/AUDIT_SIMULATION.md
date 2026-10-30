@@ -8,7 +8,7 @@
 
 ## 중요한 교차 확인 사항
 
-- ScenarioRunner.cpp:475–598 검색에서 임무 재할당을 확인했다. UpdateEnergyPolicy(81)에도 저배터리 복귀 정책이 있다. apps/simulator/AeroSimLabAppMission.cpp:273,456,617에서 앱도 경로 계획을 호출한다. 임무 책임의 중복 여부는 본문·호출 흐름 전체 미확인이라 결론을 보류한다.
+- ScenarioRunner.cpp:475–598 검색에서 임무 재할당을 확인했다. UpdateEnergyPolicy(81)에도 저배터리 복귀 정책이 있다. apps/simulator/DroneSimAppMission.cpp:273,456,617에서 앱도 경로 계획을 호출한다. 임무 책임의 중복 여부는 본문·호출 흐름 전체 미확인이라 결론을 보류한다.
 - FormationPlanner.cpp:387–408은 요청 편대 경로 실패 때 Column을 시도한다. 고정 V 요구와 다르므로 단순화 후보이지만 경로 없음과 장애물 여유를 처리해야 한다.
 - DroneModel.h:108의 1/60초와 SimulationCore.cpp:660–662,907,914의 누적·ECS 진행·배터리 갱신이 연결된다. SimulationCore.cpp에서 진행 순서와 소유권을 확인했으며 실행 검증은 하지 않았다.
 - PhysicsWorld.cpp:49–53,485–487,915–916에서 좌표 변환, 전역 이전 물리 구현 시계, 별도 접촉 계산을 확인했다. 수명·동시 월드 및 충돌 정확성은 미검증이다.
@@ -54,7 +54,7 @@
 - `Dynamics()`, `IsPaused()`, `SetRotorMotorFault()`와 `IsRotorMotorFaulted()`는 저장소 호출처가 없어 SimulationCore 공개 API에서 제거했다. 실제 로터 고장 동작과 직접 시험은 `PhysicsWorld`에 남겨 두었다. 모드 선택은 생성자에 남아 있고, 일시정지는 `Pause()`·`Resume()` 동작으로 제어한다.
 - `AddDrone`의 두 인자 오버로드는 지면 높이 0을 넣어 세 인자 오버로드를 다시 호출하던 얇은 중복이었다. 기본 지면 높이 인자를 둔 한 함수로 합쳤다. 인자 세 개를 넘겨 실제 지면 높이를 지정하는 호출도 유지된다.
 - 강체 모드의 지형은 `PhysicsWorld`가 접촉 계산에 사용한다. `SimulationCore`에도 같은 격자를 복사해 두고 있었지만 강체 경로에서는 읽지 않았다. 이제 강체 모드에서는 소유권을 물리 월드로 넘기고, 운동학 모드에서만 코어가 지형을 보관한다. 따라서 강체 모드의 불필요한 격자 사본 하나와 복사 한 번을 없앴다.
-- `ScenarioRunner`는 Simulation Core 틱을 반복 호출하는 별도 JSON 자동 시험 실행기다. JSON 해석은 `ScenarioDefinition`이 맡고 Runner는 명령·임무·관측·결과를 조합한다. 라이브 앱의 임무 코드는 `AeroSimLabAppMission.cpp`에 따로 있으므로 두 경로의 임무 기능이 일부 겹쳐도 같은 호출 경로라고 볼 수 없다. 중복을 줄이려면 같은 M01–M03 규칙이 실제로 양쪽에 중복 구현됐는지 추가 비교해야 한다.
+- `ScenarioRunner`는 Simulation Core 틱을 반복 호출하는 별도 JSON 자동 시험 실행기다. JSON 해석은 `ScenarioDefinition`이 맡고 Runner는 명령·임무·관측·결과를 조합한다. 라이브 앱의 임무 코드는 `DroneSimAppMission.cpp`에 따로 있으므로 두 경로의 임무 기능이 일부 겹쳐도 같은 호출 경로라고 볼 수 없다. 중복을 줄이려면 같은 M01–M03 규칙이 실제로 양쪽에 중복 구현됐는지 추가 비교해야 한다.
 - 2026-10-30 변경: JSON을 구조체로 바꾸는 단계와, 완성된 설정끼리 맞는지 확인하는 단계의 경계를 분명히 했다. 자료형·필수 항목·배열 해석은 읽기 쪽에, 명령의 드론 참조·Tick 순서·통신 단절 구간·임무 중복과 설정 조합은 검증 쪽에 둔다. 전체 시나리오 시험으로 기존 오류 처리를 확인했다.
 - 2026-10-30 변경: JSON 임무 입력과 실행 결과를 분리했다. 파서는 이름·담당 드론·경유점·기한만 읽고, 실행기에서 별도의 진행 자료를 만들어 완료·실패 상태를 기록한다. 따라서 파서가 실행 결과 헤더를 끌어오지 않는다.
 - `modules/terrain/include/terrain/MapBridges.h`: SIMPLIFY — 확인 1–46; 남은 줄 없음. GeoJSON 경로·지형을 받아 교량 외곽 값을 반환하고 교각을 추정한다(33–45). 반환 vector가 형상을 소유. 교량 점검이 MVP 범위 밖이면 시각화·충돌 호출처를 확인 후 제거 후보; 오류 세부는 구현 미확인.
@@ -100,7 +100,7 @@
 ### 실제 호출과 시나리오 자료
 
 - `RunScenario`의 제품 실행 호출자는 `apps/headless/main.cpp`다. 자동 시험은 `tests/scenario/ScenarioRunnerTests.cpp`에서 직접 부른다. 검색상 `apps/simulator`는 이 실행기를 부르지 않는다.
-- 시뮬레이터의 M01·M02·M03 임무 흐름은 `apps/simulator/AeroSimLabAppMission.cpp`에서 별도로 시작·진행한다. 따라서 JSON Runner의 임무 시험이 화면에서 쓰는 임무 실행 코드를 검증하지 않는다.
+- 시뮬레이터의 M01·M02·M03 임무 흐름은 `apps/simulator/DroneSimAppMission.cpp`에서 별도로 시작·진행한다. 따라서 JSON Runner의 임무 시험이 화면에서 쓰는 임무 실행 코드를 검증하지 않는다.
 - Runner의 통신 장애도 시뮬레이터가 쓰는 가상 통신망과 다른 코드다. 한쪽의 단절·복구 시험이 다른 쪽의 동작을 보증하지 않는다.
 - 감사 뒤 `formation_links` 기능과 전용 사례를 제거했다. 현재 `scenarios/`에는 JSON 8개가 있고, CMake headless 연기 시험은 `rigid-body-flight`, `communication-outage`, `independent-flight`, `two-point-survey` 4개를 실행한다. `physical-model-override`, `four-drone-survey-outage`, `low-battery-return`은 GoogleTest에서 자료 파일로 읽는다. `normal-flight`는 코드나 CMake에서 참조를 찾지 못했다. 수동 예제로 쓰는지는 확인되지 않아 삭제 대상으로 단정하지 않는다.
 - `survey_area`는 기존 자료 파일이나 앱에서 사용하지 않고 하나의 시험에서만 사용했다. 자동 영역 분할 코드를 제거하고 그 시험은 동일한 분할 결과를 `tasks`의 경유점으로 직접 적는다. 임무 실행과 완료율 계산은 계속 시험한다.
@@ -130,7 +130,7 @@
 
 - JSON의 `formation_links`는 leader 위치에 오프셋을 더해 follower에게 매 Tick 새 경유점을 주고, 별도 링크 단절 구간을 적용했다. 시뮬레이터 앱이나 다른 시나리오가 이 기능을 부르지 않았고, 직접 통신 단절 모의도 따로 있었다.
 - 정의 구조, JSON 파서·검증, Tick 처리, 전용 시험, headless 연기 시험과 `leader-following-outage.json`을 함께 제거했다. 총 268줄을 덜었다. 직접 상태 보고 장애(`communication_outages`)와 앱의 V자 편대 경로는 변경하지 않았다.
-- Release의 `aerosimlab_headless`, `aerosimlab_scenario_tests` 타깃 빌드 성공. 전체 CTest 28/28 통과. 시나리오와 앱 임무가 별도 구현이라는 기존 경계는 그대로라서, 앱 임무 동작이 이 시험으로 검증된다고 볼 수 없다.
+- Release의 `dronesim_headless`, `dronesim_scenario_tests` 타깃 빌드 성공. 전체 CTest 28/28 통과. 시나리오와 앱 임무가 별도 구현이라는 기존 경계는 그대로라서, 앱 임무 동작이 이 시험으로 검증된다고 볼 수 없다.
 
 ## 시나리오 명령 전달 모형 축소 — 2026-10-29
 
@@ -144,7 +144,7 @@
 
 - `ScenarioResult`와 임무 결과는 이미 `Passed`, `Failed`, `Inconclusive` 상태를 저장하면서 같은 의미의 `passed` 불리언도 따로 저장했다. 두 값이 달라질 수 있어 상태 불변식이 중복되어 있었다.
 - 저장 필드를 제거하고 `IsPassed()`가 결과 열거형에서 값을 계산하게 했다. headless JSON의 `passed` 출력은 유지해 실행 결과 형식은 바뀌지 않는다.
-- `aerosimlab_headless`와 시나리오 시험 타깃 빌드 성공, 전체 CTest 28/28 통과.
+- `dronesim_headless`와 시나리오 시험 타깃 빌드 성공, 전체 CTest 28/28 통과.
 
 ## 시나리오 목표 좌표 중복 제거 — 2026-10-29
 

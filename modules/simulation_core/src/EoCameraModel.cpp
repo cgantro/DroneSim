@@ -3,7 +3,7 @@
 
 #include <cmath>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 namespace
 {

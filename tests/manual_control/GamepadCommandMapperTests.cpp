@@ -4,7 +4,7 @@
 
 #include <cmath>
 
-namespace aerosimlab::manual_control
+namespace dronesim::manual_control
 {
 // 스틱 중앙의 작은 흔들림이 사라지고, 기체 방향에 맞춰 이동축이 회전하는지 확인한다.
 void Verify_GamepadCommandMapper_AppliesDeadZoneAndRotatesMovement()

@@ -8,7 +8,7 @@
 #include <Psapi.h>
 #endif
 
-namespace aerosimlab::simulator::detail
+namespace dronesim::simulator::detail
 {
 /** @brief Windows 프로세스 메모리 표본이다. */
 struct ProcessMemorySample

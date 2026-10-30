@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 /**
@@ -97,4 +97,4 @@ private:
     float m_FarPlane;
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 struct DroneState;
 

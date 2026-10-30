@@ -5,7 +5,7 @@
 #include <array>
 #include <vector>
 
-namespace aerosimlab::communication
+namespace dronesim::communication
 {
 namespace
 {

@@ -5,7 +5,7 @@
 #include "graphics/GlApi.h"
 #include <GLFW/glfw3.h>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 Window::Window(const Properties& properties)
@@ -172,4 +172,4 @@ void Window::ScrollCallback(
     self->m_ScrollOffset += yOffset;
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

@@ -8,7 +8,7 @@
       "binaryDir": "${sourceDir}/build-ninja-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "AEROSIMLAB_BUILD_GRAPHICS": "ON",
+        "DRONESIM_BUILD_GRAPHICS": "ON",
         "BUILD_TESTING": "OFF"
       }
     },
@@ -22,7 +22,7 @@
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "AEROSIMLAB_BUILD_GRAPHICS": "ON"
+        "DRONESIM_BUILD_GRAPHICS": "ON"
       }
     },
     {

@@ -1,4 +1,4 @@
-#include "AeroSimLabApp.h"
+#include "DroneSimApp.h"
 #include "FleetMissionProgress.h"
 #include "TrainingRangeScene.h"
 #include "flight_planning/RoutePlanner.h"
@@ -14,13 +14,13 @@
 #include <emscripten.h>
 #endif
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 namespace detail
 {
 std::string EncodePeerTelemetry(
     const glm::dvec3& positionMeters,
-    aerosimlab::simulation::FlightMode mode,
+    dronesim::simulation::FlightMode mode,
     std::uint8_t missionLeg,
     FleetDroneStatus missionStatus,
     std::uint64_t assignmentVersion)
@@ -28,7 +28,7 @@ std::string EncodePeerTelemetry(
     std::ostringstream payload;
     payload << std::setprecision(17) << positionMeters.x << ' '
         << positionMeters.y << ' ' << positionMeters.z << ' '
-        << aerosimlab::simulation::ToString(mode) << ' '
+        << dronesim::simulation::ToString(mode) << ' '
         << static_cast<unsigned int>(missionLeg) << ' '
         << static_cast<unsigned int>(missionStatus) << ' '
         << assignmentVersion;
@@ -56,7 +56,7 @@ std::optional<PeerTelemetry> DecodePeerTelemetry(const std::string& payload)
     values >> std::ws;
     if (!values.eof())
         return std::nullopt;
-    const auto mode = aerosimlab::simulation::TryParseFlightMode(modeName);
+    const auto mode = dronesim::simulation::TryParseFlightMode(modeName);
     if (!mode)
         return std::nullopt;
     telemetry.mode = *mode;
@@ -169,7 +169,7 @@ std::optional<FleetRouteMessage> DecodeFleetRoute(const std::string& payload)
 
 }
 
-bool AeroSimLabApp::FleetIsReadyForMission() const
+bool DroneSimApp::FleetIsReadyForMission() const
 {
     if (CompleteFleetMissionIsActive() || formationTransit_.IsActive()
         || reconTargets_.empty() || FleetReconnaissanceIsActive())
@@ -177,20 +177,20 @@ bool AeroSimLabApp::FleetIsReadyForMission() const
 
     const auto droneIds = simulation_.DroneIds();
     return !droneIds.empty() && std::all_of(droneIds.begin(), droneIds.end(),
-        [this](aerosimlab::simulation::DroneId id)
+        [this](dronesim::simulation::DroneId id)
         {
             return simulation_.State(id).mode
-                == aerosimlab::simulation::FlightMode::Grounded;
+                == dronesim::simulation::FlightMode::Grounded;
         });
 }
 
-bool AeroSimLabApp::FleetReconnaissanceCanStart() const
+bool DroneSimApp::FleetReconnaissanceCanStart() const
 {
     return FleetIsReadyForMission();
 }
 
-const AeroSimLabApp::ReceivedPeerTelemetry* AeroSimLabApp::FreshPeerTelemetry(
-    aerosimlab::simulation::DroneId droneId) const noexcept
+const DroneSimApp::ReceivedPeerTelemetry* DroneSimApp::FreshPeerTelemetry(
+    dronesim::simulation::DroneId droneId) const noexcept
 {
     constexpr std::uint64_t telemetryTimeoutTicks = 30U;
     const auto telemetry = peerTelemetryAtLeader_.find(droneId);
@@ -201,12 +201,12 @@ const AeroSimLabApp::ReceivedPeerTelemetry* AeroSimLabApp::FreshPeerTelemetry(
     return &telemetry->second;
 }
 
-bool AeroSimLabApp::CompleteFleetMissionCanStart() const
+bool DroneSimApp::CompleteFleetMissionCanStart() const
 {
     return simulation_.DroneCount() == 4U && FleetIsReadyForMission();
 }
 
-bool AeroSimLabApp::CompleteFleetMissionIsActive() const
+bool DroneSimApp::CompleteFleetMissionIsActive() const
 {
     using Stage = CompleteFleetMissionState::Stage;
     return completeFleetMission_.stage == Stage::FormationTransit
@@ -215,7 +215,7 @@ bool AeroSimLabApp::CompleteFleetMissionIsActive() const
         || completeFleetMission_.stage == Stage::Returning;
 }
 
-bool AeroSimLabApp::FleetReconnaissanceIsActive() const
+bool DroneSimApp::FleetReconnaissanceIsActive() const
 {
     return std::any_of(fleetReconnaissance_.begin(), fleetReconnaissance_.end(),
         [](const auto& entry)
@@ -224,7 +224,7 @@ bool AeroSimLabApp::FleetReconnaissanceIsActive() const
         });
 }
 
-bool AeroSimLabApp::StartCompleteFleetMission()
+bool DroneSimApp::StartCompleteFleetMission()
 {
     if (!CompleteFleetMissionCanStart())
         return false;
@@ -245,27 +245,27 @@ bool AeroSimLabApp::StartCompleteFleetMission()
     return true;
 }
 
-std::string AeroSimLabApp::CompleteFleetMissionStatus() const
+std::string DroneSimApp::CompleteFleetMissionStatus() const
 {
     return completeFleetMission_.status;
 }
 
-bool AeroSimLabApp::StartFleetReconnaissance()
+bool DroneSimApp::StartFleetReconnaissance()
 {
     if (!FleetReconnaissanceCanStart())
         return false;
 
-    std::map<aerosimlab::simulation::DroneId, glm::dvec3> homePositions;
+    std::map<dronesim::simulation::DroneId, glm::dvec3> homePositions;
     for (const auto droneId : simulation_.DroneIds())
         homePositions.emplace(droneId, simulation_.State(droneId).positionMeters);
     return StartFleetReconnaissance(true, homePositions);
 }
 
-bool AeroSimLabApp::StartFleetReconnaissance(
+bool DroneSimApp::StartFleetReconnaissance(
     bool takeOffDrones,
-    const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions)
+    const std::map<dronesim::simulation::DroneId, glm::dvec3>& homePositions)
 {
-    using namespace aerosimlab::simulation;
+    using namespace dronesim::simulation;
     if (takeOffDrones)
         InitializeFleetLeadership();
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
@@ -307,7 +307,7 @@ bool AeroSimLabApp::StartFleetReconnaissance(
                 return false;
             start = &report->state.positionMeters;
         }
-        const auto route = aerosimlab::flight_planning::PlanRoute(
+        const auto route = dronesim::flight_planning::PlanRoute(
             terrainGrid_, trainingRangeScene_->BuildingObstacles(), *start, target.approachPositionMeters,
             3.0, cameraTransitAltitudeMeters_);
         if (!route)
@@ -370,7 +370,7 @@ bool AeroSimLabApp::StartFleetReconnaissance(
     return true;
 }
 
-bool AeroSimLabApp::FleetReturnCanStart() const
+bool DroneSimApp::FleetReturnCanStart() const
 {
     if (fleetReconnaissance_.empty() || CompleteFleetMissionIsActive()
         || formationTransit_.IsActive())
@@ -388,14 +388,14 @@ bool AeroSimLabApp::FleetReturnCanStart() const
             return false;
         if (droneId == leaderId)
             return (simulation_.State(droneId).mode
-                    == aerosimlab::simulation::FlightMode::Grounded
+                    == dronesim::simulation::FlightMode::Grounded
                 && mission->second.leg == FleetMissionLeg::Reconnaissance
                 && !detail::IsFleetMissionInProgress(mission->second.status))
                 || (mission->second.lowBatteryReturn
                     && mission->second.status
                         == detail::FleetDroneStatus::LowBatteryReturnComplete
                     && simulation_.State(droneId).mode
-                        == aerosimlab::simulation::FlightMode::Grounded);
+                        == dronesim::simulation::FlightMode::Grounded);
 
         const ReceivedPeerTelemetry* report = FreshPeerTelemetry(droneId);
         if (report == nullptr)
@@ -403,10 +403,10 @@ bool AeroSimLabApp::FleetReturnCanStart() const
         if (mission->second.lowBatteryReturn
                     && report->state.missionStatus
                         == detail::FleetDroneStatus::LowBatteryReturnComplete
-            && report->state.mode == aerosimlab::simulation::FlightMode::Grounded)
+            && report->state.mode == dronesim::simulation::FlightMode::Grounded)
             return true;
         const bool finishedReconnaissance = report->state.mode
-                == aerosimlab::simulation::FlightMode::Grounded
+                == dronesim::simulation::FlightMode::Grounded
             && report->state.missionLeg
                 == static_cast<std::uint8_t>(FleetMissionLeg::Reconnaissance)
             && !detail::IsFleetMissionInProgress(report->state.missionStatus);
@@ -414,7 +414,7 @@ bool AeroSimLabApp::FleetReturnCanStart() const
     });
 }
 
-bool AeroSimLabApp::StartFleetReturn()
+bool DroneSimApp::StartFleetReturn()
 {
     if (!FleetReturnCanStart())
         return false;
@@ -422,9 +422,9 @@ bool AeroSimLabApp::StartFleetReturn()
     return StartFleetReturn(true);
 }
 
-bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
+bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
 {
-    using namespace aerosimlab::simulation;
+    using namespace dronesim::simulation;
 
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
     const DroneId leaderId = fleetLeaderId_;
@@ -466,7 +466,7 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
             return false;
         glm::dvec3 returnApproach = mission.startPositionMeters;
         returnApproach.z += 5.0;
-        const auto route = aerosimlab::flight_planning::PlanRoute(
+        const auto route = dronesim::flight_planning::PlanRoute(
             terrainGrid_, trainingRangeScene_->BuildingObstacles(), currentPosition,
             returnApproach, 3.0, cameraTransitAltitudeMeters_);
         if (!route)
@@ -518,10 +518,10 @@ bool AeroSimLabApp::StartFleetReturn(bool takeOffDrones)
     return true;
 }
 
-bool AeroSimLabApp::StartFleetRally()
+bool DroneSimApp::StartFleetRally()
 {
-    using namespace aerosimlab::simulation;
-    using namespace aerosimlab::flight_planning;
+    using namespace dronesim::simulation;
+    using namespace dronesim::flight_planning;
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
     if (droneIds.empty() || fleetLeaderId_ == 0U
         || std::any_of(droneIds.begin(), droneIds.end(), [this](DroneId droneId)
@@ -586,7 +586,7 @@ bool AeroSimLabApp::StartFleetRally()
             centerMeters.x + offsets[index].x,
             centerMeters.y + offsets[index].y,
             centerMeters.z};
-        const auto route = aerosimlab::flight_planning::PlanRoute(
+        const auto route = dronesim::flight_planning::PlanRoute(
             terrainGrid_, trainingRangeScene_->BuildingObstacles(), currentPosition, rallyTarget,
             3.0, cameraTransitAltitudeMeters_);
         if (!route)
@@ -626,11 +626,11 @@ bool AeroSimLabApp::StartFleetRally()
     return true;
 }
 
-void AeroSimLabApp::AdvanceFleetReconnaissance()
+void DroneSimApp::AdvanceFleetReconnaissance()
 {
-    using DroneId = aerosimlab::simulation::DroneId;
-    using Command = aerosimlab::simulation::DroneCommand;
-    using FlightMode = aerosimlab::simulation::FlightMode;
+    using DroneId = dronesim::simulation::DroneId;
+    using Command = dronesim::simulation::DroneCommand;
+    using FlightMode = dronesim::simulation::FlightMode;
     constexpr std::uint64_t routeDeliveryTimeoutTicks = 600U;
 
     for (auto& [droneId, mission] : fleetReconnaissance_)
@@ -651,7 +651,7 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
 
                 glm::dvec3 returnApproach = mission.startPositionMeters;
                 returnApproach.z += 5.0;
-                const auto route = aerosimlab::flight_planning::PlanRoute(
+                const auto route = dronesim::flight_planning::PlanRoute(
                     terrainGrid_, trainingRangeScene_->BuildingObstacles(),
                     simulation_.State(droneId).positionMeters, returnApproach,
                     3.0, cameraTransitAltitudeMeters_);
@@ -660,7 +660,7 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                     && simulation_.State(droneId).mode == FlightMode::Grounded)
                     returnStarted = simulation_.Apply(droneId,
                         {Command::Kind::TakeOff})
-                        == aerosimlab::simulation::CommandResult::Accepted;
+                        == dronesim::simulation::CommandResult::Accepted;
                 if (returnStarted)
                 {
                     mission.lowBatteryReturn = true;
@@ -770,7 +770,7 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
                 continue;
             }
             const Command land{Command::Kind::Land};
-            if (simulation_.Apply(droneId, land) == aerosimlab::simulation::CommandResult::Accepted)
+            if (simulation_.Apply(droneId, land) == dronesim::simulation::CommandResult::Accepted)
             {
                 if (mission.leg == FleetMissionLeg::Returning)
                     mission.status = mission.lowBatteryReturn
@@ -797,16 +797,16 @@ void AeroSimLabApp::AdvanceFleetReconnaissance()
             waypoint.kind = Command::Kind::SetWaypoint;
             waypoint.vector = mission.routeWaypointsMeters[mission.nextWaypoint];
             if (simulation_.Apply(droneId, waypoint)
-                != aerosimlab::simulation::CommandResult::Accepted)
+                != dronesim::simulation::CommandResult::Accepted)
                 mission.status = detail::FleetDroneStatus::RouteFailed;
         }
     }
 }
 
-void AeroSimLabApp::AdvanceCompleteFleetMission()
+void DroneSimApp::AdvanceCompleteFleetMission()
 {
     using Stage = CompleteFleetMissionState::Stage;
-    using DroneId = aerosimlab::simulation::DroneId;
+    using DroneId = dronesim::simulation::DroneId;
     if (completeFleetMission_.stage == Stage::Idle
         || completeFleetMission_.stage == Stage::Completed
         || completeFleetMission_.stage == Stage::Failed)
@@ -874,7 +874,7 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
                 && cached->second.state.assignmentVersion
                     == mission->second.assignmentVersion
                 && cached->second.state.mode
-                    == aerosimlab::simulation::FlightMode::Grounded)
+                    == dronesim::simulation::FlightMode::Grounded)
             {
                 const bool returnedAfterBatteryReserve = mission->second.lowBatteryReturn
                     && cached->second.state.missionLeg
@@ -956,10 +956,10 @@ void AeroSimLabApp::AdvanceCompleteFleetMission()
     }
 }
 
-void AeroSimLabApp::FailCompleteFleetMission(const std::string& reason)
+void DroneSimApp::FailCompleteFleetMission(const std::string& reason)
 {
-    using FlightMode = aerosimlab::simulation::FlightMode;
-    using Command = aerosimlab::simulation::DroneCommand;
+    using FlightMode = dronesim::simulation::FlightMode;
+    using Command = dronesim::simulation::DroneCommand;
     completeFleetMission_.stage = CompleteFleetMissionState::Stage::Failed;
     completeFleetMission_.status = reason;
     if (formationTransit_.IsActive())
@@ -972,10 +972,10 @@ void AeroSimLabApp::FailCompleteFleetMission(const std::string& reason)
     }
 }
 
-bool AeroSimLabApp::StartFormationTransit()
+bool DroneSimApp::StartFormationTransit()
 {
-    using namespace aerosimlab::simulation;
-    using namespace aerosimlab::flight_planning;
+    using namespace dronesim::simulation;
+    using namespace dronesim::flight_planning;
 
     if (formationTransit_.IsActive() || reconTargets_.empty())
         return false;
@@ -1055,7 +1055,7 @@ bool AeroSimLabApp::StartFormationTransit()
     return true;
 }
 
-bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
+bool DroneSimApp::PrepareFleetNetwork(bool reset)
 {
     if (formationNetwork_ && !reset)
         return true;
@@ -1075,7 +1075,7 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     formationRadioObstacles_.clear();
     const auto& buildings = trainingRangeScene_->BuildingObstacles();
     formationRadioObstacles_.reserve(buildings.size());
-    for (const aerosimlab::flight_planning::BuildingObstacle& building : buildings)
+    for (const dronesim::flight_planning::BuildingObstacle& building : buildings)
     {
         if (building.outlineMeters.size() < 3U || building.heightMeters <= 0.0)
             continue;
@@ -1098,15 +1098,15 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     return !nodes.empty();
 }
 
-void AeroSimLabApp::InitializeFleetLeadership()
+void DroneSimApp::InitializeFleetLeadership()
 {
     fleetDroneIds_ = simulation_.DroneIds();
     fleetReconnaissance_.clear();
     fleetLeaderId_ = fleetDroneIds_.empty() ? 0U : fleetDroneIds_.front();
 }
 
-bool AeroSimLabApp::SendFleetRouteAssignment(
-    aerosimlab::simulation::DroneId droneId,
+bool DroneSimApp::SendFleetRouteAssignment(
+    dronesim::simulation::DroneId droneId,
     FleetMissionLeg leg,
     std::size_t targetIndex,
     std::vector<glm::dvec3> routeWaypointsMeters)
@@ -1168,8 +1168,8 @@ bool AeroSimLabApp::SendFleetRouteAssignment(
     return true;
 }
 
-void AeroSimLabApp::ApplyFleetRouteAssignment(
-    aerosimlab::simulation::DroneId droneId,
+void DroneSimApp::ApplyFleetRouteAssignment(
+    dronesim::simulation::DroneId droneId,
     FleetMissionLeg leg,
     std::size_t targetIndex,
     std::vector<glm::dvec3> routeWaypointsMeters,
@@ -1194,19 +1194,19 @@ void AeroSimLabApp::ApplyFleetRouteAssignment(
 
     auto mode = simulation_.State(droneId).mode;
     if (leg == FleetMissionLeg::Reconnaissance
-        && mode == aerosimlab::simulation::FlightMode::Grounded)
+        && mode == dronesim::simulation::FlightMode::Grounded)
     {
         if (simulation_.Apply(droneId,
-                {aerosimlab::simulation::DroneCommand::Kind::TakeOff})
-            != aerosimlab::simulation::CommandResult::Accepted)
+                {dronesim::simulation::DroneCommand::Kind::TakeOff})
+            != dronesim::simulation::CommandResult::Accepted)
         {
             mission->second.status = detail::FleetDroneStatus::RouteFailed;
             return;
         }
         mode = simulation_.State(droneId).mode;
     }
-    const bool waitingForTakeoff = mode == aerosimlab::simulation::FlightMode::Grounded
-        || mode == aerosimlab::simulation::FlightMode::TakingOff;
+    const bool waitingForTakeoff = mode == dronesim::simulation::FlightMode::Grounded
+        || mode == dronesim::simulation::FlightMode::TakingOff;
     switch (leg)
     {
     case FleetMissionLeg::Reconnaissance:
@@ -1227,10 +1227,10 @@ void AeroSimLabApp::ApplyFleetRouteAssignment(
     }
 }
 
-void AeroSimLabApp::AdvanceFleetNetwork()
+void DroneSimApp::AdvanceFleetNetwork()
 {
-    using aerosimlab::simulation::DroneCommand;
-    using aerosimlab::simulation::DroneId;
+    using dronesim::simulation::DroneCommand;
+    using dronesim::simulation::DroneId;
 
     if (!formationNetwork_ || (!formationTransit_.IsActive()
         && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()))
@@ -1314,7 +1314,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             command.kind = DroneCommand::Kind::SetWaypoint;
             command.vector = *waypoint;
             if (simulation_.Apply(message.destination, command)
-                != aerosimlab::simulation::CommandResult::Accepted)
+                != dronesim::simulation::CommandResult::Accepted)
             {
                 formationTransit_.phase = FormationTransitState::Phase::Failed;
                 formationTransit_.status = "통신으로 받은 편대 목표를 적용하지 못했습니다.";
@@ -1345,8 +1345,8 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             && currentTick >= route->assignmentLeaseExpiresAtTick)
         {
             const auto mode = simulation_.State(message.destination).mode;
-            if (mode != aerosimlab::simulation::FlightMode::Grounded
-                && mode != aerosimlab::simulation::FlightMode::Landing)
+            if (mode != dronesim::simulation::FlightMode::Grounded
+                && mode != dronesim::simulation::FlightMode::Landing)
                 static_cast<void>(simulation_.Apply(message.destination,
                     {DroneCommand::Kind::Land}));
             mission->second.status = detail::FleetDroneStatus::AssignmentExpiredLanding;
@@ -1426,10 +1426,10 @@ void AeroSimLabApp::AdvanceFleetNetwork()
 
 }
 
-void AeroSimLabApp::AdvanceFormationTransit()
+void DroneSimApp::AdvanceFormationTransit()
 {
-    using namespace aerosimlab::simulation;
-    using namespace aerosimlab::flight_planning;
+    using namespace dronesim::simulation;
+    using namespace dronesim::flight_planning;
     if (!formationTransit_.IsActive())
         return;
 

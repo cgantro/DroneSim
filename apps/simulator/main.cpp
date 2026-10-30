@@ -1,4 +1,4 @@
-#include "AeroSimLabApp.h"
+#include "DroneSimApp.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -58,7 +58,7 @@ void ShowStartupMessage(std::string_view message, MessageKind kind)
     MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, text.data(), wideLength);
     text.pop_back();
     const UINT icon = kind == MessageKind::Error ? MB_ICONERROR : MB_ICONINFORMATION;
-    MessageBoxW(nullptr, text.c_str(), L"AeroSimLab", MB_OK | icon);
+    MessageBoxW(nullptr, text.c_str(), L"DroneSim", MB_OK | icon);
 #else
     if (kind == MessageKind::Error)
         std::cerr << message << '\n';
@@ -112,7 +112,7 @@ int RunSimulator(int argc, char** argv)
                 MessageKind::Error);
             return 2;
         }
-        aerosimlab::simulator::AeroSimLabApp::Options options{
+        dronesim::simulator::DroneSimApp::Options options{
             .smokeTest = smokeTest,
             .demoMode = demoMode,
             .benchmarkMode = benchmarkMode,
@@ -120,11 +120,11 @@ int RunSimulator(int argc, char** argv)
         };
 #ifdef __EMSCRIPTEN__
         // 브라우저 프레임 함수가 계속 실행되므로 앱을 프로그램이 끝날 때까지 보관한다.
-        static std::unique_ptr<aerosimlab::simulator::AeroSimLabApp> app;
-        app = std::make_unique<aerosimlab::simulator::AeroSimLabApp>(options);
+        static std::unique_ptr<dronesim::simulator::DroneSimApp> app;
+        app = std::make_unique<dronesim::simulator::DroneSimApp>(options);
         return app->Run();
 #else
-        aerosimlab::simulator::AeroSimLabApp app(options);
+        dronesim::simulator::DroneSimApp app(options);
         return app.Run();
 #endif
     }

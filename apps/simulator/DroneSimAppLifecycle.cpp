@@ -1,4 +1,4 @@
-#include "AeroSimLabApp.h"
+#include "DroneSimApp.h"
 
 #include "graphics/Window.h"
 #include "simulation_core/ScopedDuration.h"
@@ -14,7 +14,7 @@
 #include <emscripten.h>
 #endif
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 namespace
 {
@@ -23,7 +23,7 @@ constexpr std::size_t smokeTestFrameLimit = 8;
 constexpr double benchmarkDurationSeconds = 5.0;
 }
 
-int AeroSimLabApp::Run()
+int DroneSimApp::Run()
 {
 #ifndef __EMSCRIPTEN__
     InitializeGraphics();
@@ -32,7 +32,7 @@ int AeroSimLabApp::Run()
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg([](void* application)
     {
-        auto& app = *static_cast<AeroSimLabApp*>(application);
+        auto& app = *static_cast<DroneSimApp*>(application);
         try
         {
             if (!app.webGraphicsInitialized_)
@@ -120,7 +120,7 @@ int AeroSimLabApp::Run()
 #endif
 }
 
-void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
+void DroneSimApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
 {
 #ifdef __EMSCRIPTEN__
     static const bool collectWebFrameTimings = EM_ASM_INT({
@@ -135,12 +135,12 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
         : std::chrono::steady_clock::time_point{};
     frameMeasurements_ = {};
     {
-        aerosimlab::simulation::ScopedDuration measureEvents(
+        dronesim::simulation::ScopedDuration measureEvents(
             benchmarkMode_ ? &frameMeasurements_.eventPollingMicroseconds : nullptr);
         window_->PollEvents();
     }
     {
-        aerosimlab::simulation::ScopedDuration measureGamepad(
+        dronesim::simulation::ScopedDuration measureGamepad(
             benchmarkMode_ ? &frameMeasurements_.gamepadPollingMicroseconds : nullptr);
         PollGamepad();
     }
@@ -155,12 +155,12 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     double frameSeconds = elapsedSeconds;
     if (smokeTest_ && !benchmarkMode_)
     {
-        frameSeconds = aerosimlab::simulation::FixedTickAccumulator::fixedStepSeconds;
+        frameSeconds = dronesim::simulation::FixedTickAccumulator::fixedStepSeconds;
     }
     previousFrame = now;
 
     {
-        aerosimlab::simulation::ScopedDuration measureSimulation(
+        dronesim::simulation::ScopedDuration measureSimulation(
             benchmarkMode_ ? &frameMeasurements_.simulationUpdateMicroseconds : nullptr);
         AdvanceSimulation(frameSeconds);
     }
@@ -171,10 +171,10 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     auto renderComplete = std::chrono::steady_clock::time_point{};
 #endif
     {
-        aerosimlab::simulation::ScopedDuration measureRenderFrame(
+        dronesim::simulation::ScopedDuration measureRenderFrame(
             benchmarkMode_ ? &frameMeasurements_.renderFrameMicroseconds : nullptr);
         {
-            aerosimlab::simulation::ScopedDuration measureRender(
+            dronesim::simulation::ScopedDuration measureRender(
                 benchmarkMode_ ? &frameMeasurements_.renderMicroseconds : nullptr);
             RenderFrame();
         }
@@ -184,7 +184,7 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
             : std::chrono::steady_clock::time_point{};
 #endif
         {
-            aerosimlab::simulation::ScopedDuration measureBufferSwap(
+            dronesim::simulation::ScopedDuration measureBufferSwap(
                 benchmarkMode_ ? &frameMeasurements_.bufferSwapMicroseconds : nullptr);
             window_->SwapBuffers();
         }
@@ -222,13 +222,13 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     if (telemetryTime - lastWebTelemetryUpdate_ >= std::chrono::milliseconds(250))
     {
         const auto& state = simulation_.State();
-        const std::string mode{aerosimlab::simulation::ToString(state.mode)};
+        const std::string mode{dronesim::simulation::ToString(state.mode)};
         const double speedMetersPerSecond = glm::length(state.velocityMetersPerSecond);
         const double heightAboveGroundMeters = state.positionMeters.z
             - terrainGrid_.HeightAtLocalMeters(
                 {state.positionMeters.x, state.positionMeters.y});
         const bool cameraActive = simulation_.Camera().status
-            == aerosimlab::simulation::CameraStatus::Active;
+            == dronesim::simulation::CameraStatus::Active;
         const std::string missionStatus = CompleteFleetMissionStatus();
         const std::uint64_t simulationTick = simulation_.TickCount();
         EM_ASM({
@@ -241,7 +241,7 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
             heightAboveGroundMeters, speedMetersPerSecond, cameraActive,
             missionStatus.c_str(), simulationTick, CompleteFleetMissionIsActive(),
             CompleteFleetMissionCanStart(),
-            state.mode == aerosimlab::simulation::FlightMode::Grounded);
+            state.mode == dronesim::simulation::FlightMode::Grounded);
         lastWebTelemetryUpdate_ = telemetryTime;
     }
     if (!webFirstFrameRendered_)
@@ -258,15 +258,15 @@ void AeroSimLabApp::RunFrame(std::chrono::steady_clock::time_point& previousFram
     }
 }
 
-bool AeroSimLabApp::SmokeTestIsComplete() const
+bool DroneSimApp::SmokeTestIsComplete() const
 {
     return renderedFrames_ >= smokeTestFrameLimit;
 }
 
-int AeroSimLabApp::ValidateSmokeTestOutput() const
+int DroneSimApp::ValidateSmokeTestOutput() const
 {
     const auto& camera = simulation_.Camera();
-    if (camera.status != aerosimlab::simulation::CameraStatus::Active
+    if (camera.status != dronesim::simulation::CameraStatus::Active
         || camera.lastFrameTick == 0)
         return 5;
 

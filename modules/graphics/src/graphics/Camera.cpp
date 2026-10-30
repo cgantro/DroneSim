@@ -5,7 +5,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 Camera::Camera(
@@ -86,4 +86,4 @@ glm::vec3 Camera::GetTarget() const
     return m_Target;
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

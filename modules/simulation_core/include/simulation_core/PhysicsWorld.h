@@ -12,7 +12,7 @@
 #include <array>
 #include <memory>
 #include <vector>
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 struct QuadrotorParameters;
 

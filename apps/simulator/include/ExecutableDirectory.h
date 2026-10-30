@@ -10,7 +10,7 @@
 #include <Windows.h>
 #endif
 
-namespace aerosimlab::simulator::detail
+namespace dronesim::simulator::detail
 {
 /** @brief 실행 파일이 있는 폴더를 돌려준다. */
 inline std::filesystem::path ExecutableDirectory()

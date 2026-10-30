@@ -8,7 +8,7 @@
 
 #include <glm/geometric.hpp>
 
-namespace aerosimlab::communication
+namespace dronesim::communication
 {
 namespace
 {

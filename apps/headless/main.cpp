@@ -15,14 +15,14 @@
 namespace
 {
 constexpr std::string_view helpText =
-    "사용법: aerosimlab_headless --scenario <JSON 파일>\n"
-    "        aerosimlab_headless --help\n";
+    "사용법: dronesim_headless --scenario <JSON 파일>\n"
+    "        dronesim_headless --help\n";
 constexpr std::uintmax_t maximumScenarioFileBytes = 16 * 1024 * 1024;
 
-nlohmann::json ToJson(const aerosimlab::simulation::DroneState& state)
+nlohmann::json ToJson(const dronesim::simulation::DroneState& state)
 {
     return {
-        {"mode", aerosimlab::simulation::ToString(state.mode)},
+        {"mode", dronesim::simulation::ToString(state.mode)},
         {"position_meters", {state.positionMeters.x, state.positionMeters.y, state.positionMeters.z}},
         {"velocity_meters_per_second", {
             state.velocityMetersPerSecond.x,
@@ -41,10 +41,10 @@ nlohmann::json ToJson(const aerosimlab::simulation::DroneState& state)
         {"yaw_radians", state.yawRadians}};
 }
 
-nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
+nlohmann::json ToJson(const dronesim::scenario::ScenarioResult& result)
 {
     using CommunicationStatus =
-        aerosimlab::scenario::ScenarioResult::Drone::CommunicationStatus;
+        dronesim::scenario::ScenarioResult::Drone::CommunicationStatus;
     const auto communicationStatusName = [](CommunicationStatus status)
     {
         switch (status)
@@ -74,7 +74,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
             {"name", drone.name},
             {"state", ToJson(drone.finalState)},
             {"camera", {
-                {"status", aerosimlab::simulation::ToString(drone.finalCamera.status)},
+                {"status", dronesim::simulation::ToString(drone.finalCamera.status)},
                 {"image_width_pixels", drone.finalCamera.model.imageWidthPixels},
                 {"image_height_pixels", drone.finalCamera.model.imageHeightPixels},
                 {"vertical_field_of_view_degrees",
@@ -113,7 +113,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                 {"completed_tick", task.completedTick}});
         }
         mission = {{"name", result.mission->name},
-            {"outcome", aerosimlab::scenario::ToString(result.mission->GetOutcome())},
+            {"outcome", dronesim::scenario::ToString(result.mission->GetOutcome())},
             {"completed_task_count", result.mission->CompletedTaskCount()},
             {"task_count", result.mission->tasks.size()},
             {"waypoint_progress_percent", result.mission->WaypointProgressPercent()},
@@ -123,7 +123,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
                     && result.mission->startedTick
                 ? nlohmann::json(static_cast<double>(*completedTick
                     - *result.mission->startedTick)
-                    * aerosimlab::simulation::DroneModel::fixedStepSeconds)
+                    * dronesim::simulation::DroneModel::fixedStepSeconds)
                 : nlohmann::json(nullptr)},
             {"tasks", std::move(tasks)}};
     }
@@ -175,7 +175,7 @@ nlohmann::json ToJson(const aerosimlab::scenario::ScenarioResult& result)
     }
 
     return {
-        {"outcome", aerosimlab::scenario::ToString(result.outcome)},
+        {"outcome", dronesim::scenario::ToString(result.outcome)},
         {"tick_count", result.tickCount},
         {"simulation_time_seconds", result.simulationTimeSeconds},
         {"wind_velocity_meters_per_second", result.windVelocityMetersPerSecond
@@ -228,7 +228,7 @@ int main(int argc, char** argv)
         const std::string jsonText{
             std::istreambuf_iterator<char>{input},
             std::istreambuf_iterator<char>{}};
-        const auto result = aerosimlab::scenario::RunScenario(jsonText);
+        const auto result = dronesim::scenario::RunScenario(jsonText);
         std::cout << ToJson(result).dump(2) << '\n';
         return result.IsPassed() ? 0 : 1;
     }

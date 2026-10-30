@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace aerosimlab::manual_control
+namespace dronesim::manual_control
 {
 namespace
 {

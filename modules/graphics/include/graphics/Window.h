@@ -4,7 +4,7 @@
 
 struct GLFWwindow;
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 enum class MouseButton
@@ -32,7 +32,7 @@ public:
         int width = 1280;
         /** 요청하는 창 높이 [논리 픽셀]. */
         int height = 720;
-        std::string title = "AeroSimLab";
+        std::string title = "DroneSim";
         /** true이면 완성된 화면을 모니터 주사 주기에 맞춰 표시한다. */
         bool vsync = true;
         /** false이면 보이는 창 없이 화면을 그릴 수 있다. */
@@ -114,4 +114,4 @@ private:
     double m_ScrollOffset = 0.0;
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

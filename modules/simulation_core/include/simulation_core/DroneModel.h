@@ -7,7 +7,7 @@
 #include <optional>
 #include <string_view>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 /**
  * @brief 드론이 고정 간격 모의에서 따르는 비행 상태를 나타낸다.

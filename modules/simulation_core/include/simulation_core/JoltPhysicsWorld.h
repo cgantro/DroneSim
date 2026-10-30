@@ -10,11 +10,11 @@
 #include <span>
 #include <vector>
 
-namespace aerosimlab::terrain {
+namespace dronesim::terrain {
 struct TerrainGrid;
 }
 
-namespace aerosimlab::simulation {
+namespace dronesim::simulation {
 struct QuadrotorParameters;
 
 /** @brief 한 Jolt 물리 월드 안의 강체를 가리킨다. */
@@ -72,7 +72,7 @@ public:
                              std::span<const std::uint32_t> triangleIndices);
 
   /** @brief 지형 격자와 같은 표면 높이를 가진 정적 충돌 지형을 만든다. */
-  void SetTerrain(const aerosimlab::terrain::TerrainGrid &terrain);
+  void SetTerrain(const dronesim::terrain::TerrainGrid &terrain);
 
   /** @brief 외곽선과 높이로 건물·구조물의 정적 충돌 메시를 만든다. */
   void AddStaticPrism(const std::vector<glm::dvec2> &outlineMeters,
@@ -130,4 +130,4 @@ private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
-} // namespace aerosimlab::simulation
+} // namespace dronesim::simulation

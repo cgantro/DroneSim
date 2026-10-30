@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace aerosimlab::communication
+namespace dronesim::communication
 {
 namespace
 {

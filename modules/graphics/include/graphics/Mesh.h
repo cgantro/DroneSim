@@ -7,7 +7,7 @@
 
 #include <glm/glm.hpp>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 /** @brief 한 정점의 3D 위치와 표면 방향을 보관한다. 위치는 모델 중심 기준이다. */
@@ -100,4 +100,4 @@ private:
     std::uint32_t instanceCount_ = 0;
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

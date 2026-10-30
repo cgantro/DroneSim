@@ -4,9 +4,9 @@
 
 ## 현재 실행 경계 확인 — 2026-10-30
 
-- `apps/ground_control`은 화면 프로그램이 아니라 `aerosimlab_ground_control_client` 정적 라이브러리다. 명령을 UDP로 보내고 응답을 기다리는 코드는 있지만, 현재 저장소의 실행 파일에서 이 라이브러리를 호출하는 곳은 없다. 따라서 독립 지상통제 프로그램으로는 바로 실행할 수 없다.
-- 지금 화면에서 쓰는 지상통제 기능은 시뮬레이터 안의 ImGui 패널과 `AeroSimLabAppInput.cpp`의 UDP 서버 처리다. 이를 외부 앱용 클라이언트와 혼동하지 않도록 문서·실행 안내에서 구분해야 한다.
-- `apps/simulator`는 여러 소스 파일로 나뉘어 있어도 앱 상태를 `AeroSimLabApp` 하나가 소유한다. `AeroSimLabAppMission.cpp`에는 편대·통신·임무 흐름이 함께 있고, 헤더에는 그래픽·제어·네트워크·임무 상태가 모여 있다. 파일을 더 쪼개기보다 먼저 각 상태의 소유자와 호출 경계를 줄이는 것이 필요하다.
+- `apps/ground_control`은 화면 프로그램이 아니라 `dronesim_ground_control_client` 정적 라이브러리다. 명령을 UDP로 보내고 응답을 기다리는 코드는 있지만, 현재 저장소의 실행 파일에서 이 라이브러리를 호출하는 곳은 없다. 따라서 독립 지상통제 프로그램으로는 바로 실행할 수 없다.
+- 지금 화면에서 쓰는 지상통제 기능은 시뮬레이터 안의 ImGui 패널과 `DroneSimAppInput.cpp`의 UDP 서버 처리다. 이를 외부 앱용 클라이언트와 혼동하지 않도록 문서·실행 안내에서 구분해야 한다.
+- `apps/simulator`는 여러 소스 파일로 나뉘어 있어도 앱 상태를 `DroneSimApp` 하나가 소유한다. `DroneSimAppMission.cpp`에는 편대·통신·임무 흐름이 함께 있고, 헤더에는 그래픽·제어·네트워크·임무 상태가 모여 있다. 파일을 더 쪼개기보다 먼저 각 상태의 소유자와 호출 경계를 줄이는 것이 필요하다.
 - EO 화면은 GPU 프레임버퍼 텍스처를 패널에 표시한다. CPU 픽셀 읽기·화질 분석·종료 drain을 제거하고, 남은 장면·카메라 렌더링 코드를 역할에 맞는 이름으로 정리했다.
 
 기준: d6515b6e와 당시 미커밋 변경을 포함한 작업 트리, INVENTORY.tsv의 owner=app 32개. 이 기록의 초기 로컬 녹화 관련 평가는 2026-10-29 사용자 요청으로 뒤집혔다. 카메라 파일 녹화·저장은 제거하고 라이브 EO 화면은 유지한다. 아래 파일별 조사 내용은 당시 코드 기준이며 이후 변경은 CHECKPOINT와 VERIFICATION에서 확인한다.
@@ -16,19 +16,19 @@
 현재 `apps/`에는 28개 파일이 있다. 위 표는 이전 감사 시점의 32개 목록이므로 삭제된 항목을 포함하며, 현재 목록과 섞어 읽지 않는다. 이번 시나리오 재검토에서 다시 확인한 앱 경계는 다음과 같다.
 
 - `apps/headless/main.cpp`는 JSON 파일을 읽어 `scenario::RunScenario`를 실행하고 결과를 JSON으로 출력한다.
-- `apps/simulator/AeroSimLabAppMission.cpp`는 화면 시뮬레이터의 편대·정찰·복귀 임무를 직접 진행한다. JSON Runner를 호출하지 않는다.
+- `apps/simulator/DroneSimAppMission.cpp`는 화면 시뮬레이터의 편대·정찰·복귀 임무를 직접 진행한다. JSON Runner를 호출하지 않는다.
 - 따라서 시나리오 자동 시험은 headless 경로를 검증하며, 화면에서 수행하는 앱 임무를 대신 검증하지 않는다. 앱 시험은 기존 `tests/simulator/SimulatorSessionTests.cpp` 및 Viewer 실행 경로를 별도로 확인해야 한다.
 
 | 경로 | 판단 | 확인된 입출력·호출·상태/오류·중복 또는 범위 판단 |
 |---|---|---|
-| apps/simulator/AeroSimLabApp.cpp | SIMPLIFY | 생성자 178, 그래픽 초기화 271–350, 지형/시설 361–438, 4대 생성 441–466, tick 498, RenderFrame 678, 카메라 941/982. 자산과 simulation을 받아 렌더링·상태에 연결하고 unique_ptr로 그래픽 객체 소유. 미션·네트워크·웹 분기를 목표에 맞게 축소. CreateTerrainMesh 120–153은 격자 수 2 이상에 의존하므로 생산자 불변식 확인 필요. |
-| apps/simulator/AeroSimLabApp.h | SIMPLIFY | 기준선에는 구형 점검 상태와 네 대 정찰·전체 임무 상태가 함께 있었다. 구형 상태·목표·카메라 판정 자료를 제거하고 정찰 지점 자료만 남겼다. 앱은 여전히 그래픽·제어·통신·임무를 함께 소유하므로 책임 검토가 남았다. |
-| apps/simulator/AeroSimLabAppBenchmark.cpp | SIMPLIFY | RecordBenchmarkFrame 15, WriteBenchmarkReport 70: 화면 계측을 보고서로 출력한다. 고정 임무 범위에서 쓰지 않는 대규모 확장 측정은 제거하고 화면 측정만 남겼다. |
-| apps/simulator/AeroSimLabAppCamera.cpp | SIMPLIFY | 과거 감사 시점에는 GPU 픽셀 읽기와 화질 분석이 있었다. 2026-10-30 해당 분석·종료 drain을 제거했다. 현재는 GPU 카메라 장면을 출력 텍스처에 그려 패널에 제공한다. |
-| apps/simulator/AeroSimLabAppGamepad.cpp | KEEP | ScanForGamepad 27, PollGamepad 50, HandleGamepadDisconnected 118. 장치 상태를 입력으로 조종 명령을 만들고 연결 해제를 처리한다. 독립 기능이지만 MVP에서 수동 조종 필요 여부는 별도 결정. |
-| apps/simulator/AeroSimLabAppInput.cpp | SIMPLIFY | 당시 PollGroundControl 184, ProcessPendingGroundCommand 727, CurrentTelemetry 840이 UDP 명령과 상태 응답을 처리했다. 기록·재생 제어는 이후 제거했다. 목표 임무와 직접 통신은 보존한다. |
-| apps/simulator/AeroSimLabAppLifecycle.cpp | SIMPLIFY | Run 28, RunFrame 139, SmokeTestIsComplete 302, ValidateSmokeTestOutput 313. 프레임 입력→모의→렌더→swap을 묶고 웹 예외 및 smoke 시간 초과를 처리한다. 벤치마크·웹/네이티브 분기 정리는 EO 검증과 종료 경로를 보존하며 수행. |
-| apps/simulator/AeroSimLabAppMission.cpp | SIMPLIFY | 기준선에는 단일 드론의 이륙·접근·카메라 정렬·촬영·착륙 처리와 네 대 임무가 함께 있었다. 구형 단일 드론 흐름을 제거했다. 남은 흐름은 편대 이동·드론별 정찰·재집결·복귀를 맡으며, 메시지 처리와 임무 판정은 아직 한 파일에 모여 있다. |
+| apps/simulator/DroneSimApp.cpp | SIMPLIFY | 생성자 178, 그래픽 초기화 271–350, 지형/시설 361–438, 4대 생성 441–466, tick 498, RenderFrame 678, 카메라 941/982. 자산과 simulation을 받아 렌더링·상태에 연결하고 unique_ptr로 그래픽 객체 소유. 미션·네트워크·웹 분기를 목표에 맞게 축소. CreateTerrainMesh 120–153은 격자 수 2 이상에 의존하므로 생산자 불변식 확인 필요. |
+| apps/simulator/DroneSimApp.h | SIMPLIFY | 기준선에는 구형 점검 상태와 네 대 정찰·전체 임무 상태가 함께 있었다. 구형 상태·목표·카메라 판정 자료를 제거하고 정찰 지점 자료만 남겼다. 앱은 여전히 그래픽·제어·통신·임무를 함께 소유하므로 책임 검토가 남았다. |
+| apps/simulator/DroneSimAppBenchmark.cpp | SIMPLIFY | RecordBenchmarkFrame 15, WriteBenchmarkReport 70: 화면 계측을 보고서로 출력한다. 고정 임무 범위에서 쓰지 않는 대규모 확장 측정은 제거하고 화면 측정만 남겼다. |
+| apps/simulator/DroneSimAppCamera.cpp | MOVED | 2026-10-30 패널 카메라·프레임버퍼 책임을 `modules/gui/SimulatorView.cpp`로 옮기고 옛 앱 전용 파일을 삭제했다. |
+| apps/simulator/DroneSimAppGamepad.cpp | KEEP | ScanForGamepad 27, PollGamepad 50, HandleGamepadDisconnected 118. 장치 상태를 입력으로 조종 명령을 만들고 연결 해제를 처리한다. 독립 기능이지만 MVP에서 수동 조종 필요 여부는 별도 결정. |
+| apps/simulator/DroneSimAppInput.cpp | SIMPLIFY | 당시 PollGroundControl 184, ProcessPendingGroundCommand 727, CurrentTelemetry 840이 UDP 명령과 상태 응답을 처리했다. 기록·재생 제어는 이후 제거했다. 목표 임무와 직접 통신은 보존한다. |
+| apps/simulator/DroneSimAppLifecycle.cpp | SIMPLIFY | Run 28, RunFrame 139, SmokeTestIsComplete 302, ValidateSmokeTestOutput 313. 프레임 입력→모의→렌더→swap을 묶고 웹 예외 및 smoke 시간 초과를 처리한다. 벤치마크·웹/네이티브 분기 정리는 EO 검증과 종료 경로를 보존하며 수행. |
+| apps/simulator/DroneSimAppMission.cpp | SIMPLIFY | 기준선에는 단일 드론의 이륙·접근·카메라 정렬·촬영·착륙 처리와 네 대 임무가 함께 있었다. 구형 단일 드론 흐름을 제거했다. 남은 흐름은 편대 이동·드론별 정찰·재집결·복귀를 맡으며, 메시지 처리와 임무 판정은 아직 한 파일에 모여 있다. |
 | apps/simulator/BenchmarkProcessMemory.h | SIMPLIFY | ProcessMemorySample 14, ReadProcessMemorySample 21은 프로세스 메모리 계측에 선택적 결과를 반환한다. 벤치마크 보존 여부와 함께 결정. |
 | apps/simulator/BuildRevision.cpp | KEEP | 빌드 리비전 제공 구현. 호출·생성 연결과 실패 시 값은 추가 확인 필요. |
 | apps/simulator/BuildRevision.h | KEEP | 리비전 인터페이스. 빌드 생성 및 표시 호출처 확인 필요. |
@@ -65,12 +65,12 @@
 
 아래 범위만 연속 본문 확인을 주장한다. 함수명 검색은 본문 완독으로 세지 않는다. 첫 묶음 출력이 잘렸으므로 보수적으로 분류했다.
 
-- `AeroSimLabApp.cpp`: 1–469, 470–700, 701–930, 931–1150, 1151–1264 확인.
-- `AeroSimLabAppInput.cpp`: 1–250, 251–500, 501–726, 727–863 확인.
-- `AeroSimLabAppLifecycle.cpp`: 1–337 확인, 미확인 없음.
+- `DroneSimApp.cpp`: 1–469, 470–700, 701–930, 931–1150, 1151–1264 확인.
+- `DroneSimAppInput.cpp`: 1–250, 251–500, 501–726, 727–863 확인.
+- `DroneSimAppLifecycle.cpp`: 1–337 확인, 미확인 없음.
 - 다음 11개는 전체 확인: BenchmarkProcessMemory.h 1–36, BuildRevision.cpp 1–11, BuildRevision.h 1–9, ExecutableDirectory.h 1–36, FleetDroneSpawn.cpp 1–37, FleetDroneSpawn.h 1–24, FleetMissionProgress.cpp 1–119, FleetMissionProgress.h 1–92, FleetTelemetry.h 1–33, TrainingRangeScene.cpp 1–149, TrainingRangeScene.h 1–59.
 
-추가 완독: AeroSimLabApp.h 1–220, 221–440, 441–604; AeroSimLabAppBenchmark.cpp 1–131; AeroSimLabAppEoCapture.cpp 1–150, 151–299; AeroSimLabAppGamepad.cpp 1–188. EoVideoRecorder.cpp 1–205, 205–659 확인. 추가 완독: AeroSimLabAppMission.cpp 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1500, 1501–1750, 1751–2000, 2001–2240; CooperativeMissionBenchmark.cpp 1–200, 201–400, 401–563; DroneScalingBenchmark.cpp 1–240, 241–480. 추가 완독: EoVideoRecorder.h 1–90; FaultScenarioTimeline.cpp 1–200, 201–400, 401–583; FaultScenarioTimeline.h 1–101; SimulationBenchmark.cpp 1–204; SimulationBenchmark.h 1–129. 추가 완독: SimulatorHud.cpp 1–250, 251–500, 501–750, 751–1000, 1001–1203; SimulatorHud.h 1–143; main.cpp 1–214; web/web_shell_single_thread.html 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1335; tests/simulator/SimulatorSessionTests.cpp 1–250, 251–500, 501–750, 751–941. 따라서 완독 32/32개, 미완독·누락 없음.
+추가 완독: DroneSimApp.h 1–220, 221–440, 441–604; DroneSimAppBenchmark.cpp 1–131; DroneSimAppEoCapture.cpp 1–150, 151–299; DroneSimAppGamepad.cpp 1–188. EoVideoRecorder.cpp 1–205, 205–659 확인. 추가 완독: DroneSimAppMission.cpp 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1500, 1501–1750, 1751–2000, 2001–2240; CooperativeMissionBenchmark.cpp 1–200, 201–400, 401–563; DroneScalingBenchmark.cpp 1–240, 241–480. 추가 완독: EoVideoRecorder.h 1–90; FaultScenarioTimeline.cpp 1–200, 201–400, 401–583; FaultScenarioTimeline.h 1–101; SimulationBenchmark.cpp 1–204; SimulationBenchmark.h 1–129. 추가 완독: SimulatorHud.cpp 1–250, 251–500, 501–750, 751–1000, 1001–1203; SimulatorHud.h 1–143; main.cpp 1–214; web/web_shell_single_thread.html 1–250, 251–500, 501–750, 751–1000, 1001–1250, 1251–1335; tests/simulator/SimulatorSessionTests.cpp 1–250, 251–500, 501–750, 751–941. 따라서 완독 32/32개, 미완독·누락 없음.
 
 추가 확인: FleetMissionProgress.cpp 63–117은 보고 누락이나 단계 불일치 시 대기하고 정찰·복귀 실패 및 착륙을 판정한다. 상태를 한국어 문자열로 파싱하므로 문구 변경이 판정을 바꿀 수 있다(5–39). TrainingRangeScene.cpp 53–57의 첫 네 정찰 지점은 다중 홉 연결을 전제로 배치됐으므로 직접 통신 목표에 맞는지 재검토해야 한다. ExecutableDirectory.h 20–32는 경로 조회 실패 시 예외를 던지고, FleetDroneSpawn.cpp 21–28은 지형 범위 밖을 nullopt로 반환한다.
 
@@ -94,14 +94,14 @@
 
 | 파일 | 현재 역할과 호출 | 책임·중복 판단 |
 |---|---|---|
-| `AeroSimLabAppBenchmark.cpp` | 앱의 프레임·느린 프레임 표본을 모으고 완료된 HUD GPU 시간과 결합한다. 종료 시 렌더러 정보, Tick·프레임 수와 CPU 시간을 모아 보고서 작성·저장을 호출한다. `AeroSimLabAppLifecycle.cpp`가 측정 실행 때 호출한다. | 앱의 계측값을 보고서 입력으로 옮기는 역할이다. 화면 그리기와 CPU 구간 측정값을 앱 여러 곳에서 받아 필드가 많지만 실제 보고서에 사용한다. GPU 결과는 프레임 번호로 늦게 도착하므로 별도 결합이 필요하다. 측정 항목을 줄일지는 요구하는 지표와 기존 결과의 용도를 대조해 결정한다. |
+| `DroneSimAppBenchmark.cpp` | 앱의 프레임·느린 프레임 표본을 모으고 완료된 HUD GPU 시간과 결합한다. 종료 시 렌더러 정보, Tick·프레임 수와 CPU 시간을 모아 보고서 작성·저장을 호출한다. `DroneSimAppLifecycle.cpp`가 측정 실행 때 호출한다. | 앱의 계측값을 보고서 입력으로 옮기는 역할이다. 화면 그리기와 CPU 구간 측정값을 앱 여러 곳에서 받아 필드가 많지만 실제 보고서에 사용한다. GPU 결과는 프레임 번호로 늦게 도착하므로 별도 결합이 필요하다. 측정 항목을 줄일지는 요구하는 지표와 기존 결과의 용도를 대조해 결정한다. |
 | `BenchmarkProcessMemory.h` | Windows에서 현재 프로세스의 작업 집합과 전용 메모리를 읽고 실패하거나 다른 환경이면 빈 값을 반환한다. `SimulationBenchmark.cpp`만 호출하며 Windows 빌드는 Psapi를 연결한다. | 단일 호출처를 위한 작은 플랫폼 함수다. 측정 항목을 유지하면 유지하고, 파일 수를 줄일 필요가 있으면 보고서 구현에 합칠 수 있다. 다른 플랫폼에서 값이 없다는 점은 현재 코드의 동작이다. |
 | `BuildRevision.h` | 소스 버전을 돌려주는 `BuildRevision()`을 선언한다. | 앱 계측 코드가 생성 헤더를 직접 알지 않게 하는 얇은 경계다. 호출은 보고서 작성 한 곳이다. |
 | `BuildRevision.cpp` | CMake가 생성한 헤더의 버전 문자열을 반환한다. | 함수 자체는 단순 전달이다. 두 파일을 없애려면 생성 헤더의 빌드 의존성과 변경 시 재컴파일도 함께 유지해야 한다. 단순히 호출이 한 곳이라는 이유만으로 제거하지 않는다. |
-| `ExecutableDirectory.h` | Windows 실행 파일 경로, Linux `/proc/self/exe`, 웹의 빈 경로를 처리한다. 자산 경로와 Windows 기본 벤치마크 출력 경로가 사용한다. | 두 기능이 같은 실행 파일 위치를 필요로 하므로 공유할 근거가 있다. `AeroSimLabAppInput.cpp`의 이 헤더 포함은 실제 사용처가 없는 후보이다. 경로 조회 실패는 예외로 알린다. |
+| `ExecutableDirectory.h` | Windows 실행 파일 경로, Linux `/proc/self/exe`, 웹의 빈 경로를 처리한다. 자산 경로와 Windows 기본 벤치마크 출력 경로가 사용한다. | 두 기능이 같은 실행 파일 위치를 필요로 하므로 공유할 근거가 있다. `DroneSimAppInput.cpp`의 이 헤더 포함은 실제 사용처가 없는 후보이다. 경로 조회 실패는 예외로 알린다. |
 | `main.cpp` | 명령행 옵션을 해석하고 플랫폼별 시작 오류를 표시한 뒤 앱을 생성·실행한다. Windows에서는 유니코드 명령행을 UTF-8로 바꾸고 웹에서는 프레임 루프 동안 앱 수명을 유지한다. CMake가 실행 파일 진입점으로 사용한다. | 실행 진입점의 책임에 맞는다. 옵션 해석과 오류 표시, 플랫폼 진입이 한 파일에 있어 흐름을 읽어야 하지만 별도 클래스는 필요하지 않다. 옵션을 순서대로 처리하므로 `--smoke-test` 뒤에 `--udp-port`를 지정하면 UDP가 다시 활성화된다. 의도한 조합인지 확인이 필요하다. |
 | `SimulationBenchmark.h` | HUD GPU 시간과 한 실행의 화면·Tick·느린 프레임 표본, JSON 결과 생성·저장 계약을 선언한다. 앱 계측과 HUD가 자료형을 사용한다. | 여러 구간의 상세 측정값을 모으는 자료 계약으로 역할에 맞지만 필드 수가 많다. `SummarizeDurations()`는 이 헤더 밖의 호출처가 없어 구현 내부 함수로 좁힐 후보이다. |
-| `SimulationBenchmark.cpp` | 표본을 정렬해 p50·p95·p99·최댓값과 Tick 초과 횟수를 계산하고 JSON으로 저장한다. `AeroSimLabAppBenchmark.cpp`가 보고서 생성과 저장을 호출한다. | 현재 출력의 `configuration`은 드론 한 대와 예전 SRTM 지형·건물을 고정 문구로 기록해 현재 훈련장·네 대 초기화와 맞지 않는다. 이 문구를 현재 실행 조건으로 바꾸거나 확인되지 않은 세부 내용을 제거해야 한다. 이 보고서 함수 전용 시험은 검색에서 찾지 못했다. |
+| `SimulationBenchmark.cpp` | 표본을 정렬해 p50·p95·p99·최댓값과 Tick 초과 횟수를 계산하고 JSON으로 저장한다. `DroneSimAppBenchmark.cpp`가 보고서 생성과 저장을 호출한다. | 현재 출력의 `configuration`은 드론 한 대와 예전 SRTM 지형·건물을 고정 문구로 기록해 현재 훈련장·네 대 초기화와 맞지 않는다. 이 문구를 현재 실행 조건으로 바꾸거나 확인되지 않은 세부 내용을 제거해야 한다. 이 보고서 함수 전용 시험은 검색에서 찾지 못했다. |
 | `SimulatorHud.h` | HUD 생성·소멸과 화면 렌더 함수, 지상통제 수신 위치, HUD CPU·GPU 계측 자료를 선언한다. 앱이 소유하고 호출한다. | ImGui 수명과 GPU 쿼리 수명을 객체에 묶고 복사를 막는다. `Render()` 인자가 상태·명령 콜백·렌더 콜백·계측을 한 번에 받아 길다. `GroundControlDronePosition::droneId`는 채워지지만 HUD에서 읽히지 않는다. 현재는 앱과 HUD가 같은 `DroneIds()` 순서로 목록을 만들어 인덱스로 연결한다. |
 | `SimulatorHud.cpp` | 도킹 배치, 관찰 드론 선택, 드론별 2열 카메라, 비행·관제 상태, 임무 시작·복귀와 가상 통신 차단·복구를 표시한다. ImGui 초기화·해제와 선택적인 GPU 시간 조회도 맡는다. | 화면 출력과 UI 입력 처리는 HUD 책임에 맞고 생성·소멸에서 ImGui와 GPU 쿼리 자원을 정리한다. 통신 사건의 송신·수신 ID를 모두 `DroneName()`으로 표시하므로 지상통제 노드의 최댓값 ID도 드론 번호로 표시된다. 화면에는 드론별 배터리, 임무 일시정지·중단 조작이 없다. 기존 ViewerSmoke는 이 세부 UI를 확인하지 않는다. |
 | `web/web_shell_single_thread.html` | 웹 페이지의 장면·카메라·상태·조작 UI와 시작 상태, C++ 웹 함수 호출, EO 캔버스 복사를 묶는다. CMake의 Emscripten `--shell-file`이 사용하고 웹 스모크 도구가 시작·카메라 표시·수동 조작과 임무 일부를 확인한다. | 브라우저 의존 작업을 한곳에서 처리한다. HTML·CSS·JS가 함께 있어 길지만 이 파일은 배포 셸이다. EO 캔버스 하나와 주 드론 상태만 제공하며, 네이티브의 드론별 카메라 격자와 다르다. 페이지 안 `#scene-panel canvas`의 150% 너비는 C++이 그린 장면과 카메라 영역을 같은 캔버스에서 분리하는 구조와 함께 검토해야 하므로 단독 삭제 후보로 보지 않는다. |
@@ -121,13 +121,13 @@
 
 | 파일 | 현재 역할과 판단 |
 |---|---|
-| `AeroSimLabApp.h` | 앱의 그래픽 자원, 입력, 임무, 가상 통신과 측정 상태를 소유한다. 자원은 주로 `unique_ptr`로 관리하지만 여러 책임과 임무 상태가 한 클래스에 모여 있다. `<unordered_map>`은 네이티브 조건에서만 포함하면서 웹에서도 해당 자료형을 사용한다. 다른 헤더의 간접 포함에 의존하지 않도록 확인이 필요하다. |
-| `AeroSimLabApp.cpp` | 창·모델·지형·네 대 드론 초기화, 고정 Tick, 수동 조종과 장면 출력을 연결한다. `AdvanceSimulationTick()`의 정찰 진행 조건은 `FleetReconnaissanceIsActive()`와 같은 내용을 따로 계산한다. `ApplySimulationCommand()`는 현재 `simulation_.Apply()`에 그대로 전달한다. |
-| `AeroSimLabAppMission.cpp` | 편대 이동, 드론별 정찰, 집결·복귀, 가상 통신 전송·수신·재전송과 단계 판정을 맡는다. 한 파일에 서로 다른 책임이 모여 있다. `FleetReconnaissanceStatus()`는 선언·정의 외 호출처가 없다. 이 함수에서만 읽는 `fleetLeadershipStatus_`와 상태 보고 경과 기준 상수도 제거 후보이다. 재전송 횟수는 재시도 제한에 사용한다. |
-| `AeroSimLabAppInput.cpp` | UDP 요청을 해독하고 순서·중복을 확인해 명령을 적용하며 응답을 만든다. 드론 추가와 정찰 시작도 이 경로에서 처리한다. `ExecutableDirectory.h`와 `graphics/MultisampleFramebuffer.h`는 이 파일에서 사용처를 찾지 못했다. |
-| `AeroSimLabAppLifecycle.cpp` | 네이티브 실행 루프, 웹 단계별 시작, 프레임 입력·모의·렌더링과 스모크 종료를 관리한다. 실행 수명을 맡는 역할에 맞는다. 웹 상태 전송 블록의 `camera` 지역 참조는 현재 읽히지 않는다. |
-| `AeroSimLabAppCamera.cpp` | 네이티브 장면과 드론별 카메라를 프레임버퍼에 그리고 HUD에 텍스처를 전달한다. 주 드론과 보조 드론의 갱신 코드가 유사하다. 주 카메라는 웹 화면에서도 사용하므로 통합 전에 플랫폼별 자원 수명을 확인해야 한다. |
-| `AeroSimLabAppGamepad.cpp` | GLFW 게임패드 탐색, 버튼 변화 감지, 축 입력과 연결 해제 처리를 맡는다. 축을 비행 명령으로 바꾸는 계산은 `manual_control`에 있어 입력 수집과 계산이 구분된다. |
+| `DroneSimApp.h` | 앱의 그래픽 자원, 입력, 임무, 가상 통신과 측정 상태를 소유한다. 자원은 주로 `unique_ptr`로 관리하지만 여러 책임과 임무 상태가 한 클래스에 모여 있다. `<unordered_map>`은 네이티브 조건에서만 포함하면서 웹에서도 해당 자료형을 사용한다. 다른 헤더의 간접 포함에 의존하지 않도록 확인이 필요하다. |
+| `DroneSimApp.cpp` | 창·모델·지형·네 대 드론 초기화, 고정 Tick, 수동 조종과 장면 출력을 연결한다. `AdvanceSimulationTick()`의 정찰 진행 조건은 `FleetReconnaissanceIsActive()`와 같은 내용을 따로 계산한다. `ApplySimulationCommand()`는 현재 `simulation_.Apply()`에 그대로 전달한다. |
+| `DroneSimAppMission.cpp` | 편대 이동, 드론별 정찰, 집결·복귀, 가상 통신 전송·수신·재전송과 단계 판정을 맡는다. 한 파일에 서로 다른 책임이 모여 있다. `FleetReconnaissanceStatus()`는 선언·정의 외 호출처가 없다. 이 함수에서만 읽는 `fleetLeadershipStatus_`와 상태 보고 경과 기준 상수도 제거 후보이다. 재전송 횟수는 재시도 제한에 사용한다. |
+| `DroneSimAppInput.cpp` | UDP 요청을 해독하고 순서·중복을 확인해 명령을 적용하며 응답을 만든다. 드론 추가와 정찰 시작도 이 경로에서 처리한다. `ExecutableDirectory.h`와 `graphics/MultisampleFramebuffer.h`는 이 파일에서 사용처를 찾지 못했다. |
+| `DroneSimAppLifecycle.cpp` | 네이티브 실행 루프, 웹 단계별 시작, 프레임 입력·모의·렌더링과 스모크 종료를 관리한다. 실행 수명을 맡는 역할에 맞는다. 웹 상태 전송 블록의 `camera` 지역 참조는 현재 읽히지 않는다. |
+| `DroneSimAppCamera.cpp` | 당시 네이티브 장면과 드론별 카메라를 그렸다. 2026-10-30 카메라와 프레임버퍼 소유를 `modules/gui/SimulatorView.cpp`로 옮겼다. 웹 렌더링은 Emscripten 전용 경로로 앱에 남는다. |
+| `DroneSimAppGamepad.cpp` | GLFW 게임패드 탐색, 버튼 변화 감지, 축 입력과 연결 해제 처리를 맡는다. 축을 비행 명령으로 바꾸는 계산은 `manual_control`에 있어 입력 수집과 계산이 구분된다. |
 | `FleetDroneSpawn.h` | 추가 드론의 지면 위치와 높이 결과, 위치 탐색 함수의 계약이다. |
 | `FleetDroneSpawn.cpp` | 주 드론 주변 슬롯의 지면 위치를 계산한다. UDP 드론 추가와 관련 시험에서 사용하므로 현재 미사용 파일은 아니다. 네 대 고정 정책을 적용할 때 호출처와 함께 검토한다. |
 | `FleetMissionProgress.h` | 드론 임무 단계·상태와 보고·전체 진행 판정 자료를 선언한다. 표시 문구와 드론 상태 enum을 분리한다. |
@@ -147,7 +147,7 @@
 
 ### 후속 정리
 
-- 앱 헤더 9개를 `apps/simulator/include`로 옮기고 CMake 공개 포함 경로를 바꿨다. `AeroSimLabApp.h`에서 웹 빌드에도 쓰는 `unordered_map`을 직접 포함하도록 수정했다.
+- 앱 헤더 9개를 `apps/simulator/include`로 옮기고 CMake 공개 포함 경로를 바꿨다. `DroneSimApp.h`에서 웹 빌드에도 쓰는 `unordered_map`을 직접 포함하도록 수정했다.
 - 입력 처리 파일에서 사용하지 않던 헤더 2개와 웹 상태 전송에서 읽지 않던 카메라 참조를 제거했다.
 - 편대 상태 패킷에서 수신 측이 쓰지 않던 배정 만료 시각을 제거했다. 실제 경로 배정 메시지의 만료 시각과 만료 시 착륙 동작은 유지했다.
 - Release 앱·통합시험 빌드 성공, 통신 시험 7/7 및 시뮬레이터 통합 시험 5/5 통과. Emscripten 빌드와 화면 실행은 확인하지 않았다.

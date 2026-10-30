@@ -1,17 +1,19 @@
-#include "AeroSimLabApp.h"
+#include "DroneSimApp.h"
 #include "ExecutableDirectory.h"
 #include "FleetMissionProgress.h"
 #include "TrainingRangeScene.h"
+#ifndef __EMSCRIPTEN__
+#include "gui/SimulatorView.h"
+#endif
 
 #ifdef _WIN32
 #include <Windows.h>
 #endif
+#ifdef __EMSCRIPTEN__
 #include "graphics/Camera.h"
+#endif
 #include "graphics/GlbModel.h"
 #include "graphics/Mesh.h"
-#ifndef __EMSCRIPTEN__
-#include "graphics/MultisampleFramebuffer.h"
-#endif
 #include "graphics/Renderer.h"
 #include "graphics/Texture2D.h"
 #include "graphics/Shader.h"
@@ -44,12 +46,12 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 namespace
 {
 #ifdef __EMSCRIPTEN__
-AeroSimLabApp* activeWebApplication = nullptr;
+DroneSimApp* activeWebApplication = nullptr;
 #endif
 void SetStartupDetail(std::string_view message)
 {
@@ -64,7 +66,7 @@ void SetStartupDetail(std::string_view message)
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 // 전력값은 임무 흐름을 시험하기 위한 가정이며 실제 X500 배터리 사양이 아니다.
-constexpr aerosimlab::simulation::BatteryModelParameters trainingBatteryModel{
+constexpr dronesim::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
 constexpr double trainingRangeCameraTransitAltitudeMeters = 25.0;
 
@@ -81,12 +83,14 @@ glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
         static_cast<float>(-positionMeters.y)};
 }
 
+#ifdef __EMSCRIPTEN__
 glm::vec3 ToRenderDirection(const glm::dvec3& direction)
 {
     return glm::vec3{
         static_cast<float>(direction.x), static_cast<float>(direction.z),
         static_cast<float>(-direction.y)};
 }
+#endif
 
 glm::quat ToRenderOrientation(const glm::dquat& orientation)
 {
@@ -103,7 +107,7 @@ glm::quat ToRenderOrientation(const glm::dquat& orientation)
 }
 }
 
-AeroSimLabApp::AeroSimLabApp(Options options)
+DroneSimApp::DroneSimApp(Options options)
     : smokeTest_(options.smokeTest), demoMode_(options.demoMode),
       benchmarkMode_(options.benchmarkMode || options.visibleBenchmarkMode),
       visibleBenchmarkMode_(options.visibleBenchmarkMode)
@@ -115,7 +119,7 @@ AeroSimLabApp::AeroSimLabApp(Options options)
 #endif
 }
 
-AeroSimLabApp::~AeroSimLabApp()
+DroneSimApp::~DroneSimApp()
 {
 #ifdef __EMSCRIPTEN__
     if (activeWebApplication == this)
@@ -124,22 +128,22 @@ AeroSimLabApp::~AeroSimLabApp()
 }
 
 #ifdef __EMSCRIPTEN__
-void AeroSimLabApp::QueueWebFlightCommand(
-    aerosimlab::simulation::DroneCommand::Kind kind)
+void DroneSimApp::QueueWebFlightCommand(
+    dronesim::simulation::DroneCommand::Kind kind)
 {
     externalControl_ = true;
     if (CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive())
         return;
-    pendingControllerAction_ = aerosimlab::simulation::DroneCommand{kind};
+    pendingControllerAction_ = dronesim::simulation::DroneCommand{kind};
 }
 
-bool AeroSimLabApp::StartWebFleetMission()
+bool DroneSimApp::StartWebFleetMission()
 {
     externalControl_ = true;
     return StartCompleteFleetMission();
 }
 
-bool AeroSimLabApp::StopWebFleetMission()
+bool DroneSimApp::StopWebFleetMission()
 {
     externalControl_ = true;
     if (!CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
@@ -149,8 +153,8 @@ bool AeroSimLabApp::StopWebFleetMission()
     return true;
 }
 
-void AeroSimLabApp::SetWebPilotAxes(
-    const aerosimlab::manual_control::GamepadAxes& axes)
+void DroneSimApp::SetWebPilotAxes(
+    const dronesim::manual_control::GamepadAxes& axes)
 {
     externalControl_ = true;
     if (CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive())
@@ -163,7 +167,7 @@ void AeroSimLabApp::SetWebPilotAxes(
 }
 #endif
 
-void AeroSimLabApp::InitializeGraphics()
+void DroneSimApp::InitializeGraphics()
 {
     InitializeWindow();
     InitializeRendererAndCameras();
@@ -172,7 +176,7 @@ void AeroSimLabApp::InitializeGraphics()
 }
 
 #ifdef __EMSCRIPTEN__
-bool AeroSimLabApp::InitializeGraphicsStep()
+bool DroneSimApp::InitializeGraphicsStep()
 {
     switch (webStartupStep_++)
     {
@@ -208,45 +212,45 @@ bool AeroSimLabApp::InitializeGraphicsStep()
 }
 #endif
 
-void AeroSimLabApp::InitializeWindow()
+void DroneSimApp::InitializeWindow()
 {
-    window_ = std::make_unique<aerosimlab::graphics::Window>(
-        aerosimlab::graphics::Window::Properties{windowWidth, windowHeight,
+    window_ = std::make_unique<dronesim::graphics::Window>(
+        dronesim::graphics::Window::Properties{windowWidth, windowHeight,
             "DroneSim | 드론 관찰 · EO 영상",
             !smokeTest_ && !benchmarkMode_,
             !smokeTest_ && (!benchmarkMode_ || visibleBenchmarkMode_)});
     window_->GetFramebufferSize(framebufferWidth_, framebufferHeight_);
 }
 
-void AeroSimLabApp::InitializeRendererAndCameras()
+void DroneSimApp::InitializeRendererAndCameras()
 {
-    renderer_ = std::make_unique<aerosimlab::graphics::Renderer>();
+    renderer_ = std::make_unique<dronesim::graphics::Renderer>();
     renderer_->Init(framebufferWidth_, framebufferHeight_);
 #ifndef __EMSCRIPTEN__
-    sceneTarget_ = std::make_unique<aerosimlab::graphics::MultisampleFramebuffer>(
-        framebufferWidth_, framebufferHeight_);
-    cameraTarget_ = std::make_unique<aerosimlab::graphics::MultisampleFramebuffer>(
-        framebufferWidth_, framebufferHeight_);
-#endif
-    observerCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
+    view_ = std::make_unique<dronesim::gui::SimulatorView>(*renderer_, framebufferWidth_,
+        framebufferHeight_, static_cast<float>(
+            simulation_.Camera().model.verticalFieldOfViewDegrees));
+#else
+    observerCamera_ = std::make_unique<dronesim::graphics::Camera>(
         glm::vec3{0.0F, 145.0F, 285.0F}, glm::vec3{0.0F, 12.0F, 0.0F}, 1.0F,
         45.0F, 0.1F, 2000.0F);
-    eoCamera_ = std::make_unique<aerosimlab::graphics::Camera>(
+    eoCamera_ = std::make_unique<dronesim::graphics::Camera>(
         glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F,
         static_cast<float>(simulation_.Camera().model.verticalFieldOfViewDegrees),
         0.05F, 200.0F);
-}
-
-void AeroSimLabApp::InitializeShaderAndHud()
-{
-    shader_ = std::make_unique<aerosimlab::graphics::Shader>(
-        AssetPath("shaders/Scene.glsl").string());
-#ifndef __EMSCRIPTEN__
-    hud_ = std::make_unique<aerosimlab::gui::SimulatorHud>(window_->GetNativeHandle());
 #endif
 }
 
-void AeroSimLabApp::LoadScene()
+void DroneSimApp::InitializeShaderAndHud()
+{
+    shader_ = std::make_unique<dronesim::graphics::Shader>(
+        AssetPath("shaders/Scene.glsl").string());
+#ifndef __EMSCRIPTEN__
+    hud_ = std::make_unique<dronesim::gui::SimulatorHud>(window_->GetNativeHandle());
+#endif
+}
+
+void DroneSimApp::LoadScene()
 {
     LoadSceneModels();
     LoadMapFeatures();
@@ -255,18 +259,18 @@ void AeroSimLabApp::LoadScene()
     InitializeStartingState();
 }
 
-void AeroSimLabApp::LoadSceneModels()
+void DroneSimApp::LoadSceneModels()
 {
-    cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
-    droneModel_ = aerosimlab::graphics::GlbModel::Load(
+    cube_ = dronesim::graphics::Mesh::CreateCube(1.0F);
+    droneModel_ = dronesim::graphics::GlbModel::Load(
         AssetPath("models/drones/x500/visual.glb").string());
-    droneGimbalModel_ = aerosimlab::graphics::GlbModel::Load(
+    droneGimbalModel_ = dronesim::graphics::GlbModel::Load(
         AssetPath("models/drones/x500/cgo3-gimbal.glb").string());
-    droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
+    droneSurfaceTexture_ = dronesim::graphics::Texture2D::LoadFromFile(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
 }
 
-void AeroSimLabApp::LoadTerrain()
+void DroneSimApp::LoadTerrain()
 {
     if (!trainingRangeScene_)
         throw std::logic_error("물리 지면을 만들기 전에 도시 바닥을 읽어야 합니다.");
@@ -284,7 +288,7 @@ void AeroSimLabApp::LoadTerrain()
         static_cast<std::size_t>(sampleCount) * sampleCount, 0.0F);
     simulation_.SetTerrain(terrainGrid_);
 }
-void AeroSimLabApp::LoadMapFeatures()
+void DroneSimApp::LoadMapFeatures()
 {
     SetStartupDetail("도시 지도와 충돌 모양을 준비하고 있습니다.");
     trainingRangeScene_ = std::make_unique<TrainingRangeScene>();
@@ -292,7 +296,7 @@ void AeroSimLabApp::LoadMapFeatures()
     cameraTransitAltitudeMeters_ = trainingRangeCameraTransitAltitudeMeters;
 }
 
-void AeroSimLabApp::LoadReconTargets()
+void DroneSimApp::LoadReconTargets()
 {
     reconTargets_.clear();
 
@@ -302,7 +306,7 @@ void AeroSimLabApp::LoadReconTargets()
         reconTargets_.push_back({point.id, {point.positionMeters, groundMeters + 25.0}});
     }
 }
-void AeroSimLabApp::InitializeStartingState()
+void DroneSimApp::InitializeStartingState()
 {
     if (reconTargets_.empty())
         throw std::runtime_error("훈련장 정찰 지점을 준비하지 못했습니다.");
@@ -315,15 +319,15 @@ void AeroSimLabApp::InitializeStartingState()
     const double initialYawRadians = std::atan2(toFirstTarget.y, toFirstTarget.x);
     simulation_.SetInitialPose({demoDroneStartMeters.x, demoDroneStartMeters.y,
         startElevation +
-            aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
+            dronesim::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
         initialYawRadians);
     ConfigureTrainingBattery(simulation_.PrimaryDroneId());
     const bool singleDroneBenchmark = benchmarkMode_ && !demoMode_;
     if (singleDroneBenchmark)
     {
         const auto result = simulation_.Apply({
-            aerosimlab::simulation::DroneCommand::Kind::TakeOff});
-        if (result != aerosimlab::simulation::CommandResult::Accepted)
+            dronesim::simulation::DroneCommand::Kind::TakeOff});
+        if (result != dronesim::simulation::CommandResult::Accepted)
             throw std::runtime_error("단일 기체 성능 시험의 이륙 명령을 시작하지 못했습니다.");
     }
     else
@@ -335,7 +339,7 @@ void AeroSimLabApp::InitializeStartingState()
             const double groundMeters = terrainGrid_.HeightAtLocalMeters(position);
             const auto droneId = simulation_.AddDrone(
                 {position, groundMeters
-                    + aerosimlab::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
+                    + dronesim::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},
                 initialYawRadians, groundMeters);
             ConfigureTrainingBattery(droneId);
         }
@@ -343,13 +347,13 @@ void AeroSimLabApp::InitializeStartingState()
     fleetDroneIds_ = simulation_.DroneIds();
 }
 
-void AeroSimLabApp::ConfigureTrainingBattery(
-    aerosimlab::simulation::DroneId droneId)
+void DroneSimApp::ConfigureTrainingBattery(
+    dronesim::simulation::DroneId droneId)
 {
     simulation_.ConfigureBattery(droneId, trainingBatteryModel);
 }
 
-void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
+void DroneSimApp::AdvanceSimulation(double elapsedSeconds)
 {
     const std::size_t tickCount = fixedTickAccumulator_.Consume(elapsedSeconds);
     for (std::size_t tick = 0; tick < tickCount; ++tick)
@@ -357,7 +361,7 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
         double tickDurationMicroseconds = 0.0;
         const std::uint64_t previousSimulationTick = simulation_.TickCount();
         {
-            aerosimlab::simulation::ScopedDuration measureTick(
+            dronesim::simulation::ScopedDuration measureTick(
                 benchmarkMode_ ? &tickDurationMicroseconds : nullptr);
             AdvanceSimulationTick();
         }
@@ -374,7 +378,7 @@ void AeroSimLabApp::AdvanceSimulation(double elapsedSeconds)
     }
 }
 
-void AeroSimLabApp::AdvanceSimulationTick()
+void DroneSimApp::AdvanceSimulationTick()
 {
     AdvanceAmbientWind();
     AdvanceFleetNetwork();
@@ -389,13 +393,13 @@ void AeroSimLabApp::AdvanceSimulationTick()
     {
         missionControlOwnsInput_ = false;
         window_->SetTitle(gamepadConnected_
-            ? "AeroSimLab | 게임패드 연결됨"
-            : "AeroSimLab | 드론 관찰 · EO 영상");
+            ? "DroneSim | 게임패드 연결됨"
+            : "DroneSim | 드론 관찰 · EO 영상");
     }
     AdvanceManualControlTick();
 }
 
-void AeroSimLabApp::AdvanceAmbientWind()
+void DroneSimApp::AdvanceAmbientWind()
 {
     constexpr std::uint32_t gustChangeIntervalTicks = 240U;
     constexpr double maximumWindMetersPerSecond = 0.5;
@@ -414,7 +418,7 @@ void AeroSimLabApp::AdvanceAmbientWind()
     simulation_.SetWindVelocityMetersPerSecond(windVelocityMetersPerSecond_);
 }
 
-void AeroSimLabApp::AdvanceManualControlTick()
+void DroneSimApp::AdvanceManualControlTick()
 {
     if (missionControlOwnsInput_ || CompleteFleetMissionIsActive()
         || FleetReconnaissanceIsActive() || formationTransit_.IsActive())
@@ -427,10 +431,10 @@ void AeroSimLabApp::AdvanceManualControlTick()
     if (webPilotAxes_)
     {
         const auto mode = simulation_.State().mode;
-        if (mode == aerosimlab::simulation::FlightMode::Hovering
-            || mode == aerosimlab::simulation::FlightMode::Flying)
+        if (mode == dronesim::simulation::FlightMode::Hovering
+            || mode == dronesim::simulation::FlightMode::Flying)
         {
-            pendingPilotCommand_ = aerosimlab::manual_control::MapAxes(
+            pendingPilotCommand_ = dronesim::manual_control::MapAxes(
                 *webPilotAxes_, simulation_.State().yawRadians);
         }
         else
@@ -447,14 +451,14 @@ void AeroSimLabApp::AdvanceManualControlTick()
     if (pendingPilotCommand_)
     {
         const auto mode = simulation_.State().mode;
-        if (mode == aerosimlab::simulation::FlightMode::Hovering
-            || mode == aerosimlab::simulation::FlightMode::Flying)
+        if (mode == dronesim::simulation::FlightMode::Hovering
+            || mode == dronesim::simulation::FlightMode::Flying)
         {
-            const aerosimlab::simulation::DroneCommand velocityCommand{
-                aerosimlab::simulation::DroneCommand::Kind::SetVelocity,
+            const dronesim::simulation::DroneCommand velocityCommand{
+                dronesim::simulation::DroneCommand::Kind::SetVelocity,
                 pendingPilotCommand_->velocityMetersPerSecond};
-            const aerosimlab::simulation::DroneCommand yawCommand{
-                aerosimlab::simulation::DroneCommand::Kind::SetYawRate,
+            const dronesim::simulation::DroneCommand yawCommand{
+                dronesim::simulation::DroneCommand::Kind::SetYawRate,
                 glm::dvec3{0.0},
                 pendingPilotCommand_->yawRateRadiansPerSecond};
             static_cast<void>(ApplySimulationCommand(velocityCommand));
@@ -465,20 +469,20 @@ void AeroSimLabApp::AdvanceManualControlTick()
     simulation_.AdvanceOneTick();
 }
 
-aerosimlab::simulation::CommandResult AeroSimLabApp::ApplySimulationCommand(
-    const aerosimlab::simulation::DroneCommand& command)
+dronesim::simulation::CommandResult DroneSimApp::ApplySimulationCommand(
+    const dronesim::simulation::DroneCommand& command)
 {
     return ApplySimulationCommand(simulation_.PrimaryDroneId(), command);
 }
 
-aerosimlab::simulation::CommandResult AeroSimLabApp::ApplySimulationCommand(
-    aerosimlab::simulation::DroneId droneId,
-    const aerosimlab::simulation::DroneCommand& command)
+dronesim::simulation::CommandResult DroneSimApp::ApplySimulationCommand(
+    dronesim::simulation::DroneId droneId,
+    const dronesim::simulation::DroneCommand& command)
 {
     return simulation_.Apply(droneId, command);
 }
 
-void AeroSimLabApp::RenderFrame()
+void DroneSimApp::RenderFrame()
 {
 #ifdef __EMSCRIPTEN__
     int width = 0;
@@ -518,7 +522,7 @@ void AeroSimLabApp::RenderFrame()
         const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
         const bool formationNetworkActive = formationTransit_.IsActive()
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
-        aerosimlab::gui::HudRenderTimings hudTimings;
+        dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, observerDroneId_, gamepadConnected_,
@@ -531,7 +535,7 @@ void AeroSimLabApp::RenderFrame()
             },
             formationNetwork_.get(),
             &droneSocketTransport_,
-            [this, formationNetworkActive](aerosimlab::simulation::DroneId droneId,
+            [this, formationNetworkActive](dronesim::simulation::DroneId droneId,
                 bool enabled)
             {
                 if (formationNetwork_ && formationNetworkActive)
@@ -539,10 +543,32 @@ void AeroSimLabApp::RenderFrame()
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
                 }
             },
-            [this](int width, int height) { return RenderScenePanel(width, height); },
-            [this](aerosimlab::simulation::DroneId droneId)
+            [this](int width, int height)
             {
-                return RenderCameraPanel(droneId);
+                return view_->RenderScenePanel(simulation_, observerDroneId_,
+                    trainingRangeScene_->BuildingObstacles(), width, height,
+                    [this](const glm::mat4& view, const glm::mat4& projection,
+                        const glm::vec3& cameraPosition, bool showMissionGuides,
+                        std::optional<dronesim::simulation::DroneId> hiddenDroneId)
+                    {
+                        DrawWorld(view, projection, cameraPosition,
+                            showMissionGuides, hiddenDroneId);
+                    },
+                    benchmarkMode_
+                        ? &frameMeasurements_.scenePanelRenderMicroseconds : nullptr);
+            },
+            [this](dronesim::simulation::DroneId droneId)
+            {
+                return view_->RenderCameraPanel(simulation_, droneId,
+                    [this](const glm::mat4& view, const glm::mat4& projection,
+                        const glm::vec3& cameraPosition, bool showMissionGuides,
+                        std::optional<dronesim::simulation::DroneId> hiddenDroneId)
+                    {
+                        DrawWorld(view, projection, cameraPosition,
+                            showMissionGuides, hiddenDroneId);
+                    },
+                    benchmarkMode_
+                        ? &frameMeasurements_.cameraSceneRenderMicroseconds : nullptr);
             },
             benchmarkMode_ ? &hudTimings : nullptr);
         frameMeasurements_.hudInterfaceBuildMicroseconds = hudTimings.interfaceBuildMicroseconds;
@@ -563,7 +589,8 @@ void AeroSimLabApp::RenderFrame()
 #endif
 }
 
-void AeroSimLabApp::UpdateObserverCamera(int width, int height)
+#ifdef __EMSCRIPTEN__
+void DroneSimApp::UpdateObserverCamera(int width, int height)
 {
     const auto& state = observerDroneId_ == 0U
         ? simulation_.State()
@@ -581,9 +608,9 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     {
         const auto& buildings = trainingRangeScene_->BuildingObstacles();
         return std::any_of(buildings.begin(), buildings.end(),
-            [&position](const aerosimlab::flight_planning::BuildingObstacle& building)
+            [&position](const dronesim::flight_planning::BuildingObstacle& building)
             {
-                return aerosimlab::flight_planning::ContainsBuildingVolume(
+                return dronesim::flight_planning::ContainsBuildingVolume(
                     building, position);
             });
     };
@@ -607,23 +634,23 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     observerCamera_->SetFieldOfViewDegrees(45.0F);
 }
 
-void AeroSimLabApp::UpdateEoCamera(int width, int height)
+void DroneSimApp::UpdateEoCamera(int width, int height)
 {
     UpdateEoCamera(simulation_.PrimaryDroneId(), *eoCamera_, width, height);
 }
 
-void AeroSimLabApp::UpdateEoCamera(
-    aerosimlab::simulation::DroneId droneId,
-    aerosimlab::graphics::Camera& renderCamera,
+void DroneSimApp::UpdateEoCamera(
+    dronesim::simulation::DroneId droneId,
+    dronesim::graphics::Camera& renderCamera,
     int width,
     int height)
 {
     const auto& cameraState = simulation_.Camera(droneId);
     const glm::vec3 cameraPosition = ToRenderPosition(cameraState.positionMeters);
     const glm::dvec3 opticalAxis =
-        aerosimlab::simulation::EoCameraModel::OpticalAxis(cameraState);
+        dronesim::simulation::EoCameraModel::OpticalAxis(cameraState);
     const glm::dvec3 cameraUpAxis =
-        aerosimlab::simulation::EoCameraModel::UpAxis(cameraState);
+        dronesim::simulation::EoCameraModel::UpAxis(cameraState);
     const glm::vec3 viewDirection = ToRenderDirection(opticalAxis);
     const glm::vec3 cameraUp = ToRenderDirection(cameraUpAxis);
     renderCamera.SetPosition(cameraPosition);
@@ -633,10 +660,11 @@ void AeroSimLabApp::UpdateEoCamera(
     renderCamera.SetFieldOfViewDegrees(
         static_cast<float>(cameraState.model.verticalFieldOfViewDegrees));
 }
+#endif
 
-void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
+void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, bool showMissionGuides,
-    std::optional<aerosimlab::simulation::DroneId> hiddenDroneId)
+    std::optional<dronesim::simulation::DroneId> hiddenDroneId)
 {
     renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
     if (trainingRangeScene_)
@@ -644,7 +672,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
 
     const auto drawRouteSegment = [this, &view, &projection, &cameraPosition](
         const glm::dvec3& startMeters, const glm::dvec3& endMeters,
-        const aerosimlab::graphics::Material& material)
+        const dronesim::graphics::Material& material)
     {
         const glm::vec3 start = ToRenderPosition(startMeters);
         const glm::vec3 end = ToRenderPosition(endMeters);
@@ -699,7 +727,7 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
         }
     }
 
-    for (const aerosimlab::simulation::DroneId id : fleetDroneIds_)
+    for (const dronesim::simulation::DroneId id : fleetDroneIds_)
     {
         if (hiddenDroneId == id)
             continue;
@@ -717,8 +745,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     }
 }
 
-void AeroSimLabApp::DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
-    const aerosimlab::graphics::Material& material,
+void DroneSimApp::DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
+    const dronesim::graphics::Material& material,
     const glm::mat4& view, const glm::mat4& projection)
 {
     renderer_->Draw(transform, *cube_, material, *shader_, view, projection, cameraPosition);
@@ -729,20 +757,20 @@ void AeroSimLabApp::DrawCube(const glm::mat4& transform, const glm::vec3& camera
 #ifdef __EMSCRIPTEN__
 extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebFlightCommand(int command)
 {
-    if (aerosimlab::simulator::activeWebApplication == nullptr)
+    if (dronesim::simulator::activeWebApplication == nullptr)
         return;
 
-    using Kind = aerosimlab::simulation::DroneCommand::Kind;
+    using Kind = dronesim::simulation::DroneCommand::Kind;
     switch (command)
     {
     case 0:
-        aerosimlab::simulator::activeWebApplication->QueueWebFlightCommand(Kind::TakeOff);
+        dronesim::simulator::activeWebApplication->QueueWebFlightCommand(Kind::TakeOff);
         break;
     case 1:
-        aerosimlab::simulator::activeWebApplication->QueueWebFlightCommand(Kind::Stop);
+        dronesim::simulator::activeWebApplication->QueueWebFlightCommand(Kind::Stop);
         break;
     case 2:
-        aerosimlab::simulator::activeWebApplication->QueueWebFlightCommand(Kind::Land);
+        dronesim::simulator::activeWebApplication->QueueWebFlightCommand(Kind::Land);
         break;
     default:
         break;
@@ -752,10 +780,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebFlightCommand(int command)
 extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebPilotInput(
     double forward, double right, double vertical, double yaw)
 {
-    if (aerosimlab::simulator::activeWebApplication == nullptr)
+    if (dronesim::simulator::activeWebApplication == nullptr)
         return;
 
-    aerosimlab::simulator::activeWebApplication->SetWebPilotAxes({
+    dronesim::simulator::activeWebApplication->SetWebPilotAxes({
         .forward = forward,
         .right = right,
         .vertical = vertical,
@@ -764,18 +792,18 @@ extern "C" EMSCRIPTEN_KEEPALIVE void DroneSimWebPilotInput(
 
 extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStartFleetMission()
 {
-    if (aerosimlab::simulator::activeWebApplication == nullptr)
+    if (dronesim::simulator::activeWebApplication == nullptr)
         return 0;
-    return aerosimlab::simulator::activeWebApplication
+    return dronesim::simulator::activeWebApplication
         ->StartWebFleetMission()
         ? 1 : 0;
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int DroneSimWebStopFleetMission()
 {
-    if (aerosimlab::simulator::activeWebApplication == nullptr)
+    if (dronesim::simulator::activeWebApplication == nullptr)
         return 0;
-    return aerosimlab::simulator::activeWebApplication
+    return dronesim::simulator::activeWebApplication
         ->StopWebFleetMission() ? 1 : 0;
 }
 #endif

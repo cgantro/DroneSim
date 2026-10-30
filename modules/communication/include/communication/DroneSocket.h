@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace aerosimlab::communication
+namespace dronesim::communication
 {
 using SocketPort = std::uint16_t;
 

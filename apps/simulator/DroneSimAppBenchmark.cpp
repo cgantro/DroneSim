@@ -1,4 +1,4 @@
-#include "AeroSimLabApp.h"
+#include "DroneSimApp.h"
 #include "BuildRevision.h"
 #include "SimulationBenchmark.h"
 #include "graphics/GlApi.h"
@@ -10,10 +10,10 @@
 #include <ctime>
 #include <utility>
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 /** @brief 프레임 측정값을 모으고 60Hz 예산을 넘긴 프레임의 세부 항목을 남긴다. */
-void AeroSimLabApp::RecordBenchmarkFrame(double applicationMicroseconds)
+void DroneSimApp::RecordBenchmarkFrame(double applicationMicroseconds)
 {
     benchmarkMeasurements_.renderFrameDurationsMicroseconds.push_back(
         frameMeasurements_.renderFrameMicroseconds);
@@ -23,7 +23,7 @@ void AeroSimLabApp::RecordBenchmarkFrame(double applicationMicroseconds)
     for (std::size_t index = 0;
          index < frameMeasurements_.completedHudGpuTimingCount; ++index)
     {
-        const aerosimlab::gui::HudGpuTiming& timing = completedHudGpuTimings_[index];
+        const dronesim::gui::HudGpuTiming& timing = completedHudGpuTimings_[index];
         const auto frame = std::find_if(benchmarkMeasurements_.slowFrames.begin(),
             benchmarkMeasurements_.slowFrames.end(), [&timing](const auto& candidate)
             {
@@ -59,7 +59,7 @@ void AeroSimLabApp::RecordBenchmarkFrame(double applicationMicroseconds)
         .hudIndexCount = frameMeasurements_.hudIndexCount});
 }
 
-void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
+void DroneSimApp::WriteBenchmarkReport(double elapsedSeconds) const
 {
     // 재현 조건을 맞출 수 있도록 빌드, 화면 크기, 그래픽 장치, 실행량을 함께 기록한다.
     int framebufferWidth = 0;
@@ -72,7 +72,7 @@ void AeroSimLabApp::WriteBenchmarkReport(double elapsedSeconds) const
     };
 
     ViewerBenchmarkMeasurements measurements = benchmarkMeasurements_;
-    measurements.sourceRevision = aerosimlab::simulator::BuildRevision();
+    measurements.sourceRevision = dronesim::simulator::BuildRevision();
     measurements.windowVisible = visibleBenchmarkMode_;
     measurements.warmupSeconds = benchmarkWarmupDurationSeconds;
     measurements.framebufferWidth = framebufferWidth;

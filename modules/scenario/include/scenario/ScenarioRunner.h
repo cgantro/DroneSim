@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::scenario
+namespace dronesim::scenario
 {
 /**
  * @brief JSON 시나리오 실행의 최종 상태와 시험 결과를 돌려준다.

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 /**
@@ -49,4 +49,4 @@ private:
 
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

@@ -28,7 +28,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace aerosimlab::simulation {
+namespace dronesim::simulation {
 namespace {
 using JoltObjectLayer = JPH::ObjectLayer;
 
@@ -462,7 +462,7 @@ void JoltPhysicsWorld::AddStaticTriangleMesh(
 }
 
 void JoltPhysicsWorld::SetTerrain(
-    const aerosimlab::terrain::TerrainGrid &terrain) {
+    const dronesim::terrain::TerrainGrid &terrain) {
   const std::size_t expectedSamples =
       static_cast<std::size_t>(terrain.sampleCount) * terrain.sampleCount;
   if (terrain.sampleCount < 3 ||
@@ -823,4 +823,4 @@ bool JoltPhysicsWorld::DestroyBody(JoltRigidBodyHandle handle) {
   impl_->bodies.erase(found);
   return true;
 }
-} // namespace aerosimlab::simulation
+} // namespace dronesim::simulation

@@ -9,7 +9,7 @@
 #include <span>
 #include <vector>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 /**
  * @brief SimulationCore가 사용하는 물리 기능을 제공한다.

@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 using detail::ReadProcessMemorySample;
 namespace
@@ -45,7 +45,7 @@ nlohmann::json SummarizeDurations(std::vector<double> durations)
 
 std::filesystem::path DefaultBenchmarkOutputPath()
 {
-    if (const char* outputPath = std::getenv("AEROSIMLAB_BENCHMARK_OUTPUT");
+    if (const char* outputPath = std::getenv("DRONESIM_BENCHMARK_OUTPUT");
         outputPath != nullptr && outputPath[0] != '\0')
     {
         return std::filesystem::u8path(outputPath);

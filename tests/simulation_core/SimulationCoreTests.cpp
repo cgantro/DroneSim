@@ -9,7 +9,7 @@
 
 #include <glm/geometric.hpp>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 namespace
 {

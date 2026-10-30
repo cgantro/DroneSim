@@ -1,6 +1,6 @@
 include(FetchContent)
 
-function(aerosimlab_add_common_dependencies)
+function(dronesim_add_common_dependencies)
   FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
@@ -10,7 +10,7 @@ function(aerosimlab_add_common_dependencies)
   FetchContent_MakeAvailable(glm)
 endfunction()
 
-function(aerosimlab_add_ecs_dependencies)
+function(dronesim_add_ecs_dependencies)
   set(FLECS_SHARED OFF CACHE BOOL "Build Flecs as a shared library" FORCE)
   set(FLECS_STATIC ON CACHE BOOL "Build Flecs as a static library" FORCE)
   set(FLECS_TESTS OFF CACHE BOOL "Disable Flecs tests" FORCE)
@@ -23,7 +23,7 @@ function(aerosimlab_add_ecs_dependencies)
   FetchContent_MakeAvailable(flecs)
 endfunction()
 
-function(aerosimlab_add_jolt_dependency)
+function(dronesim_add_jolt_dependency)
   set(USE_ASSERTS OFF CACHE BOOL "Disable Jolt assertions in project builds" FORCE)
   set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "Keep the project's compiler flags" FORCE)
   set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "Keep Jolt separate from project LTO" FORCE)
@@ -50,7 +50,7 @@ function(aerosimlab_add_jolt_dependency)
   FetchContent_MakeAvailable(JoltPhysics)
 endfunction()
 
-function(aerosimlab_add_scenario_dependencies)
+function(dronesim_add_scenario_dependencies)
   set(JSON_BuildTests OFF CACHE INTERNAL "Disable dependency tests")
   set(JSON_Install OFF CACHE INTERNAL "Do not install a project-private dependency")
   FetchContent_Declare(
@@ -62,7 +62,7 @@ function(aerosimlab_add_scenario_dependencies)
   FetchContent_MakeAvailable(nlohmann_json)
 endfunction()
 
-function(aerosimlab_add_graphics_dependencies)
+function(dronesim_add_graphics_dependencies)
   FetchContent_Declare(
     stb_image
     GIT_REPOSITORY https://github.com/nothings/stb.git
@@ -70,8 +70,8 @@ function(aerosimlab_add_graphics_dependencies)
     GIT_SHALLOW FALSE
   )
   FetchContent_MakeAvailable(stb_image)
-  add_library(aerosimlab_stb_image INTERFACE)
-  target_include_directories(aerosimlab_stb_image SYSTEM INTERFACE
+  add_library(dronesim_stb_image INTERFACE)
+  target_include_directories(dronesim_stb_image SYSTEM INTERFACE
     "${stb_image_SOURCE_DIR}"
   )
 

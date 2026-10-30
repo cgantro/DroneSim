@@ -8,7 +8,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace aerosimlab::simulation {
+namespace dronesim::simulation {
 namespace {
 // 높이와 질량을 바꿔 중력 낙하·접촉 시험에 쓸 상자를 만든다.
 JoltRigidBodyHandle MakeFallingBox(JoltPhysicsWorld &world, double heightMeters,
@@ -68,7 +68,7 @@ TEST(JoltPhysicsWorldTests, RigidBodyBasics) {
 
 TEST(JoltPhysicsWorldTests, TerrainAndBuildingMeshesStopFallingBodies) {
   JoltPhysicsWorld world;
-  aerosimlab::terrain::TerrainGrid terrain;
+  dronesim::terrain::TerrainGrid terrain;
   terrain.sampleCount = 3;
   terrain.spacingXMeters = 10.0F;
   terrain.spacingYMeters = 10.0F;
@@ -296,4 +296,4 @@ TEST(JoltPhysicsWorldTests, RejectsInvalidOrInapplicableOperations) {
   EXPECT_THROW(static_cast<void>(world.CreateDynamicBox(invalidDefinition)),
                std::invalid_argument);
 }
-} // namespace aerosimlab::simulation
+} // namespace dronesim::simulation

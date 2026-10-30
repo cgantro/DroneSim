@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 class Material;
 class Mesh;
@@ -77,4 +77,4 @@ private:
     std::vector<GlbPartBounds> partBounds_;
     std::vector<GlbCollisionPart> collisionParts_;
 };
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

@@ -7,7 +7,7 @@
 #include <array>
 #include <cstddef>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 enum class RotorRotation
 {

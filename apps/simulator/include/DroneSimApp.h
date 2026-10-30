@@ -26,21 +26,25 @@
 #include <unordered_map>
 #include <vector>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 class Camera;
 class Mesh;
 class GlbModel;
-class MultisampleFramebuffer;
 class Renderer;
 class Shader;
 class Texture2D;
 class Window;
 }
 
-namespace aerosimlab::simulator
+namespace dronesim::gui
 {
-namespace communication = ::aerosimlab::communication;
+class SimulatorView;
+}
+
+namespace dronesim::simulator
+{
+namespace communication = ::dronesim::communication;
 
 class TrainingRangeScene;
 
@@ -49,7 +53,7 @@ class TrainingRangeScene;
  * @details 위치 단위는 미터이며 비행 상태는 초당 60회 계산한다. 화면 갱신과 비행 계산을 분리해
  * 렌더링 속도가 달라져도 같은 시간 간격으로 비행 상태를 갱신한다.
  */
-class AeroSimLabApp
+class DroneSimApp
 {
 public:
     /**
@@ -65,25 +69,25 @@ public:
         bool visibleBenchmarkMode = false;
     };
 
-    explicit AeroSimLabApp(Options options);
-    ~AeroSimLabApp();
+    explicit DroneSimApp(Options options);
+    ~DroneSimApp();
 
     /** @brief 그래픽 자원을 준비하고 창이 닫힐 때까지 모의를 실행한다. */
     int Run();
 
 #ifdef __EMSCRIPTEN__
     /** @brief 웹 비행 조작 화면에서 비행 명령을 예약한다. */
-    void QueueWebFlightCommand(aerosimlab::simulation::DroneCommand::Kind kind);
+    void QueueWebFlightCommand(dronesim::simulation::DroneCommand::Kind kind);
     /** @brief 네 대가 편대 이동·정찰·복귀를 하는 전체 임무를 시작한다. */
     [[nodiscard]] bool StartWebFleetMission();
     /** @brief 전체 임무를 중단하고 네 대 모두 착륙시킨다. */
     [[nodiscard]] bool StopWebFleetMission();
     /** @brief 웹 조작 버튼의 입력을 다음 비행 Tick에 적용한다. */
-    void SetWebPilotAxes(const aerosimlab::manual_control::GamepadAxes& axes);
+    void SetWebPilotAxes(const dronesim::manual_control::GamepadAxes& axes);
 #endif
 
 private:
-    friend class AeroSimLabAppTestAccess;
+    friend class DroneSimAppTestAccess;
 
 
     static constexpr double benchmarkWarmupDurationSeconds = 1.0;
@@ -129,7 +133,7 @@ private:
     bool webFirstFrameRendered_ = false;
     bool webGraphicsInitialized_ = false;
     std::uint8_t webStartupStep_ = 0;
-    std::optional<aerosimlab::manual_control::GamepadAxes> webPilotAxes_;
+    std::optional<dronesim::manual_control::GamepadAxes> webPilotAxes_;
 #endif
     /** @brief 지형·지도 형상·드론 모형과 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();
@@ -138,7 +142,7 @@ private:
     void LoadMapFeatures();
     void LoadReconTargets();
     void InitializeStartingState();
-    void ConfigureTrainingBattery(aerosimlab::simulation::DroneId droneId);
+    void ConfigureTrainingBattery(dronesim::simulation::DroneId droneId);
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
@@ -165,17 +169,17 @@ private:
     [[nodiscard]] bool StartFormationTransit();
     [[nodiscard]] bool StartFleetReconnaissance(
         bool takeOffDrones,
-        const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
+        const std::map<dronesim::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
     void InitializeFleetLeadership();
     void AdvanceFleetNetwork();
     [[nodiscard]] bool SendFleetRouteAssignment(
-        aerosimlab::simulation::DroneId droneId,
+        dronesim::simulation::DroneId droneId,
         FleetMissionLeg leg,
         std::size_t targetIndex,
         std::vector<glm::dvec3> routeWaypointsMeters);
     void ApplyFleetRouteAssignment(
-        aerosimlab::simulation::DroneId droneId,
+        dronesim::simulation::DroneId droneId,
         FleetMissionLeg leg,
         std::size_t targetIndex,
         std::vector<glm::dvec3> routeWaypointsMeters,
@@ -187,11 +191,11 @@ private:
     void FailCompleteFleetMission(const std::string& reason);
     void AdvanceFormationTransit();
     /** @brief 지정한 드론에 비행 명령을 적용한다. */
-    [[nodiscard]] aerosimlab::simulation::CommandResult ApplySimulationCommand(
-        const aerosimlab::simulation::DroneCommand& command);
-    [[nodiscard]] aerosimlab::simulation::CommandResult ApplySimulationCommand(
-        aerosimlab::simulation::DroneId droneId,
-        const aerosimlab::simulation::DroneCommand& command);
+    [[nodiscard]] dronesim::simulation::CommandResult ApplySimulationCommand(
+        const dronesim::simulation::DroneCommand& command);
+    [[nodiscard]] dronesim::simulation::CommandResult ApplySimulationCommand(
+        dronesim::simulation::DroneId droneId,
+        const dronesim::simulation::DroneCommand& command);
     void PollGamepad();
     /** @brief 연결이 끊긴 뒤 남은 조종 입력을 지우고 필요한 정지 명령을 예약한다. */
     void HandleGamepadDisconnected();
@@ -200,34 +204,25 @@ private:
      * @details 이륙·착륙 버튼은 눌린 순간 한 번 처리하고, 스틱 값은 비행 중 계속 갱신한다.
      */
     void HandleGamepadConnected(bool takeoffPressed, bool landPressed,
-        const std::optional<aerosimlab::manual_control::GamepadAxes>& pilotAxes);
+        const std::optional<dronesim::manual_control::GamepadAxes>& pilotAxes);
     void WriteBenchmarkReport(double elapsedSeconds) const;
     void RenderFrame();
-    /** @brief 화면 크기에 맞춰 관찰 카메라의 시야 비율을 갱신한다. */
+#ifdef __EMSCRIPTEN__
+    /** @brief 웹 화면 크기에 맞춰 관찰 카메라의 시야 비율을 갱신한다. */
     void UpdateObserverCamera(int width, int height);
-    /** @brief 화면 크기에 맞춰 EO 카메라의 시야 비율을 갱신한다. */
     void UpdateEoCamera(int width, int height);
-    void UpdateEoCamera(aerosimlab::simulation::DroneId droneId,
-        aerosimlab::graphics::Camera& camera, int width, int height);
-#ifndef __EMSCRIPTEN__
-    [[nodiscard]] std::uint32_t RenderScenePanel(int width, int height);
-    [[nodiscard]] std::uint32_t RenderCameraPanel(
-        aerosimlab::simulation::DroneId droneId);
-    [[nodiscard]] std::uint32_t RenderWorldToTarget(
-        aerosimlab::graphics::MultisampleFramebuffer& target,
-        const aerosimlab::graphics::Camera& camera,
-        bool showMissionGuides,
-        std::optional<aerosimlab::simulation::DroneId> hiddenDroneId = std::nullopt);
+    void UpdateEoCamera(dronesim::simulation::DroneId droneId,
+        dronesim::graphics::Camera& camera, int width, int height);
 #endif
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition, bool showMissionGuides,
-        std::optional<aerosimlab::simulation::DroneId> hiddenDroneId = std::nullopt);
+        std::optional<dronesim::simulation::DroneId> hiddenDroneId = std::nullopt);
     void DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
-        const aerosimlab::graphics::Material& material,
+        const dronesim::graphics::Material& material,
         const glm::mat4& view, const glm::mat4& projection);
 
     bool smokeTest_ = false;
-    aerosimlab::simulation::FixedTickAccumulator fixedTickAccumulator_;
+    dronesim::simulation::FixedTickAccumulator fixedTickAccumulator_;
     bool demoMode_ = false;
     struct ReconTarget
     {
@@ -244,20 +239,16 @@ private:
     bool previousLandButton_ = false;
     int gamepadJoystickId_ = -1;
     int unsupportedJoystickId_ = -1;
-    std::optional<aerosimlab::simulation::DroneCommand> pendingControllerAction_;
-    std::optional<aerosimlab::manual_control::PilotCommand> pendingPilotCommand_;
+    std::optional<dronesim::simulation::DroneCommand> pendingControllerAction_;
+    std::optional<dronesim::manual_control::PilotCommand> pendingPilotCommand_;
     bool benchmarkMode_ = false;
     bool visibleBenchmarkMode_ = false;
     std::size_t renderedFrames_ = 0;
     std::size_t benchmarkStartRenderedFrames_ = 0;
     std::uint64_t benchmarkStartSimulationTicks_ = 0;
-#ifndef __EMSCRIPTEN__
-    // 같은 센서 Tick의 EO 화면은 화면 프레임마다 반복해서 그리지 않는다.
-    std::optional<std::uint64_t> lastRenderedEoFrameTick_;
-#endif
     std::clock_t benchmarkCpuStart_ = 0;
     CurrentFrameMeasurements frameMeasurements_;
-    std::array<aerosimlab::gui::HudGpuTiming, 4> completedHudGpuTimings_{};
+    std::array<dronesim::gui::HudGpuTiming, 4> completedHudGpuTimings_{};
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
     int framebufferWidth_ = 0;
     int framebufferHeight_ = 0;
@@ -266,33 +257,26 @@ private:
     std::chrono::steady_clock::time_point webPreviousFrame_;
     std::chrono::steady_clock::time_point lastWebTelemetryUpdate_;
 #endif
-    std::unique_ptr<aerosimlab::graphics::Window> window_;
+    std::unique_ptr<dronesim::graphics::Window> window_;
 #ifndef __EMSCRIPTEN__
-    std::unique_ptr<aerosimlab::gui::SimulatorHud> hud_;
+    std::unique_ptr<dronesim::gui::SimulatorHud> hud_;
 #endif
-    std::unique_ptr<aerosimlab::graphics::Renderer> renderer_;
+    std::unique_ptr<dronesim::graphics::Renderer> renderer_;
 #ifndef __EMSCRIPTEN__
-    std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> sceneTarget_;
-    std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> cameraTarget_;
-    struct AuxiliaryCameraView
-    {
-        std::unique_ptr<aerosimlab::graphics::Camera> camera;
-        std::unique_ptr<aerosimlab::graphics::MultisampleFramebuffer> target;
-        std::optional<std::uint64_t> lastRenderedTick;
-    };
-    std::unordered_map<aerosimlab::simulation::DroneId, AuxiliaryCameraView>
-        auxiliaryCameraViews_;
+    std::unique_ptr<dronesim::gui::SimulatorView> view_;
 #endif
-    std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
-    std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
+#ifdef __EMSCRIPTEN__
+    std::unique_ptr<dronesim::graphics::Camera> observerCamera_;
+    std::unique_ptr<dronesim::graphics::Camera> eoCamera_;
+#endif
+    std::unique_ptr<dronesim::graphics::Mesh> cube_;
     std::unique_ptr<TrainingRangeScene> trainingRangeScene_;
-    std::unique_ptr<aerosimlab::graphics::GlbModel> droneModel_;
-    std::unique_ptr<aerosimlab::graphics::GlbModel> droneGimbalModel_;
-    std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
-    std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
+    std::unique_ptr<dronesim::graphics::GlbModel> droneModel_;
+    std::unique_ptr<dronesim::graphics::GlbModel> droneGimbalModel_;
+    std::unique_ptr<dronesim::graphics::Texture2D> droneSurfaceTexture_;
+    std::vector<dronesim::simulation::DroneId> fleetDroneIds_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
-    aerosimlab::simulation::DroneId observerDroneId_ = 0;
+    dronesim::simulation::DroneId observerDroneId_ = 0;
     struct FleetReconnaissanceState
     {
         std::size_t targetIndex = 0;
@@ -313,22 +297,22 @@ private:
         bool lowBatteryReturn = false;
         FleetMissionLeg leg = FleetMissionLeg::Reconnaissance;
     };
-    std::unordered_map<aerosimlab::simulation::DroneId, FleetReconnaissanceState>
+    std::unordered_map<dronesim::simulation::DroneId, FleetReconnaissanceState>
         fleetReconnaissance_;
-    aerosimlab::simulation::DroneId fleetLeaderId_ = 0;
+    dronesim::simulation::DroneId fleetLeaderId_ = 0;
     std::uint64_t nextMissionAssignmentVersion_ = 1;
     struct ReceivedPeerTelemetry
     {
-        aerosimlab::simulator::detail::PeerTelemetry state;
+        dronesim::simulator::detail::PeerTelemetry state;
         std::uint64_t receivedAtTick = 0;
         std::uint32_t sequence = 0;
     };
     [[nodiscard]] const ReceivedPeerTelemetry* FreshPeerTelemetry(
-        aerosimlab::simulation::DroneId droneId) const noexcept;
+        dronesim::simulation::DroneId droneId) const noexcept;
     std::uint32_t nextTelemetrySequence_ = 1;
-    std::map<aerosimlab::simulation::DroneId, std::uint64_t>
+    std::map<dronesim::simulation::DroneId, std::uint64_t>
         lastTelemetrySentAtTick_;
-    std::map<aerosimlab::simulation::DroneId, ReceivedPeerTelemetry>
+    std::map<dronesim::simulation::DroneId, ReceivedPeerTelemetry>
         peerTelemetryAtLeader_;
     struct FormationTransitState
     {
@@ -347,12 +331,12 @@ private:
             return phase == Phase::InProgress;
         }
 
-        aerosimlab::flight_planning::FormationRoutePlan route;
+        dronesim::flight_planning::FormationRoutePlan route;
         std::size_t waypointIndex = 0;
         std::uint32_t nextMessageSequence = 1;
-        std::map<aerosimlab::simulation::DroneId, glm::dvec3> sentFollowerTargets;
-        std::map<aerosimlab::simulation::DroneId, std::uint64_t> lastTargetSentAtTick;
-        std::map<aerosimlab::simulation::DroneId, std::uint32_t> lastAppliedSequence;
+        std::map<dronesim::simulation::DroneId, glm::dvec3> sentFollowerTargets;
+        std::map<dronesim::simulation::DroneId, std::uint64_t> lastTargetSentAtTick;
+        std::map<dronesim::simulation::DroneId, std::uint32_t> lastAppliedSequence;
         std::optional<std::uint64_t> lastNetworkNodeUpdateTick;
         std::string status = "대기";
     };
@@ -371,23 +355,23 @@ private:
         };
 
         Stage stage = Stage::Idle;
-        std::map<aerosimlab::simulation::DroneId, glm::dvec3> homePositionsMeters;
+        std::map<dronesim::simulation::DroneId, glm::dvec3> homePositionsMeters;
         std::string status = "대기";
     };
     CompleteFleetMissionState completeFleetMission_;
     communication::DroneSocketTransport droneSocketTransport_;
     std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
     std::vector<communication::RadioObstacle> formationRadioObstacles_;
-    aerosimlab::terrain::TerrainGrid terrainGrid_;
-    std::unique_ptr<aerosimlab::graphics::Shader> shader_;
-    aerosimlab::graphics::Material droneMaterial_{
+    dronesim::terrain::TerrainGrid terrainGrid_;
+    std::unique_ptr<dronesim::graphics::Shader> shader_;
+    dronesim::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};
-    aerosimlab::graphics::Material missionRouteMaterial_{
+    dronesim::graphics::Material missionRouteMaterial_{
         glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
     std::mt19937 windGenerator_{0x44524F4EU};
     glm::dvec3 windVelocityMetersPerSecond_{0.0};
     glm::dvec3 windTargetMetersPerSecond_{0.0};
     std::uint32_t windGustTicksRemaining_ = 0U;
-    aerosimlab::simulation::SimulationCore simulation_{};
+    dronesim::simulation::SimulationCore simulation_{};
 };
 }

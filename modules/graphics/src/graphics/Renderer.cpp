@@ -18,7 +18,7 @@
 #include <unordered_set>
 #endif
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 namespace
 {
@@ -262,4 +262,4 @@ void Renderer::Draw(
 
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

@@ -7,7 +7,7 @@
 #include <span>
 #include <vector>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 /** @brief RGB 이미지 한 장을 GPU에 올려 장면 표면에 입힌다. */
@@ -46,4 +46,4 @@ private:
     std::uint32_t rendererId_ = 0U;
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

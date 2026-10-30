@@ -6,7 +6,7 @@
 
 #include <glm/glm.hpp>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 /**
@@ -97,4 +97,4 @@ private:
     mutable std::unordered_map<std::string, int> m_UniformLocationCache;
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

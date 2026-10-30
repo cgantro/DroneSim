@@ -9,7 +9,7 @@
 #include <optional>
 #include <string>
 
-namespace aerosimlab::simulator::detail
+namespace dronesim::simulator::detail
 {
 struct PeerTelemetry
 {

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace aerosimlab::flight_planning
+namespace dronesim::flight_planning
 {
 namespace
 {

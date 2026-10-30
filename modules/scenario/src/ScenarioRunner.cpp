@@ -18,9 +18,9 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::scenario
+namespace dronesim::scenario
 {
-using namespace aerosimlab::simulation;
+using namespace dronesim::simulation;
 
 namespace
 {

@@ -7,7 +7,7 @@
 #include <span>
 #include <string_view>
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 /** @brief 드론 한 대가 수행 중인 임무 구간이다. */
 enum class FleetMissionLeg : std::uint8_t

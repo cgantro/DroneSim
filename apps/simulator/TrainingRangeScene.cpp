@@ -13,7 +13,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 namespace
 {
@@ -68,7 +68,7 @@ double DistanceToSegment(const glm::dvec2& point,
 }
 
 double DistanceToStructures(const glm::dvec2& point,
-    const std::vector<aerosimlab::flight_planning::BuildingObstacle>& buildings)
+    const std::vector<dronesim::flight_planning::BuildingObstacle>& buildings)
 {
     double nearest = std::numeric_limits<double>::infinity();
     for (const auto& building : buildings)
@@ -95,7 +95,7 @@ double DistanceToStructures(const glm::dvec2& point,
 
 glm::dvec2 FindOpenPosition(const glm::dvec2& preferred,
     const glm::dvec2& halfSize,
-    const std::vector<aerosimlab::flight_planning::BuildingObstacle>& buildings,
+    const std::vector<dronesim::flight_planning::BuildingObstacle>& buildings,
     const std::vector<glm::dvec2>& reserved, double minimumClearanceMeters,
     double minimumSeparationMeters, double maximumSearchDistanceMeters)
 {
@@ -136,10 +136,10 @@ glm::dvec2 FindOpenPosition(const glm::dvec2& preferred,
 }
 
 void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
-    aerosimlab::simulation::SimulationCore& simulation)
+    dronesim::simulation::SimulationCore& simulation)
 {
     const float worldScale = static_cast<float>(mapScale);
-    cityModel_ = aerosimlab::graphics::GlbModel::Load(
+    cityModel_ = dronesim::graphics::GlbModel::Load(
         (assetRoot / "maps/ruined_city.glb").string());
     buildingObstacles_.clear();
     reconPoints_.clear();
@@ -150,7 +150,7 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
         throw std::logic_error("도시 지도 충돌 자료와 화면 메시 순서가 다릅니다.");
     double largestGroundArea = 0.0;
     std::size_t groundSurfacePart = partBounds.size();
-    aerosimlab::graphics::GlbPartBounds groundBounds{};
+    dronesim::graphics::GlbPartBounds groundBounds{};
     for (std::size_t index = 0; index < partBounds.size(); ++index)
     {
         const auto& bounds = partBounds[index];
@@ -213,7 +213,7 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
         for (const std::uint32_t vertexIndex : part.triangleIndices)
             collisionIndices.push_back(firstVertex + vertexIndex);
 
-        aerosimlab::flight_planning::BuildingObstacle obstacle;
+        dronesim::flight_planning::BuildingObstacle obstacle;
         obstacle.name = "도시 구조물 " + std::to_string(++obstacleNumber);
         obstacle.heightMeters = highestPointMeters;
         obstacle.outlineMeters = MakeFootprintHull(std::move(footprintPoints));
@@ -245,8 +245,8 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
     }
 }
 
-void TrainingRangeScene::Draw(aerosimlab::graphics::Renderer& renderer,
-    aerosimlab::graphics::Shader& shader, const glm::mat4& view,
+void TrainingRangeScene::Draw(dronesim::graphics::Renderer& renderer,
+    dronesim::graphics::Shader& shader, const glm::mat4& view,
     const glm::mat4& projection, const glm::vec3& cameraPosition) const
 {
     if (cityModel_)
@@ -254,7 +254,7 @@ void TrainingRangeScene::Draw(aerosimlab::graphics::Renderer& renderer,
             view, projection, cameraPosition);
 }
 
-const std::vector<aerosimlab::flight_planning::BuildingObstacle>&
+const std::vector<dronesim::flight_planning::BuildingObstacle>&
 TrainingRangeScene::BuildingObstacles() const noexcept
 {
     return buildingObstacles_;

@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-namespace aerosimlab::graphics::glb_detail
+namespace dronesim::graphics::glb_detail
 {
 using Json = nlohmann::json;
 
@@ -289,4 +289,4 @@ inline std::vector<std::uint32_t> ReadTriangleIndices(const Json& document,
     }
     return indices;
 }
-} // namespace aerosimlab::graphics::glb_detail
+} // namespace dronesim::graphics::glb_detail

@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 /** @brief 한 물리 월드 안의 강체를 가리킨다. */
 struct RigidBodyHandle

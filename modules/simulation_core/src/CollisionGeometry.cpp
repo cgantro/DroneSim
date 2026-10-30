@@ -4,7 +4,7 @@
 #include <cmath>
 #include <limits>
 
-namespace aerosimlab::simulation::collision
+namespace dronesim::simulation::collision
 {
 namespace
 {

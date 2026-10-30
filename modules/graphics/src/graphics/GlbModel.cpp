@@ -17,7 +17,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 namespace
 {
@@ -373,4 +373,4 @@ std::span<const GlbCollisionPart> GlbModel::CollisionParts() const noexcept
 {
     return collisionParts_;
 }
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

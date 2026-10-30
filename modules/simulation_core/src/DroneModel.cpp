@@ -8,7 +8,7 @@
 #include <cmath>
 #include <string_view>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 namespace
 {

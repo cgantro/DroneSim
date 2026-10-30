@@ -14,7 +14,7 @@
 #include <span>
 #include <vector>
 
-namespace aerosimlab::simulation
+namespace dronesim::simulation
 {
 struct QuadrotorParameters;
 struct QuadrotorControllerParameters;

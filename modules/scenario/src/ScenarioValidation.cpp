@@ -9,9 +9,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace aerosimlab::scenario::detail
+namespace dronesim::scenario::detail
 {
-using namespace aerosimlab::simulation;
+using namespace dronesim::simulation;
 
 namespace
 {

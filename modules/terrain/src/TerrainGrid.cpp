@@ -13,7 +13,7 @@
 #include <string>
 #include <type_traits>
 
-namespace aerosimlab::terrain
+namespace dronesim::terrain
 {
 namespace
 {

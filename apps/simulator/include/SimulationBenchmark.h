@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 /** @brief 화면 성능 기록에 들어갈 한 번의 실행 측정값이다. */
 struct ViewerBenchmarkMeasurements

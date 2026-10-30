@@ -6,7 +6,7 @@
 #include <cmath>
 #include <cstddef>
 
-namespace aerosimlab::terrain
+namespace dronesim::terrain
 {
 /** @brief 경로 탐색 시험에서 지형 높이 변화를 재현하는 테스트 자료다. */
 inline TerrainGrid MakeHillyTerrainForTest()

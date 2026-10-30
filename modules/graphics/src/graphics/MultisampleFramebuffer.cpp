@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 MultisampleFramebuffer::MultisampleFramebuffer(int width, int height, int samples)
@@ -177,4 +177,4 @@ void MultisampleFramebuffer::Resize(int width, int height)
     Create();
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

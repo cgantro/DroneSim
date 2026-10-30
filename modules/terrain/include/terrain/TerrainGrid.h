@@ -6,7 +6,7 @@
 
 #include <glm/vec2.hpp>
 
-namespace aerosimlab::terrain
+namespace dronesim::terrain
 {
 /**
  * @brief 일정한 간격으로 높이를 기록한 정사각형 지형이다.

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 /**
@@ -38,4 +38,4 @@ private:
     uint32_t m_RendererID = 0;
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

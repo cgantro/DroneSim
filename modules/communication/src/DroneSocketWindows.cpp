@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-namespace aerosimlab::communication
+namespace dronesim::communication
 {
 namespace
 {

@@ -14,9 +14,9 @@
 
 struct GLFWwindow;
 
-namespace aerosimlab::gui
+namespace dronesim::gui
 {
-namespace communication = ::aerosimlab::communication;
+namespace communication = ::dronesim::communication;
 
 /** @brief 화면 성능 측정에 사용할 GPU 구간 결과다. */
 struct HudGpuTiming

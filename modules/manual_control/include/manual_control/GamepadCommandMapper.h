@@ -2,7 +2,7 @@
 
 #include "simulation_core/DroneModel.h"
 
-namespace aerosimlab::manual_control
+namespace dronesim::manual_control
 {
 /**
  * @brief GLFW 게임패드의 축 값을 드론 비행 명령으로 바꾼다.

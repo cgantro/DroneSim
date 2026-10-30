@@ -1,4 +1,4 @@
-name: Build and deploy AeroSimLab Web
+name: Build and deploy DroneSim Web
 
 on:
   push:
@@ -67,7 +67,7 @@ jobs:
         run: emcmake cmake --preset emscripten-single-thread
 
       - name: Build web simulator
-        run: cmake --build --preset emscripten-single-thread --target aerosimlab_simulator
+        run: cmake --build --preset emscripten-single-thread --target dronesim_simulator
 
       - name: Check and prepare Pages files
         run: |

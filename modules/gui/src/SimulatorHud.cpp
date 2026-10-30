@@ -17,7 +17,7 @@
 #include <chrono>
 #include <vector>
 
-namespace aerosimlab::gui
+namespace dronesim::gui
 {
 namespace
 {
@@ -61,7 +61,7 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
 
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
-    const ImGuiID dockspaceId = ImGui::GetID("AeroSimLabDockspaceV3");
+    const ImGuiID dockspaceId = ImGui::GetID("DroneSimDockspaceV3");
     if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
     {
         ImGui::DockBuilderAddNode(dockspaceId,
@@ -79,7 +79,7 @@ void CreateDefaultDockspace(ImGuiViewport* viewport)
 
         ImGui::DockBuilderDockWindow("장면##SceneViewV3", sceneNode);
         ImGui::DockBuilderDockWindow("카메라##CameraViewV3", cameraNode);
-        ImGui::DockBuilderDockWindow("AeroSimLab | 비행 상태##FlightStatusV3", statusNode);
+        ImGui::DockBuilderDockWindow("DroneSim | 비행 상태##FlightStatusV3", statusNode);
         ImGui::DockBuilderFinish(dockspaceId);
     }
     ImGui::DockSpaceOverViewport(dockspaceId, viewport);
@@ -216,7 +216,7 @@ void DrawFlightStatusPanel(
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled)
 {
-    if (ImGui::Begin("AeroSimLab | 비행 상태##FlightStatusV3"))
+    if (ImGui::Begin("DroneSim | 비행 상태##FlightStatusV3"))
     {
         const auto& primary = simulation.State();
         ImGui::Text("주 드론: %s", DroneName(simulation.PrimaryDroneId()).c_str());
@@ -321,7 +321,7 @@ SimulatorHud::SimulatorHud(GLFWwindow* window)
     if (const char* localAppData = std::getenv("LOCALAPPDATA"))
     {
         std::error_code error;
-        const auto settingsDirectory = std::filesystem::path(localAppData) / "AeroSimLab";
+        const auto settingsDirectory = std::filesystem::path(localAppData) / "DroneSim";
         std::filesystem::create_directories(settingsDirectory, error);
         if (!error)
         {

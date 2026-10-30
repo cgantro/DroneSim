@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 #ifndef __EMSCRIPTEN__
@@ -55,4 +55,4 @@ private:
     float m_AnimationTimeSeconds = 0.0F;
 };
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

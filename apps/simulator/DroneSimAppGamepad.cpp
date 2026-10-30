@@ -1,4 +1,4 @@
-#include "AeroSimLabApp.h"
+#include "DroneSimApp.h"
 
 #include "graphics/Window.h"
 
@@ -8,7 +8,7 @@
 
 #include <string>
 
-namespace aerosimlab::simulator
+namespace dronesim::simulator
 {
 #ifndef __EMSCRIPTEN__
 namespace
@@ -47,7 +47,7 @@ GamepadScanResult ScanForGamepad()
 }
 #endif
 
-void AeroSimLabApp::PollGamepad()
+void DroneSimApp::PollGamepad()
 {
 #ifdef __EMSCRIPTEN__
     return;
@@ -64,14 +64,14 @@ void AeroSimLabApp::PollGamepad()
         {
             const char* deviceName = glfwGetJoystickName(scan.unsupportedJoystickId);
             const std::string name = deviceName != nullptr ? deviceName : "이름 없음";
-            window_->SetTitle("AeroSimLab | 게임패드 형식 미지원: " + name);
+            window_->SetTitle("DroneSim | 게임패드 형식 미지원: " + name);
             unsupportedJoystickId_ = scan.unsupportedJoystickId;
         }
         else if (scan.unsupportedJoystickId < 0 && unsupportedJoystickId_ >= 0)
         {
             window_->SetTitle(gamepadConnected_
-                ? "AeroSimLab | 게임패드 연결됨"
-                : "AeroSimLab | 드론 관찰 · EO 영상");
+                ? "DroneSim | 게임패드 연결됨"
+                : "DroneSim | 드론 관찰 · EO 영상");
             unsupportedJoystickId_ = -1;
         }
         return;
@@ -89,12 +89,12 @@ void AeroSimLabApp::PollGamepad()
 
     const bool takeoffPressed = scan.state.buttons[GLFW_GAMEPAD_BUTTON_A] == GLFW_PRESS;
     const bool landPressed = scan.state.buttons[GLFW_GAMEPAD_BUTTON_B] == GLFW_PRESS;
-    std::optional<aerosimlab::manual_control::GamepadAxes> pilotAxes;
+    std::optional<dronesim::manual_control::GamepadAxes> pilotAxes;
     if (!missionControlOwnsInput_)
     {
         const auto mode = simulation_.State().mode;
-        const bool airborne = mode == aerosimlab::simulation::FlightMode::Hovering
-            || mode == aerosimlab::simulation::FlightMode::Flying;
+        const bool airborne = mode == dronesim::simulation::FlightMode::Hovering
+            || mode == dronesim::simulation::FlightMode::Flying;
         if (airborne)
         {
             // GLFW 트리거 값은 -1부터 시작하므로 0~1로 바꾼 뒤 양쪽 입력 차이를 높이 명령으로 쓴다.
@@ -102,7 +102,7 @@ void AeroSimLabApp::PollGamepad()
             {
                 return (static_cast<double>(value) + 1.0) * 0.5;
             };
-            pilotAxes = aerosimlab::manual_control::GamepadAxes{
+            pilotAxes = dronesim::manual_control::GamepadAxes{
                 .forward = -static_cast<double>(scan.state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]),
                 .right = static_cast<double>(scan.state.axes[GLFW_GAMEPAD_AXIS_LEFT_X]),
                 .vertical = triggerValue(scan.state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER])
@@ -115,27 +115,27 @@ void AeroSimLabApp::PollGamepad()
 #endif
 }
 
-void AeroSimLabApp::HandleGamepadDisconnected()
+void DroneSimApp::HandleGamepadDisconnected()
 {
-    using DisconnectAction = aerosimlab::manual_control::GamepadDisconnectAction;
-    const auto action = aerosimlab::manual_control::ResolveGamepadDisconnectAction(
+    using DisconnectAction = dronesim::manual_control::GamepadDisconnectAction;
+    const auto action = dronesim::manual_control::ResolveGamepadDisconnectAction(
         gamepadConnected_, missionControlOwnsInput_, simulation_.State().mode);
     if (action == DisconnectAction::NoChange)
         return;
 
     pendingControllerAction_.reset();
     window_->SetTitle(missionControlOwnsInput_
-        ? "AeroSimLab | 자율 임무 진행 중"
-        : "AeroSimLab | 드론 관찰 · EO 영상");
+        ? "DroneSim | 자율 임무 진행 중"
+        : "DroneSim | 드론 관찰 · EO 영상");
     switch (action)
     {
     case DisconnectAction::Land:
-        pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-            aerosimlab::simulation::DroneCommand::Kind::Land};
+        pendingControllerAction_ = dronesim::simulation::DroneCommand{
+            dronesim::simulation::DroneCommand::Kind::Land};
         break;
     case DisconnectAction::Stop:
-        pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-            aerosimlab::simulation::DroneCommand::Kind::Stop};
+        pendingControllerAction_ = dronesim::simulation::DroneCommand{
+            dronesim::simulation::DroneCommand::Kind::Stop};
         break;
     case DisconnectAction::NoChange:
     case DisconnectAction::ClearPendingAction:
@@ -148,31 +148,31 @@ void AeroSimLabApp::HandleGamepadDisconnected()
     previousLandButton_ = false;
 }
 
-void AeroSimLabApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed,
-    const std::optional<aerosimlab::manual_control::GamepadAxes>& pilotAxes)
+void DroneSimApp::HandleGamepadConnected(bool takeoffPressed, bool landPressed,
+    const std::optional<dronesim::manual_control::GamepadAxes>& pilotAxes)
 {
     if (!gamepadConnected_ && !missionControlOwnsInput_)
-        window_->SetTitle("AeroSimLab | 게임패드 연결됨");
+        window_->SetTitle("DroneSim | 게임패드 연결됨");
     gamepadConnected_ = true;
     externalControl_ = true;
 
     if (!missionControlOwnsInput_)
     {
         if (takeoffPressed && !previousTakeoffButton_
-            && simulation_.State().mode == aerosimlab::simulation::FlightMode::Grounded)
+            && simulation_.State().mode == dronesim::simulation::FlightMode::Grounded)
         {
-            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-                aerosimlab::simulation::DroneCommand::Kind::TakeOff};
+            pendingControllerAction_ = dronesim::simulation::DroneCommand{
+                dronesim::simulation::DroneCommand::Kind::TakeOff};
         }
         if (landPressed && !previousLandButton_
-            && simulation_.State().mode != aerosimlab::simulation::FlightMode::Grounded)
+            && simulation_.State().mode != dronesim::simulation::FlightMode::Grounded)
         {
-            pendingControllerAction_ = aerosimlab::simulation::DroneCommand{
-                aerosimlab::simulation::DroneCommand::Kind::Land};
+            pendingControllerAction_ = dronesim::simulation::DroneCommand{
+                dronesim::simulation::DroneCommand::Kind::Land};
         }
 
         if (pilotAxes)
-            pendingPilotCommand_ = aerosimlab::manual_control::MapAxes(
+            pendingPilotCommand_ = dronesim::manual_control::MapAxes(
                 *pilotAxes, simulation_.State().yawRadians);
     }
     previousTakeoffButton_ = takeoffPressed;

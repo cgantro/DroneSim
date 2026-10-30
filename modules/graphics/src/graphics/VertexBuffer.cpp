@@ -4,7 +4,7 @@
 
 #include <stdexcept>
 
-namespace aerosimlab::graphics
+namespace dronesim::graphics
 {
 
 VertexBuffer::VertexBuffer(const void* data, GLsizeiptr size)
@@ -40,4 +40,4 @@ void VertexBuffer::UnBind() const
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-} // namespace aerosimlab::graphics
+} // namespace dronesim::graphics

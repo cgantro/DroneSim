@@ -8,7 +8,7 @@
 #include <span>
 #include <vector>
 
-namespace aerosimlab::simulation::collision
+namespace dronesim::simulation::collision
 {
 /** @brief 월드 좌표에 놓인 회전 상자와 빠른 후보 검사에 필요한 경계다. */
 struct OrientedBox
