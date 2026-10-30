@@ -1063,14 +1063,14 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     InitializeFleetLeadership();
 
     nextTelemetrySequence_ = 1U;
-    droneSocketPorts_.clear();
     lastTelemetrySentAtTick_.clear();
     peerTelemetryAtLeader_.clear();
 
     communication::VirtualMeshSettings settings;
     settings.maximumLinkRangeMeters = 130.0;
+    const auto droneIds = simulation_.DroneIds();
     formationNetwork_ = std::make_unique<
-        communication::VirtualMeshNetwork>(settings);
+        communication::VirtualMeshNetwork>(droneSocketTransport_, settings);
 
     formationRadioObstacles_.clear();
     const auto& buildings = trainingRangeScene_->BuildingObstacles();
@@ -1088,23 +1088,14 @@ bool AeroSimLabApp::PrepareFleetNetwork(bool reset)
     }
 
     std::vector<communication::NetworkNodeSnapshot> nodes;
-    const auto droneIds = simulation_.DroneIds();
     nodes.reserve(droneIds.size());
     for (const auto droneId : droneIds)
     {
         nodes.push_back({droneId, simulation_.State(droneId).positionMeters});
     }
     formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
-    for (const auto droneId : droneIds)
-        droneSocketPorts_.emplace(droneId, *formationNetwork_->PortFor(droneId));
     formationTransit_.lastNetworkNodeUpdateTick = simulation_.TickCount();
     return !nodes.empty();
-}
-
-communication::DroneEndpoint AeroSimLabApp::EndpointFor(
-    aerosimlab::simulation::DroneId droneId) const
-{
-    return {droneId, droneSocketPorts_.at(droneId)};
 }
 
 void AeroSimLabApp::InitializeFleetLeadership()
@@ -1157,7 +1148,7 @@ bool AeroSimLabApp::SendFleetRouteAssignment(
     }
 
     const auto messageId = formationNetwork_->Send(
-        EndpointFor(fleetLeaderId_), EndpointFor(droneId),
+        fleetLeaderId_, droneId,
         sequence, "fleet_route", payload);
     if (!messageId)
         return false;
@@ -1366,7 +1357,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
         {
             // 같은 경로가 다시 오면 비행 상태를 초기화하지 않고 확인 응답만 다시 보낸다.
             static_cast<void>(formationNetwork_->Send(
-                EndpointFor(message.destination), EndpointFor(leaderId),
+                message.destination, leaderId,
                 message.sequence, "fleet_route_ack", {}));
             continue;
         }
@@ -1379,7 +1370,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             route->waypointsMeters, message.sequence, route->assignmentVersion,
             route->assignmentLeaseExpiresAtTick);
         static_cast<void>(formationNetwork_->Send(
-            EndpointFor(message.destination), EndpointFor(leaderId),
+            message.destination, leaderId,
             message.sequence, "fleet_route_ack", {}));
     }
 
@@ -1404,7 +1395,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             ? 0U : mission->second.assignmentVersion;
         const auto& state = simulation_.State(droneId);
         static_cast<void>(formationNetwork_->Send(
-            EndpointFor(droneId), EndpointFor(leaderId),
+            droneId, leaderId,
             nextTelemetrySequence_++, "drone_telemetry",
             detail::EncodePeerTelemetry(state.positionMeters, state.mode,
                 missionLeg, missionStatus,
@@ -1424,7 +1415,7 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             || currentTick < mission.lastRouteTransmissionTick + routeRetryIntervalTicks)
             continue;
 
-        if (formationNetwork_->Send(EndpointFor(leaderId), EndpointFor(droneId),
+        if (formationNetwork_->Send(leaderId, droneId,
                 mission.pendingRouteSequence, "fleet_route",
                 mission.pendingRoutePayload))
         {
@@ -1600,7 +1591,7 @@ void AeroSimLabApp::AdvanceFormationTransit()
         if (targetChanged || refreshDue)
         {
             const auto messageId = formationNetwork_->Send(
-                EndpointFor(leaderId), EndpointFor(droneId),
+                leaderId, droneId,
                 formationTransit_.nextMessageSequence++, "formation_waypoint",
                 EncodeWaypoint(target));
             if (!messageId)

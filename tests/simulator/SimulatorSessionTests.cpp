@@ -120,7 +120,7 @@ public:
         communication::VirtualMeshSettings settings;
         settings.maximumLinkRangeMeters = 1'000.0;
         app.formationNetwork_ = std::make_unique<
-            communication::VirtualMeshNetwork>(settings);
+            communication::VirtualMeshNetwork>(app.droneSocketTransport_, settings);
         app.formationRadioObstacles_.clear();
         app.formationTransit_.lastNetworkNodeUpdateTick.reset();
     }
@@ -159,15 +159,12 @@ public:
         AeroSimLabApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
-        ASSERT_EQ(app.droneSocketPorts_.size(), app.simulation_.DroneCount());
-
         std::vector<communication::SocketPort> ports;
         for (const auto droneId : app.simulation_.DroneIds())
         {
-            const auto port = app.formationNetwork_->PortFor(droneId);
+            const auto port = app.droneSocketTransport_.PortFor(droneId);
             ASSERT_TRUE(port.has_value());
             EXPECT_NE(*port, 0U);
-            EXPECT_EQ(*port, app.droneSocketPorts_.at(droneId));
             ports.push_back(*port);
         }
         std::sort(ports.begin(), ports.end());

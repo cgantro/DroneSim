@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string_view>
 
+// ASCII 격자의 기준 높이를 입력받아 시뮬레이터가 읽는 지형 파일로 바꾼다.
 namespace
 {
 double ReadNumber(std::string_view text, const char* label)
@@ -20,6 +21,7 @@ double ReadNumber(std::string_view text, const char* label)
 
 int main(int argc, char** argv)
 {
+    // 입력 경로, 출력 경로, 기준 높이를 순서대로 받아 변환 조건을 고정한다.
     if (argc != 4)
     {
         std::cerr << "사용법: terrain_grid_converter 입력.asc 출력.aerotrn "

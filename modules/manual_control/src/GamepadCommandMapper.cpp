@@ -27,6 +27,7 @@ double ShapeStick(double value) noexcept
 
 double ApplyDeadZone(double value) noexcept
 {
+    // 스틱이 중앙에서 흔들리는 작은 입력을 무시하고 나머지 범위를 0~1로 다시 맞춘다.
     const double clipped = std::clamp(value, -1.0, 1.0);
     const double magnitude = std::abs(clipped);
     if (magnitude <= stickDeadZone)
@@ -38,12 +39,14 @@ double ApplyDeadZone(double value) noexcept
 
 PilotCommand MapAxes(const GamepadAxes& axes, double droneYawRadians) noexcept
 {
+    // 스틱 입력을 먼저 완만하게 보정해 중앙 부근의 작은 움직임을 다루기 쉽게 한다.
     const double forward = ShapeStick(axes.forward);
     const double right = ShapeStick(axes.right);
     const double vertical = ShapeStick(axes.vertical);
     const double yaw = ShapeStick(axes.yaw);
 
     const double horizontalLength = std::hypot(forward, right);
+    // 대각선 입력도 최대 속도를 넘지 않도록 두 수평축을 함께 줄인다.
     const double horizontalScale = horizontalLength > 1.0
         ? 1.0 / horizontalLength
         : 1.0;
@@ -53,6 +56,7 @@ PilotCommand MapAxes(const GamepadAxes& axes, double droneYawRadians) noexcept
     const double sine = std::sin(droneYawRadians);
 
     PilotCommand command;
+    // 기체 앞·오른쪽 속도를 월드 동·북 속도로 회전 변환한다.
     command.velocityMetersPerSecond = {
         localForward * cosine - localRight * sine,
         localForward * sine + localRight * cosine,
@@ -67,6 +71,7 @@ PilotCommand MapAxes(const GamepadAxes& axes, double droneYawRadians) noexcept
 GamepadDisconnectAction ResolveGamepadDisconnectAction(
     bool wasConnected, bool manualControlBlocked, simulation::FlightMode flightMode) noexcept
 {
+    // 연결이 끊긴 순간의 비행 상태에 따라 남은 입력을 지우거나 안전 동작을 고른다.
     if (!wasConnected)
         return GamepadDisconnectAction::NoChange;
     if (manualControlBlocked)

@@ -40,6 +40,7 @@ glm::vec3 ReadVec3(const Json& values, const char* name,
 
 glm::mat4 ReadNodeTransform(const Json& node)
 {
+    // GLB는 행렬 하나 또는 이동·회전·크기 값을 저장한다. 둘 중 실제로 있는 형식을 읽는다.
     if (node.contains("matrix"))
     {
         const Json& values = node.at("matrix");
@@ -74,6 +75,7 @@ glm::mat4 ReadNodeTransform(const Json& node)
             throw std::runtime_error("GLB 노드 회전 값이 올바르지 않습니다.");
         rotation = glm::normalize(rotation);
     }
+    // glTF 회전 순서와 쿼터니언 값(x,y,z,w)을 GLM 행렬로 옮긴다.
     glm::mat4 result = glm::translate(glm::mat4(1.0F), translation);
     const float x = rotation.x;
     const float y = rotation.y;
@@ -124,6 +126,7 @@ std::unique_ptr<Texture2D> LoadBaseColorTexture(const Json& document,
     const Json& pbr, const std::vector<std::uint8_t>& binary,
     bool hasTextureCoordinates, const std::filesystem::path& modelDirectory)
 {
+    // 재질의 기본색 이미지를 읽어 메시의 UV 좌표와 연결한다.
     if (!pbr.contains("baseColorTexture"))
         return nullptr;
     const Json& textureInfo = pbr.at("baseColorTexture");
@@ -186,6 +189,7 @@ std::unique_ptr<Texture2D> LoadBaseColorTexture(const Json& document,
 void BuildNormalsIfMissing(std::vector<Vertex>& vertices,
     const std::vector<std::uint32_t>& indices, const Json& primitive)
 {
+    // 법선이 빠진 메시만 삼각형 면적을 가중치로 삼아 정점 법선을 계산한다.
     if (primitive.at("attributes").contains("NORMAL"))
         return;
     std::vector<glm::vec3> sums(vertices.size(), glm::vec3(0.0F));
@@ -221,6 +225,7 @@ GlbModel::~GlbModel() = default;
 
 std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
 {
+    // GLB 씬의 루트부터 자식 노드를 따라가며 메시, 재질, 충돌 자료를 만든다.
     glb_detail::Document source = glb_detail::ReadDocument(path);
     const std::filesystem::path modelDirectory = std::filesystem::path{path}.parent_path();
     const Json& document = source.json;
@@ -253,6 +258,7 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
                 throw std::runtime_error("GLB 삼각형 번호 수가 올바르지 않습니다.");
             BuildNormalsIfMissing(vertices, indices, primitive);
 
+            // 경계는 월드 변환까지 반영해 두고, 충돌 정점은 로컬 좌표와 변환을 함께 보관한다.
             GlbPartBounds bounds{
                 glm::vec3(std::numeric_limits<float>::max()),
                 glm::vec3(std::numeric_limits<float>::lowest())};
@@ -294,6 +300,7 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
         }
     };
 
+    // 부모 변환을 자식에게 누적해 계층형 모델의 위치·방향·크기를 보존한다.
     std::function<void(std::size_t, const glm::mat4&)> visitNode;
     visitNode = [&](std::size_t nodeIndex, const glm::mat4& parentTransform)
     {
@@ -326,6 +333,7 @@ void GlbModel::Draw(const glm::mat4& modelTransform, Renderer& renderer,
     const glm::vec3& cameraPosition, const Material* fallbackMaterial,
     const Texture2D* fallbackTexture, bool fallbackTriplanar) const
 {
+    // GLB 재질이 있으면 이를 쓰고, 없을 때만 호출자가 준 기본 재질과 질감을 사용한다.
     static const Material defaultMaterial(glm::vec4(1.0F), 0.0F, 1.0F);
     for (const auto& part : parts_)
     {

@@ -2,6 +2,7 @@
 
 namespace aerosimlab::simulator::detail
 {
+/** @brief 내부 임무 상태를 HUD에서 읽을 수 있는 한국어 문구로 바꾼다. */
 std::string_view FleetDroneStatusLabel(FleetDroneStatus status) noexcept
 {
     switch (status)
@@ -34,6 +35,7 @@ std::string_view FleetDroneStatusLabel(FleetDroneStatus status) noexcept
     return {};
 }
 
+/** @brief 드론 상태가 아직 임무 수행 중인지 판정한다. */
 bool IsFleetMissionInProgress(FleetDroneStatus status) noexcept
 {
     switch (status)
@@ -59,6 +61,7 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
     FleetMissionLeg leg,
     std::span<const std::optional<FleetMissionReport>> reports) noexcept
 {
+    // 각 드론의 최신 보고가 모일 때까지 기다린 뒤 현재 임무 단계의 완료 조건을 검사한다.
     if (reports.empty())
         return {FleetMissionProgress::Waiting, {}};
 

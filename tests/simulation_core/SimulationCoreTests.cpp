@@ -13,6 +13,7 @@ namespace aerosimlab::simulation
 {
 namespace
 {
+// 고정 Tick마다 비행 상태와 카메라 프레임 번호가 함께 진행되는지 확인한다.
 void VerifyTakeoffAndCameraAdvanceTogether()
 {
     SimulationCore simulation;
@@ -28,6 +29,7 @@ void VerifyTakeoffAndCameraAdvanceTogether()
     EXPECT_EQ(simulation.Camera(drone).frameCount, 360U);
 }
 
+// 긴 호버 동안 위치·속도·자세가 발산하지 않는지 확인한다.
 void VerifyLongHoverKeepsTheRigidBodyStable()
 {
     SimulationCore simulation;
@@ -48,6 +50,7 @@ void VerifyLongHoverKeepsTheRigidBodyStable()
     EXPECT_LT(glm::length(state.angularVelocityRadiansPerSecond), 0.2);
 }
 
+// 경유점 명령이 실제 위치를 바꾸고 도착 후 호버 상태로 끝나는지 확인한다.
 void VerifyWaypointCommandMovesTheRigidBody()
 {
     SimulationCore simulation;
@@ -67,6 +70,7 @@ void VerifyWaypointCommandMovesTheRigidBody()
     EXPECT_EQ(simulation.State(drone).mode, FlightMode::Hovering);
 }
 
+// 드론을 지우면 연결된 강체도 정리되고 나머지 드론은 계속 진행하는지 확인한다.
 void VerifyDroneAndPhysicsBodyAreRemovedTogether()
 {
     SimulationCore simulation;
@@ -84,6 +88,7 @@ void VerifyDroneAndPhysicsBodyAreRemovedTogether()
     EXPECT_NO_THROW(simulation.AdvanceOneTick());
 }
 
+// 배터리 사용량이 물리 Tick 이후의 비행 상태를 기준으로 계산되는지 확인한다.
 void VerifyBatteryUsesThePostPhysicsFlightState()
 {
     SimulationCore simulation;
@@ -99,6 +104,7 @@ void VerifyBatteryUsesThePostPhysicsFlightState()
     EXPECT_EQ(simulation.State(drone).mode, FlightMode::Hovering);
 }
 
+// 네 대의 드론이 서로 독립적으로 이륙·이동·착륙하는지 확인한다.
 void VerifyFourDronesTakeOffMoveAndLandIndependently()
 {
     SimulationCore simulation;

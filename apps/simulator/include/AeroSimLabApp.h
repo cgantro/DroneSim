@@ -167,8 +167,6 @@ private:
         bool takeOffDrones,
         const std::map<aerosimlab::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
-    [[nodiscard]] communication::DroneEndpoint EndpointFor(
-        aerosimlab::simulation::DroneId droneId) const;
     void InitializeFleetLeadership();
     void AdvanceFleetNetwork();
     [[nodiscard]] bool SendFleetRouteAssignment(
@@ -295,9 +293,6 @@ private:
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     aerosimlab::simulation::DroneId observerDroneId_ = 0;
-    /** @brief 각 드론 소켓에 운영체제가 배정한 UDP 포트다. */
-    std::map<aerosimlab::simulation::DroneId, communication::SocketPort>
-        droneSocketPorts_;
     struct FleetReconnaissanceState
     {
         std::size_t targetIndex = 0;
@@ -380,6 +375,7 @@ private:
         std::string status = "대기";
     };
     CompleteFleetMissionState completeFleetMission_;
+    communication::DroneSocketTransport droneSocketTransport_;
     std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
     std::vector<communication::RadioObstacle> formationRadioObstacles_;
     aerosimlab::terrain::TerrainGrid terrainGrid_;

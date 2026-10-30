@@ -9,6 +9,7 @@ namespace aerosimlab::communication
 {
 namespace
 {
+// 브라우저는 UDP를 직접 열 수 없어, 주소와 수신 동작만 같은 메모리 전송기를 쓴다.
 struct InProcessDatagram
 {
     SocketPort sourcePort = 0;
@@ -23,6 +24,7 @@ struct InProcessBus
 
 InProcessBus& Bus()
 {
+    // 시뮬레이션은 한 브라우저 스레드에서 진행하므로 단일 큐 묶음으로 충분하다.
     static InProcessBus bus;
     return bus;
 }
@@ -34,6 +36,7 @@ public:
     Impl()
     {
         InProcessBus& bus = Bus();
+        // 메모리 수신함이 이미 쓰는 번호를 건너뛰어 드론마다 고유한 주소를 준다.
         const SocketPort firstCandidate = bus.nextPort;
         while (bus.queues.contains(bus.nextPort))
         {
@@ -48,6 +51,7 @@ public:
             ? 30000U : static_cast<SocketPort>(bus.nextPort + 1U);
     }
 
+    // 소켓이 사라지면 그 주소의 대기 메시지도 함께 버린다.
     ~Impl() { Bus().queues.erase(localPort_); }
 
     SocketPort localPort_ = 0;
@@ -69,6 +73,7 @@ void DroneSocket::SendTo(SocketPort destinationPort, std::string_view payload) c
         throw std::invalid_argument("드론 통신 메시지의 포트나 크기를 확인해 주세요.");
     auto& queues = Bus().queues;
     const auto destination = queues.find(destinationPort);
+    // UDP와 마찬가지로 상대가 없으면 보낼 곳이 없어 메시지를 버린다.
     if (destination == queues.end())
         return;
     destination->second.push_back({impl_->localPort_, std::string(payload)});
@@ -80,6 +85,7 @@ std::optional<ReceivedDatagram> DroneSocket::Receive()
     if (queue.empty())
         return std::nullopt;
     InProcessDatagram datagram = std::move(queue.front());
+    // 메시지 본문을 복사하지 않고 꺼내 수신 결과에 넘긴다.
     queue.pop_front();
     return ReceivedDatagram{datagram.sourcePort, std::move(datagram.payload)};
 }

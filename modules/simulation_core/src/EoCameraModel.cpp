@@ -14,6 +14,7 @@ constexpr glm::dvec3 cameraOpticalAxisBody{1.0, 0.0, 0.0};
 
 bool CameraModel::IsValid() const noexcept
 {
+    // 화면 크기와 시야각은 카메라 투영 행렬을 만들 수 있는 범위인지 확인한다.
     return imageWidthPixels > 0
         && imageWidthPixels <= maximumImageDimensionPixels
         && imageHeightPixels > 0
@@ -29,11 +30,13 @@ void EoCameraModel::AdvanceOneTick(CameraState& state, std::uint64_t tick) noexc
         return;
 
     ++state.frameCount;
+    // 프레임은 실제 렌더링이 아니라 모의 카메라의 갱신 주기를 기록한다.
     state.lastFrameTick = tick;
 }
 
 void EoCameraModel::UpdatePose(CameraState& camera, const DroneState& drone) noexcept
 {
+    // 기체 기준 장착점을 월드 위치로 회전·이동하고 카메라 방향도 기체와 맞춘다.
     camera.positionMeters = drone.positionMeters
         + drone.orientation * cameraMountPositionBodyMeters;
     camera.orientation = drone.orientation;

@@ -6,6 +6,7 @@
 
 namespace aerosimlab::manual_control
 {
+// 스틱 중앙의 작은 흔들림이 사라지고, 기체 방향에 맞춰 이동축이 회전하는지 확인한다.
 void Verify_GamepadCommandMapper_AppliesDeadZoneAndRotatesMovement()
 {
     EXPECT_DOUBLE_EQ(ApplyDeadZone(0.08), 0.0);
@@ -18,6 +19,7 @@ void Verify_GamepadCommandMapper_AppliesDeadZoneAndRotatesMovement()
     EXPECT_NEAR(command.velocityMetersPerSecond.y, 3.0, 1.0e-12);
 }
 
+// 연결 해제 시점과 비행 상태에 따라 정지·착륙·입력 취소를 고르는지 확인한다.
 void Verify_GamepadDisconnect_ChoosesActionFromConnectionAndFlightState()
 {
     using Action = GamepadDisconnectAction;

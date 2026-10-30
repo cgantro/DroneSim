@@ -7,6 +7,7 @@
 
 namespace aerosimlab::simulation
 {
+// 공개 물리 API와 Jolt의 전용 타입 사이에서 변환을 맡는다.
 struct SimulationPhysics::Impl
 {
     JoltPhysicsWorld world;
@@ -16,6 +17,7 @@ struct SimulationPhysics::Impl
         : defaultGround(world.AddStaticBox(
             {0.0, 0.0, -0.5}, {10000.0, 10000.0, 0.5}))
     {
+        // 실제 지형을 지정하기 전에도 드론이 끝없이 떨어지지 않도록 큰 바닥을 둔다.
     }
 };
 
@@ -117,6 +119,7 @@ void SimulationPhysics::SetTerrain(terrain::TerrainGrid terrain)
     impl_->world.SetTerrain(terrain);
     if (impl_->defaultGround)
     {
+        // 높이 격자 바닥으로 바꾼 뒤에는 기본 평면이 겹치지 않도록 제거한다.
         static_cast<void>(impl_->world.DestroyBody(*impl_->defaultGround));
         impl_->defaultGround.reset();
     }

@@ -83,6 +83,7 @@ target_link_libraries(aerosimlab_scenario
 )
 
 add_library(aerosimlab_communication STATIC
+  modules/communication/src/DroneSocketTransport.cpp
   modules/communication/src/VirtualMeshNetwork.cpp
 )
 target_include_directories(aerosimlab_communication PUBLIC modules/communication/include)

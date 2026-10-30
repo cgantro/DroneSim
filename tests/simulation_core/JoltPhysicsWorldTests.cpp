@@ -10,6 +10,7 @@
 
 namespace aerosimlab::simulation {
 namespace {
+// 높이와 질량을 바꿔 중력 낙하·접촉 시험에 쓸 상자를 만든다.
 JoltRigidBodyHandle MakeFallingBox(JoltPhysicsWorld &world, double heightMeters,
                                    double massKilograms = 1.0,
                                    double northMeters = 0.0) {
@@ -36,6 +37,7 @@ TEST(JoltPhysicsWorldTests, RigidBodyBasics) {
   for (int step = 0; step < 180; ++step)
     world.StepFixed();
 
+  // 상자 바닥면이 지면에 닿아 멈추고, 상태 저장·복원과 삭제도 동작해야 한다.
   const JoltRigidBodyState restingState = world.State(fallingBox);
   EXPECT_NEAR(restingState.positionMeters.z, 0.25, 0.025);
   EXPECT_NEAR(restingState.linearVelocityMetersPerSecond.z, 0.0, 0.05);

@@ -533,6 +533,7 @@ void AeroSimLabApp::RenderFrame()
                 static_cast<void>(StartCompleteFleetMission());
             },
             formationNetwork_.get(),
+            &droneSocketTransport_,
             [this, formationNetworkActive](aerosimlab::simulation::DroneId droneId,
                 bool enabled)
             {

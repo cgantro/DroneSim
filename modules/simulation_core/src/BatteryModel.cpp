@@ -6,6 +6,7 @@
 
 namespace aerosimlab::simulation
 {
+/** @brief 배터리 설정과 시작 잔량으로 사용 가능 에너지를 초기화한다. */
 BatteryModel::BatteryModel(
     BatteryModelParameters parameters, double initialPercent)
     : parameters_(parameters)
@@ -37,6 +38,7 @@ void BatteryModel::Advance(FlightMode mode) noexcept
 
     const double powerWatts = mode == FlightMode::Hovering
         ? parameters_.hoverPowerWatts : parameters_.flightPowerWatts;
+    // 와트 × 초를 와트시로 바꿔 고정 Tick마다 남은 에너지에서 뺀다.
     constexpr double secondsPerHour = 3'600.0;
     const double usedWattHours = powerWatts * DroneModel::fixedStepSeconds
         / secondsPerHour;
@@ -45,6 +47,7 @@ void BatteryModel::Advance(FlightMode mode) noexcept
 
 void BatteryModel::Reset() noexcept
 {
+    // 재시작 시 현재 잔량과 저전압 복귀 표시를 초기 상태로 되돌린다.
     remainingWattHours_ = initialWattHours_;
     returningForLowBattery_ = false;
 }

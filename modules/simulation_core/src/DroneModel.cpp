@@ -43,6 +43,7 @@ constexpr std::array flightModeNames{
 };
 }
 
+/** @brief 화면·기록에 쓰는 비행 상태 이름을 반환한다. */
 std::string_view ToString(FlightMode mode) noexcept
 {
     for (const FlightModeName& entry : flightModeNames)
@@ -53,6 +54,7 @@ std::string_view ToString(FlightMode mode) noexcept
     return "unknown";
 }
 
+/** @brief 저장된 상태 이름을 비행 상태로 바꾸며 모르는 이름은 거부한다. */
 std::optional<FlightMode> TryParseFlightMode(std::string_view name) noexcept
 {
     for (const FlightModeName& entry : flightModeNames)
@@ -97,6 +99,7 @@ CommandResult DroneModel::Apply(
         }
         control.targetVelocityMetersPerSecond = ClampLength(
             command.vector, maximumSpeedMetersPerSecond);
+        // 정지 명령은 바로 호버링으로, 이동 명령은 속도가 생길 때까지 비행 상태로 둔다.
         state.mode = glm::length(control.targetVelocityMetersPerSecond) == 0.0
                 && glm::length(state.velocityMetersPerSecond) < 0.05
             ? FlightMode::Hovering
@@ -118,6 +121,7 @@ CommandResult DroneModel::Apply(
             return CommandResult::InvalidValue;
         }
         control.waypointMeters = command.vector;
+        // 목표 방향을 따로 주지 않으면 현재 위치에서 경유점까지의 방위로 기수를 돌린다.
         const double offsetX = command.vector.x - state.positionMeters.x;
         const double offsetY = command.vector.y - state.positionMeters.y;
         if (command.targetYawRadians)
@@ -175,6 +179,7 @@ CommandResult DroneModel::Apply(
 
 double DroneModel::YawRadians(const DroneState& state) noexcept
 {
+    // 자세 쿼터니언에서 수직축 기준 회전각만 뽑아 게임패드 좌표 변환에 쓴다.
     const glm::dquat& orientation = state.orientation;
     return std::atan2(
         2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),

@@ -13,6 +13,7 @@ namespace aerosimlab::communication
 {
 namespace
 {
+// IPv4 UDP 데이터그램 하나가 담을 수 있는 최대 사용자 데이터 크기다.
 constexpr std::size_t maximumDatagramBytes = 65507U;
 
 class WinsockSession
@@ -20,11 +21,13 @@ class WinsockSession
 public:
     WinsockSession()
     {
+        // 프로세스에서 Winsock을 먼저 초기화해야 소켓을 만들 수 있다.
         WSADATA data{};
         if (WSAStartup(MAKEWORD(2, 2), &data) != 0)
             throw std::runtime_error("UDP 통신을 시작하지 못했습니다.");
     }
 
+    // Impl의 멤버 순서상 UDP 소켓이 닫힌 다음 Winsock을 종료한다.
     ~WinsockSession() { WSACleanup(); }
     WinsockSession(const WinsockSession&) = delete;
     WinsockSession& operator=(const WinsockSession&) = delete;
@@ -60,6 +63,7 @@ class DroneSocket::Impl
 public:
     Impl()
     {
+        // 각 드론은 독립된 IPv4 UDP 소켓을 가진다.
         const SOCKET created = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (created == INVALID_SOCKET)
             throw std::runtime_error(SocketError("드론 UDP 소켓 생성", WSAGetLastError()));
@@ -67,12 +71,15 @@ public:
 
         sockaddr_in address{};
         address.sin_family = AF_INET;
+        // 같은 PC 안에서만 주고받도록 루프백 주소에 바인딩한다.
         address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        // 포트 0은 사용 가능한 포트를 운영체제가 선택하게 한다.
         address.sin_port = 0;
         if (::bind(socket_.Get(), reinterpret_cast<const sockaddr*>(&address),
                 sizeof(address)) == SOCKET_ERROR)
             throw std::runtime_error(SocketError("드론 UDP 포트 연결", WSAGetLastError()));
 
+        // 수신을 기다리며 시뮬레이션 Tick이 멈추지 않도록 논블로킹으로 설정한다.
         u_long nonBlocking = 1;
         if (ioctlsocket(socket_.Get(), FIONBIO, &nonBlocking) == SOCKET_ERROR)
             throw std::runtime_error(SocketError("드론 UDP 비동기 설정", WSAGetLastError()));
@@ -106,6 +113,7 @@ void DroneSocket::SendTo(SocketPort destinationPort, std::string_view payload) c
 
     sockaddr_in destination{};
     destination.sin_family = AF_INET;
+    // 가상 거리·가림 검사를 통과한 데이터만 로컬 UDP 포트로 보낸다.
     destination.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     destination.sin_port = htons(destinationPort);
     const int sent = sendto(impl_->socket_.Get(), payload.data(),
@@ -117,6 +125,7 @@ void DroneSocket::SendTo(SocketPort destinationPort, std::string_view payload) c
 
 std::optional<ReceivedDatagram> DroneSocket::Receive()
 {
+    // 허용 크기보다 한 바이트 크게 받아 초과 데이터그램을 식별한다.
     std::array<char, maximumDatagramBytes + 1U> buffer{};
     sockaddr_in source{};
     int sourceLength = sizeof(source);
@@ -126,6 +135,7 @@ std::optional<ReceivedDatagram> DroneSocket::Receive()
     if (received == SOCKET_ERROR)
     {
         const int error = WSAGetLastError();
+        // 아직 데이터가 없거나 일시적인 네트워크 오류면 다음 Tick에 다시 확인한다.
         if (error == WSAEWOULDBLOCK || error == WSAEINTR || error == WSAECONNRESET)
             return std::nullopt;
         if (error != WSAEMSGSIZE)

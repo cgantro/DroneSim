@@ -15,6 +15,7 @@ namespace
 std::vector<glm::dvec2> LocalOffsets(
     std::size_t droneCount, double spacingMeters)
 {
+    // 첫 드론은 리더 위치에 두고 나머지는 뒤쪽 좌우에 번갈아 놓는다.
     std::vector<glm::dvec2> offsets;
     offsets.reserve(droneCount);
     offsets.emplace_back(0.0, 0.0);
@@ -38,6 +39,7 @@ double RequiredClearance(
     std::size_t droneCount, double spacingMeters,
     double droneRadiusMeters, double safetyMarginMeters)
 {
+    // 편대의 가장 바깥 드론까지 거리와 기체 반경·안전 여유를 합친다.
     const auto offsets = LocalOffsets(droneCount, spacingMeters);
     double formationRadiusMeters = 0.0;
     for (const glm::dvec2& offset : offsets)
@@ -55,6 +57,7 @@ std::vector<glm::dvec2> FormationOffsets(
 
     const std::vector<glm::dvec2> local =
         LocalOffsets(droneCount, spacingMeters);
+    // 로컬 앞·옆 축의 간격을 월드 진행 방향에 맞춰 회전한다.
     const glm::dvec2 forward{std::cos(headingRadians), std::sin(headingRadians)};
     const glm::dvec2 right{forward.y, -forward.x};
     std::vector<glm::dvec2> worldOffsets;
@@ -83,6 +86,7 @@ std::optional<FormationRoutePlan> PlanFormationRoute(
     // 편대 전체가 통과할 여유를 확보하지 못하면 대형을 바꾸지 않고 실패한다.
     const double clearance = RequiredClearance(droneCount,
         spacingMeters, droneRadiusMeters, safetyMarginMeters);
+    // 편대가 통째로 지나갈 폭을 경로 탐색에 요구한다.
     const auto route = PlanRoute(terrain, obstacles,
         leaderStartMeters, destinationMeters, clearance,
         minimumTransitAltitudeMeters);

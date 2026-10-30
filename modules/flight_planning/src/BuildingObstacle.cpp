@@ -10,6 +10,7 @@ namespace
 bool ContainsPoint(const std::vector<glm::dvec2>& outline,
     const glm::dvec2& point) noexcept
 {
+    // 다각형 변을 가로지르는 횟수의 홀짝으로 점이 내부인지 판정한다.
     bool inside = false;
     for (std::size_t first = 0, previous = outline.size() - 1U;
          first < outline.size(); previous = first++)
@@ -28,6 +29,7 @@ bool ContainsPoint(const std::vector<glm::dvec2>& outline,
 bool ContainsBuildingVolume(
     const BuildingObstacle& building, const glm::dvec3& positionMeters) noexcept
 {
+    // 높이와 평면 외곽선을 모두 만족해야 건물 충돌 부피 안으로 본다.
     if (building.outlineMeters.size() < 3U
         || !std::isfinite(positionMeters.x) || !std::isfinite(positionMeters.y)
         || !std::isfinite(positionMeters.z))

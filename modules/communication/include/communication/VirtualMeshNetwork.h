@@ -1,6 +1,6 @@
 #pragma once
 
-#include "communication/DroneSocket.h"
+#include "communication/DroneSocketTransport.h"
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -15,16 +15,7 @@
 
 namespace aerosimlab::communication
 {
-using NetworkNodeId = std::uint64_t;
-
-/** @brief 드론과 그 드론이 실제로 열어 둔 통신 포트다. */
-struct DroneEndpoint
-{
-    NetworkNodeId node = 0;
-    SocketPort port = 0;
-};
-
-/** @brief 통신망에 등록할 드론의 위치다. 소켓은 통신망이 소유한다. */
+/** @brief 통신망에 등록할 드론의 위치다. */
 struct NetworkNodeSnapshot
 {
     NetworkNodeId id = 0;
@@ -50,8 +41,6 @@ struct VirtualMeshMessage
     std::uint64_t id = 0;
     NetworkNodeId source = 0;
     NetworkNodeId destination = 0;
-    SocketPort sourcePort = 0;
-    SocketPort destinationPort = 0;
     std::uint32_t sequence = 0;
     std::string kind;
     std::string payload;
@@ -89,13 +78,14 @@ struct MeshEvent
 
 /**
  * @brief 거리, 건물 가림, 장애 주입을 반영해 노드 사이 직접 전송만 처리한다.
- * @details 메시지는 중간 노드를 거치지 않는다. 신뢰성이 필요한 명령의 재전송은
- *          통신망이 아닌 임무 계층에서 맡는다.
+ * @details 소켓 생성과 데이터그램 송수신은 전달받은 전송 계층에 맡긴다.
+ *          메시지는 중간 노드를 거치지 않으며, 재전송은 임무 계층에서 맡는다.
  */
 class VirtualMeshNetwork
 {
 public:
-    explicit VirtualMeshNetwork(VirtualMeshSettings settings = {});
+    explicit VirtualMeshNetwork(DroneSocketTransport& transport,
+        VirtualMeshSettings settings = {});
 
     /** @brief 매 Tick 노드 위치와 전파를 가리는 장애물을 갱신한다. */
     void UpdateNodes(std::span<const NetworkNodeSnapshot> nodes,
@@ -104,12 +94,9 @@ public:
     /** @brief 한 노드의 송수신을 끊거나 복구한다. */
     void SetNodeRadioEnabled(NetworkNodeId node, bool enabled);
     [[nodiscard]] bool IsNodeRadioEnabled(NetworkNodeId node) const noexcept;
-    [[nodiscard]] std::optional<SocketPort> PortFor(
-        NetworkNodeId node) const noexcept;
-
     /** @brief 직접 연결이 가능한 메시지를 보내고 메시지 ID를 돌려준다. */
     [[nodiscard]] std::optional<std::uint64_t> Send(
-        DroneEndpoint source, DroneEndpoint destination,
+        NetworkNodeId source, NetworkNodeId destination,
         std::uint32_t sequence, std::string kind, std::string payload);
 
     /** @brief 모의 시간을 진행하고 도착한 메시지를 처리한다. */
@@ -148,13 +135,13 @@ private:
         const glm::dvec3& receiverPositionMeters) const;
     [[nodiscard]] bool HasLineOfSight(
         const glm::dvec3& start, const glm::dvec3& end) const;
-    void ReceiveDatagrams();
+    void ReceiveMessages();
     void RecordEvent(MeshEventKind kind, NetworkNodeId source,
         NetworkNodeId destination, std::string detail);
 
+    DroneSocketTransport& transport_;
     VirtualMeshSettings settings_;
     std::map<NetworkNodeId, NetworkNodeSnapshot> nodes_;
-    std::map<NetworkNodeId, DroneSocket> sockets_;
     std::vector<RadioObstacle> obstacles_;
     std::set<NetworkNodeId> radioDisabledNodes_;
     std::map<std::uint64_t, PendingMessage> pendingMessages_;

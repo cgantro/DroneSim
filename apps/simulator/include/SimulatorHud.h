@@ -1,6 +1,7 @@
 #pragma once
 
 #include "communication/VirtualMeshNetwork.h"
+#include "communication/DroneSocketTransport.h"
 #include "SimulationBenchmark.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
@@ -51,6 +52,7 @@ public:
         bool completeFleetMissionCanStart,
         const std::function<void()>& startCompleteFleetMission,
         const communication::VirtualMeshNetwork* formationNetwork,
+        const communication::DroneSocketTransport* socketTransport,
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
         const std::function<std::uint32_t(int, int)>& renderScene,

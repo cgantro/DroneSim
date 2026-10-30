@@ -13,6 +13,7 @@
 
 namespace aerosimlab::terrain
 {
+// 절차적으로 만든 훈련장이 문서에 정한 크기와 높이 변화를 갖는지 확인한다.
 void Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief()
 {
     const TerrainGrid terrain = CreateTrainingRangeTerrain();
@@ -26,6 +27,7 @@ void Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief()
     EXPECT_GT(*std::max_element(terrain.heightOffsetsMeters.begin(),
         terrain.heightOffsetsMeters.end()), 30.0F);
 }
+// 격자 중심과 경계 좌표가 올바르고 표본 사이 높이를 보간하는지 확인한다.
 void Verify_TerrainGridBoundsAndInterpolatesHeight()
 {
     TerrainGrid terrain;
@@ -44,6 +46,7 @@ void Verify_TerrainGridBoundsAndInterpolatesHeight()
     EXPECT_FLOAT_EQ(terrain.HeightAtLocalMeters({0.0, 0.0}), 120.0F);
 }
 
+// 소수점 고도를 기준 높이와 분리해 저장하고 다시 읽어도 보존되는지 확인한다.
 void Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips()
 {
     const auto sourcePath = std::filesystem::temp_directory_path()
@@ -81,6 +84,7 @@ void Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips()
     std::filesystem::remove(convertedPath, ignored);
 }
 
+// 표본 수가 머리 정보보다 적은 파일은 유효한 지형으로 받아들이지 않는다.
 void Verify_AsciiGridRejectsMissingHeightSamples()
 {
     const auto path = std::filesystem::temp_directory_path()

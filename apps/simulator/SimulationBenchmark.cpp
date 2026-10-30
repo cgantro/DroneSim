@@ -20,6 +20,7 @@ namespace aerosimlab::simulator
 using detail::ReadProcessMemorySample;
 namespace
 {
+// 정렬된 표본에서 가장 가까운 상위 순위 값을 고른다.
 double Percentile(const std::vector<double>& sortedDurations, double fraction)
 {
     if (sortedDurations.empty())
@@ -32,6 +33,7 @@ double Percentile(const std::vector<double>& sortedDurations, double fraction)
 
 nlohmann::json SummarizeDurations(std::vector<double> durations)
 {
+    // 복사한 표본을 정렬해 중앙값 주변과 긴 지연 꼬리를 함께 요약한다.
     std::sort(durations.begin(), durations.end());
     return {
         {"p50", Percentile(durations, 0.50)},
@@ -50,6 +52,7 @@ std::filesystem::path DefaultBenchmarkOutputPath()
     }
 
 #ifdef _WIN32
+    // 실행 옵션이 없으면 실행 파일 옆에 최신 결과 하나를 덮어쓴다.
     return detail::ExecutableDirectory() / L"benchmark-latest.json";
 #else
     return std::filesystem::current_path() / "benchmark-latest.json";
@@ -60,6 +63,7 @@ std::filesystem::path DefaultBenchmarkOutputPath()
 
 nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measurements)
 {
+    // 60Hz 한 주기보다 오래 걸린 물리 Tick을 놓친 주기로 센다.
     const std::size_t deadlineMisses = static_cast<std::size_t>(std::count_if(
         measurements.tickDurationsMicroseconds.begin(),
         measurements.tickDurationsMicroseconds.end(), [](double duration)
@@ -131,6 +135,7 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
 void SaveViewerBenchmarkReport(
     const nlohmann::json& report, const std::filesystem::path& outputPath)
 {
+    // 지정 경로가 없으면 기본 위치를 쓰고, 결과 파일은 UTF-8 JSON 한 개로 갱신한다.
     const std::string output = report.dump(2) + '\n';
     const std::filesystem::path destination = outputPath.empty()
         ? DefaultBenchmarkOutputPath()

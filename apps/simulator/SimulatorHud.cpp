@@ -211,6 +211,7 @@ void DrawFlightStatusPanel(
     bool completeFleetMissionCanStart,
     const std::function<void()>& startCompleteFleetMission,
     const communication::VirtualMeshNetwork* formationNetwork,
+    const communication::DroneSocketTransport* socketTransport,
     int& selectedFaultSource,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled)
@@ -261,7 +262,8 @@ void DrawFlightStatusPanel(
                 const bool isLeader = droneId == leaderId;
                 const bool linked = isLeader
                     || formationNetwork->HasDirectLink(droneId, leaderId);
-                const auto port = formationNetwork->PortFor(droneId);
+                const auto port = socketTransport != nullptr
+                    ? socketTransport->PortFor(droneId) : std::nullopt;
                 ImGui::Text("소켓 포트: %u · 편대 연결: %s",
                     port ? static_cast<unsigned int>(*port) : 0U,
                     isLeader ? "리더" : (radioEnabled && linked ? "연결됨" : "끊김"));
@@ -403,6 +405,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     bool completeFleetMissionCanStart,
     const std::function<void()>& startCompleteFleetMission,
     const communication::VirtualMeshNetwork* formationNetwork,
+    const communication::DroneSocketTransport* socketTransport,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
     const std::function<std::uint32_t(int, int)>& renderScene,
@@ -427,7 +430,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         fleetReturnCanStart, startFleetReturn,
         completeFleetMissionStatus, completeFleetMissionCanStart,
         startCompleteFleetMission,
-        formationNetwork, selectedFaultSource_, setFormationNodeRadioEnabled);
+        formationNetwork, socketTransport, selectedFaultSource_,
+        setFormationNodeRadioEnabled);
 
     if (timings != nullptr)
     {
