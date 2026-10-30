@@ -7,6 +7,8 @@
 #include <array>
 #include <stdexcept>
 
+#include <glm/geometric.hpp>
+
 namespace aerosimlab::simulation
 {
 namespace
@@ -24,6 +26,26 @@ void VerifyTakeoffAndCameraAdvanceTogether()
     EXPECT_GT(simulation.State(drone).positionMeters.z, 1.0);
     EXPECT_EQ(simulation.Camera(drone).status, CameraStatus::Active);
     EXPECT_EQ(simulation.Camera(drone).frameCount, 360U);
+}
+
+void VerifyLongHoverKeepsTheRigidBodyStable()
+{
+    SimulationCore simulation;
+    const DroneId drone = simulation.PrimaryDroneId();
+    ASSERT_EQ(simulation.Apply({DroneCommand::Kind::TakeOff}), CommandResult::Accepted);
+
+    for (int tick = 0; tick < 360; ++tick)
+        simulation.AdvanceOneTick();
+    ASSERT_EQ(simulation.State(drone).mode, FlightMode::Hovering);
+
+    for (int tick = 0; tick < 3600; ++tick)
+        simulation.AdvanceOneTick();
+
+    const DroneState& state = simulation.State(drone);
+    EXPECT_EQ(state.mode, FlightMode::Hovering);
+    EXPECT_NEAR(state.positionMeters.z, DroneModel::takeoffHeightMeters, 0.2);
+    EXPECT_LT(glm::length(state.velocityMetersPerSecond), 0.2);
+    EXPECT_LT(glm::length(state.angularVelocityRadiansPerSecond), 0.2);
 }
 
 void VerifyWaypointCommandMovesTheRigidBody()
@@ -128,6 +150,7 @@ void VerifyFourDronesTakeOffMoveAndLandIndependently()
 TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(VerifyTakeoffAndCameraAdvanceTogether());
+    EXPECT_NO_FATAL_FAILURE(VerifyLongHoverKeepsTheRigidBodyStable());
     EXPECT_NO_FATAL_FAILURE(VerifyWaypointCommandMovesTheRigidBody());
     EXPECT_NO_FATAL_FAILURE(VerifyDroneAndPhysicsBodyAreRemovedTogether());
     EXPECT_NO_FATAL_FAILURE(VerifyBatteryUsesThePostPhysicsFlightState());

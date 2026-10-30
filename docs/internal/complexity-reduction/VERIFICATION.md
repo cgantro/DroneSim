@@ -569,3 +569,9 @@
 - 통합: `Simulator.SimulatorSessionTests.*` 4/4 및 `HeadlessFourDroneSurveySmoke` 1/1 통과.
 - 화면 시작: `ViewerSmoke` 1/1 통과. 화면에서 차량과 드론의 상대 크기는 직접 확인하지 않았다.
 - 지도 GLB의 기준 범위는 바닥판 약 16.6 × 49.8m, X500 표시 모델은 약 0.41 × 0.30 × 0.64m다. 지도 속 어떤 작은 메시가 차량인지는 자산에 이름 정보가 없어 확인하지 못했다.
+
+## 2026-10-30 네이티브 60초 호버 시험
+
+- `aerosimlab_simulation_tests` Release 빌드 성공.
+- `Simulation.SimulationCoreTests.CoreScenarios` 통과. 6초 이륙 후 추가 60초 동안 Hovering을 유지했고, 마지막 위치는 목표 고도에서 0.2m 이내, 속도 크기는 0.2m/s 미만, 각속도 크기는 0.2rad/s 미만이었다.
+- 이 시험은 현재 Jolt 기반 제어 경로의 안정성 확인이다. PX4 참조 로그와의 정확도 비교는 포함하지 않는다.
