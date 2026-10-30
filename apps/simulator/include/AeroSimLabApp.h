@@ -145,6 +145,7 @@ private:
     void LoadSceneModels();
     void LoadTerrain();
     void LoadMapFeatures();
+    void LoadReconTargets();
     void InitializeStartingState();
     void ConfigureTrainingBattery(aerosimlab::simulation::DroneId droneId);
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
@@ -333,7 +334,6 @@ private:
     std::unique_ptr<aerosimlab::graphics::Camera> observerCamera_;
     std::unique_ptr<aerosimlab::graphics::Camera> eoCamera_;
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
-    std::unique_ptr<aerosimlab::graphics::Mesh> terrainMesh_;
     std::unique_ptr<TrainingRangeScene> trainingRangeScene_;
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneModel_;
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneCameraModel_;
@@ -435,8 +435,6 @@ private:
     std::unique_ptr<aerosimlab::graphics::Shader> shader_;
     aerosimlab::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};
-    aerosimlab::graphics::Material groundMaterial_{
-        glm::vec4{0.25F, 0.40F, 0.25F, 1.0F}, 0.0F, 0.92F};
     aerosimlab::graphics::Material missionRouteMaterial_{
         glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
     std::mt19937 windGenerator_{0x44524F4EU};

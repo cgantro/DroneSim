@@ -557,7 +557,7 @@ bool AeroSimLabApp::StartFleetRally()
         centerMeters += completeFleetMission_.homePositionsMeters.at(droneId);
     centerMeters /= static_cast<double>(droneIds.size());
     centerMeters.z += 12.0;
-    const auto offsets = FormationOffsets(rallyDroneIds.size(), 8.0, 0.0);
+    const auto offsets = FormationOffsets(rallyDroneIds.size(), 3.0, 0.0);
 
     std::vector<std::vector<glm::dvec3>> rallyRoutes;
     rallyRoutes.reserve(rallyDroneIds.size());
@@ -1002,7 +1002,7 @@ bool AeroSimLabApp::StartFormationTransit()
     const glm::dvec3 destination{stagingPosition, stagingAltitude};
     const auto route = PlanFormationRoute(terrainGrid_, trainingRangeScene_->BuildingObstacles(),
         simulation_.State(droneIds.front()).positionMeters, destination,
-        droneIds.size(), 8.0, 1.5, 2.0,
+        droneIds.size(), 1.5, 0.75, 1.0,
         cameraTransitAltitudeMeters_);
     if (!route)
     {

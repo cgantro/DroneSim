@@ -16,10 +16,18 @@ class Renderer;
 class Shader;
 class Texture2D;
 
+/** @brief GLB 메시 한 조각의 축 정렬 상자다. 좌표는 GLB 장면 기준이다. */
+struct GlbPartBounds
+{
+    glm::vec3 minimum{0.0F};
+    glm::vec3 maximum{0.0F};
+};
+
 /** @brief GLB 장면의 노드 배치와 각 메시의 PBR 재질·이미지를 함께 보관한다. */
 class GlbModel final
 {
 public:
+    /** @brief GLB 장면과 원본 UV에 맞는 재질 이미지를 읽는다. */
     [[nodiscard]] static std::unique_ptr<GlbModel> Load(const std::string& path);
 
     GlbModel(const GlbModel&) = delete;
@@ -46,11 +54,15 @@ public:
     /** @brief 같은 GLB 모델을 여러 변환 위치에 배치해 한 번에 그리도록 준비한다. */
     void SetInstances(std::span<const glm::mat4> modelTransforms);
 
+    /** @brief 장면을 이루는 각 메시의 축 정렬 범위를 반환한다. */
+    [[nodiscard]] std::span<const GlbPartBounds> PartBounds() const noexcept;
+
     [[nodiscard]] std::size_t PartCount() const noexcept;
 
 private:
     GlbModel() = default;
     struct Part;
     std::vector<std::unique_ptr<Part>> parts_;
+    std::vector<GlbPartBounds> partBounds_;
 };
 } // namespace aerosimlab::graphics

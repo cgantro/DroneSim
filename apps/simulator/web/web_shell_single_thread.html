@@ -99,7 +99,7 @@
     </div>
     <header id="app-header">
       <div id="app-brand"><strong>DRONESIM</strong><span>영상 정찰 · 지상통제</span></div>
-      <span id="runtime-badge" data-state="loading" title="네이티브와 웹 모두 AirSim 강체 물리를 사용합니다.">시뮬레이터 준비 중</span>
+      <span id="runtime-badge" data-state="loading" title="네이티브와 웹은 Jolt 물리 엔진을 사용합니다.">시뮬레이터 준비 중</span>
     </header>
     <main id="sim-workspace">
       <section id="scene-panel" class="view-panel" aria-label="드론을 보는 장면">
@@ -203,7 +203,7 @@
         window.clearTimeout(startupTimeout);
         startupStatus.hidden = true;
         var badge = document.getElementById("runtime-badge");
-        badge.textContent = "AirSim 물리 · 실행 중";
+        badge.textContent = "Jolt 물리 · 실행 중";
         badge.dataset.state = "ready";
         document.querySelectorAll("#web-gcs button").forEach(function (button) {
           button.disabled = false;

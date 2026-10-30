@@ -4,6 +4,7 @@
 #include "TrainingRangeScene.h"
 
 #include "simulation_core/SimulationCore.h"
+#include "simulation_core/QuadrotorFlightController.h"
 #include "flight_planning/RoutePlanner.h"
 #include "terrain/TerrainGrid.h"
 
@@ -19,6 +20,7 @@
 #include <array>
 #include <chrono>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <limits>
@@ -43,6 +45,28 @@ public:
         AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
         app.InitializeGraphics();
         ASSERT_EQ(app.simulation_.DroneIds().size(), 4U);
+        ASSERT_FALSE(app.trainingRangeScene_->BuildingObstacles().empty());
+        const glm::dvec2 mapGroundSize =
+            app.trainingRangeScene_->GroundSizeMeters();
+        EXPECT_NEAR(app.terrainGrid_.HalfWidthMeters() * 2.0,
+            mapGroundSize.x, 0.02);
+        EXPECT_NEAR(app.terrainGrid_.HalfDepthMeters() * 2.0,
+            mapGroundSize.y, 0.02);
+        for (const auto droneId : app.simulation_.DroneIds())
+        {
+            const auto& state = app.simulation_.State(droneId);
+            EXPECT_EQ(state.mode, simulation::FlightMode::Grounded);
+            const glm::dvec2 groundPosition{
+                state.positionMeters.x, state.positionMeters.y};
+            EXPECT_TRUE(app.terrainGrid_.ContainsLocalPositionMeters(groundPosition));
+            EXPECT_NEAR(state.positionMeters.z,
+                app.terrainGrid_.HeightAtLocalMeters(groundPosition)
+                    + simulation::QuadrotorFlightController::groundedModelOriginHeightMeters,
+                0.02);
+            EXPECT_NEAR(state.positionMeters.z,
+                simulation::QuadrotorFlightController::groundedModelOriginHeightMeters,
+                0.02);
+        }
         EXPECT_TRUE(app.CompleteFleetMissionCanStart());
 
         app.fleetReconnaissance_[app.simulation_.PrimaryDroneId()].status =
@@ -58,6 +82,45 @@ public:
         const auto lastDrone = app.simulation_.DroneIds().back();
         ASSERT_TRUE(app.simulation_.RemoveDrone(lastDrone));
         EXPECT_FALSE(app.CompleteFleetMissionCanStart());
+    }
+
+    static void VerifyFallingDroneLandsOnLoadedMapBuilding()
+    {
+        AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
+        app.InitializeGraphics();
+
+        const auto& obstacles = app.trainingRangeScene_->BuildingObstacles();
+        const auto building = std::max_element(obstacles.begin(), obstacles.end(),
+            [](const flight_planning::BuildingObstacle& left,
+                const flight_planning::BuildingObstacle& right)
+            {
+                const double leftArea = (left.outlineMeters[2].x
+                    - left.outlineMeters[0].x)
+                    * (left.outlineMeters[2].y - left.outlineMeters[0].y);
+                const double rightArea = (right.outlineMeters[2].x
+                    - right.outlineMeters[0].x)
+                    * (right.outlineMeters[2].y - right.outlineMeters[0].y);
+                const double leftScore = left.heightMeters > 5.0
+                    ? leftArea * left.heightMeters : 0.0;
+                const double rightScore = right.heightMeters > 5.0
+                    ? rightArea * right.heightMeters : 0.0;
+                return leftScore < rightScore;
+            });
+        ASSERT_NE(building, obstacles.end());
+        ASSERT_GT(building->heightMeters, 5.0);
+
+        const glm::dvec2 center = (building->outlineMeters[0]
+            + building->outlineMeters[2]) * 0.5;
+        const double initialHeight = building->heightMeters + 3.0;
+        const auto fallingDrone = app.simulation_.AddDrone(
+            {center, initialHeight}, 0.0, 0.0);
+
+        for (int tick = 0; tick < 180; ++tick)
+            app.simulation_.AdvanceOneTick();
+
+        const auto& landedState = app.simulation_.State(fallingDrone);
+        EXPECT_GT(landedState.positionMeters.z, building->heightMeters);
+        EXPECT_LT(std::abs(landedState.velocityMetersPerSecond.z), 0.5);
     }
 
     static void VerifyReconnaissanceKeepsTheFirstWaypoint()
@@ -819,4 +882,9 @@ TEST(SimulatorSessionTests, ReconnaissanceKeepsTheFirstWaypoint)
 TEST(SimulatorSessionTests, CompleteMissionRequiresFourDrones)
 {
     simulator::AeroSimLabAppTestAccess::VerifyCompleteMissionRequiresFourDrones();
+}
+
+TEST(SimulatorSessionTests, FallingDroneLandsOnLoadedMapBuilding)
+{
+    simulator::AeroSimLabAppTestAccess::VerifyFallingDroneLandsOnLoadedMapBuilding();
 }

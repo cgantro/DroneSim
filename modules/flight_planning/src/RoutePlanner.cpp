@@ -324,11 +324,15 @@ std::optional<std::vector<glm::dvec3>> PlanRoute(
 
     const glm::dvec2 start{startMeters.x, startMeters.y};
     const glm::dvec2 goal{goalMeters.x, goalMeters.y};
+    const double transitAltitude = minimumTransitAltitudeMeters;
     const double clearanceSquared = buildingClearanceMeters * buildingClearanceMeters;
+    const double safeStartAltitude = std::max(
+        transitAltitude,
+        terrain.HeightAtLocalMeters(start) + minimumGroundClearanceMeters);
     std::vector<BuildingObstacle> routeObstacles;
     routeObstacles.reserve(buildings.size());
-    const double transitAltitude = minimumTransitAltitudeMeters;
-    const double minimumRouteAltitude = std::min(startMeters.z, goalMeters.z);
+    // 출발 직후 수직으로 안전 고도까지 오른 뒤 수평 이동하므로, 그 고도보다 낮은 건물은 경로를 막지 않는다.
+    const double minimumRouteAltitude = std::min(safeStartAltitude, goalMeters.z);
     for (const BuildingObstacle& building : buildings)
     {
         const double highestGround = building.groundElevationsMeters.empty()
@@ -339,10 +343,12 @@ std::optional<std::vector<glm::dvec3>> PlanRoute(
         if (minimumRouteAltitude < buildingTop + minimumGroundClearanceMeters)
             routeObstacles.push_back(building);
     }
+    const bool startBlocked = IsBlockedAtAltitude(
+        start, startMeters.z, buildings, clearanceSquared);
+    const bool goalBlocked = IsBlockedAtAltitude(
+        goal, goalMeters.z, buildings, clearanceSquared);
     if (!terrain.ContainsLocalPositionMeters(start)
-        || !terrain.ContainsLocalPositionMeters(goal)
-        || IsBlockedAtAltitude(start, startMeters.z, buildings, clearanceSquared)
-        || IsBlockedAtAltitude(goal, goalMeters.z, buildings, clearanceSquared))
+        || !terrain.ContainsLocalPositionMeters(goal) || startBlocked || goalBlocked)
         return std::nullopt;
 
     if (glm::length(goal - start) < 1.0e-6)
@@ -371,10 +377,6 @@ std::optional<std::vector<glm::dvec3>> PlanRoute(
 
     std::vector<glm::dvec3> route;
     route.reserve(horizontalPath.size() + 1U);
-    const double startGroundAltitude = terrain.HeightAtLocalMeters(start);
-    const double safeStartAltitude = std::max(
-        transitAltitude,
-        startGroundAltitude + minimumGroundClearanceMeters);
     if (startMeters.z + 1.0e-6 < safeStartAltitude)
         route.emplace_back(startMeters.x, startMeters.y, safeStartAltitude);
 

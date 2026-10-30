@@ -36,7 +36,7 @@ struct QuadrotorParameters
     double massKilograms = 2.0643076923076924;
     glm::dvec3 principalInertiaKilogramMetersSquared{
         0.023846692647701416, 0.02394961745804886, 0.043999953714003955};
-    /** @brief AirSim의 동체 공기 저항에 쓰는 중심 기체 크기다. */
+    /** @brief 물리 계산에서 동체의 공기 저항과 크기를 정하는 값이다. */
     glm::dvec3 bodySizeMeters{0.18, 0.11, 0.04};
     std::array<RotorDefinition, rotorCount> rotors{};
     std::array<QuadrotorCollisionBox, 9> collisionBoxes{};

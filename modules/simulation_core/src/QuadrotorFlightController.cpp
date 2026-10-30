@@ -82,7 +82,7 @@ glm::dvec3 AttitudeTorque(
         angleError = vectorPart * (angle / vectorLength);
     }
 
-    // 상태의 각속도는 AirSim에서 기체 축 기준으로 전달되므로 다시 돌리지 않는다.
+    // 물리 엔진이 기체 축으로 돌려준 각속도이므로, 자세 오차와 같은 좌표계에서 바로 쓴다.
     const glm::dvec3& angularVelocityBody = state.angularVelocityRadiansPerSecond;
     const glm::dvec3 angularAcceleration =
         controller.attitudeGain * angleError - controller.angularRateGain * angularVelocityBody;

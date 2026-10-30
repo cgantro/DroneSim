@@ -73,7 +73,9 @@ TerrainCellCoordinates FindTerrainCell(
         throw std::invalid_argument("지형 위치와 격자 자료를 확인해 주세요.");
     }
     if (!terrain.ContainsLocalPositionMeters(positionMeters))
-        throw std::out_of_range("요청한 위치가 지형 격자 범위를 벗어났습니다.");
+        throw std::out_of_range("요청한 위치가 지형 격자 범위를 벗어났습니다: ("
+            + std::to_string(positionMeters.x) + ", "
+            + std::to_string(positionMeters.y) + ") m");
 
     const double column = (positionMeters.x + terrain.HalfWidthMeters())
         / terrain.spacingXMeters;

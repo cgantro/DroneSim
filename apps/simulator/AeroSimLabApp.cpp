@@ -23,7 +23,6 @@
 #include "simulation_core/ScopedDuration.h"
 #include "flight_planning/BuildingObstacle.h"
 #include "terrain/TerrainGrid.h"
-#include "terrain/TrainingRangeTerrain.h"
 #include <glm/geometric.hpp>
 #include <glm/gtc/quaternion.hpp>
 #ifdef __EMSCRIPTEN__
@@ -67,14 +66,12 @@ void SetStartupDetail(std::string_view message)
 
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
-// 기지와 편대 출발 위치를 시험장 남서쪽에 둔다.
-constexpr glm::dvec2 demoDroneStartMeters{-205.0, -155.0};
 // 전력값은 임무 흐름을 시험하기 위한 가정이며 실제 X500 배터리 사양이 아니다.
 constexpr aerosimlab::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
 // GLB 원점은 장착 브래킷이고 렌즈 중심은 그 원점에서 앞·위로 떨어져 있다.
 constexpr glm::vec3 cameraLensCenterInModelMeters{0.015F, 0.048F, 0.030F};
-constexpr double trainingRangeCameraTransitAltitudeMeters = 48.0;
+constexpr double trainingRangeCameraTransitAltitudeMeters = 20.0;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -109,65 +106,6 @@ glm::quat ToRenderOrientation(const glm::dquat& orientation)
     return glm::normalize(
         simulationToRender * simulationOrientation * glm::inverse(simulationToRender));
 }
-std::unique_ptr<aerosimlab::graphics::Mesh> CreateTerrainMesh(
-    const aerosimlab::terrain::TerrainGrid& terrain)
-{
-    const std::uint32_t count = terrain.sampleCount;
-    std::vector<aerosimlab::graphics::Vertex> vertices;
-    std::vector<std::uint32_t> indices;
-    vertices.reserve(static_cast<std::size_t>(count) * count);
-    indices.reserve(static_cast<std::size_t>(count - 1U) * (count - 1U) * 6U);
-
-    for (std::uint32_t row = 0; row < count; ++row)
-    {
-        for (std::uint32_t column = 0; column < count; ++column)
-        {
-            const float east = (static_cast<float>(column) -
-                static_cast<float>(count - 1U) * 0.5F) * terrain.spacingXMeters;
-            // 격자 0행은 북쪽 끝이므로, 지도와 지형의 남북 방향을 맞춘다.
-            const float north = (static_cast<float>(count - 1U) * 0.5F -
-                static_cast<float>(row)) * terrain.spacingYMeters;
-            // 높이 변화량으로 경사를 구해야 지형의 조명이 실제 굴곡을 따라간다.
-            const std::uint32_t westColumn = column > 0U ? column - 1U : column;
-            const std::uint32_t eastColumn = std::min(column + 1U, count - 1U);
-            const std::uint32_t northRow = row > 0U ? row - 1U : row;
-            const std::uint32_t southRow = std::min(row + 1U, count - 1U);
-            const float eastDistance = static_cast<float>(eastColumn - westColumn)
-                * terrain.spacingXMeters;
-            const float southDistance = static_cast<float>(southRow - northRow)
-                * terrain.spacingYMeters;
-            const float eastSlope = (terrain.HeightAt(row, eastColumn)
-                - terrain.HeightAt(row, westColumn)) / eastDistance;
-            const float southSlope = (terrain.HeightAt(southRow, column)
-                - terrain.HeightAt(northRow, column)) / southDistance;
-            const glm::vec3 surfaceNormal = glm::normalize(
-                glm::vec3{-eastSlope, 1.0F, -southSlope});
-            vertices.push_back({
-                {east, terrain.referenceElevationMeters + terrain.HeightAt(row, column), -north},
-                surfaceNormal,
-                {static_cast<float>(column) / static_cast<float>(count - 1U),
-                    static_cast<float>(row) / static_cast<float>(count - 1U)}});
-        }
-    }
-
-    for (std::uint32_t row = 0; row + 1U < count; ++row)
-    {
-        for (std::uint32_t column = 0; column + 1U < count; ++column)
-        {
-            const std::uint32_t northwest = row * count + column;
-            const std::uint32_t northeast = northwest + 1U;
-            const std::uint32_t southwest = northwest + count;
-            const std::uint32_t southeast = southwest + 1U;
-            indices.insert(indices.end(), {northwest, southwest, northeast,
-                northeast, southwest, southeast});
-        }
-    }
-
-    return std::make_unique<aerosimlab::graphics::Mesh>(
-        vertices.data(), static_cast<std::uint32_t>(vertices.size()),
-        indices.data(), static_cast<std::uint32_t>(indices.size()));
-}
-
 }
 
 AeroSimLabApp::AeroSimLabApp(Options options)
@@ -257,13 +195,14 @@ bool AeroSimLabApp::InitializeGraphicsStep()
         InitializeRendererAndCameras();
         return false;
     case 2:
-        EM_ASM({ window.setSimulatorStartupStatus("지형 자료를 읽고 있습니다."); });
+        EM_ASM({ window.setSimulatorStartupStatus("도시 지도와 충돌 형상을 읽고 있습니다."); });
         LoadSceneModels();
-        LoadTerrain();
+        LoadMapFeatures();
         return false;
     case 3:
-        EM_ASM({ window.setSimulatorStartupStatus("시설물 형상을 만들고 있습니다."); });
-        LoadMapFeatures();
+        EM_ASM({ window.setSimulatorStartupStatus("지도 바닥과 물리 지면을 맞추고 있습니다."); });
+        LoadTerrain();
+        LoadReconTargets();
         return false;
     case 4:
         EM_ASM({ window.setSimulatorStartupStatus("비행 시작 위치를 준비하고 있습니다."); });
@@ -320,8 +259,9 @@ void AeroSimLabApp::InitializeShaderAndHud()
 void AeroSimLabApp::LoadScene()
 {
     LoadSceneModels();
-    LoadTerrain();
     LoadMapFeatures();
+    LoadTerrain();
+    LoadReconTargets();
     InitializeStartingState();
 }
 
@@ -338,16 +278,32 @@ void AeroSimLabApp::LoadSceneModels()
 
 void AeroSimLabApp::LoadTerrain()
 {
-    terrainGrid_ = aerosimlab::terrain::CreateTrainingRangeTerrain();
+    if (!trainingRangeScene_)
+        throw std::logic_error("물리 지면을 만들기 전에 도시 바닥을 읽어야 합니다.");
+
+    // GLB 바닥판의 크기와 같은 범위를 경로 계획과 Jolt 충돌에 사용한다.
+    constexpr std::uint32_t sampleCount = 61U;
+    const glm::dvec2 groundSize = trainingRangeScene_->GroundSizeMeters();
+    terrainGrid_.sampleCount = sampleCount;
+    terrainGrid_.spacingXMeters = static_cast<float>(
+        groundSize.x / static_cast<double>(sampleCount - 1U));
+    terrainGrid_.spacingYMeters = static_cast<float>(
+        groundSize.y / static_cast<double>(sampleCount - 1U));
+    terrainGrid_.referenceElevationMeters = 0.0F;
+    terrainGrid_.heightOffsetsMeters.assign(
+        static_cast<std::size_t>(sampleCount) * sampleCount, 0.0F);
     simulation_.SetTerrain(terrainGrid_);
-    terrainMesh_ = CreateTerrainMesh(terrainGrid_);
 }
 void AeroSimLabApp::LoadMapFeatures()
 {
-    SetStartupDetail("훈련장 시설물과 충돌 모양을 준비하고 있습니다.");
+    SetStartupDetail("도시 지도와 충돌 모양을 준비하고 있습니다.");
     trainingRangeScene_ = std::make_unique<TrainingRangeScene>();
-    trainingRangeScene_->Load(AssetPath(""), terrainGrid_, simulation_);
+    trainingRangeScene_->Load(AssetPath(""), simulation_);
     cameraTransitAltitudeMeters_ = trainingRangeCameraTransitAltitudeMeters;
+}
+
+void AeroSimLabApp::LoadReconTargets()
+{
     reconTargets_.clear();
 
     for (const auto& point : trainingRangeScene_->ReconPoints())
@@ -360,6 +316,8 @@ void AeroSimLabApp::InitializeStartingState()
 {
     if (reconTargets_.empty())
         throw std::runtime_error("훈련장 정찰 지점을 준비하지 못했습니다.");
+    const glm::dvec2 demoDroneStartMeters =
+        trainingRangeScene_->FormationStagingPositionMeters();
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
     const glm::dvec2 toFirstTarget = glm::dvec2{
         reconTargets_.front().approachPositionMeters.x,
@@ -381,7 +339,7 @@ void AeroSimLabApp::InitializeStartingState()
     else
     {
         for (const glm::dvec2 offset : std::array<glm::dvec2, 3>{
-                 glm::dvec2{10.0, 0.0}, glm::dvec2{0.0, 10.0}, glm::dvec2{10.0, 10.0}})
+                 glm::dvec2{-2.0, 0.0}, glm::dvec2{2.0, 0.0}, glm::dvec2{0.0, -2.0}})
         {
             const glm::dvec2 position = demoDroneStartMeters + offset;
             const double groundMeters = terrainGrid_.HeightAtLocalMeters(position);
@@ -658,8 +616,8 @@ void AeroSimLabApp::UpdateObserverCamera(int width, int height)
     const glm::vec3 up{0.0F, 1.0F, 0.0F};
     const glm::dvec3 forwardMeters{
         std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0};
-    constexpr double followDistanceMeters = 5.5;
-    constexpr double followHeightMeters = 2.0;
+    constexpr double followDistanceMeters = 12.0;
+    constexpr double followHeightMeters = 3.5;
     glm::dvec3 observerPositionMeters = state.positionMeters
         - forwardMeters * followDistanceMeters
         + glm::dvec3{0.0, 0.0, followHeightMeters};
@@ -725,8 +683,6 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
     std::optional<aerosimlab::simulation::DroneId> hiddenDroneId)
 {
     renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
-    renderer_->Draw(glm::mat4{1.0F}, *terrainMesh_, groundMaterial_, *shader_,
-        view, projection, cameraPosition);
     if (trainingRangeScene_)
         trainingRangeScene_->Draw(*renderer_, *shader_, view, projection, cameraPosition);
 

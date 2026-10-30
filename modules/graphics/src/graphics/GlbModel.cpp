@@ -10,7 +10,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <functional>
@@ -206,6 +205,7 @@ void BuildNormalsIfMissing(std::vector<Vertex>& vertices,
         vertices[index].normal = glm::length(sums[index]) > 1.0e-8F
             ? glm::normalize(sums[index]) : glm::vec3(0.0F, 1.0F, 0.0F);
 }
+
 } // namespace
 
 struct GlbModel::Part
@@ -235,13 +235,14 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
     const Json& roots = scenes.at(sceneIndex).at("nodes");
     auto model = std::unique_ptr<GlbModel>(new GlbModel());
     std::vector<bool> recursionPath(nodes.size(), false);
-
     const auto addPrimitive = [&](const Json& node, const glm::mat4& nodeTransform)
     {
         const std::size_t meshIndex = node.at("mesh").get<std::size_t>();
         const Json& primitives = meshes.at(meshIndex).at("primitives");
-        for (const Json& primitive : primitives)
+        for (std::size_t primitiveIndex = 0;
+            primitiveIndex < primitives.size(); ++primitiveIndex)
         {
+            const Json& primitive = primitives.at(primitiveIndex);
             if (primitive.value("mode", 4U) != 4U)
                 throw std::runtime_error("GLB는 삼각형 메시만 지원합니다.");
             std::vector<Vertex> vertices = glb_detail::ReadVertices(
@@ -251,6 +252,18 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
             if (indices.size() % 3U != 0U)
                 throw std::runtime_error("GLB 삼각형 번호 수가 올바르지 않습니다.");
             BuildNormalsIfMissing(vertices, indices, primitive);
+
+            GlbPartBounds bounds{
+                glm::vec3(std::numeric_limits<float>::max()),
+                glm::vec3(std::numeric_limits<float>::lowest())};
+            for (const Vertex& vertex : vertices)
+            {
+                const glm::vec3 position = glm::vec3(
+                    nodeTransform * glm::vec4(vertex.position, 1.0F));
+                bounds.minimum = glm::min(bounds.minimum, position);
+                bounds.maximum = glm::max(bounds.maximum, position);
+            }
+            model->partBounds_.push_back(bounds);
 
             auto part = std::make_unique<Part>();
             part->mesh = std::make_unique<Mesh>(vertices.data(),
@@ -333,5 +346,10 @@ void GlbModel::SetInstances(std::span<const glm::mat4> modelTransforms)
 std::size_t GlbModel::PartCount() const noexcept
 {
     return parts_.size();
+}
+
+std::span<const GlbPartBounds> GlbModel::PartBounds() const noexcept
+{
+    return partBounds_;
 }
 } // namespace aerosimlab::graphics

@@ -38,13 +38,7 @@ endif()
 aerosimlab_add_common_dependencies()
 aerosimlab_add_ecs_dependencies()
 aerosimlab_add_scenario_dependencies()
-if(EMSCRIPTEN OR BUILD_TESTING)
-  # 웹 구현과 이전 물리 비교 시험에서만 AirSim 코드를 빌드한다.
-  aerosimlab_add_airsim_dependency()
-endif()
-if(NOT EMSCRIPTEN)
-  aerosimlab_add_jolt_dependency()
-endif()
+aerosimlab_add_jolt_dependency()
 
 add_library(aerosimlab_terrain STATIC
   modules/terrain/src/TerrainGrid.cpp
@@ -70,19 +64,11 @@ add_library(aerosimlab_simulation_core STATIC
   modules/simulation_core/src/QuadrotorModel.cpp
   modules/simulation_core/src/QuadrotorFlightController.cpp
 )
-if(EMSCRIPTEN)
-  target_sources(aerosimlab_simulation_core PRIVATE
-    modules/simulation_core/src/PhysicsWorld.cpp
-    modules/simulation_core/src/SimulationPhysicsAirSim.cpp
-  )
-  target_link_libraries(aerosimlab_simulation_core PRIVATE aerosimlab_airsim)
-else()
-  target_sources(aerosimlab_simulation_core PRIVATE
-    modules/simulation_core/src/JoltPhysicsWorld.cpp
-    modules/simulation_core/src/SimulationPhysicsJolt.cpp
-  )
-  target_link_libraries(aerosimlab_simulation_core PRIVATE Jolt::Jolt)
-endif()
+target_sources(aerosimlab_simulation_core PRIVATE
+  modules/simulation_core/src/JoltPhysicsWorld.cpp
+  modules/simulation_core/src/SimulationPhysicsJolt.cpp
+)
+target_link_libraries(aerosimlab_simulation_core PRIVATE Jolt::Jolt)
 target_include_directories(aerosimlab_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(aerosimlab_simulation_core
   PUBLIC glm::glm aerosimlab_terrain
@@ -363,29 +349,8 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   endif()
   set_target_properties(aerosimlab_simulator PROPERTIES OUTPUT_NAME "DroneSim")
 
-  set(training_range_models
-    "models/environment/industrial/building-a.glb"
-    "models/environment/industrial/building-c.glb"
-    "models/environment/industrial/building-f.glb"
-    "models/environment/industrial/building-j.glb"
-    "models/environment/industrial/building-m.glb"
-    "models/environment/industrial/building-q.glb"
-    "models/environment/industrial/building-t.glb"
-    "models/environment/industrial/shipping-container-a.glb"
-    "models/environment/industrial/shipping-container-b.glb"
-    "models/environment/industrial/shipping-container-c.glb"
-    "models/environment/industrial/detail-tank.glb"
-    "models/environment/industrial/detail-tank-large.glb"
-    "models/environment/industrial/chimney-large.glb"
-    "models/environment/industrial/water-tower.glb"
-    "models/environment/industrial/windmill.glb"
-    "models/environment/industrial/Textures/colormap.png"
-    "models/environment/nature/tree_oak.glb"
-    "models/environment/nature/tree_pineTallA_detailed.glb"
-    "models/environment/nature/rock_largeA.glb"
-    "models/environment/nature/rock_largeC.glb"
-    "models/environment/nature/rock_tallB.glb"
-  )
+  # 맵 원본은 자산 배포 조건 때문에 저장소에 넣지 않고 로컬에서 배치한다.
+  set(city_map_asset "maps/ruined_city.glb")
   if(EMSCRIPTEN)
     set_target_properties(aerosimlab_simulator PROPERTIES SUFFIX ".html")
     # Flecs 월드 초기화에 필요한 스택을 확보한다. Emscripten 기본 64KB로는 부족하다.
@@ -398,10 +363,8 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb@models/drones/x500/action-camera.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE@models/drones/x500/LICENSE"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/industrial/LICENSE.txt@models/environment/industrial/LICENSE.txt"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/environment/nature/LICENSE.txt@models/environment/nature/LICENSE.txt"
     )
-    foreach(model IN LISTS training_range_models)
+    foreach(model IN LISTS city_map_asset)
       target_link_options(aerosimlab_simulator PRIVATE
         "--embed-file=${CMAKE_SOURCE_DIR}/assets/${model}@${model}"
       )
@@ -412,10 +375,8 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm"
-      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE"
-      "${CMAKE_SOURCE_DIR}/assets/models/environment/industrial/LICENSE.txt"
-      "${CMAKE_SOURCE_DIR}/assets/models/environment/nature/LICENSE.txt")
-    foreach(model IN LISTS training_range_models)
+      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE")
+    foreach(model IN LISTS city_map_asset)
       list(APPEND simulator_runtime_assets "${CMAKE_SOURCE_DIR}/assets/${model}")
     endforeach()
 
@@ -476,11 +437,8 @@ if(BUILD_TESTING)
   )
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_simulation_tests PRIVATE
-      tests/simulation_core/PhysicsWorldTests.cpp
       tests/simulation_core/JoltPhysicsWorldTests.cpp
-      modules/simulation_core/src/PhysicsWorld.cpp
     )
-    target_link_libraries(aerosimlab_simulation_tests PRIVATE aerosimlab_airsim)
   endif()
   target_link_libraries(aerosimlab_simulation_tests PRIVATE
     aerosimlab_simulation_core

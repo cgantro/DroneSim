@@ -23,46 +23,6 @@ function(aerosimlab_add_ecs_dependencies)
   FetchContent_MakeAvailable(flecs)
 endfunction()
 
-function(aerosimlab_add_airsim_dependency)
-  FetchContent_Declare(
-    Eigen3
-    GIT_REPOSITORY https://eigen.googlesource.com/mirror
-    GIT_TAG 3.4.0
-    GIT_SHALLOW TRUE
-  )
-  FetchContent_GetProperties(Eigen3)
-  if(NOT eigen3_POPULATED)
-    FetchContent_Populate(Eigen3)
-  endif()
-  # 물리에 필요한 것은 Eigen 헤더뿐이므로, Eigen의 문서·시험·설치 규칙은 구성하지 않는다.
-  add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
-  set_target_properties(Eigen3::Eigen PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${eigen3_SOURCE_DIR}"
-  )
-
-  set(_airsim_commit 1ca93f6f77e4e8a39b2b241c1fe2764da4d7dd41)
-  set(_airsim_archive_name "AirSim-${_airsim_commit}.tar.gz")
-  set(_airsim_download_dir "${CMAKE_BINARY_DIR}/_deps/airsim-download")
-  FetchContent_Declare(
-    AirSim
-    URL "https://codeload.github.com/microsoft/AirSim/tar.gz/${_airsim_commit}"
-    URL_HASH SHA256=C7A349C097AA7507AD908C2FBEFF0ABB071D92BCA5032B35B5A00F02576991EB
-    DOWNLOAD_DIR "${_airsim_download_dir}"
-    DOWNLOAD_NAME "${_airsim_archive_name}"
-  )
-  FetchContent_MakeAvailable(AirSim)
-  # 압축 파일은 헤더를 풀고 나면 필요 없으므로 빌드 폴더에 남기지 않는다.
-  file(REMOVE
-    "${_airsim_download_dir}/${_airsim_archive_name}"
-    "${CMAKE_BINARY_DIR}/_deps/airsim-subbuild/airsim-populate-prefix/src/archive.tar")
-
-  add_library(aerosimlab_airsim INTERFACE)
-  target_include_directories(aerosimlab_airsim SYSTEM INTERFACE
-    "${airsim_SOURCE_DIR}/AirLib/include"
-  )
-  target_link_libraries(aerosimlab_airsim INTERFACE Eigen3::Eigen)
-endfunction()
-
 function(aerosimlab_add_jolt_dependency)
   set(USE_ASSERTS OFF CACHE BOOL "Disable Jolt assertions in project builds" FORCE)
   set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "Keep the project's compiler flags" FORCE)
