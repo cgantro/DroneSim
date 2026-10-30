@@ -16,9 +16,6 @@
 #include "graphics/Texture2D.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
-#ifndef __EMSCRIPTEN__
-#include "SimulatorHud.h"
-#endif
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
 #include "flight_planning/BuildingObstacle.h"
@@ -245,7 +242,7 @@ void AeroSimLabApp::InitializeShaderAndHud()
     shader_ = std::make_unique<aerosimlab::graphics::Shader>(
         AssetPath("shaders/Scene.glsl").string());
 #ifndef __EMSCRIPTEN__
-    hud_ = std::make_unique<SimulatorHud>(window_->GetNativeHandle());
+    hud_ = std::make_unique<aerosimlab::gui::SimulatorHud>(window_->GetNativeHandle());
 #endif
 }
 
@@ -521,7 +518,7 @@ void AeroSimLabApp::RenderFrame()
         const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
         const bool formationNetworkActive = formationTransit_.IsActive()
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
-        HudRenderTimings hudTimings;
+        aerosimlab::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
         hud_->Render(simulation_, observerDroneId_, gamepadConnected_,

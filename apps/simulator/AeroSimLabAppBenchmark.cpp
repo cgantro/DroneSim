@@ -23,7 +23,7 @@ void AeroSimLabApp::RecordBenchmarkFrame(double applicationMicroseconds)
     for (std::size_t index = 0;
          index < frameMeasurements_.completedHudGpuTimingCount; ++index)
     {
-        const HudGpuTiming& timing = completedHudGpuTimings_[index];
+        const aerosimlab::gui::HudGpuTiming& timing = completedHudGpuTimings_[index];
         const auto frame = std::find_if(benchmarkMeasurements_.slowFrames.begin(),
             benchmarkMeasurements_.slowFrames.end(), [&timing](const auto& candidate)
             {

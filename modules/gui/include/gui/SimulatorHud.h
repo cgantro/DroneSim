@@ -2,7 +2,6 @@
 
 #include "communication/VirtualMeshNetwork.h"
 #include "communication/DroneSocketTransport.h"
-#include "SimulationBenchmark.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
 
@@ -15,8 +14,17 @@
 
 struct GLFWwindow;
 
-namespace aerosimlab::simulator
+namespace aerosimlab::gui
 {
+namespace communication = ::aerosimlab::communication;
+
+/** @brief 화면 성능 측정에 사용할 GPU 구간 결과다. */
+struct HudGpuTiming
+{
+    std::uint64_t frameIndex = 0;
+    double executionMicroseconds = 0.0;
+};
+
 /** @brief ImGui 프레임을 만들고 그리는 CPU 구간이다. */
 struct HudRenderTimings
 {

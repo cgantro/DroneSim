@@ -1,6 +1,6 @@
 #include "flight_planning/FormationPlanner.h"
 
-#include "terrain/TrainingRangeTerrain.h"
+#include "../terrain/TestTerrain.h"
 
 #include <gtest/gtest.h>
 #include <glm/gtc/constants.hpp>
@@ -27,7 +27,7 @@ TEST(FormationPlannerTests, PlacesFourDronesBehindLeaderAndRotatesWithRoute)
 
 TEST(FormationPlannerTests, RejectsNarrowRouteInsteadOfChangingFormation)
 {
-    const auto openTerrain = terrain::CreateTrainingRangeTerrain();
+    const auto openTerrain = terrain::MakeHillyTerrainForTest();
     const auto openRoute = PlanFormationRoute(openTerrain, {},
         {-205.0, -155.0, 4.0}, {176.0, -148.0, 18.0}, 4U,
         8.0, 1.0, 2.0, 18.0);
@@ -38,7 +38,7 @@ TEST(FormationPlannerTests, RejectsNarrowRouteInsteadOfChangingFormation)
     ASSERT_GE(openRoute->leaderWaypointsMeters.size(), 2U);
     EXPECT_EQ(openRoute->leaderWaypointsMeters.back(), glm::dvec3(176.0, -148.0, 18.0));
 
-    const auto narrowTerrain = terrain::CreateTrainingRangeTerrain();
+    const auto narrowTerrain = terrain::MakeHillyTerrainForTest();
     const double halfWidth = narrowTerrain.HalfWidthMeters();
     const double halfDepth = narrowTerrain.HalfDepthMeters();
     constexpr double corridorHalfWidthMeters = 17.0;

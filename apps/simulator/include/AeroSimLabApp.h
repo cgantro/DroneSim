@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SimulationBenchmark.h"
+#include "gui/SimulatorHud.h"
 #include "FleetTelemetry.h"
 #include "FleetMissionProgress.h"
 #include "communication/VirtualMeshNetwork.h"
@@ -41,7 +42,6 @@ namespace aerosimlab::simulator
 {
 namespace communication = ::aerosimlab::communication;
 
-class SimulatorHud;
 class TrainingRangeScene;
 
 /**
@@ -257,7 +257,7 @@ private:
 #endif
     std::clock_t benchmarkCpuStart_ = 0;
     CurrentFrameMeasurements frameMeasurements_;
-    std::array<HudGpuTiming, 4> completedHudGpuTimings_{};
+    std::array<aerosimlab::gui::HudGpuTiming, 4> completedHudGpuTimings_{};
     ViewerBenchmarkMeasurements benchmarkMeasurements_;
     int framebufferWidth_ = 0;
     int framebufferHeight_ = 0;
@@ -268,7 +268,7 @@ private:
 #endif
     std::unique_ptr<aerosimlab::graphics::Window> window_;
 #ifndef __EMSCRIPTEN__
-    std::unique_ptr<SimulatorHud> hud_;
+    std::unique_ptr<aerosimlab::gui::SimulatorHud> hud_;
 #endif
     std::unique_ptr<aerosimlab::graphics::Renderer> renderer_;
 #ifndef __EMSCRIPTEN__

@@ -1,4 +1,4 @@
-#include "SimulatorHud.h"
+#include "gui/SimulatorHud.h"
 #include "graphics/GlApi.h"
 
 #include <GLFW/glfw3.h>
@@ -17,7 +17,7 @@
 #include <chrono>
 #include <vector>
 
-namespace aerosimlab::simulator
+namespace aerosimlab::gui
 {
 namespace
 {

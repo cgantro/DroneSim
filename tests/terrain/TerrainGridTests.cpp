@@ -1,32 +1,12 @@
 #include "terrain/TerrainGrid.h"
-#include "terrain/TrainingRangeTerrain.h"
 
-#include <algorithm>
 #include <gtest/gtest.h>
 
-#include <array>
-#include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <limits>
-#include <string>
 
 namespace aerosimlab::terrain
 {
-// 절차적으로 만든 훈련장이 문서에 정한 크기와 높이 변화를 갖는지 확인한다.
-void Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief()
-{
-    const TerrainGrid terrain = CreateTrainingRangeTerrain();
-
-    EXPECT_EQ(terrain.sampleCount, 101U);
-    EXPECT_DOUBLE_EQ(terrain.HalfWidthMeters(), 250.0);
-    EXPECT_DOUBLE_EQ(terrain.HalfDepthMeters(), 200.0);
-    EXPECT_EQ(terrain.heightOffsetsMeters.size(), 101U * 101U);
-    EXPECT_NEAR(*std::min_element(terrain.heightOffsetsMeters.begin(),
-        terrain.heightOffsetsMeters.end()), 0.0F, 1.0e-5F);
-    EXPECT_GT(*std::max_element(terrain.heightOffsetsMeters.begin(),
-        terrain.heightOffsetsMeters.end()), 30.0F);
-}
 // 격자 중심과 경계 좌표가 올바르고 표본 사이 높이를 보간하는지 확인한다.
 void Verify_TerrainGridBoundsAndInterpolatesHeight()
 {
@@ -104,8 +84,6 @@ void Verify_AsciiGridRejectsMissingHeightSamples()
 
 TEST(TerrainGridTests, CoreScenarios)
 {
-    EXPECT_NO_FATAL_FAILURE(
-        Verify_TrainingRangeTerrainUsesThePlannedSizeAndHasRelief());
     EXPECT_NO_FATAL_FAILURE(
         Verify_TerrainGridBoundsAndInterpolatesHeight());
     EXPECT_NO_FATAL_FAILURE(Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips());

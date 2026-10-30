@@ -10,13 +10,6 @@
 
 namespace aerosimlab::simulator
 {
-/** @brief GPU에서 끝난 HUD 그리기 시간과 해당 화면 프레임 번호다. */
-struct HudGpuTiming
-{
-    std::uint64_t frameIndex = 0;
-    double executionMicroseconds = 0.0;
-};
-
 /** @brief 화면 성능 기록에 들어갈 한 번의 실행 측정값이다. */
 struct ViewerBenchmarkMeasurements
 {

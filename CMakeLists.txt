@@ -38,7 +38,6 @@ aerosimlab_add_jolt_dependency()
 
 add_library(aerosimlab_terrain STATIC
   modules/terrain/src/TerrainGrid.cpp
-  modules/terrain/src/TrainingRangeTerrain.cpp
 )
 target_include_directories(aerosimlab_terrain PUBLIC modules/terrain/include)
 target_link_libraries(aerosimlab_terrain PUBLIC glm::glm)
@@ -197,6 +196,16 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   endif()
   target_compile_definitions(aerosimlab_graphics PRIVATE GLFW_INCLUDE_NONE)
 
+  if(NOT EMSCRIPTEN)
+    add_library(aerosimlab_gui STATIC modules/gui/src/SimulatorHud.cpp)
+    target_include_directories(aerosimlab_gui PUBLIC modules/gui/include)
+    target_link_libraries(aerosimlab_gui
+      PUBLIC aerosimlab_communication aerosimlab_simulation_core
+      PRIVATE aerosimlab_graphics aerosimlab_imgui glfw
+    )
+    target_compile_definitions(aerosimlab_gui PRIVATE GLFW_INCLUDE_NONE)
+  endif()
+
   add_library(aerosimlab_simulator_app STATIC
     apps/simulator/AeroSimLabApp.cpp
     apps/simulator/AeroSimLabAppLifecycle.cpp
@@ -211,10 +220,12 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
   if(NOT EMSCRIPTEN)
     target_sources(aerosimlab_simulator_app PRIVATE
       apps/simulator/AeroSimLabAppCamera.cpp
-      apps/simulator/SimulatorHud.cpp
     )
   endif()
-  target_include_directories(aerosimlab_simulator_app PUBLIC apps/simulator/include)
+  target_include_directories(aerosimlab_simulator_app PUBLIC
+    apps/simulator/include
+    modules/gui/include
+  )
   set(_aerosimlab_generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
   set(_aerosimlab_build_revision_header
     "${_aerosimlab_generated_dir}/AeroSimLabBuildRevision.h")
@@ -318,8 +329,10 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     nlohmann_json::nlohmann_json
   )
   if(NOT EMSCRIPTEN)
-    target_link_libraries(aerosimlab_simulator_app PRIVATE
-      aerosimlab_imgui glfw)
+    target_link_libraries(aerosimlab_simulator_app PUBLIC
+      aerosimlab_gui
+      PRIVATE glfw
+    )
     target_compile_definitions(aerosimlab_simulator_app PRIVATE GLFW_INCLUDE_NONE)
   endif()
   if(WIN32)

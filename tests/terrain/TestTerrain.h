@@ -1,21 +1,21 @@
-#include "terrain/TrainingRangeTerrain.h"
+#pragma once
+
+#include "terrain/TerrainGrid.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 
 namespace aerosimlab::terrain
 {
-/** @brief 반복 가능한 시험을 위해 언덕과 낮은 능선을 가진 가상 지형을 만든다. */
-TerrainGrid CreateTrainingRangeTerrain()
+/** @brief 경로 탐색 시험에서 지형 높이 변화를 재현하는 테스트 자료다. */
+inline TerrainGrid MakeHillyTerrainForTest()
 {
-    // 101개 표본을 5m × 4m 간격으로 놓아 약 500m × 400m 구역을 만든다.
     constexpr std::uint32_t sampleCount = 101U;
-
     TerrainGrid terrain;
     terrain.sampleCount = sampleCount;
     terrain.spacingXMeters = 5.0F;
     terrain.spacingYMeters = 4.0F;
-    terrain.referenceElevationMeters = 0.0F;
     terrain.heightOffsetsMeters.resize(
         static_cast<std::size_t>(sampleCount) * sampleCount);
 
@@ -27,7 +27,6 @@ TerrainGrid CreateTrainingRangeTerrain()
         {
             const double east = -terrain.HalfWidthMeters()
                 + static_cast<double>(column) * terrain.spacingXMeters;
-            // 두 봉우리와 비스듬한 능선을 겹쳐 평평한 판처럼 보이지 않게 한다.
             const double westHill = 34.0 * std::exp(
                 -std::pow((east + 145.0) / 72.0, 2.0)
                 -std::pow((north - 105.0) / 58.0, 2.0));
@@ -42,16 +41,15 @@ TerrainGrid CreateTrainingRangeTerrain()
 
             terrain.heightOffsetsMeters[
                 static_cast<std::size_t>(row) * sampleCount + column]
-                = static_cast<float>((westHill + eastHill + ridge) * (1.0 - 0.18 * valley));
+                = static_cast<float>((westHill + eastHill + ridge)
+                    * (1.0 - 0.18 * valley));
         }
     }
 
-    // 가장 낮은 점을 0m로 맞춰 음수 지형이 생기지 않게 한다.
     const float lowestHeight = *std::min_element(
         terrain.heightOffsetsMeters.begin(), terrain.heightOffsetsMeters.end());
     for (float& height : terrain.heightOffsetsMeters)
         height -= lowestHeight;
-
     return terrain;
 }
 }
