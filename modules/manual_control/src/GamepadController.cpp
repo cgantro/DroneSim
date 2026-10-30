@@ -1,10 +1,10 @@
-#include "GamepadController.h"
+#include "manual_control/GamepadController.h"
 
 #ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
 #endif
 
-namespace dronesim::simulator
+namespace dronesim::manual_control
 {
 #ifndef __EMSCRIPTEN__
 namespace
@@ -36,7 +36,7 @@ GamepadScan FindGamepad()
     return scan;
 }
 
-manual_control::GamepadAxes ReadAxes(const GLFWgamepadstate& state)
+GamepadAxes ReadAxes(const GLFWgamepadstate& state)
 {
     // GLFW 트리거는 -1부터 시작하므로 0~1로 바꾼 뒤 양쪽 입력 차이를 고도 명령으로 쓴다.
     const auto trigger = [](float value)
@@ -69,12 +69,12 @@ GamepadController::Update GamepadController::Poll(bool missionOwnsInput,
         update.connectionChanged = connected_;
         if (connected_)
         {
-            const auto action = manual_control::ResolveGamepadDisconnectAction(
+            const auto action = ResolveGamepadDisconnectAction(
                 true, missionOwnsInput, flightMode);
-            if (action == manual_control::GamepadDisconnectAction::Land)
+            if (action == GamepadDisconnectAction::Land)
                 update.flightAction = simulation::DroneCommand{
                     simulation::DroneCommand::Kind::Land};
-            else if (action == manual_control::GamepadDisconnectAction::Stop)
+            else if (action == GamepadDisconnectAction::Stop)
                 update.flightAction = simulation::DroneCommand{
                     simulation::DroneCommand::Kind::Stop};
         }
@@ -126,7 +126,7 @@ GamepadController::Update GamepadController::Poll(bool missionOwnsInput,
             update.flightAction = simulation::DroneCommand{
                 simulation::DroneCommand::Kind::Land};
         if (airborne)
-            update.pilotCommand = manual_control::MapAxes(ReadAxes(scan.state), yawRadians);
+            update.pilotCommand = MapAxes(ReadAxes(scan.state), yawRadians);
     }
 
     if (update.connectionChanged)

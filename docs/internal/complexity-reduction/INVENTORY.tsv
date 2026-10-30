@@ -38,8 +38,10 @@ apps/simulator/FleetDroneSpawn.h	644	24	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_
 apps/simulator/FleetMissionProgress.cpp	5456	119	app	REVIEWED	KEEP	535aebeb	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 관련 CTest 7개 통과; 직접 통신 미검증
 apps/simulator/FleetMissionProgress.h	2346	92	app	REVIEWED	KEEP	b8a3bb7f	no	AUDIT_APP.md 파일별 항목	Release 빌드 및 관련 CTest 3개 통과; 직접 통신 별도 검증 필요
 apps/simulator/FleetTelemetry.h	838	33	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/SimulationBenchmark.cpp	9811	204	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
-apps/simulator/SimulationBenchmark.h	5400	129	app	REVIEWED	SIMPLIFY	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도
+modules/performance/src/SimulationBenchmark.cpp			module	REVIEWED	KEEP	33af145b	no	AUDIT_APP.md 파일별 항목	성능 측정 모듈로 이동; Release 전체 빌드 및 CTest 35개 통과
+modules/performance/include/performance/SimulationBenchmark.h			module	REVIEWED	KEEP	33af145b	no	AUDIT_APP.md 파일별 항목	성능 측정 모듈로 이동; Release 전체 빌드 및 CTest 35개 통과
+modules/performance/src/BenchmarkSession.cpp			module	REVIEWED	KEEP	33af145b	no	AUDIT_APP.md 파일별 항목	성능 측정 표본과 보고서 저장 책임을 소유
+modules/manual_control/src/GamepadController.cpp			module	REVIEWED	KEEP	33af145b	no	AUDIT_APP.md 파일별 항목	게임패드 입력 구현을 수동 조종 모듈로 이동
 apps/simulator/SimulatorHud.cpp	55330	1203	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
 apps/simulator/SimulatorHud.h	5387	143	app	REVIEWED	SIMPLIFY	d187de2d	no	AUDIT_APP.md 파일별 항목	Release 전체 빌드 및 편대·앱 CTest 7개 통과; 직접 통신 미검증
 apps/simulator/TrainingRangeScene.cpp	6227	149	app	REVIEWED	KEEP	d6515b6e	no	AUDIT_APP.md 파일별 항목	정적 감사, 실행 시험은 별도

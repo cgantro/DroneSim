@@ -1,4 +1,6 @@
 #include "DroneSimApp.h"
+#include "BuildRevision.h"
+#include "ExecutableDirectory.h"
 
 #include "graphics/Window.h"
 #include "simulation_core/ScopedDuration.h"
@@ -79,7 +81,8 @@ int DroneSimApp::Run()
     {
         while (!window_->ShouldClose()
             && std::chrono::steady_clock::now() - startTime_
-                < std::chrono::duration<double>(BenchmarkSession::warmupSeconds))
+                < std::chrono::duration<double>(
+                    dronesim::performance::BenchmarkSession::warmupSeconds))
         {
             RunFrame(previousFrame);
         }
@@ -111,7 +114,9 @@ int DroneSimApp::Run()
         const double elapsedSeconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - startTime_).count();
         benchmarkSession_.WriteReport(*window_, simulation_, demoMode_,
-            visibleBenchmarkMode_, elapsedSeconds, renderedFrames_);
+            visibleBenchmarkMode_, elapsedSeconds, renderedFrames_,
+            BuildRevision(), detail::ExecutableDirectory()
+                / "benchmark-latest.json");
     }
     return 0;
 #endif

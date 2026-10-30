@@ -5,9 +5,9 @@
 #include <optional>
 #include <string>
 
-namespace dronesim::simulator
+namespace dronesim::manual_control
 {
-/** @brief 게임패드 장치 상태와 입력 가장자리를 앱 실행 흐름에서 분리해 소유한다. */
+/** @brief 게임패드 연결 상태와 버튼 입력 변화를 관리한다. */
 class GamepadController final
 {
 public:
@@ -17,7 +17,7 @@ public:
         bool connectionChanged = false;
         bool externalInputReceived = false;
         std::optional<simulation::DroneCommand> flightAction;
-        std::optional<manual_control::PilotCommand> pilotCommand;
+        std::optional<PilotCommand> pilotCommand;
         std::optional<std::string> windowTitle;
     };
 

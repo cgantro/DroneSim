@@ -44,8 +44,10 @@
 | apps/simulator/FleetMissionProgress.cpp | KEEP | 임무 진행 판정 구현. 현재 로컬 수정본으로 Mission.cpp의 상태 집계와 역할을 비교하고 M01/M02/M03 완료·착륙 조건을 검증해야 한다. |
 | apps/simulator/FleetMissionProgress.h | KEEP | FleetMissionLeg 13, FleetDroneStatus 23, FleetMissionReport 61, FleetMissionProgressDecision 77. 진행 판정 데이터 계약. 현재 로컬 수정본. |
 | apps/simulator/FleetTelemetry.h | SIMPLIFY | PeerTelemetry 13. 동료 상태 데이터 계약. 직접 통신에 필요한 필드 유지, 중계·선출 전용 필드 확인 후 제거. |
-| apps/simulator/SimulationBenchmark.cpp | SIMPLIFY | Percentile 23, SummarizeDurations 50, BuildViewerBenchmarkReport 61. 측정값을 JSON 보고서로 변환. 가변 대수·장애 계측과 앱 계측 의존을 분리해 필요한 검증만 보존. |
-| apps/simulator/SimulationBenchmark.h | SIMPLIFY | ViewerBenchmarkMeasurements를 선언한다. 드론 수 확장 벤치마크의 입력 형식과 함수 선언을 제거하고 화면 측정 결과만 남겼다. |
+| modules/performance/src/SimulationBenchmark.cpp | KEEP | 측정 표본을 JSON 보고서로 만든다. 실행 환경 정보는 앱에서 전달받아 성능 모듈이 앱 내부에 기대지 않도록 분리했다. |
+| modules/performance/include/performance/SimulationBenchmark.h | KEEP | 성능 측정 결과 자료와 보고서 생성 계약을 선언한다. |
+| modules/performance/src/BenchmarkSession.cpp | KEEP | 프레임·Tick 표본을 모으고 성능 보고서를 저장한다. 앱 실행 정보와 결과 경로는 호출부에서 받는다. |
+| modules/manual_control/src/GamepadController.cpp | KEEP | GLFW 게임패드 검색, 버튼 입력, 연결 해제 동작을 수동 조종 모듈에서 처리한다. 앱에는 입력 결과만 전달한다. |
 | apps/simulator/SimulatorHud.cpp | SIMPLIFY | HUD가 사용자 입력을 앱 제어에 연결하고 장면·EO·상태를 그린다. 명령 기록 UI와 카메라 영상 녹화 UI는 모두 제거했다. |
 | apps/simulator/SimulatorHud.h | SIMPLIFY | SessionRecordingControls 47, SimulatorHud 85, PendingGpuQuery 124. UI 입력과 콜백/계측 상태 계약. 구현의 제거 대상과 동기화하고 GPU 쿼리 수명 확인. |
 | apps/simulator/TrainingRangeScene.cpp | KEEP | Load 68은 자산과 지형·simulation을 받아 시설·장애물·정찰 지점을 만들고, Draw 124가 renderer에 전달한다. Obstacles 134, ReconPoints 140으로 임무에 연결. 자산 로드 실패 처리 추가 확인 필요. |
@@ -94,14 +96,14 @@
 
 | 파일 | 현재 역할과 호출 | 책임·중복 판단 |
 |---|---|---|
-| `DroneSimAppBenchmark.cpp` | 앱의 프레임·느린 프레임 표본을 모으고 완료된 HUD GPU 시간과 결합한다. 종료 시 렌더러 정보, Tick·프레임 수와 CPU 시간을 모아 보고서 작성·저장을 호출한다. `DroneSimAppLifecycle.cpp`가 측정 실행 때 호출한다. | 앱의 계측값을 보고서 입력으로 옮기는 역할이다. 화면 그리기와 CPU 구간 측정값을 앱 여러 곳에서 받아 필드가 많지만 실제 보고서에 사용한다. GPU 결과는 프레임 번호로 늦게 도착하므로 별도 결합이 필요하다. 측정 항목을 줄일지는 요구하는 지표와 기존 결과의 용도를 대조해 결정한다. |
-| `BenchmarkProcessMemory.h` | Windows에서 현재 프로세스의 작업 집합과 전용 메모리를 읽고 실패하거나 다른 환경이면 빈 값을 반환한다. `SimulationBenchmark.cpp`만 호출하며 Windows 빌드는 Psapi를 연결한다. | 단일 호출처를 위한 작은 플랫폼 함수다. 측정 항목을 유지하면 유지하고, 파일 수를 줄일 필요가 있으면 보고서 구현에 합칠 수 있다. 다른 플랫폼에서 값이 없다는 점은 현재 코드의 동작이다. |
+| `modules/performance/src/BenchmarkSession.cpp` | 프레임·느린 프레임 표본을 모으고 HUD GPU 측정값과 연결한다. 종료 시 실행 정보와 함께 보고서를 만든다. 앱이 시작 시각·버전·저장 위치를 전달한다. | 성능 측정 모듈이 앱 구현이나 GUI 자료형에 직접 의존하지 않게 옮겼다. |
+| `modules/performance/include/performance/BenchmarkProcessMemory.h` | Windows에서 현재 프로세스의 작업 집합과 전용 메모리를 읽고 다른 환경에서는 값이 없음을 반환한다. 성능 보고서 구현만 호출한다. | 성능 보고서에 필요한 프로세스 메모리 측정으로 유지한다. |
 | `BuildRevision.h` | 소스 버전을 돌려주는 `BuildRevision()`을 선언한다. | 앱 계측 코드가 생성 헤더를 직접 알지 않게 하는 얇은 경계다. 호출은 보고서 작성 한 곳이다. |
 | `BuildRevision.cpp` | CMake가 생성한 헤더의 버전 문자열을 반환한다. | 함수 자체는 단순 전달이다. 두 파일을 없애려면 생성 헤더의 빌드 의존성과 변경 시 재컴파일도 함께 유지해야 한다. 단순히 호출이 한 곳이라는 이유만으로 제거하지 않는다. |
 | `ExecutableDirectory.h` | Windows 실행 파일 경로, Linux `/proc/self/exe`, 웹의 빈 경로를 처리한다. 자산 경로와 Windows 기본 벤치마크 출력 경로가 사용한다. | 두 기능이 같은 실행 파일 위치를 필요로 하므로 공유할 근거가 있다. `DroneSimAppInput.cpp`의 이 헤더 포함은 실제 사용처가 없는 후보이다. 경로 조회 실패는 예외로 알린다. |
 | `main.cpp` | 명령행 옵션을 해석하고 플랫폼별 시작 오류를 표시한 뒤 앱을 생성·실행한다. Windows에서는 유니코드 명령행을 UTF-8로 바꾸고 웹에서는 프레임 루프 동안 앱 수명을 유지한다. CMake가 실행 파일 진입점으로 사용한다. | 실행 진입점의 책임에 맞는다. 옵션 해석과 오류 표시, 플랫폼 진입이 한 파일에 있어 흐름을 읽어야 하지만 별도 클래스는 필요하지 않다. 옵션을 순서대로 처리하므로 `--smoke-test` 뒤에 `--udp-port`를 지정하면 UDP가 다시 활성화된다. 의도한 조합인지 확인이 필요하다. |
-| `SimulationBenchmark.h` | HUD GPU 시간과 한 실행의 화면·Tick·느린 프레임 표본, JSON 결과 생성·저장 계약을 선언한다. 앱 계측과 HUD가 자료형을 사용한다. | 여러 구간의 상세 측정값을 모으는 자료 계약으로 역할에 맞지만 필드 수가 많다. `SummarizeDurations()`는 이 헤더 밖의 호출처가 없어 구현 내부 함수로 좁힐 후보이다. |
-| `SimulationBenchmark.cpp` | 표본을 정렬해 p50·p95·p99·최댓값과 Tick 초과 횟수를 계산하고 JSON으로 저장한다. `DroneSimAppBenchmark.cpp`가 보고서 생성과 저장을 호출한다. | 현재 출력의 `configuration`은 드론 한 대와 예전 SRTM 지형·건물을 고정 문구로 기록해 현재 훈련장·네 대 초기화와 맞지 않는다. 이 문구를 현재 실행 조건으로 바꾸거나 확인되지 않은 세부 내용을 제거해야 한다. 이 보고서 함수 전용 시험은 검색에서 찾지 못했다. |
+| `modules/performance/include/performance/SimulationBenchmark.h` | 한 번의 화면·Tick·느린 프레임 표본과 보고서 생성·저장 계약을 선언한다. | 측정값과 JSON 보고서가 성능 모듈에 모이도록 옮겼다. |
+| `modules/performance/src/SimulationBenchmark.cpp` | 표본을 정렬해 p50·p95·p99·최댓값과 Tick 초과 횟수를 계산하고 JSON으로 저장한다. | 앱 실행 버전과 결과 파일 경로는 호출부에서 받아 앱 내부 구조와의 의존을 끊었다. |
 | `SimulatorHud.h` | HUD 생성·소멸과 화면 렌더 함수, 지상통제 수신 위치, HUD CPU·GPU 계측 자료를 선언한다. 앱이 소유하고 호출한다. | ImGui 수명과 GPU 쿼리 수명을 객체에 묶고 복사를 막는다. `Render()` 인자가 상태·명령 콜백·렌더 콜백·계측을 한 번에 받아 길다. `GroundControlDronePosition::droneId`는 채워지지만 HUD에서 읽히지 않는다. 현재는 앱과 HUD가 같은 `DroneIds()` 순서로 목록을 만들어 인덱스로 연결한다. |
 | `SimulatorHud.cpp` | 도킹 배치, 관찰 드론 선택, 드론별 2열 카메라, 비행·관제 상태, 임무 시작·복귀와 가상 통신 차단·복구를 표시한다. ImGui 초기화·해제와 선택적인 GPU 시간 조회도 맡는다. | 화면 출력과 UI 입력 처리는 HUD 책임에 맞고 생성·소멸에서 ImGui와 GPU 쿼리 자원을 정리한다. 통신 사건의 송신·수신 ID를 모두 `DroneName()`으로 표시하므로 지상통제 노드의 최댓값 ID도 드론 번호로 표시된다. 화면에는 드론별 배터리, 임무 일시정지·중단 조작이 없다. 기존 ViewerSmoke는 이 세부 UI를 확인하지 않는다. |
 | `web/web_shell_single_thread.html` | 웹 페이지의 장면·카메라·상태·조작 UI와 시작 상태, C++ 웹 함수 호출, EO 캔버스 복사를 묶는다. CMake의 Emscripten `--shell-file`이 사용하고 웹 스모크 도구가 시작·카메라 표시·수동 조작과 임무 일부를 확인한다. | 브라우저 의존 작업을 한곳에서 처리한다. HTML·CSS·JS가 함께 있어 길지만 이 파일은 배포 셸이다. EO 캔버스 하나와 주 드론 상태만 제공하며, 네이티브의 드론별 카메라 격자와 다르다. 페이지 안 `#scene-panel canvas`의 150% 너비는 C++이 그린 장면과 카메라 영역을 같은 캔버스에서 분리하는 구조와 함께 검토해야 하므로 단독 삭제 후보로 보지 않는다. |

@@ -1,12 +1,10 @@
-#include "SimulationBenchmark.h"
-#include "ExecutableDirectory.h"
-#include "BenchmarkProcessMemory.h"
+#include "performance/SimulationBenchmark.h"
+#include "performance/BenchmarkProcessMemory.h"
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -15,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace dronesim::simulator
+namespace dronesim::performance
 {
 using detail::ReadProcessMemorySample;
 namespace
@@ -41,22 +39,6 @@ nlohmann::json SummarizeDurations(std::vector<double> durations)
         {"p99", Percentile(durations, 0.99)},
         {"maximum", durations.empty() ? 0.0 : durations.back()},
         {"samples", durations.size()}};
-}
-
-std::filesystem::path DefaultBenchmarkOutputPath()
-{
-    if (const char* outputPath = std::getenv("DRONESIM_BENCHMARK_OUTPUT");
-        outputPath != nullptr && outputPath[0] != '\0')
-    {
-        return std::filesystem::u8path(outputPath);
-    }
-
-#ifdef _WIN32
-    // 실행 옵션이 없으면 실행 파일 옆에 최신 결과 하나를 덮어쓴다.
-    return detail::ExecutableDirectory() / L"benchmark-latest.json";
-#else
-    return std::filesystem::current_path() / "benchmark-latest.json";
-#endif
 }
 
 }
@@ -137,9 +119,7 @@ void SaveViewerBenchmarkReport(
 {
     // 지정 경로가 없으면 기본 위치를 쓰고, 결과 파일은 UTF-8 JSON 한 개로 갱신한다.
     const std::string output = report.dump(2) + '\n';
-    const std::filesystem::path destination = outputPath.empty()
-        ? DefaultBenchmarkOutputPath()
-        : outputPath;
+    const std::filesystem::path& destination = outputPath;
     std::ofstream resultFile(destination, std::ios::binary | std::ios::trunc);
     if (!resultFile)
         throw std::runtime_error("성능 측정 결과 파일을 저장할 수 없습니다.");

@@ -133,6 +133,14 @@ if(DRONESIM_BUILD_GRAPHICS)
   find_package(Git QUIET)
   dronesim_add_graphics_dependencies()
 
+  target_sources(dronesim_manual_control PRIVATE
+    modules/manual_control/src/GamepadController.cpp
+  )
+  if(NOT EMSCRIPTEN)
+    target_link_libraries(dronesim_manual_control PRIVATE glfw)
+    target_compile_definitions(dronesim_manual_control PRIVATE GLFW_INCLUDE_NONE)
+  endif()
+
   if(NOT EMSCRIPTEN)
     add_library(dronesim_glad STATIC third_party/glad/src/glad.c)
     target_include_directories(dronesim_glad PUBLIC third_party/glad/include)
@@ -209,17 +217,27 @@ if(DRONESIM_BUILD_GRAPHICS)
     target_compile_definitions(dronesim_gui PRIVATE GLFW_INCLUDE_NONE)
   endif()
 
+  add_library(dronesim_performance STATIC
+    modules/performance/src/BenchmarkSession.cpp
+    modules/performance/src/SimulationBenchmark.cpp
+  )
+  target_include_directories(dronesim_performance PUBLIC
+    modules/performance/include
+  )
+  target_link_libraries(dronesim_performance PUBLIC
+    dronesim_graphics
+    dronesim_simulation_core
+    nlohmann_json::nlohmann_json
+  )
+
   add_library(dronesim_simulator_app STATIC
     apps/simulator/DroneSimApp.cpp
-    apps/simulator/GamepadController.cpp
     apps/simulator/DroneSimAppLifecycle.cpp
-    apps/simulator/BenchmarkSession.cpp
     apps/simulator/BuildRevision.cpp
     apps/simulator/DroneSimAppGamepad.cpp
     apps/simulator/DroneSimAppMission.cpp
     apps/simulator/FleetMissionProgress.cpp
     apps/simulator/TrainingRangeScene.cpp
-    apps/simulator/SimulationBenchmark.cpp
   )
   target_include_directories(dronesim_simulator_app PUBLIC
     apps/simulator/include
@@ -321,6 +339,7 @@ if(DRONESIM_BUILD_GRAPHICS)
     OBJECT_DEPENDS "${_dronesim_build_revision_header}")
   target_link_libraries(dronesim_simulator_app PUBLIC
     dronesim_graphics
+    dronesim_performance
     dronesim_simulation_core
     dronesim_flight_planning
     dronesim_manual_control

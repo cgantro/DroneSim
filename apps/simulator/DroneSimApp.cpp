@@ -584,8 +584,10 @@ void DroneSimApp::RenderFrame()
         for (std::size_t index = 0;
              index < frame.completedHudGpuTimingCount; ++index)
         {
-            benchmarkSession_.CompletedHudGpuTimings()[index]
-                = hudTimings.completedGpuFrames[index];
+            auto& destination = benchmarkSession_.CompletedHudGpuTimings()[index];
+            const auto& source = hudTimings.completedGpuFrames[index];
+            destination.frameIndex = source.frameIndex;
+            destination.executionMicroseconds = source.executionMicroseconds;
         }
     }
 #endif

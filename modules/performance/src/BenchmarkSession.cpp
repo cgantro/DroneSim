@@ -1,6 +1,5 @@
-#include "BenchmarkSession.h"
+#include "performance/BenchmarkSession.h"
 
-#include "BuildRevision.h"
 #include "graphics/GlApi.h"
 #include "graphics/Window.h"
 #include "simulation_core/SimulationCore.h"
@@ -11,7 +10,7 @@
 #include <ctime>
 #include <utility>
 
-namespace dronesim::simulator
+namespace dronesim::performance
 {
 void BenchmarkSession::ResetMeasurements(
     std::size_t renderedFrames, std::uint64_t simulationTicks)
@@ -83,7 +82,8 @@ void BenchmarkSession::AddPhysicsStep(double durationMicroseconds)
 
 void BenchmarkSession::WriteReport(const graphics::Window& window,
     const simulation::SimulationCore& simulation, bool demoMode,
-    bool visible, double elapsedSeconds, std::size_t renderedFrames) const
+    bool visible, double elapsedSeconds, std::size_t renderedFrames,
+    std::string_view sourceRevision, const std::filesystem::path& outputPath) const
 {
     int framebufferWidth = 0;
     int framebufferHeight = 0;
@@ -95,7 +95,7 @@ void BenchmarkSession::WriteReport(const graphics::Window& window,
     };
 
     ViewerBenchmarkMeasurements report = measurements_;
-    report.sourceRevision = BuildRevision();
+    report.sourceRevision = sourceRevision;
     report.windowVisible = visible;
     report.warmupSeconds = warmupSeconds;
     report.framebufferWidth = framebufferWidth;
@@ -110,6 +110,6 @@ void BenchmarkSession::WriteReport(const graphics::Window& window,
     nlohmann::json output = BuildViewerBenchmarkReport(std::move(report));
     output["drone_count"] = simulation.DroneCount();
     output["demo_mode"] = demoMode;
-    SaveViewerBenchmarkReport(output);
+    SaveViewerBenchmarkReport(output, outputPath);
 }
 }

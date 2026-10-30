@@ -1,10 +1,11 @@
 #pragma once
 
-#include "SimulationBenchmark.h"
-#include "gui/SimulatorHud.h"
+#include "performance/SimulationBenchmark.h"
 
 #include <array>
 #include <ctime>
+#include <filesystem>
+#include <string_view>
 
 namespace dronesim::graphics
 {
@@ -16,12 +17,18 @@ namespace dronesim::simulation
 class SimulationCore;
 }
 
-namespace dronesim::simulator
+namespace dronesim::performance
 {
-/** @brief 화면 성능 측정 자료와 결과 파일 생성을 앱 실행 상태에서 분리해 맡는다. */
+/** @brief 화면·시뮬레이션 성능 표본을 모아 실행 결과를 기록한다. */
 class BenchmarkSession final
 {
 public:
+    struct GpuTiming
+    {
+        std::uint64_t frameIndex = 0;
+        double executionMicroseconds = 0.0;
+    };
+
     struct Frame
     {
         double eventPollingMicroseconds = 0.0;
@@ -45,7 +52,7 @@ public:
     static constexpr double warmupSeconds = 1.0;
 
     Frame& CurrentFrame() noexcept { return frame_; }
-    std::array<gui::HudGpuTiming, 4>& CompletedHudGpuTimings() noexcept
+    std::array<GpuTiming, 4>& CompletedHudGpuTimings() noexcept
     {
         return completedHudGpuTimings_;
     }
@@ -57,11 +64,12 @@ public:
     void AddPhysicsStep(double durationMicroseconds);
     void WriteReport(const graphics::Window& window,
         const simulation::SimulationCore& simulation, bool demoMode,
-        bool visible, double elapsedSeconds, std::size_t renderedFrames) const;
+        bool visible, double elapsedSeconds, std::size_t renderedFrames,
+        std::string_view sourceRevision, const std::filesystem::path& outputPath) const;
 
 private:
     Frame frame_;
-    std::array<gui::HudGpuTiming, 4> completedHudGpuTimings_{};
+    std::array<GpuTiming, 4> completedHudGpuTimings_{};
     ViewerBenchmarkMeasurements measurements_;
     std::size_t startRenderedFrames_ = 0;
     std::uint64_t startSimulationTicks_ = 0;

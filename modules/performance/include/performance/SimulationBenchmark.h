@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace dronesim::simulator
+namespace dronesim::performance
 {
 /** @brief 화면 성능 기록에 들어갈 한 번의 실행 측정값이다. */
 struct ViewerBenchmarkMeasurements
@@ -58,8 +58,8 @@ struct ViewerBenchmarkMeasurements
 /** @brief 화면 성능 측정값을 읽기 쉬운 JSON 결과로 만든다. */
 nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measurements);
 
-/** @brief 성능 결과를 실행 파일 옆에 저장한다. 시험에서는 저장 경로를 따로 지정할 수 있다. */
+/** @brief 성능 결과를 지정한 경로에 JSON으로 저장한다. */
 void SaveViewerBenchmarkReport(
-    const nlohmann::json& report, const std::filesystem::path& outputPath = {});
+    const nlohmann::json& report, const std::filesystem::path& outputPath);
 
 }

@@ -1,8 +1,7 @@
 #pragma once
 
-#include "SimulationBenchmark.h"
-#include "BenchmarkSession.h"
-#include "GamepadController.h"
+#include "performance/BenchmarkSession.h"
+#include "manual_control/GamepadController.h"
 #include "gui/SimulatorHud.h"
 #include "FleetTelemetry.h"
 #include "FleetMissionProgress.h"
@@ -19,7 +18,6 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
-#include <ctime>
 #include <memory>
 #include <map>
 #include <optional>
@@ -207,13 +205,13 @@ private:
     double cameraTransitAltitudeMeters_ = 0.0;
     bool externalControl_ = false;
     bool missionControlOwnsInput_ = false;
-    GamepadController gamepadController_;
+    dronesim::manual_control::GamepadController gamepadController_;
     std::optional<dronesim::simulation::DroneCommand> pendingControllerAction_;
     std::optional<dronesim::manual_control::PilotCommand> pendingPilotCommand_;
     bool benchmarkMode_ = false;
     bool visibleBenchmarkMode_ = false;
     std::size_t renderedFrames_ = 0;
-    BenchmarkSession benchmarkSession_;
+    dronesim::performance::BenchmarkSession benchmarkSession_;
     int framebufferWidth_ = 0;
     int framebufferHeight_ = 0;
     std::chrono::steady_clock::time_point startTime_;

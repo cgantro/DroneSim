@@ -4,11 +4,14 @@
 #include <optional>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
 #include <Psapi.h>
 #endif
 
-namespace dronesim::simulator::detail
+namespace dronesim::performance::detail
 {
 /** @brief Windows 프로세스 메모리 표본이다. */
 struct ProcessMemorySample
