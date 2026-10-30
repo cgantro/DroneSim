@@ -70,6 +70,7 @@ constexpr int windowHeight = 720;
 constexpr aerosimlab::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
 constexpr double trainingRangeCameraTransitAltitudeMeters = 25.0;
+constexpr float glbAssetUpAxisCorrectionRadians = -1.57079632679F;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -752,8 +753,10 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             glm::mat4_cast(ToRenderOrientation(drone.orientation));
         droneModel_->Draw(heading, *renderer_, *shader_, view, projection,
             cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true);
-        // 짐벌 GLB에는 PX4 SDF의 장착 위치와 중립 관절 각도를 반영했다.
-        droneGimbalModel_->Draw(heading, *renderer_, *shader_, view, projection,
+        // PX4 SDF는 Z축을 위로 쓰고 GLB 모델은 Y축을 위로 쓰므로, 기체 자세를 적용하기 전에 축을 맞춘다.
+        const glm::mat4 gimbalAssetTransform = heading * glm::rotate(
+            glm::mat4{1.0F}, glbAssetUpAxisCorrectionRadians, glm::vec3{1.0F, 0.0F, 0.0F});
+        droneGimbalModel_->Draw(gimbalAssetTransform, *renderer_, *shader_, view, projection,
             cameraPosition);
 
     }
