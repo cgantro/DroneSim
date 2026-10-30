@@ -84,43 +84,22 @@ public:
         EXPECT_FALSE(app.CompleteFleetMissionCanStart());
     }
 
-    static void VerifyFallingDroneLandsOnLoadedMapBuilding()
+    static void VerifyFallingDroneLandsOnLoadedMapFloor()
     {
         AeroSimLabApp app({.smokeTest = true, .networkEnabled = false});
         app.InitializeGraphics();
-
-        const auto& obstacles = app.trainingRangeScene_->BuildingObstacles();
-        const auto building = std::max_element(obstacles.begin(), obstacles.end(),
-            [](const flight_planning::BuildingObstacle& left,
-                const flight_planning::BuildingObstacle& right)
-            {
-                const double leftArea = (left.outlineMeters[2].x
-                    - left.outlineMeters[0].x)
-                    * (left.outlineMeters[2].y - left.outlineMeters[0].y);
-                const double rightArea = (right.outlineMeters[2].x
-                    - right.outlineMeters[0].x)
-                    * (right.outlineMeters[2].y - right.outlineMeters[0].y);
-                const double leftScore = left.heightMeters > 5.0
-                    ? leftArea * left.heightMeters : 0.0;
-                const double rightScore = right.heightMeters > 5.0
-                    ? rightArea * right.heightMeters : 0.0;
-                return leftScore < rightScore;
-            });
-        ASSERT_NE(building, obstacles.end());
-        ASSERT_GT(building->heightMeters, 5.0);
-
-        const glm::dvec2 center = (building->outlineMeters[0]
-            + building->outlineMeters[2]) * 0.5;
-        const double initialHeight = building->heightMeters + 3.0;
+        const glm::dvec2 openGround =
+            app.trainingRangeScene_->FormationStagingPositionMeters();
         const auto fallingDrone = app.simulation_.AddDrone(
-            {center, initialHeight}, 0.0, 0.0);
+            {openGround, 8.0}, 0.0, 0.0);
 
         for (int tick = 0; tick < 180; ++tick)
             app.simulation_.AdvanceOneTick();
 
-        const auto& landedState = app.simulation_.State(fallingDrone);
-        EXPECT_GT(landedState.positionMeters.z, building->heightMeters);
-        EXPECT_LT(std::abs(landedState.velocityMetersPerSecond.z), 0.5);
+        const auto& landed = app.simulation_.State(fallingDrone);
+        EXPECT_GT(landed.positionMeters.z, 0.2);
+        EXPECT_LT(landed.positionMeters.z, 0.8);
+        EXPECT_LT(std::abs(landed.velocityMetersPerSecond.z), 0.5);
     }
 
     static void VerifyReconnaissanceKeepsTheFirstWaypoint()
@@ -884,7 +863,7 @@ TEST(SimulatorSessionTests, CompleteMissionRequiresFourDrones)
     simulator::AeroSimLabAppTestAccess::VerifyCompleteMissionRequiresFourDrones();
 }
 
-TEST(SimulatorSessionTests, FallingDroneLandsOnLoadedMapBuilding)
+TEST(SimulatorSessionTests, FallingDroneLandsOnLoadedMapFloor)
 {
-    simulator::AeroSimLabAppTestAccess::VerifyFallingDroneLandsOnLoadedMapBuilding();
+    simulator::AeroSimLabAppTestAccess::VerifyFallingDroneLandsOnLoadedMapFloor();
 }

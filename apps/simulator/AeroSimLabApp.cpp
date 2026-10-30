@@ -71,7 +71,7 @@ constexpr aerosimlab::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
 // GLB 원점은 장착 브래킷이고 렌즈 중심은 그 원점에서 앞·위로 떨어져 있다.
 constexpr glm::vec3 cameraLensCenterInModelMeters{0.015F, 0.048F, 0.030F};
-constexpr double trainingRangeCameraTransitAltitudeMeters = 20.0;
+constexpr double trainingRangeCameraTransitAltitudeMeters = 25.0;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
 {
@@ -309,7 +309,7 @@ void AeroSimLabApp::LoadReconTargets()
     for (const auto& point : trainingRangeScene_->ReconPoints())
     {
         const double groundMeters = terrainGrid_.HeightAtLocalMeters(point.positionMeters);
-        reconTargets_.push_back({point.id, {point.positionMeters, groundMeters + 15.0}});
+        reconTargets_.push_back({point.id, {point.positionMeters, groundMeters + 25.0}});
     }
 }
 void AeroSimLabApp::InitializeStartingState()

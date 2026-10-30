@@ -54,6 +54,7 @@ private:
     glm::vec3 mapOffset_{0.0F};
     glm::mat4 mapTransform_{1.0F};
     glm::dvec2 groundSizeMeters_{0.0};
+    glm::dvec2 stagingPositionMeters_{0.0};
     std::vector<aerosimlab::flight_planning::BuildingObstacle> buildingObstacles_;
     std::vector<ReconPoint> reconPoints_;
 };

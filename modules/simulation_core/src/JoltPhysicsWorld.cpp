@@ -418,6 +418,49 @@ JoltPhysicsWorld::AddStaticBox(const glm::dvec3 &centerMeters,
   return impl_->AddBody(settings, JPH::EActivation::DontActivate, true);
 }
 
+void JoltPhysicsWorld::AddStaticTriangleMesh(
+    std::span<const glm::dvec3> verticesMeters,
+    std::span<const std::uint32_t> triangleIndices) {
+  if (verticesMeters.size() < 3 || triangleIndices.empty() ||
+      triangleIndices.size() % 3 != 0 ||
+      verticesMeters.size() > std::numeric_limits<JPH::uint32>::max()) {
+    throw std::invalid_argument("장면 충돌 메시의 정점과 삼각형 자료를 확인해 주세요.");
+  }
+
+  JPH::VertexList vertices;
+  vertices.reserve(verticesMeters.size());
+  for (const glm::dvec3 &vertex : verticesMeters) {
+    if (!IsFinite(vertex))
+      throw std::invalid_argument("장면 충돌 메시의 정점에 잘못된 값이 있습니다.");
+    const JPH::Vec3 converted = ToJoltVector(vertex);
+    vertices.emplace_back(converted.GetX(), converted.GetY(), converted.GetZ());
+  }
+
+  JPH::IndexedTriangleList triangles;
+  triangles.reserve(triangleIndices.size() / 3);
+  for (std::size_t index = 0; index < triangleIndices.size(); index += 3) {
+    const std::uint32_t first = triangleIndices[index];
+    const std::uint32_t second = triangleIndices[index + 1];
+    const std::uint32_t third = triangleIndices[index + 2];
+    if (first >= vertices.size() || second >= vertices.size() ||
+        third >= vertices.size()) {
+      throw std::invalid_argument("장면 충돌 메시의 삼각형 번호가 정점 범위를 벗어났습니다.");
+    }
+    triangles.emplace_back(first, second, third, 0);
+  }
+
+  JPH::MeshShapeSettings shapeSettings(std::move(vertices), std::move(triangles));
+  auto shapeResult = shapeSettings.Create();
+  if (shapeResult.HasError())
+    throw std::runtime_error(shapeResult.GetError().c_str());
+  const JPH::RefConst<JPH::Shape> shape = shapeResult.Get();
+  const JPH::BodyCreationSettings settings(
+      shape.GetPtr(), JPH::RVec3::sZero(), JPH::Quat::sIdentity(),
+      JPH::EMotionType::Static, nonMovingLayer);
+  static_cast<void>(
+      impl_->AddBody(settings, JPH::EActivation::DontActivate, true));
+}
+
 void JoltPhysicsWorld::SetTerrain(
     const aerosimlab::terrain::TerrainGrid &terrain) {
   const std::size_t expectedSamples =

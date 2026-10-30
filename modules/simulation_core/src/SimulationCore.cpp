@@ -648,6 +648,13 @@ void SimulationCore::AddStaticObstacleBox(
     ecs_->physics->AddStaticObstacleBox(centerMeters, halfExtentsMeters);
 }
 
+void SimulationCore::AddStaticObstacleMesh(
+    std::span<const glm::dvec3> verticesMeters,
+    std::span<const std::uint32_t> triangleIndices)
+{
+    ecs_->physics->AddStaticObstacleMesh(verticesMeters, triangleIndices);
+}
+
 void SimulationCore::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)

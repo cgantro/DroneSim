@@ -6,6 +6,7 @@
 
 #include <array>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace aerosimlab::simulation
@@ -38,6 +39,9 @@ public:
     [[nodiscard]] RigidBodyState State(RigidBodyHandle body) const;
     void AddStaticObstacleBox(
         const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters);
+    void AddStaticObstacleMesh(
+        std::span<const glm::dvec3> verticesMeters,
+        std::span<const std::uint32_t> triangleIndices);
     void AddStaticObstaclePrism(
         const std::vector<glm::dvec2>& outlineMeters,
         double bottomMeters, double topMeters);

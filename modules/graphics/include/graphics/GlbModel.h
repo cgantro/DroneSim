@@ -23,6 +23,14 @@ struct GlbPartBounds
     glm::vec3 maximum{0.0F};
 };
 
+/** @brief 물리 충돌을 만들 때 쓸 메시 정점과 삼각형 연결 정보다. */
+struct GlbCollisionPart
+{
+    std::vector<glm::vec3> vertices;
+    std::vector<std::uint32_t> triangleIndices;
+    glm::mat4 nodeTransform{1.0F};
+};
+
 /** @brief GLB 장면의 노드 배치와 각 메시의 PBR 재질·이미지를 함께 보관한다. */
 class GlbModel final
 {
@@ -57,6 +65,9 @@ public:
     /** @brief 장면을 이루는 각 메시의 축 정렬 범위를 반환한다. */
     [[nodiscard]] std::span<const GlbPartBounds> PartBounds() const noexcept;
 
+    /** @brief 장면의 실제 삼각형을 반환한다. 충돌 모양은 이 자료로 만든다. */
+    [[nodiscard]] std::span<const GlbCollisionPart> CollisionParts() const noexcept;
+
     [[nodiscard]] std::size_t PartCount() const noexcept;
 
 private:
@@ -64,5 +75,6 @@ private:
     struct Part;
     std::vector<std::unique_ptr<Part>> parts_;
     std::vector<GlbPartBounds> partBounds_;
+    std::vector<GlbCollisionPart> collisionParts_;
 };
 } // namespace aerosimlab::graphics

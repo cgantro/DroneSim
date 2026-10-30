@@ -7,6 +7,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/html5.h>
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -27,9 +31,15 @@ namespace
  */
 void SetAnisotropicFilteringIfAvailable()
 {
-#ifndef __EMSCRIPTEN__
     constexpr GLenum textureMaxAnisotropy = 0x84FE;
     constexpr GLenum maxTextureMaxAnisotropy = 0x84FF;
+#ifdef __EMSCRIPTEN__
+    const EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context =
+        emscripten_webgl_get_current_context();
+    if (context == 0 || emscripten_webgl_enable_extension(
+            context, "EXT_texture_filter_anisotropic") != EMSCRIPTEN_RESULT_SUCCESS)
+        return;
+#else
     constexpr char extensionName[] = "GL_EXT_texture_filter_anisotropic";
 
     GLint extensionCount = 0;
@@ -48,12 +58,12 @@ void SetAnisotropicFilteringIfAvailable()
 
     if (!isSupported)
         return;
+#endif
 
     GLfloat maximumAnisotropy = 1.0F;
     glGetFloatv(maxTextureMaxAnisotropy, &maximumAnisotropy);
     glTexParameterf(GL_TEXTURE_2D, textureMaxAnisotropy,
         std::min(maximumAnisotropy, 16.0F));
-#endif
 }
 
 /** @brief RGB 픽셀 자료를 검사하고 OpenGL 텍스처로 올린다. */

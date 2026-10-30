@@ -265,6 +265,14 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
             }
             model->partBounds_.push_back(bounds);
 
+            GlbCollisionPart collisionPart;
+            collisionPart.vertices.reserve(vertices.size());
+            for (const Vertex& vertex : vertices)
+                collisionPart.vertices.push_back(vertex.position);
+            collisionPart.triangleIndices = indices;
+            collisionPart.nodeTransform = nodeTransform;
+            model->collisionParts_.push_back(std::move(collisionPart));
+
             auto part = std::make_unique<Part>();
             part->mesh = std::make_unique<Mesh>(vertices.data(),
                 static_cast<std::uint32_t>(vertices.size()), indices.data(),
@@ -351,5 +359,10 @@ std::size_t GlbModel::PartCount() const noexcept
 std::span<const GlbPartBounds> GlbModel::PartBounds() const noexcept
 {
     return partBounds_;
+}
+
+std::span<const GlbCollisionPart> GlbModel::CollisionParts() const noexcept
+{
+    return collisionParts_;
 }
 } // namespace aerosimlab::graphics

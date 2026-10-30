@@ -93,6 +93,23 @@ TEST(JoltPhysicsWorldTests, TerrainAndBuildingMeshesStopFallingBodies) {
   EXPECT_LT(world.State(approachingBox).positionMeters.x, 3.8);
 }
 
+TEST(JoltPhysicsWorldTests, TriangleMeshFloorStopsFallingBody) {
+  JoltPhysicsWorld world;
+  const std::vector<glm::dvec3> floorVertices{
+      {-5.0, -5.0, 0.0}, {5.0, -5.0, 0.0},
+      {5.0, 5.0, 0.0}, {-5.0, 5.0, 0.0}};
+  const std::vector<std::uint32_t> floorTriangles{0, 1, 2, 0, 2, 3};
+  world.AddStaticTriangleMesh(floorVertices, floorTriangles);
+  const JoltRigidBodyHandle fallingBox = MakeFallingBox(world, 2.0);
+
+  for (int step = 0; step < 180; ++step)
+    world.StepFixed();
+
+  EXPECT_NEAR(world.State(fallingBox).positionMeters.z, 0.25, 0.03);
+  EXPECT_NEAR(world.State(fallingBox).linearVelocityMetersPerSecond.z, 0.0,
+              0.05);
+}
+
 TEST(JoltPhysicsWorldTests, EqualForceProducesMassDependentAcceleration) {
   JoltPhysicsWorld world;
   const JoltRigidBodyHandle lightBox = MakeFallingBox(world, 20.0, 1.0);

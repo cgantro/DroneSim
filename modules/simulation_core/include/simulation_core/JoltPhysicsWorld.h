@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace aerosimlab::terrain {
@@ -65,6 +66,10 @@ public:
   [[nodiscard]] JoltRigidBodyHandle
   AddStaticBox(const glm::dvec3 &centerMeters,
                const glm::dvec3 &halfExtentsMeters);
+
+  /** @brief 정점과 삼각형 번호로 실제 장면 표면의 충돌 모양을 만든다. */
+  void AddStaticTriangleMesh(std::span<const glm::dvec3> verticesMeters,
+                             std::span<const std::uint32_t> triangleIndices);
 
   /** @brief 지형 격자와 같은 표면 높이를 가진 정적 충돌 지형을 만든다. */
   void SetTerrain(const aerosimlab::terrain::TerrainGrid &terrain);

@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace aerosimlab::simulation
@@ -153,6 +154,11 @@ public:
     /** @brief 지도 건물처럼 움직이지 않는 상자 장애물을 추가한다. */
     void AddStaticObstacleBox(
         const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters);
+
+    /** @brief GLB 장면의 삼각형 정점으로 고정 충돌 형상을 등록한다. */
+    void AddStaticObstacleMesh(
+        std::span<const glm::dvec3> verticesMeters,
+        std::span<const std::uint32_t> triangleIndices);
 
     /** @brief 건물 외곽선을 높이로 돌출해 충돌 장애물로 등록한다. */
     void AddStaticObstaclePrism(

@@ -98,6 +98,13 @@ void SimulationPhysics::AddStaticObstacleBox(
         impl_->world.AddStaticBox(centerMeters, glm::dvec3{halfExtentsMeters}));
 }
 
+void SimulationPhysics::AddStaticObstacleMesh(
+    std::span<const glm::dvec3> verticesMeters,
+    std::span<const std::uint32_t> triangleIndices)
+{
+    impl_->world.AddStaticTriangleMesh(verticesMeters, triangleIndices);
+}
+
 void SimulationPhysics::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)
