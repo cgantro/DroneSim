@@ -1,8 +1,0 @@
-드론 외장 카메라 모델
-
-출처: Innerscene, Action Cube - Action Camera
-주소: https://www.innerscene.com/tools/library/3d-parts/action-cube-action-camera-30513e89
-이용 조건: CC0 1.0 공개 도메인 헌정
-파일 형식: GLB, 실물 크기 기준, 재질 이미지 포함
-
-X500 화면 모델의 아래쪽 앞에 부착해 표시합니다. 실제 X500 기체 사양을 나타내는 부품 모델은 아닙니다.

@@ -7,9 +7,9 @@ namespace aerosimlab::simulation
 {
 namespace
 {
-// 카메라 렌즈를 기체 앞쪽 아래에 고정하고 기체 자세를 따라가게 한다.
-constexpr glm::dvec3 cameraMountPositionBodyMeters{0.12, 0.0, -0.10};
-constexpr glm::dvec3 cameraOpticalAxisBody{25.0, 0.0, -2.5};
+// PX4 짐벌의 중립 관절과 센서 원점을 합친 기체 기준 위치다.
+constexpr glm::dvec3 cameraMountPositionBodyMeters{0.10776, 0.0, -0.2259};
+constexpr glm::dvec3 cameraOpticalAxisBody{1.0, 0.0, 0.0};
 }
 
 bool CameraModel::IsValid() const noexcept

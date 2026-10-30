@@ -69,8 +69,6 @@ constexpr int windowHeight = 720;
 // 전력값은 임무 흐름을 시험하기 위한 가정이며 실제 X500 배터리 사양이 아니다.
 constexpr aerosimlab::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
-// GLB 원점은 장착 브래킷이고 렌즈 중심은 그 원점에서 앞·위로 떨어져 있다.
-constexpr glm::vec3 cameraLensCenterInModelMeters{0.015F, 0.048F, 0.030F};
 constexpr double trainingRangeCameraTransitAltitudeMeters = 25.0;
 
 std::filesystem::path AssetPath(std::string_view relativePath)
@@ -270,8 +268,8 @@ void AeroSimLabApp::LoadSceneModels()
     cube_ = aerosimlab::graphics::Mesh::CreateCube(1.0F);
     droneModel_ = aerosimlab::graphics::GlbModel::Load(
         AssetPath("models/drones/x500/visual.glb").string());
-    droneCameraModel_ = aerosimlab::graphics::GlbModel::Load(
-        AssetPath("models/drones/x500/action-camera.glb").string());
+    droneGimbalModel_ = aerosimlab::graphics::GlbModel::Load(
+        AssetPath("models/drones/x500/cgo3-gimbal.glb").string());
     droneSurfaceTexture_ = aerosimlab::graphics::Texture2D::LoadFromFile(
         AssetPath("models/drones/x500/carbon-weave.ppm"));
 }
@@ -754,29 +752,8 @@ void AeroSimLabApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection
             glm::mat4_cast(ToRenderOrientation(drone.orientation));
         droneModel_->Draw(heading, *renderer_, *shader_, view, projection,
             cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true);
-        const auto& cameraState = simulation_.Camera(id);
-        const glm::vec3 cameraForward = glm::normalize(ToRenderDirection(
-            aerosimlab::simulation::EoCameraModel::OpticalAxis(cameraState)));
-        const glm::vec3 cameraUp = glm::normalize(ToRenderDirection(
-            aerosimlab::simulation::EoCameraModel::UpAxis(cameraState)));
-        // 이 GLB의 렌즈는 모델의 -Z 방향을 향한다. 렌즈가 비행 방향을 보도록
-        // 카메라 모델의 뒤쪽(+Z)을 광축의 반대편에 맞춘다.
-        const glm::vec3 cameraBackward = -cameraForward;
-        const glm::vec3 cameraRight = glm::normalize(
-            glm::cross(cameraForward, cameraUp));
-        const glm::vec3 correctedCameraUp = glm::normalize(
-            glm::cross(cameraBackward, cameraRight));
-        glm::mat3 cameraOrientation{1.0F};
-        cameraOrientation[0] = cameraRight;
-        cameraOrientation[1] = correctedCameraUp;
-        cameraOrientation[2] = cameraBackward;
-        constexpr float cameraModelScale = 1.0F;
-        const glm::mat4 cameraMount = glm::translate(glm::mat4{1.0F},
-                ToRenderPosition(cameraState.positionMeters))
-            * glm::mat4_cast(glm::quat_cast(cameraOrientation))
-            * glm::translate(glm::mat4{1.0F}, -cameraLensCenterInModelMeters)
-            * glm::scale(glm::mat4{1.0F}, glm::vec3{cameraModelScale});
-        droneCameraModel_->Draw(cameraMount, *renderer_, *shader_, view, projection,
+        // 짐벌 GLB에는 PX4 SDF의 장착 위치와 중립 관절 각도를 반영했다.
+        droneGimbalModel_->Draw(heading, *renderer_, *shader_, view, projection,
             cameraPosition);
 
     }

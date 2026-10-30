@@ -336,7 +336,7 @@ private:
     std::unique_ptr<aerosimlab::graphics::Mesh> cube_;
     std::unique_ptr<TrainingRangeScene> trainingRangeScene_;
     std::unique_ptr<aerosimlab::graphics::GlbModel> droneModel_;
-    std::unique_ptr<aerosimlab::graphics::GlbModel> droneCameraModel_;
+    std::unique_ptr<aerosimlab::graphics::GlbModel> droneGimbalModel_;
     std::unique_ptr<aerosimlab::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<aerosimlab::simulation::DroneId> fleetDroneIds_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */

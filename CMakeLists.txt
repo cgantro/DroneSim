@@ -360,7 +360,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
       "-sSTACK_SIZE=1mb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb@models/drones/x500/visual.glb"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb@models/drones/x500/action-camera.glb"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/cgo3-gimbal.glb@models/drones/x500/cgo3-gimbal.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE@models/drones/x500/LICENSE"
     )
@@ -373,7 +373,7 @@ if(AEROSIMLAB_BUILD_GRAPHICS)
     set(simulator_runtime_assets
       "${CMAKE_SOURCE_DIR}/assets/shaders/Scene.glsl"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb"
-      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/action-camera.glb"
+      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/cgo3-gimbal.glb"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE")
     foreach(model IN LISTS city_map_asset)

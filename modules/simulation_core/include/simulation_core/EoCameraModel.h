@@ -28,8 +28,9 @@ struct CameraModel
     static constexpr int maximumImageDimensionPixels = 8192;
 
     int imageWidthPixels = 1280;
-    int imageHeightPixels = 960;
-    double verticalFieldOfViewDegrees = 70.0;
+    int imageHeightPixels = 720;
+    // PX4 짐벌 모델의 수평 2 rad 시야각을 16:9 영상의 수직 시야각으로 환산한 값이다.
+    double verticalFieldOfViewDegrees = 82.43943265128681;
 
     /** @brief 영상 크기와 시야각이 사용할 수 있는 값인지 확인한다. */
     [[nodiscard]] bool IsValid() const noexcept;
@@ -37,8 +38,8 @@ struct CameraModel
 
 /**
  * @brief 카메라 동작 상태와 드론에 고정된 위치·자세를 보관한다.
- * @details 위치는 월드 좌표계의 미터 단위다. 카메라 중심은 기체 앞쪽 0.12m, 아래쪽 0.10m에 둔다.
- * 위치와 자세 모두 동체에 고정하며 광축의 아래쪽 기울기도 시뮬레이션 좌표에서 계산한다.
+ * @details 위치는 월드 좌표계의 미터 단위다. PX4 X500 짐벌 SDF의 중립 관절 위치를 따라 렌즈를
+ * 기체 앞쪽 약 0.108m, 아래쪽 약 0.226m에 둔다. 광축은 기체의 앞쪽을 향한다.
  */
 struct CameraState
 {
