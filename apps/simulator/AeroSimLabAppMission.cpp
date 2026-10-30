@@ -1436,10 +1436,11 @@ void AeroSimLabApp::AdvanceFleetNetwork()
             ? detail::FleetDroneStatus::Other : mission->second.status;
         const std::uint64_t assignmentVersion = mission == fleetReconnaissance_.end()
             ? 0U : mission->second.assignmentVersion;
+        const auto& state = simulation_.State(droneId);
         static_cast<void>(formationNetwork_->Send(droneId, leaderId,
             nextTelemetrySequence_++, "drone_telemetry",
-            detail::EncodePeerTelemetry(simulation_.State(droneId).positionMeters,
-                simulation_.State(droneId).mode, missionLeg, missionStatus,
+            detail::EncodePeerTelemetry(state.positionMeters, state.mode,
+                missionLeg, missionStatus,
                 assignmentVersion)));
         lastTelemetrySentAtTick_[droneId] = currentTick;
     }
