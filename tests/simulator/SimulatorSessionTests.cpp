@@ -2,7 +2,6 @@
 #include "gui/SimulatorView.h"
 #include "FleetMissionProgress.h"
 #include "FleetTelemetry.h"
-#include "TrainingRangeScene.h"
 
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/QuadrotorFlightController.h"
@@ -65,7 +64,7 @@ public:
         EXPECT_TRUE(app.CompleteFleetMissionCanStart());
 
         app.fleetReconnaissance_[app.simulation_.PrimaryDroneId()].status =
-            detail::FleetDroneStatus::Reconnaissance;
+            mission::FleetDroneStatus::Reconnaissance;
         EXPECT_FALSE(app.FleetReconnaissanceCanStart());
         EXPECT_FALSE(app.CompleteFleetMissionCanStart());
         app.fleetReconnaissance_.clear();
@@ -192,20 +191,20 @@ public:
             app.simulation_.SetInitialState(droneId, state);
         }
 
-        app.formationTransit_.phase = DroneSimApp::FormationTransitState::Phase::InProgress;
+        app.formationTransit_.phase = mission::FormationTransitState::Phase::InProgress;
         app.formationTransit_.route.leaderStartMeters =
             app.simulation_.State(droneIds.front()).positionMeters;
         app.formationTransit_.route.leaderWaypointsMeters.push_back(
             app.formationTransit_.route.leaderStartMeters + glm::dvec3{10.0, 0.0, 0.0});
         app.completeFleetMission_.stage =
-            DroneSimApp::CompleteFleetMissionState::Stage::FormationTransit;
+            mission::CompleteFleetMissionState::Stage::FormationTransit;
 
         app.AdvanceFormationTransit();
 
         EXPECT_EQ(app.formationTransit_.phase,
-            DroneSimApp::FormationTransitState::Phase::Failed);
+            mission::FormationTransitState::Phase::Failed);
         EXPECT_EQ(app.completeFleetMission_.stage,
-            DroneSimApp::CompleteFleetMissionState::Stage::Failed);
+            mission::CompleteFleetMissionState::Stage::Failed);
         EXPECT_EQ(app.completeFleetMission_.status,
             "추종 드론 상태 보고가 끊겨 편대를 안전 착륙시킵니다.");
         for (const auto droneId : droneIds)
@@ -215,8 +214,8 @@ public:
 
     static void VerifyFormationResultDoesNotDependOnStatusText()
     {
-        using FormationPhase = DroneSimApp::FormationTransitState::Phase;
-        using MissionStage = DroneSimApp::CompleteFleetMissionState::Stage;
+        using FormationPhase = mission::FormationTransitState::Phase;
+        using MissionStage = mission::CompleteFleetMissionState::Stage;
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(app.PrepareFleetNetwork(true));
@@ -230,11 +229,11 @@ public:
             app.completeFleetMission_.homePositionsMeters[droneId] = state.positionMeters;
             if (droneId != app.fleetLeaderId_)
             {
-                DroneSimApp::ReceivedPeerTelemetry report;
-                report.state.positionMeters = state.positionMeters;
-                report.state.mode = state.mode;
-                report.receivedAtTick = app.simulation_.TickCount();
-                app.peerTelemetryAtLeader_[droneId] = report;
+                mission::PeerTelemetry report;
+                report.positionMeters = state.positionMeters;
+                report.mode = state.mode;
+                ASSERT_TRUE(app.peerTelemetryAtLeader_.Record(droneId, report,
+                    app.simulation_.TickCount(), 1U));
             }
         }
 
@@ -260,7 +259,7 @@ public:
 
     static void VerifyCompleteFleetMissionFinishesAndLands()
     {
-        using Stage = DroneSimApp::CompleteFleetMissionState::Stage;
+        using Stage = mission::CompleteFleetMissionState::Stage;
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneIds = app.simulation_.DroneIds();
@@ -294,7 +293,7 @@ public:
                     + std::to_string(droneId) + " 목표 "
                     + std::to_string(mission.targetIndex) + " 버전 "
                     + std::to_string(mission.assignmentVersion) + " 상태 "
-                    + std::string(simulator::detail::FleetDroneStatusLabel(
+                    + std::string(mission::FleetDroneStatusLabel(
                         mission.status)));
                 lastVersion = mission.assignmentVersion;
             }
@@ -329,20 +328,20 @@ public:
                     << ", " << drone.positionMeters.z << ")";
                 if (droneId != app.fleetLeaderId_)
                 {
-                    const auto report = app.peerTelemetryAtLeader_.find(droneId);
+                    const auto* report = app.peerTelemetryAtLeader_.Latest(droneId);
                     failureContext << ", 리더와 거리 "
                         << glm::distance(drone.positionMeters,
                             leader.positionMeters) << "m, 보고 경과 ";
-                    if (report == app.peerTelemetryAtLeader_.end())
+                    if (report == nullptr)
                         failureContext << "없음";
                     else
                         failureContext << app.simulation_.TickCount()
-                            - report->second.receivedAtTick << " Tick";
+                            - report->receivedAtTick << " Tick";
                 }
                 const auto mission = app.fleetReconnaissance_.find(droneId);
                 if (mission != app.fleetReconnaissance_.end())
                     failureContext << ", 목표 " << mission->second.targetIndex
-                        << ", 상태 " << simulator::detail::FleetDroneStatusLabel(
+                        << ", 상태 " << mission::FleetDroneStatusLabel(
                             mission->second.status);
             }
             const auto& metrics = app.formationNetwork_->Metrics();
@@ -394,7 +393,7 @@ public:
             const auto& mission = app.fleetReconnaissance_.at(lowBatteryDroneId);
             if (mission.lowBatteryReturn
                 && mission.status
-                    == simulator::detail::FleetDroneStatus::LowBatteryReturnComplete)
+                    == mission::FleetDroneStatus::LowBatteryReturnComplete)
                 break;
         }
 
@@ -402,9 +401,9 @@ public:
         EXPECT_TRUE(app.simulation_.Battery(lowBatteryDroneId)
             .IsReturningForLowBattery());
         EXPECT_TRUE(mission.lowBatteryReturn);
-        EXPECT_EQ(mission.leg, simulator::FleetMissionLeg::Returning);
+        EXPECT_EQ(mission.leg, mission::FleetMissionLeg::Returning);
         EXPECT_EQ(mission.status,
-            simulator::detail::FleetDroneStatus::LowBatteryReturnComplete);
+            mission::FleetDroneStatus::LowBatteryReturnComplete);
         EXPECT_LE(glm::distance(app.simulation_.State(lowBatteryDroneId).positionMeters,
             mission.startPositionMeters), 5.0);
         const bool targetWasReassigned = std::any_of(app.fleetDroneIds_.begin(),
@@ -423,43 +422,53 @@ public:
 void Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues()
 {
     const glm::dvec3 positionMeters{12.5, -7.25, 31.0};
-    using simulator::detail::FleetDroneStatus;
-    const std::string payload = simulator::detail::EncodePeerTelemetry(
+    using mission::FleetDroneStatus;
+    const std::string payload = mission::EncodePeerTelemetry(
         positionMeters, simulation::FlightMode::Hovering, 2U,
         FleetDroneStatus::ReturnLanding,
         17U);
-    const auto telemetry = simulator::detail::DecodePeerTelemetry(payload);
+    const auto telemetry = mission::DecodePeerTelemetry(payload);
     ASSERT_TRUE(telemetry.has_value());
     EXPECT_EQ(telemetry->positionMeters, positionMeters);
     EXPECT_EQ(telemetry->mode, simulation::FlightMode::Hovering);
     EXPECT_EQ(telemetry->missionLeg, 2U);
     EXPECT_EQ(telemetry->missionStatus, FleetDroneStatus::ReturnLanding);
     EXPECT_EQ(telemetry->assignmentVersion, 17U);
-    EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(payload + " 2400").has_value());
+    EXPECT_FALSE(mission::DecodePeerTelemetry(payload + " 2400").has_value());
 
-    EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
-        simulator::detail::EncodePeerTelemetry(positionMeters,
+    mission::FleetTelemetryStore receivedStates;
+    EXPECT_TRUE(receivedStates.Record(4U, *telemetry, 100U, 8U));
+    EXPECT_FALSE(receivedStates.Record(4U, *telemetry, 101U, 7U));
+    ASSERT_NE(receivedStates.Fresh(4U, 130U), nullptr);
+    EXPECT_EQ(receivedStates.Fresh(4U, 130U)->state.positionMeters, positionMeters);
+    EXPECT_EQ(receivedStates.Fresh(4U, 131U), nullptr);
+    EXPECT_NE(receivedStates.Latest(4U), nullptr);
+    receivedStates.Clear();
+    EXPECT_EQ(receivedStates.Latest(4U), nullptr);
+
+    EXPECT_FALSE(mission::DecodePeerTelemetry(
+        mission::EncodePeerTelemetry(positionMeters,
             simulation::FlightMode::Hovering, 3U, FleetDroneStatus::Other,
             17U)).has_value());
-    EXPECT_FALSE(simulator::detail::DecodePeerTelemetry(
-        simulator::detail::EncodePeerTelemetry(positionMeters,
+    EXPECT_FALSE(mission::DecodePeerTelemetry(
+        mission::EncodePeerTelemetry(positionMeters,
             simulation::FlightMode::Hovering, 2U,
             static_cast<FleetDroneStatus>(255U), 17U)).has_value());
 }
 
 void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
 {
-    using simulator::FleetMissionLeg;
-    using simulator::detail::FleetMissionProgress;
-    using simulator::detail::FleetMissionReport;
-    using simulator::detail::FleetDroneStatus;
+    using mission::FleetMissionLeg;
+    using mission::FleetMissionProgress;
+    using mission::FleetMissionReport;
+    using mission::FleetDroneStatus;
     using simulation::FlightMode;
 
-    EXPECT_TRUE(simulator::detail::IsFleetMissionInProgress(
+    EXPECT_TRUE(mission::IsFleetMissionInProgress(
         FleetDroneStatus::Reconnaissance));
-    EXPECT_EQ(simulator::detail::FleetDroneStatusLabel(
+    EXPECT_EQ(mission::FleetDroneStatusLabel(
         FleetDroneStatus::TargetReached), "정찰 위치 도착");
-    EXPECT_FALSE(simulator::detail::IsFleetMissionInProgress(
+    EXPECT_FALSE(mission::IsFleetMissionInProgress(
         FleetDroneStatus::TargetReached));
 
     std::vector<std::optional<FleetMissionReport>> reports{
@@ -471,24 +480,24 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
             FleetMissionLeg::Reconnaissance, FleetDroneStatus::TargetReached},
         FleetMissionReport{FlightMode::Grounded,
             FleetMissionLeg::Reconnaissance, FleetDroneStatus::TargetReached}};
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Reconnaissance, reports).progress,
         FleetMissionProgress::Advance);
 
     reports.back().reset();
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Reconnaissance, reports).progress,
         FleetMissionProgress::Waiting);
     reports.back() = FleetMissionReport{
         FlightMode::Grounded, FleetMissionLeg::Regrouping,
         FleetDroneStatus::RegroupComplete};
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Reconnaissance, reports).progress,
         FleetMissionProgress::Waiting);
 
     reports.back() = FleetMissionReport{FlightMode::Grounded,
         FleetMissionLeg::Reconnaissance, FleetDroneStatus::RouteFailed};
-    const auto failed = simulator::detail::EvaluateFleetMissionProgress(
+    const auto failed = mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Reconnaissance, reports);
     EXPECT_EQ(failed.progress, FleetMissionProgress::Failed);
     EXPECT_FALSE(failed.failureReason.empty());
@@ -496,23 +505,23 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     reports.assign(4U, FleetMissionReport{
         FlightMode::Hovering, FleetMissionLeg::Regrouping,
         FleetDroneStatus::RegroupComplete});
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Regrouping, reports).progress,
         FleetMissionProgress::Advance);
     reports.back() = FleetMissionReport{
         FlightMode::Hovering, FleetMissionLeg::Regrouping,
         FleetDroneStatus::RegroupFailed};
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Regrouping, reports).progress,
         FleetMissionProgress::Failed);
 }
 
 void Verify_FleetMissionProgressRequiresLandedReturnReports()
 {
-    using simulator::FleetMissionLeg;
-    using simulator::detail::FleetMissionProgress;
-    using simulator::detail::FleetMissionReport;
-    using simulator::detail::FleetDroneStatus;
+    using mission::FleetMissionLeg;
+    using mission::FleetMissionProgress;
+    using mission::FleetMissionReport;
+    using mission::FleetDroneStatus;
     using simulation::FlightMode;
 
     std::vector<std::optional<FleetMissionReport>> reports{
@@ -520,13 +529,13 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
             FleetMissionLeg::Returning, FleetDroneStatus::ReturnComplete},
         FleetMissionReport{FlightMode::Hovering,
             FleetMissionLeg::Returning, FleetDroneStatus::ReturnComplete}};
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Returning, reports).progress,
         FleetMissionProgress::Waiting);
     reports.back() = FleetMissionReport{
         FlightMode::Grounded, FleetMissionLeg::Returning,
         FleetDroneStatus::ReturnComplete};
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Returning, reports).progress,
         FleetMissionProgress::Complete);
 
@@ -536,13 +545,13 @@ void Verify_FleetMissionProgressRequiresLandedReturnReports()
             FleetDroneStatus::LowBatteryReturnComplete},
         FleetMissionReport{FlightMode::Grounded,
             FleetMissionLeg::Reconnaissance, FleetDroneStatus::TargetReached}};
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Reconnaissance, reports).progress,
         FleetMissionProgress::Failed);
     reports.back() = FleetMissionReport{
         FlightMode::Grounded, FleetMissionLeg::Returning,
         FleetDroneStatus::LowBatteryReturnComplete};
-    EXPECT_EQ(simulator::detail::EvaluateFleetMissionProgress(
+    EXPECT_EQ(mission::EvaluateFleetMissionProgress(
         FleetMissionLeg::Returning, reports).progress,
         FleetMissionProgress::Complete);
 }

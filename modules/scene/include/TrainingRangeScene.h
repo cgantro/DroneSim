@@ -17,7 +17,7 @@ class Renderer;
 class Shader;
 }
 
-namespace dronesim::simulator
+namespace dronesim::scene
 {
 /** @brief 도시 GLB를 그리고 메시 범위로 비행 충돌체와 정찰 지점을 준비한다. */
 class TrainingRangeScene final

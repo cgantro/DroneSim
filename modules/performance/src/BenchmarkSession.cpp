@@ -1,4 +1,4 @@
-#include "performance/BenchmarkSession.h"
+#include "BenchmarkSession.h"
 
 #include "graphics/GlApi.h"
 #include "graphics/Window.h"
@@ -83,7 +83,7 @@ void BenchmarkSession::AddPhysicsStep(double durationMicroseconds)
 void BenchmarkSession::WriteReport(const graphics::Window& window,
     const simulation::SimulationCore& simulation, bool demoMode,
     bool visible, double elapsedSeconds, std::size_t renderedFrames,
-    std::string_view sourceRevision, const std::filesystem::path& outputPath) const
+    const std::filesystem::path& outputPath) const
 {
     int framebufferWidth = 0;
     int framebufferHeight = 0;
@@ -95,7 +95,6 @@ void BenchmarkSession::WriteReport(const graphics::Window& window,
     };
 
     ViewerBenchmarkMeasurements report = measurements_;
-    report.sourceRevision = sourceRevision;
     report.windowVisible = visible;
     report.warmupSeconds = warmupSeconds;
     report.framebufferWidth = framebufferWidth;

@@ -13,7 +13,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-namespace dronesim::simulator
+namespace dronesim::scene
 {
 namespace
 {

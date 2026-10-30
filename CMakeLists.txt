@@ -111,6 +111,16 @@ add_library(dronesim_manual_control STATIC
 target_include_directories(dronesim_manual_control PUBLIC modules/manual_control/include)
 target_link_libraries(dronesim_manual_control PUBLIC dronesim_simulation_core)
 
+add_library(dronesim_mission STATIC
+  modules/mission/src/FleetMissionProgress.cpp
+  modules/mission/src/FleetTelemetry.cpp
+)
+target_include_directories(dronesim_mission PUBLIC modules/mission/include)
+target_link_libraries(dronesim_mission PUBLIC
+  dronesim_flight_planning
+  dronesim_simulation_core
+)
+
 add_executable(dronesim_headless apps/headless/main.cpp)
 target_link_libraries(dronesim_headless PRIVATE
   dronesim_scenario
@@ -130,7 +140,6 @@ if(EMSCRIPTEN)
 endif()
 
 if(DRONESIM_BUILD_GRAPHICS)
-  find_package(Git QUIET)
   dronesim_add_graphics_dependencies()
 
   target_sources(dronesim_manual_control PRIVATE
@@ -230,119 +239,34 @@ if(DRONESIM_BUILD_GRAPHICS)
     nlohmann_json::nlohmann_json
   )
 
+  add_library(dronesim_scene STATIC
+    modules/scene/src/TrainingRangeScene.cpp
+  )
+  target_include_directories(dronesim_scene PUBLIC modules/scene/include)
+  target_link_libraries(dronesim_scene PUBLIC
+    dronesim_graphics
+    dronesim_simulation_core
+    dronesim_flight_planning
+  )
+
   add_library(dronesim_simulator_app STATIC
     apps/simulator/DroneSimApp.cpp
     apps/simulator/DroneSimAppLifecycle.cpp
-    apps/simulator/BuildRevision.cpp
     apps/simulator/DroneSimAppGamepad.cpp
     apps/simulator/DroneSimAppMission.cpp
-    apps/simulator/FleetMissionProgress.cpp
-    apps/simulator/TrainingRangeScene.cpp
   )
   target_include_directories(dronesim_simulator_app PUBLIC
     apps/simulator/include
     modules/gui/include
   )
-  set(_dronesim_generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
-  set(_dronesim_build_revision_header
-    "${_dronesim_generated_dir}/DroneSimBuildRevision.h")
-  set(_dronesim_revision_paths
-    CMakeLists.txt
-    cmake
-    apps/simulator
-    modules
-    assets
-    ":(exclude)assets/models/source"
-    ":(exclude)assets/**/README.md"
-    ":(exclude)assets/**/LICENSE")
-  string(REPLACE ";" "," _dronesim_revision_paths_argument
-    "${_dronesim_revision_paths}")
-  set(_dronesim_build_revision_dependencies
-    "${CMAKE_SOURCE_DIR}/cmake/GenerateBuildRevision.cmake")
-  if(GIT_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
-    execute_process(
-      COMMAND "${GIT_EXECUTABLE}" rev-parse --git-path HEAD
-      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-      OUTPUT_VARIABLE _dronesim_git_head
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET
-    )
-    get_filename_component(_dronesim_git_head "${_dronesim_git_head}"
-      ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
-    if(_dronesim_git_head AND EXISTS "${_dronesim_git_head}")
-      list(APPEND _dronesim_build_revision_dependencies "${_dronesim_git_head}")
-      file(READ "${_dronesim_git_head}" _dronesim_git_head_contents)
-      string(REGEX MATCH "^ref: (.+)$" _dronesim_git_ref_match
-        "${_dronesim_git_head_contents}")
-      if(CMAKE_MATCH_1)
-        execute_process(
-          COMMAND "${GIT_EXECUTABLE}" rev-parse --git-path "${CMAKE_MATCH_1}"
-          WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-          OUTPUT_VARIABLE _dronesim_git_ref
-          OUTPUT_STRIP_TRAILING_WHITESPACE
-          ERROR_QUIET
-        )
-        get_filename_component(_dronesim_git_ref "${_dronesim_git_ref}"
-          ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
-        if(_dronesim_git_ref AND EXISTS "${_dronesim_git_ref}")
-          list(APPEND _dronesim_build_revision_dependencies "${_dronesim_git_ref}")
-        endif()
-      endif()
-    endif()
-    # dirty 표시는 측정 결과의 코드 상태를 구분한다. 매 빌드 git status를
-    # 실행하는 대신, 현재 Git 작업 폴더의 파일과 부모 폴더를 의존성으로 둔다.
-    execute_process(
-      COMMAND "${GIT_EXECUTABLE}" ls-files --cached --others --exclude-standard
-        -- ${_dronesim_revision_paths}
-      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-      OUTPUT_VARIABLE _dronesim_worktree_files
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET
-    )
-    string(REPLACE "\r\n" "\n" _dronesim_worktree_files
-      "${_dronesim_worktree_files}")
-    string(REPLACE "\n" ";" _dronesim_worktree_files
-      "${_dronesim_worktree_files}")
-    foreach(_dronesim_worktree_file IN LISTS _dronesim_worktree_files)
-      if(EXISTS "${CMAKE_SOURCE_DIR}/${_dronesim_worktree_file}")
-        list(APPEND _dronesim_build_revision_dependencies
-          "${CMAKE_SOURCE_DIR}/${_dronesim_worktree_file}")
-        get_filename_component(_dronesim_worktree_directory
-          "${_dronesim_worktree_file}" DIRECTORY)
-        while(_dronesim_worktree_directory)
-          list(APPEND _dronesim_build_revision_dependencies
-            "${CMAKE_SOURCE_DIR}/${_dronesim_worktree_directory}")
-          get_filename_component(_dronesim_worktree_directory
-            "${_dronesim_worktree_directory}" DIRECTORY)
-        endwhile()
-      endif()
-    endforeach()
-    # 실행 코드와 실제 자산만 추적해 문서·시험 변경으로 앱을 다시 만들지 않는다.
-    list(REMOVE_DUPLICATES _dronesim_build_revision_dependencies)
-  endif()
-  add_custom_command(
-    OUTPUT "${_dronesim_build_revision_header}"
-    COMMAND "${CMAKE_COMMAND}"
-      "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
-      "-DOUTPUT=${_dronesim_build_revision_header}"
-      "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
-      "-DREVISION_PATHS=${_dronesim_revision_paths_argument}"
-      -P "${CMAKE_SOURCE_DIR}/cmake/GenerateBuildRevision.cmake"
-    DEPENDS ${_dronesim_build_revision_dependencies}
-    VERBATIM
-  )
-  add_custom_target(dronesim_build_revision
-    DEPENDS "${_dronesim_build_revision_header}")
-  add_dependencies(dronesim_simulator_app dronesim_build_revision)
-  target_include_directories(dronesim_simulator_app PRIVATE "${_dronesim_generated_dir}")
-  set_source_files_properties(apps/simulator/BuildRevision.cpp PROPERTIES
-    OBJECT_DEPENDS "${_dronesim_build_revision_header}")
   target_link_libraries(dronesim_simulator_app PUBLIC
     dronesim_graphics
     dronesim_performance
     dronesim_simulation_core
     dronesim_flight_planning
     dronesim_manual_control
+    dronesim_mission
+    dronesim_scene
     dronesim_communication
     nlohmann_json::nlohmann_json
   )

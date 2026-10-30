@@ -1,12 +1,10 @@
 #include "DroneSimApp.h"
-#include "ExecutableDirectory.h"
-#include "FleetMissionProgress.h"
-#include "TrainingRangeScene.h"
 #ifndef __EMSCRIPTEN__
 #include "gui/SimulatorView.h"
 #endif
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <Windows.h>
 #endif
 #ifdef __EMSCRIPTEN__
@@ -33,7 +31,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -42,6 +39,7 @@
 #include <string_view>
 #include <ctime>
 #include <cmath>
+#include <filesystem>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -69,11 +67,6 @@ constexpr int windowHeight = 720;
 constexpr dronesim::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
 constexpr double trainingRangeCameraTransitAltitudeMeters = 25.0;
-
-std::filesystem::path AssetPath(std::string_view relativePath)
-{
-    return detail::ExecutableDirectory() / relativePath;
-}
 
 glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
 {
@@ -244,7 +237,7 @@ void DroneSimApp::InitializeRendererAndCameras()
 void DroneSimApp::InitializeShaderAndHud()
 {
     shader_ = std::make_unique<dronesim::graphics::Shader>(
-        AssetPath("shaders/Scene.glsl").string());
+        "shaders/Scene.glsl");
 #ifndef __EMSCRIPTEN__
     hud_ = std::make_unique<dronesim::gui::SimulatorHud>(window_->GetNativeHandle());
 #endif
@@ -263,11 +256,11 @@ void DroneSimApp::LoadSceneModels()
 {
     cube_ = dronesim::graphics::Mesh::CreateCube(1.0F);
     droneModel_ = dronesim::graphics::GlbModel::Load(
-        AssetPath("models/drones/x500/visual.glb").string());
+        "models/drones/x500/visual.glb");
     droneGimbalModel_ = dronesim::graphics::GlbModel::Load(
-        AssetPath("models/drones/x500/cgo3-gimbal.glb").string());
+        "models/drones/x500/cgo3-gimbal.glb");
     droneSurfaceTexture_ = dronesim::graphics::Texture2D::LoadFromFile(
-        AssetPath("models/drones/x500/carbon-weave.ppm"));
+        "models/drones/x500/carbon-weave.ppm");
 }
 
 void DroneSimApp::LoadTerrain()
@@ -291,8 +284,8 @@ void DroneSimApp::LoadTerrain()
 void DroneSimApp::LoadMapFeatures()
 {
     SetStartupDetail("도시 지도와 충돌 모양을 준비하고 있습니다.");
-    trainingRangeScene_ = std::make_unique<TrainingRangeScene>();
-    trainingRangeScene_->Load(AssetPath(""), simulation_);
+    trainingRangeScene_ = std::make_unique<dronesim::scene::TrainingRangeScene>();
+    trainingRangeScene_->Load({}, simulation_);
     cameraTransitAltitudeMeters_ = trainingRangeCameraTransitAltitudeMeters;
 }
 
@@ -709,9 +702,9 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         for (const auto& [droneId, mission] : fleetReconnaissance_)
         {
             const auto missionStatus = mission.status;
-            if (missionStatus != detail::FleetDroneStatus::TakeoffReady
-                && missionStatus != detail::FleetDroneStatus::Reconnaissance
-                && missionStatus != detail::FleetDroneStatus::Landing)
+            if (missionStatus != dronesim::mission::FleetDroneStatus::TakeoffReady
+                && missionStatus != dronesim::mission::FleetDroneStatus::Reconnaissance
+                && missionStatus != dronesim::mission::FleetDroneStatus::Landing)
                 continue;
             glm::dvec3 previous = mission.startPositionMeters;
             for (const glm::dvec3& waypoint : mission.routeWaypointsMeters)

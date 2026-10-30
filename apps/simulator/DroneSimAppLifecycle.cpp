@@ -1,6 +1,6 @@
 #include "DroneSimApp.h"
-#include "BuildRevision.h"
-#include "ExecutableDirectory.h"
+
+#include <filesystem>
 
 #include "graphics/Window.h"
 #include "simulation_core/ScopedDuration.h"
@@ -115,8 +115,7 @@ int DroneSimApp::Run()
             std::chrono::steady_clock::now() - startTime_).count();
         benchmarkSession_.WriteReport(*window_, simulation_, demoMode_,
             visibleBenchmarkMode_, elapsedSeconds, renderedFrames_,
-            BuildRevision(), detail::ExecutableDirectory()
-                / "benchmark-latest.json");
+            std::filesystem::path{"benchmark-latest.json"});
     }
     return 0;
 #endif

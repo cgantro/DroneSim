@@ -1,11 +1,10 @@
 #pragma once
 
-#include "performance/SimulationBenchmark.h"
+#include "SimulationBenchmark.h"
 
 #include <array>
 #include <ctime>
 #include <filesystem>
-#include <string_view>
 
 namespace dronesim::graphics
 {
@@ -65,7 +64,7 @@ public:
     void WriteReport(const graphics::Window& window,
         const simulation::SimulationCore& simulation, bool demoMode,
         bool visible, double elapsedSeconds, std::size_t renderedFrames,
-        std::string_view sourceRevision, const std::filesystem::path& outputPath) const;
+        const std::filesystem::path& outputPath) const;
 
 private:
     Frame frame_;

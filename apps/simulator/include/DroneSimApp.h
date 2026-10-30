@@ -1,10 +1,8 @@
 #pragma once
 
-#include "performance/BenchmarkSession.h"
+#include "BenchmarkSession.h"
 #include "manual_control/GamepadController.h"
 #include "gui/SimulatorHud.h"
-#include "FleetTelemetry.h"
-#include "FleetMissionProgress.h"
 #include "communication/VirtualMeshNetwork.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
@@ -12,6 +10,10 @@
 #include "flight_planning/FormationPlanner.h"
 #include "flight_planning/BuildingObstacle.h"
 #include "simulation_core/SimulationCore.h"
+#include "FleetMissionProgress.h"
+#include "FleetMission.h"
+#include "FleetTelemetry.h"
+#include "TrainingRangeScene.h"
 
 #include <glm/glm.hpp>
 
@@ -45,8 +47,6 @@ class SimulatorView;
 namespace dronesim::simulator
 {
 namespace communication = ::dronesim::communication;
-
-class TrainingRangeScene;
 
 /**
  * @brief 군집 훈련장을 띄우고 드론 편대와 카메라 영상을 보여 준다.
@@ -150,12 +150,12 @@ private:
     void AdvanceFleetNetwork();
     [[nodiscard]] bool SendFleetRouteAssignment(
         dronesim::simulation::DroneId droneId,
-        FleetMissionLeg leg,
+        dronesim::mission::FleetMissionLeg leg,
         std::size_t targetIndex,
         std::vector<glm::dvec3> routeWaypointsMeters);
     void ApplyFleetRouteAssignment(
         dronesim::simulation::DroneId droneId,
-        FleetMissionLeg leg,
+        dronesim::mission::FleetMissionLeg leg,
         std::size_t targetIndex,
         std::vector<glm::dvec3> routeWaypointsMeters,
         std::uint32_t sequence,
@@ -232,95 +232,24 @@ private:
     std::unique_ptr<dronesim::graphics::Camera> eoCamera_;
 #endif
     std::unique_ptr<dronesim::graphics::Mesh> cube_;
-    std::unique_ptr<TrainingRangeScene> trainingRangeScene_;
+    std::unique_ptr<dronesim::scene::TrainingRangeScene> trainingRangeScene_;
     std::unique_ptr<dronesim::graphics::GlbModel> droneModel_;
     std::unique_ptr<dronesim::graphics::GlbModel> droneGimbalModel_;
     std::unique_ptr<dronesim::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<dronesim::simulation::DroneId> fleetDroneIds_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     dronesim::simulation::DroneId observerDroneId_ = 0;
-    struct FleetReconnaissanceState
-    {
-        std::size_t targetIndex = 0;
-        glm::dvec3 startPositionMeters{0.0};
-        std::vector<glm::dvec3> routeWaypointsMeters;
-        std::string pendingRoutePayload;
-        std::uint32_t routeSequence = 0;
-        std::uint32_t pendingRouteSequence = 0;
-        std::uint64_t assignmentVersion = 0;
-        std::uint64_t assignmentLeaseExpiresAtTick = 0;
-        std::uint32_t routeTransmissionCount = 0;
-        std::uint64_t routeSentAtTick = 0;
-        std::uint64_t lastRouteTransmissionTick = 0;
-        std::size_t nextWaypoint = 0;
-        detail::FleetDroneStatus status = detail::FleetDroneStatus::Other;
-        bool routeReceived = false;
-        bool waypointCommanded = false;
-        bool lowBatteryReturn = false;
-        FleetMissionLeg leg = FleetMissionLeg::Reconnaissance;
-    };
-    std::unordered_map<dronesim::simulation::DroneId, FleetReconnaissanceState>
+    std::unordered_map<dronesim::simulation::DroneId,
+        dronesim::mission::FleetReconnaissanceState>
         fleetReconnaissance_;
     dronesim::simulation::DroneId fleetLeaderId_ = 0;
     std::uint64_t nextMissionAssignmentVersion_ = 1;
-    struct ReceivedPeerTelemetry
-    {
-        dronesim::simulator::detail::PeerTelemetry state;
-        std::uint64_t receivedAtTick = 0;
-        std::uint32_t sequence = 0;
-    };
-    [[nodiscard]] const ReceivedPeerTelemetry* FreshPeerTelemetry(
-        dronesim::simulation::DroneId droneId) const noexcept;
     std::uint32_t nextTelemetrySequence_ = 1;
     std::map<dronesim::simulation::DroneId, std::uint64_t>
         lastTelemetrySentAtTick_;
-    std::map<dronesim::simulation::DroneId, ReceivedPeerTelemetry>
-        peerTelemetryAtLeader_;
-    struct FormationTransitState
-    {
-        /** @brief 화면 문구를 바꿔도 편대 이동의 결과 판정이 달라지지 않게 한다. */
-        enum class Phase
-        {
-            Idle,
-            InProgress,
-            Arrived,
-            Failed
-        };
-
-        Phase phase = Phase::Idle;
-        [[nodiscard]] bool IsActive() const noexcept
-        {
-            return phase == Phase::InProgress;
-        }
-
-        dronesim::flight_planning::FormationRoutePlan route;
-        std::size_t waypointIndex = 0;
-        std::uint32_t nextMessageSequence = 1;
-        std::map<dronesim::simulation::DroneId, glm::dvec3> sentFollowerTargets;
-        std::map<dronesim::simulation::DroneId, std::uint64_t> lastTargetSentAtTick;
-        std::map<dronesim::simulation::DroneId, std::uint32_t> lastAppliedSequence;
-        std::optional<std::uint64_t> lastNetworkNodeUpdateTick;
-        std::string status = "대기";
-    };
-    FormationTransitState formationTransit_;
-    struct CompleteFleetMissionState
-    {
-        enum class Stage
-        {
-            Idle,
-            FormationTransit,
-            Reconnaissance,
-            Regrouping,
-            Returning,
-            Completed,
-            Failed
-        };
-
-        Stage stage = Stage::Idle;
-        std::map<dronesim::simulation::DroneId, glm::dvec3> homePositionsMeters;
-        std::string status = "대기";
-    };
-    CompleteFleetMissionState completeFleetMission_;
+    dronesim::mission::FleetTelemetryStore peerTelemetryAtLeader_;
+    dronesim::mission::FormationTransitState formationTransit_;
+    dronesim::mission::CompleteFleetMissionState completeFleetMission_;
     communication::DroneSocketTransport droneSocketTransport_;
     std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
     std::vector<communication::RadioObstacle> formationRadioObstacles_;

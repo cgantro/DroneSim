@@ -35,7 +35,6 @@ struct ViewerBenchmarkMeasurements
         bool hudGpuTimingAvailable = false;
     };
 
-    std::string sourceRevision;
     bool windowVisible = false;
     int framebufferWidth = 0;
     int framebufferHeight = 0;

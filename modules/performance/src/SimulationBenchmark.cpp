@@ -1,5 +1,5 @@
-#include "performance/SimulationBenchmark.h"
-#include "performance/BenchmarkProcessMemory.h"
+#include "SimulationBenchmark.h"
+#include "BenchmarkProcessMemory.h"
 
 #include <nlohmann/json.hpp>
 
@@ -54,7 +54,6 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
         }));
 
     nlohmann::json report{
-        {"source_revision", measurements.sourceRevision},
         {"window_visible", measurements.windowVisible},
         {"framebuffer", {
             {"width", measurements.framebufferWidth},

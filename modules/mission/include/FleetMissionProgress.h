@@ -7,7 +7,7 @@
 #include <span>
 #include <string_view>
 
-namespace dronesim::simulator
+namespace dronesim::mission
 {
 /** @brief 드론 한 대가 수행 중인 임무 구간이다. */
 enum class FleetMissionLeg : std::uint8_t
@@ -17,8 +17,6 @@ enum class FleetMissionLeg : std::uint8_t
     Returning
 };
 
-namespace detail
-{
 /** @brief 화면 문구와 분리해 임무 판정에 사용하는 드론 상태다. */
 enum class FleetDroneStatus : std::uint8_t
 {
@@ -84,5 +82,4 @@ struct FleetMissionProgressDecision
 [[nodiscard]] FleetMissionProgressDecision EvaluateFleetMissionProgress(
     FleetMissionLeg leg,
     std::span<const std::optional<FleetMissionReport>> reports) noexcept;
-}
 }
