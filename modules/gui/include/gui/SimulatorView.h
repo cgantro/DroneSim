@@ -31,7 +31,7 @@ class SimulatorView final
 {
 public:
     using DrawWorld = std::function<void(const glm::mat4&, const glm::mat4&,
-        const glm::vec3&, bool, std::optional<simulation::DroneId>)>;
+        const glm::vec3&, bool, std::optional<simulation::DroneId>, bool)>;
 
     SimulatorView(graphics::Renderer& renderer, int width, int height,
         float cameraFieldOfViewDegrees);
@@ -42,7 +42,8 @@ public:
         const simulation::SimulationCore& simulation,
         simulation::DroneId observerDroneId,
         const std::vector<flight_planning::BuildingObstacle>& buildings,
-        int width, int height, const DrawWorld& drawWorld,
+        int width, int height, bool showGlbNodeColors,
+        const DrawWorld& drawWorld,
         double* renderMicroseconds);
 
     /** @brief 선택한 드론의 최신 EO 화면을 렌더링하고 텍스처를 돌려준다. */
@@ -72,6 +73,7 @@ private:
     void DrawToTarget(graphics::MultisampleFramebuffer& target,
         const graphics::Camera& camera, bool showMissionGuides,
         std::optional<simulation::DroneId> hiddenDroneId,
+        bool showGlbNodeColors,
         const DrawWorld& drawWorld);
 
     graphics::Renderer& renderer_;

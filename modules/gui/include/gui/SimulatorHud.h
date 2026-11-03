@@ -4,12 +4,14 @@
 #include "communication/DroneSocketTransport.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
+#include "graphics/GlbModel.h"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
 #include <functional>
+#include <span>
 #include <string>
 
 struct GLFWwindow;
@@ -63,7 +65,8 @@ public:
         const communication::DroneSocketTransport* socketTransport,
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
-        const std::function<std::uint32_t(int, int)>& renderScene,
+        std::span<const graphics::GlbPartBounds> glbParts,
+        const std::function<std::uint32_t(int, int, bool)>& renderScene,
         const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
         HudRenderTimings* timings = nullptr);
 
@@ -78,6 +81,7 @@ private:
     void CollectCompletedGpuTimings(HudRenderTimings* timings);
 
     bool initialized_ = false;
+    bool showGlbNodeColors_ = true;
     int selectedFaultSource_ = 0;
     std::string layoutFile_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};

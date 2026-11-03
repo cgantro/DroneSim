@@ -535,16 +535,19 @@ void DroneSimApp::RenderFrame()
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
                 }
             },
-            [this](int width, int height)
+            trainingRangeScene_->GlbParts(),
+            [this](int width, int height, bool showGlbNodeColors)
             {
                 return view_->RenderScenePanel(simulation_, observerDroneId_,
                     trainingRangeScene_->BuildingObstacles(), width, height,
+                    showGlbNodeColors,
                     [this](const glm::mat4& view, const glm::mat4& projection,
                         const glm::vec3& cameraPosition, bool showMissionGuides,
-                        std::optional<dronesim::simulation::DroneId> hiddenDroneId)
+                        std::optional<dronesim::simulation::DroneId> hiddenDroneId,
+                        bool showGlbNodeColors)
                     {
                         DrawWorld(view, projection, cameraPosition,
-                            showMissionGuides, hiddenDroneId);
+                            showMissionGuides, hiddenDroneId, showGlbNodeColors);
                     },
                     benchmarkMode_ ? &benchmarkSession_.CurrentFrame()
                         .scenePanelRenderMicroseconds : nullptr);
@@ -554,10 +557,11 @@ void DroneSimApp::RenderFrame()
                 return view_->RenderCameraPanel(simulation_, droneId,
                     [this](const glm::mat4& view, const glm::mat4& projection,
                         const glm::vec3& cameraPosition, bool showMissionGuides,
-                        std::optional<dronesim::simulation::DroneId> hiddenDroneId)
+                        std::optional<dronesim::simulation::DroneId> hiddenDroneId,
+                        bool showGlbNodeColors)
                     {
                         DrawWorld(view, projection, cameraPosition,
-                            showMissionGuides, hiddenDroneId);
+                            showMissionGuides, hiddenDroneId, showGlbNodeColors);
                     },
                     benchmarkMode_ ? &benchmarkSession_.CurrentFrame()
                         .cameraSceneRenderMicroseconds : nullptr);
@@ -661,11 +665,13 @@ void DroneSimApp::UpdateEoCamera(
 
 void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, bool showMissionGuides,
-    std::optional<dronesim::simulation::DroneId> hiddenDroneId)
+    std::optional<dronesim::simulation::DroneId> hiddenDroneId,
+    bool showGlbNodeColors)
 {
     renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
     if (trainingRangeScene_)
-        trainingRangeScene_->Draw(*renderer_, *shader_, view, projection, cameraPosition);
+        trainingRangeScene_->Draw(*renderer_, *shader_, view, projection,
+            cameraPosition, showGlbNodeColors);
 
     const auto drawRouteSegment = [this, &view, &projection, &cameraPosition](
         const glm::dvec3& startMeters, const glm::dvec3& endMeters,

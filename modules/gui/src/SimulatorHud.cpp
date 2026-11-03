@@ -87,7 +87,9 @@ void CreateDefaultDockspace(ImGuiViewport* viewport)
 
 void DrawScenePanel(const simulation::SimulationCore& simulation,
     simulation::DroneId& observerDroneId,
-    const std::function<std::uint32_t(int, int)>& renderScene)
+    std::span<const graphics::GlbPartBounds> glbParts,
+    bool& showGlbNodeColors,
+    const std::function<std::uint32_t(int, int, bool)>& renderScene)
 {
     if (ImGui::Begin("장면##SceneViewV3"))
     {
@@ -113,11 +115,36 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
             }
         }
 
+        ImGui::Checkbox("GLB 구성요소 색으로 구분", &showGlbNodeColors);
+        if (ImGui::CollapsingHeader("GLB 구성요소 이름"))
+        {
+            ImGui::TextDisabled("색상 표시를 켜면 목록과 장면의 색이 맞춰집니다.");
+            if (ImGui::BeginChild("GLB 구성요소 목록", ImVec2(0.0F, 125.0F), true))
+            {
+                for (std::size_t index = 0; index < glbParts.size(); ++index)
+                {
+                    const auto& part = glbParts[index];
+                    ImGui::PushID(static_cast<int>(index));
+                    ImGui::ColorButton("##GLB노드색상",
+                        ImVec4(part.debugColor.r, part.debugColor.g,
+                            part.debugColor.b, part.debugColor.a),
+                        ImGuiColorEditFlags_NoTooltip, ImVec2(16.0F, 16.0F));
+                    ImGui::SameLine();
+                    ImGui::Text("GLB 구성요소 %02zu", index + 1U);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("원본 노드 이름: %s", part.nodeName.c_str());
+                    ImGui::PopID();
+                }
+            }
+            ImGui::EndChild();
+        }
+
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const ImVec2 imageSize{
             std::max(1.0F, available.x), std::max(1.0F, available.y)};
         const std::uint32_t texture = renderScene(
-            static_cast<int>(imageSize.x), static_cast<int>(imageSize.y));
+            static_cast<int>(imageSize.x), static_cast<int>(imageSize.y),
+            showGlbNodeColors);
         ImGui::Image(static_cast<ImTextureID>(texture), imageSize,
             ImVec2{0.0F, 1.0F}, ImVec2{1.0F, 0.0F});
     }
@@ -408,7 +435,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const communication::DroneSocketTransport* socketTransport,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
-    const std::function<std::uint32_t(int, int)>& renderScene,
+    std::span<const graphics::GlbPartBounds> glbParts,
+    const std::function<std::uint32_t(int, int, bool)>& renderScene,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
     HudRenderTimings* timings)
 {
@@ -424,7 +452,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
-    DrawScenePanel(simulation, observerDroneId, renderScene);
+    DrawScenePanel(simulation, observerDroneId, glbParts,
+        showGlbNodeColors_, renderScene);
     DrawCameraPanel(simulation, observerDroneId, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected,
         fleetReturnCanStart, startFleetReturn,

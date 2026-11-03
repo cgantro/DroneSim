@@ -23,6 +23,29 @@ namespace
 {
 using glb_detail::Json;
 
+glm::vec4 DebugColor(std::size_t index)
+{
+    // 색상환에서 일정한 간격으로 색을 골라 가까운 메시끼리도 쉽게 구별한다.
+    constexpr float goldenAngleTurns = 0.61803398875F;
+    const float hue = std::fmod(static_cast<float>(index) * goldenAngleTurns, 1.0F);
+    const float sector = hue * 6.0F;
+    const float chroma = 0.82F;
+    const float secondary = chroma * (1.0F - std::abs(
+        std::fmod(sector, 2.0F) - 1.0F));
+    const float brightnessOffset = 0.13F;
+    glm::vec3 color{0.0F};
+    switch (static_cast<int>(sector))
+    {
+    case 0: color = {chroma, secondary, 0.0F}; break;
+    case 1: color = {secondary, chroma, 0.0F}; break;
+    case 2: color = {0.0F, chroma, secondary}; break;
+    case 3: color = {0.0F, secondary, chroma}; break;
+    case 4: color = {secondary, 0.0F, chroma}; break;
+    default: color = {chroma, 0.0F, secondary}; break;
+    }
+    return glm::vec4(color + brightnessOffset, 1.0F);
+}
+
 glm::vec3 ReadVec3(const Json& values, const char* name,
     const glm::vec3& defaultValue)
 {
@@ -240,7 +263,9 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
     const Json& roots = scenes.at(sceneIndex).at("nodes");
     auto model = std::unique_ptr<GlbModel>(new GlbModel());
     std::vector<bool> recursionPath(nodes.size(), false);
-    const auto addPrimitive = [&](const Json& node, const glm::mat4& nodeTransform)
+    const auto addPrimitive = [&](const Json& node,
+                                  const glm::mat4& nodeTransform,
+                                  std::size_t nodeIndex)
     {
         const std::size_t meshIndex = node.at("mesh").get<std::size_t>();
         const Json& primitives = meshes.at(meshIndex).at("primitives");
@@ -262,6 +287,11 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
             GlbPartBounds bounds{
                 glm::vec3(std::numeric_limits<float>::max()),
                 glm::vec3(std::numeric_limits<float>::lowest())};
+            bounds.nodeName = node.value("name",
+                "이름 없는 노드 " + std::to_string(nodeIndex + 1U));
+            if (primitives.size() > 1U)
+                bounds.nodeName += " · 메시 " + std::to_string(primitiveIndex + 1U);
+            bounds.debugColor = DebugColor(model->partBounds_.size());
             for (const Vertex& vertex : vertices)
             {
                 const glm::vec3 position = glm::vec3(
@@ -312,7 +342,7 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
         const Json& node = nodes.at(nodeIndex);
         const glm::mat4 worldTransform = parentTransform * ReadNodeTransform(node);
         if (node.contains("mesh"))
-            addPrimitive(node, worldTransform);
+            addPrimitive(node, worldTransform, nodeIndex);
         if (node.contains("children"))
         {
             for (const Json& child : node.at("children"))
@@ -331,17 +361,23 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
 void GlbModel::Draw(const glm::mat4& modelTransform, Renderer& renderer,
     Shader& shader, const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, const Material* fallbackMaterial,
-    const Texture2D* fallbackTexture, bool fallbackTriplanar) const
+    const Texture2D* fallbackTexture, bool fallbackTriplanar,
+    bool showNodeColors) const
 {
     // GLB 재질이 있으면 이를 쓰고, 없을 때만 호출자가 준 기본 재질과 질감을 사용한다.
     static const Material defaultMaterial(glm::vec4(1.0F), 0.0F, 1.0F);
-    for (const auto& part : parts_)
+    for (std::size_t index = 0; index < parts_.size(); ++index)
     {
-        const Material& material = part->hasMaterial
-            ? part->material : (fallbackMaterial != nullptr ? *fallbackMaterial : defaultMaterial);
-        const Texture2D* texture = part->hasMaterial
-            ? part->texture.get() : fallbackTexture;
-        const bool triplanar = !part->hasMaterial && fallbackTriplanar;
+        const auto& part = parts_[index];
+        const Material nodeColorMaterial(partBounds_[index].debugColor,
+            0.0F, 0.82F);
+        const Material& material = showNodeColors
+            ? nodeColorMaterial
+            : (part->hasMaterial ? part->material
+                : (fallbackMaterial != nullptr ? *fallbackMaterial : defaultMaterial));
+        const Texture2D* texture = showNodeColors ? nullptr
+            : (part->hasMaterial ? part->texture.get() : fallbackTexture);
+        const bool triplanar = !showNodeColors && !part->hasMaterial && fallbackTriplanar;
         renderer.Draw(modelTransform * part->nodeTransform, *part->mesh,
             material, shader, view, projection, cameraPosition, texture, triplanar);
     }

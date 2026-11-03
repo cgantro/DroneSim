@@ -47,13 +47,15 @@ std::uint32_t SimulatorView::RenderScenePanel(
     const simulation::SimulationCore& simulation,
     simulation::DroneId observerDroneId,
     const std::vector<flight_planning::BuildingObstacle>& buildings,
-    int width, int height, const DrawWorld& drawWorld,
+    int width, int height, bool showGlbNodeColors,
+    const DrawWorld& drawWorld,
     double* renderMicroseconds)
 {
     simulation::ScopedDuration measure(renderMicroseconds);
     sceneTarget_->Resize(width, height);
     UpdateObserverCamera(simulation, observerDroneId, buildings, width, height);
-    DrawToTarget(*sceneTarget_, *observerCamera_, true, std::nullopt, drawWorld);
+    DrawToTarget(*sceneTarget_, *observerCamera_, true, std::nullopt,
+        showGlbNodeColors, drawWorld);
     return sceneTarget_->GetTextureId();
 }
 
@@ -89,7 +91,7 @@ std::uint32_t SimulatorView::RenderCameraPanel(
         {
             simulation::ScopedDuration measure(renderMicroseconds);
             UpdateEoCamera(simulation, droneId, *view.camera, width, height);
-            DrawToTarget(*view.target, *view.camera, false, droneId, drawWorld);
+            DrawToTarget(*view.target, *view.camera, false, droneId, false, drawWorld);
             view.lastRenderedTick = cameraState.lastFrameTick;
         }
         return view.target->GetTextureId();
@@ -103,7 +105,8 @@ std::uint32_t SimulatorView::RenderCameraPanel(
     {
         simulation::ScopedDuration measure(renderMicroseconds);
         UpdateEoCamera(simulation, droneId, *primaryCamera_, width, height);
-        DrawToTarget(*primaryCameraTarget_, *primaryCamera_, false, droneId, drawWorld);
+        DrawToTarget(*primaryCameraTarget_, *primaryCamera_, false, droneId,
+            false, drawWorld);
         lastPrimaryCameraTick_ = cameraState.lastFrameTick;
     }
     return primaryCameraTarget_->GetTextureId();
@@ -174,11 +177,13 @@ void SimulatorView::UpdateEoCamera(const simulation::SimulationCore& simulation,
 void SimulatorView::DrawToTarget(graphics::MultisampleFramebuffer& target,
     const graphics::Camera& camera, bool showMissionGuides,
     std::optional<simulation::DroneId> hiddenDroneId,
+    bool showGlbNodeColors,
     const DrawWorld& drawWorld)
 {
     renderer_.BeginView(target);
     drawWorld(camera.GetViewMatrix(), camera.GetProjectionMatrix(),
-        camera.GetPosition(), showMissionGuides, hiddenDroneId);
+        camera.GetPosition(), showMissionGuides, hiddenDroneId,
+        showGlbNodeColors);
     renderer_.EndView(target);
 }
 }
