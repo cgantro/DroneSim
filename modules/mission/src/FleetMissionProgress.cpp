@@ -469,7 +469,7 @@ std::optional<FleetMissionReport> FleetMissionState::CurrentReport(
         return std::nullopt;
 
     // 통신이 끊겨도 이 임무에서 이미 착륙을 마친 기록은 최종 결과로 쓸 수 있다.
-    const bool returnedAfterBatteryReserve = assignment.IsLowBatteryReturn()
+    const bool returnedAfterBatteryReserve = assignment.IsLowBatteryReturnComplete()
         && cached->state.missionLeg
             == static_cast<std::uint8_t>(FleetMissionLeg::Returning)
         && cached->state.missionStatus == FleetDroneStatus::LowBatteryReturnComplete;
@@ -503,7 +503,8 @@ bool FleetMissionState::AllDronesReadyToReturn(
         if (!report || report->mode != simulation::FlightMode::Grounded)
             return false;
 
-        const bool landedAfterLowBatteryReserve = assignment->second.IsLowBatteryReturn()
+        const bool landedAfterLowBatteryReserve =
+            assignment->second.IsLowBatteryReturnComplete()
             && report->status == FleetDroneStatus::LowBatteryReturnComplete;
         if (landedAfterLowBatteryReserve)
             return true;

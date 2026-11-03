@@ -119,6 +119,13 @@ public:
         return lowBatteryReturn_;
     }
 
+    /** @brief 배터리 부족 복귀를 마치고 착륙 상태까지 기록했는지 확인한다. */
+    [[nodiscard]] bool IsLowBatteryReturnComplete() const noexcept
+    {
+        return lowBatteryReturn_
+            && status_ == FleetDroneStatus::LowBatteryReturnComplete;
+    }
+
     /** @brief 경로 메시지의 확인·재전송을 맡는 전송 상태를 제공한다. */
     [[nodiscard]] FleetRouteDeliveryState& RouteDelivery() noexcept
     {

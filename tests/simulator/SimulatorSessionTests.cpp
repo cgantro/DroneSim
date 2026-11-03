@@ -637,9 +637,12 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_FALSE(routeProgress.AdvanceWaypointIfReached({1.0, 0.0, 5.0}, 2.0));
     routeProgress.BeginLowBatteryReturn();
     EXPECT_TRUE(routeProgress.IsLowBatteryReturn());
+    EXPECT_FALSE(routeProgress.IsLowBatteryReturnComplete());
     EXPECT_EQ(routeProgress.Leg(), FleetMissionLeg::Returning);
     EXPECT_EQ(routeProgress.Status(), FleetDroneStatus::RoutePending);
     EXPECT_FALSE(routeProgress.HasReceivedRoute());
+    routeProgress.UpdateStatus(FleetDroneStatus::LowBatteryReturnComplete);
+    EXPECT_TRUE(routeProgress.IsLowBatteryReturnComplete());
 
     mission::FleetRouteDeliveryState routeDelivery;
     EXPECT_EQ(routeDelivery.NextSequence(), 1U);

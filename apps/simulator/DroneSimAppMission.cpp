@@ -203,9 +203,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
     for (const auto droneId : droneIds)
     {
         const auto& mission = fleetMission_.Assignment(droneId);
-        if (mission.IsLowBatteryReturn()
-            && mission.Status()
-                == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
+        if (mission.IsLowBatteryReturnComplete())
         {
             returnRoutes.emplace_back();
             continue;
@@ -246,9 +244,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
         for (const DroneId droneId : droneIds)
         {
             const auto& mission = fleetMission_.Assignment(droneId);
-            if (mission.IsLowBatteryReturn()
-                && mission.Status()
-                    == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
+            if (mission.IsLowBatteryReturnComplete())
                 continue;
             if (simulation_.State(droneId).mode == FlightMode::Grounded)
                 dronesToTakeOff.push_back(droneId);
@@ -260,9 +256,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
         auto& mission = fleetMission_.Assignment(droneIds[index]);
-        if (mission.IsLowBatteryReturn()
-            && mission.Status()
-                == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
+        if (mission.IsLowBatteryReturnComplete())
             continue;
         mission.BeginLeg(dronesim::mission::FleetMissionLeg::Returning);
         if (!SendFleetRouteAssignment(droneIds[index],
@@ -295,9 +289,8 @@ bool DroneSimApp::StartFleetRally()
     for (const DroneId droneId : droneIds)
     {
         const auto& mission = fleetMission_.Assignment(droneId);
-        const bool alreadyReturnedForLowBattery = mission.IsLowBatteryReturn()
-            && mission.Status()
-                == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete;
+        const bool alreadyReturnedForLowBattery =
+            mission.IsLowBatteryReturnComplete();
         if (!alreadyReturnedForLowBattery)
             rallyDroneIds.push_back(droneId);
     }
