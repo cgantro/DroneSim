@@ -474,6 +474,8 @@ void JoltPhysicsWorld::SetTerrain(
     throw std::invalid_argument("지형 격자와 높이 값을 확인해 주세요.");
   }
 
+  // 격자 표본은 기준 고도에 대한 높이 오프셋이다. 형상의 원점을 기준 고도에 두고,
+  // X/Z 시작점을 지도 중심에서 반 격자 폭만큼 옮겨 표본이 실제 월드 범위에 놓이게 한다.
   JPH::HeightFieldShapeSettings shapeSettings(
       terrain.heightOffsetsMeters.data(),
       {ToJoltFloat(-terrain.HalfWidthMeters()),
@@ -720,6 +722,8 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds) {
     const JPH::Vec3 joltLinearVelocity =
         bodyInterface.GetLinearVelocity(body.id);
     const glm::dvec3 linearVelocity = ToProjectVector(joltLinearVelocity);
+    // 바람은 월드 좌표, 기체 항력 계수와 투영 면적은 기체 축 기준이다.
+    // 먼저 바람을 뺀 상대 속도를 구한 뒤 역회전해 기체 좌표로 옮긴다.
     const glm::dvec3 relativeAirflowBody =
         glm::inverse(orientation) *
         (linearVelocity - impl_->windVelocityMetersPerSecond);
@@ -734,6 +738,8 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds) {
     for (std::size_t rotor = 0; rotor < actuation.motorSpeeds.size(); ++rotor) {
       const double thrust = rotorThrusts[rotor];
       const glm::dvec3 force = orientation * glm::dvec3{0.0, 0.0, thrust};
+      // 추력은 로터 장착점에 가한다. 중심에서 벗어난 힘의 모멘트 팔이
+      // Jolt에서 자동으로 롤·피치 회전 효과를 만든다.
       const glm::dvec3 rotorPosition =
           position + orientation * parameters.rotors[rotor].positionMeters;
       bodyInterface.AddForce(body.id, ToJoltVector(force),
@@ -748,6 +754,7 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds) {
     bodyInterface.AddTorque(body.id, ToJoltVector(reactionTorque));
     actuation.hasStepped = true;
   }
+  // 네 로터 힘을 모두 등록한 뒤 고정 간격 한 번만 적분해 기체 상태를 함께 갱신한다.
   impl_->physicsSystem.Update(static_cast<float>(fixedStepSeconds), 1,
                               &impl_->tempAllocator, &impl_->jobSystem);
   if (stepDurationMicroseconds) {
