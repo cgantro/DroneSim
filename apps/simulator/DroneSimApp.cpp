@@ -374,8 +374,7 @@ void DroneSimApp::AdvanceSimulationTick()
             ? "DroneSim | 게임패드 연결됨"
             : "DroneSim | 드론 관찰 · EO 영상");
     }
-    const bool manualInputBlocked = missionControlOwnsInput_
-        || missionController_->HasActiveMission();
+    const bool manualInputBlocked = missionControlOwnsInput_ || missionActive;
     manualControlSession_.AdvanceTick(simulation_, manualInputBlocked);
 }
 
@@ -448,9 +447,9 @@ void DroneSimApp::RenderDesktopFrame()
         const bool fleetReturnCanStart = missionController_->FleetReturnCanStart();
         const bool completeFleetMissionCanStart =
             missionController_->CompleteFleetMissionCanStart();
-        const bool formationNetworkActive = missionController_->HasActiveMission();
+        const bool showMissionNetworkStatus = missionController_->HasActiveMission();
         std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
-        if (missionController_->NetworkSession().IsReady() && formationNetworkActive)
+        if (missionController_->NetworkSession().IsReady() && showMissionNetworkStatus)
         {
             networkStatus = MakeFleetNetworkStatus(
                 simulation_, missionController_->NetworkSession(), missionController_->State().LeaderId());
@@ -520,10 +519,10 @@ void DroneSimApp::RenderDesktopFrame()
                     static_cast<void>(StartCompleteFleetMission());
                 },
                 .fleetNetworkStatus = networkStatus ? &*networkStatus : nullptr,
-                .setRadioEnabled = [this, formationNetworkActive](
+                .setRadioEnabled = [this, showMissionNetworkStatus](
                     dronesim::simulation::DroneId droneId, bool enabled)
                 {
-                    if (formationNetworkActive)
+                    if (showMissionNetworkStatus)
                         missionController_->SetRadioEnabled(droneId, enabled);
                 }},
             .timings = benchmarkMode_ ? &hudTimings : nullptr};
