@@ -765,7 +765,6 @@ class ScenarioExecution final
 public:
     explicit ScenarioExecution(ScenarioDefinition definition)
         : definition_(std::move(definition)),
-          tickCount_(definition_.tickCount),
           simulation_(definition_.quadrotorParameters,
               definition_.controllerParameters)
     {
@@ -780,7 +779,7 @@ public:
     /** @brief 남은 Tick을 실행하고 마지막 상태를 포함한 결과를 돌려준다. */
     [[nodiscard]] ScenarioResult Run()
     {
-        for (std::uint64_t tick = 0; tick < tickCount_; ++tick)
+        for (std::uint64_t tick = 0; tick < definition_.tickCount; ++tick)
             AdvanceOneTick(tick);
 
         FinalizeResult();
@@ -825,8 +824,8 @@ private:
         if (definition_.trajectorySampleEveryTicks)
         {
             const std::uint64_t interval = *definition_.trajectorySampleEveryTicks;
-            const std::uint64_t periodicSamples = tickCount_ / interval + 1U;
-            const std::uint64_t finalSampleNeeded = tickCount_ % interval != 0U;
+            const std::uint64_t periodicSamples = definition_.tickCount / interval + 1U;
+            const std::uint64_t finalSampleNeeded = definition_.tickCount % interval != 0U;
             result_.trajectory.reserve(static_cast<std::size_t>(
                 periodicSamples + finalSampleNeeded));
         }
@@ -882,7 +881,8 @@ private:
         if (definition_.trajectorySampleEveryTicks)
         {
             const std::uint64_t interval = *definition_.trajectorySampleEveryTicks;
-            if (completedTick % interval == 0U || completedTick == tickCount_)
+            if (completedTick % interval == 0U
+                || completedTick == definition_.tickCount)
             {
                 RecordTrajectorySample(
                     definition_, simulation_, drones_, completedTick, result_);
@@ -903,7 +903,7 @@ private:
                 ? std::optional<double>{simulation_.Battery(drone.id).RemainingPercent()}
                 : observation.LastKnownBatteryPercent();
             observation.RecordHeartbeat(
-                tickCount_, simulation_.State(drone.id), batteryPercent);
+                definition_.tickCount, simulation_.State(drone.id), batteryPercent);
         }
 
         PopulateFinalSnapshot(definition_, simulation_, drones_, result_);
@@ -911,7 +911,6 @@ private:
     }
 
     ScenarioDefinition definition_;
-    std::uint64_t tickCount_ = 0U;
     SimulationCore simulation_;
     ScenarioDrones drones_;
     ScenarioResult result_;

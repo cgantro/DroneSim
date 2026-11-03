@@ -967,3 +967,8 @@
 
 - `SimulationCore` 공개 함수에서 Flecs 엔티티 조회, 제어·카메라·배터리 컴포넌트 변경, Tick 진행, 지형·충돌 형상 등록과 Jolt 호출을 `EcsStorage` 안으로 옮겼다. 공개 API는 일시정지 같은 실행 제어를 맡고, 내부 저장소는 ECS와 물리를 함께 갱신한다.
 - `DroneModel::Apply`는 모드와 제어 목표만 바꾸므로, 명령마다 물리 상태를 다시 읽던 중복 동기화를 제거했다. DroneSim Release 앱 빌드 성공, `git diff --check` 통과. 시험은 실행하지 않았다.
+
+## 시나리오 실행 Tick 수 중복 제거 — 2026-11-04
+
+- `ScenarioExecution`이 설정에서 복사해 별도로 보관하던 실행 Tick 수를 제거했다. 실행 횟수, 궤적 표본 예약·기록, 마지막 통신 상태의 기준 시각이 모두 검증된 `ScenarioDefinition::tickCount`를 직접 사용한다.
+- 시나리오 전용 Release 라이브러리 빌드 성공, `git diff --check` 통과. 시험은 실행하지 않았다.
