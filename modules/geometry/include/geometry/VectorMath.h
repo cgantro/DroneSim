@@ -54,4 +54,21 @@ namespace dronesim::geometry
         && std::isfinite(value.z)
         && std::isfinite(value.w);
 }
+
+/**
+ * @brief 벡터의 방향은 유지하면서 길이를 지정한 최댓값 이하로 제한한다.
+ * @details 세 좌표를 제곱해 더하면 큰 입력에서 중간 계산이 먼저 넘칠 수 있다.
+ *          std::hypot은 이를 줄여 벡터 길이를 구하고, 제한을 넘을 때만 비율을 곱한다.
+ * @param value 제한할 벡터
+ * @param maximumMagnitude 허용할 최대 길이. 0 이상의 값을 전달한다.
+ */
+[[nodiscard]] inline glm::dvec3 ClampMagnitude(
+    const glm::dvec3& value, double maximumMagnitude) noexcept
+{
+    const double magnitude = std::hypot(value.x, value.y, value.z);
+    if (magnitude <= maximumMagnitude || magnitude == 0.0)
+        return value;
+
+    return value * (maximumMagnitude / magnitude);
+}
 }

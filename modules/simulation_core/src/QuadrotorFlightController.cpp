@@ -1,4 +1,5 @@
 #include "simulation_core/QuadrotorFlightController.h"
+#include "geometry/VectorMath.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/geometric.hpp>
@@ -21,14 +22,6 @@ struct DesiredWrench
     glm::dvec3 forceNewtons{0.0};
     glm::dvec3 torqueNewtonMeters{0.0};
 };
-
-glm::dvec3 LimitMagnitude(const glm::dvec3& value, double maximumMagnitude)
-{
-    const double magnitude = glm::length(value);
-    if (magnitude <= maximumMagnitude || magnitude == 0.0)
-        return value;
-    return value * (maximumMagnitude / magnitude);
-}
 
 double DirectionSign(RotorRotation direction)
 {
@@ -128,7 +121,7 @@ glm::dvec3 AttitudeTorque(
     const glm::dvec3& angularVelocityBody = state.angularVelocityRadiansPerSecond;
     const glm::dvec3 angularAcceleration =
         controller.attitudeGain * angleError - controller.angularRateGain * angularVelocityBody;
-    return LimitMagnitude(
+    return geometry::ClampMagnitude(
         parameters.principalInertiaKilogramMetersSquared * angularAcceleration,
         maximumTorqueNewtonMeters);
 }
@@ -240,7 +233,7 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
 
     glm::dvec3 desiredAcceleration = AccelerationForFlightMode(
         state, control, controller);
-    desiredAcceleration = LimitMagnitude(
+    desiredAcceleration = geometry::ClampMagnitude(
         desiredAcceleration, maximumAccelerationMetersPerSecondSquared);
     const glm::dvec3 gravity{0.0, 0.0, gravityMetersPerSecondSquared};
     glm::dvec3 desiredWorldThrust = parameters.massKilograms * (desiredAcceleration + gravity);

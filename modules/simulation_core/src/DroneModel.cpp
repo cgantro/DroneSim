@@ -14,16 +14,6 @@ namespace dronesim::simulation
 {
 namespace
 {
-glm::dvec3 ClampLength(const glm::dvec3& value, double maximumLength) noexcept
-{
-    const double length = std::hypot(value.x, value.y, value.z);
-    if (length <= maximumLength || length == 0.0)
-    {
-        return value;
-    }
-    return value * (maximumLength / length);
-}
-
 FlightMode ModeAfterVelocityCommand(
     const glm::dvec3& targetVelocityMetersPerSecond,
     const glm::dvec3& currentVelocityMetersPerSecond) noexcept
@@ -112,7 +102,7 @@ CommandResult DroneModel::Apply(
         {
             return CommandResult::InvalidValue;
         }
-        control.targetVelocityMetersPerSecond = ClampLength(
+        control.targetVelocityMetersPerSecond = geometry::ClampMagnitude(
             command.vector, maximumSpeedMetersPerSecond);
         state.mode = ModeAfterVelocityCommand(
             control.targetVelocityMetersPerSecond,
