@@ -4,7 +4,6 @@
 #include "manual_control/GamepadController.h"
 #include "gui/SimulatorHud.h"
 #include "FleetMissionController.h"
-#include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "simulation_core/EoCameraModel.h"
 #include "flight_planning/FormationPlanner.h"
@@ -28,13 +27,9 @@
 
 namespace dronesim::graphics
 {
-class Mesh;
-class GlbModel;
 class Renderer;
 class Shader;
-class Texture2D;
 class Window;
-class X500GimbalAssembly;
 }
 
 namespace dronesim::gui
@@ -44,6 +39,7 @@ class SimulatorView;
 
 namespace dronesim::simulator
 {
+class SimulatorWorldRenderer;
 
 /**
  * @brief 군집 훈련장을 띄우고 드론 편대와 카메라 영상을 보여 준다.
@@ -145,9 +141,6 @@ private:
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition, bool showMissionGuides,
         std::optional<dronesim::simulation::DroneId> hiddenDroneId = std::nullopt);
-    void DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
-        const dronesim::graphics::Material& material,
-        const glm::mat4& view, const glm::mat4& projection);
 
     bool smokeTest_ = false;
     dronesim::simulation::FixedTickAccumulator fixedTickAccumulator_;
@@ -179,20 +172,12 @@ private:
 #ifdef __EMSCRIPTEN__
     std::optional<WebCameraRig> webCameraRig_;
 #endif
-    std::unique_ptr<dronesim::graphics::Mesh> cube_;
     std::unique_ptr<dronesim::scene::TrainingRangeScene> trainingRangeScene_;
-    std::unique_ptr<dronesim::graphics::GlbModel> droneAssemblyModel_;
-    // 모델을 참조하는 조립 객체는 모델보다 먼저 해제되도록 뒤에 선언한다.
-    std::unique_ptr<dronesim::graphics::X500GimbalAssembly> droneGimbalAssembly_;
-    std::unique_ptr<dronesim::graphics::Texture2D> droneSurfaceTexture_;
+    std::unique_ptr<SimulatorWorldRenderer> worldRenderer_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     dronesim::simulation::DroneId observerDroneId_ = 0;
     dronesim::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<dronesim::graphics::Shader> shader_;
-    dronesim::graphics::Material droneMaterial_{
-        glm::vec4{1.0F}, 0.16F, 0.40F};
-    dronesim::graphics::Material missionRouteMaterial_{
-        glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
     dronesim::simulation::WindField windField_;
     dronesim::simulation::SimulationCore simulation_{};
     /** @brief 장면 준비가 끝난 뒤 생성하며 임무 상태와 통신 세션을 소유한다. */

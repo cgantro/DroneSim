@@ -1,4 +1,5 @@
 #include "DroneSimApp.h"
+#include "SimulatorWorldRenderer.h"
 #ifndef __EMSCRIPTEN__
 #include "gui/SimulatorView.h"
 #endif
@@ -7,25 +8,18 @@
 #define NOMINMAX
 #include <Windows.h>
 #endif
-#include "graphics/GlbModel.h"
-#include "graphics/CoordinateTransform.h"
-#include "graphics/Mesh.h"
 #include "graphics/Renderer.h"
-#include "graphics/Texture2D.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
-#include "graphics/X500GimbalAssembly.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
 #include "flight_planning/BuildingObstacle.h"
 #include "flight_planning/FormationPlanner.h"
 #include "terrain/TerrainGrid.h"
 #include <glm/geometric.hpp>
-#include <glm/gtc/quaternion.hpp>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
-#include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -271,13 +265,8 @@ void DroneSimApp::LoadScene()
 
 void DroneSimApp::LoadSceneModels()
 {
-    cube_ = dronesim::graphics::Mesh::CreateCube(1.0F);
-    droneAssemblyModel_ = dronesim::graphics::GlbModel::Load(
-        "models/drones/x500/x500_CAM.glb");
-    droneGimbalAssembly_ = std::make_unique<dronesim::graphics::X500GimbalAssembly>(
-        *droneAssemblyModel_);
-    droneSurfaceTexture_ = dronesim::graphics::Texture2D::LoadFromFile(
-        "models/drones/x500/carbon-weave.ppm");
+    worldRenderer_ = std::make_unique<SimulatorWorldRenderer>();
+    worldRenderer_->LoadModels();
 }
 
 void DroneSimApp::LoadTerrain()
@@ -650,94 +639,11 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, bool showMissionGuides,
     std::optional<dronesim::simulation::DroneId> hiddenDroneId)
 {
-    const auto& targets = missionController_->Environment().Targets();
-    renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
-    if (trainingRangeScene_)
-        trainingRangeScene_->Draw(*renderer_, *shader_, view, projection, cameraPosition);
-
-    const auto drawRouteSegment = [this, &view, &projection, &cameraPosition](
-        const glm::dvec3& startMeters, const glm::dvec3& endMeters,
-        const dronesim::graphics::Material& material)
-    {
-        const glm::vec3 start = dronesim::graphics::EnuPositionToRender(startMeters);
-        const glm::vec3 end = dronesim::graphics::EnuPositionToRender(endMeters);
-        const glm::vec3 direction = end - start;
-        const float length = glm::length(direction);
-        if (length < 0.1F)
-            return;
-
-        const glm::vec3 localY = direction / length;
-        const glm::vec3 referenceAxis = std::abs(localY.y) < 0.99F
-            ? glm::vec3{0.0F, 1.0F, 0.0F}
-            : glm::vec3{1.0F, 0.0F, 0.0F};
-        const glm::vec3 localX = glm::normalize(glm::cross(referenceAxis, localY));
-        const glm::vec3 localZ = glm::cross(localX, localY);
-        glm::mat4 orientation{1.0F};
-        orientation[0] = glm::vec4{localX, 0.0F};
-        orientation[1] = glm::vec4{localY, 0.0F};
-        orientation[2] = glm::vec4{localZ, 0.0F};
-        constexpr float routeThicknessMeters = 0.12F;
-        const glm::mat4 transform = glm::translate(
-            glm::mat4{1.0F}, (start + end) * 0.5F)
-            * orientation
-            * glm::scale(glm::mat4{1.0F},
-                glm::vec3{routeThicknessMeters, length, routeThicknessMeters});
-        DrawCube(transform, cameraPosition, material, view, projection);
-    };
-
-    if (showMissionGuides)
-    {
-        for (const auto& [droneId, mission] : missionController_->State().Assignments())
-        {
-            const auto missionStatus = mission.Status();
-            if (missionStatus != dronesim::mission::FleetDroneStatus::TakeoffReady
-                && missionStatus != dronesim::mission::FleetDroneStatus::Reconnaissance
-                && missionStatus != dronesim::mission::FleetDroneStatus::Landing)
-                continue;
-            glm::dvec3 previous = mission.StartPositionMeters();
-            for (const glm::dvec3& waypoint : mission.RouteWaypoints())
-            {
-                drawRouteSegment(previous, waypoint, missionRouteMaterial_);
-                previous = waypoint;
-            }
-            drawRouteSegment(previous,
-                targets[mission.TargetIndex()].approachPositionMeters,
-                missionRouteMaterial_);
-            const glm::vec3 marker = dronesim::graphics::EnuPositionToRender(
-                targets[mission.TargetIndex()].approachPositionMeters);
-            DrawCube(glm::translate(glm::mat4{1.0F}, marker)
-                * glm::scale(glm::mat4{1.0F}, glm::vec3{0.65F}),
-                cameraPosition, missionRouteMaterial_, view, projection);
-            static_cast<void>(droneId);
-        }
-    }
-
-    for (const dronesim::simulation::DroneId id : simulation_.DroneIds())
-    {
-        if (hiddenDroneId == id)
-            continue;
-
-        const auto& drone = simulation_.State(id);
-        const glm::vec3 position =
-            dronesim::graphics::EnuPositionToRender(drone.positionMeters);
-        const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
-            glm::mat4_cast(dronesim::graphics::EnuOrientationToRender(drone.orientation));
-        // 드론과 짐벌의 부모 관계·장착 위치가 GLB에 있으므로 기체 자세만 적용한다.
-        const auto& gimbal = simulation_.Camera(id).gimbalAngles;
-        const auto partTransforms = droneGimbalAssembly_->PartTransforms({
-            gimbal.yawDegrees, gimbal.rollDegrees, gimbal.pitchUpDegrees});
-        droneAssemblyModel_->Draw(heading, *renderer_, *shader_, view, projection,
-            cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true,
-            partTransforms);
-
-    }
-}
-
-void DroneSimApp::DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
-    const dronesim::graphics::Material& material,
-    const glm::mat4& view, const glm::mat4& projection)
-{
-    renderer_->Draw(transform, *cube_, material, *shader_, view, projection, cameraPosition);
+    const DroneSceneRenderContext context{
+        *renderer_, *shader_, view, projection, cameraPosition,
+        showMissionGuides, hiddenDroneId};
+    worldRenderer_->Draw(*trainingRangeScene_, simulation_, missionController_->State(),
+        missionController_->Environment().Targets(), context);
 }
 
 }
