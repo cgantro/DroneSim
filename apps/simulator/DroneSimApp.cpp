@@ -409,6 +409,15 @@ dronesim::simulation::CommandResult DroneSimApp::ApplySimulationCommand(
 void DroneSimApp::RenderFrame()
 {
 #ifdef __EMSCRIPTEN__
+    RenderWebFrame();
+#else
+    RenderDesktopFrame();
+#endif
+}
+
+#ifdef __EMSCRIPTEN__
+void DroneSimApp::RenderWebFrame()
+{
     int width = 0;
     int height = 0;
     window_->GetFramebufferSize(width, height);
@@ -416,6 +425,7 @@ void DroneSimApp::RenderFrame()
         return;
 
     renderer_->Resize(width, height);
+    // 웹 화면은 관찰 장면에 가로 3분의 2를 주고, 카메라 영상은 실제 화면 비율을 유지한다.
     const int observerWidth = width * 2 / 3;
     const int cameraWidth = width - observerWidth;
     const auto& camera = simulation_.Camera();
@@ -443,7 +453,10 @@ void DroneSimApp::RenderFrame()
             window.copyDroneSimEoViewport($0, $1, $2, $3);
         }
     }, observerWidth, cameraTop, cameraWidth, cameraHeight);
+}
 #else
+void DroneSimApp::RenderDesktopFrame()
+{
     if (hud_)
     {
         const bool fleetReturnCanStart = missionController_->FleetReturnCanStart();
@@ -551,8 +564,8 @@ void DroneSimApp::RenderFrame()
             destination.executionMicroseconds = source.executionMicroseconds;
         }
     }
-#endif
 }
+#endif
 
 void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, bool showMissionGuides,

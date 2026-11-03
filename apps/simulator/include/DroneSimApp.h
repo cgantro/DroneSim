@@ -137,6 +137,13 @@ private:
      * @details 이륙·착륙 버튼은 눌린 순간 한 번 처리하고, 스틱 값은 비행 중 계속 갱신한다.
      */
     void RenderFrame();
+#ifdef __EMSCRIPTEN__
+    /** @brief 웹 화면의 장면과 EO 영상을 브라우저 캔버스에 그린다. */
+    void RenderWebFrame();
+#else
+    /** @brief 데스크톱 HUD가 요청한 장면·카메라 패널을 그린다. */
+    void RenderDesktopFrame();
+#endif
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition, bool showMissionGuides,
         std::optional<dronesim::simulation::DroneId> hiddenDroneId = std::nullopt);
