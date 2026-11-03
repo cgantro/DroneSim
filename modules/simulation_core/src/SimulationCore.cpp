@@ -262,6 +262,69 @@ struct SimulationCore::EcsStorage
         return id;
     }
 
+    CommandResult Apply(DroneId id, const DroneCommand& command) noexcept
+    {
+        flecs::entity* drone = droneRegistry.TryFind(id);
+        if (drone == nullptr)
+            return CommandResult::DroneNotFound;
+
+        DroneState& state = drone->get_mut<DroneState>();
+        DroneControlState& control = drone->get_mut<DroneControlState>();
+        const CommandResult result = DroneModel::Apply(state, control, command);
+        if (result == CommandResult::Accepted)
+        {
+            // 명령으로 초기 속도가 바뀌면 ECS 상태를 강체에도 바로 반영한다.
+            CopyPhysicsState(state, drone->get<PhysicsBody>().handle);
+        }
+        return result;
+    }
+
+    void SetInitialPose(const glm::dvec3& positionMeters, double yawRadians)
+    {
+        if (tickCount != 0)
+            throw std::logic_error("드론 시작 자세는 첫 Tick 전에만 바꿀 수 있습니다.");
+        if (!HasFinitePose(positionMeters, yawRadians))
+            throw std::invalid_argument("드론 시작 위치와 방향은 유한한 값이어야 합니다.");
+
+        flecs::entity& drone = droneRegistry.Find(droneRegistry.PrimaryId());
+        const double groundElevationMeters = positionMeters.z
+            - QuadrotorFlightController::groundedModelOriginHeightMeters;
+        const InitialPose initialPose{
+            positionMeters, yawRadians, groundElevationMeters};
+        drone.set<InitialPose>(initialPose);
+        ResetDrone(drone);
+        SynchronizeCameraPose(drone);
+    }
+
+    void SetInitialState(DroneId id, const DroneState& state)
+    {
+        if (tickCount != 0)
+            throw std::logic_error("드론 시작 상태는 첫 Tick 전에만 바꿀 수 있습니다.");
+
+        flecs::entity& drone = droneRegistry.Find(id);
+        DroneState normalized = DroneModel::PrepareInitialState(
+            state, quadrotorParameters.maximumMotorSpeedRadiansPerSecond);
+        DroneControlState& control = drone.get_mut<DroneControlState>();
+        control.desiredYawRadians = normalized.yawRadians;
+        control.targetVelocityMetersPerSecond = normalized.velocityMetersPerSecond;
+        control.groundElevationMeters = normalized.positionMeters.z
+            - QuadrotorFlightController::groundedModelOriginHeightMeters;
+
+        const JoltRigidBodyHandle body = drone.get<PhysicsBody>().handle;
+        const JoltRigidBodyState rigidBodyState{
+            normalized.positionMeters,
+            normalized.orientation,
+            normalized.velocityMetersPerSecond,
+            normalized.angularVelocityRadiansPerSecond};
+        physics.SetState(body, rigidBodyState);
+        physics.SetInitialMotorSpeeds(body,
+            normalized.motorSpeedsRadiansPerSecond);
+        CopyPhysicsState(normalized, body);
+        normalized.mode = state.mode;
+        drone.set<DroneState>(normalized);
+        SynchronizeCameraPose(drone);
+    }
+
     void SynchronizeCameraPose(
         CameraState& camera, const DroneState& droneState) const
     {
@@ -433,18 +496,7 @@ CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command
     {
         return CommandResult::SimulationPaused;
     }
-    flecs::entity* drone = ecs_->droneRegistry.TryFind(droneId);
-    if (drone == nullptr)
-        return CommandResult::DroneNotFound;
-
-    DroneState& state = drone->get_mut<DroneState>();
-    DroneControlState& control = drone->get_mut<DroneControlState>();
-    const CommandResult result = DroneModel::Apply(state, control, command);
-    if (result == CommandResult::Accepted)
-    {
-        ecs_->CopyPhysicsState(state, drone->get<EcsStorage::PhysicsBody>().handle);
-    }
-    return result;
+    return ecs_->Apply(droneId, command);
 }
 
 DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters,
@@ -459,48 +511,12 @@ DroneId SimulationCore::AddDrone(const glm::dvec3& positionMeters,
 
 void SimulationCore::SetInitialPose(const glm::dvec3& positionMeters, double yawRadians)
 {
-    if (ecs_->tickCount != 0)
-        throw std::logic_error("드론 시작 자세는 첫 Tick 전에만 바꿀 수 있습니다.");
-    if (!HasFinitePose(positionMeters, yawRadians))
-        throw std::invalid_argument("드론 시작 위치와 방향은 유한한 값이어야 합니다.");
-
-    flecs::entity& drone = ecs_->droneRegistry.Find(
-        ecs_->droneRegistry.PrimaryId());
-    const double groundElevationMeters = positionMeters.z
-        - QuadrotorFlightController::groundedModelOriginHeightMeters;
-    const EcsStorage::InitialPose initialPose{
-        positionMeters, yawRadians, groundElevationMeters};
-    drone.set<EcsStorage::InitialPose>(initialPose);
-    ecs_->ResetDrone(drone);
-    ecs_->SynchronizeCameraPose(drone);
+    ecs_->SetInitialPose(positionMeters, yawRadians);
 }
 
 void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
 {
-    if (ecs_->tickCount != 0)
-        throw std::logic_error("드론 시작 상태는 첫 Tick 전에만 바꿀 수 있습니다.");
-    flecs::entity& drone = ecs_->droneRegistry.Find(droneId);
-    DroneState normalized = DroneModel::PrepareInitialState(
-        state, ecs_->quadrotorParameters.maximumMotorSpeedRadiansPerSecond);
-    DroneControlState& control = drone.get_mut<DroneControlState>();
-    control.desiredYawRadians = normalized.yawRadians;
-    control.targetVelocityMetersPerSecond = normalized.velocityMetersPerSecond;
-    control.groundElevationMeters = normalized.positionMeters.z
-        - QuadrotorFlightController::groundedModelOriginHeightMeters;
-    const JoltRigidBodyState rigidBodyState{
-        normalized.positionMeters,
-        normalized.orientation,
-        normalized.velocityMetersPerSecond,
-        normalized.angularVelocityRadiansPerSecond};
-    ecs_->physics.SetState(
-        drone.get<EcsStorage::PhysicsBody>().handle, rigidBodyState);
-    ecs_->physics.SetInitialMotorSpeeds(
-        drone.get<EcsStorage::PhysicsBody>().handle,
-        normalized.motorSpeedsRadiansPerSecond);
-    ecs_->CopyPhysicsState(normalized, drone.get<EcsStorage::PhysicsBody>().handle);
-    normalized.mode = state.mode;
-    drone.set<DroneState>(normalized);
-    ecs_->SynchronizeCameraPose(drone);
+    ecs_->SetInitialState(droneId, state);
 }
 
 bool SimulationCore::RemoveDrone(DroneId droneId)
