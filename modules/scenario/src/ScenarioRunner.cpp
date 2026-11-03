@@ -304,7 +304,8 @@ void UpdateDroneObservations(
         // 짧은 누락은 Stale, 설정한 제한 시간을 넘긴 누락은 Unknown으로 표시한다.
         const DroneCommunicationStatus newStatus = observation.RecordMissedHeartbeat(
             tick, outage->heartbeatTimeoutTicks);
-        if (observation.IsConnected())
+        // 상태를 Stale로 바꾸기 전에 연결 중이었는지 확인해 첫 끊김만 기록한다.
+        if (previousStatus == DroneCommunicationStatus::Connected)
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + droneName + " 드론의 하트비트가 끊겼습니다.");
