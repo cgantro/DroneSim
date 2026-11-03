@@ -7,6 +7,15 @@
 
 namespace dronesim::manual_control
 {
+/** @brief 앱 화면에 알려야 할 게임패드 연결 상태 변화다. */
+enum class GamepadNotice
+{
+    None,
+    Connected,
+    UnsupportedDevice,
+    UnsupportedDeviceRemoved
+};
+
 /** @brief 게임패드 연결 상태와 버튼 입력 변화를 관리한다. */
 class GamepadController final
 {
@@ -18,7 +27,8 @@ public:
         bool externalInputReceived = false;
         std::optional<simulation::DroneCommand> flightAction;
         std::optional<PilotCommand> pilotCommand;
-        std::optional<std::string> windowTitle;
+        GamepadNotice notice = GamepadNotice::None;
+        std::string deviceName;
     };
 
     /** @brief 현재 기체 상태와 임무 입력 잠금 여부에 맞춰 새 조종 입력을 읽는다. */

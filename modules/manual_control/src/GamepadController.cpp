@@ -87,13 +87,13 @@ GamepadController::Update GamepadController::Poll(bool missionOwnsInput,
             && unsupportedJoystickId_ != scan.unsupportedJoystickId)
         {
             const char* name = glfwGetJoystickName(scan.unsupportedJoystickId);
-            update.windowTitle = std::string{"DroneSim | 게임패드 형식 미지원: "}
-                + (name != nullptr ? name : "이름 없음");
+            update.notice = GamepadNotice::UnsupportedDevice;
+            update.deviceName = name != nullptr ? name : "이름 없음";
             unsupportedJoystickId_ = scan.unsupportedJoystickId;
         }
         else if (scan.unsupportedJoystickId < 0 && unsupportedJoystickId_ >= 0)
         {
-            update.windowTitle = "DroneSim | 드론 관찰 · EO 영상";
+            update.notice = GamepadNotice::UnsupportedDeviceRemoved;
             unsupportedJoystickId_ = -1;
         }
         return update;
@@ -130,7 +130,7 @@ GamepadController::Update GamepadController::Poll(bool missionOwnsInput,
     }
 
     if (update.connectionChanged)
-        update.windowTitle = "DroneSim | 게임패드 연결됨";
+        update.notice = GamepadNotice::Connected;
     takeoffButtonWasPressed_ = takeoffPressed;
     landButtonWasPressed_ = landPressed;
     return update;

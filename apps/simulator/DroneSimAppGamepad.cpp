@@ -7,8 +7,20 @@ void DroneSimApp::PollGamepad()
 {
     const auto update = gamepadController_.Poll(missionControlOwnsInput_,
         simulation_.State().mode, simulation_.State().yawRadians);
-    if (update.windowTitle)
-        window_->SetTitle(*update.windowTitle);
+    switch (update.notice)
+    {
+    case dronesim::manual_control::GamepadNotice::Connected:
+        window_->SetTitle("DroneSim | 게임패드 연결됨");
+        break;
+    case dronesim::manual_control::GamepadNotice::UnsupportedDevice:
+        window_->SetTitle("DroneSim | 게임패드 형식 미지원: " + update.deviceName);
+        break;
+    case dronesim::manual_control::GamepadNotice::UnsupportedDeviceRemoved:
+        window_->SetTitle("DroneSim | 드론 관찰 · EO 영상");
+        break;
+    case dronesim::manual_control::GamepadNotice::None:
+        break;
+    }
     if (update.connectionChanged && !update.connected)
         pendingControllerAction_.reset();
     if (update.connectionChanged && !update.connected && !missionControlOwnsInput_)
