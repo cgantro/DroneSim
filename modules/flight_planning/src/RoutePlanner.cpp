@@ -47,14 +47,7 @@ bool IsInsideObstacleClearance(
         return false;
     if (geometry::ContainsPointInPolygon(point, outline))
         return true;
-
-    for (std::size_t index = 0; index < outline.size(); ++index)
-    {
-        if (geometry::SquaredDistanceToSegment(point, outline[index],
-                outline[(index + 1U) % outline.size()]) < clearanceSquared)
-            return true;
-    }
-    return false;
+    return geometry::SquaredDistanceToPolygon(point, outline) < clearanceSquared;
 }
 
 bool IsBlocked(

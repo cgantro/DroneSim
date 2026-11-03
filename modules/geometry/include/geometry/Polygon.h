@@ -20,9 +20,13 @@ namespace dronesim::geometry
     const glm::dvec2& end) noexcept;
 
 /**
- * @brief 다각형 내부는 0, 바깥은 가장 가까운 변까지의 거리를 반환한다.
+ * @brief 다각형 내부는 0, 바깥은 가장 가까운 변까지 거리의 제곱을 반환한다.
  * @details 꼭짓점이 세 개보다 적으면 다각형이 아니므로 무한대를 반환한다.
  */
+[[nodiscard]] double SquaredDistanceToPolygon(
+    const glm::dvec2& point, std::span<const glm::dvec2> outline) noexcept;
+
+/** @brief 점과 다각형 사이의 거리를 미터 단위로 반환한다. */
 [[nodiscard]] double DistanceToPolygon(
     const glm::dvec2& point, std::span<const glm::dvec2> outline) noexcept;
 }

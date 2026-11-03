@@ -48,7 +48,7 @@ double SquaredDistanceToSegment(
     return glm::dot(difference, difference);
 }
 
-double DistanceToPolygon(
+double SquaredDistanceToPolygon(
     const glm::dvec2& point, std::span<const glm::dvec2> outline) noexcept
 {
     if (outline.size() < 3U)
@@ -56,7 +56,7 @@ double DistanceToPolygon(
     if (ContainsPointInPolygon(point, outline))
         return 0.0;
 
-    // 모든 변의 거리 제곱을 비교하고, 가장 가까운 변을 찾은 뒤 마지막에만 제곱근을 구한다.
+    // 모든 변의 거리 제곱을 비교한다. 안전거리 비교만 필요한 호출자는 제곱근을 구하지 않아도 된다.
     double nearestDistanceSquared = std::numeric_limits<double>::infinity();
     for (std::size_t index = 0; index < outline.size(); ++index)
     {
@@ -64,6 +64,12 @@ double DistanceToPolygon(
             SquaredDistanceToSegment(point, outline[index],
                 outline[(index + 1U) % outline.size()]));
     }
-    return std::sqrt(nearestDistanceSquared);
+    return nearestDistanceSquared;
+}
+
+double DistanceToPolygon(
+    const glm::dvec2& point, std::span<const glm::dvec2> outline) noexcept
+{
+    return std::sqrt(SquaredDistanceToPolygon(point, outline));
 }
 }
