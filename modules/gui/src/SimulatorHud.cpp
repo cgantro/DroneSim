@@ -1,5 +1,6 @@
 #include "gui/SimulatorHud.h"
 #include "gui/SimulatorView.h"
+#include "gui/GuiText.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -11,11 +12,6 @@ namespace dronesim::gui
 {
 namespace
 {
-std::string DroneName(simulation::DroneId id)
-{
-    return "드론 " + std::to_string(id);
-}
-
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
     const ImGuiID dockspaceId = ImGui::GetID("DroneSimDockspaceV5");
@@ -52,12 +48,12 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
             if (observerDroneId == 0U)
                 observerDroneId = simulation.PrimaryDroneId();
 
-            const std::string selectedName = DroneName(observerDroneId);
+            const std::string selectedName = DroneLabel(observerDroneId);
             if (ImGui::BeginCombo("장면 시점 드론", selectedName.c_str()))
             {
                 for (const simulation::DroneId droneId : droneIds)
                 {
-                    const std::string name = DroneName(droneId);
+                    const std::string name = DroneLabel(droneId);
                     const bool selected = droneId == observerDroneId;
                     if (ImGui::Selectable(name.c_str(), selected))
                         observerDroneId = droneId;
@@ -140,12 +136,12 @@ void DrawCameraPanel(
                 == droneIds.end())
                 observerDroneId = simulation.PrimaryDroneId();
 
-            const std::string selectedLabel = DroneName(observerDroneId);
+            const std::string selectedLabel = DroneLabel(observerDroneId);
             if (ImGui::BeginCombo("선택한 드론", selectedLabel.c_str()))
             {
                 for (const simulation::DroneId droneId : droneIds)
                 {
-                    const std::string label = DroneName(droneId);
+                    const std::string label = DroneLabel(droneId);
                     const bool selected = droneId == observerDroneId;
                     if (ImGui::Selectable(label.c_str(), selected))
                         observerDroneId = droneId;
@@ -209,59 +205,6 @@ void DrawCameraPanel(
     ImGui::End();
 }
 
-void DrawFlightStatusPanel(
-    const simulation::SimulationCore& simulation,
-    bool gamepadConnected,
-    bool fleetReturnCanStart,
-    const std::function<void()>& startFleetReturn,
-    const std::string& completeFleetMissionStatus,
-    bool completeFleetMissionCanStart,
-    const std::function<void()>& startCompleteFleetMission,
-    const FleetNetworkStatus* fleetNetworkStatus,
-    NetworkFaultPanel& networkFaultPanel,
-    const std::function<void(simulation::DroneId, bool)>&
-        setFormationNodeRadioEnabled)
-{
-    if (ImGui::Begin("운용##OperationsV5"))
-    {
-        const auto& primary = simulation.State();
-        ImGui::Text("주 드론: %s", DroneName(simulation.PrimaryDroneId()).c_str());
-        ImGui::Text("비행 상태: %s", simulation::ToString(primary.mode).data());
-        ImGui::Text("위치 [m]: X %.2f   Y %.2f   높이 %.2f",
-            primary.positionMeters.x, primary.positionMeters.y, primary.positionMeters.z);
-        ImGui::Text("모의 시간: %.2f초   진행 Tick: %llu",
-            simulation.SimulationTimeSeconds(),
-            static_cast<unsigned long long>(simulation.TickCount()));
-        ImGui::Separator();
-        ImGui::Text("임무: %s", completeFleetMissionStatus.c_str());
-        if (completeFleetMissionCanStart
-            && ImGui::Button("편대 정찰 임무 시작"))
-            startCompleteFleetMission();
-        else if (!completeFleetMissionCanStart)
-            ImGui::TextDisabled("모든 드론이 지상에 있고 다른 임무가 없어야 합니다.");
-        if (fleetReturnCanStart && ImGui::Button("출발 지점으로 복귀"))
-            startFleetReturn();
-
-        if (fleetNetworkStatus != nullptr)
-            networkFaultPanel.Render(*fleetNetworkStatus,
-                setFormationNodeRadioEnabled);
-        ImGui::Separator();
-        ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
-        ImGui::Separator();
-        ImGui::Text("게임패드: %s",
-            gamepadConnected ? "연결됨" : "연결 안 됨");
-        ImGui::Separator();
-        ImGui::Text("편대 상태 (%zu대)", simulation.DroneCount());
-        for (const simulation::DroneId id : simulation.DroneIds())
-        {
-            const auto& drone = simulation.State(id);
-            ImGui::Text("%s  %-16s  (%.1f, %.1f, %.1f) m",
-                DroneName(id).c_str(), simulation::ToString(drone.mode).data(),
-                drone.positionMeters.x, drone.positionMeters.y, drone.positionMeters.z);
-        }
-    }
-    ImGui::End();
-}
 }
 
 SimulatorHud::SimulatorHud(GLFWwindow* window)
@@ -297,12 +240,17 @@ void SimulatorHud::Render(const SimulatorHudFrame& frame)
     DrawScenePanel(simulation, observerDroneId, sceneView, renderScene);
     miniMapPanel_.Render(buildings, drones, routes, groundSizeMeters);
     DrawCameraPanel(simulation, observerDroneId, renderCamera, setCameraGimbalAngles);
-    DrawFlightStatusPanel(simulation, gamepadConnected,
-        fleetReturnCanStart, startFleetReturn,
-        completeFleetMissionStatus, completeFleetMissionCanStart,
-        startCompleteFleetMission,
-        fleetNetworkStatus, networkFaultPanel_,
-        setFormationNodeRadioEnabled);
+    const OperationsPanelFrame operationsFrame{
+        .simulation = simulation,
+        .gamepadConnected = gamepadConnected,
+        .fleetReturnCanStart = fleetReturnCanStart,
+        .startFleetReturn = startFleetReturn,
+        .completeFleetMissionStatus = completeFleetMissionStatus,
+        .completeFleetMissionCanStart = completeFleetMissionCanStart,
+        .startCompleteFleetMission = startCompleteFleetMission,
+        .fleetNetworkStatus = fleetNetworkStatus,
+        .setRadioEnabled = setFormationNodeRadioEnabled};
+    operationsPanel_.Render(operationsFrame);
 
     frameBackend_.Draw(timings);
 }

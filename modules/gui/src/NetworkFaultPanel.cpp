@@ -1,4 +1,5 @@
 #include "gui/NetworkFaultPanel.h"
+#include "gui/GuiText.h"
 
 #include <imgui.h>
 
@@ -39,7 +40,7 @@ void NetworkFaultPanel::Render(const FleetNetworkStatus& status,
         names.reserve(status.drones.size());
         namePointers.reserve(status.drones.size());
         for (const auto& drone : status.drones)
-            names.push_back("드론 " + std::to_string(drone.id));
+            names.push_back(DroneLabel(drone.id));
         for (const std::string& name : names)
             namePointers.push_back(name.c_str());
 
@@ -73,11 +74,11 @@ void NetworkFaultPanel::Render(const FleetNetworkStatus& status,
     {
         const auto& event = status.recentEvents[
             status.recentEvents.size() - 1U - offset];
-        ImGui::Text("%.2f초  %s  드론 %llu → 드론 %llu",
+        const std::string sourceName = DroneLabel(event.source);
+        const std::string destinationName = DroneLabel(event.destination);
+        ImGui::Text("%.2f초  %s  %s → %s",
             static_cast<double>(event.tick) / 60.0,
-            EventLabel(event.kind),
-            static_cast<unsigned long long>(event.source),
-            static_cast<unsigned long long>(event.destination));
+            EventLabel(event.kind), sourceName.c_str(), destinationName.c_str());
     }
 }
 }

@@ -4,8 +4,8 @@
 #include "simulation_core/EoCameraModel.h"
 #include "flight_planning/BuildingObstacle.h"
 #include "gui/MiniMapPanel.h"
-#include "gui/NetworkFaultPanel.h"
 #include "gui/ImGuiFrameBackend.h"
+#include "gui/OperationsPanel.h"
 
 #include <cstdint>
 #include <functional>
@@ -62,6 +62,6 @@ public:
 private:
     ImGuiFrameBackend frameBackend_;
     MiniMapPanel miniMapPanel_;
-    NetworkFaultPanel networkFaultPanel_;
+    OperationsPanel operationsPanel_;
 };
 }

@@ -238,6 +238,7 @@ if(DRONESIM_BUILD_GRAPHICS)
       modules/gui/src/ImGuiFrameBackend.cpp
       modules/gui/src/MiniMapPanel.cpp
       modules/gui/src/NetworkFaultPanel.cpp
+      modules/gui/src/OperationsPanel.cpp
       modules/gui/src/SimulatorHud.cpp
       modules/gui/src/SimulatorView.cpp
     )
