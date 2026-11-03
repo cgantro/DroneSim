@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -9,6 +10,9 @@
 namespace dronesim::communication
 {
 using SocketPort = std::uint16_t;
+
+/** @brief IPv4 UDP 데이터그램 하나에 담을 수 있는 최대 사용자 데이터 크기다. */
+inline constexpr std::size_t maximumDatagramPayloadBytes = 65'507U;
 
 /** @brief 한 드론의 데이터그램 소켓에서 받은 메시지다. */
 struct ReceivedDatagram

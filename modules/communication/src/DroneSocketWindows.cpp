@@ -13,9 +13,6 @@ namespace dronesim::communication
 {
 namespace
 {
-// IPv4 UDP 데이터그램 하나가 담을 수 있는 최대 사용자 데이터 크기다.
-constexpr std::size_t maximumDatagramBytes = 65507U;
-
 class WinsockSession
 {
 public:
@@ -108,7 +105,8 @@ SocketPort DroneSocket::LocalPort() const noexcept
 
 void DroneSocket::SendTo(SocketPort destinationPort, std::string_view payload) const
 {
-    if (destinationPort == 0U || payload.empty() || payload.size() > maximumDatagramBytes)
+    if (destinationPort == 0U || payload.empty()
+        || payload.size() > maximumDatagramPayloadBytes)
         throw std::invalid_argument("드론 UDP 메시지의 포트나 크기를 확인해 주세요.");
 
     sockaddr_in destination{};
@@ -126,7 +124,7 @@ void DroneSocket::SendTo(SocketPort destinationPort, std::string_view payload) c
 std::optional<ReceivedDatagram> DroneSocket::Receive()
 {
     // 허용 크기보다 한 바이트 크게 받아 초과 데이터그램을 식별한다.
-    std::array<char, maximumDatagramBytes + 1U> buffer{};
+    std::array<char, maximumDatagramPayloadBytes + 1U> buffer{};
     sockaddr_in source{};
     int sourceLength = sizeof(source);
     const int received = recvfrom(impl_->socket_.Get(), buffer.data(),

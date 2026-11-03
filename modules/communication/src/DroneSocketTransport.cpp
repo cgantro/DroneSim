@@ -13,7 +13,6 @@ namespace dronesim::communication
 namespace
 {
 using Json = nlohmann::json;
-constexpr std::size_t maximumDatagramBytes = 65507U;
 
 /**
  * @brief 데이터그램 안의 JSON을 통신 패킷으로 해석한다.
@@ -91,7 +90,7 @@ bool DroneSocketTransport::Send(const SocketPacket& packet) const
         {"sequence", packet.sequence},
         {"kind", packet.kind},
         {"payload", packet.payload}}.dump();
-    if (datagram.size() > maximumDatagramBytes)
+    if (datagram.size() > maximumDatagramPayloadBytes)
         return false;
 
     sender->second.SendTo(receiver->second.LocalPort(), datagram);
