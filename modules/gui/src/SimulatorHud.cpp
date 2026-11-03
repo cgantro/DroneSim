@@ -114,11 +114,14 @@ ImU32 RouteColor(std::size_t index)
 
 void DrawBuildingMiniMap(
     std::span<const flight_planning::BuildingObstacle> buildings,
+    std::span<const MiniMapDrone> drones,
     std::span<const MiniMapRoute> routes,
     const glm::dvec2& groundSizeMeters,
+    double& zoom,
+    glm::dvec2& centerMeters,
     ImDrawList* drawList, const ImVec2& sceneMinimum, const ImVec2& sceneMaximum)
 {
-    if (buildings.empty() && routes.empty())
+    if (buildings.empty() && drones.empty() && routes.empty())
         return;
 
     const float panelWidth = sceneMaximum.x - sceneMinimum.x;
@@ -134,10 +137,10 @@ void DrawBuildingMiniMap(
         IM_COL32(210, 220, 225, 190), 0.0F, 0, 1.0F);
     drawList->AddText({mapMinimum.x + 10.0F, mapMinimum.y + 7.0F},
         IM_COL32(245, 245, 245, 255), "평면 지도 · 구조물 높이와 경로");
-    drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.76F,
+    drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.68F,
         {mapMinimum.x + 10.0F, mapMinimum.y + 25.0F},
         IM_COL32(185, 200, 205, 255),
-        "A*: 5m 격자 → 장애물 회피 → 직선 구간 축약 (격자선 25m)");
+        "A*: 5m 격자 → 장애물 회피 → 직선 구간으로 경로 축약");
 
     constexpr float headerHeight = 44.0F;
     constexpr float footerHeight = 25.0F;
@@ -153,15 +156,35 @@ void DrawBuildingMiniMap(
         maximumHeightMeters = std::max(maximumHeightMeters, building.heightMeters);
 
     // 동쪽은 오른쪽, 북쪽은 위쪽으로 놓아 실제 지도처럼 평면에 표시한다.
-    const float scale = static_cast<float>(std::min(
+    const float baseScale = static_cast<float>(std::min(
         drawingSize.x / (2.0 * halfEast), drawingSize.y / (2.0 * halfNorth)));
     const ImVec2 mapCenter{(drawingMinimum.x + drawingMaximum.x) * 0.5F,
         (drawingMinimum.y + drawingMaximum.y) * 0.5F};
+    const bool pointerOverMap = ImGui::IsMouseHoveringRect(drawingMinimum, drawingMaximum);
+    ImGuiIO& io = ImGui::GetIO();
+    if (pointerOverMap && io.MouseWheel != 0.0F)
+    {
+        const double oldZoom = zoom;
+        const double newZoom = std::clamp(
+            zoom * std::pow(1.18, static_cast<double>(io.MouseWheel)), 0.5, 8.0);
+        const double screenEast = ImGui::GetMousePos().x - mapCenter.x;
+        const double screenNorth = ImGui::GetMousePos().y - mapCenter.y;
+        centerMeters.x += screenEast / baseScale * (1.0 / oldZoom - 1.0 / newZoom);
+        centerMeters.y += screenNorth / baseScale * (1.0 / newZoom - 1.0 / oldZoom);
+        zoom = newZoom;
+    }
+    if (pointerOverMap && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+    {
+        const ImVec2 drag = io.MouseDelta;
+        centerMeters.x -= drag.x / (baseScale * zoom);
+        centerMeters.y += drag.y / (baseScale * zoom);
+    }
+    const float scale = baseScale * static_cast<float>(zoom);
     const auto project = [&](const glm::dvec2& position)
     {
         return ImVec2{
-            mapCenter.x + static_cast<float>(position.x) * scale,
-            mapCenter.y - static_cast<float>(position.y) * scale};
+            mapCenter.x + static_cast<float>(position.x - centerMeters.x) * scale,
+            mapCenter.y - static_cast<float>(position.y - centerMeters.y) * scale};
     };
 
     drawList->PushClipRect(mapMinimum, mapMaximum, true);
@@ -300,15 +323,55 @@ void DrawBuildingMiniMap(
         }
     }
 
+    // 각 드론은 방향을 가진 삼각형으로 표시하고, 경로선과 같은 색을 사용한다.
+    for (const MiniMapDrone& drone : drones)
+    {
+        const ImVec2 position = project({drone.positionMeters.x, drone.positionMeters.y});
+        const double screenHeading = -drone.yawRadians;
+        const ImVec2 forward{static_cast<float>(std::cos(screenHeading)),
+            static_cast<float>(std::sin(screenHeading))};
+        const ImVec2 side{-forward.y, forward.x};
+        constexpr float iconSize = 8.0F;
+        const ImVec2 icon[]{
+            ImVec2{position.x + forward.x * iconSize,
+                position.y + forward.y * iconSize},
+            ImVec2{position.x - forward.x * iconSize * 0.7F
+                    + side.x * iconSize * 0.7F,
+                position.y - forward.y * iconSize * 0.7F
+                    + side.y * iconSize * 0.7F},
+            ImVec2{position.x - forward.x * iconSize * 0.7F
+                    - side.x * iconSize * 0.7F,
+                position.y - forward.y * iconSize * 0.7F
+                    - side.y * iconSize * 0.7F}};
+        const ImU32 color = RouteColor(static_cast<std::size_t>(drone.droneId));
+        drawList->AddTriangleFilled(icon[0], icon[1], icon[2], color);
+        drawList->AddTriangle(icon[0], icon[1], icon[2],
+            IM_COL32(8, 12, 14, 255), 1.5F);
+        const std::string label = "D" + std::to_string(drone.droneId);
+        drawList->AddText({position.x + 8.0F, position.y + 5.0F},
+            IM_COL32(255, 255, 255, 255), label.c_str());
+
+        const std::string itemId = "##드론_" + std::to_string(drone.droneId);
+        ImGui::SetCursorScreenPos({position.x - 10.0F, position.y - 10.0F});
+        ImGui::InvisibleButton(itemId.c_str(), ImVec2{20.0F, 20.0F});
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("드론 %llu\n동 %.1f m · 북 %.1f m · 고도 %.1f m",
+                static_cast<unsigned long long>(drone.droneId),
+                drone.positionMeters.x, drone.positionMeters.y,
+                drone.positionMeters.z);
+        }
+    }
+
     drawList->AddRect(drawingMinimum, drawingMaximum,
         IM_COL32(185, 200, 205, 180));
     drawList->AddText({drawingMaximum.x - 14.0F, drawingMinimum.y + 2.0F},
         IM_COL32(235, 240, 242, 255), "N");
     drawList->AddText({drawingMaximum.x - 14.0F, drawingMaximum.y - 16.0F},
         IM_COL32(235, 240, 242, 255), "E");
-    const std::string heightLegend = "건물색=높이 0–"
+    const std::string heightLegend = "건물 높이 0–"
         + std::to_string(static_cast<int>(std::ceil(maximumHeightMeters)))
-        + " m (청록→주황) · 선=드론별 경로";
+        + " m (청록→주황) · 드론=삼각형 · 경로=선";
     drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.72F,
         {mapMinimum.x + 10.0F, mapMaximum.y - 18.0F},
         IM_COL32(205, 215, 220, 255), heightLegend.c_str());
@@ -356,15 +419,26 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
 
 void DrawMiniMapPanel(
     std::span<const flight_planning::BuildingObstacle> buildings,
+    std::span<const MiniMapDrone> drones,
     std::span<const MiniMapRoute> routes,
-    const glm::dvec2& groundSizeMeters)
+    const glm::dvec2& groundSizeMeters,
+    double& zoom,
+    glm::dvec2& centerMeters)
 {
     if (ImGui::Begin("미니맵##MiniMapV1"))
     {
+        ImGui::TextDisabled("휠 확대 · 가운데 버튼 드래그 이동");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("전체 보기"))
+        {
+            zoom = 1.0;
+            centerMeters = glm::dvec2{0.0};
+        }
         const ImVec2 minimum = ImGui::GetCursorScreenPos();
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const ImVec2 maximum{minimum.x + available.x, minimum.y + available.y};
-        DrawBuildingMiniMap(buildings, routes, groundSizeMeters,
+        DrawBuildingMiniMap(buildings, drones, routes, groundSizeMeters,
+            zoom, centerMeters,
             ImGui::GetWindowDrawList(), minimum, maximum);
     }
     ImGui::End();
@@ -655,6 +729,7 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled,
     std::span<const flight_planning::BuildingObstacle> buildings,
+    std::span<const MiniMapDrone> drones,
     std::span<const MiniMapRoute> routes,
     const glm::dvec2& groundSizeMeters,
     const std::function<std::uint32_t(int, int)>& renderScene,
@@ -674,7 +749,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
     DrawScenePanel(simulation, observerDroneId, renderScene);
-    DrawMiniMapPanel(buildings, routes, groundSizeMeters);
+    DrawMiniMapPanel(buildings, drones, routes, groundSizeMeters,
+        miniMapZoom_, miniMapCenterMeters_);
     DrawCameraPanel(simulation, observerDroneId, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected,
         fleetReturnCanStart, startFleetReturn,

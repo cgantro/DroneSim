@@ -51,6 +51,14 @@ struct MiniMapRoute
     std::vector<glm::dvec3> waypointsMeters;
 };
 
+/** @brief 미니맵에 그릴 드론의 위치와 방향이다. */
+struct MiniMapDrone
+{
+    simulation::DroneId droneId = 0;
+    glm::dvec3 positionMeters{0.0};
+    double yawRadians = 0.0;
+};
+
 /** @brief 비행 상태와 편대 요약을 3D 화면 위에 표시한다. */
 class SimulatorHud
 {
@@ -74,6 +82,7 @@ public:
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
         std::span<const flight_planning::BuildingObstacle> buildings,
+        std::span<const MiniMapDrone> drones,
         std::span<const MiniMapRoute> routes,
         const glm::dvec2& groundSizeMeters,
         const std::function<std::uint32_t(int, int)>& renderScene,
@@ -93,6 +102,8 @@ private:
     bool initialized_ = false;
     int selectedFaultSource_ = 0;
     std::string layoutFile_;
+    double miniMapZoom_ = 1.0;
+    glm::dvec2 miniMapCenterMeters_{0.0};
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };
 }

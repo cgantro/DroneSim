@@ -517,6 +517,14 @@ void DroneSimApp::RenderFrame()
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
+        std::vector<dronesim::gui::MiniMapDrone> miniMapDrones;
+        const auto droneIds = simulation_.DroneIds();
+        miniMapDrones.reserve(droneIds.size());
+        for (const dronesim::simulation::DroneId droneId : droneIds)
+        {
+            const auto& state = simulation_.State(droneId);
+            miniMapDrones.push_back({droneId, state.positionMeters, state.yawRadians});
+        }
         std::vector<dronesim::gui::MiniMapRoute> miniMapRoutes;
         for (const auto& [droneId, mission] : fleetMission_.reconnaissanceByDrone)
         {
@@ -564,6 +572,7 @@ void DroneSimApp::RenderFrame()
                 }
             },
             trainingRangeScene_->BuildingObstacles(),
+            miniMapDrones,
             miniMapRoutes,
             trainingRangeScene_->GroundSizeMeters(),
             [this](int width, int height)
