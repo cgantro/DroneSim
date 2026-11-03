@@ -2,6 +2,7 @@
 
 #include "graphics/GlbModel.h"
 #include "flight_planning/BuildingObstacle.h"
+#include "terrain/TerrainGrid.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -47,12 +48,15 @@ public:
     [[nodiscard]] const BuildingCollisionMesh& CollisionMesh() const noexcept;
     /** @brief 화면 바닥판의 동·북 방향 크기를 미터로 돌려준다. */
     [[nodiscard]] glm::dvec2 GroundSizeMeters() const noexcept;
+    /** @brief 장면 바닥과 같은 크기의 지형 높이 격자를 돌려준다. */
+    [[nodiscard]] const terrain::TerrainGrid& Terrain() const noexcept;
 
 private:
     std::unique_ptr<dronesim::graphics::GlbModel> cityModel_;
     glm::vec3 mapOffset_{0.0F};
     glm::mat4 mapTransform_{1.0F};
     glm::dvec2 groundSizeMeters_{0.0};
+    terrain::TerrainGrid terrain_;
     BuildingCollisionMesh collisionMesh_;
     std::vector<dronesim::flight_planning::BuildingObstacle> buildingObstacles_;
 };

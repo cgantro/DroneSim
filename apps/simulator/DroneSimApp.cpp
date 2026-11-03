@@ -16,7 +16,6 @@
 #include "simulation_core/ScopedDuration.h"
 #include "flight_planning/BuildingObstacle.h"
 #include "flight_planning/FormationPlanner.h"
-#include "terrain/TerrainGrid.h"
 #include <glm/geometric.hpp>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -214,7 +213,7 @@ bool DroneSimApp::InitializeGraphicsStep()
         return false;
     case GraphicsStartupStep::Terrain:
         SetStartupDetail("지도 바닥과 물리 지면을 맞추고 있습니다.");
-        LoadTerrain();
+        RegisterSceneTerrain();
         graphicsStartupStep_ = GraphicsStartupStep::StartingState;
         return false;
     case GraphicsStartupStep::StartingState:
@@ -271,26 +270,16 @@ void DroneSimApp::LoadSceneModels()
     worldRenderer_->LoadModels();
 }
 
-void DroneSimApp::LoadTerrain()
+void DroneSimApp::RegisterSceneTerrain()
 {
     if (!trainingRangeScene_)
         throw std::logic_error("물리 지면을 만들기 전에 도시 바닥을 읽어야 합니다.");
 
-    // GLB 바닥판의 크기와 같은 범위를 경로 계획과 Jolt 충돌에 사용한다.
-    constexpr std::uint32_t sampleCount = 61U;
-    const glm::dvec2 groundSize = trainingRangeScene_->GroundSizeMeters();
-    terrainGrid_.sampleCount = sampleCount;
-    terrainGrid_.spacingXMeters = static_cast<float>(
-        groundSize.x / static_cast<double>(sampleCount - 1U));
-    terrainGrid_.spacingYMeters = static_cast<float>(
-        groundSize.y / static_cast<double>(sampleCount - 1U));
-    terrainGrid_.referenceElevationMeters = 0.0F;
-    terrainGrid_.heightOffsetsMeters.assign(
-        static_cast<std::size_t>(sampleCount) * sampleCount, 0.0F);
-    simulation_.SetTerrain(terrainGrid_);
+    const auto& terrain = trainingRangeScene_->Terrain();
+    simulation_.SetTerrain(terrain);
 
     missionController_ = std::make_unique<FleetMissionController>(
-        simulation_, terrainGrid_, *trainingRangeScene_);
+        simulation_, terrain, *trainingRangeScene_);
 }
 void DroneSimApp::LoadMapFeatures()
 {
@@ -308,7 +297,8 @@ void DroneSimApp::InitializeStartingState()
         throw std::runtime_error("훈련장 정찰 지점을 준비하지 못했습니다.");
     const glm::dvec2 demoDroneStartMeters =
         missionController_->Environment().StagingPositionMeters();
-    const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
+    const auto& terrain = trainingRangeScene_->Terrain();
+    const double startElevation = terrain.HeightAtLocalMeters(demoDroneStartMeters);
     const glm::dvec2 toFirstTarget = glm::dvec2{
         targets.front().approachPositionMeters.x,
         targets.front().approachPositionMeters.y} - demoDroneStartMeters;
@@ -333,7 +323,7 @@ void DroneSimApp::InitializeStartingState()
         for (std::size_t index = 1U; index < trainingFleetSize; ++index)
         {
             const glm::dvec2 position = demoDroneStartMeters + formationOffsets[index];
-            const double groundMeters = terrainGrid_.HeightAtLocalMeters(position);
+            const double groundMeters = terrain.HeightAtLocalMeters(position);
             const auto droneId = simulation_.AddDrone(
                 {position, groundMeters
                     + dronesim::simulation::QuadrotorFlightController::groundedModelOriginHeightMeters},

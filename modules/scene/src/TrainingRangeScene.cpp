@@ -97,6 +97,18 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot)
         static_cast<double>(groundBounds.maximum.x - groundBounds.minimum.x) * mapScale,
         static_cast<double>(groundBounds.maximum.z - groundBounds.minimum.z) * mapScale};
 
+    // 현재 훈련장은 평탄한 바닥으로 가정한다. 61×61 격자를 쓰면 화면 바닥과
+    // 같은 외곽 범위를 경로 탐색과 물리 충돌에서도 공유할 수 있다.
+    constexpr std::uint32_t terrainSampleCount = 61U;
+    terrain_.sampleCount = terrainSampleCount;
+    terrain_.spacingXMeters = static_cast<float>(
+        groundSizeMeters_.x / static_cast<double>(terrainSampleCount - 1U));
+    terrain_.spacingYMeters = static_cast<float>(
+        groundSizeMeters_.y / static_cast<double>(terrainSampleCount - 1U));
+    terrain_.referenceElevationMeters = 0.0F;
+    terrain_.heightOffsetsMeters.assign(
+        static_cast<std::size_t>(terrainSampleCount) * terrainSampleCount, 0.0F);
+
     for (std::size_t index = 0; index < partBounds.size(); ++index)
     {
         if (index == groundSurfacePart)
@@ -162,5 +174,10 @@ TrainingRangeScene::CollisionMesh() const noexcept
 glm::dvec2 TrainingRangeScene::GroundSizeMeters() const noexcept
 {
     return groundSizeMeters_;
+}
+
+const terrain::TerrainGrid& TrainingRangeScene::Terrain() const noexcept
+{
+    return terrain_;
 }
 }

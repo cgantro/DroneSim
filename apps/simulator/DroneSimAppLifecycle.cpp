@@ -227,7 +227,7 @@ void DroneSimApp::RunFrame(std::chrono::steady_clock::time_point& previousFrame)
         const std::string mode{dronesim::simulation::ToString(state.mode)};
         const double speedMetersPerSecond = glm::length(state.velocityMetersPerSecond);
         const double heightAboveGroundMeters = state.positionMeters.z
-            - terrainGrid_.HeightAtLocalMeters(
+            - trainingRangeScene_->Terrain().HeightAtLocalMeters(
                 {state.positionMeters.x, state.positionMeters.y});
         const bool cameraActive = simulation_.Camera().status
             == dronesim::simulation::CameraStatus::Active;

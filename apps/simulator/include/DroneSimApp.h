@@ -114,7 +114,7 @@ private:
     GraphicsStartupStep graphicsStartupStep_ = GraphicsStartupStep::Window;
     /** @brief 지형·지도 형상·드론 모형과 강체 월드의 충돌 모양을 준비한다. */
     void LoadSceneModels();
-    void LoadTerrain();
+    void RegisterSceneTerrain();
     void LoadMapFeatures();
     void InitializeStartingState();
     void ConfigureTrainingBattery(dronesim::simulation::DroneId droneId);
@@ -189,7 +189,6 @@ private:
     std::unique_ptr<SimulatorWorldRenderer> worldRenderer_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     dronesim::simulation::DroneId observerDroneId_ = 0;
-    dronesim::terrain::TerrainGrid terrainGrid_;
     std::unique_ptr<dronesim::graphics::Shader> shader_;
     dronesim::simulation::WindField windField_;
     dronesim::simulation::SimulationCore simulation_{};
