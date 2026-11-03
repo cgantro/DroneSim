@@ -3,6 +3,7 @@
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
 #include "geometry/Polygon.h"
+#include "geometry/VectorMath.h"
 
 #include <algorithm>
 #include <array>
@@ -18,14 +19,6 @@ namespace dronesim::scene
 {
 namespace
 {
-double Cross(const glm::dvec2& origin, const glm::dvec2& first,
-    const glm::dvec2& second)
-{
-    const glm::dvec2 a = first - origin;
-    const glm::dvec2 b = second - origin;
-    return a.x * b.y - a.y * b.x;
-}
-
 std::vector<glm::dvec2> MakeFootprintHull(std::vector<glm::dvec2> points)
 {
     std::sort(points.begin(), points.end(), [](const auto& left, const auto& right)
@@ -41,7 +34,7 @@ std::vector<glm::dvec2> MakeFootprintHull(std::vector<glm::dvec2> points)
     for (const glm::dvec2& point : points)
     {
         while (hull.size() >= 2U
-            && Cross(hull[hull.size() - 2U], hull.back(), point) <= 0.0)
+            && geometry::Cross2D(hull[hull.size() - 2U], hull.back(), point) <= 0.0)
             hull.pop_back();
         hull.push_back(point);
     }
@@ -49,7 +42,7 @@ std::vector<glm::dvec2> MakeFootprintHull(std::vector<glm::dvec2> points)
     for (auto point = points.rbegin() + 1; point != points.rend(); ++point)
     {
         while (hull.size() > lowerSize
-            && Cross(hull[hull.size() - 2U], hull.back(), *point) <= 0.0)
+            && geometry::Cross2D(hull[hull.size() - 2U], hull.back(), *point) <= 0.0)
             hull.pop_back();
         hull.push_back(*point);
     }

@@ -1,7 +1,7 @@
 #include "communication/VirtualMeshNetwork.h"
 #include "communication/DroneSocketTransport.h"
-#include "geometry/Finite.h"
 #include "geometry/Polygon.h"
+#include "geometry/VectorMath.h"
 
 #include <algorithm>
 #include <cmath>
@@ -18,23 +18,18 @@ namespace
 constexpr double geometryTolerance = 1.0e-9;
 constexpr std::size_t maximumRecordedEvents = 64U;
 
-double Cross(const glm::dvec2& first, const glm::dvec2& second)
-{
-    return first.x * second.y - first.y * second.x;
-}
-
 std::optional<double> SegmentIntersectionParameter(
     const glm::dvec2& start, const glm::dvec2& end,
     const glm::dvec2& edgeStart, const glm::dvec2& edgeEnd)
 {
     const glm::dvec2 ray = end - start;
     const glm::dvec2 edge = edgeEnd - edgeStart;
-    const double denominator = Cross(ray, edge);
+    const double denominator = geometry::Cross2D(ray, edge);
     if (std::abs(denominator) <= geometryTolerance)
         return std::nullopt;
 
-    const double rayParameter = Cross(edgeStart - start, edge) / denominator;
-    const double edgeParameter = Cross(edgeStart - start, ray) / denominator;
+    const double rayParameter = geometry::Cross2D(edgeStart - start, edge) / denominator;
+    const double edgeParameter = geometry::Cross2D(edgeStart - start, ray) / denominator;
     if (rayParameter < -geometryTolerance || rayParameter > 1.0 + geometryTolerance
         || edgeParameter < -geometryTolerance || edgeParameter > 1.0 + geometryTolerance)
         return std::nullopt;

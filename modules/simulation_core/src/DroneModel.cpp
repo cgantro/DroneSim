@@ -1,5 +1,5 @@
 #include "simulation_core/DroneModel.h"
-#include "geometry/Finite.h"
+#include "geometry/VectorMath.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/geometric.hpp>

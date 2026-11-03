@@ -1,5 +1,5 @@
 #include "simulation_core/SimulationCore.h"
-#include "geometry/Finite.h"
+#include "geometry/VectorMath.h"
 #include "simulation_core/SimulationPhysics.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"

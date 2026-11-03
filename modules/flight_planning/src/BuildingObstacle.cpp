@@ -1,6 +1,6 @@
 #include "flight_planning/BuildingObstacle.h"
-#include "geometry/Finite.h"
 #include "geometry/Polygon.h"
+#include "geometry/VectorMath.h"
 
 #include <algorithm>
 

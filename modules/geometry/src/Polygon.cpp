@@ -1,4 +1,5 @@
 #include "geometry/Polygon.h"
+#include "geometry/VectorMath.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,14 +12,6 @@ namespace dronesim::geometry
 {
 namespace
 {
-double Cross2D(const glm::dvec2& first, const glm::dvec2& second,
-    const glm::dvec2& third) noexcept
-{
-    const glm::dvec2 firstEdge = second - first;
-    const glm::dvec2 secondEdge = third - first;
-    return firstEdge.x * secondEdge.y - firstEdge.y * secondEdge.x;
-}
-
 bool PointInTriangle(const glm::dvec2& point, const glm::dvec2& first,
     const glm::dvec2& second, const glm::dvec2& third, double winding) noexcept
 {

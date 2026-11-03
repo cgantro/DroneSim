@@ -1,5 +1,5 @@
 #include "terrain/TerrainGrid.h"
-#include "geometry/Finite.h"
+#include "geometry/VectorMath.h"
 
 #include <algorithm>
 #include <cmath>

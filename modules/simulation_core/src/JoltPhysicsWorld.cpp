@@ -1,7 +1,7 @@
 #include "simulation_core/JoltPhysicsWorld.h"
 #include "simulation_core/CollisionGeometry.h"
 #include "simulation_core/DroneModel.h"
-#include "geometry/Finite.h"
+#include "geometry/VectorMath.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "geometry/Polygon.h"
 #include "terrain/TerrainGrid.h"
