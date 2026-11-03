@@ -87,16 +87,14 @@ SocketReceiveBatch DroneSocketTransport::ReceiveAll()
                 continue;
             }
 
-            const auto sender = std::find_if(sockets_.begin(), sockets_.end(),
-                [&datagram](const auto& entry)
-                {
-                    return entry.second.LocalPort() == datagram->sourcePort;
-                });
             const NetworkNodeId claimedSource = fields["source"].get<NetworkNodeId>();
             const NetworkNodeId claimedDestination =
                 fields["destination"].get<NetworkNodeId>();
+            const auto sender = sockets_.find(claimedSource);
             const std::uint64_t sequence = fields["sequence"].get<std::uint64_t>();
-            if (sender == sockets_.end() || sender->first != claimedSource
+            // 본문에 적힌 드론 ID와 운영체제가 알려 준 실제 출발 포트가 모두 맞아야 한다.
+            if (sender == sockets_.end()
+                || sender->second.LocalPort() != datagram->sourcePort
                 || destination != claimedDestination
                 || sequence > std::numeric_limits<std::uint32_t>::max()
                 || fields["kind"].get<std::string>().empty())
