@@ -236,6 +236,7 @@ if(DRONESIM_BUILD_GRAPHICS)
   if(NOT EMSCRIPTEN)
     add_library(dronesim_gui STATIC
       modules/gui/src/MiniMapPanel.cpp
+      modules/gui/src/NetworkFaultPanel.cpp
       modules/gui/src/SimulatorHud.cpp
       modules/gui/src/SimulatorView.cpp
     )

@@ -4,6 +4,7 @@
 #include "simulation_core/EoCameraModel.h"
 #include "flight_planning/BuildingObstacle.h"
 #include "gui/MiniMapPanel.h"
+#include "gui/NetworkFaultPanel.h"
 
 #include <array>
 #include <cstddef>
@@ -11,7 +12,6 @@
 #include <vector>
 #include <functional>
 #include <span>
-#include <optional>
 #include <string>
 
 struct GLFWwindow;
@@ -41,40 +41,6 @@ struct HudRenderTimings
     std::uint64_t frameIndex = 0;
     std::array<HudGpuTiming, 4> completedGpuFrames{};
     std::size_t completedGpuFrameCount = 0;
-};
-
-/** @brief HUD에 표시할 통신 장애 시험 결과다. 실제 통신망 객체는 포함하지 않는다. */
-struct FleetNetworkStatus
-{
-    enum class EventKind
-    {
-        RadioDisabled,
-        RadioRestored,
-        MessageDelivered,
-        PacketDropped
-    };
-
-    struct Drone
-    {
-        simulation::DroneId id = 0;
-        std::optional<std::uint16_t> socketPort;
-        bool isLeader = false;
-        bool radioEnabled = true;
-        bool linkedToLeader = false;
-    };
-
-    struct RecentEvent
-    {
-        std::uint64_t tick = 0;
-        EventKind kind = EventKind::PacketDropped;
-        simulation::DroneId source = 0;
-        simulation::DroneId destination = 0;
-    };
-
-    std::uint64_t deliveredMessages = 0;
-    std::uint64_t droppedMessages = 0;
-    std::vector<Drone> drones;
-    std::vector<RecentEvent> recentEvents;
 };
 
 using ScenePanelRenderer = std::function<std::uint32_t(int, int)>;
@@ -129,9 +95,9 @@ private:
     void CollectCompletedGpuTimings(HudRenderTimings* timings);
 
     bool initialized_ = false;
-    int selectedFaultSource_ = 0;
     std::string layoutFile_;
     MiniMapPanel miniMapPanel_;
+    NetworkFaultPanel networkFaultPanel_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };
 }

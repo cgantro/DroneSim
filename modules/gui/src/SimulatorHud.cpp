@@ -43,18 +43,6 @@ std::string DroneName(simulation::DroneId id)
     return "드론 " + std::to_string(id);
 }
 
-const char* NetworkEventLabel(FleetNetworkStatus::EventKind kind)
-{
-    switch (kind)
-    {
-    case FleetNetworkStatus::EventKind::RadioDisabled: return "드론 라디오 차단";
-    case FleetNetworkStatus::EventKind::RadioRestored: return "드론 라디오 복구";
-    case FleetNetworkStatus::EventKind::MessageDelivered: return "메시지 전달";
-    case FleetNetworkStatus::EventKind::PacketDropped: return "패킷 폐기";
-    }
-    return "통신 사건";
-}
-
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
     const ImGuiID dockspaceId = ImGui::GetID("DroneSimDockspaceV5");
@@ -248,64 +236,6 @@ void DrawCameraPanel(
     ImGui::End();
 }
 
-void DrawNetworkFaultPanel(
-    const FleetNetworkStatus& networkStatus,
-    int& selectedDroneIndex,
-    const std::function<void(simulation::DroneId, bool)>& setRadioEnabled)
-{
-    ImGui::Separator();
-    ImGui::Text("드론 간 UDP 통신: 직접 연결");
-
-    if (!networkStatus.drones.empty())
-    {
-        selectedDroneIndex = std::clamp(selectedDroneIndex, 0,
-            static_cast<int>(networkStatus.drones.size() - 1U));
-        std::vector<std::string> names;
-        std::vector<const char*> namePointers;
-        names.reserve(networkStatus.drones.size());
-        namePointers.reserve(networkStatus.drones.size());
-        for (const auto& drone : networkStatus.drones)
-            names.push_back(DroneName(drone.id));
-        for (const std::string& name : names)
-            namePointers.push_back(name.c_str());
-
-        ImGui::SetNextItemWidth(-1.0F);
-        ImGui::Combo("시험할 드론", &selectedDroneIndex,
-            namePointers.data(), static_cast<int>(namePointers.size()));
-
-        const auto& drone = networkStatus.drones[
-            static_cast<std::size_t>(selectedDroneIndex)];
-        ImGui::Text("소켓 포트: %u · 편대 연결: %s",
-            drone.socketPort ? static_cast<unsigned int>(*drone.socketPort) : 0U,
-            drone.isLeader ? "리더" : (drone.radioEnabled && drone.linkedToLeader
-                ? "연결됨" : "끊김"));
-        if (drone.radioEnabled)
-        {
-            if (ImGui::Button("이 드론 통신 차단"))
-                setRadioEnabled(drone.id, false);
-        }
-        else if (ImGui::Button("이 드론 통신 복구"))
-        {
-            setRadioEnabled(drone.id, true);
-        }
-    }
-
-    ImGui::Text("전달 %llu · 폐기 %llu",
-        static_cast<unsigned long long>(networkStatus.deliveredMessages),
-        static_cast<unsigned long long>(networkStatus.droppedMessages));
-    const std::size_t visibleEvents = std::min<std::size_t>(
-        networkStatus.recentEvents.size(), 4U);
-    for (std::size_t offset = 0; offset < visibleEvents; ++offset)
-    {
-        const auto& event = networkStatus.recentEvents[
-            networkStatus.recentEvents.size() - 1U - offset];
-        ImGui::Text("%.2f초  %s  %s → %s",
-            static_cast<double>(event.tick) / 60.0,
-            NetworkEventLabel(event.kind), DroneName(event.source).c_str(),
-            DroneName(event.destination).c_str());
-    }
-}
-
 void DrawFlightStatusPanel(
     const simulation::SimulationCore& simulation,
     bool gamepadConnected,
@@ -315,7 +245,7 @@ void DrawFlightStatusPanel(
     bool completeFleetMissionCanStart,
     const std::function<void()>& startCompleteFleetMission,
     const FleetNetworkStatus* fleetNetworkStatus,
-    int& selectedFaultSource,
+    NetworkFaultPanel& networkFaultPanel,
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled)
 {
@@ -340,7 +270,7 @@ void DrawFlightStatusPanel(
             startFleetReturn();
 
         if (fleetNetworkStatus != nullptr)
-            DrawNetworkFaultPanel(*fleetNetworkStatus, selectedFaultSource,
+            networkFaultPanel.Render(*fleetNetworkStatus,
                 setFormationNodeRadioEnabled);
         ImGui::Separator();
         ImGui::TextDisabled("조작: A 이륙 · 왼쪽 스틱 이동 · RT/LT 높이 · B 착륙");
@@ -491,7 +421,7 @@ void SimulatorHud::Render(const SimulatorHudFrame& frame)
         fleetReturnCanStart, startFleetReturn,
         completeFleetMissionStatus, completeFleetMissionCanStart,
         startCompleteFleetMission,
-        fleetNetworkStatus, selectedFaultSource_,
+        fleetNetworkStatus, networkFaultPanel_,
         setFormationNodeRadioEnabled);
 
     if (timings != nullptr)
