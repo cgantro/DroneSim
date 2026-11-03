@@ -179,10 +179,11 @@ struct ScenarioResult
                 progress_ = Progress::FailedAfterStart;
         }
 
-        /** @brief 다음 경유점이 있으면 이동하고, 없으면 false를 반환한다. */
+        /** @brief 진행 중인 임무만 다음 지점으로 옮긴다. 더 갈 곳이 없으면 false다. */
         [[nodiscard]] bool AdvanceWaypoint() noexcept
         {
-            if (currentWaypointIndex_ + 1U >= waypointsMeters.size())
+            if (progress_ != Progress::Active
+                || currentWaypointIndex_ + 1U >= waypointsMeters.size())
                 return false;
             ++currentWaypointIndex_;
             return true;
