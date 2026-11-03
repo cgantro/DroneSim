@@ -38,7 +38,7 @@ std::optional<std::vector<FleetReconnaissanceAssignment>>
 FleetMissionPlanner::PlanReconnaissance(
     std::span<const FleetReconnaissanceStart> starts,
     std::span<const FleetReconnaissanceTarget> targets,
-    bool takeOffDrones) const
+    FleetMissionStartMode startMode) const
 {
     if (starts.empty() || targets.empty())
         return std::vector<FleetReconnaissanceAssignment>{};
@@ -62,7 +62,7 @@ FleetMissionPlanner::PlanReconnaissance(
         FleetReconnaissanceState mission;
         mission.SetInitialAssignment(targetIndex, start.homePositionMeters);
         mission.SetPlannedRoute(std::move(*route));
-        mission.UpdateStatus(takeOffDrones
+        mission.UpdateStatus(startMode == FleetMissionStartMode::TakeOffFromGround
             ? FleetDroneStatus::TakeoffReady
             : FleetDroneStatus::Reconnaissance);
         assignments.push_back({start.droneId, std::move(mission)});

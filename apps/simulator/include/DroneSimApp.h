@@ -13,7 +13,9 @@
 #include "simulation_core/SimulationCore.h"
 #include "FleetMissionProgress.h"
 #include "FleetMission.h"
+#include "FleetMissionPlanner.h"
 #include "FleetTelemetry.h"
+#include "scene/TrainingRangeRouteEnvironment.h"
 #include "TrainingRangeScene.h"
 
 #include <glm/glm.hpp>
@@ -144,11 +146,19 @@ private:
     [[nodiscard]] bool StartFleetReturn();
     [[nodiscard]] bool StartFormationTransit();
     [[nodiscard]] bool StartFleetReconnaissance(
-        bool takeOffDrones,
+        dronesim::mission::FleetMissionStartMode startMode,
         const std::map<dronesim::simulation::DroneId, glm::dvec3>& homePositions);
     [[nodiscard]] bool PrepareFleetNetwork(bool reset);
     void InitializeFleetLeadership();
     void AdvanceFleetNetwork();
+    /** @brief 통신 노드 위치를 갱신해 거리·가림에 따른 링크를 다시 계산한다. */
+    void RefreshFleetNetworkNodes(std::uint64_t currentTick);
+    /** @brief 도착한 임무·편대 메시지를 검사하고 해당 드론에 반영한다. */
+    void ProcessDeliveredFleetMessages(std::uint64_t currentTick);
+    /** @brief 편대원 상태를 주기적으로 리더에게 전달한다. */
+    void SendFleetTelemetry(std::uint64_t currentTick);
+    /** @brief 응답이 오지 않은 경로 배정을 정해진 횟수만큼 다시 보낸다. */
+    void RetryPendingFleetRoutes(std::uint64_t currentTick);
     [[nodiscard]] bool SendFleetRouteAssignment(
         dronesim::simulation::DroneId droneId,
         dronesim::mission::FleetMissionLeg leg,
@@ -163,7 +173,8 @@ private:
         std::uint64_t assignmentVersion,
         std::uint64_t assignmentLeaseExpiresAtTick);
     [[nodiscard]] bool StartFleetRally();
-    [[nodiscard]] bool StartFleetReturn(bool takeOffDrones);
+    [[nodiscard]] bool StartFleetReturn(
+        dronesim::mission::FleetMissionStartMode startMode);
     void FailCompleteFleetMission(const std::string& reason);
     void AdvanceFormationTransit();
     /** @brief 지정한 드론에 비행 명령을 적용한다. */
@@ -196,12 +207,7 @@ private:
     bool smokeTest_ = false;
     dronesim::simulation::FixedTickAccumulator fixedTickAccumulator_;
     bool demoMode_ = false;
-    struct ReconTarget
-    {
-        std::string displayName;
-        glm::dvec3 approachPositionMeters{0.0};
-    };
-    std::vector<ReconTarget> reconTargets_;
+    std::vector<dronesim::mission::FleetReconnaissanceTarget> reconTargets_;
     /** @brief 정찰 중 카메라 시야가 나무 수관에 가리지 않도록 확보한 통과 고도다. */
     double cameraTransitAltitudeMeters_ = 0.0;
     bool externalControl_ = false;
@@ -234,27 +240,18 @@ private:
 #endif
     std::unique_ptr<dronesim::graphics::Mesh> cube_;
     std::unique_ptr<dronesim::scene::TrainingRangeScene> trainingRangeScene_;
-    std::unique_ptr<dronesim::graphics::GlbModel> droneModel_;
-    std::unique_ptr<dronesim::graphics::GlbModel> droneGimbalModel_;
+    std::unique_ptr<dronesim::graphics::GlbModel> droneAssemblyModel_;
     std::unique_ptr<dronesim::graphics::Texture2D> droneSurfaceTexture_;
     std::vector<dronesim::simulation::DroneId> fleetDroneIds_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     dronesim::simulation::DroneId observerDroneId_ = 0;
-    std::unordered_map<dronesim::simulation::DroneId,
-        dronesim::mission::FleetReconnaissanceState>
-        fleetReconnaissance_;
-    dronesim::simulation::DroneId fleetLeaderId_ = 0;
-    std::uint64_t nextMissionAssignmentVersion_ = 1;
-    std::uint32_t nextTelemetrySequence_ = 1;
-    std::map<dronesim::simulation::DroneId, std::uint64_t>
-        lastTelemetrySentAtTick_;
-    dronesim::mission::FleetTelemetryStore peerTelemetryAtLeader_;
-    dronesim::mission::FormationTransitState formationTransit_;
-    dronesim::mission::CompleteFleetMissionState completeFleetMission_;
+    dronesim::mission::FleetMissionState fleetMission_;
     communication::DroneSocketTransport droneSocketTransport_;
     std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
     std::vector<communication::RadioObstacle> formationRadioObstacles_;
     dronesim::terrain::TerrainGrid terrainGrid_;
+    /** @brief 훈련장 지도와 지형을 경로 탐색 형식으로 한 번 변환해 재사용한다. */
+    std::unique_ptr<dronesim::scene::TrainingRangeRouteEnvironment> routeEnvironment_;
     std::unique_ptr<dronesim::graphics::Shader> shader_;
     dronesim::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};

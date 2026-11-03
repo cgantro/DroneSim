@@ -89,24 +89,28 @@ bool DroneSimApp::StartFleetReconnaissance()
     std::map<dronesim::simulation::DroneId, glm::dvec3> homePositions;
     for (const auto droneId : simulation_.DroneIds())
         homePositions.emplace(droneId, simulation_.State(droneId).positionMeters);
-    return StartFleetReconnaissance(true, homePositions);
+    return StartFleetReconnaissance(
+        dronesim::mission::FleetMissionStartMode::TakeOffFromGround,
+        homePositions);
 }
 
 bool DroneSimApp::StartFleetReconnaissance(
-    bool takeOffDrones,
+    dronesim::mission::FleetMissionStartMode startMode,
     const std::map<dronesim::simulation::DroneId, glm::dvec3>& homePositions)
 {
     using namespace dronesim::simulation;
-    if (takeOffDrones)
+    const bool startsOnGround = startMode
+        == dronesim::mission::FleetMissionStartMode::TakeOffFromGround;
+    if (startsOnGround)
         InitializeFleetLeadership();
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
     if (droneIds.empty() || reconTargets_.empty()
-        || (takeOffDrones && CompleteFleetMissionIsActive()))
+        || (startsOnGround && CompleteFleetMissionIsActive()))
         return false;
 
     std::vector<dronesim::mission::FleetReconnaissanceStart> starts;
     starts.reserve(droneIds.size());
-    const auto observationSource = takeOffDrones
+    const auto observationSource = startsOnGround
         ? dronesim::mission::MissionStateSource::LocalSimulation
         : dronesim::mission::MissionStateSource::FreshTelemetry;
     for (const DroneId droneId : droneIds)
@@ -117,7 +121,7 @@ bool DroneSimApp::StartFleetReconnaissance(
             return false;
 
         const FlightMode mode = observation->mode;
-        const bool ready = takeOffDrones
+        const bool ready = startsOnGround
             ? mode == FlightMode::Grounded
             : DroneModel::CanAcceptInFlightCommands(mode);
         if (!ready)
@@ -131,14 +135,14 @@ bool DroneSimApp::StartFleetReconnaissance(
     const dronesim::mission::FleetMissionPlanner planner{
         *routeEnvironment_, cameraTransitAltitudeMeters_};
     auto assignments = planner.PlanReconnaissance(
-        starts, reconTargets_, takeOffDrones);
+        starts, reconTargets_, startMode);
     if (!assignments)
         return false;
 
-    if (!PrepareFleetNetwork(takeOffDrones))
+    if (!PrepareFleetNetwork(startsOnGround))
         return false;
 
-    if (takeOffDrones)
+    if (startsOnGround)
     {
         if (!dronesim::mission::TakeOffFleetDrones(simulation_, droneIds))
             return false;
@@ -180,13 +184,17 @@ bool DroneSimApp::StartFleetReturn()
     if (!FleetReturnCanStart())
         return false;
 
-    return StartFleetReturn(true);
+    return StartFleetReturn(
+        dronesim::mission::FleetMissionStartMode::TakeOffFromGround);
 }
 
-bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
+bool DroneSimApp::StartFleetReturn(
+    dronesim::mission::FleetMissionStartMode startMode)
 {
     using namespace dronesim::simulation;
 
+    const bool startsOnGround = startMode
+        == dronesim::mission::FleetMissionStartMode::TakeOffFromGround;
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
     const DroneId leaderId = fleetMission_.LeaderId();
     if (droneIds.empty() || leaderId == 0U)
@@ -196,7 +204,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
     // 경로와 대상 드론을 한 항목으로 묶어, 배정 순서가 달라져도 서로 어긋나지 않게 한다.
     std::vector<PlannedFleetRoute> returnPlans;
     returnPlans.reserve(droneIds.size());
-    const auto observationSource = takeOffDrones
+    const auto observationSource = startsOnGround
         ? dronesim::mission::MissionStateSource::LocalSimulation
         : dronesim::mission::MissionStateSource::FreshTelemetry;
     for (const auto droneId : droneIds)
@@ -209,7 +217,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
             droneId, simulation_, observationSource);
         if (!observation)
             return false;
-        const bool ready = takeOffDrones
+        const bool ready = startsOnGround
             ? observation->mode == FlightMode::Grounded
             : DroneModel::CanAcceptInFlightCommands(observation->mode);
         if (!ready || mission.Leg() == dronesim::mission::FleetMissionLeg::Returning)
@@ -221,7 +229,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
         returnPlans.push_back({droneId, std::move(*route)});
     }
 
-    if (takeOffDrones)
+    if (startsOnGround)
     {
         std::vector<DroneId> dronesToTakeOff;
         dronesToTakeOff.reserve(returnPlans.size());
@@ -276,7 +284,8 @@ bool DroneSimApp::StartFleetRally()
     }
     if (rallyDroneIds.empty())
     {
-        if (!StartFleetReturn(false))
+        if (!StartFleetReturn(
+                dronesim::mission::FleetMissionStartMode::ContinueInFlight))
             return false;
         fleetMission_.CompleteMission().SetStage(
             dronesim::mission::CompleteFleetMissionState::Stage::Returning);
@@ -477,7 +486,9 @@ void DroneSimApp::AdvanceCompleteFleetMission()
             FailCompleteFleetMission("M01 편대 이동이 끝나지 않아 전체 임무를 중단했습니다.");
             return;
         }
-        if (!StartFleetReconnaissance(false, fleetMission_.CompleteMission().HomePositions()))
+        if (!StartFleetReconnaissance(
+                dronesim::mission::FleetMissionStartMode::ContinueInFlight,
+                fleetMission_.CompleteMission().HomePositions()))
         {
             FailCompleteFleetMission("M02 정찰 경로를 만들지 못해 기체를 착륙시킵니다.");
             return;
@@ -550,7 +561,8 @@ void DroneSimApp::AdvanceCompleteFleetMission()
 
     if (currentStage == Stage::Regrouping)
     {
-        if (!StartFleetReturn(false))
+        if (!StartFleetReturn(
+                dronesim::mission::FleetMissionStartMode::ContinueInFlight))
         {
             FailCompleteFleetMission("집결지에서 기지까지 복귀 경로를 만들지 못했습니다.");
             return;

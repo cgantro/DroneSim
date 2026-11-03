@@ -8,6 +8,13 @@
 
 namespace dronesim::mission
 {
+/** @brief 정찰 임무를 지상에서 시작할지 비행 중 이어서 시작할지 정한다. */
+enum class FleetMissionStartMode
+{
+    TakeOffFromGround,
+    ContinueInFlight
+};
+
 /** @brief 지도에서 정찰 대상으로 쓸 이름과 촬영 접근 위치다. */
 struct FleetReconnaissanceTarget
 {
@@ -60,7 +67,7 @@ public:
     PlanReconnaissance(
         std::span<const FleetReconnaissanceStart> starts,
         std::span<const FleetReconnaissanceTarget> targets,
-        bool takeOffDrones) const;
+        FleetMissionStartMode startMode) const;
 
 private:
     static constexpr double returnApproachHeightMeters = 5.0;
