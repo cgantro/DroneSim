@@ -568,6 +568,10 @@ void Verify_FleetRouteMessagesRoundTripAndRejectInvalidValues()
 {
     const std::vector<glm::dvec3> waypoints{
         {12.5, -7.25, 31.0}, {18.0, 2.0, 36.0}};
+    const auto decodedWaypoint = mission::DecodeWaypoint(
+        mission::EncodeWaypoint(waypoints.front()));
+    ASSERT_TRUE(decodedWaypoint.has_value());
+    EXPECT_EQ(*decodedWaypoint, waypoints.front());
     const std::string payload = mission::EncodeFleetRoute(
         mission::FleetMissionLeg::Regrouping, 3U, 17U, 2500U, waypoints);
     const auto decoded = mission::DecodeFleetRoute(payload);

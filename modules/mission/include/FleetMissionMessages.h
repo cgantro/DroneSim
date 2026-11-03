@@ -41,7 +41,11 @@ struct FleetRouteMessage
 [[nodiscard]] std::optional<FleetRouteMessage> DecodeFleetRoute(
     const std::string& payload);
 
-/** @brief 경로 길이와 여유 시간을 바탕으로 배정 만료 Tick을 계산한다. */
+/**
+ * @brief 경로 길이와 여유 시간을 바탕으로 배정 만료 Tick을 계산한다.
+ * @details 계획 속도는 1m/s로 잡고, 60Hz 모의 시간으로 환산한 뒤 30초 여유를 더한다.
+ *          실제 기체의 예상 도착 시각이 아니라, 통신 지연으로 배정이 일찍 만료되는 것을 막는 기준이다.
+ */
 [[nodiscard]] std::uint64_t EstimateMissionLeaseExpiry(
     std::uint64_t currentTick,
     const glm::dvec3& startPositionMeters,

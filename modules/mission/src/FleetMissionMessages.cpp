@@ -12,13 +12,34 @@ namespace
 constexpr std::uint64_t leaseGraceTicks = 1800U;
 constexpr double estimatedPlanningSpeedMetersPerSecond = 1.0;
 constexpr double simulationTicksPerSecond = 60.0;
+
+void WriteWaypoint(std::ostream& payload, const glm::dvec3& waypointMeters)
+{
+    // 17자리 유효 숫자는 double 값을 문자열로 바꿨다가 읽어도 원래 값으로 복원한다.
+    payload << std::setprecision(17)
+        << waypointMeters.x << ' ' << waypointMeters.y << ' ' << waypointMeters.z;
+}
+
+bool ReadWaypoint(std::istream& values, glm::dvec3& waypointMeters)
+{
+    return static_cast<bool>(values >> waypointMeters.x
+        >> waypointMeters.y >> waypointMeters.z)
+        && std::isfinite(waypointMeters.x)
+        && std::isfinite(waypointMeters.y)
+        && std::isfinite(waypointMeters.z);
+}
+
+bool HasNoTrailingData(std::istream& values)
+{
+    values >> std::ws;
+    return values.eof();
+}
 }
 
 std::string EncodeWaypoint(const glm::dvec3& waypointMeters)
 {
     std::ostringstream payload;
-    payload << std::setprecision(17)
-        << waypointMeters.x << ' ' << waypointMeters.y << ' ' << waypointMeters.z;
+    WriteWaypoint(payload, waypointMeters);
     return payload.str();
 }
 
@@ -26,14 +47,7 @@ std::optional<glm::dvec3> DecodeWaypoint(const std::string& payload)
 {
     std::istringstream values(payload);
     glm::dvec3 waypointMeters{0.0};
-    if (!(values >> waypointMeters.x >> waypointMeters.y >> waypointMeters.z))
-        return std::nullopt;
-
-    values >> std::ws;
-    if (!values.eof()
-        || !std::isfinite(waypointMeters.x)
-        || !std::isfinite(waypointMeters.y)
-        || !std::isfinite(waypointMeters.z))
+    if (!ReadWaypoint(values, waypointMeters) || !HasNoTrailingData(values))
         return std::nullopt;
     return waypointMeters;
 }
@@ -52,8 +66,8 @@ std::string EncodeFleetRoute(
         << assignmentLeaseExpiresAtTick << ' ' << waypointsMeters.size();
     for (const glm::dvec3& waypointMeters : waypointsMeters)
     {
-        payload << ' ' << std::setprecision(17)
-            << waypointMeters.x << ' ' << waypointMeters.y << ' ' << waypointMeters.z;
+        payload << ' ';
+        WriteWaypoint(payload, waypointMeters);
     }
     return payload.str();
 }
@@ -75,16 +89,12 @@ std::optional<FleetRouteMessage> DecodeFleetRoute(const std::string& payload)
     for (std::size_t index = 0; index < waypointCount; ++index)
     {
         glm::dvec3 waypointMeters{0.0};
-        if (!(values >> waypointMeters.x >> waypointMeters.y >> waypointMeters.z)
-            || !std::isfinite(waypointMeters.x)
-            || !std::isfinite(waypointMeters.y)
-            || !std::isfinite(waypointMeters.z))
+        if (!ReadWaypoint(values, waypointMeters))
             return std::nullopt;
         route.waypointsMeters.push_back(waypointMeters);
     }
 
-    values >> std::ws;
-    if (!values.eof())
+    if (!HasNoTrailingData(values))
         return std::nullopt;
     return route;
 }
@@ -102,7 +112,8 @@ std::uint64_t EstimateMissionLeaseExpiry(
         previousPositionMeters = waypointMeters;
     }
 
-    // 예상 비행 시간에 30초 여유를 더해, 느린 기체가 정상 임무 중 만료되지 않게 한다.
+    // 계획 단계에서는 실제 비행 제어기의 속도와 다를 수 있어 보수적으로 1m/s를 쓴다.
+    // 여기에 30초를 더해 경로 배정이 정상 이동 중 먼저 만료되지 않게 한다.
     const double estimatedTravelTicks = std::ceil(routeLengthMeters
         / estimatedPlanningSpeedMetersPerSecond * simulationTicksPerSecond);
     return currentTick + static_cast<std::uint64_t>(estimatedTravelTicks)
