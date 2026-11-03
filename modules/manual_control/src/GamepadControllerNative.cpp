@@ -1,12 +1,9 @@
 #include "manual_control/GamepadController.h"
 
-#ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
-#endif
 
 namespace dronesim::manual_control
 {
-#ifndef __EMSCRIPTEN__
 namespace
 {
 struct GamepadScan
@@ -51,18 +48,11 @@ GamepadAxes ReadAxes(const GLFWgamepadstate& state)
         .yaw = static_cast<double>(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X])};
 }
 }
-#endif
 
 GamepadController::Update GamepadController::Poll(bool missionOwnsInput,
     simulation::FlightMode flightMode, double yawRadians)
 {
     Update update;
-#ifdef __EMSCRIPTEN__
-    static_cast<void>(missionOwnsInput);
-    static_cast<void>(flightMode);
-    static_cast<void>(yawRadians);
-    return update;
-#else
     const GamepadScan scan = FindGamepad();
     if (scan.supportedJoystickId < 0)
     {
@@ -134,6 +124,5 @@ GamepadController::Update GamepadController::Poll(bool missionOwnsInput,
     takeoffButtonWasPressed_ = takeoffPressed;
     landButtonWasPressed_ = landPressed;
     return update;
-#endif
 }
 }

@@ -147,10 +147,14 @@ endif()
 if(DRONESIM_BUILD_GRAPHICS)
   dronesim_add_graphics_dependencies()
 
-  target_sources(dronesim_manual_control PRIVATE
-    modules/manual_control/src/GamepadController.cpp
-  )
-  if(NOT EMSCRIPTEN)
+  if(EMSCRIPTEN)
+    target_sources(dronesim_manual_control PRIVATE
+      modules/manual_control/src/GamepadControllerWeb.cpp
+    )
+  else()
+    target_sources(dronesim_manual_control PRIVATE
+      modules/manual_control/src/GamepadControllerNative.cpp
+    )
     target_link_libraries(dronesim_manual_control PRIVATE glfw)
     target_compile_definitions(dronesim_manual_control PRIVATE GLFW_INCLUDE_NONE)
   endif()
