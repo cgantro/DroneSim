@@ -260,6 +260,7 @@ const DroneCommunicationOutage* FindActiveCommunicationOutage(
     const std::string& droneName,
     const std::vector<DroneCommunicationOutage>& outages)
 {
+    // 장애 구간은 시작 Tick을 포함하고 종료 Tick은 포함하지 않는다.
     const auto found = std::find_if(outages.begin(), outages.end(),
         [tick, &droneName](const DroneCommunicationOutage& outage)
         {
@@ -285,6 +286,8 @@ void UpdateDroneObservations(
             tick, droneName, definition.communicationOutages);
         if (outage == nullptr)
         {
+            // 연결 중에는 실제 모의 상태를 관제 측 관측값으로 갱신한다.
+            // 장애 중에도 비행 계산은 계속되지만 관측값은 이 마지막 보고에 머문다.
             if (observation.Status() != DroneCommunicationStatus::Connected)
             {
                 result.eventLog.push_back("tick " + std::to_string(tick) + ": "
@@ -298,6 +301,7 @@ void UpdateDroneObservations(
         }
 
         const DroneCommunicationStatus previousStatus = observation.Status();
+        // 짧은 누락은 Stale, 설정한 제한 시간을 넘긴 누락은 Unknown으로 표시한다.
         const DroneCommunicationStatus newStatus = observation.RecordMissedHeartbeat(
             tick, outage->heartbeatTimeoutTicks);
         if (observation.IsConnected())
