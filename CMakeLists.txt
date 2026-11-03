@@ -285,6 +285,7 @@ if(DRONESIM_BUILD_GRAPHICS)
     apps/simulator/DroneSimAppGamepad.cpp
     apps/simulator/DroneSimAppMission.cpp
     apps/simulator/SimulatorWorldRenderer.cpp
+    apps/simulator/SimulatorMiniMapSnapshot.cpp
     apps/simulator/FleetMissionEnvironment.cpp
     apps/simulator/FleetMissionController.cpp
     apps/simulator/FleetMissionCommunication.cpp

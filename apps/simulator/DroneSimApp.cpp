@@ -1,4 +1,5 @@
 #include "DroneSimApp.h"
+#include "SimulatorMiniMapSnapshot.h"
 #include "SimulatorWorldRenderer.h"
 #ifndef __EMSCRIPTEN__
 #include "gui/SimulatorView.h"
@@ -460,42 +461,8 @@ void DroneSimApp::RenderFrame()
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
-        std::vector<dronesim::gui::MiniMapDrone> miniMapDrones;
-        const auto droneIds = simulation_.DroneIds();
-        miniMapDrones.reserve(droneIds.size());
-        for (const dronesim::simulation::DroneId droneId : droneIds)
-        {
-            const auto& state = simulation_.State(droneId);
-            miniMapDrones.push_back({droneId, state.positionMeters, state.yawRadians});
-        }
-        std::vector<dronesim::gui::MiniMapRoute> miniMapRoutes;
-        for (const auto& [droneId, mission] : missionController_->State().Assignments())
-        {
-            if (!dronesim::mission::IsFleetMissionInProgress(mission.Status())
-                || !mission.HasRemainingWaypoints())
-                continue;
-            const auto& currentPosition = simulation_.State(droneId).positionMeters;
-            std::vector<glm::dvec3> remainingWaypoints(
-                mission.RouteWaypoints().begin()
-                    + static_cast<std::ptrdiff_t>(mission.WaypointIndex()),
-                mission.RouteWaypoints().end());
-            miniMapRoutes.push_back({droneId, currentPosition,
-                std::move(remainingWaypoints)});
-        }
-        const auto& formationRoute = missionController_->State().FormationTransit().Route();
-        if (missionController_->State().FormationTransit().IsActive()
-            && missionController_->State().FormationTransit().WaypointIndex()
-                < formationRoute.leaderWaypointsMeters.size())
-        {
-            const auto& currentPosition = simulation_.State(
-                missionController_->State().LeaderId()).positionMeters;
-            std::vector<glm::dvec3> remainingWaypoints(
-                formationRoute.leaderWaypointsMeters.begin()
-                    + static_cast<std::ptrdiff_t>(missionController_->State().FormationTransit().WaypointIndex()),
-                formationRoute.leaderWaypointsMeters.end());
-            miniMapRoutes.push_back({missionController_->State().LeaderId(),
-                currentPosition, std::move(remainingWaypoints)});
-        }
+        const auto miniMapSnapshot = dronesim::simulator::SimulatorMiniMapSnapshot::Capture(
+            simulation_, missionController_->State());
         const dronesim::gui::SimulatorView::DrawWorld drawPanelWorld =
             [this](const glm::mat4& view, const glm::mat4& projection,
                 const glm::vec3& cameraPosition, bool showMissionGuides,
@@ -521,8 +488,8 @@ void DroneSimApp::RenderFrame()
                 }},
             .miniMap = {
                 .buildings = trainingRangeScene_->BuildingObstacles(),
-                .drones = miniMapDrones,
-                .routes = miniMapRoutes,
+                .drones = miniMapSnapshot.drones,
+                .routes = miniMapSnapshot.routes,
                 .groundSizeMeters = trainingRangeScene_->GroundSizeMeters()},
             .camera = {
                 .simulation = simulation_,
