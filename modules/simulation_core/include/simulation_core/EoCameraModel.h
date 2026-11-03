@@ -36,6 +36,17 @@ struct CameraModel
     [[nodiscard]] bool IsValid() const noexcept;
 };
 
+/** @brief 짐벌 회전량이다. 피치는 위쪽, 롤은 기체 앞쪽 축 기준으로 표시한다. */
+struct CameraGimbalAngles
+{
+    double yawDegrees = 0.0;
+    double pitchUpDegrees = 0.0;
+    double rollDegrees = 0.0;
+
+    /** @brief 각 축의 회전각이 유한한 값인지 확인한다. */
+    [[nodiscard]] bool IsValid() const noexcept;
+};
+
 /**
  * @brief 카메라 동작 상태와 드론에 고정된 위치·자세를 보관한다.
  * @details 위치는 월드 좌표계의 미터 단위다. PX4 X500 짐벌 SDF의 중립 관절 위치를 따라 렌즈를
@@ -47,6 +58,7 @@ struct CameraState
     CameraModel model;
     std::uint64_t frameCount = 0;
     std::uint64_t lastFrameTick = 0;
+    CameraGimbalAngles gimbalAngles;
     glm::dvec3 positionMeters{0.0};
     glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
 };
@@ -60,6 +72,10 @@ public:
 
     /** @brief 드론의 월드 위치와 자세에서 탑재 카메라의 월드 자세를 갱신한다. */
     static void UpdatePose(CameraState& camera, const DroneState& drone) noexcept;
+
+    /** @brief 짐벌 각도를 반영해 드론 자세 기준 카메라 방향을 계산한다. */
+    [[nodiscard]] static glm::dquat GimbalOrientation(
+        const CameraGimbalAngles& angles) noexcept;
 
     /** @brief 현재 카메라가 바라보는 월드 기준 단위 방향을 돌려준다. */
     [[nodiscard]] static glm::dvec3 OpticalAxis(const CameraState& camera) noexcept;

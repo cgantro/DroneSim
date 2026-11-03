@@ -3,6 +3,8 @@
 
 #include <cmath>
 
+#include <glm/gtc/constants.hpp>
+
 namespace dronesim::simulation
 {
 namespace
@@ -24,6 +26,14 @@ bool CameraModel::IsValid() const noexcept
         && verticalFieldOfViewDegrees < 180.0;
 }
 
+bool CameraGimbalAngles::IsValid() const noexcept
+{
+    // 실제 짐벌의 회전 한계는 모델별로 달라질 수 있어 여기서는 비정상 수만 거른다.
+    return std::isfinite(yawDegrees)
+        && std::isfinite(pitchUpDegrees)
+        && std::isfinite(rollDegrees);
+}
+
 void EoCameraModel::AdvanceOneTick(CameraState& state, std::uint64_t tick) noexcept
 {
     if (state.status != CameraStatus::Active)
@@ -36,10 +46,25 @@ void EoCameraModel::AdvanceOneTick(CameraState& state, std::uint64_t tick) noexc
 
 void EoCameraModel::UpdatePose(CameraState& camera, const DroneState& drone) noexcept
 {
-    // 기체 기준 장착점을 월드 위치로 회전·이동하고 카메라 방향도 기체와 맞춘다.
+    // 렌즈 위치는 기체에 고정하고, 방향에는 Z-Y-X 순서의 짐벌 각도를 적용한다.
     camera.positionMeters = drone.positionMeters
         + drone.orientation * cameraMountPositionBodyMeters;
-    camera.orientation = drone.orientation;
+    camera.orientation = glm::normalize(
+        drone.orientation * GimbalOrientation(camera.gimbalAngles));
+}
+
+glm::dquat EoCameraModel::GimbalOrientation(
+    const CameraGimbalAngles& angles) noexcept
+{
+    constexpr double degreesToRadians = glm::pi<double>() / 180.0;
+    const glm::dquat yaw = glm::angleAxis(
+        -angles.yawDegrees * degreesToRadians, glm::dvec3{0.0, 0.0, 1.0});
+    const glm::dquat roll = glm::angleAxis(
+        -angles.rollDegrees * degreesToRadians, glm::dvec3{1.0, 0.0, 0.0});
+    // PX4 짐벌 축 부호를 따르며, 양수 피치는 화면에서 위를 보도록 뒤집는다.
+    const glm::dquat pitch = glm::angleAxis(
+        -angles.pitchUpDegrees * degreesToRadians, glm::dvec3{0.0, 1.0, 0.0});
+    return glm::normalize(yaw * roll * pitch);
 }
 
 glm::dvec3 EoCameraModel::OpticalAxis(const CameraState& camera) noexcept

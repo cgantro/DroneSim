@@ -679,3 +679,9 @@
 - `ScenarioRunner.cpp`가 모의 실행뿐 아니라 드론 기대 상태, 최소 간격, 카메라 결과와 최종 통과 여부까지 판정하고 있었다. 기대 결과 비교와 `Mission::GetOutcome()`을 `ScenarioResultEvaluator.cpp`로 옮겼다.
 - 실행기는 마지막 상태를 만든 뒤 평가 함수에 넘긴다. 입력 해석·검증은 기존 파서와 검증기 책임으로 유지했다.
 - MSVC Release에서 `dronesim_scenario_tests` 빌드와 핵심 시나리오 시험 1개가 통과했다. 다른 모듈 시험과 웹 빌드는 이번 변경에서 실행하지 않았다.
+
+## 짐벌 각도 유효성 책임 이동 — 2026-11-04
+
+- 짐벌 각도의 유한값 검사가 `SimulationCore` 안에 있어 카메라 입력 규칙을 시뮬레이션 조립부가 직접 알고 있었다. 검사를 `CameraGimbalAngles::IsValid()`로 옮기고, 같은 드론 엔티티를 두 번 찾던 경로도 한 번의 조회로 정리했다.
+- 시험에서 정상 각도와 NaN 각도를 확인하고, NaN 입력은 기존처럼 `std::invalid_argument`로 거부되는지 검사했다.
+- MSVC Release에서 시뮬레이션 시험 14개와 시나리오 핵심 시험 1개가 통과했다.

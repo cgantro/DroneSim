@@ -600,6 +600,18 @@ void SimulationCore::SetCameraModel(DroneId droneId, const CameraModel& model)
     ecs_->FindDrone(droneId).get_mut<CameraState>().model = model;
 }
 
+void SimulationCore::SetCameraGimbalAngles(
+    DroneId droneId, const CameraGimbalAngles& angles)
+{
+    if (!angles.IsValid())
+        throw std::invalid_argument("카메라 짐벌 각도는 유한한 값이어야 합니다.");
+
+    flecs::entity& drone = ecs_->FindDrone(droneId);
+    CameraState& camera = drone.get_mut<CameraState>();
+    camera.gimbalAngles = angles;
+    EoCameraModel::UpdatePose(camera, drone.get<DroneState>());
+}
+
 void SimulationCore::SetCameraEnabled(bool enabled) noexcept
 {
     SetCameraEnabled(ecs_->primaryDroneId, enabled);

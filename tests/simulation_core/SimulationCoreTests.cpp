@@ -5,9 +5,12 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 
 #include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
 
 namespace dronesim::simulation
 {
@@ -27,6 +30,43 @@ void VerifyTakeoffAndCameraAdvanceTogether()
     EXPECT_GT(simulation.State(drone).positionMeters.z, 1.0);
     EXPECT_EQ(simulation.Camera(drone).status, CameraStatus::Active);
     EXPECT_EQ(simulation.Camera(drone).frameCount, 360U);
+}
+
+// 짐벌 각도가 드론 이동과 분리되어 카메라 광축과 화면 위쪽만 회전시키는지 확인한다.
+void VerifyCameraGimbalRotatesAroundItsThreeAxes()
+{
+    CameraGimbalAngles invalidAngles;
+    invalidAngles.pitchUpDegrees = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_TRUE(CameraGimbalAngles{}.IsValid());
+    EXPECT_FALSE(invalidAngles.IsValid());
+
+    SimulationCore simulation;
+    const DroneId drone = simulation.PrimaryDroneId();
+    const glm::dvec3 initialPosition = simulation.State(drone).positionMeters;
+    EXPECT_THROW(simulation.SetCameraGimbalAngles(drone, invalidAngles),
+        std::invalid_argument);
+
+    simulation.SetCameraGimbalAngles(drone, {90.0, 0.0, 0.0});
+    glm::dvec3 axis = EoCameraModel::OpticalAxis(simulation.Camera(drone));
+    EXPECT_NEAR(axis.x, 0.0, 1.0e-9);
+    EXPECT_NEAR(axis.y, -1.0, 1.0e-9);
+    EXPECT_NEAR(axis.z, 0.0, 1.0e-9);
+
+    simulation.SetCameraGimbalAngles(drone, {0.0, 30.0, 0.0});
+    axis = EoCameraModel::OpticalAxis(simulation.Camera(drone));
+    EXPECT_NEAR(axis.x, std::cos(glm::radians(30.0)), 1.0e-9);
+    EXPECT_NEAR(axis.y, 0.0, 1.0e-9);
+    EXPECT_NEAR(axis.z, 0.5, 1.0e-9);
+
+    simulation.SetCameraGimbalAngles(drone, {0.0, 0.0, 30.0});
+    axis = EoCameraModel::OpticalAxis(simulation.Camera(drone));
+    const glm::dvec3 up = EoCameraModel::UpAxis(simulation.Camera(drone));
+    EXPECT_NEAR(axis.x, 1.0, 1.0e-9);
+    EXPECT_NEAR(axis.y, 0.0, 1.0e-9);
+    EXPECT_NEAR(axis.z, 0.0, 1.0e-9);
+    EXPECT_NEAR(up.y, 0.5, 1.0e-9);
+    EXPECT_NEAR(up.z, std::cos(glm::radians(30.0)), 1.0e-9);
+    EXPECT_EQ(simulation.State(drone).positionMeters, initialPosition);
 }
 
 // 긴 호버 동안 위치·속도·자세가 발산하지 않는지 확인한다.
@@ -156,6 +196,7 @@ void VerifyFourDronesTakeOffMoveAndLandIndependently()
 TEST(SimulationCoreTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(VerifyTakeoffAndCameraAdvanceTogether());
+    EXPECT_NO_FATAL_FAILURE(VerifyCameraGimbalRotatesAroundItsThreeAxes());
     EXPECT_NO_FATAL_FAILURE(VerifyLongHoverKeepsTheRigidBodyStable());
     EXPECT_NO_FATAL_FAILURE(VerifyWaypointCommandMovesTheRigidBody());
     EXPECT_NO_FATAL_FAILURE(VerifyDroneAndPhysicsBodyAreRemovedTogether());
