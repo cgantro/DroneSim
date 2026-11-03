@@ -39,6 +39,7 @@ public:
     [[nodiscard]] double RemainingWattHours() const noexcept;
     [[nodiscard]] double RemainingPercent() const noexcept;
     [[nodiscard]] double ConsumedWattHours() const noexcept;
+    /** @brief 잔량이 설정한 예비량 이하인지 확인한다. 배터리 상태는 바꾸지 않는다. */
     [[nodiscard]] bool ShouldReturnForLowBattery() const noexcept;
     [[nodiscard]] bool IsReturningForLowBattery() const noexcept;
     /** @brief 예비량에 도달했고 아직 복귀 중이 아니면 복귀 상태로 바꾼다. */

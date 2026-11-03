@@ -43,6 +43,8 @@ void BatteryModel::Advance(FlightMode mode) noexcept
     if (remainingWattHours_ <= 0.0 || mode == FlightMode::Grounded)
         return;
 
+    // 호버링만 호버 전력을 쓰고, 이륙·이동·착륙은 비행 전력으로 근사한다.
+    // 실제 속도나 로터 추력에 따라 전력이 달라지는 효과는 이 간단한 모델에서 다루지 않는다.
     const double powerWatts = mode == FlightMode::Hovering
         ? parameters_.hoverPowerWatts : parameters_.flightPowerWatts;
     // 와트 × 초를 와트시로 바꿔 고정 Tick마다 남은 에너지에서 뺀다.
@@ -99,6 +101,7 @@ bool BatteryModel::TryBeginLowBatteryReturn() noexcept
     if (returningForLowBattery_ || !ShouldReturnForLowBattery())
         return false;
 
+    // 복귀 상태를 기억해 이후 Tick에서 같은 복귀 명령을 반복 시작하지 않게 한다.
     returningForLowBattery_ = true;
     return true;
 }
