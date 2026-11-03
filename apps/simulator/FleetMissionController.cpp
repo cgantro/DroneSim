@@ -189,12 +189,9 @@ bool FleetMissionController::StartFleetReconnaissance()
     if (!FleetReconnaissanceCanStart())
         return false;
 
-    std::map<dronesim::simulation::DroneId, glm::dvec3> homePositions;
-    for (const auto droneId : simulation_.DroneIds())
-        homePositions.emplace(droneId, simulation_.State(droneId).positionMeters);
     return StartFleetReconnaissance(
         dronesim::mission::FleetMissionStartMode::TakeOffFromGround,
-        homePositions);
+        {});
 }
 
 bool FleetMissionController::StartFleetReconnaissance(
