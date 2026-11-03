@@ -483,7 +483,7 @@ public:
         {
             app.AdvanceSimulationTick();
             const auto& mission = app.fleetMission_.Assignment(lowBatteryDroneId);
-            if (mission.lowBatteryReturn
+            if (mission.IsLowBatteryReturn()
                 && mission.status
                     == mission::FleetDroneStatus::LowBatteryReturnComplete)
                 break;
@@ -492,8 +492,8 @@ public:
         const auto& mission = app.fleetMission_.Assignment(lowBatteryDroneId);
         EXPECT_TRUE(app.simulation_.Battery(lowBatteryDroneId)
             .IsReturningForLowBattery());
-        EXPECT_TRUE(mission.lowBatteryReturn);
-        EXPECT_EQ(mission.leg, mission::FleetMissionLeg::Returning);
+        EXPECT_TRUE(mission.IsLowBatteryReturn());
+        EXPECT_EQ(mission.Leg(), mission::FleetMissionLeg::Returning);
         EXPECT_EQ(mission.status,
             mission::FleetDroneStatus::LowBatteryReturnComplete);
         EXPECT_LE(glm::distance(app.simulation_.State(lowBatteryDroneId).positionMeters,
@@ -614,8 +614,8 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_EQ(*routeProgress.CurrentWaypoint(), glm::dvec3(10.0, 0.0, 5.0));
     EXPECT_FALSE(routeProgress.AdvanceWaypointIfReached({1.0, 0.0, 5.0}, 2.0));
     routeProgress.BeginLowBatteryReturn();
-    EXPECT_TRUE(routeProgress.lowBatteryReturn);
-    EXPECT_EQ(routeProgress.leg, FleetMissionLeg::Returning);
+    EXPECT_TRUE(routeProgress.IsLowBatteryReturn());
+    EXPECT_EQ(routeProgress.Leg(), FleetMissionLeg::Returning);
     EXPECT_EQ(routeProgress.status, FleetDroneStatus::RoutePending);
     EXPECT_FALSE(routeProgress.HasReceivedRoute());
 

@@ -1,6 +1,7 @@
 #include "FleetMission.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <glm/geometric.hpp>
 
@@ -93,7 +94,7 @@ void FormationTransitState::RecordNetworkNodesUpdated(std::uint64_t currentTick)
 
 bool FleetReconnaissanceState::IsLegFinished() const noexcept
 {
-    switch (leg)
+    switch (leg_)
     {
     case FleetMissionLeg::Reconnaissance:
         return status == FleetDroneStatus::TargetReached
@@ -112,7 +113,7 @@ bool FleetReconnaissanceState::IsLegFinished() const noexcept
 
 void FleetReconnaissanceState::BeginLeg(FleetMissionLeg nextLeg) noexcept
 {
-    leg = nextLeg;
+    leg_ = nextLeg;
     status = FleetDroneStatus::RoutePending;
     routeWaypointsMeters_.clear();
     nextWaypoint_ = 0U;
@@ -158,17 +159,17 @@ void FleetReconnaissanceState::WaitForRoute() noexcept
 
 void FleetReconnaissanceState::BeginLowBatteryReturn() noexcept
 {
-    lowBatteryReturn = true;
+    lowBatteryReturn_ = true;
     BeginLeg(FleetMissionLeg::Returning);
 }
 
 void FleetReconnaissanceState::BeginWaypointCommand() noexcept
 {
     waypointCommanded_ = true;
-    switch (leg)
+    switch (leg_)
     {
     case FleetMissionLeg::Returning:
-        status = lowBatteryReturn
+        status = lowBatteryReturn_
             ? FleetDroneStatus::LowBatteryReturning
             : FleetDroneStatus::Returning;
         break;
@@ -261,7 +262,7 @@ bool FleetMissionState::HasActiveReconnaissance() const noexcept
 
 bool FleetReconnaissanceState::CanBeginLowBatteryReturn() const noexcept
 {
-    return leg == FleetMissionLeg::Reconnaissance
+    return leg_ == FleetMissionLeg::Reconnaissance
         && (IsFleetMissionInProgress(status)
             || status == FleetDroneStatus::TargetReached);
 }
@@ -270,7 +271,7 @@ FleetDroneStatus FleetReconnaissanceState::StatusAfterLanding(
     const glm::dvec3& positionMeters,
     const glm::dvec3& destinationMeters) const noexcept
 {
-    if (leg == FleetMissionLeg::Regrouping)
+    if (leg_ == FleetMissionLeg::Regrouping)
         return FleetDroneStatus::RegroupFailed;
 
     // 착륙 판정은 수평 오차만 본다. 고도는 착륙 중 지면 영향으로 변할 수 있다.
@@ -279,11 +280,11 @@ FleetDroneStatus FleetReconnaissanceState::StatusAfterLanding(
         positionMeters.y - destinationMeters.y};
     const bool reachedDestination = glm::length(horizontalError) <= 5.0;
 
-    if (leg == FleetMissionLeg::Returning)
+    if (leg_ == FleetMissionLeg::Returning)
     {
         if (!reachedDestination)
             return FleetDroneStatus::ReturnFailed;
-        return lowBatteryReturn
+        return lowBatteryReturn_
             ? FleetDroneStatus::LowBatteryReturnComplete
             : FleetDroneStatus::ReturnComplete;
     }
@@ -357,7 +358,7 @@ std::optional<FleetMissionReport> FleetMissionState::FreshReport(
     {
         return FleetMissionReport{
             simulation.State(droneId).mode,
-            assignment.leg,
+            assignment.Leg(),
             assignment.status};
     }
 
@@ -391,7 +392,7 @@ std::optional<FleetMissionReport> FleetMissionState::CurrentReport(
         return std::nullopt;
 
     // 통신이 끊겨도 이 임무에서 이미 착륙을 마친 기록은 최종 결과로 쓸 수 있다.
-    const bool returnedAfterBatteryReserve = assignment.lowBatteryReturn
+    const bool returnedAfterBatteryReserve = assignment.IsLowBatteryReturn()
         && cached->state.missionLeg
             == static_cast<std::uint8_t>(FleetMissionLeg::Returning)
         && cached->state.missionStatus == FleetDroneStatus::LowBatteryReturnComplete;
@@ -425,7 +426,7 @@ bool FleetMissionState::AllDronesReadyToReturn(
         if (!report || report->mode != simulation::FlightMode::Grounded)
             return false;
 
-        const bool landedAfterLowBatteryReserve = assignment->second.lowBatteryReturn
+        const bool landedAfterLowBatteryReserve = assignment->second.IsLowBatteryReturn()
             && report->status == FleetDroneStatus::LowBatteryReturnComplete;
         if (landedAfterLowBatteryReserve)
             return true;

@@ -28,6 +28,8 @@ private:
     std::size_t nextWaypoint_ = 0U;
     bool routeReceived_ = false;
     bool waypointCommanded_ = false;
+    bool lowBatteryReturn_ = false;
+    FleetMissionLeg leg_ = FleetMissionLeg::Reconnaissance;
 
 public:
     std::size_t targetIndex = 0;
@@ -41,8 +43,15 @@ public:
     std::uint64_t routeSentAtTick = 0;
     std::uint64_t lastRouteTransmissionTick = 0;
     FleetDroneStatus status = FleetDroneStatus::Other;
-    bool lowBatteryReturn = false;
-    FleetMissionLeg leg = FleetMissionLeg::Reconnaissance;
+
+    /** @brief 현재 정찰·집결·복귀 구간을 읽는다. */
+    [[nodiscard]] FleetMissionLeg Leg() const noexcept { return leg_; }
+
+    /** @brief 배터리 부족으로 시작한 복귀인지 확인한다. */
+    [[nodiscard]] bool IsLowBatteryReturn() const noexcept
+    {
+        return lowBatteryReturn_;
+    }
 
     /** @brief 경로 계획 결과를 저장하고 진행 번호를 첫 경유점으로 맞춘다. */
     void SetPlannedRoute(std::vector<glm::dvec3> routeWaypointsMeters);

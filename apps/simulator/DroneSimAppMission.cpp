@@ -152,7 +152,7 @@ bool DroneSimApp::StartFleetReconnaissance(
     {
         const DroneId droneId = assignment.droneId;
         auto& mission = assignment.mission;
-        const dronesim::mission::FleetMissionLeg leg = mission.leg;
+        const dronesim::mission::FleetMissionLeg leg = mission.Leg();
         const std::size_t targetIndex = mission.targetIndex;
         std::vector<glm::dvec3> route = mission.TakeRouteForDelivery();
         mission.status = dronesim::mission::FleetDroneStatus::RoutePending;
@@ -203,7 +203,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
     for (const auto droneId : droneIds)
     {
         const auto& mission = fleetMission_.Assignment(droneId);
-        if (mission.lowBatteryReturn
+        if (mission.IsLowBatteryReturn()
             && mission.status
                 == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
         {
@@ -230,7 +230,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
         const bool ready = takeOffDrones
             ? mode == FlightMode::Grounded
             : DroneModel::CanAcceptInFlightCommands(mode);
-        if (!ready || mission.leg == dronesim::mission::FleetMissionLeg::Returning)
+        if (!ready || mission.Leg() == dronesim::mission::FleetMissionLeg::Returning)
             return false;
         const auto route = planner.PlanReturnRoute(
             currentPosition, mission.startPositionMeters);
@@ -246,7 +246,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
         for (const DroneId droneId : droneIds)
         {
             const auto& mission = fleetMission_.Assignment(droneId);
-            if (mission.lowBatteryReturn
+            if (mission.IsLowBatteryReturn()
                 && mission.status
                     == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
                 continue;
@@ -260,7 +260,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
         auto& mission = fleetMission_.Assignment(droneIds[index]);
-        if (mission.lowBatteryReturn
+        if (mission.IsLowBatteryReturn()
             && mission.status
                 == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
             continue;
@@ -295,7 +295,7 @@ bool DroneSimApp::StartFleetRally()
     for (const DroneId droneId : droneIds)
     {
         const auto& mission = fleetMission_.Assignment(droneId);
-        const bool alreadyReturnedForLowBattery = mission.lowBatteryReturn
+        const bool alreadyReturnedForLowBattery = mission.IsLowBatteryReturn()
             && mission.status
                 == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete;
         if (!alreadyReturnedForLowBattery)
@@ -440,13 +440,13 @@ void DroneSimApp::AdvanceFleetReconnaissance()
                 || groundedStatus == dronesim::mission::FleetDroneStatus::RegroupPreparing)
                 continue;
 
-            if (mission.leg == dronesim::mission::FleetMissionLeg::Regrouping)
+            if (mission.Leg() == dronesim::mission::FleetMissionLeg::Regrouping)
             {
                 mission.status = mission.StatusAfterLanding(
                     state.positionMeters, state.positionMeters);
                 continue;
             }
-            const glm::dvec3& destination = mission.leg == dronesim::mission::FleetMissionLeg::Returning
+            const glm::dvec3& destination = mission.Leg() == dronesim::mission::FleetMissionLeg::Returning
                 ? mission.startPositionMeters
                 : reconTargets_[mission.targetIndex].approachPositionMeters;
             mission.status = mission.StatusAfterLanding(
@@ -462,15 +462,15 @@ void DroneSimApp::AdvanceFleetReconnaissance()
         }
         else if (!mission.HasRemainingWaypoints())
         {
-            if (mission.leg == dronesim::mission::FleetMissionLeg::Regrouping)
+            if (mission.Leg() == dronesim::mission::FleetMissionLeg::Regrouping)
             {
                 mission.status = dronesim::mission::FleetDroneStatus::RegroupComplete;
                 continue;
             }
             if (dronesim::mission::TryLandDrone(simulation_, droneId))
             {
-                if (mission.leg == dronesim::mission::FleetMissionLeg::Returning)
-                    mission.status = mission.lowBatteryReturn
+                if (mission.Leg() == dronesim::mission::FleetMissionLeg::Returning)
+                    mission.status = mission.IsLowBatteryReturn()
                         ? dronesim::mission::FleetDroneStatus::LowBatteryLanding
                         : dronesim::mission::FleetDroneStatus::ReturnLanding;
                 else
@@ -800,7 +800,7 @@ void DroneSimApp::ApplyFleetRouteAssignment(
     if (mission == fleetMission_.AssignmentsEnd())
         return;
 
-    mission->second.leg = leg;
+    mission->second.BeginLeg(leg);
     mission->second.targetIndex = targetIndex;
     mission->second.routeSequence = sequence;
     mission->second.assignmentVersion = assignmentVersion;
@@ -1017,7 +1017,7 @@ void DroneSimApp::SendFleetTelemetry(std::uint64_t currentTick)
 
         const auto mission = fleetMission_.FindAssignment(droneId);
         const std::uint8_t missionLeg = mission == fleetMission_.AssignmentsEnd()
-            ? 0U : static_cast<std::uint8_t>(mission->second.leg);
+            ? 0U : static_cast<std::uint8_t>(mission->second.Leg());
         const dronesim::mission::FleetDroneStatus missionStatus =
             mission == fleetMission_.AssignmentsEnd()
             ? dronesim::mission::FleetDroneStatus::Other : mission->second.status;
