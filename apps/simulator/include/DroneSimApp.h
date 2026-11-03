@@ -10,6 +10,7 @@
 #include "flight_planning/FormationPlanner.h"
 #include "flight_planning/BuildingObstacle.h"
 #include "simulation_core/SimulationCore.h"
+#include "simulation_core/WindField.h"
 #include "TrainingRangeScene.h"
 #ifdef __EMSCRIPTEN__
 #include "WebCameraRig.h"
@@ -22,7 +23,6 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <random>
 #include <string_view>
 #include <vector>
 
@@ -118,7 +118,6 @@ private:
     void AdvanceSimulation(double elapsedSeconds);
     /** @brief 한 번의 Tick에서 입력 경로의 우선순위를 정해 모의를 진행한다. */
     void AdvanceSimulationTick();
-    void AdvanceAmbientWind();
     /** @brief 현재 실행 경로에서 스모크 검사를 끝낼 조건이 충족됐는지 확인한다. */
     [[nodiscard]] bool SmokeTestIsComplete() const;
     /** @brief 카메라 모의가 한 번 이상 갱신됐는지 확인한다. 픽셀은 CPU로 읽지 않는다. */
@@ -194,10 +193,7 @@ private:
         glm::vec4{1.0F}, 0.16F, 0.40F};
     dronesim::graphics::Material missionRouteMaterial_{
         glm::vec4{0.12F, 0.82F, 0.92F, 1.0F}, 0.0F, 0.48F};
-    std::mt19937 windGenerator_{0x44524F4EU};
-    glm::dvec3 windVelocityMetersPerSecond_{0.0};
-    glm::dvec3 windTargetMetersPerSecond_{0.0};
-    std::uint32_t windGustTicksRemaining_ = 0U;
+    dronesim::simulation::WindField windField_;
     dronesim::simulation::SimulationCore simulation_{};
     /** @brief 장면 준비가 끝난 뒤 생성하며 임무 상태와 통신 세션을 소유한다. */
     std::unique_ptr<FleetMissionController> missionController_;

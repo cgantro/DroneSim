@@ -381,7 +381,7 @@ void DroneSimApp::AdvanceSimulation(double elapsedSeconds)
 
 void DroneSimApp::AdvanceSimulationTick()
 {
-    AdvanceAmbientWind();
+    simulation_.SetWindVelocityMetersPerSecond(windField_.AdvanceOneTick());
     missionController_->AdvanceTick();
     if (demoMode_ && !externalControl_
         && missionController_->CompleteFleetMissionCanStart())
@@ -397,25 +397,6 @@ void DroneSimApp::AdvanceSimulationTick()
             : "DroneSim | 드론 관찰 · EO 영상");
     }
     AdvanceManualControlTick();
-}
-
-void DroneSimApp::AdvanceAmbientWind()
-{
-    constexpr std::uint32_t gustChangeIntervalTicks = 240U;
-    constexpr double maximumWindMetersPerSecond = 0.5;
-    constexpr double smoothingPerTick = 0.01;
-    if (windGustTicksRemaining_ == 0U)
-    {
-        std::uniform_real_distribution<double> chooseWind(
-            -maximumWindMetersPerSecond, maximumWindMetersPerSecond);
-        windTargetMetersPerSecond_ = {
-            chooseWind(windGenerator_), chooseWind(windGenerator_), 0.0};
-        windGustTicksRemaining_ = gustChangeIntervalTicks;
-    }
-    --windGustTicksRemaining_;
-    windVelocityMetersPerSecond_ += (windTargetMetersPerSecond_
-        - windVelocityMetersPerSecond_) * smoothingPerTick;
-    simulation_.SetWindVelocityMetersPerSecond(windVelocityMetersPerSecond_);
 }
 
 void DroneSimApp::AdvanceManualControlTick()
