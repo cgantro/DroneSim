@@ -86,8 +86,8 @@ public:
         EXPECT_TRUE(app.CompleteFleetMissionCanStart());
 
         app.fleetMission_.SetAssignment(app.simulation_.PrimaryDroneId(), {});
-        app.fleetMission_.Assignment(app.simulation_.PrimaryDroneId()).status =
-            mission::FleetDroneStatus::Reconnaissance;
+        app.fleetMission_.Assignment(app.simulation_.PrimaryDroneId()).UpdateStatus(
+            mission::FleetDroneStatus::Reconnaissance);
         EXPECT_FALSE(app.FleetReconnaissanceCanStart());
         EXPECT_FALSE(app.CompleteFleetMissionCanStart());
         app.fleetMission_.ClearAssignments();
@@ -361,7 +361,7 @@ public:
                     + std::to_string(mission.targetIndex) + " 버전 "
                     + std::to_string(mission.assignmentVersion) + " 상태 "
                     + std::string(mission::FleetDroneStatusLabel(
-                        mission.status)));
+                        mission.Status())));
                 lastVersion = mission.assignmentVersion;
             }
             sawReconnaissance = sawReconnaissance
@@ -409,7 +409,7 @@ public:
                 if (mission != app.fleetMission_.AssignmentsEnd())
                     failureContext << ", 목표 " << mission->second.targetIndex
                         << ", 상태 " << mission::FleetDroneStatusLabel(
-                            mission->second.status);
+                            mission->second.Status());
             }
             const auto& metrics = app.formationNetwork_->Metrics();
             failureContext << "; 통신 통계 전달 " << metrics.deliveredMessages
@@ -484,7 +484,7 @@ public:
             app.AdvanceSimulationTick();
             const auto& mission = app.fleetMission_.Assignment(lowBatteryDroneId);
             if (mission.IsLowBatteryReturn()
-                && mission.status
+                && mission.Status()
                     == mission::FleetDroneStatus::LowBatteryReturnComplete)
                 break;
         }
@@ -494,7 +494,7 @@ public:
             .IsReturningForLowBattery());
         EXPECT_TRUE(mission.IsLowBatteryReturn());
         EXPECT_EQ(mission.Leg(), mission::FleetMissionLeg::Returning);
-        EXPECT_EQ(mission.status,
+        EXPECT_EQ(mission.Status(),
             mission::FleetDroneStatus::LowBatteryReturnComplete);
         EXPECT_LE(glm::distance(app.simulation_.State(lowBatteryDroneId).positionMeters,
             mission.startPositionMeters), 5.0);
@@ -595,18 +595,18 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_EQ(fleetState.CompleteMission().StatusText(), "시험 실패 사유");
     EXPECT_FALSE(fleetState.HasActiveReconnaissance());
     fleetState.SetAssignment(1, {});
-    fleetState.Assignment(1).status = FleetDroneStatus::Reconnaissance;
+    fleetState.Assignment(1).UpdateStatus(FleetDroneStatus::Reconnaissance);
     EXPECT_TRUE(fleetState.HasActiveReconnaissance());
-    fleetState.Assignment(1).status = FleetDroneStatus::TargetReached;
+    fleetState.Assignment(1).UpdateStatus(FleetDroneStatus::TargetReached);
     EXPECT_FALSE(fleetState.HasActiveReconnaissance());
 
     mission::FleetReconnaissanceState routeProgress;
     routeProgress.BeginLeg(FleetMissionLeg::Reconnaissance);
     routeProgress.ReceiveRoute({{0.0, 0.0, 5.0}, {10.0, 0.0, 5.0}});
-    EXPECT_EQ(routeProgress.status, FleetDroneStatus::RoutePending);
+    EXPECT_EQ(routeProgress.Status(), FleetDroneStatus::RoutePending);
     EXPECT_TRUE(routeProgress.HasReceivedRoute());
     routeProgress.BeginWaypointCommand();
-    EXPECT_EQ(routeProgress.status, FleetDroneStatus::Reconnaissance);
+    EXPECT_EQ(routeProgress.Status(), FleetDroneStatus::Reconnaissance);
     EXPECT_TRUE(routeProgress.HasCommandedWaypoint());
     ASSERT_NE(routeProgress.CurrentWaypoint(), nullptr);
     EXPECT_EQ(*routeProgress.CurrentWaypoint(), glm::dvec3(0.0, 0.0, 5.0));
@@ -616,7 +616,7 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     routeProgress.BeginLowBatteryReturn();
     EXPECT_TRUE(routeProgress.IsLowBatteryReturn());
     EXPECT_EQ(routeProgress.Leg(), FleetMissionLeg::Returning);
-    EXPECT_EQ(routeProgress.status, FleetDroneStatus::RoutePending);
+    EXPECT_EQ(routeProgress.Status(), FleetDroneStatus::RoutePending);
     EXPECT_FALSE(routeProgress.HasReceivedRoute());
 
     EXPECT_TRUE(mission::IsFleetMissionInProgress(

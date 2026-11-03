@@ -640,7 +640,7 @@ void DroneSimApp::RenderFrame()
         std::vector<dronesim::gui::MiniMapRoute> miniMapRoutes;
         for (const auto& [droneId, mission] : fleetMission_.Assignments())
         {
-            if (!dronesim::mission::IsFleetMissionInProgress(mission.status)
+            if (!dronesim::mission::IsFleetMissionInProgress(mission.Status())
                 || !mission.HasRemainingWaypoints())
                 continue;
             const auto& currentPosition = simulation_.State(droneId).positionMeters;
@@ -858,7 +858,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     {
         for (const auto& [droneId, mission] : fleetMission_.Assignments())
         {
-            const auto missionStatus = mission.status;
+            const auto missionStatus = mission.Status();
             if (missionStatus != dronesim::mission::FleetDroneStatus::TakeoffReady
                 && missionStatus != dronesim::mission::FleetDroneStatus::Reconnaissance
                 && missionStatus != dronesim::mission::FleetDroneStatus::Landing)

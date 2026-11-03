@@ -63,9 +63,9 @@ FleetMissionPlanner::PlanReconnaissance(
         mission.targetIndex = targetIndex;
         mission.startPositionMeters = start.homePositionMeters;
         mission.SetPlannedRoute(std::move(*route));
-        mission.status = takeOffDrones
+        mission.UpdateStatus(takeOffDrones
             ? FleetDroneStatus::TakeoffReady
-            : FleetDroneStatus::Reconnaissance;
+            : FleetDroneStatus::Reconnaissance);
         assignments.push_back({start.droneId, std::move(mission)});
     }
     return assignments;

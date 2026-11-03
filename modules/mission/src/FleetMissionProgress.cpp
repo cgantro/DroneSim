@@ -97,16 +97,16 @@ bool FleetReconnaissanceState::IsLegFinished() const noexcept
     switch (leg_)
     {
     case FleetMissionLeg::Reconnaissance:
-        return status == FleetDroneStatus::TargetReached
-            || status == FleetDroneStatus::RouteFailed
-            || status == FleetDroneStatus::OutsideTargetLanding;
+        return status_ == FleetDroneStatus::TargetReached
+            || status_ == FleetDroneStatus::RouteFailed
+            || status_ == FleetDroneStatus::OutsideTargetLanding;
     case FleetMissionLeg::Regrouping:
-        return status == FleetDroneStatus::RegroupComplete
-            || status == FleetDroneStatus::RegroupFailed;
+        return status_ == FleetDroneStatus::RegroupComplete
+            || status_ == FleetDroneStatus::RegroupFailed;
     case FleetMissionLeg::Returning:
-        return status == FleetDroneStatus::ReturnComplete
-            || status == FleetDroneStatus::ReturnFailed
-            || status == FleetDroneStatus::LowBatteryReturnComplete;
+        return status_ == FleetDroneStatus::ReturnComplete
+            || status_ == FleetDroneStatus::ReturnFailed
+            || status_ == FleetDroneStatus::LowBatteryReturnComplete;
     }
     return false;
 }
@@ -114,7 +114,7 @@ bool FleetReconnaissanceState::IsLegFinished() const noexcept
 void FleetReconnaissanceState::BeginLeg(FleetMissionLeg nextLeg) noexcept
 {
     leg_ = nextLeg;
-    status = FleetDroneStatus::RoutePending;
+    status_ = FleetDroneStatus::RoutePending;
     routeWaypointsMeters_.clear();
     nextWaypoint_ = 0U;
     routeReceived_ = false;
@@ -169,15 +169,15 @@ void FleetReconnaissanceState::BeginWaypointCommand() noexcept
     switch (leg_)
     {
     case FleetMissionLeg::Returning:
-        status = lowBatteryReturn_
+        status_ = lowBatteryReturn_
             ? FleetDroneStatus::LowBatteryReturning
             : FleetDroneStatus::Returning;
         break;
     case FleetMissionLeg::Regrouping:
-        status = FleetDroneStatus::Regrouping;
+        status_ = FleetDroneStatus::Regrouping;
         break;
     case FleetMissionLeg::Reconnaissance:
-        status = FleetDroneStatus::Reconnaissance;
+        status_ = FleetDroneStatus::Reconnaissance;
         break;
     }
 }
@@ -254,7 +254,7 @@ bool FleetMissionState::HasActiveReconnaissance() const noexcept
     for (const auto& [droneId, reconnaissance] : assignments_)
     {
         (void)droneId;
-        if (IsFleetMissionInProgress(reconnaissance.status))
+        if (IsFleetMissionInProgress(reconnaissance.Status()))
             return true;
     }
     return false;
@@ -263,8 +263,8 @@ bool FleetMissionState::HasActiveReconnaissance() const noexcept
 bool FleetReconnaissanceState::CanBeginLowBatteryReturn() const noexcept
 {
     return leg_ == FleetMissionLeg::Reconnaissance
-        && (IsFleetMissionInProgress(status)
-            || status == FleetDroneStatus::TargetReached);
+        && (IsFleetMissionInProgress(status_)
+            || status_ == FleetDroneStatus::TargetReached);
 }
 
 FleetDroneStatus FleetReconnaissanceState::StatusAfterLanding(
@@ -359,7 +359,7 @@ std::optional<FleetMissionReport> FleetMissionState::FreshReport(
         return FleetMissionReport{
             simulation.State(droneId).mode,
             assignment.Leg(),
-            assignment.status};
+            assignment.Status()};
     }
 
     const ReceivedPeerTelemetry* telemetry = telemetryAtLeader_.Fresh(

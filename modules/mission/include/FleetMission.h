@@ -30,6 +30,7 @@ private:
     bool waypointCommanded_ = false;
     bool lowBatteryReturn_ = false;
     FleetMissionLeg leg_ = FleetMissionLeg::Reconnaissance;
+    FleetDroneStatus status_ = FleetDroneStatus::Other;
 
 public:
     std::size_t targetIndex = 0;
@@ -42,7 +43,12 @@ public:
     std::uint32_t routeTransmissionCount = 0;
     std::uint64_t routeSentAtTick = 0;
     std::uint64_t lastRouteTransmissionTick = 0;
-    FleetDroneStatus status = FleetDroneStatus::Other;
+
+    /** @brief 현재 구간의 진행 상태를 읽는다. */
+    [[nodiscard]] FleetDroneStatus Status() const noexcept { return status_; }
+
+    /** @brief 통신·비행 처리 결과를 현재 구간 상태로 기록한다. */
+    void UpdateStatus(FleetDroneStatus nextStatus) noexcept { status_ = nextStatus; }
 
     /** @brief 현재 정찰·집결·복귀 구간을 읽는다. */
     [[nodiscard]] FleetMissionLeg Leg() const noexcept { return leg_; }

@@ -924,3 +924,8 @@
 
 - 임무 구간과 저전력 복귀 여부를 비공개로 옮겼다. 앱과 보고 계산은 읽기 전용 메서드로 상태를 확인하고, 구간 전환은 `BeginLeg`와 `BeginLowBatteryReturn`을 거친다.
 - Release 통합 시험 빌드 성공, `SimulatorSessionTests` 5/5 통과, `git diff --check` 공백 오류 없음. 드론별 진행 객체에는 아직 공개 상태가 남아 있다.
+
+## 드론별 임무 진행 상태 캡슐화 — 2026-11-04
+
+- 드론별 임무 상태 코드를 비공개로 옮겼다. 앱, 상태 보고와 화면 코드는 `Status()`로 읽고 `UpdateStatus()`로 결과를 기록한다. 새 구간과 첫 경유점 전환은 기존 임무 메서드에서 상태를 함께 갱신한다.
+- Release 통합 시험 빌드 성공, `SimulatorSessionTests` 5/5 통과, `git diff --check` 공백 오류 없음. 나머지 배정·통신 자료 공개 범위는 계속 검토한다.
