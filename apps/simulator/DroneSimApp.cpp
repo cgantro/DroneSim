@@ -181,47 +181,57 @@ void DroneSimApp::SetWebPilotAxes(
 
 void DroneSimApp::InitializeGraphics()
 {
-    InitializeWindow();
-    InitializeRendererAndCameras();
-    LoadScene();
-    InitializeShaderAndHud();
-}
-
-#ifdef __EMSCRIPTEN__
-bool DroneSimApp::InitializeGraphicsStep()
-{
-    switch (webStartupStep_++)
+    while (!InitializeGraphicsStep())
     {
-    case 0:
-        EM_ASM({ window.setSimulatorStartupStatus("화면을 준비하고 있습니다."); });
-        InitializeWindow();
-        return false;
-    case 1:
-        EM_ASM({ window.setSimulatorStartupStatus("렌더링 장치를 준비하고 있습니다."); });
-        InitializeRendererAndCameras();
-        return false;
-    case 2:
-        EM_ASM({ window.setSimulatorStartupStatus("도시 지도와 충돌 형상을 읽고 있습니다."); });
-        LoadSceneModels();
-        LoadMapFeatures();
-        return false;
-    case 3:
-        EM_ASM({ window.setSimulatorStartupStatus("지도 바닥과 물리 지면을 맞추고 있습니다."); });
-        LoadTerrain();
-        return false;
-    case 4:
-        EM_ASM({ window.setSimulatorStartupStatus("비행 시작 위치를 준비하고 있습니다."); });
-        InitializeStartingState();
-        return false;
-    case 5:
-        EM_ASM({ window.setSimulatorStartupStatus("화면 구성을 마무리하고 있습니다."); });
-        InitializeShaderAndHud();
-        return false;
-    default:
-        return true;
     }
 }
-#endif
+
+bool DroneSimApp::InitializeGraphicsStep()
+{
+    // 한 번에 한 단계만 처리한다. 데스크톱은 반복해서 끝까지 진행하고,
+    // 브라우저는 프레임마다 한 단계씩 실행해 화면이 응답할 기회를 얻는다.
+    switch (graphicsStartupStep_)
+    {
+    case GraphicsStartupStep::Window:
+        SetStartupDetail("화면을 준비하고 있습니다.");
+        InitializeWindow();
+        graphicsStartupStep_ = GraphicsStartupStep::Renderer;
+        return false;
+    case GraphicsStartupStep::Renderer:
+        SetStartupDetail("렌더링 장치를 준비하고 있습니다.");
+        InitializeRendererAndCameras();
+        graphicsStartupStep_ = GraphicsStartupStep::SceneModels;
+        return false;
+    case GraphicsStartupStep::SceneModels:
+        SetStartupDetail("도시 모델을 읽고 있습니다.");
+        LoadSceneModels();
+        graphicsStartupStep_ = GraphicsStartupStep::MapFeatures;
+        return false;
+    case GraphicsStartupStep::MapFeatures:
+        SetStartupDetail("지도 충돌 형상을 준비하고 있습니다.");
+        LoadMapFeatures();
+        graphicsStartupStep_ = GraphicsStartupStep::Terrain;
+        return false;
+    case GraphicsStartupStep::Terrain:
+        SetStartupDetail("지도 바닥과 물리 지면을 맞추고 있습니다.");
+        LoadTerrain();
+        graphicsStartupStep_ = GraphicsStartupStep::StartingState;
+        return false;
+    case GraphicsStartupStep::StartingState:
+        SetStartupDetail("비행 시작 위치를 준비하고 있습니다.");
+        InitializeStartingState();
+        graphicsStartupStep_ = GraphicsStartupStep::ShaderAndHud;
+        return false;
+    case GraphicsStartupStep::ShaderAndHud:
+        SetStartupDetail("화면 구성을 마무리하고 있습니다.");
+        InitializeShaderAndHud();
+        graphicsStartupStep_ = GraphicsStartupStep::Complete;
+        return false;
+    case GraphicsStartupStep::Complete:
+        return true;
+    }
+    return true;
+}
 
 void DroneSimApp::InitializeWindow()
 {
@@ -255,14 +265,6 @@ void DroneSimApp::InitializeShaderAndHud()
 #endif
 }
 
-void DroneSimApp::LoadScene()
-{
-    LoadSceneModels();
-    LoadMapFeatures();
-    LoadTerrain();
-    InitializeStartingState();
-}
-
 void DroneSimApp::LoadSceneModels()
 {
     worldRenderer_ = std::make_unique<SimulatorWorldRenderer>();
@@ -292,7 +294,6 @@ void DroneSimApp::LoadTerrain()
 }
 void DroneSimApp::LoadMapFeatures()
 {
-    SetStartupDetail("도시 지도와 충돌 모양을 준비하고 있습니다.");
     trainingRangeScene_ = std::make_unique<dronesim::scene::TrainingRangeScene>();
     trainingRangeScene_->Load({});
     const auto& collisionMesh = trainingRangeScene_->CollisionMesh();

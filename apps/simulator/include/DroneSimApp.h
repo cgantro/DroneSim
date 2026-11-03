@@ -88,10 +88,19 @@ private:
     void RunFrame(std::chrono::steady_clock::time_point& previousFrame);
     /** @brief 창과 그래픽 자원을 준비한다. */
     void InitializeGraphics();
-#ifdef __EMSCRIPTEN__
-    /** @brief 브라우저가 화면을 갱신할 수 있도록 웹 초기화를 한 단계씩 진행한다. */
+    /** @brief 그래픽 준비 단계 하나를 실행하고 남은 단계가 있는지 알려준다. */
     [[nodiscard]] bool InitializeGraphicsStep();
-#endif
+    enum class GraphicsStartupStep : std::uint8_t
+    {
+        Window,
+        Renderer,
+        SceneModels,
+        MapFeatures,
+        Terrain,
+        StartingState,
+        ShaderAndHud,
+        Complete
+    };
     /** @brief 화면 창과 OpenGL 문맥을 만든다. */
     void InitializeWindow();
     /** @brief 장면과 카메라를 그릴 기본 장치를 만든다. */
@@ -101,10 +110,9 @@ private:
 #ifdef __EMSCRIPTEN__
     bool webFirstFrameRendered_ = false;
     bool webGraphicsInitialized_ = false;
-    std::uint8_t webStartupStep_ = 0;
 #endif
+    GraphicsStartupStep graphicsStartupStep_ = GraphicsStartupStep::Window;
     /** @brief 지형·지도 형상·드론 모형과 강체 월드의 충돌 모양을 준비한다. */
-    void LoadScene();
     void LoadSceneModels();
     void LoadTerrain();
     void LoadMapFeatures();
