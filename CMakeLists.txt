@@ -72,6 +72,7 @@ target_link_libraries(dronesim_simulation_core
 
 add_library(dronesim_scenario STATIC
   modules/scenario/src/ScenarioRunner.cpp
+  modules/scenario/src/ScenarioResultEvaluator.cpp
   modules/scenario/src/ScenarioParser.cpp
   modules/scenario/src/ScenarioValidation.cpp
 )

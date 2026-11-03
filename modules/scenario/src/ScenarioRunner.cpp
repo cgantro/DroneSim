@@ -1,4 +1,5 @@
 #include "scenario/ScenarioRunner.h"
+#include "scenario/ScenarioResultEvaluator.h"
 #include "simulation_core/BatteryModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/SimulationCore.h"
@@ -24,7 +25,6 @@ using namespace dronesim::simulation;
 
 namespace
 {
-using detail::ExpectedDrone;
 using detail::ScenarioDefinition;
 using detail::ScenarioDrone;
 using detail::CollisionAvoidanceSettings;
@@ -269,15 +269,6 @@ ScenarioResult::Mission CreateMissionResult(ScenarioMission definition)
         result.tasks.push_back(std::move(runtimeTask));
     }
     return result;
-}
-
-double OrientationErrorRadians(
-    const glm::dquat& actual, const glm::dquat& expected) noexcept
-{
-    const double dot = std::abs(
-        actual.w * expected.w + actual.x * expected.x
-        + actual.y * expected.y + actual.z * expected.z);
-    return 2.0 * std::acos(std::clamp(dot, 0.0, 1.0));
 }
 
 void RecordMinimumDroneSeparation(
@@ -811,124 +802,6 @@ void PopulateFinalSnapshot(
 
 }
 
-/** @brief 단일 드론 형식과 이름별 형식에 맞는 비행 상태 오류 문구를 만든다. */
-std::string FlightModeMismatchMessage(const ExpectedDrone& expectedDrone)
-{
-    return expectedDrone.name + " 드론의 최종 비행 상태가 예상과 다릅니다.";
-}
-
-void CheckExpectedDroneResults(
-    const ScenarioDefinition& definition,
-    ScenarioResult& result)
-{
-    // 결과 이름을 복사하지 않고 빌려 쓰는 색인으로 반복 검색을 줄인다.
-    std::unordered_map<std::string_view, std::size_t> resultIndexByName;
-    resultIndexByName.reserve(result.drones.size());
-    for (std::size_t index = 0; index < result.drones.size(); ++index)
-        resultIndexByName.emplace(result.drones[index].name, index);
-
-    for (const ExpectedDrone& expectedDrone : definition.expectedDrones)
-    {
-        const auto found = resultIndexByName.find(expectedDrone.name);
-        if (found == resultIndexByName.end())
-        {
-            result.issues.push_back("예상 결과에 지정한 드론을 찾을 수 없습니다: "
-                + expectedDrone.name);
-            continue;
-        }
-        const ScenarioResult::Drone& drone = result.drones[found->second];
-        if (drone.communicationStatus != DroneCommunicationStatus::Connected)
-            continue;
-        const std::string dronePrefix = expectedDrone.name + " 드론의 ";
-        if (drone.finalState.mode != expectedDrone.mode)
-            result.issues.push_back(FlightModeMismatchMessage(expectedDrone));
-        if (glm::length(drone.finalState.positionMeters - expectedDrone.positionMeters)
-            > definition.toleranceMeters)
-        {
-            result.issues.push_back(dronePrefix + "최종 위치가 허용 오차를 벗어났습니다.");
-        }
-        if (expectedDrone.orientation
-            && OrientationErrorRadians(drone.finalState.orientation, *expectedDrone.orientation)
-                > definition.orientationToleranceRadians)
-        {
-            result.issues.push_back(dronePrefix + "최종 자세가 허용 각도 오차를 벗어났습니다.");
-        }
-    }
-    if (!definition.expectedDrones.empty()
-        && definition.expectedDrones.size() != result.drones.size())
-    {
-        result.issues.push_back("expected.drones 개수가 시나리오 드론 수와 다릅니다.");
-    }
-}
-
-void CheckExpectedSeparation(
-    const ScenarioDefinition& definition,
-    ScenarioResult& result)
-{
-    if (definition.minimumDroneSeparationMeters
-        && result.minimumDroneSeparationMeters
-        && *result.minimumDroneSeparationMeters
-            < *definition.minimumDroneSeparationMeters)
-    {
-        result.issues.push_back("드론 사이 최소 거리가 설정한 안전 간격보다 짧았습니다.");
-    }
-}
-
-void CheckExpectedCamera(
-    const ScenarioDefinition& definition,
-    ScenarioResult& result)
-{
-    const simulation::CameraState& primaryCamera = result.drones.front().finalCamera;
-    if (definition.expectedCameraStatus
-        && primaryCamera.status != *definition.expectedCameraStatus)
-    {
-        result.issues.push_back("최종 카메라 상태가 예상값과 다릅니다.");
-    }
-    if (definition.expectedFrameCount
-        && primaryCamera.frameCount != *definition.expectedFrameCount)
-    {
-        result.issues.push_back("카메라 프레임 수가 예상값과 다릅니다.");
-    }
-}
-
-void CheckExpectedResults(
-    const ScenarioDefinition& definition,
-    ScenarioResult& result)
-{
-    CheckExpectedDroneResults(definition, result);
-    CheckExpectedSeparation(definition, result);
-    CheckExpectedCamera(definition, result);
-    if (!result.issues.empty())
-        result.outcome = ScenarioResult::Outcome::Failed;
-    else if (result.mission)
-        result.outcome = result.mission->GetOutcome();
-    else
-        result.outcome = ScenarioResult::Outcome::Passed;
-}
-}
-
-ScenarioResult::Outcome ScenarioResult::Mission::GetOutcome() const noexcept
-{
-    bool allTasksCompleted = true;
-    for (const MissionTask& task : tasks)
-    {
-        if (task.failed)
-            return Outcome::Failed;
-        if (!task.IsCompleted())
-            allTasksCompleted = false;
-    }
-    return allTasksCompleted ? Outcome::Passed : Outcome::Inconclusive;
-}
-
-std::string_view ToString(ScenarioResult::Outcome outcome) noexcept
-{
-    switch (outcome)
-    {
-    case ScenarioResult::Outcome::Passed: return "passed";
-    case ScenarioResult::Outcome::Failed: return "failed";
-    case ScenarioResult::Outcome::Inconclusive: return "inconclusive";
-    }
-    return "inconclusive";
 }
 
 ScenarioResult RunScenario(std::string_view jsonText)
@@ -1052,7 +925,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         }
     }
     PopulateFinalSnapshot(definition, simulation, drones, result);
-    CheckExpectedResults(definition, result);
+    detail::EvaluateExpectedResults(definition, result);
     return result;
 }
 
