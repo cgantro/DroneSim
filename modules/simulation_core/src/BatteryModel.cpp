@@ -87,8 +87,12 @@ bool BatteryModel::IsReturningForLowBattery() const noexcept
     return returningForLowBattery_;
 }
 
-void BatteryModel::MarkReturningForLowBattery() noexcept
+bool BatteryModel::TryBeginLowBatteryReturn() noexcept
 {
+    if (returningForLowBattery_ || !ShouldReturnForLowBattery())
+        return false;
+
     returningForLowBattery_ = true;
+    return true;
 }
 }

@@ -144,6 +144,22 @@ void VerifyBatteryUsesThePostPhysicsFlightState()
     EXPECT_EQ(simulation.State(drone).mode, FlightMode::Hovering);
 }
 
+// 예비량에 닿았을 때만 한 번 복귀 상태로 바뀌고, 재설정하면 다시 판단하는지 확인한다.
+void VerifyBatteryStartsLowBatteryReturnOnlyOnce()
+{
+    BatteryModel battery({1.0, 3600.0, 3600.0, 99.0});
+    EXPECT_FALSE(battery.TryBeginLowBatteryReturn());
+
+    battery.Advance(FlightMode::Hovering);
+    EXPECT_TRUE(battery.TryBeginLowBatteryReturn());
+    EXPECT_TRUE(battery.IsReturningForLowBattery());
+    EXPECT_FALSE(battery.TryBeginLowBatteryReturn());
+
+    battery.Reset();
+    EXPECT_FALSE(battery.IsReturningForLowBattery());
+    EXPECT_FALSE(battery.TryBeginLowBatteryReturn());
+}
+
 // 네 대의 드론이 서로 독립적으로 이륙·이동·착륙하는지 확인한다.
 void VerifyFourDronesTakeOffMoveAndLandIndependently()
 {
@@ -201,6 +217,7 @@ TEST(SimulationCoreTests, CoreScenarios)
     EXPECT_NO_FATAL_FAILURE(VerifyWaypointCommandMovesTheRigidBody());
     EXPECT_NO_FATAL_FAILURE(VerifyDroneAndPhysicsBodyAreRemovedTogether());
     EXPECT_NO_FATAL_FAILURE(VerifyBatteryUsesThePostPhysicsFlightState());
+    EXPECT_NO_FATAL_FAILURE(VerifyBatteryStartsLowBatteryReturnOnlyOnce());
     EXPECT_NO_FATAL_FAILURE(VerifyFourDronesTakeOffMoveAndLandIndependently());
 }
 }

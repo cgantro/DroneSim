@@ -38,7 +38,8 @@ public:
     [[nodiscard]] double ConsumedWattHours() const noexcept;
     [[nodiscard]] bool ShouldReturnForLowBattery() const noexcept;
     [[nodiscard]] bool IsReturningForLowBattery() const noexcept;
-    void MarkReturningForLowBattery() noexcept;
+    /** @brief 예비량에 도달했고 아직 복귀 중이 아니면 복귀 상태로 바꾼다. */
+    [[nodiscard]] bool TryBeginLowBatteryReturn() noexcept;
 
 private:
     BatteryModelParameters parameters_;

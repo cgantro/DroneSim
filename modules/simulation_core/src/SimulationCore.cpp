@@ -512,20 +512,20 @@ bool SimulationCore::HasBattery(DroneId droneId) const noexcept
     return found != ecs_->drones.end() && found->second.has<BatteryModel>();
 }
 
-BatteryModel& SimulationCore::Battery(DroneId droneId)
-{
-    flecs::entity& drone = ecs_->FindDrone(droneId);
-    if (!drone.has<BatteryModel>())
-        throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
-    return drone.get_mut<BatteryModel>();
-}
-
 const BatteryModel& SimulationCore::Battery(DroneId droneId) const
 {
     const flecs::entity& drone = ecs_->FindDrone(droneId);
     if (!drone.has<BatteryModel>())
         throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
     return drone.get<BatteryModel>();
+}
+
+bool SimulationCore::TryBeginLowBatteryReturn(DroneId droneId)
+{
+    flecs::entity& drone = ecs_->FindDrone(droneId);
+    if (!drone.has<BatteryModel>())
+        throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
+    return drone.get_mut<BatteryModel>().TryBeginLowBatteryReturn();
 }
 
 void SimulationCore::AdvanceOneTick()

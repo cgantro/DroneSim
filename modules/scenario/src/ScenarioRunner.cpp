@@ -115,13 +115,10 @@ void UpdateEnergyPolicy(
     {
         const ScenarioDroneRuntime& drone = drones.at(droneName);
         const DroneId droneId = drone.id;
-        const BatteryModel& energy = simulation.Battery(droneId);
-        if (!energy.IsReturningForLowBattery())
+        const bool beganLowBatteryReturn =
+            simulation.TryBeginLowBatteryReturn(droneId);
+        if (beganLowBatteryReturn)
         {
-            if (!energy.ShouldReturnForLowBattery())
-                return;
-
-            simulation.MarkReturningForLowBattery(droneId);
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + droneName + " 드론이 배터리 예비량에 도달해 출발 지점으로 돌아갑니다.");
 
@@ -136,6 +133,10 @@ void UpdateEnergyPolicy(
                 + task.name + "' 임무는 미완료로 남습니다.");
                 }
             }
+        }
+        else if (!simulation.Battery(droneId).IsReturningForLowBattery())
+        {
+            return;
         }
 
         const DroneState& state = simulation.State(droneId);

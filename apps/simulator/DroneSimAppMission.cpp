@@ -388,12 +388,8 @@ void DroneSimApp::AdvanceFleetReconnaissance()
         auto& mission = assignment->second;
         if (mission.CanBeginLowBatteryReturn() && simulation_.HasBattery(droneId))
         {
-            const auto& battery = simulation_.Battery(droneId);
-            if (!battery.IsReturningForLowBattery()
-                && battery.ShouldReturnForLowBattery())
+            if (simulation_.TryBeginLowBatteryReturn(droneId))
             {
-                simulation_.MarkReturningForLowBattery(droneId);
-
                 const auto route = planner.PlanReturnRoute(
                     simulation_.State(droneId).positionMeters,
                     mission.startPositionMeters);
