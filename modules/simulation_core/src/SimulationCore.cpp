@@ -8,6 +8,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -77,21 +78,18 @@ public:
         return found == drones_.end() ? nullptr : &found->second;
     }
 
-    /** @brief 마지막 드론은 남기고, 기본 대상이 제거되면 남은 첫 드론으로 바꾼다. */
-    [[nodiscard]] bool Unregister(DroneId id)
+    /**
+     * @brief 물리 객체 제거가 끝난 드론을 등록부에서도 지운다.
+     * @details 호출자는 드론이 등록되어 있고 마지막 한 대가 아님을 먼저 확인한다.
+     */
+    void RemoveAfterPhysicsBodyDestroyed(DroneId id) noexcept
     {
-        if (drones_.size() <= 1)
-            return false;
-
-        const auto found = drones_.find(id);
-        if (found == drones_.end())
-            return false;
-
         const bool removedPrimary = id == primaryId_;
-        drones_.erase(found);
+        const std::size_t removedCount = drones_.erase(id);
+        assert(removedCount == 1);
+        static_cast<void>(removedCount);
         if (removedPrimary)
             primaryId_ = drones_.begin()->first;
-        return true;
     }
 
     [[nodiscard]] DroneId PrimaryId() const noexcept
@@ -304,7 +302,8 @@ struct SimulationCore::EcsStorage
             return false;
 
         drone->destruct();
-        return droneRegistry.Unregister(id);
+        droneRegistry.RemoveAfterPhysicsBodyDestroyed(id);
+        return true;
     }
 
     void ResetPhysicsBody(flecs::entity& drone)
