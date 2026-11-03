@@ -1,10 +1,9 @@
 #pragma once
 
-#include "communication/VirtualMeshNetwork.h"
-#include "communication/DroneSocketTransport.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
 #include "flight_planning/BuildingObstacle.h"
+#include "gui/MiniMapPanel.h"
 
 #include <array>
 #include <cstddef>
@@ -12,13 +11,14 @@
 #include <vector>
 #include <functional>
 #include <span>
+#include <optional>
 #include <string>
 
 struct GLFWwindow;
 
 namespace dronesim::gui
 {
-namespace communication = ::dronesim::communication;
+class SimulatorView;
 
 /** @brief 화면 성능 측정에 사용할 GPU 구간 결과다. */
 struct HudGpuTiming
@@ -43,20 +43,67 @@ struct HudRenderTimings
     std::size_t completedGpuFrameCount = 0;
 };
 
-/** @brief 미니맵에 그릴 드론 한 대의 현재 계획 경로다. */
-struct MiniMapRoute
+/** @brief HUD에 표시할 통신 장애 시험 결과다. 실제 통신망 객체는 포함하지 않는다. */
+struct FleetNetworkStatus
 {
-    simulation::DroneId droneId = 0;
-    glm::dvec3 startMeters{0.0};
-    std::vector<glm::dvec3> waypointsMeters;
+    enum class EventKind
+    {
+        RadioDisabled,
+        RadioRestored,
+        MessageDelivered,
+        PacketDropped
+    };
+
+    struct Drone
+    {
+        simulation::DroneId id = 0;
+        std::optional<std::uint16_t> socketPort;
+        bool isLeader = false;
+        bool radioEnabled = true;
+        bool linkedToLeader = false;
+    };
+
+    struct RecentEvent
+    {
+        std::uint64_t tick = 0;
+        EventKind kind = EventKind::PacketDropped;
+        simulation::DroneId source = 0;
+        simulation::DroneId destination = 0;
+    };
+
+    std::uint64_t deliveredMessages = 0;
+    std::uint64_t droppedMessages = 0;
+    std::vector<Drone> drones;
+    std::vector<RecentEvent> recentEvents;
 };
 
-/** @brief 미니맵에 그릴 드론의 위치와 방향이다. */
-struct MiniMapDrone
+using ScenePanelRenderer = std::function<std::uint32_t(int, int)>;
+using CameraPanelRenderer = std::function<std::uint32_t(simulation::DroneId)>;
+using CameraGimbalSetter = std::function<void(
+    simulation::DroneId, const simulation::CameraGimbalAngles&)>;
+
+/** @brief 한 프레임의 HUD 표시 자료와 사용자가 실행할 동작을 모은다. */
+struct SimulatorHudFrame
 {
-    simulation::DroneId droneId = 0;
-    glm::dvec3 positionMeters{0.0};
-    double yawRadians = 0.0;
+    const simulation::SimulationCore& simulation;
+    simulation::DroneId& observerDroneId;
+    SimulatorView& sceneView;
+    bool gamepadConnected = false;
+    bool fleetReturnCanStart = false;
+    std::function<void()> startFleetReturn;
+    std::string completeFleetMissionStatus;
+    bool completeFleetMissionCanStart = false;
+    std::function<void()> startCompleteFleetMission;
+    const FleetNetworkStatus* fleetNetworkStatus = nullptr;
+    std::function<void(simulation::DroneId, bool)> setFormationNodeRadioEnabled;
+    std::span<const flight_planning::BuildingObstacle> buildings;
+    std::span<const MiniMapDrone> drones;
+    std::span<const MiniMapRoute> routes;
+    glm::dvec2 groundSizeMeters{0.0};
+    ScenePanelRenderer renderScene;
+    CameraPanelRenderer renderCamera;
+    CameraGimbalSetter setCameraGimbalAngles;
+    HudRenderTimings* timings = nullptr;
 };
 
 /** @brief 비행 상태와 편대 요약을 3D 화면 위에 표시한다. */
@@ -69,25 +116,7 @@ public:
     SimulatorHud(const SimulatorHud&) = delete;
     SimulatorHud& operator=(const SimulatorHud&) = delete;
 
-    void Render(const simulation::SimulationCore& simulation,
-        simulation::DroneId& observerDroneId,
-        bool gamepadConnected,
-        bool fleetReturnCanStart,
-        const std::function<void()>& startFleetReturn,
-        const std::string& completeFleetMissionStatus,
-        bool completeFleetMissionCanStart,
-        const std::function<void()>& startCompleteFleetMission,
-        const communication::VirtualMeshNetwork* formationNetwork,
-        const communication::DroneSocketTransport* socketTransport,
-        const std::function<void(simulation::DroneId, bool)>&
-            setFormationNodeRadioEnabled,
-        std::span<const flight_planning::BuildingObstacle> buildings,
-        std::span<const MiniMapDrone> drones,
-        std::span<const MiniMapRoute> routes,
-        const glm::dvec2& groundSizeMeters,
-        const std::function<std::uint32_t(int, int)>& renderScene,
-        const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
-        HudRenderTimings* timings = nullptr);
+    void Render(const SimulatorHudFrame& frame);
 
 private:
     struct PendingGpuQuery
@@ -102,8 +131,7 @@ private:
     bool initialized_ = false;
     int selectedFaultSource_ = 0;
     std::string layoutFile_;
-    double miniMapZoom_ = 1.0;
-    glm::dvec2 miniMapCenterMeters_{0.0};
+    MiniMapPanel miniMapPanel_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };
 }

@@ -665,29 +665,35 @@ void DroneSimApp::RenderFrame()
             miniMapRoutes.push_back({fleetMission_.LeaderId(),
                 currentPosition, std::move(remainingWaypoints)});
         }
-        hud_->Render(simulation_, observerDroneId_, *view_,
-            gamepadController_.IsConnected(),
-            fleetReturnCanStart,
-            [this] { static_cast<void>(StartFleetReturn()); },
-            CompleteFleetMissionStatus(), completeFleetMissionCanStart,
-            [this]
+        const std::string completeMissionStatus = CompleteFleetMissionStatus();
+        const dronesim::gui::SimulatorHudFrame hudFrame{
+            .simulation = simulation_,
+            .observerDroneId = observerDroneId_,
+            .sceneView = *view_,
+            .gamepadConnected = gamepadController_.IsConnected(),
+            .fleetReturnCanStart = fleetReturnCanStart,
+            .startFleetReturn = [this]
+            {
+                static_cast<void>(StartFleetReturn());
+            },
+            .completeFleetMissionStatus = completeMissionStatus,
+            .completeFleetMissionCanStart = completeFleetMissionCanStart,
+            .startCompleteFleetMission = [this]
             {
                 static_cast<void>(StartCompleteFleetMission());
             },
-            networkStatus ? &*networkStatus : nullptr,
-            [this, formationNetworkActive](dronesim::simulation::DroneId droneId,
-                bool enabled)
+            .fleetNetworkStatus = networkStatus ? &*networkStatus : nullptr,
+            .setFormationNodeRadioEnabled = [this, formationNetworkActive](
+                dronesim::simulation::DroneId droneId, bool enabled)
             {
                 if (formationNetwork_ && formationNetworkActive)
-                {
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
-                }
             },
-            trainingRangeScene_->BuildingObstacles(),
-            miniMapDrones,
-            miniMapRoutes,
-            trainingRangeScene_->GroundSizeMeters(),
-            [this](int width, int height)
+            .buildings = trainingRangeScene_->BuildingObstacles(),
+            .drones = miniMapDrones,
+            .routes = miniMapRoutes,
+            .groundSizeMeters = trainingRangeScene_->GroundSizeMeters(),
+            .renderScene = [this](int width, int height)
             {
                 return view_->RenderScenePanel(simulation_, observerDroneId_,
                     trainingRangeScene_->BuildingObstacles(), width, height,
@@ -701,7 +707,7 @@ void DroneSimApp::RenderFrame()
                     benchmarkMode_ ? &benchmarkSession_.CurrentFrame()
                         .scenePanelRenderMicroseconds : nullptr);
             },
-            [this](dronesim::simulation::DroneId droneId)
+            .renderCamera = [this](dronesim::simulation::DroneId droneId)
             {
                 return view_->RenderCameraPanel(simulation_, droneId,
                     [this](const glm::mat4& view, const glm::mat4& projection,
@@ -714,12 +720,14 @@ void DroneSimApp::RenderFrame()
                     benchmarkMode_ ? &benchmarkSession_.CurrentFrame()
                         .cameraSceneRenderMicroseconds : nullptr);
             },
-            [this](dronesim::simulation::DroneId droneId,
+            .setCameraGimbalAngles = [this](
+                dronesim::simulation::DroneId droneId,
                 const dronesim::simulation::CameraGimbalAngles& angles)
             {
                 simulation_.SetCameraGimbalAngles(droneId, angles);
             },
-            benchmarkMode_ ? &hudTimings : nullptr);
+            .timings = benchmarkMode_ ? &hudTimings : nullptr};
+        hud_->Render(hudFrame);
         auto& frame = benchmarkSession_.CurrentFrame();
         frame.hudInterfaceBuildMicroseconds = hudTimings.interfaceBuildMicroseconds;
         frame.hudFinalizeMicroseconds = hudTimings.frameFinalizeMicroseconds;

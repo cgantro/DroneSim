@@ -108,7 +108,10 @@ glm::dvec2 FindOpenPosition(const glm::dvec2& preferred,
         }
     }
     if (!std::isfinite(bestDistance))
-        throw std::runtime_error("도시 지도에서 드론이 모일 빈 공간을 찾지 못했습니다.");
+        throw std::runtime_error("도시 지도에서 비행 가능한 위치를 찾지 못했습니다. 기준 위치 ("
+            + std::to_string(preferred.x) + ", " + std::to_string(preferred.y)
+            + "), 탐색 반경 " + std::to_string(maximumSearchDistanceMeters)
+            + "m, 최소 간격 " + std::to_string(minimumSeparationMeters) + "m");
     return best;
 }
 
@@ -209,17 +212,27 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
     stagingPositionMeters_ = FindOpenPosition(
         {0.0, -23.0 * mapScale}, halfSize, buildingObstacles_, {},
         10.0, 0.0, std::numeric_limits<double>::infinity());
+    // 정찰 지점을 출발 지점 주변 네 방향에 나눠 임무 범위를 넓힌다.
+    const double reconRadiusMeters = std::min(
+        std::min(halfSize.x, halfSize.y) * 0.2, 30.0);
+    const auto keepInsideMap = [&](glm::dvec2 position)
+    {
+        position.x = std::clamp(position.x, -halfSize.x + 10.0, halfSize.x - 10.0);
+        position.y = std::clamp(position.y, -halfSize.y + 10.0, halfSize.y - 10.0);
+        return position;
+    };
     const std::array<glm::dvec2, 4> preferredReconPositions{
-        stagingPositionMeters_ + glm::dvec2{6.0, 0.0},
-        stagingPositionMeters_ + glm::dvec2{-6.0, 0.0},
-        stagingPositionMeters_ + glm::dvec2{0.0, 6.0},
-        stagingPositionMeters_ + glm::dvec2{0.0, -6.0}};
+        keepInsideMap(stagingPositionMeters_ + glm::dvec2{reconRadiusMeters, 0.0}),
+        keepInsideMap(stagingPositionMeters_ + glm::dvec2{0.0, reconRadiusMeters}),
+        keepInsideMap(stagingPositionMeters_ + glm::dvec2{-reconRadiusMeters, 0.0}),
+        keepInsideMap(stagingPositionMeters_ + glm::dvec2{0.0, -reconRadiusMeters})};
     std::vector<glm::dvec2> reserved{stagingPositionMeters_};
+    const double searchRadiusMeters = 50.0;
     for (std::size_t index = 0; index < preferredReconPositions.size(); ++index)
     {
         const glm::dvec2 position = FindOpenPosition(
             preferredReconPositions[index], halfSize, buildingObstacles_,
-            reserved, 8.0, 6.0, 25.0);
+            reserved, 8.0, 15.0, searchRadiusMeters);
         reserved.push_back(position);
         reconPoints_.push_back({"정찰 지점 " + std::to_string(index + 1U), position});
     }

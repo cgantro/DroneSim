@@ -235,12 +235,13 @@ if(DRONESIM_BUILD_GRAPHICS)
 
   if(NOT EMSCRIPTEN)
     add_library(dronesim_gui STATIC
+      modules/gui/src/MiniMapPanel.cpp
       modules/gui/src/SimulatorHud.cpp
       modules/gui/src/SimulatorView.cpp
     )
     target_include_directories(dronesim_gui PUBLIC modules/gui/include)
     target_link_libraries(dronesim_gui
-      PUBLIC dronesim_communication dronesim_simulation_core dronesim_flight_planning
+      PUBLIC dronesim_simulation_core dronesim_flight_planning
       PRIVATE dronesim_graphics dronesim_imgui glfw
     )
     target_compile_definitions(dronesim_gui PRIVATE GLFW_INCLUDE_NONE)
@@ -323,8 +324,7 @@ if(DRONESIM_BUILD_GRAPHICS)
       "-sALLOW_MEMORY_GROWTH=1"
       "-sSTACK_SIZE=1mb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/shaders@shaders"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb@models/drones/x500/visual.glb"
-      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/cgo3-gimbal.glb@models/drones/x500/cgo3-gimbal.glb"
+      "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/x500_CAM.glb@models/drones/x500/x500_CAM.glb"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm@models/drones/x500/carbon-weave.ppm"
       "--embed-file=${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE@models/drones/x500/LICENSE"
     )
@@ -336,8 +336,7 @@ if(DRONESIM_BUILD_GRAPHICS)
   else()
     set(simulator_runtime_assets
       "${CMAKE_SOURCE_DIR}/assets/shaders/Scene.glsl"
-      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/visual.glb"
-      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/cgo3-gimbal.glb"
+      "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/x500_CAM.glb"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/carbon-weave.ppm"
       "${CMAKE_SOURCE_DIR}/assets/models/drones/x500/LICENSE")
     foreach(model IN LISTS city_map_asset)

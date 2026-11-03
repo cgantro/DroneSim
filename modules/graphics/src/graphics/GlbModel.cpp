@@ -266,6 +266,7 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
                 glm::vec3(std::numeric_limits<float>::max()),
                 glm::vec3(std::numeric_limits<float>::lowest())};
             bounds.nodeName = nodeName;
+            bounds.nodeTransform = nodeTransform;
             if (primitives.size() > 1U)
                 bounds.nodeName += " · 메시 " + std::to_string(primitiveIndex + 1U);
             for (const Vertex& vertex : vertices)
@@ -337,18 +338,25 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
 void GlbModel::Draw(const glm::mat4& modelTransform, Renderer& renderer,
     Shader& shader, const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, const Material* fallbackMaterial,
-    const Texture2D* fallbackTexture, bool fallbackTriplanar) const
+    const Texture2D* fallbackTexture, bool fallbackTriplanar,
+    std::span<const glm::mat4> partTransforms) const
 {
+    if (!partTransforms.empty() && partTransforms.size() != parts_.size())
+        throw std::invalid_argument("GLB 메시별 변환 개수는 메시 개수와 같아야 합니다.");
+
     // GLB 재질이 있으면 이를 쓰고, 없을 때만 호출자가 준 기본 재질과 질감을 사용한다.
     static const Material defaultMaterial(glm::vec4(1.0F), 0.0F, 1.0F);
-    for (const auto& part : parts_)
+    for (std::size_t index = 0; index < parts_.size(); ++index)
     {
+        const auto& part = parts_[index];
         const Material& material = part->hasMaterial
             ? part->material : (fallbackMaterial != nullptr ? *fallbackMaterial : defaultMaterial);
         const Texture2D* texture = part->hasMaterial
             ? part->texture.get() : fallbackTexture;
         const bool triplanar = !part->hasMaterial && fallbackTriplanar;
-        renderer.Draw(modelTransform * part->nodeTransform, *part->mesh,
+        const glm::mat4& partTransform = partTransforms.empty()
+            ? part->nodeTransform : partTransforms[index];
+        renderer.Draw(modelTransform * partTransform, *part->mesh,
             material, shader, view, projection, cameraPosition, texture, triplanar);
     }
 }
