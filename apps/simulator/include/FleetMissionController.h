@@ -4,7 +4,6 @@
 #include "FleetMissionEnvironment.h"
 #include "FleetDroneMissionExecutor.h"
 #include "FleetFormationFlight.h"
-#include "TrainingRangeScene.h"
 #include "simulation_core/SimulationCore.h"
 
 #include <map>
@@ -70,7 +69,6 @@ private:
     void AdvanceFormationTransit();
 
     simulation::SimulationCore& simulation_;
-    const scene::TrainingRangeScene& trainingScene_;
     FleetMissionEnvironment missionEnvironment_;
     mission::FleetMissionState fleetMission_;
     FleetMissionCommunication fleetCommunication_;

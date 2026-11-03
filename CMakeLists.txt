@@ -311,6 +311,7 @@ if(DRONESIM_BUILD_GRAPHICS)
     dronesim_scene
     dronesim_communication
     nlohmann_json::nlohmann_json
+    PRIVATE dronesim_geometry
   )
   if(NOT EMSCRIPTEN)
     target_link_libraries(dronesim_simulator_app PUBLIC

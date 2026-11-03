@@ -303,7 +303,7 @@ void DroneSimApp::InitializeStartingState()
     if (targets.empty())
         throw std::runtime_error("훈련장 정찰 지점을 준비하지 못했습니다.");
     const glm::dvec2 demoDroneStartMeters =
-        trainingRangeScene_->FormationStagingPositionMeters();
+        missionController_->Environment().StagingPositionMeters();
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
     const glm::dvec2 toFirstTarget = glm::dvec2{
         targets.front().approachPositionMeters.x,

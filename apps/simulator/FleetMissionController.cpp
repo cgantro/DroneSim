@@ -22,9 +22,8 @@ FleetMissionController::FleetMissionController(
     const terrain::TerrainGrid& terrain,
     const scene::TrainingRangeScene& trainingScene)
     : simulation_(simulation),
-      trainingScene_(trainingScene),
       missionEnvironment_(terrain, trainingScene),
-      fleetCommunication_(simulation_, trainingScene_, missionEnvironment_, fleetMission_),
+      fleetCommunication_(simulation_, trainingScene, missionEnvironment_, fleetMission_),
       formationFlight_(simulation_, fleetMission_, fleetCommunication_),
       droneMissionExecutor_(simulation_, missionEnvironment_, fleetMission_, fleetCommunication_)
 {
@@ -599,7 +598,7 @@ bool FleetMissionController::StartFormationTransit()
         return false;
 
     const glm::dvec2 stagingPosition =
-        trainingScene_.FormationStagingPositionMeters();
+        missionEnvironment_.StagingPositionMeters();
     // 대기 지점의 지면 높이와 최소 순항 고도 중 높은 값을 써서 지형에 박히지 않게 한다.
     const double stagingAltitude = std::max(
         missionEnvironment_.RouteEnvironment().GroundAltitudeMeters(stagingPosition) + 15.0,

@@ -100,18 +100,24 @@ public:
             mapGroundSize.x, 0.02);
         EXPECT_NEAR(app.terrainGrid_.HalfDepthMeters() * 2.0,
             mapGroundSize.y, 0.02);
-        ASSERT_EQ(app.trainingRangeScene_->ReconPoints().size(), 4U);
+        const auto& missionEnvironment = MissionController(app).Environment();
+        ASSERT_EQ(missionEnvironment.Targets().size(), 4U);
         double farthestTargetMeters = 0.0;
         double closestTargetSpacingMeters = std::numeric_limits<double>::infinity();
-        for (const auto& target : app.trainingRangeScene_->ReconPoints())
+        for (const auto& target : missionEnvironment.Targets())
         {
             farthestTargetMeters = std::max(farthestTargetMeters,
-                glm::distance(target.positionMeters,
-                    app.trainingRangeScene_->FormationStagingPositionMeters()));
-            for (const auto& other : app.trainingRangeScene_->ReconPoints())
+                glm::distance(glm::dvec2{
+                    target.approachPositionMeters.x, target.approachPositionMeters.y},
+                    missionEnvironment.StagingPositionMeters()));
+            for (const auto& other : missionEnvironment.Targets())
                 if (&target != &other)
                     closestTargetSpacingMeters = std::min(closestTargetSpacingMeters,
-                        glm::distance(target.positionMeters, other.positionMeters));
+                        glm::distance(
+                            glm::dvec2{target.approachPositionMeters.x,
+                                target.approachPositionMeters.y},
+                            glm::dvec2{other.approachPositionMeters.x,
+                                other.approachPositionMeters.y}));
         }
         EXPECT_GT(farthestTargetMeters, 25.0);
         EXPECT_GE(closestTargetSpacingMeters, 15.0);
@@ -156,7 +162,7 @@ public:
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const glm::dvec2 openGround =
-            app.trainingRangeScene_->FormationStagingPositionMeters();
+            MissionController(app).Environment().StagingPositionMeters();
         const auto fallingDrone = app.simulation_.AddDrone(
             {openGround, 8.0}, 0.0, 0.0);
 

@@ -5,6 +5,8 @@
 #include "scene/TrainingRangeRouteEnvironment.h"
 #include "terrain/TerrainGrid.h"
 
+#include <glm/vec2.hpp>
+
 #include <vector>
 
 namespace dronesim::simulator
@@ -22,6 +24,8 @@ public:
     [[nodiscard]] const mission::FleetMissionPlanner& Planner() const noexcept;
     [[nodiscard]] const std::vector<mission::FleetReconnaissanceTarget>&
     Targets() const noexcept;
+    /** @brief 편대가 정찰 임무를 시작하기 전에 모일 지점을 반환한다. */
+    [[nodiscard]] const glm::dvec2& StagingPositionMeters() const noexcept;
     [[nodiscard]] double MinimumTransitAltitudeMeters() const noexcept;
 
 private:
@@ -32,6 +36,7 @@ private:
 
     scene::TrainingRangeRouteEnvironment routeEnvironment_;
     mission::FleetMissionPlanner planner_;
+    glm::dvec2 stagingPositionMeters_{0.0};
     std::vector<mission::FleetReconnaissanceTarget> targets_;
 };
 }
