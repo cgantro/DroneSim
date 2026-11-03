@@ -56,6 +56,24 @@ glm::dvec3 PositionBeyondConflict(
     return conflictPositionMeters + glm::normalize(forward) * clearanceMeters;
 }
 
+/** @brief 두 드론의 상대 이동 방향에 직각인 수평 회피 방향을 정한다. */
+glm::dvec3 ChooseLateralDirection(
+    const glm::dvec3& relativeVelocityMetersPerSecond,
+    const glm::dvec3& relativePositionMeters)
+{
+    // 상대 속도에 직각인 방향이면 서로 접근하는 선을 옆으로 벗어난다.
+    glm::dvec3 lateral{-relativeVelocityMetersPerSecond.y,
+        relativeVelocityMetersPerSecond.x, 0.0};
+    if (glm::length(lateral) < 1.0e-6)
+    {
+        // 속도가 같을 때는 현재 두 기체의 상대 위치를 기준으로 방향을 고른다.
+        lateral = {-relativePositionMeters.y, relativePositionMeters.x, 0.0};
+    }
+    if (glm::length(lateral) < 1.0e-6)
+        return {0.0, 1.0, 0.0};
+    return glm::normalize(lateral);
+}
+
 /**
  * @brief 충돌 회피를 위해 속도를 바꿀 드론을 고른다.
  * @details 둘 다 연결되어 임무 중이면 두 대가 함께 비킨다. 그 외에는 연결이 살아 있고
@@ -114,6 +132,7 @@ CollisionAvoidancePlan PlanCollisionAvoidance(
                 plan.minimumPredictedSeparationMeters = intendedPath.distanceMeters;
             }
 
+            // 회피 중에는 원래 경로의 간격을 봐서, 위험이 사라지면 새 회피 목표를 내지 않는다.
             const bool alreadyAvoiding = bothHaveTasks
                 ? currentTargetsByDrone.contains(first.name)
                     || currentTargetsByDrone.contains(second.name)
@@ -131,12 +150,8 @@ CollisionAvoidancePlan PlanCollisionAvoidance(
             const glm::dvec3 relativePosition = second.positionMeters - first.positionMeters;
             const glm::dvec3 threatVelocity = second.intendedVelocityMetersPerSecond
                 - first.intendedVelocityMetersPerSecond;
-            glm::dvec3 side{-threatVelocity.y, threatVelocity.x, 0.0};
-            if (glm::length(side) < 1.0e-6)
-                side = {-relativePosition.y, relativePosition.x, 0.0};
-            if (glm::length(side) < 1.0e-6)
-                side = {0.0, 1.0, 0.0};
-            side = glm::normalize(side);
+            const glm::dvec3 side = ChooseLateralDirection(
+                threatVelocity, relativePosition);
 
             const auto makeTarget = [&](const DroneMotionIntent& drone,
                                         const glm::dvec3& lateralDirection)
