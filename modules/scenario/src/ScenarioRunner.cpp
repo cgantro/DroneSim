@@ -98,14 +98,55 @@ private:
     std::optional<double> lastKnownBatteryPercent_;
 };
 
+/** @brief 한 드론의 비행 시간과 이동 거리를 누적한다. */
+class FlightMetrics final
+{
+public:
+    /** @brief 시나리오 시작 위치를 거리 계산의 기준점으로 저장한다. */
+    void Reset(const glm::dvec3& initialPositionMeters) noexcept
+    {
+        previousPositionMeters_ = initialPositionMeters;
+        flightDistanceMeters_ = 0.0;
+        flightTimeSeconds_ = 0.0;
+    }
+
+    /** @brief 물리 계산 직전의 비행 상태를 기준으로 한 Tick 시간을 더한다. */
+    void RecordTimeBeforePhysics(FlightMode mode) noexcept
+    {
+        if (mode != FlightMode::Grounded)
+            flightTimeSeconds_ += DroneModel::fixedStepSeconds;
+    }
+
+    /** @brief 물리 계산이 끝난 위치까지의 직선 이동 거리를 누적한다. */
+    void RecordPositionAfterPhysics(const glm::dvec3& positionMeters) noexcept
+    {
+        flightDistanceMeters_ += glm::distance(
+            previousPositionMeters_, positionMeters);
+        previousPositionMeters_ = positionMeters;
+    }
+
+    [[nodiscard]] double DistanceMeters() const noexcept
+    {
+        return flightDistanceMeters_;
+    }
+
+    [[nodiscard]] double TimeSeconds() const noexcept
+    {
+        return flightTimeSeconds_;
+    }
+
+private:
+    glm::dvec3 previousPositionMeters_{0.0};
+    double flightDistanceMeters_ = 0.0;
+    double flightTimeSeconds_ = 0.0;
+};
+
 struct ScenarioDroneRuntime
 {
     DroneId id{};
     glm::dvec3 homePositionMeters{0.0};
     DroneObservation observation;
-    glm::dvec3 previousPositionMeters{0.0};
-    double flightDistanceMeters = 0.0;
-    double flightTimeSeconds = 0.0;
+    FlightMetrics flightMetrics;
 };
 
 using ScenarioDrones = std::unordered_map<std::string, ScenarioDroneRuntime>;
@@ -677,8 +718,8 @@ void PopulateFinalSnapshot(
             droneName, observation.LastKnownState(),
             observation.Status(), observation.LastHeartbeatTick()};
         drone.finalCamera = simulation.Camera(runtime.id);
-        drone.flightDistanceMeters = runtime.flightDistanceMeters;
-        drone.flightTimeSeconds = runtime.flightTimeSeconds;
+        drone.flightDistanceMeters = runtime.flightMetrics.DistanceMeters();
+        drone.flightTimeSeconds = runtime.flightMetrics.TimeSeconds();
         drone.reportedBatteryPercent = observation.LastKnownBatteryPercent();
         if (simulation.HasBattery(runtime.id))
         {
@@ -719,7 +760,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         if (initialState.mode == FlightMode::Grounded)
             drone.homePositionMeters.z += DroneModel::takeoffHeightMeters;
         drone.observation.RecordHeartbeat(0, initialState, std::nullopt);
-        drone.previousPositionMeters = initialState.positionMeters;
+        drone.flightMetrics.Reset(initialState.positionMeters);
     }
     if (definition.energyModel)
     {
@@ -776,19 +817,12 @@ ScenarioResult RunScenario(std::string_view jsonText)
         UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
             drones, activeAvoidanceTargets, result);
         for (auto& [droneName, drone] : drones)
-        {
-            if (simulation.State(drone.id).mode != FlightMode::Grounded)
-                drone.flightTimeSeconds += DroneModel::fixedStepSeconds;
-        }
+            drone.flightMetrics.RecordTimeBeforePhysics(
+                simulation.State(drone.id).mode);
         simulation.AdvanceOneTick();
         for (auto& [droneName, drone] : drones)
-        {
-            const glm::dvec3& currentPosition =
-                simulation.State(drone.id).positionMeters;
-            drone.flightDistanceMeters += glm::distance(
-                drone.previousPositionMeters, currentPosition);
-            drone.previousPositionMeters = currentPosition;
-        }
+            drone.flightMetrics.RecordPositionAfterPhysics(
+                simulation.State(drone.id).positionMeters);
 
         // 물리 상태를 한 Tick 진행한 뒤 실제 이동 거리, 최소 간격,
         // 임무 도착 여부와 요청된 궤적 표본을 기록한다.
