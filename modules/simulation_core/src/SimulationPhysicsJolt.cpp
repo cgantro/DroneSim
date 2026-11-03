@@ -7,7 +7,8 @@
 
 namespace dronesim::simulation
 {
-// 공개 물리 API와 Jolt의 전용 타입 사이에서 변환을 맡는다.
+// 공개 헤더에는 Jolt를 노출하지 않고, 이 구현 파일에서만 실제 물리 월드를 소유한다.
+// unique_ptr가 Impl을 파괴하므로 Jolt 월드와 그 안의 물리 자원도 함께 정리된다.
 struct SimulationPhysics::Impl
 {
     JoltPhysicsWorld world;
@@ -17,7 +18,8 @@ struct SimulationPhysics::Impl
         : defaultGround(world.AddStaticBox(
             {0.0, 0.0, -0.5}, {10000.0, 10000.0, 0.5}))
     {
-        // 실제 지형을 지정하기 전에도 드론이 끝없이 떨어지지 않도록 큰 바닥을 둔다.
+        // 바닥 윗면을 z=0에 맞춘 20km 정사각형이다. 지형을 불러오기 전에도
+        // 드론이 빈 공간으로 떨어지지 않게 임시 바닥으로 사용한다.
     }
 };
 
@@ -25,6 +27,7 @@ namespace
 {
 JoltRigidBodyHandle ToJolt(RigidBodyHandle body) noexcept
 {
+    // 두 핸들은 같은 월드의 물체 번호를 공유한다. 변환은 이름이 다른 래퍼만 벗긴다.
     return {body.value};
 }
 
@@ -35,6 +38,8 @@ RigidBodyHandle FromJolt(JoltRigidBodyHandle body) noexcept
 
 JoltRigidBodyState ToJolt(const RigidBodyState& state) noexcept
 {
+    // 두 공개 상태 형식 모두 ENU 좌표, 미터, 초, 라디안 단위를 사용한다.
+    // 축 변환이 필요하면 이 경계가 아니라 JoltPhysicsWorld가 내부 Jolt 좌표로 바꾼다.
     return {state.positionMeters, state.orientation,
         state.linearVelocityMetersPerSecond, state.angularVelocityRadiansPerSecond};
 }
@@ -116,6 +121,8 @@ void SimulationPhysics::AddStaticObstaclePrism(
 
 void SimulationPhysics::SetTerrain(terrain::TerrainGrid terrain)
 {
+    // 새 지형이 성공적으로 만들어진 뒤에만 임시 평면을 지운다.
+    // 지형 생성 중 오류가 나면 기존 바닥이 남아 시뮬레이션을 받쳐 준다.
     impl_->world.SetTerrain(terrain);
     if (impl_->defaultGround)
     {
