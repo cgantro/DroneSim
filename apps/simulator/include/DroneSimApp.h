@@ -3,8 +3,7 @@
 #include "BenchmarkSession.h"
 #include "manual_control/GamepadController.h"
 #include "gui/SimulatorHud.h"
-#include "communication/VirtualMeshNetwork.h"
-#include "communication/DroneSocketTransport.h"
+#include "FleetNetworkSession.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "simulation_core/EoCameraModel.h"
@@ -51,7 +50,6 @@ class SimulatorView;
 
 namespace dronesim::simulator
 {
-namespace communication = ::dronesim::communication;
 
 /**
  * @brief 군집 훈련장을 띄우고 드론 편대와 카메라 영상을 보여 준다.
@@ -236,9 +234,7 @@ private:
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     dronesim::simulation::DroneId observerDroneId_ = 0;
     dronesim::mission::FleetMissionState fleetMission_;
-    communication::DroneSocketTransport droneSocketTransport_;
-    std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
-    std::vector<communication::RadioObstacle> formationRadioObstacles_;
+    FleetNetworkSession fleetNetworkSession_;
     dronesim::terrain::TerrainGrid terrainGrid_;
     std::optional<FleetMissionEnvironment> missionEnvironment_;
     std::unique_ptr<dronesim::graphics::Shader> shader_;

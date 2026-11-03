@@ -140,16 +140,6 @@ public:
             *expectedRoute);
     }
 
-    static void UseConnectedNetworkForTest(DroneSimApp& app)
-    {
-        communication::VirtualMeshSettings settings;
-        settings.maximumLinkRangeMeters = 1'000.0;
-        app.formationNetwork_ = std::make_unique<
-            communication::VirtualMeshNetwork>(app.droneSocketTransport_, settings);
-        app.formationRadioObstacles_.clear();
-        app.fleetMission_.FormationTransit().SetRoute({});
-    }
-
     static void VerifyObserverCameraKeepsAUsableFollowDistance()
     {
         DroneSimApp app({.smokeTest = true});
@@ -192,7 +182,7 @@ public:
         std::vector<communication::SocketPort> ports;
         for (const auto droneId : app.simulation_.DroneIds())
         {
-            const auto port = app.droneSocketTransport_.PortFor(droneId);
+            const auto port = app.fleetNetworkSession_.SocketTransport().PortFor(droneId);
             ASSERT_TRUE(port.has_value());
             EXPECT_NE(*port, 0U);
             ports.push_back(*port);
@@ -410,10 +400,10 @@ public:
                         << ", 상태 " << mission::FleetDroneStatusLabel(
                             mission->second.Status());
             }
-            const auto& metrics = app.formationNetwork_->Metrics();
+            const auto& metrics = app.fleetNetworkSession_.VirtualNetwork()->Metrics();
             failureContext << "; 통신 통계 전달 " << metrics.deliveredMessages
                 << ", 폐기 " << metrics.droppedMessages;
-            const auto events = app.formationNetwork_->Events();
+            const auto events = app.fleetNetworkSession_.VirtualNetwork()->Events();
             const std::size_t firstEvent = events.size() > 12U
                 ? events.size() - 12U : 0U;
             for (std::size_t index = firstEvent; index < events.size(); ++index)

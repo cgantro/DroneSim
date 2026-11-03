@@ -571,10 +571,11 @@ void DroneSimApp::RenderFrame()
         const bool formationNetworkActive = fleetMission_.FormationTransit().IsActive()
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
         std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
-        if (formationNetwork_ && formationNetworkActive)
+        if (const auto* network = fleetNetworkSession_.VirtualNetwork();
+            network != nullptr && formationNetworkActive)
         {
             networkStatus = MakeFleetNetworkStatus(simulation_,
-                *formationNetwork_, droneSocketTransport_, fleetMission_.LeaderId());
+                *network, fleetNetworkSession_.SocketTransport(), fleetMission_.LeaderId());
         }
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -677,8 +678,9 @@ void DroneSimApp::RenderFrame()
                 .setRadioEnabled = [this, formationNetworkActive](
                     dronesim::simulation::DroneId droneId, bool enabled)
                 {
-                    if (formationNetwork_ && formationNetworkActive)
-                        formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
+                    if (auto* network = fleetNetworkSession_.VirtualNetwork();
+                        network != nullptr && formationNetworkActive)
+                        network->SetNodeRadioEnabled(droneId, enabled);
                 }},
             .timings = benchmarkMode_ ? &hudTimings : nullptr};
         hud_->Render(hudFrame);
