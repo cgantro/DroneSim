@@ -1,8 +1,7 @@
 #pragma once
 
+#include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
-
-#include "simulation_core/RigidBodyTypes.h"
 
 #include <array>
 #include <cstddef>
@@ -22,8 +21,13 @@ struct RotorDefinition
     RotorRotation rotation = RotorRotation::Clockwise;
 };
 
-/** @brief 기체 기준 좌표에 놓인 PX4 모델의 상자 충돌 형상이다. */
-using QuadrotorCollisionBox = RigidBodyBox;
+/** @brief 기체 기준 위치와 자세를 가진 상자 충돌 모양이다. 길이 단위는 미터다. */
+struct QuadrotorCollisionBox
+{
+    glm::vec3 halfExtentsMeters{0.1F};
+    glm::dvec3 positionMeters{0.0};
+    glm::dquat orientation{1.0, 0.0, 0.0, 0.0};
+};
 
 /**
  * @brief 기체 질량·관성과 로터·모터의 계산값을 보관한다.

@@ -1,6 +1,6 @@
 #include "simulation_core/SimulationCore.h"
 #include "geometry/VectorMath.h"
-#include "simulation_core/SimulationPhysics.h"
+#include "simulation_core/JoltPhysicsWorld.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 
@@ -144,13 +144,14 @@ struct SimulationCore::EcsStorage
 
     struct PhysicsBody
     {
-        RigidBodyHandle handle;
+        JoltRigidBodyHandle handle;
     };
 
     QuadrotorControllerParameters controllerParameters;
     QuadrotorParameters quadrotorParameters;
     /** @brief 월드의 콜백이 물리를 사용하므로 Flecs 월드보다 나중에 정리한다. */
-    SimulationPhysics physics;
+    JoltPhysicsWorld physics;
+    std::optional<JoltRigidBodyHandle> defaultGround;
     flecs::world world;
     DroneRegistry droneRegistry;
     bool measurePhysicsStepDuration = false;
@@ -175,6 +176,10 @@ struct SimulationCore::EcsStorage
         : controllerParameters(selectedControllerParameters)
         , quadrotorParameters(std::move(selectedQuadrotorParameters))
     {
+        // 지형을 불러오기 전에도 드론이 떨어지지 않도록 임시 평면을 둔다.
+        // 바닥 윗면은 z=0이며, 실제 지형 등록이 끝나면 이 평면을 제거한다.
+        defaultGround = physics.AddStaticBox(
+            {0.0, 0.0, -0.5}, {10000.0, 10000.0, 0.5});
         static_cast<void>(CreateDrone(glm::dvec3{
             0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters}, 0.0));
         RegisterMotorTargetSystem();
@@ -227,7 +232,7 @@ struct SimulationCore::EcsStorage
         DroneControlState initialControl;
         ApplyInitialPose(initialState, initialControl, initialPose);
         flecs::entity drone = world.entity();
-        std::optional<RigidBodyHandle> createdBody;
+        std::optional<JoltRigidBodyHandle> createdBody;
 
         try
         {
@@ -235,7 +240,7 @@ struct SimulationCore::EcsStorage
                 .set<DroneControlState>(initialControl)
                 .set<InitialPose>(initialPose)
                 .set<CameraState>({});
-            RigidBodyDefinition definition;
+            JoltRigidBodyDefinition definition;
             definition.positionMeters = positionMeters;
             definition.orientation = initialState.orientation;
             createdBody = physics.CreateQuadrotor(definition, quadrotorParameters);
@@ -296,10 +301,10 @@ struct SimulationCore::EcsStorage
     void ResetPhysicsBody(flecs::entity& drone)
     {
         const DroneState& droneState = drone.get<DroneState>();
-        RigidBodyState initialState;
+        JoltRigidBodyState initialState;
         initialState.positionMeters = droneState.positionMeters;
         initialState.orientation = droneState.orientation;
-        const RigidBodyHandle body = drone.get<PhysicsBody>().handle;
+        const JoltRigidBodyHandle body = drone.get<PhysicsBody>().handle;
         physics.SetState(body, initialState);
         CopyPhysicsState(drone.get_mut<DroneState>(), body);
     }
@@ -317,7 +322,7 @@ struct SimulationCore::EcsStorage
     void UpdateMotorTargets(
         DroneState& state,
         DroneControlState& control,
-        RigidBodyHandle body)
+        JoltRigidBodyHandle body)
     {
         const double step = DroneModel::fixedStepSeconds;
         if (state.mode != FlightMode::Grounded)
@@ -332,17 +337,17 @@ struct SimulationCore::EcsStorage
     void SynchronizeRigidBody(
         DroneState& state,
         DroneControlState& control,
-        RigidBodyHandle body)
+        JoltRigidBodyHandle body)
     {
         CopyPhysicsState(state, body);
         DroneModel::UpdateFlightModeAfterPhysics(state, control,
             QuadrotorFlightController::groundedModelOriginHeightMeters);
     }
 
-    void CopyPhysicsState(DroneState& target, RigidBodyHandle body) const
+    void CopyPhysicsState(DroneState& target, JoltRigidBodyHandle body) const
     {
         // 비행 위치와 자세의 기준은 물리 엔진이다. 모터 시험에서 기록한 실제 회전수도 함께 복사한다.
-        const RigidBodyState source = physics.State(body);
+        const JoltRigidBodyState source = physics.State(body);
         target.positionMeters = source.positionMeters;
         target.velocityMetersPerSecond = source.linearVelocityMetersPerSecond;
         target.orientation = source.orientation;
@@ -364,6 +369,17 @@ struct SimulationCore::EcsStorage
             SynchronizeRigidBody(
                 state, control, body.handle);
         });
+    }
+
+    void SetTerrain(const terrain::TerrainGrid& terrain)
+    {
+        // 지형 생성이 실패하면 기존 임시 바닥을 유지해 드론이 추락하지 않게 한다.
+        physics.SetTerrain(terrain);
+        if (defaultGround)
+        {
+            static_cast<void>(physics.DestroyBody(*defaultGround));
+            defaultGround.reset();
+        }
     }
 };
 
@@ -469,7 +485,7 @@ void SimulationCore::SetInitialState(DroneId droneId, const DroneState& state)
     control.targetVelocityMetersPerSecond = normalized.velocityMetersPerSecond;
     control.groundElevationMeters = normalized.positionMeters.z
         - QuadrotorFlightController::groundedModelOriginHeightMeters;
-    const RigidBodyState rigidBodyState{
+    const JoltRigidBodyState rigidBodyState{
         normalized.positionMeters,
         normalized.orientation,
         normalized.velocityMetersPerSecond,
@@ -666,27 +682,28 @@ double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 void SimulationCore::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    ecs_->physics.AddStaticObstacleBox(centerMeters, halfExtentsMeters);
+    static_cast<void>(ecs_->physics.AddStaticBox(
+        centerMeters, glm::dvec3{halfExtentsMeters}));
 }
 
 void SimulationCore::AddStaticObstacleMesh(
     std::span<const glm::dvec3> verticesMeters,
     std::span<const std::uint32_t> triangleIndices)
 {
-    ecs_->physics.AddStaticObstacleMesh(verticesMeters, triangleIndices);
+    ecs_->physics.AddStaticTriangleMesh(verticesMeters, triangleIndices);
 }
 
 void SimulationCore::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)
 {
-    ecs_->physics.AddStaticObstaclePrism(
+    ecs_->physics.AddStaticPrism(
         outlineMeters, bottomMeters, topMeters);
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
 {
-    ecs_->physics.SetTerrain(std::move(terrain));
+    ecs_->SetTerrain(terrain);
 }
 
 std::uint64_t SimulationCore::TickCount() const noexcept

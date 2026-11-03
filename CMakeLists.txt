@@ -76,7 +76,6 @@ add_library(dronesim_simulation_core STATIC
 )
 target_sources(dronesim_simulation_core PRIVATE
   modules/simulation_core/src/JoltPhysicsWorld.cpp
-  modules/simulation_core/src/SimulationPhysicsJolt.cpp
 )
 target_link_libraries(dronesim_simulation_core PRIVATE Jolt::Jolt)
 target_include_directories(dronesim_simulation_core PUBLIC modules/simulation_core/include)

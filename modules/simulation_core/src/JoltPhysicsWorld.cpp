@@ -177,7 +177,7 @@ JPH::RefConst<JPH::Shape> MakeBoxShape(const glm::dvec3 &halfExtentsMeters) {
 JPH::RefConst<JPH::Shape>
 MakeQuadrotorShape(const QuadrotorParameters &parameters) {
   JPH::StaticCompoundShapeSettings compound;
-  for (const RigidBodyBox &box : parameters.collisionBoxes) {
+  for (const QuadrotorCollisionBox &box : parameters.collisionBoxes) {
     if (!collision::IsValidObstacleBox(box.positionMeters,
                                        glm::dvec3{box.halfExtentsMeters}) ||
         !IsValidOrientation(box.orientation))
