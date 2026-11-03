@@ -175,6 +175,18 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
     const QuadrotorParameters& parameters,
     const QuadrotorControllerParameters& controller)
 {
+    if (control.commandedRotorThrustRatios)
+    {
+        std::array<double, QuadrotorParameters::rotorCount> targets{};
+        for (std::size_t rotor = 0; rotor < targets.size(); ++rotor)
+        {
+            // 추력은 회전수 제곱에 비례하므로, 추력 비율을 회전수 비율로 바꾼다.
+            targets[rotor] = parameters.maximumMotorSpeedRadiansPerSecond
+                * std::sqrt((*control.commandedRotorThrustRatios)[rotor]);
+        }
+        return targets;
+    }
+
     glm::dvec3 desiredAcceleration{0.0};
     switch (state.mode)
     {

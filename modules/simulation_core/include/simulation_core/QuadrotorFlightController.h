@@ -39,8 +39,9 @@ public:
         const QuadrotorControllerParameters& controller = defaultQuadrotorControllerParameters);
 
     /**
-     * @brief 현재 비행 목표를 로터별 목표 회전 속도로 바꾼다.
-     * @details 위치·속도 오차로 가속도를 만든 뒤, 자세 토크와 추력을 네 로터에 나눈다.
+     * @brief 비행 목표 또는 수동 추력 비율을 로터별 목표 회전 속도로 바꾼다.
+     * @details 자동 비행은 위치·속도 오차와 자세 토크를 네 로터에 나눈다.
+     * 수동 입력은 추력 비율의 제곱근을 최대 회전수에 곱해 목표를 만든다.
      */
     [[nodiscard]] static std::array<double, QuadrotorParameters::rotorCount> MotorTargets(
         const DroneState& state,
