@@ -61,7 +61,7 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
 
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
-    const ImGuiID dockspaceId = ImGui::GetID("DroneSimDockspaceV4");
+    const ImGuiID dockspaceId = ImGui::GetID("DroneSimDockspaceV5");
     if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
     {
         ImGui::DockBuilderAddNode(dockspaceId,
@@ -70,22 +70,13 @@ void CreateDefaultDockspace(ImGuiViewport* viewport)
         ImGuiID sceneNode = 0;
         ImGuiID sideNode = 0;
         ImGui::DockBuilderSplitNode(
-            dockspaceId, ImGuiDir_Right, 0.30F, &sideNode, &sceneNode);
+            dockspaceId, ImGuiDir_Right, 0.34F, &sideNode, &sceneNode);
 
-        ImGuiID cameraNode = 0;
-        ImGuiID lowerNode = 0;
-        ImGui::DockBuilderSplitNode(
-            sideNode, ImGuiDir_Down, 0.34F, &cameraNode, &lowerNode);
-
-        ImGuiID mapNode = 0;
-        ImGuiID statusNode = 0;
-        ImGui::DockBuilderSplitNode(
-            lowerNode, ImGuiDir_Down, 0.46F, &mapNode, &statusNode);
-
-        ImGui::DockBuilderDockWindow("장면##SceneViewV4", sceneNode);
-        ImGui::DockBuilderDockWindow("카메라##CameraViewV4", cameraNode);
-        ImGui::DockBuilderDockWindow("미니맵##MiniMapV1", mapNode);
-        ImGui::DockBuilderDockWindow("DroneSim | 비행 상태##FlightStatusV3", statusNode);
+        // 장면을 크게 남기고, 나머지 창은 탭으로 전환하거나 바깥으로 떼어 쓴다.
+        ImGui::DockBuilderDockWindow("장면##SceneViewV5", sceneNode);
+        ImGui::DockBuilderDockWindow("운용##OperationsV5", sideNode);
+        ImGui::DockBuilderDockWindow("카메라##CameraViewV5", sideNode);
+        ImGui::DockBuilderDockWindow("지도##MapViewV5", sideNode);
         ImGui::DockBuilderFinish(dockspaceId);
     }
     ImGui::DockSpaceOverViewport(dockspaceId, viewport);
@@ -382,7 +373,7 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
     simulation::DroneId& observerDroneId,
     const std::function<std::uint32_t(int, int)>& renderScene)
 {
-    if (ImGui::Begin("장면##SceneViewV4"))
+    if (ImGui::Begin("장면##SceneViewV5"))
     {
         const auto droneIds = simulation.DroneIds();
         if (!droneIds.empty())
@@ -425,9 +416,9 @@ void DrawMiniMapPanel(
     double& zoom,
     glm::dvec2& centerMeters)
 {
-    if (ImGui::Begin("미니맵##MiniMapV1"))
+    if (ImGui::Begin("지도##MapViewV5"))
     {
-        ImGui::TextDisabled("휠 확대 · 가운데 버튼 드래그 이동");
+        ImGui::TextDisabled("휠 확대 · 가운데 드래그 이동 · 창 밖으로 끌어 분리");
         ImGui::SameLine();
         if (ImGui::SmallButton("전체 보기"))
         {
@@ -449,7 +440,7 @@ void DrawCameraPanel(
     simulation::DroneId& observerDroneId,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera)
 {
-    if (ImGui::Begin("카메라##CameraViewV4"))
+    if (ImGui::Begin("카메라##CameraViewV5"))
     {
         ImGui::TextDisabled("드론 이름을 누르면 장면 시점이 바뀝니다.");
         const ImVec2 available = ImGui::GetContentRegionAvail();
@@ -536,7 +527,7 @@ void DrawFlightStatusPanel(
     const std::function<void(simulation::DroneId, bool)>&
         setFormationNodeRadioEnabled)
 {
-    if (ImGui::Begin("DroneSim | 비행 상태##FlightStatusV3"))
+    if (ImGui::Begin("운용##OperationsV5"))
     {
         const auto& primary = simulation.State();
         ImGui::Text("주 드론: %s", DroneName(simulation.PrimaryDroneId()).c_str());
@@ -649,7 +640,11 @@ SimulatorHud::SimulatorHud(GLFWwindow* window)
             ImGui::GetIO().IniFilename = layoutFile_.c_str();
         }
     }
-    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+#ifndef __EMSCRIPTEN__
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+#endif
 
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true))
     {
@@ -815,5 +810,16 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
         timings->backendDrawMicroseconds = std::chrono::duration<double, std::micro>(
             std::chrono::steady_clock::now() - backendDrawStart).count();
     }
+
+#ifndef __EMSCRIPTEN__
+    // 화면 밖으로 분리한 ImGui 창을 각각의 네이티브 창에 그린 뒤 주 창 context로 돌아온다.
+    if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
+    {
+        GLFWwindow* mainContext = glfwGetCurrentContext();
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+        glfwMakeContextCurrent(mainContext);
+    }
+#endif
 }
 }
