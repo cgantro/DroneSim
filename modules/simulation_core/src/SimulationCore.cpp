@@ -351,16 +351,14 @@ struct SimulationCore::EcsStorage
     const BatteryModel& Battery(DroneId id) const
     {
         const flecs::entity& drone = droneRegistry.Find(id);
-        if (!drone.has<BatteryModel>())
-            throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
+        RequireBatteryConfigured(drone);
         return drone.get<BatteryModel>();
     }
 
     bool TryBeginLowBatteryReturn(DroneId id)
     {
         flecs::entity& drone = droneRegistry.Find(id);
-        if (!drone.has<BatteryModel>())
-            throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
+        RequireBatteryConfigured(drone);
         return drone.get_mut<BatteryModel>().TryBeginLowBatteryReturn();
     }
 
@@ -603,6 +601,14 @@ struct SimulationCore::EcsStorage
             static_cast<void>(physics.DestroyBody(*defaultGround));
             defaultGround.reset();
         }
+    }
+
+private:
+    /** @brief 배터리는 선택 컴포넌트이므로 접근 전에 같은 오류 규칙으로 확인한다. */
+    static void RequireBatteryConfigured(const flecs::entity& drone)
+    {
+        if (!drone.has<BatteryModel>())
+            throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
     }
 };
 
