@@ -193,7 +193,8 @@ void DroneSimApp::QueueWebFlightCommand(
     dronesim::simulation::DroneCommand::Kind kind)
 {
     externalControl_ = true;
-    if (CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive())
+    if (missionController_->CompleteFleetMissionIsActive()
+        || missionController_->FleetReconnaissanceIsActive())
         return;
     pendingControllerAction_ = dronesim::simulation::DroneCommand{kind};
 }
@@ -207,10 +208,11 @@ bool DroneSimApp::StartWebFleetMission()
 bool DroneSimApp::StopWebFleetMission()
 {
     externalControl_ = true;
-    if (!CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
-        && !fleetMission_.FormationTransit().IsActive())
+    if (!missionController_->CompleteFleetMissionIsActive()
+        && !missionController_->FleetReconnaissanceIsActive()
+        && !missionController_->State().FormationTransit().IsActive())
         return false;
-    FailCompleteFleetMission("화면에서 전체 임무를 중단했습니다.");
+    missionController_->Abort("화면에서 전체 임무를 중단했습니다.");
     return true;
 }
 
@@ -218,7 +220,8 @@ void DroneSimApp::SetWebPilotAxes(
     const dronesim::manual_control::GamepadAxes& axes)
 {
     externalControl_ = true;
-    if (CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive())
+    if (missionController_->CompleteFleetMissionIsActive()
+        || missionController_->FleetReconnaissanceIsActive())
     {
         webPilotAxes_.reset();
         pendingPilotCommand_.reset();
@@ -340,7 +343,8 @@ void DroneSimApp::LoadTerrain()
         static_cast<std::size_t>(sampleCount) * sampleCount, 0.0F);
     simulation_.SetTerrain(terrainGrid_);
 
-    missionEnvironment_.emplace(terrainGrid_, *trainingRangeScene_);
+    missionController_ = std::make_unique<FleetMissionController>(
+        simulation_, terrainGrid_, *trainingRangeScene_);
 }
 void DroneSimApp::LoadMapFeatures()
 {
@@ -350,7 +354,7 @@ void DroneSimApp::LoadMapFeatures()
 }
 void DroneSimApp::InitializeStartingState()
 {
-    const auto& targets = missionEnvironment_->Targets();
+    const auto& targets = missionController_->Environment().Targets();
     if (targets.empty())
         throw std::runtime_error("훈련장 정찰 지점을 준비하지 못했습니다.");
     const glm::dvec2 demoDroneStartMeters =
@@ -388,7 +392,6 @@ void DroneSimApp::InitializeStartingState()
             ConfigureTrainingBattery(droneId);
         }
     }
-    fleetDroneIds_ = simulation_.DroneIds();
 }
 
 void DroneSimApp::ConfigureTrainingBattery(
@@ -424,14 +427,13 @@ void DroneSimApp::AdvanceSimulation(double elapsedSeconds)
 void DroneSimApp::AdvanceSimulationTick()
 {
     AdvanceAmbientWind();
-    AdvanceFleetNetwork();
-    AdvanceFleetReconnaissance();
-    AdvanceFormationTransit();
-    AdvanceCompleteFleetMission();
-    if (demoMode_ && !externalControl_ && CompleteFleetMissionCanStart())
+    missionController_->AdvanceTick();
+    if (demoMode_ && !externalControl_
+        && missionController_->CompleteFleetMissionCanStart())
         static_cast<void>(StartCompleteFleetMission());
-    const bool missionActive = fleetMission_.FormationTransit().IsActive()
-        || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
+    const bool missionActive = missionController_->State().FormationTransit().IsActive()
+        || missionController_->CompleteFleetMissionIsActive()
+        || missionController_->FleetReconnaissanceIsActive();
     if (!missionActive && missionControlOwnsInput_)
     {
         missionControlOwnsInput_ = false;
@@ -463,8 +465,9 @@ void DroneSimApp::AdvanceAmbientWind()
 
 void DroneSimApp::AdvanceManualControlTick()
 {
-    if (missionControlOwnsInput_ || CompleteFleetMissionIsActive()
-        || FleetReconnaissanceIsActive() || fleetMission_.FormationTransit().IsActive())
+    if (missionControlOwnsInput_ || missionController_->CompleteFleetMissionIsActive()
+        || missionController_->FleetReconnaissanceIsActive()
+        || missionController_->State().FormationTransit().IsActive())
     {
         simulation_.AdvanceOneTick();
         return;
@@ -565,15 +568,17 @@ void DroneSimApp::RenderFrame()
 #else
     if (hud_)
     {
-        const bool fleetReturnCanStart = FleetReturnCanStart();
-        const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
-        const bool formationNetworkActive = fleetMission_.FormationTransit().IsActive()
-            || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
+        const bool fleetReturnCanStart = missionController_->FleetReturnCanStart();
+        const bool completeFleetMissionCanStart =
+            missionController_->CompleteFleetMissionCanStart();
+        const bool formationNetworkActive = missionController_->State().FormationTransit().IsActive()
+            || missionController_->CompleteFleetMissionIsActive()
+            || missionController_->FleetReconnaissanceIsActive();
         std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
-        if (fleetNetworkSession_.IsReady() && formationNetworkActive)
+        if (missionController_->NetworkSession().IsReady() && formationNetworkActive)
         {
             networkStatus = MakeFleetNetworkStatus(
-                simulation_, fleetNetworkSession_, fleetMission_.LeaderId());
+                simulation_, missionController_->NetworkSession(), missionController_->State().LeaderId());
         }
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -587,7 +592,7 @@ void DroneSimApp::RenderFrame()
             miniMapDrones.push_back({droneId, state.positionMeters, state.yawRadians});
         }
         std::vector<dronesim::gui::MiniMapRoute> miniMapRoutes;
-        for (const auto& [droneId, mission] : fleetMission_.Assignments())
+        for (const auto& [droneId, mission] : missionController_->State().Assignments())
         {
             if (!dronesim::mission::IsFleetMissionInProgress(mission.Status())
                 || !mission.HasRemainingWaypoints())
@@ -600,18 +605,18 @@ void DroneSimApp::RenderFrame()
             miniMapRoutes.push_back({droneId, currentPosition,
                 std::move(remainingWaypoints)});
         }
-        const auto& formationRoute = fleetMission_.FormationTransit().Route();
-        if (fleetMission_.FormationTransit().IsActive()
-            && fleetMission_.FormationTransit().WaypointIndex()
+        const auto& formationRoute = missionController_->State().FormationTransit().Route();
+        if (missionController_->State().FormationTransit().IsActive()
+            && missionController_->State().FormationTransit().WaypointIndex()
                 < formationRoute.leaderWaypointsMeters.size())
         {
             const auto& currentPosition = simulation_.State(
-                fleetMission_.LeaderId()).positionMeters;
+                missionController_->State().LeaderId()).positionMeters;
             std::vector<glm::dvec3> remainingWaypoints(
                 formationRoute.leaderWaypointsMeters.begin()
-                    + static_cast<std::ptrdiff_t>(fleetMission_.FormationTransit().WaypointIndex()),
+                    + static_cast<std::ptrdiff_t>(missionController_->State().FormationTransit().WaypointIndex()),
                 formationRoute.leaderWaypointsMeters.end());
-            miniMapRoutes.push_back({fleetMission_.LeaderId(),
+            miniMapRoutes.push_back({missionController_->State().LeaderId(),
                 currentPosition, std::move(remainingWaypoints)});
         }
         const dronesim::gui::SimulatorView::DrawWorld drawPanelWorld =
@@ -622,7 +627,8 @@ void DroneSimApp::RenderFrame()
                 DrawWorld(view, projection, cameraPosition,
                     showMissionGuides, hiddenDroneId);
             };
-        const std::string completeMissionStatus = CompleteFleetMissionStatus();
+        const std::string completeMissionStatus =
+            missionController_->CompleteFleetMissionStatus();
         const dronesim::gui::SimulatorHudFrame hudFrame{
             .scene = {
                 .simulation = simulation_,
@@ -677,7 +683,7 @@ void DroneSimApp::RenderFrame()
                     dronesim::simulation::DroneId droneId, bool enabled)
                 {
                     if (formationNetworkActive)
-                        fleetNetworkSession_.SetRadioEnabled(droneId, enabled);
+                        missionController_->SetRadioEnabled(droneId, enabled);
                 }},
             .timings = benchmarkMode_ ? &hudTimings : nullptr};
         hud_->Render(hudFrame);
@@ -708,7 +714,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, bool showMissionGuides,
     std::optional<dronesim::simulation::DroneId> hiddenDroneId)
 {
-    const auto& targets = missionEnvironment_->Targets();
+    const auto& targets = missionController_->Environment().Targets();
     renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
     if (trainingRangeScene_)
         trainingRangeScene_->Draw(*renderer_, *shader_, view, projection, cameraPosition);
@@ -745,7 +751,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
 
     if (showMissionGuides)
     {
-        for (const auto& [droneId, mission] : fleetMission_.Assignments())
+        for (const auto& [droneId, mission] : missionController_->State().Assignments())
         {
             const auto missionStatus = mission.Status();
             if (missionStatus != dronesim::mission::FleetDroneStatus::TakeoffReady
@@ -770,7 +776,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         }
     }
 
-    for (const dronesim::simulation::DroneId id : fleetDroneIds_)
+    for (const dronesim::simulation::DroneId id : simulation_.DroneIds())
     {
         if (hiddenDroneId == id)
             continue;

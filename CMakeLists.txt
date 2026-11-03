@@ -282,6 +282,7 @@ if(DRONESIM_BUILD_GRAPHICS)
     apps/simulator/DroneSimAppGamepad.cpp
     apps/simulator/DroneSimAppMission.cpp
     apps/simulator/FleetMissionEnvironment.cpp
+    apps/simulator/FleetMissionController.cpp
     apps/simulator/FleetNetworkSession.cpp
     apps/simulator/WebCameraRig.cpp
   )

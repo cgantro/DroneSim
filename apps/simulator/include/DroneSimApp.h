@@ -3,18 +3,13 @@
 #include "BenchmarkSession.h"
 #include "manual_control/GamepadController.h"
 #include "gui/SimulatorHud.h"
-#include "FleetNetworkSession.h"
+#include "FleetMissionController.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "simulation_core/EoCameraModel.h"
 #include "flight_planning/FormationPlanner.h"
 #include "flight_planning/BuildingObstacle.h"
 #include "simulation_core/SimulationCore.h"
-#include "FleetMissionProgress.h"
-#include "FleetMission.h"
-#include "FleetMissionPlanner.h"
-#include "FleetMissionEnvironment.h"
-#include "FleetTelemetry.h"
 #include "TrainingRangeScene.h"
 #ifdef __EMSCRIPTEN__
 #include "WebCameraRig.h"
@@ -26,11 +21,9 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
-#include <map>
 #include <optional>
 #include <random>
-#include <string>
-#include <unordered_map>
+#include <string_view>
 #include <vector>
 
 namespace dronesim::graphics
@@ -130,52 +123,12 @@ private:
     /** @brief 카메라 모의가 한 번 이상 갱신됐는지 확인한다. 픽셀은 CPU로 읽지 않는다. */
     [[nodiscard]] int ValidateSmokeTestOutput() const;
     void AdvanceManualControlTick();
-    /** @brief 임무·정찰 지점·드론 상태가 새 임무를 시작할 수 있는지 확인한다. */
-    [[nodiscard]] bool FleetIsReadyForMission() const;
-    [[nodiscard]] bool FleetReconnaissanceCanStart() const;
-    [[nodiscard]] bool FleetReconnaissanceIsActive() const;
-    [[nodiscard]] bool CompleteFleetMissionCanStart() const;
-    [[nodiscard]] bool CompleteFleetMissionIsActive() const;
+    /** @brief 전체 임무를 시작하고 비행 입력을 임무에 넘긴다. */
     [[nodiscard]] bool StartCompleteFleetMission();
-    [[nodiscard]] std::string CompleteFleetMissionStatus() const;
-    void AdvanceCompleteFleetMission();
     [[nodiscard]] bool StartFleetReconnaissance();
-    void AdvanceFleetReconnaissance();
-    [[nodiscard]] bool FleetReturnCanStart() const;
     [[nodiscard]] bool StartFleetReturn();
-    [[nodiscard]] bool StartFormationTransit();
-    [[nodiscard]] bool StartFleetReconnaissance(
-        dronesim::mission::FleetMissionStartMode startMode,
-        const std::map<dronesim::simulation::DroneId, glm::dvec3>& homePositions);
-    [[nodiscard]] bool PrepareFleetNetwork(bool reset);
-    void InitializeFleetLeadership();
-    void AdvanceFleetNetwork();
-    /** @brief 통신 노드 위치를 갱신해 거리·가림에 따른 링크를 다시 계산한다. */
-    void RefreshFleetNetworkNodes(std::uint64_t currentTick);
-    /** @brief 도착한 임무·편대 메시지를 검사하고 해당 드론에 반영한다. */
-    void ProcessDeliveredFleetMessages(std::uint64_t currentTick);
-    /** @brief 편대원 상태를 주기적으로 리더에게 전달한다. */
-    void SendFleetTelemetry(std::uint64_t currentTick);
-    /** @brief 응답이 오지 않은 경로 배정을 정해진 횟수만큼 다시 보낸다. */
-    void RetryPendingFleetRoutes(std::uint64_t currentTick);
-    [[nodiscard]] bool SendFleetRouteAssignment(
-        dronesim::simulation::DroneId droneId,
-        dronesim::mission::FleetMissionLeg leg,
-        std::size_t targetIndex,
-        std::vector<glm::dvec3> routeWaypointsMeters);
-    void ApplyFleetRouteAssignment(
-        dronesim::simulation::DroneId droneId,
-        dronesim::mission::FleetMissionLeg leg,
-        std::size_t targetIndex,
-        std::vector<glm::dvec3> routeWaypointsMeters,
-        std::uint32_t sequence,
-        std::uint64_t assignmentVersion,
-        std::uint64_t assignmentLeaseExpiresAtTick);
-    [[nodiscard]] bool StartFleetRally();
-    [[nodiscard]] bool StartFleetReturn(
-        dronesim::mission::FleetMissionStartMode startMode);
-    void FailCompleteFleetMission(const std::string& reason);
-    void AdvanceFormationTransit();
+    /** @brief 임무 시작 뒤 조종 입력 소유권과 창 제목을 함께 갱신한다. */
+    void TakeMissionControl(std::string_view windowTitle);
     /** @brief 지정한 드론에 비행 명령을 적용한다. */
     [[nodiscard]] dronesim::simulation::CommandResult ApplySimulationCommand(
         const dronesim::simulation::DroneCommand& command);
@@ -230,13 +183,9 @@ private:
     std::unique_ptr<dronesim::scene::TrainingRangeScene> trainingRangeScene_;
     std::unique_ptr<dronesim::graphics::GlbModel> droneAssemblyModel_;
     std::unique_ptr<dronesim::graphics::Texture2D> droneSurfaceTexture_;
-    std::vector<dronesim::simulation::DroneId> fleetDroneIds_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     dronesim::simulation::DroneId observerDroneId_ = 0;
-    dronesim::mission::FleetMissionState fleetMission_;
-    FleetNetworkSession fleetNetworkSession_;
     dronesim::terrain::TerrainGrid terrainGrid_;
-    std::optional<FleetMissionEnvironment> missionEnvironment_;
     std::unique_ptr<dronesim::graphics::Shader> shader_;
     dronesim::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};
@@ -247,5 +196,7 @@ private:
     glm::dvec3 windTargetMetersPerSecond_{0.0};
     std::uint32_t windGustTicksRemaining_ = 0U;
     dronesim::simulation::SimulationCore simulation_{};
+    /** @brief 장면 준비가 끝난 뒤 생성하며 임무 상태와 통신 세션을 소유한다. */
+    std::unique_ptr<FleetMissionController> missionController_;
 };
 }
