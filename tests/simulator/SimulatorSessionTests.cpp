@@ -48,19 +48,19 @@ public:
         return app.missionController_->missionEnvironment_;
     }
 
-    static FleetNetworkSession& NetworkSession(DroneSimApp& app)
+    static const FleetNetworkSession& NetworkSession(DroneSimApp& app)
     {
-        return app.missionController_->fleetNetworkSession_;
+        return app.missionController_->fleetCommunication_.NetworkSession();
     }
 
-    static std::vector<simulation::DroneId>& FleetDroneIds(DroneSimApp& app)
+    static const std::vector<simulation::DroneId>& FleetDroneIds(DroneSimApp& app)
     {
-        return app.missionController_->fleetDroneIds_;
+        return app.missionController_->fleetCommunication_.DroneIds();
     }
 
     static bool PrepareNetwork(DroneSimApp& app, bool reset)
     {
-        return app.missionController_->PrepareFleetNetwork(reset);
+        return app.missionController_->fleetCommunication_.Prepare(reset);
     }
 
     static void AdvanceFormation(DroneSimApp& app)

@@ -1,7 +1,7 @@
 #pragma once
 
+#include "FleetMissionCommunication.h"
 #include "FleetMissionEnvironment.h"
-#include "FleetNetworkSession.h"
 #include "TrainingRangeScene.h"
 #include "simulation_core/SimulationCore.h"
 
@@ -12,9 +12,9 @@
 namespace dronesim::simulator
 {
 /**
- * @brief 편대 임무의 시작, 진행, 통신 반영과 안전 종료를 맡는다.
- * @details 화면과 게임패드에는 의존하지 않는다. 시뮬레이션 상태, 훈련장 자료,
- *          임무 상태, 통신 세션을 연결해 M01·M02·M03 흐름을 진행한다.
+ * @brief 편대 임무의 시작, 단계 전환, 경로 진행과 안전 종료를 맡는다.
+ * @details 임무용 통신 메시지는 FleetMissionCommunication에 맡긴다. 이 객체는
+ *          화면 입력 없이 시뮬레이션과 임무 상태를 갱신한다.
  */
 class FleetMissionController final
 {
@@ -53,26 +53,7 @@ private:
     void AdvanceCompleteFleetMission();
     void AdvanceFleetReconnaissance();
     [[nodiscard]] bool StartFormationTransit();
-    [[nodiscard]] bool PrepareFleetNetwork(bool reset);
     void InitializeFleetLeadership();
-    void AdvanceFleetNetwork();
-    void RefreshFleetNetworkNodes(std::uint64_t currentTick);
-    void ProcessDeliveredFleetMessages(std::uint64_t currentTick);
-    void SendFleetTelemetry(std::uint64_t currentTick);
-    void RetryPendingFleetRoutes(std::uint64_t currentTick);
-    [[nodiscard]] bool SendFleetRouteAssignment(
-        simulation::DroneId droneId,
-        mission::FleetMissionLeg leg,
-        std::size_t targetIndex,
-        std::vector<glm::dvec3> routeWaypointsMeters);
-    void ApplyFleetRouteAssignment(
-        simulation::DroneId droneId,
-        mission::FleetMissionLeg leg,
-        std::size_t targetIndex,
-        std::vector<glm::dvec3> routeWaypointsMeters,
-        std::uint32_t sequence,
-        std::uint64_t assignmentVersion,
-        std::uint64_t assignmentLeaseExpiresAtTick);
     [[nodiscard]] bool StartFleetRally();
     [[nodiscard]] bool StartFleetReturn(mission::FleetMissionStartMode startMode);
     void FailCompleteFleetMission(const std::string& reason);
@@ -82,7 +63,6 @@ private:
     const scene::TrainingRangeScene& trainingScene_;
     FleetMissionEnvironment missionEnvironment_;
     mission::FleetMissionState fleetMission_;
-    FleetNetworkSession fleetNetworkSession_;
-    std::vector<simulation::DroneId> fleetDroneIds_;
+    FleetMissionCommunication fleetCommunication_;
 };
 }
