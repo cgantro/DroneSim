@@ -9,16 +9,10 @@
 
 namespace dronesim::gui
 {
-SimulatorView::SimulatorView(graphics::Renderer& renderer, int width, int height,
-    float cameraFieldOfViewDegrees)
+SimulatorView::SimulatorView(graphics::Renderer& renderer, int width, int height)
     : renderer_(renderer),
       sceneCamera_(width, height),
-      primaryCamera_(std::make_unique<graphics::Camera>(
-          glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F,
-          cameraFieldOfViewDegrees, 0.05F, 200.0F)),
-      sceneTarget_(std::make_unique<graphics::MultisampleFramebuffer>(width, height)),
-      primaryCameraTarget_(
-          std::make_unique<graphics::MultisampleFramebuffer>(width, height))
+      sceneTarget_(std::make_unique<graphics::MultisampleFramebuffer>(width, height))
 {
 }
 
@@ -53,47 +47,33 @@ std::uint32_t SimulatorView::RenderCameraPanel(
     const int width = cameraState.model.imageWidthPixels;
     const int height = cameraState.model.imageHeightPixels;
 
-    if (droneId != simulation.PrimaryDroneId())
+    // 주 드론도 나머지 드론과 같은 구조에 보관해 카메라 갱신 경로를 하나로 유지한다.
+    auto& view = cameraViews_[droneId];
+    if (!view.camera)
     {
-        auto& view = otherCameraViews_[droneId];
-        if (!view.camera)
-        {
-            const float aspectRatio = static_cast<float>(width)
-                / static_cast<float>(height);
-            view.camera = std::make_unique<graphics::Camera>(
-                glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, aspectRatio,
-                static_cast<float>(cameraState.model.verticalFieldOfViewDegrees),
-                0.05F, 200.0F);
-        }
-        if (!view.target)
-            view.target = std::make_unique<graphics::MultisampleFramebuffer>(width, height);
-
-        const bool targetSizeChanged = view.target->GetWidth() != width
-            || view.target->GetHeight() != height;
-        view.target->Resize(width, height);
-        if (targetSizeChanged || !view.lastRenderedTick
-            || *view.lastRenderedTick != cameraState.lastFrameTick)
-        {
-            simulation::ScopedDuration measure(renderMicroseconds);
-            UpdateEoCamera(simulation, droneId, *view.camera, width, height);
-            DrawToTarget(*view.target, *view.camera, false, droneId, drawWorld);
-            view.lastRenderedTick = cameraState.lastFrameTick;
-        }
-        return view.target->GetTextureId();
+        const float aspectRatio = static_cast<float>(width)
+            / static_cast<float>(height);
+        view.camera = std::make_unique<graphics::Camera>(
+            glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, aspectRatio,
+            static_cast<float>(cameraState.model.verticalFieldOfViewDegrees),
+            0.05F, 200.0F);
     }
+    if (!view.target)
+        view.target = std::make_unique<graphics::MultisampleFramebuffer>(width, height);
 
-    const bool targetSizeChanged = primaryCameraTarget_->GetWidth() != width
-        || primaryCameraTarget_->GetHeight() != height;
-    primaryCameraTarget_->Resize(width, height);
-    if (targetSizeChanged || !lastPrimaryCameraTick_
-        || *lastPrimaryCameraTick_ != cameraState.lastFrameTick)
+    const bool targetSizeChanged = view.target->GetWidth() != width
+        || view.target->GetHeight() != height;
+    view.target->Resize(width, height);
+    // 새 영상이 없고 크기도 그대로면 같은 모의 Tick의 화면을 다시 그리지 않는다.
+    if (targetSizeChanged || !view.lastRenderedTick
+        || *view.lastRenderedTick != cameraState.lastFrameTick)
     {
         simulation::ScopedDuration measure(renderMicroseconds);
-        UpdateEoCamera(simulation, droneId, *primaryCamera_, width, height);
-        DrawToTarget(*primaryCameraTarget_, *primaryCamera_, false, droneId, drawWorld);
-        lastPrimaryCameraTick_ = cameraState.lastFrameTick;
+        UpdateEoCamera(simulation, droneId, *view.camera, width, height);
+        DrawToTarget(*view.target, *view.camera, false, droneId, drawWorld);
+        view.lastRenderedTick = cameraState.lastFrameTick;
     }
-    return primaryCameraTarget_->GetTextureId();
+    return view.target->GetTextureId();
 }
 
 void SimulatorView::UpdateEoCamera(const simulation::SimulationCore& simulation,

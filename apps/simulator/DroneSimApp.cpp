@@ -239,8 +239,7 @@ void DroneSimApp::InitializeRendererAndCameras()
     renderer_->Init(framebufferWidth_, framebufferHeight_);
 #ifndef __EMSCRIPTEN__
     view_ = std::make_unique<dronesim::gui::SimulatorView>(*renderer_, framebufferWidth_,
-        framebufferHeight_, static_cast<float>(
-            simulation_.Camera().model.verticalFieldOfViewDegrees));
+        framebufferHeight_);
 #else
     webCameraRig_.emplace(
         static_cast<float>(simulation_.Camera().model.verticalFieldOfViewDegrees));

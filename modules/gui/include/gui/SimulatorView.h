@@ -34,8 +34,7 @@ public:
     using DrawWorld = std::function<void(const glm::mat4&, const glm::mat4&,
         const glm::vec3&, bool, std::optional<simulation::DroneId>)>;
 
-    SimulatorView(graphics::Renderer& renderer, int width, int height,
-        float cameraFieldOfViewDegrees);
+    SimulatorView(graphics::Renderer& renderer, int width, int height);
     ~SimulatorView();
 
     /** @brief 관찰 패널 크기에 맞춰 카메라를 갱신하고 장면 텍스처를 돌려준다. */
@@ -77,10 +76,7 @@ private:
 
     graphics::Renderer& renderer_;
     ObserverCameraController sceneCamera_;
-    std::unique_ptr<graphics::Camera> primaryCamera_;
     std::unique_ptr<graphics::MultisampleFramebuffer> sceneTarget_;
-    std::unique_ptr<graphics::MultisampleFramebuffer> primaryCameraTarget_;
-    std::optional<std::uint64_t> lastPrimaryCameraTick_;
-    std::unordered_map<simulation::DroneId, CameraView> otherCameraViews_;
+    std::unordered_map<simulation::DroneId, CameraView> cameraViews_;
 };
 }
