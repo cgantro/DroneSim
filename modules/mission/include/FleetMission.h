@@ -279,32 +279,126 @@ public:
     }
 };
 
-/** @brief 편대 임무 실행에 필요한 드론별 상태를 한곳에 모은다. */
-struct FleetMissionState
+/** @brief 편대 임무의 드론 배정과 통신 상태를 소유한다. */
+class FleetMissionState
 {
-    std::unordered_map<simulation::DroneId, FleetReconnaissanceState>
-        reconnaissanceByDrone;
-    simulation::DroneId leaderId = 0;
-    std::uint64_t nextAssignmentVersion = 1;
+public:
+    using AssignmentMap =
+        std::unordered_map<simulation::DroneId, FleetReconnaissanceState>;
+    using AssignmentIterator = AssignmentMap::iterator;
+    using ConstAssignmentIterator = AssignmentMap::const_iterator;
 
-    FleetTelemetryStore telemetryAtLeader;
-    std::uint32_t nextTelemetrySequence = 1;
-    std::map<simulation::DroneId, std::uint64_t> lastTelemetrySentAtTick;
+private:
+    AssignmentMap assignments_;
+    simulation::DroneId leaderId_ = 0;
+    std::uint64_t nextAssignmentVersion_ = 1;
+    FleetTelemetryStore telemetryAtLeader_;
+    std::uint32_t nextTelemetrySequence_ = 1;
+    std::map<simulation::DroneId, std::uint64_t> lastTelemetrySentAtTick_;
+    FormationTransitState formationTransit_;
+    CompleteFleetMissionState completeMission_;
 
-    FormationTransitState formationTransit;
-    CompleteFleetMissionState completeMission;
+public:
+    /** @brief 편대원 배정을 읽기 전용으로 순회한다. */
+    [[nodiscard]] const AssignmentMap& Assignments() const noexcept
+    {
+        return assignments_;
+    }
+
+    /** @brief 지정한 드론의 배정을 수정할 수 있도록 찾는다. */
+    [[nodiscard]] AssignmentIterator FindAssignment(
+        simulation::DroneId droneId) noexcept;
+
+    /** @brief 지정한 드론의 배정을 읽기 전용으로 찾는다. */
+    [[nodiscard]] ConstAssignmentIterator FindAssignment(
+        simulation::DroneId droneId) const noexcept;
+
+    /** @brief 배정 목록의 끝을 반환해 찾기 결과와 비교할 수 있게 한다. */
+    [[nodiscard]] ConstAssignmentIterator AssignmentsEnd() const noexcept
+    {
+        return assignments_.end();
+    }
+
+    /** @brief 지정한 드론의 배정을 참조로 가져온다. 배정이 없으면 표준 범위 오류가 난다. */
+    [[nodiscard]] FleetReconnaissanceState& Assignment(simulation::DroneId droneId)
+    {
+        return assignments_.at(droneId);
+    }
+    [[nodiscard]] const FleetReconnaissanceState& Assignment(
+        simulation::DroneId droneId) const
+    {
+        return assignments_.at(droneId);
+    }
+
+    /** @brief 배정이 하나 이상 있는지 확인한다. */
+    [[nodiscard]] bool HasAssignments() const noexcept { return !assignments_.empty(); }
+
+    /** @brief 배정을 추가하거나 해당 드론의 기존 배정을 교체한다. */
+    void SetAssignment(
+        simulation::DroneId droneId, FleetReconnaissanceState assignment);
+
+    /** @brief 모든 드론 배정을 지우고 이전 임무를 비운다. */
+    void ClearAssignments() noexcept { assignments_.clear(); }
+
+    /** @brief 편대장 식별값을 읽거나 새 임무의 편대장을 지정한다. */
+    [[nodiscard]] simulation::DroneId LeaderId() const noexcept { return leaderId_; }
+    void SetLeaderId(simulation::DroneId droneId) noexcept { leaderId_ = droneId; }
+
+    /** @brief 다음 임무 배정에 쓸 버전을 받고 번호를 하나 올린다. */
+    [[nodiscard]] std::uint64_t TakeNextAssignmentVersion() noexcept
+    {
+        return nextAssignmentVersion_++;
+    }
+
+    /** @brief 편대장이 받은 원격 드론 상태 기록에 접근한다. */
+    [[nodiscard]] FleetTelemetryStore& TelemetryAtLeader() noexcept
+    {
+        return telemetryAtLeader_;
+    }
+    [[nodiscard]] const FleetTelemetryStore& TelemetryAtLeader() const noexcept
+    {
+        return telemetryAtLeader_;
+    }
+
+    /** @brief 다음 텔레메트리 메시지 순번을 받고 번호를 하나 올린다. */
+    [[nodiscard]] std::uint32_t TakeNextTelemetrySequence() noexcept
+    {
+        return nextTelemetrySequence_++;
+    }
+
+    /** @brief 새 임무를 위해 텔레메트리 순번과 수신·전송 기록을 초기화한다. */
+    void ResetTelemetry();
+
+    /** @brief 지정한 드론의 상태를 보낼 시간이 되었는지 확인한다. */
+    [[nodiscard]] bool ShouldSendTelemetry(
+        simulation::DroneId droneId,
+        std::uint64_t currentTick,
+        std::uint64_t intervalTicks) const noexcept;
+
+    /** @brief 성공 여부와 관계없이 메시지 전달 시도 시각을 기록한다. */
+    void RecordTelemetryAttempt(
+        simulation::DroneId droneId, std::uint64_t currentTick);
+
+    /** @brief 편대 이동과 전체 임무 진행 객체를 읽고 갱신한다. */
+    [[nodiscard]] FormationTransitState& FormationTransit() noexcept
+    {
+        return formationTransit_;
+    }
+    [[nodiscard]] const FormationTransitState& FormationTransit() const noexcept
+    {
+        return formationTransit_;
+    }
+    [[nodiscard]] CompleteFleetMissionState& CompleteMission() noexcept
+    {
+        return completeMission_;
+    }
+    [[nodiscard]] const CompleteFleetMissionState& CompleteMission() const noexcept
+    {
+        return completeMission_;
+    }
 
     /** @brief 드론 하나라도 편대 정찰·집결·복귀 임무를 진행 중인지 확인한다. */
-    [[nodiscard]] bool HasActiveReconnaissance() const noexcept
-    {
-        for (const auto& [droneId, reconnaissance] : reconnaissanceByDrone)
-        {
-            (void)droneId;
-            if (IsFleetMissionInProgress(reconnaissance.status))
-                return true;
-        }
-        return false;
-    }
+    [[nodiscard]] bool HasActiveReconnaissance() const noexcept;
 
     /** @brief 리더의 현재 상태나 일정 시간 안에 받은 편대원 보고를 읽는다. */
     [[nodiscard]] std::optional<FleetMissionReport> FreshReport(

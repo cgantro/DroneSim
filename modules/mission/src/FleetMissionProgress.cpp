@@ -110,6 +110,61 @@ bool FleetReconnaissanceState::IsLegFinished() const noexcept
     return false;
 }
 
+FleetMissionState::AssignmentIterator FleetMissionState::FindAssignment(
+    simulation::DroneId droneId) noexcept
+{
+    return assignments_.find(droneId);
+}
+
+FleetMissionState::ConstAssignmentIterator FleetMissionState::FindAssignment(
+    simulation::DroneId droneId) const noexcept
+{
+    return assignments_.find(droneId);
+}
+
+void FleetMissionState::SetAssignment(
+    simulation::DroneId droneId,
+    FleetReconnaissanceState assignment)
+{
+    assignments_.insert_or_assign(droneId, std::move(assignment));
+}
+
+bool FleetMissionState::ShouldSendTelemetry(
+    simulation::DroneId droneId,
+    std::uint64_t currentTick,
+    std::uint64_t intervalTicks) const noexcept
+{
+    const auto lastSent = lastTelemetrySentAtTick_.find(droneId);
+    return lastSent == lastTelemetrySentAtTick_.end()
+        || (currentTick >= lastSent->second
+            && currentTick - lastSent->second >= intervalTicks);
+}
+
+void FleetMissionState::RecordTelemetryAttempt(
+    simulation::DroneId droneId,
+    std::uint64_t currentTick)
+{
+    lastTelemetrySentAtTick_[droneId] = currentTick;
+}
+
+void FleetMissionState::ResetTelemetry()
+{
+    telemetryAtLeader_.Clear();
+    nextTelemetrySequence_ = 1U;
+    lastTelemetrySentAtTick_.clear();
+}
+
+bool FleetMissionState::HasActiveReconnaissance() const noexcept
+{
+    for (const auto& [droneId, reconnaissance] : assignments_)
+    {
+        (void)droneId;
+        if (IsFleetMissionInProgress(reconnaissance.status))
+            return true;
+    }
+    return false;
+}
+
 bool FleetReconnaissanceState::CanBeginLowBatteryReturn() const noexcept
 {
     return leg == FleetMissionLeg::Reconnaissance
@@ -204,7 +259,7 @@ std::optional<FleetMissionReport> FleetMissionState::FreshReport(
     const FleetReconnaissanceState& assignment,
     const simulation::SimulationCore& simulation) const
 {
-    if (droneId == leaderId)
+    if (droneId == leaderId_)
     {
         return FleetMissionReport{
             simulation.State(droneId).mode,
@@ -212,7 +267,7 @@ std::optional<FleetMissionReport> FleetMissionState::FreshReport(
             assignment.status};
     }
 
-    const ReceivedPeerTelemetry* telemetry = telemetryAtLeader.Fresh(
+    const ReceivedPeerTelemetry* telemetry = telemetryAtLeader_.Fresh(
         droneId, simulation.TickCount());
     if (telemetry == nullptr)
         return std::nullopt;
@@ -232,10 +287,10 @@ std::optional<FleetMissionReport> FleetMissionState::CurrentReport(
     if (const auto report = FreshReport(droneId, assignment, simulation))
         return report;
 
-    if (droneId == leaderId)
+    if (droneId == leaderId_)
         return std::nullopt;
 
-    const ReceivedPeerTelemetry* cached = telemetryAtLeader.Latest(droneId);
+    const ReceivedPeerTelemetry* cached = telemetryAtLeader_.Latest(droneId);
     if (cached == nullptr
         || cached->state.assignmentVersion != assignment.assignmentVersion
         || cached->state.mode != simulation::FlightMode::Grounded)
@@ -268,8 +323,8 @@ bool FleetMissionState::AllDronesReadyToReturn(
 
     return std::all_of(droneIds.begin(), droneIds.end(), [this, &simulation](auto droneId)
     {
-        const auto assignment = reconnaissanceByDrone.find(droneId);
-        if (assignment == reconnaissanceByDrone.end())
+        const auto assignment = assignments_.find(droneId);
+        if (assignment == assignments_.end())
             return false;
 
         const auto report = FreshReport(droneId, assignment->second, simulation);

@@ -243,7 +243,7 @@ bool DroneSimApp::StopWebFleetMission()
 {
     externalControl_ = true;
     if (!CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
-        && !fleetMission_.formationTransit.IsActive())
+        && !fleetMission_.FormationTransit().IsActive())
         return false;
     FailCompleteFleetMission("화면에서 전체 임무를 중단했습니다.");
     return true;
@@ -485,7 +485,7 @@ void DroneSimApp::AdvanceSimulationTick()
     AdvanceCompleteFleetMission();
     if (demoMode_ && !externalControl_ && CompleteFleetMissionCanStart())
         static_cast<void>(StartCompleteFleetMission());
-    const bool missionActive = fleetMission_.formationTransit.IsActive()
+    const bool missionActive = fleetMission_.FormationTransit().IsActive()
         || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
     if (!missionActive && missionControlOwnsInput_)
     {
@@ -519,7 +519,7 @@ void DroneSimApp::AdvanceAmbientWind()
 void DroneSimApp::AdvanceManualControlTick()
 {
     if (missionControlOwnsInput_ || CompleteFleetMissionIsActive()
-        || FleetReconnaissanceIsActive() || fleetMission_.formationTransit.IsActive())
+        || FleetReconnaissanceIsActive() || fleetMission_.FormationTransit().IsActive())
     {
         simulation_.AdvanceOneTick();
         return;
@@ -618,13 +618,13 @@ void DroneSimApp::RenderFrame()
     {
         const bool fleetReturnCanStart = FleetReturnCanStart();
         const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
-        const bool formationNetworkActive = fleetMission_.formationTransit.IsActive()
+        const bool formationNetworkActive = fleetMission_.FormationTransit().IsActive()
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
         std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
         if (formationNetwork_ && formationNetworkActive)
         {
             networkStatus = MakeFleetNetworkStatus(simulation_,
-                *formationNetwork_, droneSocketTransport_, fleetMission_.leaderId);
+                *formationNetwork_, droneSocketTransport_, fleetMission_.LeaderId());
         }
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -638,7 +638,7 @@ void DroneSimApp::RenderFrame()
             miniMapDrones.push_back({droneId, state.positionMeters, state.yawRadians});
         }
         std::vector<dronesim::gui::MiniMapRoute> miniMapRoutes;
-        for (const auto& [droneId, mission] : fleetMission_.reconnaissanceByDrone)
+        for (const auto& [droneId, mission] : fleetMission_.Assignments())
         {
             if (!dronesim::mission::IsFleetMissionInProgress(mission.status)
                 || mission.nextWaypoint >= mission.routeWaypointsMeters.size())
@@ -651,18 +651,18 @@ void DroneSimApp::RenderFrame()
             miniMapRoutes.push_back({droneId, currentPosition,
                 std::move(remainingWaypoints)});
         }
-        const auto& formationRoute = fleetMission_.formationTransit.Route();
-        if (fleetMission_.formationTransit.IsActive()
-            && fleetMission_.formationTransit.WaypointIndex()
+        const auto& formationRoute = fleetMission_.FormationTransit().Route();
+        if (fleetMission_.FormationTransit().IsActive()
+            && fleetMission_.FormationTransit().WaypointIndex()
                 < formationRoute.leaderWaypointsMeters.size())
         {
             const auto& currentPosition = simulation_.State(
-                fleetMission_.leaderId).positionMeters;
+                fleetMission_.LeaderId()).positionMeters;
             std::vector<glm::dvec3> remainingWaypoints(
                 formationRoute.leaderWaypointsMeters.begin()
-                    + static_cast<std::ptrdiff_t>(fleetMission_.formationTransit.WaypointIndex()),
+                    + static_cast<std::ptrdiff_t>(fleetMission_.FormationTransit().WaypointIndex()),
                 formationRoute.leaderWaypointsMeters.end());
-            miniMapRoutes.push_back({fleetMission_.leaderId,
+            miniMapRoutes.push_back({fleetMission_.LeaderId(),
                 currentPosition, std::move(remainingWaypoints)});
         }
         hud_->Render(simulation_, observerDroneId_, *view_,
@@ -856,7 +856,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
 
     if (showMissionGuides)
     {
-        for (const auto& [droneId, mission] : fleetMission_.reconnaissanceByDrone)
+        for (const auto& [droneId, mission] : fleetMission_.Assignments())
         {
             const auto missionStatus = mission.status;
             if (missionStatus != dronesim::mission::FleetDroneStatus::TakeoffReady

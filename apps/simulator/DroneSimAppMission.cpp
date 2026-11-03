@@ -17,7 +17,7 @@ namespace
 
 bool DroneSimApp::FleetIsReadyForMission() const
 {
-    if (CompleteFleetMissionIsActive() || fleetMission_.formationTransit.IsActive()
+    if (CompleteFleetMissionIsActive() || fleetMission_.FormationTransit().IsActive()
         || reconTargets_.empty() || FleetReconnaissanceIsActive())
         return false;
 
@@ -42,7 +42,7 @@ bool DroneSimApp::CompleteFleetMissionCanStart() const
 
 bool DroneSimApp::CompleteFleetMissionIsActive() const
 {
-    return fleetMission_.completeMission.IsActive();
+    return fleetMission_.CompleteMission().IsActive();
 }
 
 bool DroneSimApp::FleetReconnaissanceIsActive() const
@@ -55,25 +55,25 @@ bool DroneSimApp::StartCompleteFleetMission()
     if (!CompleteFleetMissionCanStart())
         return false;
 
-    fleetMission_.completeMission.ClearHomePositions();
+    fleetMission_.CompleteMission().ClearHomePositions();
     for (const auto droneId : simulation_.DroneIds())
-        fleetMission_.completeMission.RecordHomePosition(
+        fleetMission_.CompleteMission().RecordHomePosition(
             droneId, simulation_.State(droneId).positionMeters);
 
     if (!StartFormationTransit())
     {
-        fleetMission_.completeMission.ClearHomePositions();
+        fleetMission_.CompleteMission().ClearHomePositions();
         return false;
     }
 
-    fleetMission_.completeMission.SetStage(
+    fleetMission_.CompleteMission().SetStage(
         dronesim::mission::CompleteFleetMissionState::Stage::FormationTransit);
     return true;
 }
 
 std::string DroneSimApp::CompleteFleetMissionStatus() const
 {
-    return std::string{fleetMission_.completeMission.StatusText()};
+    return std::string{fleetMission_.CompleteMission().StatusText()};
 }
 
 bool DroneSimApp::StartFleetReconnaissance()
@@ -95,7 +95,7 @@ bool DroneSimApp::StartFleetReconnaissance(
     if (takeOffDrones)
         InitializeFleetLeadership();
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
-    const DroneId leaderId = fleetMission_.leaderId;
+    const DroneId leaderId = fleetMission_.LeaderId();
     if (droneIds.empty() || reconTargets_.empty()
         || (takeOffDrones && CompleteFleetMissionIsActive()))
         return false;
@@ -108,7 +108,7 @@ bool DroneSimApp::StartFleetReconnaissance(
         const dronesim::mission::ReceivedPeerTelemetry* peerReport = nullptr;
         if (!takeOffDrones && droneId != leaderId)
         {
-            peerReport = fleetMission_.telemetryAtLeader.Fresh(
+            peerReport = fleetMission_.TelemetryAtLeader().Fresh(
                 droneId, simulation_.TickCount());
             if (peerReport == nullptr)
                 return false;
@@ -156,11 +156,11 @@ bool DroneSimApp::StartFleetReconnaissance(
         const std::size_t targetIndex = mission.targetIndex;
         std::vector<glm::dvec3> route = std::move(mission.routeWaypointsMeters);
         mission.status = dronesim::mission::FleetDroneStatus::RoutePending;
-        fleetMission_.reconnaissanceByDrone[droneId] = std::move(mission);
+        fleetMission_.SetAssignment(droneId, std::move(mission));
         if (!SendFleetRouteAssignment(
                 droneId, leg, targetIndex, std::move(route)))
         {
-            fleetMission_.reconnaissanceByDrone.clear();
+            fleetMission_.ClearAssignments();
             dronesim::mission::LandActiveFleetDrones(simulation_, droneIds);
             return false;
         }
@@ -173,8 +173,8 @@ bool DroneSimApp::StartFleetReconnaissance(
 
 bool DroneSimApp::FleetReturnCanStart() const
 {
-    if (fleetMission_.reconnaissanceByDrone.empty() || CompleteFleetMissionIsActive()
-        || fleetMission_.formationTransit.IsActive())
+    if (!fleetMission_.HasAssignments() || CompleteFleetMissionIsActive()
+        || fleetMission_.FormationTransit().IsActive())
         return false;
 
     return fleetMission_.AllDronesReadyToReturn(fleetDroneIds_, simulation_);
@@ -193,7 +193,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
     using namespace dronesim::simulation;
 
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
-    const DroneId leaderId = fleetMission_.leaderId;
+    const DroneId leaderId = fleetMission_.LeaderId();
     if (droneIds.empty() || leaderId == 0U)
         return false;
     const dronesim::mission::FleetMissionPlanner planner{
@@ -202,7 +202,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
     returnRoutes.reserve(droneIds.size());
     for (const auto droneId : droneIds)
     {
-        const auto& mission = fleetMission_.reconnaissanceByDrone.at(droneId);
+        const auto& mission = fleetMission_.Assignment(droneId);
         if (mission.lowBatteryReturn
             && mission.status
                 == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
@@ -220,7 +220,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
         }
         else
         {
-            const auto* report = fleetMission_.telemetryAtLeader.Fresh(
+            const auto* report = fleetMission_.TelemetryAtLeader().Fresh(
                 droneId, simulation_.TickCount());
             if (report == nullptr)
                 return false;
@@ -245,7 +245,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
         dronesToTakeOff.reserve(droneIds.size());
         for (const DroneId droneId : droneIds)
         {
-            const auto& mission = fleetMission_.reconnaissanceByDrone.at(droneId);
+            const auto& mission = fleetMission_.Assignment(droneId);
             if (mission.lowBatteryReturn
                 && mission.status
                     == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
@@ -259,7 +259,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
 
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
-        auto& mission = fleetMission_.reconnaissanceByDrone.at(droneIds[index]);
+        auto& mission = fleetMission_.Assignment(droneIds[index]);
         if (mission.lowBatteryReturn
             && mission.status
                 == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
@@ -282,20 +282,20 @@ bool DroneSimApp::StartFleetRally()
     using namespace dronesim::simulation;
     using namespace dronesim::flight_planning;
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
-    if (droneIds.empty() || fleetMission_.leaderId == 0U
+    if (droneIds.empty() || fleetMission_.LeaderId() == 0U
         || std::any_of(droneIds.begin(), droneIds.end(), [this](DroneId droneId)
             {
-                return !fleetMission_.completeMission.HasHomePosition(droneId);
+                return !fleetMission_.CompleteMission().HasHomePosition(droneId);
             }))
         return false;
     const dronesim::mission::FleetMissionPlanner planner{
         *routeEnvironment_, cameraTransitAltitudeMeters_};
-    const DroneId leaderId = fleetMission_.leaderId;
+    const DroneId leaderId = fleetMission_.LeaderId();
     std::vector<DroneId> rallyDroneIds;
     rallyDroneIds.reserve(droneIds.size());
     for (const DroneId droneId : droneIds)
     {
-        const auto& mission = fleetMission_.reconnaissanceByDrone.at(droneId);
+        const auto& mission = fleetMission_.Assignment(droneId);
         const bool alreadyReturnedForLowBattery = mission.lowBatteryReturn
             && mission.status
                 == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete;
@@ -306,14 +306,14 @@ bool DroneSimApp::StartFleetRally()
     {
         if (!StartFleetReturn(false))
             return false;
-        fleetMission_.completeMission.SetStage(
+        fleetMission_.CompleteMission().SetStage(
             dronesim::mission::CompleteFleetMissionState::Stage::Returning);
         return true;
     }
 
     glm::dvec3 centerMeters{0.0};
     for (const DroneId droneId : droneIds)
-        centerMeters += fleetMission_.completeMission.HomePositionMeters(droneId);
+        centerMeters += fleetMission_.CompleteMission().HomePositionMeters(droneId);
     centerMeters /= static_cast<double>(droneIds.size());
     centerMeters.z += 12.0;
     const auto offsets = FormationOffsets(rallyDroneIds.size(), 3.0, 0.0);
@@ -333,7 +333,7 @@ bool DroneSimApp::StartFleetRally()
         }
         else
         {
-            const auto* report = fleetMission_.telemetryAtLeader.Fresh(
+            const auto* report = fleetMission_.TelemetryAtLeader().Fresh(
                 droneId, simulation_.TickCount());
             if (report == nullptr
                 || report->state.missionStatus
@@ -360,7 +360,7 @@ bool DroneSimApp::StartFleetRally()
     for (std::size_t index = 0; index < rallyDroneIds.size(); ++index)
     {
         const DroneId droneId = rallyDroneIds[index];
-        auto& mission = fleetMission_.reconnaissanceByDrone.at(droneId);
+        auto& mission = fleetMission_.Assignment(droneId);
         mission.leg = dronesim::mission::FleetMissionLeg::Regrouping;
         mission.status = dronesim::mission::FleetDroneStatus::RoutePending;
         if (!SendFleetRouteAssignment(droneId,
@@ -368,7 +368,7 @@ bool DroneSimApp::StartFleetRally()
                 std::move(rallyRoutes[index])))
             return false;
     }
-    fleetMission_.completeMission.SetStage(
+    fleetMission_.CompleteMission().SetStage(
         dronesim::mission::CompleteFleetMissionState::Stage::Regrouping);
     return true;
 }
@@ -382,8 +382,12 @@ void DroneSimApp::AdvanceFleetReconnaissance()
     const dronesim::mission::FleetMissionPlanner planner{
         *routeEnvironment_, cameraTransitAltitudeMeters_};
 
-    for (auto& [droneId, mission] : fleetMission_.reconnaissanceByDrone)
+    for (const DroneId droneId : fleetDroneIds_)
     {
+        auto assignment = fleetMission_.FindAssignment(droneId);
+        if (assignment == fleetMission_.AssignmentsEnd())
+            continue;
+        auto& mission = assignment->second;
         if (mission.CanBeginLowBatteryReturn() && simulation_.HasBattery(droneId))
         {
             const auto& battery = simulation_.Battery(droneId);
@@ -510,7 +514,7 @@ void DroneSimApp::AdvanceCompleteFleetMission()
 {
     using Stage = dronesim::mission::CompleteFleetMissionState::Stage;
     using DroneId = dronesim::simulation::DroneId;
-    const Stage currentStage = fleetMission_.completeMission.CurrentStage();
+    const Stage currentStage = fleetMission_.CompleteMission().CurrentStage();
     if (currentStage == Stage::Idle
         || currentStage == Stage::Completed
         || currentStage == Stage::Failed)
@@ -518,20 +522,20 @@ void DroneSimApp::AdvanceCompleteFleetMission()
 
     if (currentStage == Stage::FormationTransit)
     {
-        if (fleetMission_.formationTransit.IsActive())
+        if (fleetMission_.FormationTransit().IsActive())
             return;
-        if (fleetMission_.formationTransit.CurrentPhase()
+        if (fleetMission_.FormationTransit().CurrentPhase()
             != dronesim::mission::FormationTransitState::Phase::Arrived)
         {
             FailCompleteFleetMission("M01 편대 이동이 끝나지 않아 전체 임무를 중단했습니다.");
             return;
         }
-        if (!StartFleetReconnaissance(false, fleetMission_.completeMission.HomePositions()))
+        if (!StartFleetReconnaissance(false, fleetMission_.CompleteMission().HomePositions()))
         {
             FailCompleteFleetMission("M02 정찰 경로를 만들지 못해 기체를 착륙시킵니다.");
             return;
         }
-        fleetMission_.completeMission.SetStage(Stage::Reconnaissance);
+        fleetMission_.CompleteMission().SetStage(Stage::Reconnaissance);
         return;
     }
 
@@ -542,12 +546,12 @@ void DroneSimApp::AdvanceCompleteFleetMission()
     reports.reserve(droneIds.size());
     for (const auto droneId : droneIds)
     {
-        const auto assignment = fleetMission_.reconnaissanceByDrone.find(droneId);
-        if (assignment == fleetMission_.reconnaissanceByDrone.end())
+        const auto assignment = fleetMission_.FindAssignment(droneId);
+        if (assignment == fleetMission_.AssignmentsEnd())
         {
             if (currentStage == Stage::Returning)
             {
-                fleetMission_.completeMission.Fail("복귀에 실패한 드론이 있습니다.");
+                fleetMission_.CompleteMission().Fail("복귀에 실패한 드론이 있습니다.");
             }
             else
             {
@@ -573,7 +577,7 @@ void DroneSimApp::AdvanceCompleteFleetMission()
     {
         if (currentStage == Stage::Returning)
         {
-            fleetMission_.completeMission.Fail(std::string{decision.failureReason});
+            fleetMission_.CompleteMission().Fail(std::string{decision.failureReason});
         }
         else
         {
@@ -583,7 +587,7 @@ void DroneSimApp::AdvanceCompleteFleetMission()
     }
     if (decision.progress == dronesim::mission::FleetMissionProgress::Waiting)
     {
-        fleetMission_.completeMission.WaitForReports();
+        fleetMission_.CompleteMission().WaitForReports();
         return;
     }
 
@@ -604,22 +608,22 @@ void DroneSimApp::AdvanceCompleteFleetMission()
             FailCompleteFleetMission("집결지에서 기지까지 복귀 경로를 만들지 못했습니다.");
             return;
         }
-        fleetMission_.completeMission.SetStage(Stage::Returning);
+        fleetMission_.CompleteMission().SetStage(Stage::Returning);
         return;
     }
 
     if (currentStage == Stage::Returning)
     {
-        fleetMission_.completeMission.SetStage(Stage::Completed);
+        fleetMission_.CompleteMission().SetStage(Stage::Completed);
         return;
     }
 }
 
 void DroneSimApp::FailCompleteFleetMission(const std::string& reason)
 {
-    fleetMission_.completeMission.Fail(reason);
-    if (fleetMission_.formationTransit.IsActive())
-        fleetMission_.formationTransit.Stop();
+    fleetMission_.CompleteMission().Fail(reason);
+    if (fleetMission_.FormationTransit().IsActive())
+        fleetMission_.FormationTransit().Stop();
     const auto droneIds = simulation_.DroneIds();
     dronesim::mission::LandActiveFleetDrones(simulation_, droneIds);
 }
@@ -629,7 +633,7 @@ bool DroneSimApp::StartFormationTransit()
     using namespace dronesim::simulation;
     using namespace dronesim::flight_planning;
 
-    if (fleetMission_.formationTransit.IsActive() || reconTargets_.empty())
+    if (fleetMission_.FormationTransit().IsActive() || reconTargets_.empty())
         return false;
 
     InitializeFleetLeadership();
@@ -656,24 +660,24 @@ bool DroneSimApp::StartFormationTransit()
         cameraTransitAltitudeMeters_);
     if (!route)
     {
-        fleetMission_.formationTransit.Fail("목적지까지 편대 경로를 찾지 못했습니다.");
+        fleetMission_.FormationTransit().Fail("목적지까지 편대 경로를 찾지 못했습니다.");
         return false;
     }
 
     if (!PrepareFleetNetwork(true))
     {
-        fleetMission_.formationTransit.Fail("가상 통신망을 준비하지 못했습니다.");
+        fleetMission_.FormationTransit().Fail("가상 통신망을 준비하지 못했습니다.");
         return false;
     }
 
     if (!dronesim::mission::TakeOffFleetDrones(simulation_, droneIds))
     {
-        fleetMission_.formationTransit.Fail("드론 이륙 명령을 적용하지 못했습니다.");
+        fleetMission_.FormationTransit().Fail("드론 이륙 명령을 적용하지 못했습니다.");
         return false;
     }
 
-    fleetMission_.formationTransit.SetRoute(*route);
-    fleetMission_.formationTransit.Start("출발 준비 · V자 대형 · "
+    fleetMission_.FormationTransit().SetRoute(*route);
+    fleetMission_.FormationTransit().Start("출발 준비 · V자 대형 · "
         + reconTargets_.back().displayName);
     externalControl_ = true;
     missionControlOwnsInput_ = true;
@@ -694,9 +698,7 @@ bool DroneSimApp::PrepareFleetNetwork(bool reset)
 
     InitializeFleetLeadership();
 
-    fleetMission_.nextTelemetrySequence = 1U;
-    fleetMission_.lastTelemetrySentAtTick.clear();
-    fleetMission_.telemetryAtLeader.Clear();
+    fleetMission_.ResetTelemetry();
 
     communication::VirtualMeshSettings settings;
     settings.maximumLinkRangeMeters = 130.0;
@@ -726,15 +728,15 @@ bool DroneSimApp::PrepareFleetNetwork(bool reset)
         nodes.push_back({droneId, simulation_.State(droneId).positionMeters});
     }
     formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
-    fleetMission_.formationTransit.RecordNetworkNodesUpdated(simulation_.TickCount());
+    fleetMission_.FormationTransit().RecordNetworkNodesUpdated(simulation_.TickCount());
     return !nodes.empty();
 }
 
 void DroneSimApp::InitializeFleetLeadership()
 {
     fleetDroneIds_ = simulation_.DroneIds();
-    fleetMission_.reconnaissanceByDrone.clear();
-    fleetMission_.leaderId = fleetDroneIds_.empty() ? 0U : fleetDroneIds_.front();
+    fleetMission_.ClearAssignments();
+    fleetMission_.SetLeaderId(fleetDroneIds_.empty() ? 0U : fleetDroneIds_.front());
 }
 
 bool DroneSimApp::SendFleetRouteAssignment(
@@ -747,18 +749,18 @@ bool DroneSimApp::SendFleetRouteAssignment(
         || targetIndex >= reconTargets_.size())
         return false;
 
-    auto mission = fleetMission_.reconnaissanceByDrone.find(droneId);
-    if (mission == fleetMission_.reconnaissanceByDrone.end() || fleetDroneIds_.empty())
+    auto mission = fleetMission_.FindAssignment(droneId);
+    if (mission == fleetMission_.AssignmentsEnd() || fleetDroneIds_.empty())
         return false;
 
-    const std::uint64_t assignmentVersion = fleetMission_.nextAssignmentVersion++;
+    const std::uint64_t assignmentVersion = fleetMission_.TakeNextAssignmentVersion();
     std::uint64_t leaseExpiresAtTick = 0U;
     if (leg == dronesim::mission::FleetMissionLeg::Reconnaissance)
     {
         glm::dvec3 startPositionMeters = simulation_.State(droneId).positionMeters;
-        if (droneId != fleetMission_.leaderId)
+        if (droneId != fleetMission_.LeaderId())
         {
-            if (const auto* report = fleetMission_.telemetryAtLeader.Fresh(
+            if (const auto* report = fleetMission_.TelemetryAtLeader().Fresh(
                     droneId, simulation_.TickCount()))
                 startPositionMeters = report->state.positionMeters;
         }
@@ -769,7 +771,7 @@ bool DroneSimApp::SendFleetRouteAssignment(
         mission->second.pendingRouteSequence) + 1U;
     const std::string payload = dronesim::mission::EncodeFleetRoute(
         leg, targetIndex, assignmentVersion, leaseExpiresAtTick, routeWaypointsMeters);
-    if (droneId == fleetMission_.leaderId)
+    if (droneId == fleetMission_.LeaderId())
     {
         ApplyFleetRouteAssignment(droneId, leg, targetIndex,
             std::move(routeWaypointsMeters), sequence, assignmentVersion,
@@ -780,7 +782,7 @@ bool DroneSimApp::SendFleetRouteAssignment(
     }
 
     const auto messageId = formationNetwork_->Send(
-        fleetMission_.leaderId, droneId,
+        fleetMission_.LeaderId(), droneId,
         sequence, "fleet_route", payload);
     if (!messageId)
         return false;
@@ -809,8 +811,8 @@ void DroneSimApp::ApplyFleetRouteAssignment(
     std::uint64_t assignmentVersion,
     std::uint64_t assignmentLeaseExpiresAtTick)
 {
-    auto mission = fleetMission_.reconnaissanceByDrone.find(droneId);
-    if (mission == fleetMission_.reconnaissanceByDrone.end())
+    auto mission = fleetMission_.FindAssignment(droneId);
+    if (mission == fleetMission_.AssignmentsEnd())
         return;
 
     mission->second.leg = leg;
@@ -861,7 +863,7 @@ void DroneSimApp::ApplyFleetRouteAssignment(
 
 void DroneSimApp::AdvanceFleetNetwork()
 {
-    if (!formationNetwork_ || (!fleetMission_.formationTransit.IsActive()
+    if (!formationNetwork_ || (!fleetMission_.FormationTransit().IsActive()
         && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()))
         return;
 
@@ -883,7 +885,7 @@ void DroneSimApp::RefreshFleetNetworkNodes(std::uint64_t currentTick)
     constexpr std::uint64_t networkPositionRefreshTicks = 6U;
     // 링크 판정은 매 6 Tick마다 갱신한다. 60Hz 기준 0.1초마다 실제 드론 위치를 반영한다.
     const bool refreshNetworkPositions =
-        fleetMission_.formationTransit.ShouldRefreshNetworkNodes(
+        fleetMission_.FormationTransit().ShouldRefreshNetworkNodes(
             currentTick, networkPositionRefreshTicks);
     if (refreshNetworkPositions)
     {
@@ -896,7 +898,7 @@ void DroneSimApp::RefreshFleetNetworkNodes(std::uint64_t currentTick)
             nodes.push_back({droneId, drone.positionMeters});
         }
         formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
-        fleetMission_.formationTransit.RecordNetworkNodesUpdated(currentTick);
+        fleetMission_.FormationTransit().RecordNetworkNodesUpdated(currentTick);
     }
 
 }
@@ -905,7 +907,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
 {
     using dronesim::simulation::DroneCommand;
     using dronesim::simulation::DroneId;
-    const DroneId leaderId = fleetMission_.leaderId;
+    const DroneId leaderId = fleetMission_.LeaderId();
 
     for (const auto& delivered : formationNetwork_->DeliveredMessages())
     {
@@ -918,7 +920,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
                 continue;
             const auto telemetry = dronesim::mission::DecodePeerTelemetry(message.payload);
             if (telemetry)
-                static_cast<void>(fleetMission_.telemetryAtLeader.Record(message.source,
+                static_cast<void>(fleetMission_.TelemetryAtLeader().Record(message.source,
                     *telemetry, delivered.deliveredAtTick, message.sequence));
             continue;
         }
@@ -926,8 +928,8 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
         if (message.kind == "fleet_route_ack"
             && message.destination == leaderId)
         {
-            const auto mission = fleetMission_.reconnaissanceByDrone.find(message.source);
-            if (mission != fleetMission_.reconnaissanceByDrone.end()
+            const auto mission = fleetMission_.FindAssignment(message.source);
+            if (mission != fleetMission_.AssignmentsEnd()
                 && mission->second.pendingRouteSequence == message.sequence
                 && mission->second.routeSequence == message.sequence)
             {
@@ -941,7 +943,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
         if (message.source != leaderId)
             continue;
 
-        if (message.kind == "formation_waypoint" && fleetMission_.formationTransit.IsActive())
+        if (message.kind == "formation_waypoint" && fleetMission_.FormationTransit().IsActive())
         {
             if (std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), message.destination)
                 == fleetDroneIds_.end())
@@ -949,7 +951,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
             const auto waypoint = dronesim::mission::DecodeWaypoint(message.payload);
             if (!waypoint)
                 continue;
-            if (!fleetMission_.formationTransit.IsNewAppliedSequence(
+            if (!fleetMission_.FormationTransit().IsNewAppliedSequence(
                     message.destination, message.sequence))
                 continue;
 
@@ -959,10 +961,10 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
             if (simulation_.Apply(message.destination, command)
                 != dronesim::simulation::CommandResult::Accepted)
             {
-                fleetMission_.formationTransit.Fail("통신으로 받은 편대 목표를 적용하지 못했습니다.");
+                fleetMission_.FormationTransit().Fail("통신으로 받은 편대 목표를 적용하지 못했습니다.");
                 return;
             }
-            fleetMission_.formationTransit.RecordAppliedSequence(
+            fleetMission_.FormationTransit().RecordAppliedSequence(
                 message.destination, message.sequence);
             continue;
         }
@@ -974,12 +976,12 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
             == fleetDroneIds_.end())
             continue;
 
-        auto mission = fleetMission_.reconnaissanceByDrone.find(message.destination);
+        auto mission = fleetMission_.FindAssignment(message.destination);
         const auto route = dronesim::mission::DecodeFleetRoute(message.payload);
-        if (mission == fleetMission_.reconnaissanceByDrone.end() || !route
+        if (mission == fleetMission_.AssignmentsEnd() || !route
             || route->targetIndex >= reconTargets_.size())
         {
-            if (mission != fleetMission_.reconnaissanceByDrone.end())
+            if (mission != fleetMission_.AssignmentsEnd())
                 mission->second.status = dronesim::mission::FleetDroneStatus::RouteFailed;
             continue;
         }
@@ -1018,7 +1020,7 @@ void DroneSimApp::SendFleetTelemetry(std::uint64_t currentTick)
 {
     using dronesim::simulation::DroneId;
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
-    const DroneId leaderId = fleetMission_.leaderId;
+    const DroneId leaderId = fleetMission_.LeaderId();
 
     constexpr std::uint64_t telemetryIntervalTicks = 6U;
 
@@ -1027,43 +1029,44 @@ void DroneSimApp::SendFleetTelemetry(std::uint64_t currentTick)
     {
         if (droneId == leaderId)
             continue;
-        const auto lastSent = fleetMission_.lastTelemetrySentAtTick.find(droneId);
-        if (lastSent != fleetMission_.lastTelemetrySentAtTick.end()
-            && currentTick < lastSent->second + telemetryIntervalTicks)
+        if (!fleetMission_.ShouldSendTelemetry(
+                droneId, currentTick, telemetryIntervalTicks))
             continue;
 
-        const auto mission = fleetMission_.reconnaissanceByDrone.find(droneId);
-        const std::uint8_t missionLeg = mission == fleetMission_.reconnaissanceByDrone.end()
+        const auto mission = fleetMission_.FindAssignment(droneId);
+        const std::uint8_t missionLeg = mission == fleetMission_.AssignmentsEnd()
             ? 0U : static_cast<std::uint8_t>(mission->second.leg);
         const dronesim::mission::FleetDroneStatus missionStatus =
-            mission == fleetMission_.reconnaissanceByDrone.end()
+            mission == fleetMission_.AssignmentsEnd()
             ? dronesim::mission::FleetDroneStatus::Other : mission->second.status;
-        const std::uint64_t assignmentVersion = mission == fleetMission_.reconnaissanceByDrone.end()
+        const std::uint64_t assignmentVersion = mission == fleetMission_.AssignmentsEnd()
             ? 0U : mission->second.assignmentVersion;
         const auto& state = simulation_.State(droneId);
         static_cast<void>(formationNetwork_->Send(
             droneId, leaderId,
-            fleetMission_.nextTelemetrySequence++, "drone_telemetry",
+            fleetMission_.TakeNextTelemetrySequence(), "drone_telemetry",
             dronesim::mission::EncodePeerTelemetry(state.positionMeters, state.mode,
                 missionLeg, missionStatus,
                 assignmentVersion)));
-        fleetMission_.lastTelemetrySentAtTick[droneId] = currentTick;
+        fleetMission_.RecordTelemetryAttempt(droneId, currentTick);
     }
 }
 
 void DroneSimApp::RetryPendingFleetRoutes(std::uint64_t currentTick)
 {
     using dronesim::simulation::DroneId;
-    const DroneId leaderId = fleetMission_.leaderId;
+    const DroneId leaderId = fleetMission_.LeaderId();
 
     constexpr std::uint64_t routeRetryIntervalTicks = 60U;
     constexpr std::uint32_t maximumRouteTransmissions = 10U;
     // 확인 응답이 없는 경로만 1초 간격으로 다시 보내며, 10회를 넘기지 않는다.
-    for (auto& [droneId, mission] : fleetMission_.reconnaissanceByDrone)
+    for (const DroneId droneId : fleetDroneIds_)
     {
+        auto assignment = fleetMission_.FindAssignment(droneId);
+        if (assignment == fleetMission_.AssignmentsEnd())
+            continue;
+        auto& mission = assignment->second;
         if (droneId == leaderId
-            || std::find(fleetDroneIds_.begin(), fleetDroneIds_.end(), droneId)
-                == fleetDroneIds_.end()
             || mission.pendingRouteSequence == 0U
             || mission.routeTransmissionCount >= maximumRouteTransmissions
             || currentTick < mission.lastRouteTransmissionTick + routeRetryIntervalTicks)
@@ -1083,24 +1086,24 @@ void DroneSimApp::AdvanceFormationTransit()
 {
     using namespace dronesim::simulation;
     using namespace dronesim::flight_planning;
-    if (!fleetMission_.formationTransit.IsActive())
+    if (!fleetMission_.FormationTransit().IsActive())
         return;
 
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
     if (droneIds.size() < 2U
-        || fleetMission_.formationTransit.Route().leaderWaypointsMeters.empty())
+        || fleetMission_.FormationTransit().Route().leaderWaypointsMeters.empty())
     {
-        fleetMission_.formationTransit.Fail("편대 구성을 유지할 수 없어 임무를 멈췄습니다.");
+        fleetMission_.FormationTransit().Fail("편대 구성을 유지할 수 없어 임무를 멈췄습니다.");
         return;
     }
 
-    const DroneId leaderId = fleetMission_.leaderId;
+    const DroneId leaderId = fleetMission_.LeaderId();
     const DroneState& leader = simulation_.State(leaderId);
     if (leader.mode == FlightMode::Grounded || leader.mode == FlightMode::TakingOff)
         return;
     if (leader.mode == FlightMode::Landing)
     {
-        fleetMission_.formationTransit.Fail("리더가 착륙해 편대 이동을 멈췄습니다.");
+        fleetMission_.FormationTransit().Fail("리더가 착륙해 편대 이동을 멈췄습니다.");
         return;
     }
 
@@ -1108,11 +1111,11 @@ void DroneSimApp::AdvanceFormationTransit()
     constexpr std::uint64_t peerTelemetryRecoveryTimeoutTicks = 180U;
     for (std::size_t index = 1U; index < droneIds.size(); ++index)
     {
-        const auto* peer = fleetMission_.telemetryAtLeader.Latest(droneIds[index]);
+        const auto* peer = fleetMission_.TelemetryAtLeader().Latest(droneIds[index]);
         if (peer == nullptr)
         {
-            fleetMission_.formationTransit.Fail("통신 끊김 · 편대 안전 착륙");
-            if (fleetMission_.completeMission.CurrentStage()
+            fleetMission_.FormationTransit().Fail("통신 끊김 · 편대 안전 착륙");
+            if (fleetMission_.CompleteMission().CurrentStage()
                 == dronesim::mission::CompleteFleetMissionState::Stage::FormationTransit)
             {
                 FailCompleteFleetMission(
@@ -1138,13 +1141,13 @@ void DroneSimApp::AdvanceFormationTransit()
             holdLeader.kind = DroneCommand::Kind::SetWaypoint;
             holdLeader.vector = leader.positionMeters;
             static_cast<void>(simulation_.Apply(leaderId, holdLeader));
-            fleetMission_.formationTransit.UpdateStatus(
+            fleetMission_.FormationTransit().UpdateStatus(
                 "추종 드론 통신 회복 대기 · 편대 이동 일시 정지");
             return;
         }
 
-        fleetMission_.formationTransit.Fail("통신 끊김 · 편대 안전 착륙");
-        if (fleetMission_.completeMission.CurrentStage()
+        fleetMission_.FormationTransit().Fail("통신 끊김 · 편대 안전 착륙");
+        if (fleetMission_.CompleteMission().CurrentStage()
             == dronesim::mission::CompleteFleetMissionState::Stage::FormationTransit)
         {
             FailCompleteFleetMission(
@@ -1157,11 +1160,11 @@ void DroneSimApp::AdvanceFormationTransit()
         return;
     }
 
-    const auto& formationRoute = fleetMission_.formationTransit.Route();
+    const auto& formationRoute = fleetMission_.FormationTransit().Route();
     const auto& route = formationRoute.leaderWaypointsMeters;
-    fleetMission_.formationTransit.AdvanceWaypointIfReached(leader.positionMeters, 3.0);
+    fleetMission_.FormationTransit().AdvanceWaypointIfReached(leader.positionMeters, 3.0);
 
-    const std::size_t nextIndex = fleetMission_.formationTransit.WaypointIndex();
+    const std::size_t nextIndex = fleetMission_.FormationTransit().WaypointIndex();
     glm::dvec2 direction{0.0, 0.0};
     if (nextIndex + 1U < route.size())
         direction = {route[nextIndex + 1U].x - route[nextIndex].x,
@@ -1182,10 +1185,10 @@ void DroneSimApp::AdvanceFormationTransit()
         const DroneId droneId = droneIds[index];
         const auto* peerState = index == 0U
             ? nullptr
-            : fleetMission_.telemetryAtLeader.Latest(droneId);
+            : fleetMission_.TelemetryAtLeader().Latest(droneId);
         if (index != 0U && peerState == nullptr)
         {
-            fleetMission_.formationTransit.Fail("추종 드론 상태 보고를 기다리는 중입니다.");
+            fleetMission_.FormationTransit().Fail("추종 드론 상태 보고를 기다리는 중입니다.");
             return;
         }
         const FlightMode mode = index == 0U ? leader.mode : peerState->state.mode;
@@ -1193,7 +1196,7 @@ void DroneSimApp::AdvanceFormationTransit()
             continue;
         if (mode == FlightMode::Landing)
         {
-            fleetMission_.formationTransit.Fail("추종 드론이 착륙해 편대 이동을 멈췄습니다.");
+            fleetMission_.FormationTransit().Fail("추종 드론이 착륙해 편대 이동을 멈췄습니다.");
             return;
         }
 
@@ -1212,38 +1215,38 @@ void DroneSimApp::AdvanceFormationTransit()
         {
             if (simulation_.Apply(droneId, command) != CommandResult::Accepted)
             {
-                fleetMission_.formationTransit.Fail("리더 목표를 적용하지 못해 임무를 멈췄습니다.");
+                fleetMission_.FormationTransit().Fail("리더 목표를 적용하지 못해 임무를 멈췄습니다.");
                 return;
             }
             continue;
         }
 
         constexpr std::uint64_t targetRefreshTicks = 6U;
-        if (fleetMission_.formationTransit.ShouldSendFollowerTarget(
+        if (fleetMission_.FormationTransit().ShouldSendFollowerTarget(
                 droneId, target, simulation_.TickCount(), 0.75, targetRefreshTicks))
         {
             const auto messageId = formationNetwork_->Send(
                 leaderId, droneId,
-                fleetMission_.formationTransit.TakeNextMessageSequence(), "formation_waypoint",
+                fleetMission_.FormationTransit().TakeNextMessageSequence(), "formation_waypoint",
                 dronesim::mission::EncodeWaypoint(target));
             if (!messageId)
             {
-                fleetMission_.formationTransit.Fail("추종 드론에게 편대 목표를 보내지 못했습니다.");
+                fleetMission_.FormationTransit().Fail("추종 드론에게 편대 목표를 보내지 못했습니다.");
                 return;
             }
-            fleetMission_.formationTransit.RecordFollowerTargetSent(
+            fleetMission_.FormationTransit().RecordFollowerTargetSent(
                 droneId, target, simulation_.TickCount());
         }
     }
 
-    const bool leaderArrived = fleetMission_.formationTransit.WaypointIndex() + 1U == route.size()
+    const bool leaderArrived = fleetMission_.FormationTransit().WaypointIndex() + 1U == route.size()
         && glm::distance(leader.positionMeters, route.back()) <= 3.0;
     bool followersArrived = true;
     for (std::size_t index = 1U; index < droneIds.size(); ++index)
     {
         const glm::dvec3 target{leader.positionMeters.x + offsets[index].x,
             leader.positionMeters.y + offsets[index].y, leader.positionMeters.z};
-        const auto* peer = fleetMission_.telemetryAtLeader.Latest(droneIds[index]);
+        const auto* peer = fleetMission_.TelemetryAtLeader().Latest(droneIds[index]);
         if (peer == nullptr)
         {
             followersArrived = false;
@@ -1257,11 +1260,11 @@ void DroneSimApp::AdvanceFormationTransit()
     }
     if (leaderArrived && followersArrived)
     {
-        fleetMission_.formationTransit.Arrive("목적지 도착 · 편대 유지 중");
+        fleetMission_.FormationTransit().Arrive("목적지 도착 · 편대 유지 중");
         return;
     }
-    fleetMission_.formationTransit.UpdateStatus("이동 중 · 경유점 "
-        + std::to_string(fleetMission_.formationTransit.WaypointIndex() + 1U)
+    fleetMission_.FormationTransit().UpdateStatus("이동 중 · 경유점 "
+        + std::to_string(fleetMission_.FormationTransit().WaypointIndex() + 1U)
         + "/" + std::to_string(route.size()));
 }
 
