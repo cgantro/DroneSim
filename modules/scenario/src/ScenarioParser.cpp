@@ -63,6 +63,18 @@ double ReadFiniteNumber(const Json& value, const char* name)
     return number;
 }
 
+int ReadImageDimension(const Json& value, const char* name)
+{
+    // 먼저 부호 없는 정수로 읽고 제한을 검사한 뒤 int로 바꾼다.
+    const std::uint64_t pixels = ReadUnsigned(value, name);
+    if (pixels > static_cast<std::uint64_t>(CameraModel::maximumImageDimensionPixels))
+    {
+        throw std::invalid_argument(std::string(name)
+            + "는 1부터 8192 사이여야 합니다.");
+    }
+    return static_cast<int>(pixels);
+}
+
 /**
  * @brief 카메라 해상도와 세로 시야각을 카메라 설정으로 옮긴다.
  * @details 해상도는 int로 바꾸기 전에 상한을 확인해 변환 범위를 보장한다.
@@ -75,21 +87,9 @@ CameraModel ReadCameraModel(const Json& value)
 
     CameraModel model;
     if (const auto width = value.find("image_width_pixels"); width != value.end())
-    {
-        const std::uint64_t parsed = ReadUnsigned(*width, "image_width_pixels");
-        if (parsed > static_cast<std::uint64_t>(
-                CameraModel::maximumImageDimensionPixels))
-            throw std::invalid_argument("image_width_pixels는 1부터 8192 사이여야 합니다.");
-        model.imageWidthPixels = static_cast<int>(parsed);
-    }
+        model.imageWidthPixels = ReadImageDimension(*width, "image_width_pixels");
     if (const auto height = value.find("image_height_pixels"); height != value.end())
-    {
-        const std::uint64_t parsed = ReadUnsigned(*height, "image_height_pixels");
-        if (parsed > static_cast<std::uint64_t>(
-                CameraModel::maximumImageDimensionPixels))
-            throw std::invalid_argument("image_height_pixels는 1부터 8192 사이여야 합니다.");
-        model.imageHeightPixels = static_cast<int>(parsed);
-    }
+        model.imageHeightPixels = ReadImageDimension(*height, "image_height_pixels");
     if (const auto fov = value.find("vertical_field_of_view_degrees");
         fov != value.end())
         model.verticalFieldOfViewDegrees = ReadFiniteNumber(
