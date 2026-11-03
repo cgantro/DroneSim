@@ -1,6 +1,7 @@
 #include "DroneSimApp.h"
 #include "flight_planning/RoutePlanner.h"
 #include "graphics/Window.h"
+#include "scene/TrainingRangeRouteEnvironment.h"
 #include <glm/geometric.hpp>
 #include <algorithm>
 #include <array>
@@ -17,6 +18,37 @@ namespace
 {
 constexpr std::uint64_t missionLeaseGraceTicks = 1800U;
 constexpr double missionLeasePlanningSpeedMetersPerSecond = 1.0;
+
+std::optional<std::vector<glm::dvec3>> PlanTrainingRangeRoute(
+    const terrain::TerrainGrid& terrain,
+    const scene::TrainingRangeScene& trainingRange,
+    const glm::dvec3& startMeters,
+    const glm::dvec3& goalMeters,
+    const flight_planning::RoutePlanningOptions& options)
+{
+    const scene::TrainingRangeRouteEnvironment environment(
+        terrain, trainingRange.BuildingObstacles());
+    return flight_planning::RoutePlanner{}.Plan(
+        environment, startMeters, goalMeters, options);
+}
+
+std::optional<flight_planning::FormationRoutePlan> PlanTrainingRangeFormationRoute(
+    const terrain::TerrainGrid& terrain,
+    const scene::TrainingRangeScene& trainingRange,
+    const glm::dvec3& startMeters,
+    const glm::dvec3& goalMeters,
+    std::size_t droneCount,
+    double spacingMeters,
+    double droneRadiusMeters,
+    double safetyMarginMeters,
+    double minimumTransitAltitudeMeters)
+{
+    const scene::TrainingRangeRouteEnvironment environment(
+        terrain, trainingRange.BuildingObstacles());
+    return flight_planning::PlanFormationRoute(environment,
+        startMeters, goalMeters, droneCount, spacingMeters,
+        droneRadiusMeters, safetyMarginMeters, minimumTransitAltitudeMeters);
+}
 
 std::uint64_t EstimateMissionLeaseExpiry(
     std::uint64_t currentTick,
@@ -244,9 +276,10 @@ bool DroneSimApp::StartFleetReconnaissance(
                 return false;
             start = &report->state.positionMeters;
         }
-        const auto route = dronesim::flight_planning::PlanRoute(
-            terrainGrid_, trainingRangeScene_->BuildingObstacles(), *start, target.approachPositionMeters,
-            3.0, cameraTransitAltitudeMeters_);
+        const auto route = PlanTrainingRangeRoute(terrainGrid_,
+            *trainingRangeScene_, *start, target.approachPositionMeters,
+            {.obstacleClearanceMeters = 3.0,
+             .minimumTransitAltitudeMeters = cameraTransitAltitudeMeters_});
         if (!route)
             return false;
 
@@ -405,9 +438,10 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
             return false;
         glm::dvec3 returnApproach = mission.startPositionMeters;
         returnApproach.z += 5.0;
-        const auto route = dronesim::flight_planning::PlanRoute(
-            terrainGrid_, trainingRangeScene_->BuildingObstacles(), currentPosition,
-            returnApproach, 3.0, cameraTransitAltitudeMeters_);
+        const auto route = PlanTrainingRangeRoute(terrainGrid_,
+            *trainingRangeScene_, currentPosition, returnApproach,
+            {.obstacleClearanceMeters = 3.0,
+             .minimumTransitAltitudeMeters = cameraTransitAltitudeMeters_});
         if (!route)
             return false;
         returnRoutes.emplace_back(route->begin(), route->end());
@@ -526,9 +560,10 @@ bool DroneSimApp::StartFleetRally()
             centerMeters.x + offsets[index].x,
             centerMeters.y + offsets[index].y,
             centerMeters.z};
-        const auto route = dronesim::flight_planning::PlanRoute(
-            terrainGrid_, trainingRangeScene_->BuildingObstacles(), currentPosition, rallyTarget,
-            3.0, cameraTransitAltitudeMeters_);
+        const auto route = PlanTrainingRangeRoute(terrainGrid_,
+            *trainingRangeScene_, currentPosition, rallyTarget,
+            {.obstacleClearanceMeters = 3.0,
+             .minimumTransitAltitudeMeters = cameraTransitAltitudeMeters_});
         if (!route)
             return false;
         rallyRoutes.emplace_back(route->begin(), route->end());
@@ -591,10 +626,10 @@ void DroneSimApp::AdvanceFleetReconnaissance()
 
                 glm::dvec3 returnApproach = mission.startPositionMeters;
                 returnApproach.z += 5.0;
-                const auto route = dronesim::flight_planning::PlanRoute(
-                    terrainGrid_, trainingRangeScene_->BuildingObstacles(),
-                    simulation_.State(droneId).positionMeters, returnApproach,
-                    3.0, cameraTransitAltitudeMeters_);
+                const auto route = PlanTrainingRangeRoute(terrainGrid_,
+                    *trainingRangeScene_, simulation_.State(droneId).positionMeters,
+                    returnApproach, {.obstacleClearanceMeters = 3.0,
+                        .minimumTransitAltitudeMeters = cameraTransitAltitudeMeters_});
                 bool returnStarted = route.has_value();
                 if (returnStarted
                     && simulation_.State(droneId).mode == FlightMode::Grounded)
@@ -939,9 +974,9 @@ bool DroneSimApp::StartFormationTransit()
         terrainGrid_.HeightAtLocalMeters(stagingPosition) + 15.0,
         cameraTransitAltitudeMeters_);
     const glm::dvec3 destination{stagingPosition, stagingAltitude};
-    const auto route = PlanFormationRoute(terrainGrid_, trainingRangeScene_->BuildingObstacles(),
-        simulation_.State(droneIds.front()).positionMeters, destination,
-        droneIds.size(), 1.5, 0.75, 1.0,
+    const auto route = PlanTrainingRangeFormationRoute(terrainGrid_,
+        *trainingRangeScene_, simulation_.State(droneIds.front()).positionMeters,
+        destination, droneIds.size(), 1.5, 0.75, 1.0,
         cameraTransitAltitudeMeters_);
     if (!route)
     {

@@ -17,11 +17,12 @@ class Renderer;
 class Shader;
 class Texture2D;
 
-/** @brief GLB 메시 조각의 경계와 화면에서 구분할 이름·색이다. */
+/** @brief GLB 메시 조각의 원본 노드 이름과 축 정렬 경계다. */
 struct GlbPartBounds
 {
     glm::vec3 minimum{0.0F};
     glm::vec3 maximum{0.0F};
+    std::string nodeName;
 };
 
 /** @brief 물리 충돌을 만들 때 쓸 메시 정점과 삼각형 연결 정보다. */

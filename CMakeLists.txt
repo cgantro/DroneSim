@@ -48,7 +48,7 @@ add_library(dronesim_flight_planning STATIC
   modules/flight_planning/src/RoutePlanner.cpp
 )
 target_include_directories(dronesim_flight_planning PUBLIC modules/flight_planning/include)
-target_link_libraries(dronesim_flight_planning PUBLIC glm::glm dronesim_terrain)
+target_link_libraries(dronesim_flight_planning PUBLIC glm::glm)
 
 add_library(dronesim_simulation_core STATIC
   modules/simulation_core/src/BatteryModel.cpp
@@ -240,6 +240,7 @@ if(DRONESIM_BUILD_GRAPHICS)
   )
 
   add_library(dronesim_scene STATIC
+    modules/scene/src/TrainingRangeRouteEnvironment.cpp
     modules/scene/src/TrainingRangeScene.cpp
   )
   target_include_directories(dronesim_scene PUBLIC modules/scene/include)
@@ -247,6 +248,7 @@ if(DRONESIM_BUILD_GRAPHICS)
     dronesim_graphics
     dronesim_simulation_core
     dronesim_flight_planning
+    dronesim_terrain
   )
 
   add_library(dronesim_simulator_app STATIC

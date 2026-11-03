@@ -6,6 +6,7 @@
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "flight_planning/RoutePlanner.h"
+#include "scene/TrainingRangeRouteEnvironment.h"
 #include "terrain/TerrainGrid.h"
 
 #include "graphics/Camera.h"
@@ -101,11 +102,14 @@ public:
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneId = app.simulation_.PrimaryDroneId();
-        const auto expectedRoute = flight_planning::PlanRoute(
-            app.terrainGrid_, app.trainingRangeScene_->BuildingObstacles(),
+        const scene::TrainingRangeRouteEnvironment environment(
+            app.terrainGrid_, app.trainingRangeScene_->BuildingObstacles());
+        const auto expectedRoute = flight_planning::RoutePlanner{}.Plan(
+            environment,
             app.simulation_.State(droneId).positionMeters,
             app.reconTargets_.front().approachPositionMeters,
-            3.0, app.cameraTransitAltitudeMeters_);
+            {.obstacleClearanceMeters = 3.0,
+             .minimumTransitAltitudeMeters = app.cameraTransitAltitudeMeters_});
         ASSERT_TRUE(expectedRoute);
         ASSERT_FALSE(expectedRoute->empty());
         ASSERT_TRUE(app.StartFleetReconnaissance());

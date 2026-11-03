@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <limits>
 #include <queue>
+#include <span>
 #include <stdexcept>
 #include <utility>
 
@@ -67,12 +68,12 @@ double DistanceToSegmentSquared(
 
 bool IsBlocked(
     const glm::dvec2& point,
-    const std::vector<BuildingObstacle>& buildings,
+    std::span<const RouteObstacle> obstacles,
     double clearanceSquared)
 {
-    for (const BuildingObstacle& building : buildings)
+    for (const RouteObstacle& obstacle : obstacles)
     {
-        const auto& outline = building.outlineMeters;
+        const auto& outline = obstacle.footprintMeters;
         if (outline.size() < 3U)
             continue;
         if (ContainsPointInRing(outline, point))
@@ -90,12 +91,12 @@ bool IsBlocked(
 bool IsBlockedAtAltitude(
     const glm::dvec2& point,
     double altitudeMeters,
-    const std::vector<BuildingObstacle>& buildings,
+    std::span<const RouteObstacle> obstacles,
     double clearanceSquared)
 {
-    for (const BuildingObstacle& building : buildings)
+    for (const RouteObstacle& obstacle : obstacles)
     {
-        const auto& outline = building.outlineMeters;
+        const auto& outline = obstacle.footprintMeters;
         if (outline.size() < 3U)
             continue;
         bool horizontallyBlocked = ContainsPointInRing(outline, point);
@@ -107,14 +108,7 @@ bool IsBlockedAtAltitude(
         if (!horizontallyBlocked)
             continue;
 
-        const double groundTop = building.groundElevationsMeters.empty()
-            ? 0.0
-            : *std::max_element(building.groundElevationsMeters.begin(),
-                building.groundElevationsMeters.end());
-        const double buildingTop = building.heightMeters > 0.0
-            ? groundTop + building.heightMeters
-            : std::numeric_limits<double>::infinity();
-        if (altitudeMeters < buildingTop + minimumGroundClearanceMeters)
+        if (altitudeMeters < obstacle.topAltitudeMeters + minimumGroundClearanceMeters)
             return true;
     }
     return false;
@@ -123,7 +117,7 @@ bool IsBlockedAtAltitude(
 bool SegmentIsClear(
     const glm::dvec2& start,
     const glm::dvec2& end,
-    const std::vector<BuildingObstacle>& buildings,
+    std::span<const RouteObstacle> obstacles,
     double clearanceSquared)
 {
     const double length = glm::length(end - start);
@@ -133,7 +127,7 @@ bool SegmentIsClear(
     {
         const double fraction = static_cast<double>(index)
             / static_cast<double>(sampleCount);
-        if (IsBlocked(glm::mix(start, end, fraction), buildings, clearanceSquared))
+        if (IsBlocked(glm::mix(start, end, fraction), obstacles, clearanceSquared))
             return false;
     }
     return true;
@@ -178,7 +172,7 @@ std::optional<std::vector<Cell>> FindGridPath(
     const Grid& grid,
     Cell start,
     Cell goal,
-    const std::vector<BuildingObstacle>& buildings,
+    std::span<const RouteObstacle> obstacles,
     double clearanceSquared)
 {
     const std::size_t cellCount = grid.rows * grid.columns;
@@ -222,14 +216,14 @@ std::optional<std::vector<Cell>> FindGridPath(
             const Cell next{static_cast<std::size_t>(row),
                 static_cast<std::size_t>(column)};
             const glm::dvec2 nextPosition = Position(grid, next);
-            if (IsBlocked(nextPosition, buildings, clearanceSquared))
+            if (IsBlocked(nextPosition, obstacles, clearanceSquared))
                 continue;
             if (rowOffset != 0 && columnOffset != 0)
             {
                 const Cell horizontal{current.row, next.column};
                 const Cell vertical{next.row, current.column};
-                if (IsBlocked(Position(grid, horizontal), buildings, clearanceSquared)
-                    || IsBlocked(Position(grid, vertical), buildings, clearanceSquared))
+                if (IsBlocked(Position(grid, horizontal), obstacles, clearanceSquared)
+                    || IsBlocked(Position(grid, vertical), obstacles, clearanceSquared))
                     continue;
             }
 
@@ -273,7 +267,7 @@ std::vector<glm::dvec2> SimplifyPath(
     const Grid& grid,
     const glm::dvec2& start,
     const glm::dvec2& goal,
-    const std::vector<BuildingObstacle>& buildings,
+    std::span<const RouteObstacle> obstacles,
     double clearanceSquared)
 {
     std::vector<glm::dvec2> anchors;
@@ -293,14 +287,14 @@ std::vector<glm::dvec2> SimplifyPath(
              candidate > current + 1U; --candidate)
         {
             if (SegmentIsClear(anchors[current], anchors[candidate],
-                    buildings, clearanceSquared))
+                    obstacles, clearanceSquared))
             {
                 next = candidate;
                 break;
             }
         }
         if (!SegmentIsClear(anchors[current], anchors[next],
-                buildings, clearanceSquared))
+                obstacles, clearanceSquared))
             return {};
         simplified.push_back(anchors[next]);
         current = next;
@@ -309,62 +303,60 @@ std::vector<glm::dvec2> SimplifyPath(
 }
 }
 
-std::optional<std::vector<glm::dvec3>> PlanRoute(
-    const terrain::TerrainGrid& terrain,
-    const std::vector<BuildingObstacle>& buildings,
+std::optional<std::vector<glm::dvec3>> RoutePlanner::Plan(
+    const RouteEnvironment& environment,
     const glm::dvec3& startMeters,
     const glm::dvec3& goalMeters,
-    double buildingClearanceMeters,
-    double minimumTransitAltitudeMeters)
+    const RoutePlanningOptions& options) const
 {
-    if (terrain.sampleCount < 2U
+    // 지도 구현체에서 경계·지면 높이·장애물만 받아오고, 지도 파일 형식은 알지 않는다.
+    const glm::dvec4 bounds = environment.BoundsMeters();
+    if (!std::isfinite(bounds.x) || !std::isfinite(bounds.y)
+        || !std::isfinite(bounds.z) || !std::isfinite(bounds.w)
+        || !(bounds.z > bounds.x) || !(bounds.w > bounds.y)
         || !std::isfinite(startMeters.x) || !std::isfinite(startMeters.y)
         || !std::isfinite(startMeters.z) || !std::isfinite(goalMeters.x)
         || !std::isfinite(goalMeters.y) || !std::isfinite(goalMeters.z)
-        || !std::isfinite(minimumTransitAltitudeMeters)
-        || !std::isfinite(buildingClearanceMeters)
-        || !(buildingClearanceMeters > 0.0))
-        throw std::invalid_argument("경로 시작점, 목표점과 건물 간격을 확인해 주세요.");
+        || !std::isfinite(options.minimumTransitAltitudeMeters)
+        || !std::isfinite(options.obstacleClearanceMeters)
+        || !(options.obstacleClearanceMeters > 0.0))
+        throw std::invalid_argument("경로 시작점, 목표점과 장애물 간격을 확인해 주세요.");
 
-    const double halfWidth = terrain.HalfWidthMeters();
-    const double halfDepth = terrain.HalfDepthMeters();
     Grid grid;
     grid.columns = static_cast<std::size_t>(std::ceil(
-        2.0 * halfWidth / routeCellSizeMeters)) + 1U;
+        (bounds.z - bounds.x) / routeCellSizeMeters)) + 1U;
     grid.rows = static_cast<std::size_t>(std::ceil(
-        2.0 * halfDepth / routeCellSizeMeters)) + 1U;
-    grid.westMeters = -halfWidth;
-    grid.southMeters = -halfDepth;
-    grid.spacingXMeters = 2.0 * halfWidth / static_cast<double>(grid.columns - 1U);
-    grid.spacingYMeters = 2.0 * halfDepth / static_cast<double>(grid.rows - 1U);
+        (bounds.w - bounds.y) / routeCellSizeMeters)) + 1U;
+    grid.westMeters = bounds.x;
+    grid.southMeters = bounds.y;
+    grid.spacingXMeters = (bounds.z - bounds.x) / static_cast<double>(grid.columns - 1U);
+    grid.spacingYMeters = (bounds.w - bounds.y) / static_cast<double>(grid.rows - 1U);
 
     const glm::dvec2 start{startMeters.x, startMeters.y};
     const glm::dvec2 goal{goalMeters.x, goalMeters.y};
-    const double transitAltitude = minimumTransitAltitudeMeters;
-    const double clearanceSquared = buildingClearanceMeters * buildingClearanceMeters;
+    const double transitAltitude = options.minimumTransitAltitudeMeters;
+    const double clearanceSquared = options.obstacleClearanceMeters
+        * options.obstacleClearanceMeters;
+    // 시작 지점에서 안전 고도까지 수직 상승한 뒤 수평 경로를 시작한다.
     const double safeStartAltitude = std::max(
         transitAltitude,
-        terrain.HeightAtLocalMeters(start) + minimumGroundClearanceMeters);
-    std::vector<BuildingObstacle> routeObstacles;
-    routeObstacles.reserve(buildings.size());
+        environment.GroundAltitudeMeters(start) + minimumGroundClearanceMeters);
+    std::vector<RouteObstacle> routeObstacles;
+    routeObstacles.reserve(environment.Obstacles().size());
     // 출발 직후 수직으로 안전 고도까지 오른 뒤 수평 이동하므로, 그 고도보다 낮은 건물은 경로를 막지 않는다.
     const double minimumRouteAltitude = std::min(safeStartAltitude, goalMeters.z);
-    for (const BuildingObstacle& building : buildings)
+    for (const RouteObstacle& obstacle : environment.Obstacles())
     {
-        const double highestGround = building.groundElevationsMeters.empty()
-            ? 0.0
-            : *std::max_element(building.groundElevationsMeters.begin(),
-                building.groundElevationsMeters.end());
-        const double buildingTop = highestGround + building.heightMeters;
-        if (minimumRouteAltitude < buildingTop + minimumGroundClearanceMeters)
-            routeObstacles.push_back(building);
+        if (minimumRouteAltitude < obstacle.topAltitudeMeters + minimumGroundClearanceMeters)
+            routeObstacles.push_back(obstacle);
     }
+    // 시작·목표 위치는 실제 고도에서 확인하고, 수평 탐색에는 비행 고도보다 높은 장애물만 넘긴다.
     const bool startBlocked = IsBlockedAtAltitude(
-        start, startMeters.z, buildings, clearanceSquared);
+        start, startMeters.z, environment.Obstacles(), clearanceSquared);
     const bool goalBlocked = IsBlockedAtAltitude(
-        goal, goalMeters.z, buildings, clearanceSquared);
-    if (!terrain.ContainsLocalPositionMeters(start)
-        || !terrain.ContainsLocalPositionMeters(goal) || startBlocked || goalBlocked)
+        goal, goalMeters.z, environment.Obstacles(), clearanceSquared);
+    if (!environment.Contains(start) || !environment.Contains(goal)
+        || startBlocked || goalBlocked)
         return std::nullopt;
 
     if (glm::length(goal - start) < 1.0e-6)
@@ -378,6 +370,7 @@ std::optional<std::vector<glm::dvec3>> PlanRoute(
         || IsBlocked(goalCellPosition, routeObstacles, clearanceSquared))
         return std::nullopt;
 
+    // 1) A*가 격자 경로를 찾고, 2) 직선으로 통과 가능한 구간을 합쳐 경유점을 줄인다.
     const auto gridPath = FindGridPath(
         grid, startCell, goalCell, routeObstacles, clearanceSquared);
     if (!gridPath)
@@ -387,6 +380,7 @@ std::optional<std::vector<glm::dvec3>> PlanRoute(
     if (horizontalPath.size() < 2U)
         return std::nullopt;
 
+    // 수평 이동 거리에 맞춰 고도를 보간하고, 각 지점의 지면보다 낮아지지 않게 한다.
     double totalDistance = 0.0;
     for (std::size_t index = 1; index < horizontalPath.size(); ++index)
         totalDistance += glm::length(horizontalPath[index] - horizontalPath[index - 1U]);
@@ -404,7 +398,7 @@ std::optional<std::vector<glm::dvec3>> PlanRoute(
         const double fraction = totalDistance > 0.0
             ? traveledDistance / totalDistance : 1.0;
         const double plannedAltitude = std::lerp(startMeters.z, goalMeters.z, fraction);
-        const double groundAltitude = terrain.HeightAtLocalMeters(horizontalPath[index]);
+        const double groundAltitude = environment.GroundAltitudeMeters(horizontalPath[index]);
         if (isGoal)
         {
             const double approachAltitude = std::max({goalMeters.z,

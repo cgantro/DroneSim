@@ -1,7 +1,6 @@
 #pragma once
 
-#include "flight_planning/BuildingObstacle.h"
-#include "terrain/TerrainGrid.h"
+#include "flight_planning/RouteEnvironment.h"
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -36,8 +35,7 @@ struct FormationRoutePlan
  *          반환 경로는 시작점을 빼고 목적지를 포함한다.
  */
 [[nodiscard]] std::optional<FormationRoutePlan> PlanFormationRoute(
-    const terrain::TerrainGrid& terrain,
-    const std::vector<BuildingObstacle>& obstacles,
+    const RouteEnvironment& environment,
     const glm::dvec3& leaderStartMeters,
     const glm::dvec3& destinationMeters,
     std::size_t droneCount,

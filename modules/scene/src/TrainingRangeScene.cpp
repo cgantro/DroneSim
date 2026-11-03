@@ -186,7 +186,6 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
 
     std::vector<glm::dvec3> collisionVertices;
     std::vector<std::uint32_t> collisionIndices;
-    std::size_t obstacleNumber = 0;
     for (std::size_t index = 0; index < partBounds.size(); ++index)
     {
         if (index == groundSurfacePart)
@@ -214,7 +213,9 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
             collisionIndices.push_back(firstVertex + vertexIndex);
 
         dronesim::flight_planning::BuildingObstacle obstacle;
-        obstacle.name = "도시 구조물 " + std::to_string(++obstacleNumber);
+        obstacle.name = partBounds[index].nodeName.empty()
+            ? "이름 없는 구조물 " + std::to_string(index + 1U)
+            : partBounds[index].nodeName;
         obstacle.heightMeters = highestPointMeters;
         obstacle.outlineMeters = MakeFootprintHull(std::move(footprintPoints));
         obstacle.groundElevationsMeters.assign(obstacle.outlineMeters.size(), 0.0);

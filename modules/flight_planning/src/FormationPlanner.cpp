@@ -68,8 +68,7 @@ std::vector<glm::dvec2> FormationOffsets(
 }
 
 std::optional<FormationRoutePlan> PlanFormationRoute(
-    const terrain::TerrainGrid& terrain,
-    const std::vector<BuildingObstacle>& obstacles,
+    const RouteEnvironment& environment,
     const glm::dvec3& leaderStartMeters,
     const glm::dvec3& destinationMeters,
     std::size_t droneCount,
@@ -87,9 +86,10 @@ std::optional<FormationRoutePlan> PlanFormationRoute(
     const double clearance = RequiredClearance(droneCount,
         spacingMeters, droneRadiusMeters, safetyMarginMeters);
     // 편대가 통째로 지나갈 폭을 경로 탐색에 요구한다.
-    const auto route = PlanRoute(terrain, obstacles,
-        leaderStartMeters, destinationMeters, clearance,
-        minimumTransitAltitudeMeters);
+    const auto route = RoutePlanner{}.Plan(environment,
+        leaderStartMeters, destinationMeters,
+        {.obstacleClearanceMeters = clearance,
+         .minimumTransitAltitudeMeters = minimumTransitAltitudeMeters});
     if (!route)
         return std::nullopt;
 

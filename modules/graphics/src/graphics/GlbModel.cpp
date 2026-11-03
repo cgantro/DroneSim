@@ -240,10 +240,13 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
     const Json& roots = scenes.at(sceneIndex).at("nodes");
     auto model = std::unique_ptr<GlbModel>(new GlbModel());
     std::vector<bool> recursionPath(nodes.size(), false);
-    const auto addPrimitive = [&](const Json& node, const glm::mat4& nodeTransform)
+    const auto addPrimitive = [&](const Json& node, const glm::mat4& nodeTransform,
+                                  std::size_t nodeIndex)
     {
         const std::size_t meshIndex = node.at("mesh").get<std::size_t>();
         const Json& primitives = meshes.at(meshIndex).at("primitives");
+        std::string nodeName = node.value("name",
+            "이름 없는 노드 " + std::to_string(nodeIndex + 1U));
         for (std::size_t primitiveIndex = 0;
             primitiveIndex < primitives.size(); ++primitiveIndex)
         {
@@ -262,6 +265,9 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
             GlbPartBounds bounds{
                 glm::vec3(std::numeric_limits<float>::max()),
                 glm::vec3(std::numeric_limits<float>::lowest())};
+            bounds.nodeName = nodeName;
+            if (primitives.size() > 1U)
+                bounds.nodeName += " · 메시 " + std::to_string(primitiveIndex + 1U);
             for (const Vertex& vertex : vertices)
             {
                 const glm::vec3 position = glm::vec3(
@@ -312,7 +318,7 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
         const Json& node = nodes.at(nodeIndex);
         const glm::mat4 worldTransform = parentTransform * ReadNodeTransform(node);
         if (node.contains("mesh"))
-            addPrimitive(node, worldTransform);
+            addPrimitive(node, worldTransform, nodeIndex);
         if (node.contains("children"))
         {
             for (const Json& child : node.at("children"))
