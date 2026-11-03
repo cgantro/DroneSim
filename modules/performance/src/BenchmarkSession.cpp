@@ -24,6 +24,8 @@ void BenchmarkSession::ResetMeasurements(
 void BenchmarkSession::RecordFrame(double applicationMicroseconds,
     std::size_t renderedFrames)
 {
+    frame_.frameIndex = static_cast<std::uint64_t>(renderedFrames);
+    frame_.applicationMicroseconds = applicationMicroseconds;
     measurements_.renderFrameDurationsMicroseconds.push_back(
         frame_.renderFrameMicroseconds);
     measurements_.applicationFrameDurationsMicroseconds.push_back(
@@ -47,23 +49,9 @@ void BenchmarkSession::RecordFrame(double applicationMicroseconds,
     if (applicationMicroseconds <= 1'000'000.0 / 60.0)
         return;
 
-    measurements_.slowFrames.push_back({
-        .frameIndex = static_cast<std::uint64_t>(renderedFrames),
-        .applicationMicroseconds = applicationMicroseconds,
-        .eventPollingMicroseconds = frame_.eventPollingMicroseconds,
-        .gamepadPollingMicroseconds = frame_.gamepadPollingMicroseconds,
-        .simulationUpdateMicroseconds = frame_.simulationUpdateMicroseconds,
-        .renderMicroseconds = frame_.renderMicroseconds,
-        .scenePanelRenderMicroseconds = frame_.scenePanelRenderMicroseconds,
-        .cameraSceneRenderMicroseconds = frame_.cameraSceneRenderMicroseconds,
-        .bufferSwapMicroseconds = frame_.bufferSwapMicroseconds,
-        .hudInterfaceBuildMicroseconds = frame_.hudInterfaceBuildMicroseconds,
-        .hudFrameFinalizeMicroseconds = frame_.hudFinalizeMicroseconds,
-        .hudBackendDrawMicroseconds = frame_.hudBackendDrawMicroseconds,
-        .hudDrawListCount = frame_.hudDrawListCount,
-        .hudDrawCommandCount = frame_.hudDrawCommandCount,
-        .hudVertexCount = frame_.hudVertexCount,
-        .hudIndexCount = frame_.hudIndexCount});
+    ViewerBenchmarkMeasurements::SlowFrame slowFrame;
+    static_cast<ViewerFrameMeasurements&>(slowFrame) = frame_;
+    measurements_.slowFrames.push_back(std::move(slowFrame));
 }
 
 void BenchmarkSession::AddTick(double durationMicroseconds)

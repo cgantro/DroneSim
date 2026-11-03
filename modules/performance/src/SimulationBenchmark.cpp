@@ -90,7 +90,7 @@ nlohmann::json BuildViewerBenchmarkReport(ViewerBenchmarkMeasurements measuremen
             {"camera_scene_render_us", frame.cameraSceneRenderMicroseconds},
             {"buffer_swap_us", frame.bufferSwapMicroseconds},
             {"hud_interface_build_us", frame.hudInterfaceBuildMicroseconds},
-            {"hud_frame_finalize_us", frame.hudFrameFinalizeMicroseconds},
+            {"hud_frame_finalize_us", frame.hudFinalizeMicroseconds},
             {"hud_backend_draw_us", frame.hudBackendDrawMicroseconds},
             {"hud_draw_list_count", frame.hudDrawListCount},
             {"hud_draw_command_count", frame.hudDrawCommandCount},

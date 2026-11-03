@@ -28,23 +28,8 @@ public:
         double executionMicroseconds = 0.0;
     };
 
-    struct Frame
+    struct Frame : ViewerFrameMeasurements
     {
-        double eventPollingMicroseconds = 0.0;
-        double gamepadPollingMicroseconds = 0.0;
-        double simulationUpdateMicroseconds = 0.0;
-        double renderFrameMicroseconds = 0.0;
-        double renderMicroseconds = 0.0;
-        double bufferSwapMicroseconds = 0.0;
-        double scenePanelRenderMicroseconds = 0.0;
-        double cameraSceneRenderMicroseconds = 0.0;
-        double hudInterfaceBuildMicroseconds = 0.0;
-        double hudFinalizeMicroseconds = 0.0;
-        double hudBackendDrawMicroseconds = 0.0;
-        std::size_t hudDrawListCount = 0;
-        std::size_t hudDrawCommandCount = 0;
-        std::size_t hudVertexCount = 0;
-        std::size_t hudIndexCount = 0;
         std::size_t completedHudGpuTimingCount = 0;
     };
 
