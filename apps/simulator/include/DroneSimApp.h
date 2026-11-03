@@ -138,8 +138,8 @@ private:
     [[nodiscard]] dronesim::simulation::CommandResult ApplySimulationCommand(
         dronesim::simulation::DroneId droneId,
         const dronesim::simulation::DroneCommand& command);
+    /** @brief 게임패드 상태를 읽어 창 제목과 수동 조종 입력을 갱신한다. */
     void PollGamepad();
-    /** @brief 연결이 끊긴 뒤 남은 조종 입력을 지우고 필요한 정지 명령을 예약한다. */
     /**
      * @brief 버튼의 새 입력과 현재 비행 조작값을 반영한다.
      * @details 이륙·착륙 버튼은 눌린 순간 한 번 처리하고, 스틱 값은 비행 중 계속 갱신한다.
