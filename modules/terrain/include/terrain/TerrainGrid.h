@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <filesystem>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -19,17 +18,6 @@ struct TerrainGrid
     float spacingYMeters = 0.0F;
     float referenceElevationMeters = 0.0F;
     std::vector<float> heightOffsetsMeters;
-
-    /** @brief 저장된 지형 격자를 읽는다. 파일 형식이 맞지 않으면 원인을 알려준다. */
-    [[nodiscard]] static TerrainGrid Load(const std::filesystem::path& path);
-
-    /** @brief 높이와 칸 간격을 읽고 격자 중심을 시뮬레이터 원점에 둔다. */
-    [[nodiscard]] static TerrainGrid LoadAsciiGrid(
-        const std::filesystem::path& path,
-        float referenceElevationMeters);
-
-    /** @brief 소수점 높이를 보존하는 지형 자료 형식으로 저장한다. */
-    void Save(const std::filesystem::path& path) const;
 
     /** @brief 지도 중심에서 서쪽·동쪽 경계까지의 거리를 미터로 반환한다. */
     [[nodiscard]] double HalfWidthMeters() const noexcept;

@@ -1,4 +1,4 @@
-#include "terrain/TerrainGrid.h"
+#include "terrain/TerrainGridIO.h"
 
 #include <charconv>
 #include <iostream>
@@ -31,9 +31,9 @@ int main(int argc, char** argv)
 
     try
     {
-        const auto grid = dronesim::terrain::TerrainGrid::LoadAsciiGrid(
+        const auto grid = dronesim::terrain::LoadAsciiTerrainGrid(
             argv[1], static_cast<float>(ReadNumber(argv[3], "기준 높이")));
-        grid.Save(argv[2]);
+        dronesim::terrain::SaveTerrainGrid(grid, argv[2]);
         std::cout << "지형 격자를 저장했습니다: " << grid.sampleCount << " x "
             << grid.sampleCount << ", " << grid.spacingXMeters << " m 간격\n";
         return 0;

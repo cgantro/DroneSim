@@ -38,6 +38,7 @@ dronesim_add_jolt_dependency()
 
 add_library(dronesim_terrain STATIC
   modules/terrain/src/TerrainGrid.cpp
+  modules/terrain/src/TerrainGridIO.cpp
 )
 target_include_directories(dronesim_terrain PUBLIC modules/terrain/include)
 target_link_libraries(dronesim_terrain PUBLIC glm::glm)

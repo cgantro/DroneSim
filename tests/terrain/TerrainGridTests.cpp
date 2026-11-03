@@ -1,4 +1,5 @@
 #include "terrain/TerrainGrid.h"
+#include "terrain/TerrainGridIO.h"
 
 #include <gtest/gtest.h>
 
@@ -47,15 +48,15 @@ void Verify_AsciiGridKeepsFractionalElevationsAndRoundTrips()
             "100.25 100.50 100.75\n";
     }
 
-    const TerrainGrid imported = TerrainGrid::LoadAsciiGrid(sourcePath, 100.5F);
+    const TerrainGrid imported = LoadAsciiTerrainGrid(sourcePath, 100.5F);
     EXPECT_EQ(imported.sampleCount, 3U);
     EXPECT_FLOAT_EQ(imported.spacingXMeters, 2.0F);
     EXPECT_FLOAT_EQ(imported.referenceElevationMeters, 100.5F);
     EXPECT_FLOAT_EQ(imported.HeightAt(0U, 0U), 0.75F);
     EXPECT_FLOAT_EQ(imported.HeightAt(2U, 2U), 0.25F);
 
-    imported.Save(convertedPath);
-    const TerrainGrid restored = TerrainGrid::Load(convertedPath);
+    SaveTerrainGrid(imported, convertedPath);
+    const TerrainGrid restored = LoadTerrainGrid(convertedPath);
     EXPECT_FLOAT_EQ(restored.HeightAt(0U, 0U), 0.75F);
     EXPECT_FLOAT_EQ(restored.HeightAt(1U, 1U), 0.5F);
     EXPECT_FLOAT_EQ(restored.HeightAt(2U, 2U), 0.25F);
@@ -76,7 +77,7 @@ void Verify_AsciiGridRejectsMissingHeightSamples()
             "cellsize 2\nNODATA_value -9999\n1 2 3\n4 5 6\n7 8\n";
     }
 
-    EXPECT_THROW(static_cast<void>(TerrainGrid::LoadAsciiGrid(
+    EXPECT_THROW(static_cast<void>(LoadAsciiTerrainGrid(
             path, 100.5F)), std::runtime_error);
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
