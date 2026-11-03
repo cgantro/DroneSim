@@ -124,6 +124,22 @@ Cell NearestCell(const Grid& grid, const glm::dvec2& position)
             static_cast<double>(grid.columns - 1U)))};
 }
 
+Grid CreateRouteGrid(const glm::dvec4& bounds)
+{
+    Grid grid;
+    grid.columns = static_cast<std::size_t>(std::ceil(
+        (bounds.z - bounds.x) / routeCellSizeMeters)) + 1U;
+    grid.rows = static_cast<std::size_t>(std::ceil(
+        (bounds.w - bounds.y) / routeCellSizeMeters)) + 1U;
+    grid.westMeters = bounds.x;
+    grid.southMeters = bounds.y;
+    grid.spacingXMeters = (bounds.z - bounds.x)
+        / static_cast<double>(grid.columns - 1U);
+    grid.spacingYMeters = (bounds.w - bounds.y)
+        / static_cast<double>(grid.rows - 1U);
+    return grid;
+}
+
 /**
  * @brief A*로 격자에서 시작 칸부터 목표 칸까지의 수평 경로를 찾는다.
  * @details A*는 시작점부터 쌓인 실제 이동 비용 g와 목표까지의 추정 비용 h를
@@ -272,6 +288,60 @@ std::vector<glm::dvec2> SimplifyPath(
     }
     return simplified;
 }
+
+std::vector<glm::dvec3> AddFlightAltitudes(
+    const std::vector<glm::dvec2>& horizontalPath,
+    const RouteEnvironment& environment,
+    const glm::dvec3& startMeters,
+    const glm::dvec3& goalMeters,
+    double transitAltitudeMeters,
+    double safeStartAltitudeMeters)
+{
+    double totalDistanceMeters = 0.0;
+    for (std::size_t index = 1; index < horizontalPath.size(); ++index)
+    {
+        totalDistanceMeters += glm::length(
+            horizontalPath[index] - horizontalPath[index - 1U]);
+    }
+
+    std::vector<glm::dvec3> route;
+    route.reserve(horizontalPath.size() + 1U);
+    if (startMeters.z + 1.0e-6 < safeStartAltitudeMeters)
+        route.emplace_back(startMeters.x, startMeters.y, safeStartAltitudeMeters);
+
+    // 목표 고도까지의 변화를 수평 이동 거리에 비례해 나눈다.
+    double traveledDistanceMeters = 0.0;
+    for (std::size_t index = 1; index < horizontalPath.size(); ++index)
+    {
+        traveledDistanceMeters += glm::length(
+            horizontalPath[index] - horizontalPath[index - 1U]);
+        const bool isGoal = index + 1U == horizontalPath.size();
+        const double fraction = totalDistanceMeters > 0.0
+            ? traveledDistanceMeters / totalDistanceMeters : 1.0;
+        const double plannedAltitude = std::lerp(
+            startMeters.z, goalMeters.z, fraction);
+        const double groundAltitude =
+            environment.GroundAltitudeMeters(horizontalPath[index]);
+        if (isGoal)
+        {
+            // 마지막 접근점은 목표 자체가 지면이나 최소 순항 고도에 묻히지 않게 한다.
+            const double approachAltitude = std::max({goalMeters.z,
+                groundAltitude + minimumGroundClearanceMeters,
+                transitAltitudeMeters});
+            if (approachAltitude > goalMeters.z + 1.0e-6)
+                route.emplace_back(goalMeters.x, goalMeters.y, approachAltitude);
+            route.push_back(goalMeters);
+            continue;
+        }
+
+        const double altitude = std::max({plannedAltitude,
+            groundAltitude + minimumGroundClearanceMeters,
+            transitAltitudeMeters});
+        route.emplace_back(horizontalPath[index].x,
+            horizontalPath[index].y, altitude);
+    }
+    return route;
+}
 }
 
 std::optional<std::vector<glm::dvec3>> RoutePlanner::Plan(
@@ -290,15 +360,7 @@ std::optional<std::vector<glm::dvec3>> RoutePlanner::Plan(
         || !(options.obstacleClearanceMeters > 0.0))
         throw std::invalid_argument("경로 시작점, 목표점과 장애물 간격을 확인해 주세요.");
 
-    Grid grid;
-    grid.columns = static_cast<std::size_t>(std::ceil(
-        (bounds.z - bounds.x) / routeCellSizeMeters)) + 1U;
-    grid.rows = static_cast<std::size_t>(std::ceil(
-        (bounds.w - bounds.y) / routeCellSizeMeters)) + 1U;
-    grid.westMeters = bounds.x;
-    grid.southMeters = bounds.y;
-    grid.spacingXMeters = (bounds.z - bounds.x) / static_cast<double>(grid.columns - 1U);
-    grid.spacingYMeters = (bounds.w - bounds.y) / static_cast<double>(grid.rows - 1U);
+    const Grid grid = CreateRouteGrid(bounds);
 
     const glm::dvec2 start{startMeters.x, startMeters.y};
     const glm::dvec2 goal{goalMeters.x, goalMeters.y};
@@ -348,42 +410,8 @@ std::optional<std::vector<glm::dvec3>> RoutePlanner::Plan(
     if (horizontalPath.size() < 2U)
         return std::nullopt;
 
-    // 수평 이동 거리에 맞춰 고도를 보간하고, 각 지점의 지면보다 낮아지지 않게 한다.
-    double totalDistance = 0.0;
-    for (std::size_t index = 1; index < horizontalPath.size(); ++index)
-        totalDistance += glm::length(horizontalPath[index] - horizontalPath[index - 1U]);
-
-    std::vector<glm::dvec3> route;
-    route.reserve(horizontalPath.size() + 1U);
-    if (startMeters.z + 1.0e-6 < safeStartAltitude)
-        route.emplace_back(startMeters.x, startMeters.y, safeStartAltitude);
-
-    double traveledDistance = 0.0;
-    for (std::size_t index = 1; index < horizontalPath.size(); ++index)
-    {
-        traveledDistance += glm::length(horizontalPath[index] - horizontalPath[index - 1U]);
-        const bool isGoal = index + 1U == horizontalPath.size();
-        const double fraction = totalDistance > 0.0
-            ? traveledDistance / totalDistance : 1.0;
-        const double plannedAltitude = std::lerp(startMeters.z, goalMeters.z, fraction);
-        const double groundAltitude = environment.GroundAltitudeMeters(horizontalPath[index]);
-        if (isGoal)
-        {
-            const double approachAltitude = std::max({goalMeters.z,
-                groundAltitude + minimumGroundClearanceMeters, transitAltitude});
-            if (approachAltitude > goalMeters.z + 1.0e-6)
-                route.emplace_back(goalMeters.x, goalMeters.y, approachAltitude);
-            route.push_back(goalMeters);
-            continue;
-        }
-
-        const double altitude = std::max({plannedAltitude,
-            groundAltitude + minimumGroundClearanceMeters, transitAltitude});
-        if (altitude < groundAltitude + minimumGroundClearanceMeters)
-            return std::nullopt;
-        route.emplace_back(horizontalPath[index].x, horizontalPath[index].y, altitude);
-    }
-    return route;
+    return AddFlightAltitudes(horizontalPath, environment,
+        startMeters, goalMeters, transitAltitude, safeStartAltitude);
 }
 
 }
