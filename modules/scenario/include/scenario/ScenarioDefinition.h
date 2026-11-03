@@ -15,14 +15,14 @@
 
 namespace dronesim::scenario::detail
 {
-using namespace dronesim::simulation;
+namespace simulation = dronesim::simulation;
 
 struct ExpectedDrone
 {
     /** @brief 최종 상태를 비교할 드론 이름이다. */
     std::string name;
     /** @brief 시험이 끝났을 때 기대하는 비행 상태다. */
-    FlightMode mode;
+    simulation::FlightMode mode;
     /** @brief 기대 위치를 미터 단위 ENU 좌표로 적는다. */
     glm::dvec3 positionMeters;
     /** @brief 비교할 자세가 있을 때만 w, x, y, z 순서의 회전을 보관한다. */
@@ -36,7 +36,7 @@ struct TickCommand
     /** @brief 명령을 받을 시나리오 안의 드론 이름이다. */
     std::string droneName;
     /** @brief SimulationCore가 이해하는 비행 명령이다. */
-    DroneCommand command;
+    simulation::DroneCommand command;
 };
 
 struct ScenarioDrone
@@ -44,7 +44,7 @@ struct ScenarioDrone
     /** @brief 시나리오에서 이 기체를 가리킬 고유 이름이다. */
     std::string name;
     /** @brief 위치·자세·속도·비행 상태 등 실행을 시작할 때의 값이다. */
-    DroneState initialState;
+    simulation::DroneState initialState;
     /** @brief 위치·방향 외의 시작 상태를 JSON에서 지정했는지 나타낸다. */
     bool hasExtendedInitialState = false;
     /** @brief 에너지 모형을 쓸 때 기본 용량을 덮어쓸 값이며 단위는 Wh다. */
@@ -52,7 +52,7 @@ struct ScenarioDrone
     /** @brief 에너지 모형을 시작할 충전 비율이다. 범위는 0~100%다. */
     double initialBatteryPercent = 100.0;
     /** @brief 기본 카메라 대신 이 기체에 사용할 카메라 설정이다. */
-    std::optional<CameraModel> cameraModel;
+    std::optional<simulation::CameraModel> cameraModel;
 };
 
 struct DroneCommunicationOutage
@@ -69,7 +69,7 @@ struct DroneCommunicationOutage
 
 using CollisionAvoidanceSettings = dronesim::flight_planning::CollisionAvoidanceSettings;
 
-using EnergyModelSettings = BatteryModelParameters;
+using EnergyModelSettings = simulation::BatteryModelParameters;
 
 /** @brief JSON 임무 한 건에 적힌 입력값이다. 실행 중 진행 상태는 담지 않는다. */
 struct ScenarioMissionTask
@@ -103,7 +103,7 @@ struct ScenarioDefinition
     /** @brief JSON에서 드론 목록을 생략해 SimulationCore의 기본 기체를 쓰는지 나타낸다. */
     bool usesExistingPrimaryDrone = false;
     /** @brief 개별 드론 카메라를 지정하지 않았을 때 적용할 기본 카메라다. */
-    CameraModel defaultCameraModel;
+    simulation::CameraModel defaultCameraModel;
     /** @brief 시각 순으로 적용할 Tick별 외부 조종 명령이다. */
     std::vector<TickCommand> commands;
     /** @brief 지정한 드론의 상태 보고만 끊는 가상 통신 장애다. */
@@ -114,10 +114,10 @@ struct ScenarioDefinition
     std::optional<EnergyModelSettings> energyModel;
     /** @brief 설정된 경우 드론별 경유점 임무를 실행한다. */
     std::optional<ScenarioMission> mission;
-    QuadrotorParameters quadrotorParameters =
-        QuadrotorParameters::X500MotorTableEstimate();
+    simulation::QuadrotorParameters quadrotorParameters =
+        simulation::QuadrotorParameters::X500MotorTableEstimate();
     bool quadrotorParametersCustomized = false;
-    QuadrotorControllerParameters controllerParameters;
+    simulation::QuadrotorControllerParameters controllerParameters;
     bool controllerParametersCustomized = false;
     /** @brief ENU 축 기준 바람 속도(m/s)다. */
     std::optional<glm::dvec3> windVelocity;
@@ -132,7 +132,7 @@ struct ScenarioDefinition
     /** @brief 실행 중 기록한 최소 거리가 이 값보다 작으면 시험을 실패시킨다. 단위는 미터다. */
     std::optional<double> minimumDroneSeparationMeters;
     /** @brief 실행 뒤 비교할 기본 드론 카메라 상태다. */
-    std::optional<CameraStatus> expectedCameraStatus;
+    std::optional<simulation::CameraStatus> expectedCameraStatus;
     /** @brief 실행 뒤 비교할 기본 드론의 카메라 프레임 수다. */
     std::optional<std::uint64_t> expectedFrameCount;
 };
