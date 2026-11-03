@@ -1,5 +1,6 @@
 #include "simulation_core/JoltPhysicsWorld.h"
 #include "simulation_core/CollisionGeometry.h"
+#include "simulation_core/FiniteVector.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "geometry/Polygon.h"
 #include "terrain/TerrainGrid.h"
@@ -68,11 +69,6 @@ private:
 JoltRuntime &EnsureJoltRuntime() {
   static JoltRuntime runtime;
   return runtime;
-}
-
-bool IsFinite(const glm::dvec3 &value) {
-  return std::isfinite(value.x) && std::isfinite(value.y) &&
-         std::isfinite(value.z);
 }
 
 bool IsValidOrientation(const glm::dquat &value) {
@@ -353,7 +349,7 @@ void JoltPhysicsWorld::AddStaticTriangleMesh(
   JPH::VertexList vertices;
   vertices.reserve(verticesMeters.size());
   for (const glm::dvec3 &vertex : verticesMeters) {
-    if (!IsFinite(vertex))
+    if (!IsFiniteVector(vertex))
       throw std::invalid_argument("장면 충돌 메시의 정점에 잘못된 값이 있습니다.");
     const JPH::Vec3 converted = ToJoltVector(vertex);
     vertices.emplace_back(converted.GetX(), converted.GetY(), converted.GetZ());
@@ -447,7 +443,7 @@ void JoltPhysicsWorld::AddStaticPrism(
 
 void JoltPhysicsWorld::SetWindVelocityMetersPerSecond(
     const glm::dvec3 &velocity) {
-  if (!IsFinite(velocity))
+  if (!IsFiniteVector(velocity))
     throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
   impl_->windVelocityMetersPerSecond = velocity;
 }
@@ -482,7 +478,7 @@ JoltPhysicsWorld::CreateDynamicBox(const JoltBoxDefinition &definition) {
 JoltRigidBodyHandle
 JoltPhysicsWorld::CreateQuadrotor(const JoltRigidBodyDefinition &body,
                                   const QuadrotorParameters &parameters) {
-  if (!IsFinite(body.positionMeters) || !IsValidOrientation(body.orientation) ||
+  if (!IsFiniteVector(body.positionMeters) || !IsValidOrientation(body.orientation) ||
       !std::isfinite(body.friction) || body.friction < 0.0 ||
       !std::isfinite(body.restitution) || body.restitution < 0.0 ||
       body.restitution > 1.0) {
@@ -494,7 +490,7 @@ JoltPhysicsWorld::CreateQuadrotor(const JoltRigidBodyDefinition &body,
   }
   if (!std::all_of(parameters.rotors.begin(), parameters.rotors.end(),
                    [](const RotorDefinition &rotor) {
-                     return IsFinite(rotor.positionMeters);
+                     return IsFiniteVector(rotor.positionMeters);
                    })) {
     throw std::invalid_argument("로터 위치를 확인해 주세요.");
   }
@@ -577,7 +573,7 @@ JoltPhysicsWorld::MotorThrustsNewtons(JoltRigidBodyHandle handle) const {
 
 void JoltPhysicsWorld::ApplyForce(JoltRigidBodyHandle handle,
                                   const glm::dvec3 &forceNewtons) {
-  if (!IsFinite(forceNewtons))
+  if (!IsFiniteVector(forceNewtons))
     throw std::invalid_argument("강체에 가할 힘은 유한한 값이어야 합니다.");
   const auto &body = impl_->GetBody(handle);
   if (body.isStatic)
@@ -588,7 +584,7 @@ void JoltPhysicsWorld::ApplyForce(JoltRigidBodyHandle handle,
 
 void JoltPhysicsWorld::ApplyTorque(JoltRigidBodyHandle handle,
                                    const glm::dvec3 &torqueNewtonMeters) {
-  if (!IsFinite(torqueNewtonMeters))
+  if (!IsFiniteVector(torqueNewtonMeters))
     throw std::invalid_argument("강체에 가할 토크는 유한한 값이어야 합니다.");
   const auto &body = impl_->GetBody(handle);
   if (body.isStatic)
@@ -599,10 +595,10 @@ void JoltPhysicsWorld::ApplyTorque(JoltRigidBodyHandle handle,
 
 void JoltPhysicsWorld::SetState(JoltRigidBodyHandle handle,
                                 const JoltRigidBodyState &state) {
-  if (!IsFinite(state.positionMeters) ||
+  if (!IsFiniteVector(state.positionMeters) ||
       !IsValidOrientation(state.orientation) ||
-      !IsFinite(state.linearVelocityMetersPerSecond) ||
-      !IsFinite(state.angularVelocityRadiansPerSecond)) {
+      !IsFiniteVector(state.linearVelocityMetersPerSecond) ||
+      !IsFiniteVector(state.angularVelocityRadiansPerSecond)) {
     throw std::invalid_argument(
         "강체 상태는 유한한 값과 올바른 자세여야 합니다.");
   }

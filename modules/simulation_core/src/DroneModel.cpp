@@ -1,4 +1,5 @@
 #include "simulation_core/DroneModel.h"
+#include "simulation_core/FiniteVector.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/geometric.hpp>
@@ -13,11 +14,6 @@ namespace dronesim::simulation
 {
 namespace
 {
-bool IsFinite(const glm::dvec3& value) noexcept
-{
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
-
 glm::dvec3 ClampLength(const glm::dvec3& value, double maximumLength) noexcept
 {
     const double length = std::hypot(value.x, value.y, value.z);
@@ -112,7 +108,7 @@ CommandResult DroneModel::Apply(
         {
             return CommandResult::InvalidFlightMode;
         }
-        if (!IsFinite(command.vector))
+        if (!IsFiniteVector(command.vector))
         {
             return CommandResult::InvalidValue;
         }
@@ -129,7 +125,7 @@ CommandResult DroneModel::Apply(
         {
             return CommandResult::InvalidFlightMode;
         }
-        if (!IsFinite(command.vector) || command.vector.z < 0.0)
+        if (!IsFiniteVector(command.vector) || command.vector.z < 0.0)
         {
             return CommandResult::InvalidValue;
         }
@@ -203,9 +199,9 @@ DroneState DroneModel::PrepareInitialState(
         state.motorSpeedsRadiansPerSecond.end(),
         [](double speed) { return std::isfinite(speed) && speed >= 0.0; });
 
-    if (!IsFinite(state.positionMeters)
-        || !IsFinite(state.velocityMetersPerSecond)
-        || !IsFinite(state.angularVelocityRadiansPerSecond)
+    if (!IsFiniteVector(state.positionMeters)
+        || !IsFiniteVector(state.velocityMetersPerSecond)
+        || !IsFiniteVector(state.angularVelocityRadiansPerSecond)
         || !std::isfinite(orientationLength) || orientationLength < 1.0e-12
         || !validMotorSpeeds)
     {
