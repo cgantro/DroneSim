@@ -49,7 +49,7 @@ void ObserverCameraController::Update(
             horizontalDistanceMeters * std::sin(cameraYaw),
             distanceMeters_ * std::sin(orbitPitchRadians_)};
 
-    if (IsInsideBuilding(cameraPositionMeters, buildings))
+    if (flight_planning::ContainsAnyBuildingVolume(buildings, cameraPositionMeters))
     {
         const glm::dvec3 awayFromTarget = glm::normalize(
             cameraPositionMeters - targetPositionMeters);
@@ -57,7 +57,7 @@ void ObserverCameraController::Update(
         {
             const glm::dvec3 candidate = cameraPositionMeters
                 + awayFromTarget * retreatMeters;
-            if (!IsInsideBuilding(candidate, buildings))
+            if (!flight_planning::ContainsAnyBuildingVolume(buildings, candidate))
             {
                 cameraPositionMeters = candidate;
                 break;
@@ -132,14 +132,4 @@ const graphics::Camera& ObserverCameraController::ViewCamera() const noexcept
     return camera_;
 }
 
-bool ObserverCameraController::IsInsideBuilding(
-    const glm::dvec3& positionMeters,
-    const std::vector<flight_planning::BuildingObstacle>& buildings) const
-{
-    return std::any_of(buildings.begin(), buildings.end(),
-        [&positionMeters](const flight_planning::BuildingObstacle& building)
-        {
-            return flight_planning::ContainsBuildingVolume(building, positionMeters);
-        });
-}
 }

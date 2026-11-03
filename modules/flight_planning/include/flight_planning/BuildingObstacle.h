@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <span>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -20,4 +21,9 @@ struct BuildingObstacle
 /** @brief 3차원 위치가 건물 외곽과 높이 범위 안에 있는지 확인한다. */
 [[nodiscard]] bool ContainsBuildingVolume(
     const BuildingObstacle& building, const glm::dvec3& positionMeters) noexcept;
+
+/** @brief 위치가 여러 건물 중 하나의 충돌 부피 안에 있는지 확인한다. */
+[[nodiscard]] bool ContainsAnyBuildingVolume(
+    std::span<const BuildingObstacle> buildings,
+    const glm::dvec3& positionMeters) noexcept;
 }

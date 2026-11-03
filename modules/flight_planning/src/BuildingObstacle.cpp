@@ -22,4 +22,15 @@ bool ContainsBuildingVolume(
         && geometry::ContainsPointInPolygon(
             {positionMeters.x, positionMeters.y}, building.outlineMeters);
 }
+
+bool ContainsAnyBuildingVolume(
+    std::span<const BuildingObstacle> buildings,
+    const glm::dvec3& positionMeters) noexcept
+{
+    return std::any_of(buildings.begin(), buildings.end(),
+        [&positionMeters](const BuildingObstacle& building)
+        {
+            return ContainsBuildingVolume(building, positionMeters);
+        });
+}
 }

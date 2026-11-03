@@ -3,9 +3,6 @@
 #include "graphics/CoordinateTransform.h"
 #include "simulation_core/EoCameraModel.h"
 
-#include <glm/geometric.hpp>
-
-#include <algorithm>
 #include <cmath>
 
 namespace dronesim::simulator
@@ -38,23 +35,14 @@ void WebCameraRig::UpdateObserver(
         - forwardMeters * followDistanceMeters
         + glm::dvec3{0.0, 0.0, followHeightMeters};
 
-    const auto isInsideBuilding = [&buildings](const glm::dvec3& position)
-    {
-        return std::any_of(buildings.begin(), buildings.end(),
-            [&position](const flight_planning::BuildingObstacle& building)
-            {
-                return flight_planning::ContainsBuildingVolume(building, position);
-            });
-    };
-
     // 기본 추적 위치가 건물 안이면 같은 높이에서 뒤로 물러나 시야를 확보한다.
-    if (isInsideBuilding(observerPositionMeters))
+    if (flight_planning::ContainsAnyBuildingVolume(buildings, observerPositionMeters))
     {
         for (double retreatMeters = 1.0; retreatMeters <= 24.0; retreatMeters += 1.0)
         {
             const glm::dvec3 candidate = observerPositionMeters
                 - forwardMeters * retreatMeters;
-            if (!isInsideBuilding(candidate))
+            if (!flight_planning::ContainsAnyBuildingVolume(buildings, candidate))
             {
                 observerPositionMeters = candidate;
                 break;

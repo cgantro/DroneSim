@@ -35,10 +35,6 @@ public:
     [[nodiscard]] const graphics::Camera& ViewCamera() const noexcept;
 
 private:
-    [[nodiscard]] bool IsInsideBuilding(
-        const glm::dvec3& positionMeters,
-        const std::vector<flight_planning::BuildingObstacle>& buildings) const;
-
     graphics::Camera camera_;
     double distanceMeters_;
     double orbitYawRadians_ = 0.0;
