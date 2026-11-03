@@ -24,6 +24,7 @@ template <typename T>
 bool ReadLittleEndian(std::ifstream& input, T& value)
 {
     static_assert(std::is_trivially_copyable_v<T>);
+    // 파일은 항상 리틀엔디언으로 저장하므로, 빅엔디언 CPU에서는 읽은 바이트 순서를 뒤집는다.
     std::array<unsigned char, sizeof(T)> bytes{};
     if (!input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
         return false;
@@ -37,6 +38,7 @@ template <typename T>
 void WriteLittleEndian(std::ofstream& output, T value)
 {
     static_assert(std::is_trivially_copyable_v<T>);
+    // 호스트 CPU의 바이트 순서와 무관하게 파일 형식을 리틀엔디언으로 고정한다.
     std::array<unsigned char, sizeof(T)> bytes{};
     std::memcpy(bytes.data(), &value, sizeof(T));
     if constexpr (std::endian::native == std::endian::big)
@@ -77,6 +79,8 @@ TerrainCellCoordinates FindTerrainCell(
             + std::to_string(positionMeters.x) + ", "
             + std::to_string(positionMeters.y) + ") m");
 
+    // 동쪽으로 갈수록 열 번호가 커지고, 남쪽으로 갈수록 행 번호가 커진다.
+    // 따라서 열은 서쪽 경계에서, 행은 북쪽 경계에서부터 거리를 재어 찾는다.
     const double column = (positionMeters.x + terrain.HalfWidthMeters())
         / terrain.spacingXMeters;
     const double row = (terrain.HalfDepthMeters() - positionMeters.y)
@@ -300,12 +304,14 @@ float TerrainGrid::HeightAtLocalMeters(const glm::dvec2& positionMeters) const
     const auto cell = FindTerrainCell(*this, positionMeters);
     const std::uint32_t eastColumn = cell.westColumn + 1U;
     const std::uint32_t southRow = cell.northRow + 1U;
+    // 먼저 북쪽·남쪽 변에서 동서 방향으로 보간하고, 두 값을 다시 남북 방향으로 섞는다.
     const float north = std::lerp(
         HeightAt(cell.northRow, cell.westColumn), HeightAt(cell.northRow, eastColumn),
         cell.eastFraction);
     const float south = std::lerp(
         HeightAt(southRow, cell.westColumn), HeightAt(southRow, eastColumn),
         cell.eastFraction);
+    // 격자에는 기준 고도와의 차이를 저장하므로, 보간이 끝난 뒤 기준 고도를 더한다.
     return referenceElevationMeters + std::lerp(north, south, cell.southFraction);
 }
 
