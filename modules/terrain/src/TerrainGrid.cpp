@@ -53,6 +53,15 @@ void RequireFinitePositive(float value, const char* label)
         throw std::invalid_argument(std::string("지형 ") + label + " 값은 0보다 커야 합니다.");
 }
 
+/** @brief 저장하거나 읽을 지형의 크기·격자 간격·기준 고도가 쓸 수 있는지 확인한다. */
+bool HasValidMetadata(const TerrainGrid& terrain) noexcept
+{
+    return terrain.sampleCount >= 3U
+        && std::isfinite(terrain.spacingXMeters) && terrain.spacingXMeters > 0.0F
+        && std::isfinite(terrain.spacingYMeters) && terrain.spacingYMeters > 0.0F
+        && std::isfinite(terrain.referenceElevationMeters);
+}
+
 struct TerrainCellCoordinates
 {
     std::uint32_t northRow;
@@ -119,10 +128,11 @@ TerrainGrid TerrainGrid::Load(const std::filesystem::path& path)
         throw std::runtime_error("지형 자료의 형식이나 머리 정보가 올바르지 않습니다.");
     }
 
-    RequireFinitePositive(grid.spacingXMeters, "동서 간격");
-    RequireFinitePositive(grid.spacingYMeters, "남북 간격");
-    if (!std::isfinite(grid.referenceElevationMeters) || grid.sampleCount < 3U)
+    if (!HasValidMetadata(grid))
     {
+        // 잘못된 격자 간격은 이전과 같은 구체적인 오류로 알려준다.
+        RequireFinitePositive(grid.spacingXMeters, "동서 간격");
+        RequireFinitePositive(grid.spacingYMeters, "남북 간격");
         throw std::runtime_error("지형 크기와 기준 높이를 확인해 주세요.");
     }
 
@@ -237,10 +247,7 @@ TerrainGrid TerrainGrid::LoadAsciiGrid(
 void TerrainGrid::Save(const std::filesystem::path& path) const
 {
     const std::size_t expectedSamples = static_cast<std::size_t>(sampleCount) * sampleCount;
-    if (sampleCount < 3U || heightOffsetsMeters.size() != expectedSamples
-        || !std::isfinite(spacingXMeters) || !(spacingXMeters > 0.0F)
-        || !std::isfinite(spacingYMeters) || !(spacingYMeters > 0.0F)
-        || !std::isfinite(referenceElevationMeters)
+    if (!HasValidMetadata(*this) || heightOffsetsMeters.size() != expectedSamples
         || !std::all_of(heightOffsetsMeters.begin(), heightOffsetsMeters.end(),
             [](float height) { return std::isfinite(height); }))
     {
