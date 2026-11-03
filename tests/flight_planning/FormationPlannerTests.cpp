@@ -71,6 +71,14 @@ TEST(FormationPlannerTests, PlacesFourDronesBehindLeaderAndRotatesWithRoute)
     EXPECT_NEAR(offsets[2].y, -8.0, 1.0e-12);
     EXPECT_NEAR(offsets[3].x, 0.0, 1.0e-12);
     EXPECT_NEAR(offsets[3].y, -16.0, 1.0e-12);
+
+    const FormationRoutePlan route{
+        .leaderStartMeters = {0.0, 0.0, 0.0},
+        .leaderWaypointsMeters = {
+            {0.0, 2.0, 0.0}, {0.0, 5.0, 0.0}, {3.0, 5.0, 0.0}}};
+    EXPECT_NEAR(route.HeadingAtWaypoint(0U, -1.0), glm::half_pi<double>(), 1.0e-12);
+    EXPECT_NEAR(route.HeadingAtWaypoint(2U, -1.0), 0.0, 1.0e-12);
+    EXPECT_DOUBLE_EQ(route.HeadingAtWaypoint(3U, 0.75), 0.75);
 }
 
 TEST(FormationPlannerTests, RejectsNarrowRouteInsteadOfChangingFormation)

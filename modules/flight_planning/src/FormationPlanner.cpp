@@ -48,6 +48,42 @@ double RequiredClearance(
 }
 }
 
+double FormationRoutePlan::HeadingAtWaypoint(
+    std::size_t waypointIndex, double fallbackHeadingRadians) const noexcept
+{
+    if (leaderWaypointsMeters.empty() || waypointIndex >= leaderWaypointsMeters.size())
+        return fallbackHeadingRadians;
+
+    glm::dvec2 direction{0.0};
+    if (waypointIndex + 1U < leaderWaypointsMeters.size())
+    {
+        direction = {
+            leaderWaypointsMeters[waypointIndex + 1U].x
+                - leaderWaypointsMeters[waypointIndex].x,
+            leaderWaypointsMeters[waypointIndex + 1U].y
+                - leaderWaypointsMeters[waypointIndex].y};
+    }
+    else if (waypointIndex > 0U)
+    {
+        direction = {
+            leaderWaypointsMeters[waypointIndex].x
+                - leaderWaypointsMeters[waypointIndex - 1U].x,
+            leaderWaypointsMeters[waypointIndex].y
+                - leaderWaypointsMeters[waypointIndex - 1U].y};
+    }
+    else
+    {
+        direction = {
+            leaderWaypointsMeters.front().x - leaderStartMeters.x,
+            leaderWaypointsMeters.front().y - leaderStartMeters.y};
+    }
+
+    // 정지점이나 중복 경유점에서는 atan2(0, 0) 대신 기체의 현재 방향을 유지한다.
+    return glm::length(direction) > 1.0e-6
+        ? std::atan2(direction.y, direction.x)
+        : fallbackHeadingRadians;
+}
+
 std::vector<glm::dvec2> FormationOffsets(
     std::size_t droneCount, double spacingMeters, double headingRadians)
 {

@@ -18,6 +18,10 @@ struct FormationRoutePlan
     std::vector<glm::dvec3> leaderWaypointsMeters;
     double requiredClearanceMeters = 0.0;
     double spacingMeters = 8.0;
+
+    /** @brief 지정한 경유점에서의 진행 방향을 구한다. 경로가 멈췄으면 현재 방향을 쓴다. */
+    [[nodiscard]] double HeadingAtWaypoint(
+        std::size_t waypointIndex, double fallbackHeadingRadians) const noexcept;
 };
 
 /**

@@ -1119,18 +1119,8 @@ void DroneSimApp::AdvanceFormationTransit()
     fleetMission_.FormationTransit().AdvanceWaypointIfReached(leader.positionMeters, 3.0);
 
     const std::size_t nextIndex = fleetMission_.FormationTransit().WaypointIndex();
-    glm::dvec2 direction{0.0, 0.0};
-    if (nextIndex + 1U < route.size())
-        direction = {route[nextIndex + 1U].x - route[nextIndex].x,
-            route[nextIndex + 1U].y - route[nextIndex].y};
-    else if (nextIndex > 0U)
-        direction = {route[nextIndex].x - route[nextIndex - 1U].x,
-            route[nextIndex].y - route[nextIndex - 1U].y};
-    else if (!route.empty())
-        direction = {route[nextIndex].x - formationRoute.leaderStartMeters.x,
-            route[nextIndex].y - formationRoute.leaderStartMeters.y};
-    const double heading = glm::length(direction) > 1.0e-6
-        ? std::atan2(direction.y, direction.x) : leader.yawRadians;
+    const double heading = formationRoute.HeadingAtWaypoint(
+        nextIndex, leader.yawRadians);
     const auto offsets = FormationOffsets(
         droneIds.size(), formationRoute.spacingMeters, heading);
 
