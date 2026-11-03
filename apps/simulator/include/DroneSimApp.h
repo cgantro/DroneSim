@@ -4,6 +4,7 @@
 #include "manual_control/GamepadController.h"
 #include "gui/SimulatorHud.h"
 #include "communication/VirtualMeshNetwork.h"
+#include "communication/DroneSocketTransport.h"
 #include "graphics/Material.h"
 #include "manual_control/GamepadCommandMapper.h"
 #include "simulation_core/EoCameraModel.h"
