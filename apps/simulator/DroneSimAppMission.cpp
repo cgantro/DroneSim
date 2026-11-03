@@ -13,6 +13,11 @@ namespace dronesim::simulator
 {
 namespace
 {
+struct PlannedFleetRoute
+{
+    dronesim::simulation::DroneId droneId = 0;
+    std::vector<glm::dvec3> waypointsMeters;
+};
 }
 
 bool DroneSimApp::FleetIsReadyForMission() const
@@ -198,16 +203,15 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
         return false;
     const dronesim::mission::FleetMissionPlanner planner{
         *routeEnvironment_, cameraTransitAltitudeMeters_};
-    std::vector<std::vector<glm::dvec3>> returnRoutes;
-    returnRoutes.reserve(droneIds.size());
+    // 경로와 대상 드론을 한 항목으로 묶어, 배정 순서가 달라져도 서로 어긋나지 않게 한다.
+    std::vector<PlannedFleetRoute> returnPlans;
+    returnPlans.reserve(droneIds.size());
     for (const auto droneId : droneIds)
     {
         const auto& mission = fleetMission_.Assignment(droneId);
         if (mission.IsLowBatteryReturnComplete())
-        {
-            returnRoutes.emplace_back();
             continue;
-        }
+
         glm::dvec3 currentPosition{0.0};
         FlightMode mode = FlightMode::Grounded;
         if (takeOffDrones || droneId == leaderId)
@@ -234,34 +238,30 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
             currentPosition, mission.StartPositionMeters());
         if (!route)
             return false;
-        returnRoutes.emplace_back(route->begin(), route->end());
+        returnPlans.push_back({droneId, std::move(*route)});
     }
 
     if (takeOffDrones)
     {
         std::vector<DroneId> dronesToTakeOff;
-        dronesToTakeOff.reserve(droneIds.size());
-        for (const DroneId droneId : droneIds)
+        dronesToTakeOff.reserve(returnPlans.size());
+        for (const PlannedFleetRoute& plan : returnPlans)
         {
-            const auto& mission = fleetMission_.Assignment(droneId);
-            if (mission.IsLowBatteryReturnComplete())
-                continue;
-            if (simulation_.State(droneId).mode == FlightMode::Grounded)
-                dronesToTakeOff.push_back(droneId);
+            if (simulation_.State(plan.droneId).mode == FlightMode::Grounded)
+                dronesToTakeOff.push_back(plan.droneId);
         }
         if (!dronesim::mission::TakeOffFleetDrones(simulation_, dronesToTakeOff))
             return false;
     }
 
-    for (std::size_t index = 0; index < droneIds.size(); ++index)
+    // 경로를 모두 구한 뒤에만 임무 상태와 드론의 경로를 바꾼다.
+    for (PlannedFleetRoute& plan : returnPlans)
     {
-        auto& mission = fleetMission_.Assignment(droneIds[index]);
-        if (mission.IsLowBatteryReturnComplete())
-            continue;
+        auto& mission = fleetMission_.Assignment(plan.droneId);
         mission.BeginLeg(dronesim::mission::FleetMissionLeg::Returning);
-        if (!SendFleetRouteAssignment(droneIds[index],
+        if (!SendFleetRouteAssignment(plan.droneId,
                 dronesim::mission::FleetMissionLeg::Returning, mission.TargetIndex(),
-                std::move(returnRoutes[index])))
+                std::move(plan.waypointsMeters)))
             return false;
     }
     externalControl_ = true;
@@ -310,8 +310,8 @@ bool DroneSimApp::StartFleetRally()
     centerMeters.z += 12.0;
     const auto offsets = FormationOffsets(rallyDroneIds.size(), 3.0, 0.0);
 
-    std::vector<std::vector<glm::dvec3>> rallyRoutes;
-    rallyRoutes.reserve(rallyDroneIds.size());
+    std::vector<PlannedFleetRoute> rallyPlans;
+    rallyPlans.reserve(rallyDroneIds.size());
     for (std::size_t index = 0; index < rallyDroneIds.size(); ++index)
     {
         const DroneId droneId = rallyDroneIds[index];
@@ -343,20 +343,20 @@ bool DroneSimApp::StartFleetRally()
         const auto route = planner.PlanTransitRoute(currentPosition, rallyTarget);
         if (!route)
             return false;
-        rallyRoutes.emplace_back(route->begin(), route->end());
+        rallyPlans.push_back({droneId, std::move(*route)});
     }
 
+    // 먼저 모든 이동 경로를 확인해 일부 드론만 출발하는 상황을 막는다.
     if (!dronesim::mission::TakeOffFleetDrones(simulation_, rallyDroneIds))
         return false;
 
-    for (std::size_t index = 0; index < rallyDroneIds.size(); ++index)
+    for (PlannedFleetRoute& plan : rallyPlans)
     {
-        const DroneId droneId = rallyDroneIds[index];
-        auto& mission = fleetMission_.Assignment(droneId);
+        auto& mission = fleetMission_.Assignment(plan.droneId);
         mission.BeginLeg(dronesim::mission::FleetMissionLeg::Regrouping);
-        if (!SendFleetRouteAssignment(droneId,
+        if (!SendFleetRouteAssignment(plan.droneId,
                 dronesim::mission::FleetMissionLeg::Regrouping, mission.TargetIndex(),
-                std::move(rallyRoutes[index])))
+                std::move(plan.waypointsMeters)))
             return false;
     }
     fleetMission_.CompleteMission().SetStage(
