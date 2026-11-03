@@ -42,12 +42,9 @@ void FleetRouteDeliveryState::Queue(
     lastTransmissionTick_ = currentTick;
 }
 
-void FleetRouteDeliveryState::RecordApplied(
-    std::uint32_t sequence,
-    std::uint64_t currentTick) noexcept
+void FleetRouteDeliveryState::RecordApplied(std::uint32_t sequence) noexcept
 {
     appliedSequence_ = sequence;
-    sentAtTick_ = currentTick;
 }
 
 bool FleetRouteDeliveryState::Acknowledge(std::uint32_t sequence) noexcept

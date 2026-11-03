@@ -785,7 +785,7 @@ void DroneSimApp::ApplyFleetRouteAssignment(
 
     mission->second.BeginLeg(leg);
     mission->second.ApplyAssignment(targetIndex, assignmentVersion);
-    mission->second.RouteDelivery().RecordApplied(sequence, simulation_.TickCount());
+    mission->second.RouteDelivery().RecordApplied(sequence);
     mission->second.ReceiveRoute(std::move(routeWaypointsMeters));
 
     auto mode = simulation_.State(droneId).mode;

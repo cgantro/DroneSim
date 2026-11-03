@@ -650,7 +650,8 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_TRUE(routeDelivery.HasPendingTransmission());
     EXPECT_EQ(routeDelivery.PendingPayload(), "경로 내용");
     EXPECT_FALSE(routeDelivery.Acknowledge(1U));
-    routeDelivery.RecordApplied(1U, 10U);
+    routeDelivery.RecordApplied(1U);
+    EXPECT_EQ(routeDelivery.SentAtTick(), 10U);
     EXPECT_TRUE(routeDelivery.Acknowledge(1U));
     EXPECT_FALSE(routeDelivery.HasPendingTransmission());
 

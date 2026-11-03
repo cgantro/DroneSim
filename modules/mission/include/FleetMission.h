@@ -66,8 +66,8 @@ public:
     void Queue(
         std::uint32_t sequence, std::string payload, std::uint64_t currentTick);
 
-    /** @brief 드론에 적용된 순번과 경로 적용 시각을 기록한다. */
-    void RecordApplied(std::uint32_t sequence, std::uint64_t currentTick) noexcept;
+    /** @brief 드론에 실제 적용된 경로 순번을 기록한다. */
+    void RecordApplied(std::uint32_t sequence) noexcept;
 
     /** @brief 현재 경로를 확인한 응답이면 대기 메시지를 비운다. */
     [[nodiscard]] bool Acknowledge(std::uint32_t sequence) noexcept;
