@@ -26,8 +26,9 @@ PredictedApproach PredictClosestApproach(
         - firstVelocityMetersPerSecond;
     const double relativeSpeedSquared = glm::dot(relativeVelocity, relativeVelocity);
 
-    // 상대 위치를 상대 속도에 투영하면 두 경로가 가장 가까워지는 시간을 구할 수 있다.
-    // 계산 결과는 현재부터 예측 범위 안으로 잘라낸다.
+    // 상대 위치를 r, 상대 속도를 v라 두면 두 기체 사이 거리의 제곱은 |r + vt|²이다.
+    // 이를 가장 작게 만드는 시각은 -dot(r, v) / dot(v, v)이며,
+    // 직선 예측 범위 밖의 답은 현재 시각이나 예측 끝 시각으로 제한한다.
     const double closestTimeSeconds = relativeSpeedSquared > 1.0e-9
         ? glm::clamp(-glm::dot(relativePosition, relativeVelocity)
             / relativeSpeedSquared, 0.0, predictionHorizonSeconds)
