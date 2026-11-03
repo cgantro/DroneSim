@@ -25,6 +25,26 @@ namespace dronesim::graphics
 namespace
 {
 
+/** @brief RGB 이미지의 픽셀 수와 바이트 수를 넘침 없이 계산한다. */
+bool TryGetRgbPixelByteCount(
+    std::uint32_t width, std::uint32_t height, std::size_t& byteCount) noexcept
+{
+    constexpr std::size_t bytesPerPixel = 3U;
+    constexpr std::size_t maximumSize = std::numeric_limits<std::size_t>::max();
+    const std::size_t widthSize = width;
+    const std::size_t heightSize = height;
+    if (width == 0U || height == 0U
+        || widthSize > maximumSize / heightSize)
+        return false;
+
+    const std::size_t pixelCount = widthSize * heightSize;
+    if (pixelCount > maximumSize / bytesPerPixel)
+        return false;
+
+    byteCount = pixelCount * bytesPerPixel;
+    return true;
+}
+
 /**
  * @brief 비스듬히 보이는 텍스처의 흐려짐을 줄입니다.
  * @details 지원하지 않는 그래픽 장치에서는 기본 필터 설정을 그대로 씁니다.
@@ -70,19 +90,17 @@ void SetAnisotropicFilteringIfAvailable()
 GLuint UploadRgbImage(std::uint32_t width, std::uint32_t height,
     const std::uint8_t* pixels, std::size_t pixelByteCount, bool repeat)
 {
-    constexpr std::size_t bytesPerPixel = 3U;
-    const std::size_t widthSize = width;
-    const std::size_t heightSize = height;
-    const std::size_t maximumSize = std::numeric_limits<std::size_t>::max();
-    if (pixels == nullptr || width == 0U || height == 0U
+    std::size_t expectedPixelByteCount = 0U;
+    if (pixels == nullptr
         || width > static_cast<std::uint32_t>(std::numeric_limits<GLsizei>::max())
         || height > static_cast<std::uint32_t>(std::numeric_limits<GLsizei>::max())
-        || widthSize > maximumSize / heightSize
-        || widthSize * heightSize > maximumSize / bytesPerPixel
-        || widthSize * heightSize * bytesPerPixel != pixelByteCount)
+        || !TryGetRgbPixelByteCount(width, height, expectedPixelByteCount)
+        || expectedPixelByteCount != pixelByteCount)
         throw std::invalid_argument("GPU 이미지 크기와 RGB 자료가 맞지 않습니다.");
 #ifdef __EMSCRIPTEN__
-    if (widthSize * heightSize > maximumSize / 4U)
+    const std::size_t pixelCount = expectedPixelByteCount / 3U;
+    const std::size_t maximumSize = std::numeric_limits<std::size_t>::max();
+    if (pixelCount > maximumSize / 4U)
         throw std::invalid_argument("GPU 이미지 크기가 너무 큽니다.");
 #endif
 
@@ -98,7 +116,6 @@ GLuint UploadRgbImage(std::uint32_t width, std::uint32_t height,
 
     // WebGL에서 밉맵을 지원하는 sRGB RGBA 형식에 맞춰 알파를 덧붙인다.
 #ifdef __EMSCRIPTEN__
-    const std::size_t pixelCount = widthSize * heightSize;
     std::vector<std::uint8_t> rgbaPixels(pixelCount * 4U);
     for (std::size_t index = 0; index < pixelCount; ++index)
     {
@@ -146,13 +163,10 @@ std::unique_ptr<Texture2D> Texture2D::LoadPpm(
     if (separator == '\r' && image.peek() == '\n')
         image.get();
 
-    constexpr std::size_t bytesPerPixel = 3U;
-    const std::size_t maximumDimension = std::numeric_limits<std::size_t>::max();
-    if (static_cast<std::size_t>(width) > maximumDimension / height
-        || static_cast<std::size_t>(width) * height > maximumDimension / bytesPerPixel)
+    std::size_t pixelByteCount = 0U;
+    if (!TryGetRgbPixelByteCount(width, height, pixelByteCount))
         throw std::runtime_error("PPM 이미지 크기가 너무 큽니다: " + path.string());
 
-    const std::size_t pixelByteCount = static_cast<std::size_t>(width) * height * bytesPerPixel;
     if (pixelByteCount > static_cast<std::size_t>(std::numeric_limits<std::streamsize>::max()))
         throw std::runtime_error("PPM 이미지 크기가 너무 큽니다: " + path.string());
     std::vector<std::uint8_t> pixels(pixelByteCount);
@@ -191,15 +205,10 @@ std::unique_ptr<Texture2D> Texture2D::LoadFromFile(
 
     const auto imageWidth = static_cast<std::uint32_t>(width);
     const auto imageHeight = static_cast<std::uint32_t>(height);
-    constexpr std::size_t bytesPerPixel = 3U;
-    const std::size_t widthSize = imageWidth;
-    const std::size_t heightSize = imageHeight;
-    const std::size_t maximumSize = std::numeric_limits<std::size_t>::max();
-    if (widthSize > maximumSize / heightSize
-        || widthSize * heightSize > maximumSize / bytesPerPixel)
+    std::size_t pixelByteCount = 0U;
+    if (!TryGetRgbPixelByteCount(imageWidth, imageHeight, pixelByteCount))
         throw std::runtime_error("이미지 크기가 너무 큽니다: " + path.string());
 
-    const std::size_t pixelByteCount = widthSize * heightSize * bytesPerPixel;
     return std::unique_ptr<Texture2D>(new Texture2D(
         imageWidth, imageHeight, pixels.get(), pixelByteCount, repeat));
 }
@@ -226,16 +235,12 @@ std::unique_ptr<Texture2D> Texture2D::LoadFromMemory(
 
     const auto imageWidth = static_cast<std::uint32_t>(width);
     const auto imageHeight = static_cast<std::uint32_t>(height);
-    constexpr std::size_t bytesPerPixel = 3U;
-    const std::size_t widthSize = imageWidth;
-    const std::size_t heightSize = imageHeight;
-    const std::size_t maximumSize = std::numeric_limits<std::size_t>::max();
-    if (widthSize > maximumSize / heightSize
-        || widthSize * heightSize > maximumSize / bytesPerPixel)
+    std::size_t pixelByteCount = 0U;
+    if (!TryGetRgbPixelByteCount(imageWidth, imageHeight, pixelByteCount))
         throw std::runtime_error("이미지 크기가 너무 큽니다.");
 
     return std::unique_ptr<Texture2D>(new Texture2D(imageWidth, imageHeight,
-        pixels.get(), widthSize * heightSize * bytesPerPixel, repeat));
+        pixels.get(), pixelByteCount, repeat));
 }
 
 Texture2D::Texture2D(std::uint32_t width, std::uint32_t height,
