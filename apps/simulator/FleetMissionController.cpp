@@ -37,6 +37,27 @@ struct PlannedFleetRoute
         : simulation::DroneModel::CanAcceptInFlightCommands(observation->mode);
     return canStart ? observation : std::nullopt;
 }
+
+/** @brief 계획한 경로를 드론 임무에 적용하고 통신망으로 전달한다.
+ * @details 복귀와 재집결은 경로 계산 방식은 다르지만, 경로를 전달할 때는
+ *          임무 구간을 먼저 바꾸고 대상·경유점을 같은 메시지로 보내야 한다.
+ */
+[[nodiscard]] bool DeliverPlannedRoutes(
+    std::vector<PlannedFleetRoute>& plans,
+    mission::FleetMissionLeg leg,
+    mission::FleetMissionState& fleetMission,
+    FleetMissionCommunication& fleetCommunication)
+{
+    for (PlannedFleetRoute& plan : plans)
+    {
+        auto& assignment = fleetMission.Assignment(plan.droneId);
+        assignment.BeginLeg(leg);
+        if (!fleetCommunication.SendRouteAssignment(plan.droneId, leg,
+                assignment.TargetIndex(), std::move(plan.waypointsMeters)))
+            return false;
+    }
+    return true;
+}
 }
 
 FleetMissionController::FleetMissionController(
@@ -305,16 +326,9 @@ bool FleetMissionController::StartFleetReturn(
     }
 
     // 경로를 모두 구한 뒤에만 임무 상태와 드론의 경로를 바꾼다.
-    for (PlannedFleetRoute& plan : returnPlans)
-    {
-        auto& mission = fleetMission_.Assignment(plan.droneId);
-        mission.BeginLeg(dronesim::mission::FleetMissionLeg::Returning);
-        if (!fleetCommunication_.SendRouteAssignment(plan.droneId,
-                dronesim::mission::FleetMissionLeg::Returning, mission.TargetIndex(),
-                std::move(plan.waypointsMeters)))
-            return false;
-    }
-    return true;
+    return DeliverPlannedRoutes(returnPlans,
+        dronesim::mission::FleetMissionLeg::Returning,
+        fleetMission_, fleetCommunication_);
 }
 
 bool FleetMissionController::StartFleetRally()
@@ -387,15 +401,10 @@ bool FleetMissionController::StartFleetRally()
     if (!dronesim::mission::TakeOffFleetDrones(simulation_, rallyDroneIds))
         return false;
 
-    for (PlannedFleetRoute& plan : rallyPlans)
-    {
-        auto& mission = fleetMission_.Assignment(plan.droneId);
-        mission.BeginLeg(dronesim::mission::FleetMissionLeg::Regrouping);
-        if (!fleetCommunication_.SendRouteAssignment(plan.droneId,
-                dronesim::mission::FleetMissionLeg::Regrouping, mission.TargetIndex(),
-                std::move(plan.waypointsMeters)))
-            return false;
-    }
+    if (!DeliverPlannedRoutes(rallyPlans,
+            dronesim::mission::FleetMissionLeg::Regrouping,
+            fleetMission_, fleetCommunication_))
+        return false;
     fleetMission_.CompleteMission().SetStage(
         dronesim::mission::CompleteFleetMissionState::Stage::Regrouping);
     return true;
