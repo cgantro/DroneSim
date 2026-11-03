@@ -148,6 +148,8 @@ private:
   std::array<JPH::BroadPhaseLayer, objectLayerCount> layers_;
 };
 
+// Jolt는 먼저 broad phase에서 충돌 후보를 거른 뒤, 아래 필터에서 실제 층 조합을 확인한다.
+// 고정물끼리는 움직이지 않으므로 후보에서 빼고, 움직이는 물체는 고정물과 움직이는 물체 모두와 비교한다.
 class ObjectVsBroadPhaseFilter final
     : public JPH::ObjectVsBroadPhaseLayerFilter {
 public:
@@ -159,6 +161,7 @@ public:
   }
 };
 
+// broad phase를 통과한 뒤에도 고정물끼리의 충돌은 만들지 않는다.
 class ObjectLayerPairFilter final : public JPH::ObjectLayerPairFilter {
 public:
   bool ShouldCollide(JPH::ObjectLayer first,
@@ -201,6 +204,7 @@ JPH::TriangleList MakePrismTriangles(const std::vector<glm::dvec2> &outline,
                                      double bottomMeters, double topMeters) {
   JPH::TriangleList triangles;
   const auto caps = geometry::TriangulateSimplePolygon(outline);
+  // 외곽선의 회전 방향에 따라 꼭짓점 순서를 뒤집어, 윗면·아랫면의 법선이 바깥을 향하게 한다.
   const bool counterClockwise = geometry::SignedArea(outline) > 0.0;
   for (const auto &cap : caps) {
     const auto [a, b, c] = cap;
