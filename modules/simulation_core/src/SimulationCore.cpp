@@ -115,13 +115,6 @@ public:
         return ids;
     }
 
-    template <typename Callback>
-    void ForEach(Callback&& callback)
-    {
-        for (auto& [id, drone] : drones_)
-            callback(id, drone);
-    }
-
 private:
     [[noreturn]] static void ThrowMissingDrone(DroneId id)
     {
@@ -364,12 +357,12 @@ struct SimulationCore::EcsStorage
         physics.StepFixed(
             measurePhysicsStepDuration ? &lastPhysicsStepDurationMicroseconds : nullptr);
 
-        droneRegistry.ForEach([this](DroneId, flecs::entity& drone)
+        // 물리 객체가 연결된 상태·제어 컴포넌트만 Flecs 쿼리로 다시 동기화한다.
+        world.each([this](DroneState& state,
+            DroneControlState& control, const PhysicsBody& body)
         {
             SynchronizeRigidBody(
-                drone.get_mut<DroneState>(),
-                drone.get_mut<DroneControlState>(),
-                drone.get<PhysicsBody>().handle);
+                state, control, body.handle);
         });
     }
 };
