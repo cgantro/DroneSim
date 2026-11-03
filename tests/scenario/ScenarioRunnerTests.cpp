@@ -217,6 +217,15 @@ void Verify_ScenarioRunner_ReplaysSixDofStateAndRotorThrust()
     EXPECT_THROW(static_cast<void>(RunScenario(kinematicRotorInput)),
         std::invalid_argument);
 
+    constexpr std::string_view invalidRotorThrustRatio = R"json(
+    {"version":1,"ticks":1,
+     "drones":[{"name":"x500","initial_position_meters":[0,0,2]}],
+     "commands":[{"tick":0,"type":"set_rotor_thrusts",
+       "normalized_thrust":[0.5,0.5,1.01,0.5]}]}
+    )json";
+    EXPECT_THROW(static_cast<void>(RunScenario(invalidRotorThrustRatio)),
+        std::invalid_argument);
+
     constexpr std::string_view invalidInitialMotorSpeeds = R"json(
     {"version":1,"ticks":1,
      "drones":[{"name":"x500","initial_position_meters":[0,0,2],

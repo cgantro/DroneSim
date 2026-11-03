@@ -189,15 +189,13 @@ DroneCommand ReadCommand(const Json& value)
         const Json& values = Required(value, "normalized_thrust");
         if (!values.is_array() || values.size() != 4)
             throw std::invalid_argument("normalized_thrust에는 로터별 값 4개가 필요합니다.");
+        // JSON 배열의 형태와 숫자만 변환한다. 0~1 허용 범위는 검증 단계에서 확인한다.
         DroneCommand command;
         command.kind = DroneCommand::Kind::SetRotorThrusts;
         for (std::size_t index = 0; index < command.rotorThrustRatios.size(); ++index)
         {
             command.rotorThrustRatios[index] = ReadFiniteNumber(
                 values[index], "normalized_thrust");
-            if (command.rotorThrustRatios[index] < 0.0
-                || command.rotorThrustRatios[index] > 1.0)
-                throw std::invalid_argument("normalized_thrust 값은 0부터 1 사이여야 합니다.");
         }
         return command;
     }
