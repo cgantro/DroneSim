@@ -28,36 +28,36 @@ void FleetDroneMissionExecutor::Advance()
         auto assignment = missionState_.FindAssignment(droneId);
         if (assignment == missionState_.AssignmentsEnd())
             continue;
-        auto& mission = assignment->second;
-        if (TryStartLowBatteryReturn(droneId, mission))
+        auto& assignmentState = assignment->second;
+        if (HandleLowBatteryReturn(droneId, assignmentState))
             continue;
 
-        if (mission.IsLegFinished())
+        if (assignmentState.IsLegFinished())
             continue;
 
-        if (!mission.HasReceivedRoute())
+        if (!assignmentState.HasReceivedRoute())
         {
             // 다른 드론의 경로 확인 응답을 기다리느라 이 드론까지 멈추지 않도록 만료만 기록한다.
-            if (simulation_.TickCount() >= mission.RouteDelivery().SentAtTick()
+            if (simulation_.TickCount() >= assignmentState.RouteDelivery().SentAtTick()
                     + routeDeliveryTimeoutTicks)
-                mission.UpdateStatus(dronesim::mission::FleetDroneStatus::RouteFailed);
+                assignmentState.UpdateStatus(dronesim::mission::FleetDroneStatus::RouteFailed);
             continue;
         }
 
         const auto& state = simulation_.State(droneId);
         if (state.mode == FlightMode::Grounded)
         {
-            UpdateGroundedMissionStatus(droneId, mission);
+            UpdateGroundedMissionStatus(droneId, assignmentState);
             continue;
         }
         if (state.mode == FlightMode::TakingOff || state.mode == FlightMode::Landing)
             continue;
 
-        AdvanceRoute(droneId, mission);
+        AdvanceRoute(droneId, assignmentState);
     }
 }
 
-bool FleetDroneMissionExecutor::TryStartLowBatteryReturn(
+bool FleetDroneMissionExecutor::HandleLowBatteryReturn(
     simulation::DroneId droneId,
     mission::FleetReconnaissanceState& assignment)
 {

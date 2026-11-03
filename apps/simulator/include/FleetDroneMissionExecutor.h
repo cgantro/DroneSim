@@ -24,8 +24,8 @@ public:
     void Advance();
 
 private:
-    /** @brief 배터리 복귀를 시작했다면 일반 임무 경로 처리를 이번 Tick에 건너뛴다. */
-    [[nodiscard]] bool TryStartLowBatteryReturn(
+    /** @brief 배터리 복귀가 필요하면 처리하고, 이번 Tick의 일반 경로를 건너뛸지 반환한다. */
+    [[nodiscard]] bool HandleLowBatteryReturn(
         simulation::DroneId droneId,
         mission::FleetReconnaissanceState& assignment);
     /** @brief 착륙한 드론의 현재 임무 구간에 맞는 완료 상태를 기록한다. */
