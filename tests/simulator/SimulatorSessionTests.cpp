@@ -531,10 +531,26 @@ void Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues()
     mission::FleetTelemetryStore receivedStates;
     EXPECT_TRUE(receivedStates.Record(4U, *telemetry, 100U, 8U));
     EXPECT_FALSE(receivedStates.Record(4U, *telemetry, 101U, 7U));
+    const auto reportAgeTicks = receivedStates.AgeInTicks(4U, 130U);
+    ASSERT_TRUE(reportAgeTicks.has_value());
+    EXPECT_EQ(*reportAgeTicks, 30U);
+    const auto ageAfterTickReset = receivedStates.AgeInTicks(4U, 99U);
+    ASSERT_TRUE(ageAfterTickReset.has_value());
+    EXPECT_EQ(*ageAfterTickReset, 0U);
+    EXPECT_FALSE(receivedStates.AgeInTicks(5U, 130U).has_value());
     ASSERT_NE(receivedStates.Fresh(4U, 130U), nullptr);
     EXPECT_EQ(receivedStates.Fresh(4U, 130U)->state.positionMeters, positionMeters);
     EXPECT_EQ(receivedStates.Fresh(4U, 131U), nullptr);
     EXPECT_NE(receivedStates.Latest(4U), nullptr);
+
+    mission::FleetTelemetryStore nearTickLimit;
+    const auto highestTick = std::numeric_limits<std::uint64_t>::max();
+    EXPECT_TRUE(nearTickLimit.Record(4U, *telemetry, highestTick - 10U, 1U));
+    const auto ageNearTickLimit = nearTickLimit.AgeInTicks(4U, highestTick);
+    ASSERT_TRUE(ageNearTickLimit.has_value());
+    EXPECT_EQ(*ageNearTickLimit, 10U);
+    EXPECT_NE(nearTickLimit.Fresh(4U, highestTick), nullptr);
+
     receivedStates.Clear();
     EXPECT_EQ(receivedStates.Latest(4U), nullptr);
 

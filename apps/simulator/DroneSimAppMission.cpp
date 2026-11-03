@@ -1072,12 +1072,13 @@ void DroneSimApp::AdvanceFormationTransit()
         return;
     }
 
-    constexpr std::uint64_t peerTelemetryTimeoutTicks = 30U;
     constexpr std::uint64_t peerTelemetryRecoveryTimeoutTicks = 180U;
     for (std::size_t index = 1U; index < droneIds.size(); ++index)
     {
-        const auto* peer = fleetMission_.TelemetryAtLeader().Latest(droneIds[index]);
-        if (peer == nullptr)
+        const auto& telemetry = fleetMission_.TelemetryAtLeader();
+        const auto reportAgeTicks = telemetry.AgeInTicks(
+            droneIds[index], simulation_.TickCount());
+        if (!reportAgeTicks)
         {
             fleetMission_.FormationTransit().Fail("통신 끊김 · 편대 안전 착륙");
             if (fleetMission_.CompleteMission().CurrentStage()
@@ -1093,13 +1094,13 @@ void DroneSimApp::AdvanceFormationTransit()
             return;
         }
 
-        const std::uint64_t reportAgeTicks = simulation_.TickCount()
-            - peer->receivedAtTick;
-        if (reportAgeTicks <= peerTelemetryTimeoutTicks)
+        if (telemetry.Fresh(droneIds[index], simulation_.TickCount()) != nullptr)
             continue;
 
-        if (reportAgeTicks <= peerTelemetryTimeoutTicks
-                + peerTelemetryRecoveryTimeoutTicks)
+        constexpr std::uint64_t recoveryWindowTicks =
+            dronesim::mission::FleetTelemetryStore::FreshnessTimeoutTicks
+            + peerTelemetryRecoveryTimeoutTicks;
+        if (*reportAgeTicks <= recoveryWindowTicks)
         {
             // 편대원 보고가 잠깐 끊기면 리더를 멈춰 연결 회복을 기다린다.
             DroneCommand holdLeader;

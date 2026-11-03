@@ -6,6 +6,19 @@
 
 namespace dronesim::mission
 {
+namespace
+{
+std::uint64_t CalculateTelemetryAgeInTicks(const ReceivedPeerTelemetry& telemetry,
+    std::uint64_t currentTick) noexcept
+{
+    // Tick이 되감긴 직후에도 부호 없는 뺄셈이 큰 값으로 튀지 않게 한다.
+    // 기존 동작과 같이 이때는 새 시각의 첫 보고로 간주한다.
+    return currentTick < telemetry.receivedAtTick
+        ? 0U
+        : currentTick - telemetry.receivedAtTick;
+}
+}
+
 bool FleetTelemetryStore::Record(simulation::DroneId droneId,
     const PeerTelemetry& state,
     std::uint64_t receivedAtTick,
@@ -26,13 +39,25 @@ const ReceivedPeerTelemetry* FleetTelemetryStore::Latest(
     return found == latestByDrone_.end() ? nullptr : &found->second;
 }
 
+std::optional<std::uint64_t> FleetTelemetryStore::AgeInTicks(
+    simulation::DroneId droneId,
+    std::uint64_t currentTick) const noexcept
+{
+    const ReceivedPeerTelemetry* latest = Latest(droneId);
+    if (latest == nullptr)
+        return std::nullopt;
+
+    return CalculateTelemetryAgeInTicks(*latest, currentTick);
+}
+
 const ReceivedPeerTelemetry* FleetTelemetryStore::Fresh(
     simulation::DroneId droneId,
     std::uint64_t currentTick) const noexcept
 {
-    constexpr std::uint64_t timeoutTicks = 30U;
     const ReceivedPeerTelemetry* latest = Latest(droneId);
-    if (latest == nullptr || currentTick > latest->receivedAtTick + timeoutTicks)
+    if (latest == nullptr
+        || CalculateTelemetryAgeInTicks(*latest, currentTick)
+            > FreshnessTimeoutTicks)
         return nullptr;
     return latest;
 }

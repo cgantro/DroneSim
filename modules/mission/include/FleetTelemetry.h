@@ -33,6 +33,9 @@ struct ReceivedPeerTelemetry
 class FleetTelemetryStore final
 {
 public:
+    /** @brief 이 시간보다 오래된 상태는 편대 제어에서 끊긴 보고로 본다. */
+    static constexpr std::uint64_t FreshnessTimeoutTicks = 30U;
+
     /** @brief 더 새 번호의 상태만 저장하고 저장 여부를 돌려준다. */
     [[nodiscard]] bool Record(simulation::DroneId droneId,
         const PeerTelemetry& state,
@@ -43,7 +46,12 @@ public:
     [[nodiscard]] const ReceivedPeerTelemetry* Latest(
         simulation::DroneId droneId) const noexcept;
 
-    /** @brief 30 Tick 안에 받은 최신 상태만 돌려준다. */
+    /** @brief 마지막 보고가 현재 모의 시각보다 몇 Tick 전인지 반환한다. */
+    [[nodiscard]] std::optional<std::uint64_t> AgeInTicks(
+        simulation::DroneId droneId,
+        std::uint64_t currentTick) const noexcept;
+
+    /** @brief 정해 둔 신선도 시간 안에 받은 상태만 돌려준다. */
     [[nodiscard]] const ReceivedPeerTelemetry* Fresh(
         simulation::DroneId droneId,
         std::uint64_t currentTick) const noexcept;
