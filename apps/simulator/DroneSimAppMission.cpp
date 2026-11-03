@@ -987,7 +987,7 @@ void DroneSimApp::SendFleetTelemetry(std::uint64_t currentTick)
     {
         if (droneId == leaderId)
             continue;
-        if (!fleetMission_.ShouldSendTelemetry(
+        if (!fleetMission_.TelemetryAtLeader().ShouldSend(
                 droneId, currentTick, telemetryIntervalTicks))
             continue;
 
@@ -1002,11 +1002,11 @@ void DroneSimApp::SendFleetTelemetry(std::uint64_t currentTick)
         const auto& state = simulation_.State(droneId);
         static_cast<void>(formationNetwork_->Send(
             droneId, leaderId,
-            fleetMission_.TakeNextTelemetrySequence(), "drone_telemetry",
+            fleetMission_.TelemetryAtLeader().TakeNextSequence(), "drone_telemetry",
             dronesim::mission::EncodePeerTelemetry(state.positionMeters, state.mode,
                 missionLeg, missionStatus,
                 assignmentVersion)));
-        fleetMission_.RecordTelemetryAttempt(droneId, currentTick);
+        fleetMission_.TelemetryAtLeader().RecordSendAttempt(droneId, currentTick);
     }
 }
 

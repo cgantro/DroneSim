@@ -538,30 +538,8 @@ public:
         return telemetryAtLeader_;
     }
 
-    /** @brief 다음 텔레메트리 메시지 순번을 받고 번호를 하나 올린다. */
-    [[nodiscard]] std::uint32_t TakeNextTelemetrySequence() noexcept
-    {
-        return telemetryAtLeader_.TakeNextSequence();
-    }
-
     /** @brief 새 임무를 위해 텔레메트리 순번과 수신·전송 기록을 초기화한다. */
     void ResetTelemetry();
-
-    /** @brief 지정한 드론의 상태를 보낼 시간이 되었는지 확인한다. */
-    [[nodiscard]] bool ShouldSendTelemetry(
-        simulation::DroneId droneId,
-        std::uint64_t currentTick,
-        std::uint64_t intervalTicks) const noexcept
-    {
-        return telemetryAtLeader_.ShouldSend(droneId, currentTick, intervalTicks);
-    }
-
-    /** @brief 성공 여부와 관계없이 메시지 전달 시도 시각을 기록한다. */
-    void RecordTelemetryAttempt(
-        simulation::DroneId droneId, std::uint64_t currentTick)
-    {
-        telemetryAtLeader_.RecordSendAttempt(droneId, currentTick);
-    }
 
     /** @brief 편대 이동과 전체 임무 진행 객체를 읽고 갱신한다. */
     [[nodiscard]] FormationTransitState& FormationTransit() noexcept
