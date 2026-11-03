@@ -374,9 +374,11 @@ bool FleetMissionController::StartFleetRally()
     glm::dvec3 centerMeters{0.0};
     for (const DroneId droneId : droneIds)
         centerMeters += fleetMission_.CompleteMission().HomePositionMeters(droneId);
-    // 각자의 출발점으로 바로 흩어지지 않도록 출발 위치의 중심 위에서 다시 모인다.
+    // 출발 위치들의 산술 평균을 공통 기준점으로 잡는다. 각 드론이 자기 집결점으로
+    // 바로 흩어지지 않도록, 기준점에서 위쪽(ENU의 +Z) 12m 높이에 먼저 모인다.
     centerMeters /= static_cast<double>(droneIds.size());
     centerMeters.z += 12.0;
+    // XY 평면의 편대 간격만 더해 같은 고도에서 서로 겹치지 않게 집결시킨다.
     const auto offsets = FormationOffsets(rallyDroneIds.size(), 3.0, 0.0);
 
     std::vector<PlannedFleetRoute> rallyPlans;
