@@ -107,15 +107,25 @@ public:
     [[nodiscard]] static CommandResult Apply(
         DroneState& state, DroneControlState& control, const DroneCommand& command) noexcept;
 
+    /** @brief 초기 비행 상태를 검사하고 자세와 방향각을 정규화해 돌려준다. */
+    [[nodiscard]] static DroneState PrepareInitialState(
+        DroneState state, double maximumMotorSpeedRadiansPerSecond);
+
+    /** @brief 물리 계산 결과를 바탕으로 이륙·경유점 도착·착륙 상태를 갱신한다. */
+    static void UpdateFlightModeAfterPhysics(
+        DroneState& state, DroneControlState& control,
+        double groundedModelOriginHeightMeters) noexcept;
+
     /** @brief 자세 쿼터니언에서 월드 Z축 기준 방향각을 라디안으로 구한다. */
     [[nodiscard]] static double YawRadians(const DroneState& state) noexcept;
 
     /** @brief 드론을 원점의 지상 상태로 되돌린다. */
     static void Reset(DroneState& state, DroneControlState& control) noexcept;
 
+    /** @brief 공중에서 속도·경유점·회전 명령을 받을 수 있는 상태인지 확인한다. */
+    [[nodiscard]] static bool CanAcceptInFlightCommands(FlightMode mode) noexcept;
+
 private:
     static constexpr double waypointToleranceMeters = 0.05;
-
-    [[nodiscard]] static bool IsAirborne(const DroneState& state) noexcept;
 };
 }

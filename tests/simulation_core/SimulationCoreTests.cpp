@@ -16,6 +16,24 @@ namespace dronesim::simulation
 {
 namespace
 {
+// 시작 상태의 유효성 검사와 자세 정규화가 비행 모델에 모여 있는지 확인한다.
+void VerifyInitialStateIsPreparedByDroneModel()
+{
+    DroneState requested;
+    requested.positionMeters = {1.0, 2.0, 3.0};
+    requested.orientation = {2.0, 0.0, 0.0, 2.0};
+    requested.motorSpeedsRadiansPerSecond[0] = 500.0;
+
+    const DroneState prepared = DroneModel::PrepareInitialState(requested, 1000.0);
+    EXPECT_NEAR(glm::length(prepared.orientation), 1.0, 1.0e-12);
+    EXPECT_NEAR(prepared.yawRadians, glm::half_pi<double>(), 1.0e-12);
+    EXPECT_EQ(prepared.positionMeters, requested.positionMeters);
+
+    requested.motorSpeedsRadiansPerSecond[0] = 1001.0;
+    EXPECT_THROW(static_cast<void>(
+        DroneModel::PrepareInitialState(requested, 1000.0)), std::invalid_argument);
+}
+
 // 고정 Tick마다 비행 상태와 카메라 프레임 번호가 함께 진행되는지 확인한다.
 void VerifyTakeoffAndCameraAdvanceTogether()
 {
@@ -123,7 +141,15 @@ void VerifyDroneAndPhysicsBodyAreRemovedTogether()
     EXPECT_EQ(simulation.PrimaryDroneId(), second);
     ASSERT_TRUE(simulation.RemoveDrone(third));
     EXPECT_FALSE(simulation.RemoveDrone(second));
-    EXPECT_THROW(static_cast<void>(simulation.State(first)), std::out_of_range);
+    try
+    {
+        static_cast<void>(simulation.State(first));
+        FAIL() << "삭제한 드론을 조회하면 예외가 나야 합니다.";
+    }
+    catch (const std::out_of_range& error)
+    {
+        EXPECT_STREQ(error.what(), "드론 식별값 1이 없습니다.");
+    }
     EXPECT_EQ(simulation.DroneCount(), 1U);
     EXPECT_NO_THROW(simulation.AdvanceOneTick());
 }
@@ -211,6 +237,7 @@ void VerifyFourDronesTakeOffMoveAndLandIndependently()
 
 TEST(SimulationCoreTests, CoreScenarios)
 {
+    EXPECT_NO_FATAL_FAILURE(VerifyInitialStateIsPreparedByDroneModel());
     EXPECT_NO_FATAL_FAILURE(VerifyTakeoffAndCameraAdvanceTogether());
     EXPECT_NO_FATAL_FAILURE(VerifyCameraGimbalRotatesAroundItsThreeAxes());
     EXPECT_NO_FATAL_FAILURE(VerifyLongHoverKeepsTheRigidBodyStable());

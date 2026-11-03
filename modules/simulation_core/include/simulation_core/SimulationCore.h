@@ -130,6 +130,9 @@ public:
     /** @brief 지정한 드론에 탑재할 카메라 해상도와 시야각을 설정한다. */
     void SetCameraModel(DroneId droneId, const CameraModel& model);
 
+    /** @brief 지정한 드론 카메라의 짐벌 방향을 바꾸고 즉시 화면 자세에 반영한다. */
+    void SetCameraGimbalAngles(DroneId droneId, const CameraGimbalAngles& angles);
+
     /** @brief 카메라를 켜거나 끈다. 고장 상태는 복구 명령으로만 해제된다. */
     void SetCameraEnabled(bool enabled) noexcept;
 
