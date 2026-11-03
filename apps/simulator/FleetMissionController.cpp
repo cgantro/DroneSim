@@ -393,13 +393,13 @@ void FleetMissionController::AdvanceCompleteFleetMission()
     using Stage = dronesim::mission::CompleteFleetMissionState::Stage;
     using DroneId = dronesim::simulation::DroneId;
     const Stage currentStage = fleetMission_.CompleteMission().CurrentStage();
-    if (currentStage == Stage::Idle
-        || currentStage == Stage::Completed
-        || currentStage == Stage::Failed)
-        return;
-
-    if (currentStage == Stage::FormationTransit)
+    switch (currentStage)
     {
+    case Stage::Idle:
+    case Stage::Completed:
+    case Stage::Failed:
+        return;
+    case Stage::FormationTransit:
         if (fleetMission_.FormationTransit().IsActive())
             return;
         if (fleetMission_.FormationTransit().CurrentPhase()
@@ -417,6 +417,10 @@ void FleetMissionController::AdvanceCompleteFleetMission()
         }
         fleetMission_.CompleteMission().SetStage(Stage::Reconnaissance);
         return;
+    case Stage::Reconnaissance:
+    case Stage::Regrouping:
+    case Stage::Returning:
+        break;
     }
 
     const std::vector<DroneId>& droneIds = fleetCommunication_.DroneIds();
@@ -435,9 +439,10 @@ void FleetMissionController::AdvanceCompleteFleetMission()
             }
             else
             {
-                FailCompleteFleetMission(currentStage == Stage::Reconnaissance
+                const std::string reason = currentStage == Stage::Reconnaissance
                     ? "드론별 정찰 상태를 찾지 못해 임무를 중단했습니다."
-                    : "모든 기체가 집결하지 못해 임무를 중단했습니다.");
+                    : "모든 기체가 집결하지 못해 임무를 중단했습니다.";
+                FailCompleteFleetMission(reason);
             }
             return;
         }
@@ -447,11 +452,21 @@ void FleetMissionController::AdvanceCompleteFleetMission()
         reports.push_back(report);
     }
 
-    const auto missionLeg = currentStage == Stage::Reconnaissance
-        ? dronesim::mission::FleetMissionLeg::Reconnaissance
-        : currentStage == Stage::Regrouping
-            ? dronesim::mission::FleetMissionLeg::Regrouping
-            : dronesim::mission::FleetMissionLeg::Returning;
+    dronesim::mission::FleetMissionLeg missionLeg;
+    switch (currentStage)
+    {
+    case Stage::Reconnaissance:
+        missionLeg = dronesim::mission::FleetMissionLeg::Reconnaissance;
+        break;
+    case Stage::Regrouping:
+        missionLeg = dronesim::mission::FleetMissionLeg::Regrouping;
+        break;
+    case Stage::Returning:
+        missionLeg = dronesim::mission::FleetMissionLeg::Returning;
+        break;
+    default:
+        return;
+    }
     const auto decision = dronesim::mission::EvaluateFleetMissionProgress(missionLeg, reports);
     if (decision.progress == dronesim::mission::FleetMissionProgress::Failed)
     {
@@ -471,18 +486,17 @@ void FleetMissionController::AdvanceCompleteFleetMission()
         return;
     }
 
-    if (currentStage == Stage::Reconnaissance)
+    // 각 단계가 끝나면 다음 경로를 준비하고, 마지막 복귀가 끝났을 때만 임무를 완료한다.
+    switch (currentStage)
     {
+    case Stage::Reconnaissance:
         if (!StartFleetRally())
         {
             FailCompleteFleetMission("공통 집결 경로를 만들지 못해 임무를 중단했습니다.");
             return;
         }
         return;
-    }
-
-    if (currentStage == Stage::Regrouping)
-    {
+    case Stage::Regrouping:
         if (!StartFleetReturn(
                 dronesim::mission::FleetMissionStartMode::ContinueInFlight))
         {
@@ -491,11 +505,13 @@ void FleetMissionController::AdvanceCompleteFleetMission()
         }
         fleetMission_.CompleteMission().SetStage(Stage::Returning);
         return;
-    }
-
-    if (currentStage == Stage::Returning)
-    {
+    case Stage::Returning:
         fleetMission_.CompleteMission().SetStage(Stage::Completed);
+        return;
+    case Stage::Idle:
+    case Stage::FormationTransit:
+    case Stage::Completed:
+    case Stage::Failed:
         return;
     }
 }
