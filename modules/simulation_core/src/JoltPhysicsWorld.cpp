@@ -1,5 +1,6 @@
 #include "simulation_core/JoltPhysicsWorld.h"
 #include "simulation_core/CollisionGeometry.h"
+#include "simulation_core/DroneModel.h"
 #include "simulation_core/FiniteVector.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "geometry/Polygon.h"
@@ -41,7 +42,6 @@ constexpr JPH::uint broadPhaseLayerCount = 2;
 constexpr JPH::uint maximumBodyCount = 65536;
 constexpr JPH::uint maximumBodyPairCount = 65536;
 constexpr JPH::uint maximumContactCount = 10240;
-constexpr double fixedStepSeconds = 1.0 / 60.0;
 constexpr double gravityMetersPerSecondSquared = 9.81;
 
 /** @brief Jolt의 전역 형식 등록을 프로세스에서 한 번만 관리한다. */
@@ -642,7 +642,8 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds) {
     bodyInterface.GetPositionAndRotation(body.id, bodyPosition, bodyRotation);
     const glm::dvec3 position = ToProjectVector(bodyPosition);
     const glm::dquat orientation = ToProjectRotation(bodyRotation);
-    const double seconds = fixedStepSeconds;
+    // 모터 응답 시간과 Jolt 적분 간격은 SimulationCore의 고정 Tick을 함께 쓴다.
+    const double seconds = DroneModel::fixedStepSeconds;
     const JPH::Vec3 joltLinearVelocity =
         bodyInterface.GetLinearVelocity(body.id);
     const glm::dvec3 linearVelocity = ToProjectVector(joltLinearVelocity);
@@ -679,8 +680,9 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds) {
     actuation.hasStepped = true;
   }
   // 네 로터 힘을 모두 등록한 뒤 고정 간격 한 번만 적분해 기체 상태를 함께 갱신한다.
-  impl_->physicsSystem.Update(static_cast<float>(fixedStepSeconds), 1,
-                              &impl_->tempAllocator, &impl_->jobSystem);
+  impl_->physicsSystem.Update(
+      static_cast<float>(DroneModel::fixedStepSeconds), 1,
+      &impl_->tempAllocator, &impl_->jobSystem);
   if (stepDurationMicroseconds) {
     *stepDurationMicroseconds =
         std::chrono::duration<double, std::micro>(Clock::now() - start).count();
