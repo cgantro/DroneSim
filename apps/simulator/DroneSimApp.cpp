@@ -517,6 +517,34 @@ void DroneSimApp::RenderFrame()
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
+        std::vector<dronesim::gui::MiniMapRoute> miniMapRoutes;
+        for (const auto& [droneId, mission] : fleetMission_.reconnaissanceByDrone)
+        {
+            if (!dronesim::mission::IsFleetMissionInProgress(mission.status)
+                || mission.nextWaypoint >= mission.routeWaypointsMeters.size())
+                continue;
+            const auto& currentPosition = simulation_.State(droneId).positionMeters;
+            std::vector<glm::dvec3> remainingWaypoints(
+                mission.routeWaypointsMeters.begin()
+                    + static_cast<std::ptrdiff_t>(mission.nextWaypoint),
+                mission.routeWaypointsMeters.end());
+            miniMapRoutes.push_back({droneId, currentPosition,
+                std::move(remainingWaypoints)});
+        }
+        const auto& formationRoute = fleetMission_.formationTransit.route;
+        if (fleetMission_.formationTransit.IsActive()
+            && fleetMission_.formationTransit.waypointIndex
+                < formationRoute.leaderWaypointsMeters.size())
+        {
+            const auto& currentPosition = simulation_.State(
+                fleetMission_.leaderId).positionMeters;
+            std::vector<glm::dvec3> remainingWaypoints(
+                formationRoute.leaderWaypointsMeters.begin()
+                    + static_cast<std::ptrdiff_t>(fleetMission_.formationTransit.waypointIndex),
+                formationRoute.leaderWaypointsMeters.end());
+            miniMapRoutes.push_back({fleetMission_.leaderId,
+                currentPosition, std::move(remainingWaypoints)});
+        }
         hud_->Render(simulation_, observerDroneId_, gamepadController_.IsConnected(),
             fleetReturnCanStart,
             [this] { static_cast<void>(StartFleetReturn()); },
@@ -536,6 +564,7 @@ void DroneSimApp::RenderFrame()
                 }
             },
             trainingRangeScene_->BuildingObstacles(),
+            miniMapRoutes,
             trainingRangeScene_->GroundSizeMeters(),
             [this](int width, int height)
             {

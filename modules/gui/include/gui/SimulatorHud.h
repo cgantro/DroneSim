@@ -43,6 +43,14 @@ struct HudRenderTimings
     std::size_t completedGpuFrameCount = 0;
 };
 
+/** @brief 미니맵에 그릴 드론 한 대의 현재 계획 경로다. */
+struct MiniMapRoute
+{
+    simulation::DroneId droneId = 0;
+    glm::dvec3 startMeters{0.0};
+    std::vector<glm::dvec3> waypointsMeters;
+};
+
 /** @brief 비행 상태와 편대 요약을 3D 화면 위에 표시한다. */
 class SimulatorHud
 {
@@ -66,6 +74,7 @@ public:
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
         std::span<const flight_planning::BuildingObstacle> buildings,
+        std::span<const MiniMapRoute> routes,
         const glm::dvec2& groundSizeMeters,
         const std::function<std::uint32_t(int, int)>& renderScene,
         const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
