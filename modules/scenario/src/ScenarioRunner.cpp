@@ -668,34 +668,31 @@ void UpdateMissionResults(
 
     for (ScenarioResult::MissionTask& task : mission->tasks)
     {
-        // 임무 단계 변경은 작업 객체가 맡아 시작·실패·완료 상태가 서로 겹치지 않게 한다.
-        if (!task.IsActive()
-            || !drones.at(task.droneName).IsConnected())
+        if (!drones.at(task.droneName).IsConnected())
             continue;
 
         const DroneId droneId = drones.at(task.droneName).Id();
-        const glm::dvec3 distance = simulation.State(droneId).positionMeters
-            - task.CurrentWaypoint();
-        const bool reachedWaypoint = glm::length(distance) <= task.toleranceMeters;
-        // 도착한 지점 뒤에 경유점이 남아 있으면 다음 지점으로, 마지막이면 완료로 전환한다.
-        if (reachedWaypoint && task.AdvanceWaypoint())
+        const auto update = task.UpdateProgress(
+            simulation.State(droneId).positionMeters, tick);
+        switch (update)
         {
+        case ScenarioResult::MissionTask::UpdateResult::WaypointAdvanced:
             RecordTickEvent(result, tick,
                 task.droneName + " 드론이 '" + task.name + "' 경유점 "
                 + std::to_string(task.CurrentWaypointIndex() + 1U) + "/"
                 + std::to_string(task.waypointsMeters.size()) + "에 도착했습니다.");
-        }
-        else if (reachedWaypoint)
-        {
-            task.Complete(tick);
+            break;
+        case ScenarioResult::MissionTask::UpdateResult::Completed:
             RecordTickEvent(result, tick,
                 task.droneName + " 드론이 '" + task.name + "' 임무를 마쳤습니다.");
-        }
-        else if (tick >= task.deadlineTick)
-        {
-            task.Fail();
+            break;
+        case ScenarioResult::MissionTask::UpdateResult::Failed:
             result.issues.push_back(task.droneName
                 + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
+            break;
+        case ScenarioResult::MissionTask::UpdateResult::Inactive:
+        case ScenarioResult::MissionTask::UpdateResult::Waiting:
+            break;
         }
     }
 }

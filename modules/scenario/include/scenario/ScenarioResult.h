@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include <glm/geometric.hpp>
+
 namespace dronesim::scenario
 {
 /**
@@ -116,6 +118,16 @@ struct ScenarioResult
             FailedAfterStart
         };
 
+        /** @brief 한 Tick에서 작업 상태를 갱신한 결과다. */
+        enum class UpdateResult
+        {
+            Inactive,
+            Waiting,
+            WaypointAdvanced,
+            Completed,
+            Failed
+        };
+
         /** @brief 임무가 시작된 적이 있는지 확인한다. */
         [[nodiscard]] bool HasStarted() const noexcept
         {
@@ -196,6 +208,35 @@ struct ScenarioResult
                 return;
             progress_ = Progress::Completed;
             completedTick_ = tick;
+        }
+
+        /**
+         * @brief 현재 위치와 기한을 확인해 임무 작업의 진행 상태를 한 번 갱신한다.
+         * @details 현재 경유점까지의 3차원 직선거리가 허용 오차 이하면 다음 지점으로 간다.
+         * 마지막 지점에 도착하면 완료하고, 도착하지 못한 채 기한에 이르면 실패시킨다.
+         * 같은 Tick에 도착과 기한이 겹치면 도착을 먼저 인정한다.
+         */
+        [[nodiscard]] UpdateResult UpdateProgress(
+            const glm::dvec3& positionMeters, std::uint64_t tick) noexcept
+        {
+            if (!IsActive())
+                return UpdateResult::Inactive;
+
+            if (glm::length(positionMeters - CurrentWaypoint()) <= toleranceMeters)
+            {
+                if (AdvanceWaypoint())
+                    return UpdateResult::WaypointAdvanced;
+
+                Complete(tick);
+                return UpdateResult::Completed;
+            }
+
+            if (tick >= deadlineTick)
+            {
+                Fail();
+                return UpdateResult::Failed;
+            }
+            return UpdateResult::Waiting;
         }
 
         /** @brief 완료 작업은 모든 지점을 방문한 것으로 센다. */

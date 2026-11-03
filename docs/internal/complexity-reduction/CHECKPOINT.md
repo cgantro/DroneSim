@@ -1068,3 +1068,8 @@
 
 - DroneSimApp::ApplySimulationCommand 두 오버로드는 호출처가 없고, 내부에서 SimulationCore::Apply만 그대로 전달했다. 선언·정의를 제거해 앱의 불필요한 명령 중계 책임을 없애고, 앱 감사 기록도 현재 상태로 고쳤다.
 - DroneSim Release 앱 빌드와 git diff --check 통과. 시험은 실행하지 않았다.
+
+## 시나리오 임무 작업이 경유점 진행을 소유 — 2026-11-04
+
+- 작업 진행 함수가 현재 위치와 허용 오차를 비교한 뒤 외부에서 경유점 이동·완료·기한 실패를 각각 호출하던 구조를 MissionTask::UpdateProgress로 모았다. 작업 객체가 자신의 좌표·허용 오차·기한과 상태 전이를 함께 관리하고, 실행기는 전환 결과에 따라 이벤트와 오류 메시지만 기록한다.
+- 공개 헤더가 직접 사용하는 GLM 거리 계산 헤더를 명시했다. Release 시나리오 라이브러리 빌드와 	wo-point-survey.json 실행(결과 passed), git diff --check를 확인했다. HeadlessScenarioSmoke와 AddressSanitizer 시나리오 테스트는 출력 없이 대기 상태가 이어져 중단했으며, 통과로 기록하지 않는다.
