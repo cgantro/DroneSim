@@ -103,6 +103,27 @@ void RecordTrajectorySample(const ScenarioDefinition& definition,
 
 using DroneNameSet = std::unordered_set<std::string>;
 
+void FailTasksForLowBatteryReturn(
+    std::uint64_t tick,
+    std::string_view droneName,
+    std::optional<ScenarioResult::Mission>& mission,
+    ScenarioResult& result)
+{
+    if (!mission)
+        return;
+
+    // 배터리 귀환이 시작되면 드론이 맡은 미완료 작업은 더 진행할 수 없다.
+    for (ScenarioResult::MissionTask& task : mission->tasks)
+    {
+        if (task.droneName != droneName || task.IsCompleted() || task.IsFailed())
+            continue;
+
+        task.Fail();
+        result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
+            + task.name + "' 임무는 미완료로 남습니다.");
+    }
+}
+
 void UpdateEnergyPolicy(
     std::uint64_t tick,
     std::optional<ScenarioResult::Mission>& mission,
@@ -121,18 +142,7 @@ void UpdateEnergyPolicy(
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + droneName + " 드론이 배터리 예비량에 도달해 출발 지점으로 돌아갑니다.");
-
-            if (mission)
-            {
-                for (ScenarioResult::MissionTask& task : mission->tasks)
-                {
-                    if (task.droneName != droneName || task.IsCompleted() || task.IsFailed())
-                        continue;
-                    task.Fail();
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-                + task.name + "' 임무는 미완료로 남습니다.");
-                }
-            }
+            FailTasksForLowBatteryReturn(tick, droneName, mission, result);
         }
         else if (!simulation.Battery(droneId).IsReturningForLowBattery())
         {
