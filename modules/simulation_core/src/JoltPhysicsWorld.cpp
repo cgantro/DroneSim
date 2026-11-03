@@ -524,8 +524,7 @@ void JoltPhysicsWorld::SetWindVelocityMetersPerSecond(
 
 JoltRigidBodyHandle
 JoltPhysicsWorld::CreateDynamicBox(const JoltBoxDefinition &definition) {
-  if (!IsFinite(definition.positionMeters) ||
-      !IsValidOrientation(definition.orientation) ||
+  if (!IsValidOrientation(definition.orientation) ||
       !collision::IsValidObstacleBox(definition.positionMeters,
                                      definition.halfExtentsMeters) ||
       !std::isfinite(definition.massKilograms) ||
