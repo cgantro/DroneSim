@@ -41,8 +41,6 @@ constexpr JPH::uint maximumBodyPairCount = 65536;
 constexpr JPH::uint maximumContactCount = 10240;
 constexpr double fixedStepSeconds = 1.0 / 60.0;
 constexpr double gravityMetersPerSecondSquared = 9.81;
-constexpr double airDensityKilogramsPerCubicMeter = 1.225;
-constexpr double dragCoefficient = 1.0;
 
 /** @brief Jolt의 전역 형식 등록을 프로세스에서 한 번만 관리한다. */
 class JoltRuntime final {
@@ -135,10 +133,6 @@ glm::dquat ToProjectRotation(JPH::QuatArg jolt) {
                         ProjectToJoltRotation());
 }
 
-bool HasPositiveComponents(const glm::dvec3 &value) {
-  return IsFinite(value) && value.x > 0.0 && value.y > 0.0 && value.z > 0.0;
-}
-
 class BroadPhaseLayers final : public JPH::BroadPhaseLayerInterface {
 public:
   BroadPhaseLayers()
@@ -184,8 +178,9 @@ JPH::RefConst<JPH::Shape>
 MakeQuadrotorShape(const QuadrotorParameters &parameters) {
   JPH::StaticCompoundShapeSettings compound;
   for (const RigidBodyBox &box : parameters.collisionBoxes) {
-    if (!HasPositiveComponents(glm::dvec3{box.halfExtentsMeters}) ||
-        !IsFinite(box.positionMeters) || !IsValidOrientation(box.orientation))
+    if (!collision::IsValidObstacleBox(box.positionMeters,
+                                       glm::dvec3{box.halfExtentsMeters}) ||
+        !IsValidOrientation(box.orientation))
       throw std::invalid_argument(
           "드론 충돌 상자의 크기와 자세를 확인해 주세요.");
 
@@ -408,7 +403,7 @@ JoltPhysicsWorld::~JoltPhysicsWorld() = default;
 JoltRigidBodyHandle
 JoltPhysicsWorld::AddStaticBox(const glm::dvec3 &centerMeters,
                                const glm::dvec3 &halfExtentsMeters) {
-  if (!IsFinite(centerMeters) || !HasPositiveComponents(halfExtentsMeters))
+  if (!collision::IsValidObstacleBox(centerMeters, halfExtentsMeters))
     throw std::invalid_argument("고정 상자의 위치와 크기를 확인해 주세요.");
 
   const auto shape = MakeBoxShape(halfExtentsMeters);
@@ -531,7 +526,8 @@ JoltRigidBodyHandle
 JoltPhysicsWorld::CreateDynamicBox(const JoltBoxDefinition &definition) {
   if (!IsFinite(definition.positionMeters) ||
       !IsValidOrientation(definition.orientation) ||
-      !HasPositiveComponents(definition.halfExtentsMeters) ||
+      !collision::IsValidObstacleBox(definition.positionMeters,
+                                     definition.halfExtentsMeters) ||
       !std::isfinite(definition.massKilograms) ||
       definition.massKilograms <= 0.0 || !std::isfinite(definition.friction) ||
       definition.friction < 0.0 || !std::isfinite(definition.restitution) ||
@@ -560,23 +556,12 @@ JoltPhysicsWorld::CreateQuadrotor(const JoltRigidBodyDefinition &body,
   if (!IsFinite(body.positionMeters) || !IsValidOrientation(body.orientation) ||
       !std::isfinite(body.friction) || body.friction < 0.0 ||
       !std::isfinite(body.restitution) || body.restitution < 0.0 ||
-      body.restitution > 1.0 || !std::isfinite(parameters.massKilograms) ||
-      parameters.massKilograms <= 0.0 ||
-      !HasPositiveComponents(parameters.bodySizeMeters) ||
-      !HasPositiveComponents(
-          parameters.principalInertiaKilogramMetersSquared) ||
-      !std::isfinite(parameters.thrustCoefficientNewtonsPerSpeedSquared) ||
-      parameters.thrustCoefficientNewtonsPerSpeedSquared <= 0.0 ||
-      !std::isfinite(parameters.momentToThrustRatio) ||
-      parameters.momentToThrustRatio < 0.0 ||
-      !std::isfinite(parameters.motorTimeConstantUpSeconds) ||
-      parameters.motorTimeConstantUpSeconds <= 0.0 ||
-      !std::isfinite(parameters.motorTimeConstantDownSeconds) ||
-      parameters.motorTimeConstantDownSeconds <= 0.0 ||
-      !std::isfinite(parameters.maximumMotorSpeedRadiansPerSecond) ||
-      parameters.maximumMotorSpeedRadiansPerSecond <= 0.0) {
+      body.restitution > 1.0) {
+    throw std::invalid_argument("드론의 시작 상태와 표면 물리값을 확인해 주세요.");
+  }
+  if (!parameters.HasValidPhysicalProperties()) {
     throw std::invalid_argument(
-        "드론의 물리 제원과 시작 상태를 확인해 주세요.");
+        "드론의 크기·질량·관성·로터 물리 제원을 확인해 주세요.");
   }
   if (!std::all_of(parameters.rotors.begin(), parameters.rotors.end(),
                    [](const RotorDefinition &rotor) {
@@ -657,13 +642,8 @@ JoltPhysicsWorld::MotorThrustsNewtons(JoltRigidBodyHandle handle) const {
   const auto &body = impl_->GetBody(handle);
   if (!body.quadrotor)
     throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
-  std::array<double, QuadrotorParameters::rotorCount> thrusts{};
-  const double coefficient =
-      body.quadrotor->parameters.thrustCoefficientNewtonsPerSpeedSquared;
-  for (std::size_t rotor = 0; rotor < thrusts.size(); ++rotor)
-    thrusts[rotor] = coefficient * body.quadrotor->motorSpeeds[rotor] *
-                     body.quadrotor->motorSpeeds[rotor];
-  return thrusts;
+  return CalculateRotorThrusts(body.quadrotor->parameters,
+                               body.quadrotor->motorSpeeds);
 }
 
 void JoltPhysicsWorld::ApplyForce(JoltRigidBodyHandle handle,
@@ -744,45 +724,26 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds) {
     const glm::dvec3 relativeAirflowBody =
         glm::inverse(orientation) *
         (linearVelocity - impl_->windVelocityMetersPerSecond);
-    const glm::dvec3 bodySize = parameters.bodySizeMeters;
-    const glm::dvec3 projectedAreas{bodySize.y * bodySize.z,
-                                    bodySize.x * bodySize.z,
-                                    bodySize.x * bodySize.y};
-    glm::dvec3 dragForceBody{0.0};
-    for (int axis = 0; axis < 3; ++axis) {
-      const double airspeed = relativeAirflowBody[axis];
-      dragForceBody[axis] = -0.5 * airDensityKilogramsPerCubicMeter *
-                            dragCoefficient * projectedAreas[axis] * airspeed *
-                            std::abs(airspeed);
-    }
+    const glm::dvec3 dragForceBody =
+        CalculateQuadrotorDragForceBody(parameters, relativeAirflowBody);
     bodyInterface.AddForce(body.id, ToJoltVector(orientation * dragForceBody));
-    double reactionTorqueBody = 0.0;
+    actuation.motorSpeeds = AdvanceMotorSpeeds(
+        parameters, actuation.motorSpeeds, actuation.targetSpeeds, seconds);
+    const auto rotorThrusts =
+        CalculateRotorThrusts(parameters, actuation.motorSpeeds);
 
     for (std::size_t rotor = 0; rotor < actuation.motorSpeeds.size(); ++rotor) {
-      const double target = actuation.targetSpeeds[rotor];
-      const double timeConstant = target >= actuation.motorSpeeds[rotor]
-                                      ? parameters.motorTimeConstantUpSeconds
-                                      : parameters.motorTimeConstantDownSeconds;
-      const double blend = 1.0 - std::exp(-seconds / timeConstant);
-      double &speed = actuation.motorSpeeds[rotor];
-      speed += (target - speed) * blend;
-
-      const double thrust =
-          parameters.thrustCoefficientNewtonsPerSpeedSquared * speed * speed;
+      const double thrust = rotorThrusts[rotor];
       const glm::dvec3 force = orientation * glm::dvec3{0.0, 0.0, thrust};
       const glm::dvec3 rotorPosition =
           position + orientation * parameters.rotors[rotor].positionMeters;
       bodyInterface.AddForce(body.id, ToJoltVector(force),
                              ToJoltVector(rotorPosition));
-      // 기체 반작용 토크는 프로펠러 회전 방향과 반대다.
-      const double reactionSign =
-          parameters.rotors[rotor].rotation == RotorRotation::CounterClockwise
-              ? -1.0
-              : 1.0;
-      reactionTorqueBody +=
-          reactionSign * parameters.momentToThrustRatio * thrust;
     }
 
+    // 프로펠러가 공기를 돌리는 토크와 반대 방향으로 기체가 반작용을 받는다.
+    const double reactionTorqueBody =
+        CalculateRotorReactionTorqueBodyZ(parameters, rotorThrusts);
     const glm::dvec3 reactionTorque =
         orientation * glm::dvec3{0.0, 0.0, reactionTorqueBody};
     bodyInterface.AddTorque(body.id, ToJoltVector(reactionTorque));
