@@ -1063,3 +1063,8 @@
 - 드론 연결 여부만 찾아 돌려주던 얇은 중복 함수를 없애고 각 호출부가 런타임 객체의 `IsConnected()`를 직접 사용한다. 시나리오와 앱 Release 타깃 빌드 성공, `git diff --check` 통과. 시험은 실행하지 않았다.
 
 - 단일 드론의 귀환 처리는 UpdateEnergyPolicyForDrone으로 나눠 배터리 확인, 복귀 명령, 도착 후 착륙 순서를 한 기체 단위로 읽을 수 있게 했다.
+
+## 앱의 미사용 명령 전달 래퍼 제거 — 2026-11-04
+
+- DroneSimApp::ApplySimulationCommand 두 오버로드는 호출처가 없고, 내부에서 SimulationCore::Apply만 그대로 전달했다. 선언·정의를 제거해 앱의 불필요한 명령 중계 책임을 없애고, 앱 감사 기록도 현재 상태로 고쳤다.
+- DroneSim Release 앱 빌드와 git diff --check 통과. 시험은 실행하지 않았다.

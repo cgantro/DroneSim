@@ -383,19 +383,6 @@ void DroneSimApp::AdvanceSimulationTick()
     manualControlSession_.AdvanceTick(simulation_, manualInputBlocked);
 }
 
-dronesim::simulation::CommandResult DroneSimApp::ApplySimulationCommand(
-    const dronesim::simulation::DroneCommand& command)
-{
-    return ApplySimulationCommand(simulation_.PrimaryDroneId(), command);
-}
-
-dronesim::simulation::CommandResult DroneSimApp::ApplySimulationCommand(
-    dronesim::simulation::DroneId droneId,
-    const dronesim::simulation::DroneCommand& command)
-{
-    return simulation_.Apply(droneId, command);
-}
-
 void DroneSimApp::RenderFrame()
 {
 #ifdef __EMSCRIPTEN__

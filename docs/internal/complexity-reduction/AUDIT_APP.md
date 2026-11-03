@@ -126,7 +126,7 @@
 | 파일 | 현재 역할과 판단 |
 |---|---|
 | `DroneSimApp.h` | 앱의 그래픽 자원, 입력, 임무, 가상 통신과 측정 상태를 소유한다. 자원은 주로 `unique_ptr`로 관리하지만 여러 책임과 임무 상태가 한 클래스에 모여 있다. `<unordered_map>`은 네이티브 조건에서만 포함하면서 웹에서도 해당 자료형을 사용한다. 다른 헤더의 간접 포함에 의존하지 않도록 확인이 필요하다. |
-| `DroneSimApp.cpp` | 창·모델·지형·네 대 드론 초기화, 고정 Tick, 수동 조종과 장면 출력을 연결한다. `AdvanceSimulationTick()`의 정찰 진행 조건은 `FleetReconnaissanceIsActive()`와 같은 내용을 따로 계산한다. `ApplySimulationCommand()`는 현재 `simulation_.Apply()`에 그대로 전달한다. |
+| `DroneSimApp.cpp` | 창·모델·지형·네 대 드론 초기화, 고정 Tick, 수동 조종과 장면 출력을 연결한다. 2026-11-04 재검토에서 저장소 호출처가 없는 `ApplySimulationCommand()` 전달 래퍼 두 개를 제거했다. |
 | `DroneSimAppMission.cpp` | 편대 이동, 드론별 정찰, 집결·복귀, 가상 통신 전송·수신·재전송과 단계 판정을 맡는다. 한 파일에 서로 다른 책임이 모여 있다. `FleetReconnaissanceStatus()`는 선언·정의 외 호출처가 없다. 이 함수에서만 읽는 `fleetLeadershipStatus_`와 상태 보고 경과 기준 상수도 제거 후보이다. 재전송 횟수는 재시도 제한에 사용한다. |
 | `DroneSimAppInput.cpp` | UDP 요청을 해독하고 순서·중복을 확인해 명령을 적용하며 응답을 만든다. 드론 추가와 정찰 시작도 이 경로에서 처리한다. `graphics/MultisampleFramebuffer.h`는 이 파일에서 사용처를 찾지 못했다. |
 | `DroneSimAppLifecycle.cpp` | 네이티브 실행 루프, 웹 단계별 시작, 프레임 입력·모의·렌더링과 스모크 종료를 관리한다. 실행 수명을 맡는 역할에 맞는다. 웹 상태 전송 블록의 `camera` 지역 참조는 현재 읽히지 않는다. |

@@ -130,12 +130,6 @@ private:
     [[nodiscard]] bool StartFleetReturn();
     /** @brief 임무 시작 뒤 조종 입력 소유권과 창 제목을 함께 갱신한다. */
     void TakeMissionControl(std::string_view windowTitle);
-    /** @brief 지정한 드론에 비행 명령을 적용한다. */
-    [[nodiscard]] dronesim::simulation::CommandResult ApplySimulationCommand(
-        const dronesim::simulation::DroneCommand& command);
-    [[nodiscard]] dronesim::simulation::CommandResult ApplySimulationCommand(
-        dronesim::simulation::DroneId droneId,
-        const dronesim::simulation::DroneCommand& command);
     /** @brief 게임패드 상태를 읽어 창 제목과 수동 조종 입력을 갱신한다. */
     void PollGamepad();
     /**
