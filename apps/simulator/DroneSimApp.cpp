@@ -1,6 +1,9 @@
 #include "DroneSimApp.h"
+#include "FleetMissionController.h"
 #include "SimulatorMiniMapSnapshot.h"
 #include "SimulatorWorldRenderer.h"
+#include "TrainingRangeScene.h"
+#include "gui/SimulatorHud.h"
 #ifndef __EMSCRIPTEN__
 #include "gui/SimulatorView.h"
 #endif

@@ -1,4 +1,6 @@
 #include "DroneSimApp.h"
+#include "FleetMissionController.h"
+#include "TrainingRangeScene.h"
 
 #include <filesystem>
 

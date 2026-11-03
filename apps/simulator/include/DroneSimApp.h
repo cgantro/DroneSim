@@ -3,28 +3,19 @@
 #include "BenchmarkSession.h"
 #include "manual_control/GamepadController.h"
 #include "manual_control/ManualControlSession.h"
-#include "gui/SimulatorHud.h"
-#include "FleetMissionController.h"
-#include "manual_control/GamepadCommandMapper.h"
-#include "simulation_core/EoCameraModel.h"
-#include "flight_planning/FormationPlanner.h"
-#include "flight_planning/BuildingObstacle.h"
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/WindField.h"
-#include "TrainingRangeScene.h"
 #ifdef __EMSCRIPTEN__
 #include "WebCameraRig.h"
 #endif
 
 #include <glm/glm.hpp>
 
-#include <array>
 #include <chrono>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string_view>
-#include <vector>
 
 namespace dronesim::graphics
 {
@@ -35,11 +26,18 @@ class Window;
 
 namespace dronesim::gui
 {
+class SimulatorHud;
 class SimulatorView;
+}
+
+namespace dronesim::scene
+{
+class TrainingRangeScene;
 }
 
 namespace dronesim::simulator
 {
+class FleetMissionController;
 class SimulatorWorldRenderer;
 
 /**
