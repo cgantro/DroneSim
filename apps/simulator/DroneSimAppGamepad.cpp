@@ -21,15 +21,8 @@ void DroneSimApp::PollGamepad()
     case dronesim::manual_control::GamepadNotice::None:
         break;
     }
-    if (update.connectionChanged && !update.connected)
-        pendingControllerAction_.reset();
-    if (update.connectionChanged && !update.connected && !missionControlOwnsInput_)
-        pendingPilotCommand_.reset();
     if (update.externalInputReceived)
         externalControl_ = true;
-    if (update.flightAction)
-        pendingControllerAction_ = *update.flightAction;
-    if (update.pilotCommand)
-        pendingPilotCommand_ = *update.pilotCommand;
+    manualControlSession_.AcceptGamepadUpdate(update, missionControlOwnsInput_);
 }
 }

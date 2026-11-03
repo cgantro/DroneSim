@@ -143,7 +143,8 @@ void DroneSimApp::QueueWebFlightCommand(
     if (missionController_->CompleteFleetMissionIsActive()
         || missionController_->FleetReconnaissanceIsActive())
         return;
-    pendingControllerAction_ = dronesim::simulation::DroneCommand{kind};
+    manualControlSession_.QueueFlightAction(
+        dronesim::simulation::DroneCommand{kind});
 }
 
 bool DroneSimApp::StartWebFleetMission()
@@ -170,11 +171,10 @@ void DroneSimApp::SetWebPilotAxes(
     if (missionController_->CompleteFleetMissionIsActive()
         || missionController_->FleetReconnaissanceIsActive())
     {
-        webPilotAxes_.reset();
-        pendingPilotCommand_.reset();
+        manualControlSession_.ClearPendingPilotCommand();
         return;
     }
-    webPilotAxes_ = axes;
+    manualControlSession_.SetWebAxes(axes);
 }
 #endif
 
@@ -385,59 +385,11 @@ void DroneSimApp::AdvanceSimulationTick()
             ? "DroneSim | 게임패드 연결됨"
             : "DroneSim | 드론 관찰 · EO 영상");
     }
-    AdvanceManualControlTick();
-}
-
-void DroneSimApp::AdvanceManualControlTick()
-{
-    if (missionControlOwnsInput_ || missionController_->CompleteFleetMissionIsActive()
+    const bool manualInputBlocked = missionControlOwnsInput_
+        || missionController_->CompleteFleetMissionIsActive()
         || missionController_->FleetReconnaissanceIsActive()
-        || missionController_->State().FormationTransit().IsActive())
-    {
-        simulation_.AdvanceOneTick();
-        return;
-    }
-
-#ifdef __EMSCRIPTEN__
-    if (webPilotAxes_)
-    {
-        const auto mode = simulation_.State().mode;
-        if (mode == dronesim::simulation::FlightMode::Hovering
-            || mode == dronesim::simulation::FlightMode::Flying)
-        {
-            pendingPilotCommand_ = dronesim::manual_control::MapAxes(
-                *webPilotAxes_, simulation_.State().yawRadians);
-        }
-        else
-        {
-            pendingPilotCommand_.reset();
-        }
-    }
-#endif
-    if (pendingControllerAction_)
-    {
-        static_cast<void>(ApplySimulationCommand(*pendingControllerAction_));
-        pendingControllerAction_.reset();
-    }
-    if (pendingPilotCommand_)
-    {
-        const auto mode = simulation_.State().mode;
-        if (mode == dronesim::simulation::FlightMode::Hovering
-            || mode == dronesim::simulation::FlightMode::Flying)
-        {
-            const dronesim::simulation::DroneCommand velocityCommand{
-                dronesim::simulation::DroneCommand::Kind::SetVelocity,
-                pendingPilotCommand_->velocityMetersPerSecond};
-            const dronesim::simulation::DroneCommand yawCommand{
-                dronesim::simulation::DroneCommand::Kind::SetYawRate,
-                glm::dvec3{0.0},
-                pendingPilotCommand_->yawRateRadiansPerSecond};
-            static_cast<void>(ApplySimulationCommand(velocityCommand));
-            static_cast<void>(ApplySimulationCommand(yawCommand));
-        }
-    }
-
-    simulation_.AdvanceOneTick();
+        || missionController_->State().FormationTransit().IsActive();
+    manualControlSession_.AdvanceTick(simulation_, manualInputBlocked);
 }
 
 dronesim::simulation::CommandResult DroneSimApp::ApplySimulationCommand(

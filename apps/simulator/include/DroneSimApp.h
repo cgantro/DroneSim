@@ -2,6 +2,7 @@
 
 #include "BenchmarkSession.h"
 #include "manual_control/GamepadController.h"
+#include "manual_control/ManualControlSession.h"
 #include "gui/SimulatorHud.h"
 #include "FleetMissionController.h"
 #include "manual_control/GamepadCommandMapper.h"
@@ -101,7 +102,6 @@ private:
     bool webFirstFrameRendered_ = false;
     bool webGraphicsInitialized_ = false;
     std::uint8_t webStartupStep_ = 0;
-    std::optional<dronesim::manual_control::GamepadAxes> webPilotAxes_;
 #endif
     /** @brief 지형·지도 형상·드론 모형과 강체 월드의 충돌 모양을 준비한다. */
     void LoadScene();
@@ -118,7 +118,6 @@ private:
     [[nodiscard]] bool SmokeTestIsComplete() const;
     /** @brief 카메라 모의가 한 번 이상 갱신됐는지 확인한다. 픽셀은 CPU로 읽지 않는다. */
     [[nodiscard]] int ValidateSmokeTestOutput() const;
-    void AdvanceManualControlTick();
     /** @brief 전체 임무를 시작하고 비행 입력을 임무에 넘긴다. */
     [[nodiscard]] bool StartCompleteFleetMission();
     [[nodiscard]] bool StartFleetReconnaissance();
@@ -148,8 +147,7 @@ private:
     bool externalControl_ = false;
     bool missionControlOwnsInput_ = false;
     dronesim::manual_control::GamepadController gamepadController_;
-    std::optional<dronesim::simulation::DroneCommand> pendingControllerAction_;
-    std::optional<dronesim::manual_control::PilotCommand> pendingPilotCommand_;
+    dronesim::manual_control::ManualControlSession manualControlSession_;
     bool benchmarkMode_ = false;
     bool visibleBenchmarkMode_ = false;
     std::size_t renderedFrames_ = 0;

@@ -121,6 +121,7 @@ endif()
 
 add_library(dronesim_manual_control STATIC
   modules/manual_control/src/GamepadCommandMapper.cpp
+  modules/manual_control/src/ManualControlSession.cpp
 )
 target_include_directories(dronesim_manual_control PUBLIC modules/manual_control/include)
 target_link_libraries(dronesim_manual_control PUBLIC dronesim_simulation_core)

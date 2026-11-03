@@ -15,11 +15,7 @@ bool DroneSimApp::StartCompleteFleetMission()
     if (!missionController_->StartCompleteFleetMission())
         return false;
 
-    pendingControllerAction_.reset();
-    pendingPilotCommand_.reset();
-#ifdef __EMSCRIPTEN__
-    webPilotAxes_.reset();
-#endif
+    manualControlSession_.ClearPendingInputs();
     TakeMissionControl("DroneSim | 편대 이동 임무 진행 중");
     return true;
 }
