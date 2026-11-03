@@ -14,6 +14,7 @@
 #include "graphics/Texture2D.h"
 #include "graphics/Shader.h"
 #include "graphics/Window.h"
+#include "graphics/X500GimbalAssembly.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
 #include "flight_planning/BuildingObstacle.h"
@@ -118,54 +119,6 @@ constexpr std::size_t trainingFleetSize = 4U;
 constexpr dronesim::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
 
-std::vector<glm::mat4> BuildDroneAssemblyTransforms(
-    const dronesim::graphics::GlbModel& model,
-    const dronesim::simulation::CameraGimbalAngles& angles)
-{
-    const auto parts = model.PartBounds();
-    std::vector<glm::mat4> transforms;
-    transforms.reserve(parts.size());
-    for (const auto& part : parts)
-        transforms.push_back(part.nodeTransform);
-
-    const auto findPart = [parts](std::string_view name)
-    {
-        for (std::size_t index = 0; index < parts.size(); ++index)
-        {
-            if (parts[index].nodeName == name)
-                return index;
-        }
-        throw std::logic_error("기체 카메라 모델에 짐벌 부품이 없습니다.");
-    };
-    const std::size_t yawArm = findPart("PX4 CGO3 yaw_arm");
-    const std::size_t rollArm = findPart("PX4 CGO3 roll_arm");
-    const std::size_t camera = findPart("PX4 CGO3 camera");
-    const auto pivotOf = [&parts](std::size_t index)
-    {
-        return glm::vec3(parts[index].nodeTransform[3]);
-    };
-    const auto aroundPivot = [](const glm::vec3& pivot, const glm::vec3& axis,
-                                double degrees)
-    {
-        const glm::mat4 toPivot = glm::translate(glm::mat4(1.0F), pivot);
-        const glm::mat4 fromPivot = glm::translate(glm::mat4(1.0F), -pivot);
-        const glm::quat rotation = glm::angleAxis(
-            glm::radians(static_cast<float>(degrees)), axis);
-        return toPivot * glm::mat4_cast(rotation) * fromPivot;
-    };
-
-    // GLB에 저장된 각 부품의 원점을 짐벌 축점으로 사용해 부모 관절 회전을 누적한다.
-    const glm::mat4 yawRotation = aroundPivot(
-        pivotOf(yawArm), {0.0F, -1.0F, 0.0F}, angles.yawDegrees);
-    const glm::mat4 rollRotation = aroundPivot(
-        pivotOf(rollArm), {-1.0F, 0.0F, 0.0F}, angles.rollDegrees);
-    const glm::mat4 pitchRotation = aroundPivot(
-        pivotOf(camera), {0.0F, 0.0F, 1.0F}, angles.pitchUpDegrees);
-    transforms[yawArm] = yawRotation * transforms[yawArm];
-    transforms[rollArm] = yawRotation * rollRotation * transforms[rollArm];
-    transforms[camera] = yawRotation * rollRotation * pitchRotation * transforms[camera];
-    return transforms;
-}
 }
 
 DroneSimApp::DroneSimApp(Options options)
@@ -321,6 +274,8 @@ void DroneSimApp::LoadSceneModels()
     cube_ = dronesim::graphics::Mesh::CreateCube(1.0F);
     droneAssemblyModel_ = dronesim::graphics::GlbModel::Load(
         "models/drones/x500/x500_CAM.glb");
+    droneGimbalAssembly_ = std::make_unique<dronesim::graphics::X500GimbalAssembly>(
+        *droneAssemblyModel_);
     droneSurfaceTexture_ = dronesim::graphics::Texture2D::LoadFromFile(
         "models/drones/x500/carbon-weave.ppm");
 }
@@ -787,10 +742,12 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
             glm::mat4_cast(dronesim::graphics::EnuOrientationToRender(drone.orientation));
         // 드론과 짐벌의 부모 관계·장착 위치가 GLB에 있으므로 기체 자세만 적용한다.
+        const auto& gimbal = simulation_.Camera(id).gimbalAngles;
+        const auto partTransforms = droneGimbalAssembly_->PartTransforms({
+            gimbal.yawDegrees, gimbal.rollDegrees, gimbal.pitchUpDegrees});
         droneAssemblyModel_->Draw(heading, *renderer_, *shader_, view, projection,
             cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true,
-            BuildDroneAssemblyTransforms(
-                *droneAssemblyModel_, simulation_.Camera(id).gimbalAngles));
+            partTransforms);
 
     }
 }

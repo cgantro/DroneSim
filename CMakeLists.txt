@@ -212,6 +212,7 @@ if(DRONESIM_BUILD_GRAPHICS)
     modules/graphics/src/graphics/VertexArray.cpp
     modules/graphics/src/graphics/VertexBuffer.cpp
     modules/graphics/src/graphics/Window.cpp
+    modules/graphics/src/graphics/X500GimbalAssembly.cpp
   )
   if(NOT EMSCRIPTEN)
     list(APPEND DRONESIM_GRAPHICS_SOURCES

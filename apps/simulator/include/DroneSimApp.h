@@ -34,6 +34,7 @@ class Renderer;
 class Shader;
 class Texture2D;
 class Window;
+class X500GimbalAssembly;
 }
 
 namespace dronesim::gui
@@ -182,6 +183,8 @@ private:
     std::unique_ptr<dronesim::graphics::Mesh> cube_;
     std::unique_ptr<dronesim::scene::TrainingRangeScene> trainingRangeScene_;
     std::unique_ptr<dronesim::graphics::GlbModel> droneAssemblyModel_;
+    // 모델을 참조하는 조립 객체는 모델보다 먼저 해제되도록 뒤에 선언한다.
+    std::unique_ptr<dronesim::graphics::X500GimbalAssembly> droneGimbalAssembly_;
     std::unique_ptr<dronesim::graphics::Texture2D> droneSurfaceTexture_;
     /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
     dronesim::simulation::DroneId observerDroneId_ = 0;
