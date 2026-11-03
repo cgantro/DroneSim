@@ -50,6 +50,7 @@ target_include_directories(dronesim_geometry PUBLIC modules/geometry/include)
 target_link_libraries(dronesim_geometry PUBLIC glm::glm)
 
 add_library(dronesim_flight_planning STATIC
+  modules/flight_planning/src/CollisionAvoidancePlanner.cpp
   modules/flight_planning/src/BuildingObstacle.cpp
   modules/flight_planning/src/FormationPlanner.cpp
   modules/flight_planning/src/RoutePlanner.cpp
@@ -88,7 +89,7 @@ add_library(dronesim_scenario STATIC
 )
 target_include_directories(dronesim_scenario PUBLIC modules/scenario/include)
 target_link_libraries(dronesim_scenario
-  PUBLIC dronesim_simulation_core
+  PUBLIC dronesim_simulation_core dronesim_flight_planning
   PRIVATE nlohmann_json::nlohmann_json
 )
 
