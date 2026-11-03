@@ -1,7 +1,7 @@
 #include "scenario/ScenarioResultEvaluator.h"
 
 #include "scenario/ScenarioDefinition.h"
-#include "scenario/ScenarioRunner.h"
+#include "scenario/ScenarioResult.h"
 
 #include <glm/geometric.hpp>
 
