@@ -17,13 +17,18 @@ struct TerrainCellCoordinates
     float southFraction;
 };
 
+bool HasValidGridExtent(const TerrainGrid& terrain) noexcept
+{
+    return terrain.sampleCount >= 2U
+        && std::isfinite(terrain.spacingXMeters) && terrain.spacingXMeters > 0.0F
+        && std::isfinite(terrain.spacingYMeters) && terrain.spacingYMeters > 0.0F;
+}
+
 TerrainCellCoordinates FindTerrainCell(
     const TerrainGrid& terrain, const glm::dvec2& positionMeters)
 {
-    if (terrain.sampleCount < 2U || !std::isfinite(positionMeters.x)
-        || !std::isfinite(positionMeters.y)
-        || !std::isfinite(terrain.spacingXMeters) || !(terrain.spacingXMeters > 0.0F)
-        || !std::isfinite(terrain.spacingYMeters) || !(terrain.spacingYMeters > 0.0F)
+    if (!HasValidGridExtent(terrain)
+        || !std::isfinite(positionMeters.x) || !std::isfinite(positionMeters.y)
         || !std::isfinite(terrain.referenceElevationMeters)
         || terrain.heightOffsetsMeters.size()
             != static_cast<std::size_t>(terrain.sampleCount) * terrain.sampleCount)
@@ -76,10 +81,8 @@ double TerrainGrid::HalfDepthMeters() const noexcept
 bool TerrainGrid::ContainsLocalPositionMeters(
     const glm::dvec2& positionMeters) const noexcept
 {
-    if (sampleCount < 2U || !std::isfinite(positionMeters.x)
-        || !std::isfinite(positionMeters.y)
-        || !std::isfinite(spacingXMeters) || !(spacingXMeters > 0.0F)
-        || !std::isfinite(spacingYMeters) || !(spacingYMeters > 0.0F))
+    if (!HasValidGridExtent(*this)
+        || !std::isfinite(positionMeters.x) || !std::isfinite(positionMeters.y))
     {
         return false;
     }
