@@ -26,13 +26,6 @@ bool TakeOffFleetDrones(
     return true;
 }
 
-void LandDroneIfNeeded(
-    simulation::SimulationCore& simulationCore,
-    simulation::DroneId droneId)
-{
-    static_cast<void>(TryLandDrone(simulationCore, droneId));
-}
-
 bool TryLandDrone(
     simulation::SimulationCore& simulationCore,
     simulation::DroneId droneId)
@@ -53,6 +46,6 @@ void LandActiveFleetDrones(
     std::span<const simulation::DroneId> droneIds)
 {
     for (const simulation::DroneId droneId : droneIds)
-        LandDroneIfNeeded(simulationCore, droneId);
+        static_cast<void>(TryLandDrone(simulationCore, droneId));
 }
 }

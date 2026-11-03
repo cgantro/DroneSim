@@ -11,11 +11,6 @@ namespace dronesim::mission
     simulation::SimulationCore& simulation,
     std::span<const simulation::DroneId> droneIds);
 
-/** @brief 이미 지상에 있거나 착륙 중인 드론을 제외하고 착륙을 명령한다. */
-void LandDroneIfNeeded(
-    simulation::SimulationCore& simulation,
-    simulation::DroneId droneId);
-
 /** @brief 착륙 명령이 받아들여졌거나 이미 착륙 상태인지 반환한다. */
 [[nodiscard]] bool TryLandDrone(
     simulation::SimulationCore& simulation,

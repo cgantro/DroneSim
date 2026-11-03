@@ -403,7 +403,8 @@ void DroneSimApp::AdvanceFleetReconnaissance()
                 {
                     mission.UpdateStatus(
                         dronesim::mission::FleetDroneStatus::BatteryReturnRouteFailed);
-                    dronesim::mission::LandDroneIfNeeded(simulation_, droneId);
+                    static_cast<void>(dronesim::mission::TryLandDrone(
+                        simulation_, droneId));
                 }
                 continue;
             }
@@ -945,7 +946,8 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
         if (route->assignmentLeaseExpiresAtTick != 0U
             && currentTick >= route->assignmentLeaseExpiresAtTick)
         {
-            dronesim::mission::LandDroneIfNeeded(simulation_, message.destination);
+            static_cast<void>(dronesim::mission::TryLandDrone(
+                simulation_, message.destination));
             mission->second.UpdateStatus(
                 dronesim::mission::FleetDroneStatus::AssignmentExpiredLanding);
             continue;
