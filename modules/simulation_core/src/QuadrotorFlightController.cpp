@@ -42,10 +42,52 @@ glm::dvec3 PositionControlAcceleration(
     const QuadrotorControllerParameters& controller)
 {
     const glm::dvec3 targetVelocity =
-        QuadrotorFlightController::WaypointVelocityTarget(
+        QuadrotorFlightController::PositionTargetVelocity(
             state, targetPosition, controller);
     return controller.velocityGain
         * (targetVelocity - state.velocityMetersPerSecond);
+}
+
+/** @brief 현재 비행 모드에 맞는 위치 또는 속도 목표에서 가속도를 계산한다. */
+glm::dvec3 AccelerationForFlightMode(
+    const DroneState& state,
+    const DroneControlState& control,
+    const QuadrotorControllerParameters& controller)
+{
+    switch (state.mode)
+    {
+    case FlightMode::Grounded:
+        return glm::dvec3{0.0};
+
+    case FlightMode::TakingOff:
+    {
+        const glm::dvec3 targetPosition{
+            state.positionMeters.x, state.positionMeters.y,
+            control.groundElevationMeters + DroneModel::takeoffHeightMeters};
+        return PositionControlAcceleration(state, targetPosition, controller);
+    }
+
+    case FlightMode::Landing:
+    {
+        const glm::dvec3 targetPosition{
+            state.positionMeters.x, state.positionMeters.y,
+            control.groundElevationMeters
+                + QuadrotorFlightController::groundedModelOriginHeightMeters};
+        return PositionControlAcceleration(state, targetPosition, controller);
+    }
+
+    case FlightMode::FollowingWaypoint:
+        return PositionControlAcceleration(
+            state, control.waypointMeters, controller);
+
+    case FlightMode::Hovering:
+    case FlightMode::Flying:
+        return controller.velocityGain
+            * (control.targetVelocityMetersPerSecond
+                - state.velocityMetersPerSecond);
+    }
+
+    return glm::dvec3{0.0};
 }
 
 /** @brief 로터 추력 방향을 기체 위쪽 축에 맞추고 yaw 방향을 유지한다. */
@@ -158,7 +200,7 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
 }
 }
 
-glm::dvec3 QuadrotorFlightController::WaypointVelocityTarget(
+glm::dvec3 QuadrotorFlightController::PositionTargetVelocity(
     const DroneState& state,
     const glm::dvec3& targetPosition,
     const QuadrotorControllerParameters& controller)
@@ -196,38 +238,8 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
         return targets;
     }
 
-    glm::dvec3 desiredAcceleration{0.0};
-    switch (state.mode)
-    {
-    case FlightMode::Grounded:
-        return {};
-    case FlightMode::TakingOff:
-    {
-        const glm::dvec3 targetPosition{
-            state.positionMeters.x, state.positionMeters.y,
-            control.groundElevationMeters + DroneModel::takeoffHeightMeters};
-        desiredAcceleration = PositionControlAcceleration(state, targetPosition, controller);
-        break;
-    }
-    case FlightMode::Landing:
-    {
-        const glm::dvec3 targetPosition{
-            state.positionMeters.x, state.positionMeters.y,
-            control.groundElevationMeters + groundedModelOriginHeightMeters};
-        desiredAcceleration = PositionControlAcceleration(state, targetPosition, controller);
-        break;
-    }
-    case FlightMode::FollowingWaypoint:
-        desiredAcceleration = PositionControlAcceleration(
-            state, control.waypointMeters, controller);
-        break;
-    case FlightMode::Hovering:
-    case FlightMode::Flying:
-        desiredAcceleration = controller.velocityGain * (
-            control.targetVelocityMetersPerSecond - state.velocityMetersPerSecond);
-        break;
-    }
-
+    glm::dvec3 desiredAcceleration = AccelerationForFlightMode(
+        state, control, controller);
     desiredAcceleration = LimitMagnitude(
         desiredAcceleration, maximumAccelerationMetersPerSecondSquared);
     const glm::dvec3 gravity{0.0, 0.0, gravityMetersPerSecondSquared};

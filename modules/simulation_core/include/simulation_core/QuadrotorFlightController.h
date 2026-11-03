@@ -32,8 +32,8 @@ public:
     /** @brief 강체 비행에서 경유점을 향해 이동할 때의 최고 속도다. */
     static constexpr double maximumWaypointSpeedMetersPerSecond = 2.0;
 
-    /** @brief 위치 제어기가 경유점을 향해 만들려는 속도를 돌려준다. */
-    [[nodiscard]] static glm::dvec3 WaypointVelocityTarget(
+    /** @brief 위치 제어기가 목표 위치에 가까워질 때 사용할 속도를 계산한다. */
+    [[nodiscard]] static glm::dvec3 PositionTargetVelocity(
         const DroneState& state,
         const glm::dvec3& targetPosition,
         const QuadrotorControllerParameters& controller = defaultQuadrotorControllerParameters);

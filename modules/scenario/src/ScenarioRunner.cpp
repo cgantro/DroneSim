@@ -531,7 +531,7 @@ glm::dvec3 MissionVelocityIntent(
         ? avoidanceTarget->second
         : task->CurrentWaypoint();
 
-    glm::dvec3 targetVelocity = QuadrotorFlightController::WaypointVelocityTarget(
+    glm::dvec3 targetVelocity = QuadrotorFlightController::PositionTargetVelocity(
         state, waypoint, definition.controllerParameters);
 
     if (definition.windVelocity)
