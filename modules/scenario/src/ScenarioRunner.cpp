@@ -254,82 +254,6 @@ void RecordTickEvent(
         "tick " + std::to_string(tick) + ": " + std::move(message));
 }
 
-void FailTasksForLowBatteryReturn(
-    std::uint64_t tick,
-    std::string_view droneName,
-    std::optional<ScenarioResult::Mission>& mission,
-    ScenarioResult& result)
-{
-    if (!mission)
-        return;
-
-    // 배터리 귀환이 시작되면 드론이 맡은 미완료 작업은 더 진행할 수 없다.
-    for (ScenarioResult::MissionTask& task : mission->tasks)
-    {
-        if (task.droneName != droneName || task.IsCompleted() || task.IsFailed())
-            continue;
-
-        task.Fail();
-        RecordTickEvent(result, tick,
-            "'" + task.name + "' 임무는 미완료로 남습니다.");
-    }
-}
-
-void UpdateEnergyPolicy(
-    std::uint64_t tick,
-    std::optional<ScenarioResult::Mission>& mission,
-    SimulationCore& simulation,
-    const ScenarioDrones& drones,
-    const ScenarioDefinition& definition,
-    ScenarioResult& result)
-{
-    const auto handleDrone = [&](const std::string& droneName)
-    {
-        const ScenarioDroneRuntime& drone = drones.at(droneName);
-        const DroneId droneId = drone.Id();
-        const bool beganLowBatteryReturn =
-            simulation.TryBeginLowBatteryReturn(droneId);
-        if (beganLowBatteryReturn)
-        {
-            RecordTickEvent(result, tick,
-                droneName + " 드론이 배터리 예비량에 도달해 출발 지점으로 돌아갑니다.");
-            FailTasksForLowBatteryReturn(tick, droneName, mission, result);
-        }
-        else if (!simulation.Battery(droneId).IsReturningForLowBattery())
-        {
-            return;
-        }
-
-        const DroneState& state = simulation.State(droneId);
-        if (!DroneModel::CanAcceptInFlightCommands(state.mode))
-            return;
-
-        const glm::dvec3& returnPosition = drone.HomePositionMeters();
-        if (glm::distance(state.positionMeters, returnPosition) <= 0.2)
-        {
-            const CommandResult landResult = simulation.Apply(droneId,
-                {DroneCommand::Kind::Land});
-            if (landResult != CommandResult::Accepted)
-                result.issues.push_back(droneName
-                    + " 드론이 귀환 지점에서 착륙하지 못했습니다.");
-            return;
-        }
-
-        const CommandResult returnResult = simulation.Apply(droneId,
-            {DroneCommand::Kind::SetWaypoint, returnPosition});
-        if (returnResult != CommandResult::Accepted)
-            result.issues.push_back(droneName + " 드론이 배터리 귀환 경로를 받지 못했습니다.");
-    };
-
-    for (const ScenarioDrone& drone : definition.drones)
-        handleDrone(drone.name);
-}
-
-bool IsConnected(const ScenarioDrones& drones, const std::string& droneName)
-{
-    return drones.at(droneName).IsConnected();
-}
-
 const DroneCommunicationOutage* FindActiveCommunicationOutage(
     std::uint64_t tick,
     const std::string& droneName,
@@ -506,7 +430,7 @@ void ApplyScheduledCommands(
     while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
     {
         const TickCommand& command = commands[nextCommand++];
-        if (!IsConnected(drones, command.droneName))
+        if (!drones.at(command.droneName).IsConnected())
         {
             RecordTickEvent(result, tick, command.droneName
                 + " 드론에 명령을 전달하지 못했습니다. 마지막 위치는 이전 보고값입니다.");
@@ -540,7 +464,7 @@ void UpdateMissionCommands(
             continue;
         if (!dronesWithPendingTask.insert(task.droneName).second)
             continue;
-        if (tick < task.startTick || !IsConnected(drones, task.droneName))
+        if (tick < task.startTick || !drones.at(task.droneName).IsConnected())
             continue;
 
         const DroneId droneId = drones.at(task.droneName).Id();
@@ -643,7 +567,7 @@ void UpdateCollisionAvoidance(
     motionIntents.reserve(definition.drones.size());
     for (const ScenarioDrone& drone : definition.drones)
     {
-        const bool connected = IsConnected(drones, drone.name);
+        const bool connected = drones.at(drone.name).IsConnected();
         DroneState state = connected
             ? simulation.State(drones.at(drone.name).Id())
             : drones.at(drone.name).LastKnownState();
@@ -746,7 +670,7 @@ void UpdateMissionResults(
     {
         // 임무 단계 변경은 작업 객체가 맡아 시작·실패·완료 상태가 서로 겹치지 않게 한다.
         if (!task.IsActive()
-            || !IsConnected(drones, task.droneName))
+            || !drones.at(task.droneName).IsConnected())
             continue;
 
         const DroneId droneId = drones.at(task.droneName).Id();
@@ -903,6 +827,76 @@ private:
             RecordTrajectorySample(definition_, simulation_, drones_, 0U, result_);
     }
 
+    /** @brief 배터리 귀환을 시작한 드론의 미완료 정찰 작업을 실패로 남긴다. */
+    void FailTasksForLowBatteryReturn(
+        std::uint64_t tick, std::string_view droneName)
+    {
+        if (!result_.mission)
+            return;
+
+        // 배터리 귀환이 시작되면 해당 드론의 미완료 작업은 더 진행할 수 없다.
+        for (ScenarioResult::MissionTask& task : result_.mission->tasks)
+        {
+            if (task.droneName != droneName || task.IsCompleted() || task.IsFailed())
+                continue;
+
+            task.Fail();
+            RecordTickEvent(result_, tick,
+                "'" + task.name + "' 임무는 미완료로 남습니다.");
+        }
+    }
+
+    /**
+     * @brief 예비 배터리에 도달한 드론을 출발 지점으로 보내고 도착하면 착륙시킨다.
+     * @details 매 Tick 배터리 모델에 귀환 시작을 묻고, 이미 귀환 중인 드론만 계속 처리한다.
+     */
+    void UpdateEnergyPolicy(std::uint64_t tick)
+    {
+        for (const ScenarioDrone& drone : definition_.drones)
+            UpdateEnergyPolicyForDrone(tick, drone.name);
+    }
+
+    /** @brief 한 대의 배터리 상태에 따라 귀환 경로 또는 착륙 명령을 적용한다. */
+    void UpdateEnergyPolicyForDrone(
+        std::uint64_t tick, const std::string& droneName)
+    {
+        const ScenarioDroneRuntime& drone = drones_.at(droneName);
+        const DroneId droneId = drone.Id();
+        const bool beganLowBatteryReturn =
+            simulation_.TryBeginLowBatteryReturn(droneId);
+        if (beganLowBatteryReturn)
+        {
+            RecordTickEvent(result_, tick,
+                droneName + " 드론이 배터리 예비량에 도달해 출발 지점으로 돌아갑니다.");
+            FailTasksForLowBatteryReturn(tick, droneName);
+        }
+        else if (!simulation_.Battery(droneId).IsReturningForLowBattery())
+        {
+            return;
+        }
+
+        const DroneState& state = simulation_.State(droneId);
+        if (!DroneModel::CanAcceptInFlightCommands(state.mode))
+            return;
+
+        const glm::dvec3& returnPosition = drone.HomePositionMeters();
+        if (glm::distance(state.positionMeters, returnPosition) <= 0.2)
+        {
+            const CommandResult landResult = simulation_.Apply(droneId,
+                {DroneCommand::Kind::Land});
+            if (landResult != CommandResult::Accepted)
+                result_.issues.push_back(droneName
+                    + " 드론이 귀환 지점에서 착륙하지 못했습니다.");
+            return;
+        }
+
+        const CommandResult returnResult = simulation_.Apply(droneId,
+            {DroneCommand::Kind::SetWaypoint, returnPosition});
+        if (returnResult != CommandResult::Accepted)
+            result_.issues.push_back(
+                droneName + " 드론이 배터리 귀환 경로를 받지 못했습니다.");
+    }
+
     void AdvanceOneTick(std::uint64_t tick)
     {
         // 관제 상태와 입력부터 갱신한다. 통신이 끊긴 동안에는 새 명령을 받지 않는다.
@@ -912,10 +906,7 @@ private:
 
         // 배터리 귀환, 임무 목표, 충돌 회피 순으로 물리 이동 전 명령을 정한다.
         if (definition_.energyModel)
-        {
-            UpdateEnergyPolicy(tick, result_.mission,
-                simulation_, drones_, definition_, result_);
-        }
+            UpdateEnergyPolicy(tick);
         UpdateMissionCommands(tick, result_.mission,
             simulation_, drones_, result_);
         UpdateCollisionAvoidance(tick, definition_, result_.mission,
