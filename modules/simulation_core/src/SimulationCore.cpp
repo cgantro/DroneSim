@@ -1,5 +1,5 @@
 #include "simulation_core/SimulationCore.h"
-#include "simulation_core/FiniteVector.h"
+#include "geometry/Finite.h"
 #include "simulation_core/SimulationPhysics.h"
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
@@ -136,7 +136,7 @@ private:
 
 bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
 {
-    return IsFiniteVector(positionMeters) && std::isfinite(yawRadians);
+    return geometry::IsFinite(positionMeters) && std::isfinite(yawRadians);
 }
 }
 
@@ -654,7 +654,7 @@ void SimulationCore::SetCameraFault(DroneId droneId, bool faulted)
 
 void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
-    if (!IsFiniteVector(velocity))
+    if (!geometry::IsFinite(velocity))
         throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
     ecs_->physics.SetWindVelocityMetersPerSecond(velocity);
 }

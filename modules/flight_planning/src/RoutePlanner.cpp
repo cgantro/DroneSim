@@ -1,4 +1,5 @@
 #include "flight_planning/RoutePlanner.h"
+#include "geometry/Finite.h"
 #include "geometry/Polygon.h"
 
 #include <algorithm>
@@ -281,12 +282,9 @@ std::optional<std::vector<glm::dvec3>> RoutePlanner::Plan(
 {
     // 지도 구현체에서 경계·지면 높이·장애물만 받아오고, 지도 파일 형식은 알지 않는다.
     const glm::dvec4 bounds = environment.BoundsMeters();
-    if (!std::isfinite(bounds.x) || !std::isfinite(bounds.y)
-        || !std::isfinite(bounds.z) || !std::isfinite(bounds.w)
+    if (!geometry::IsFinite(bounds)
         || !(bounds.z > bounds.x) || !(bounds.w > bounds.y)
-        || !std::isfinite(startMeters.x) || !std::isfinite(startMeters.y)
-        || !std::isfinite(startMeters.z) || !std::isfinite(goalMeters.x)
-        || !std::isfinite(goalMeters.y) || !std::isfinite(goalMeters.z)
+        || !geometry::IsFinite(startMeters) || !geometry::IsFinite(goalMeters)
         || !std::isfinite(options.minimumTransitAltitudeMeters)
         || !std::isfinite(options.obstacleClearanceMeters)
         || !(options.obstacleClearanceMeters > 0.0))

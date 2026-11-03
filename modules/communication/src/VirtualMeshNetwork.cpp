@@ -1,5 +1,6 @@
 #include "communication/VirtualMeshNetwork.h"
 #include "communication/DroneSocketTransport.h"
+#include "geometry/Finite.h"
 #include "geometry/Polygon.h"
 
 #include <algorithm>
@@ -20,13 +21,6 @@ constexpr std::size_t maximumRecordedEvents = 64U;
 double Cross(const glm::dvec2& first, const glm::dvec2& second)
 {
     return first.x * second.y - first.y * second.x;
-}
-
-bool IsFinitePosition(const glm::dvec3& positionMeters) noexcept
-{
-    return std::isfinite(positionMeters.x)
-        && std::isfinite(positionMeters.y)
-        && std::isfinite(positionMeters.z);
 }
 
 std::optional<double> SegmentIntersectionParameter(
@@ -64,7 +58,7 @@ void VirtualMeshNetwork::UpdateNodes(
     std::map<NetworkNodeId, NetworkNodeSnapshot> updated;
     for (const NetworkNodeSnapshot& node : nodes)
     {
-        if (!IsFinitePosition(node.positionMeters))
+        if (!geometry::IsFinite(node.positionMeters))
             throw std::invalid_argument("통신 노드 위치는 유한한 좌표여야 합니다.");
         if (!updated.emplace(node.id, node).second)
             throw std::invalid_argument("통신 노드 ID가 중복되었습니다.");
@@ -294,8 +288,8 @@ bool VirtualMeshNetwork::LinkAvailableAt(NetworkNodeId sender,
 {
     if (radioDisabledNodes_.contains(sender) || radioDisabledNodes_.contains(receiver))
         return false;
-    if (!IsFinitePosition(senderPositionMeters)
-        || !IsFinitePosition(receiverPositionMeters)
+    if (!geometry::IsFinite(senderPositionMeters)
+        || !geometry::IsFinite(receiverPositionMeters)
         || glm::distance(senderPositionMeters, receiverPositionMeters)
             > settings_.maximumLinkRangeMeters)
         return false;

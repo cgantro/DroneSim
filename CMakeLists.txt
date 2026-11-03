@@ -41,7 +41,10 @@ add_library(dronesim_terrain STATIC
   modules/terrain/src/TerrainGridIO.cpp
 )
 target_include_directories(dronesim_terrain PUBLIC modules/terrain/include)
-target_link_libraries(dronesim_terrain PUBLIC glm::glm)
+target_link_libraries(dronesim_terrain
+  PUBLIC glm::glm
+  PRIVATE dronesim_geometry
+)
 
 add_library(dronesim_geometry STATIC
   modules/geometry/src/Polygon.cpp

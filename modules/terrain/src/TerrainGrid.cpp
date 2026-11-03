@@ -1,4 +1,5 @@
 #include "terrain/TerrainGrid.h"
+#include "geometry/Finite.h"
 
 #include <algorithm>
 #include <cmath>
@@ -28,7 +29,7 @@ TerrainCellCoordinates FindTerrainCell(
     const TerrainGrid& terrain, const glm::dvec2& positionMeters)
 {
     if (!HasValidGridExtent(terrain)
-        || !std::isfinite(positionMeters.x) || !std::isfinite(positionMeters.y)
+        || !geometry::IsFinite(positionMeters)
         || !std::isfinite(terrain.referenceElevationMeters)
         || terrain.heightOffsetsMeters.size()
             != static_cast<std::size_t>(terrain.sampleCount) * terrain.sampleCount)
@@ -82,7 +83,7 @@ bool TerrainGrid::ContainsLocalPositionMeters(
     const glm::dvec2& positionMeters) const noexcept
 {
     if (!HasValidGridExtent(*this)
-        || !std::isfinite(positionMeters.x) || !std::isfinite(positionMeters.y))
+        || !geometry::IsFinite(positionMeters))
     {
         return false;
     }
