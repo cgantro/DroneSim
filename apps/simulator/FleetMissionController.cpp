@@ -447,7 +447,7 @@ void FleetMissionController::AdvanceCompleteFleetMission()
     if (!CollectCompleteMissionReports(currentStage, droneIds, reports))
         return;
 
-    ApplyCompleteMissionProgress(currentStage, reports);
+    ApplyCompleteMissionProgress(reports);
 }
 
 void FleetMissionController::AdvanceAfterFormationTransit()
@@ -510,27 +510,15 @@ bool FleetMissionController::CollectCompleteMissionReports(
 }
 
 void FleetMissionController::ApplyCompleteMissionProgress(
-    mission::CompleteFleetMissionState::Stage currentStage,
     const std::vector<std::optional<mission::FleetMissionReport>>& reports)
 {
     using Stage = mission::CompleteFleetMissionState::Stage;
-    // 진행 규칙은 임무 모듈에 맡기고, 이 클래스는 결과에 따른 다음 동작을 고른다.
-    dronesim::mission::FleetMissionLeg missionLeg;
-    switch (currentStage)
-    {
-    case Stage::Reconnaissance:
-        missionLeg = dronesim::mission::FleetMissionLeg::Reconnaissance;
-        break;
-    case Stage::Regrouping:
-        missionLeg = dronesim::mission::FleetMissionLeg::Regrouping;
-        break;
-    case Stage::Returning:
-        missionLeg = dronesim::mission::FleetMissionLeg::Returning;
-        break;
-    default:
+    const Stage currentStage = fleetMission_.CompleteMission().CurrentStage();
+    // 임무 상태가 단계와 드론 임무 구간의 대응을 소유한다.
+    const auto missionLeg = fleetMission_.CompleteMission().CurrentLeg();
+    if (!missionLeg)
         return;
-    }
-    const auto decision = dronesim::mission::EvaluateFleetMissionProgress(missionLeg, reports);
+    const auto decision = dronesim::mission::EvaluateFleetMissionProgress(*missionLeg, reports);
     if (decision.progress == dronesim::mission::FleetMissionProgress::Failed)
     {
         if (currentStage == Stage::Returning)

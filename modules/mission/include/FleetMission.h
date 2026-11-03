@@ -384,6 +384,23 @@ public:
     /** @brief 전체 임무가 현재 어느 단계에 있는지 돌려준다. */
     [[nodiscard]] Stage CurrentStage() const noexcept { return stage_; }
 
+    /** @brief 드론 보고로 진행을 판정할 수 있는 임무 구간을 돌려준다. */
+    [[nodiscard]] std::optional<FleetMissionLeg> CurrentLeg() const noexcept
+    {
+        switch (stage_)
+        {
+        case Stage::Reconnaissance: return FleetMissionLeg::Reconnaissance;
+        case Stage::Regrouping: return FleetMissionLeg::Regrouping;
+        case Stage::Returning: return FleetMissionLeg::Returning;
+        case Stage::Idle:
+        case Stage::FormationTransit:
+        case Stage::Completed:
+        case Stage::Failed:
+            return std::nullopt;
+        }
+        return std::nullopt;
+    }
+
     /** @brief 각 드론의 출발 위치를 임무 기준 위치로 저장한다. */
     void RecordHomePosition(simulation::DroneId droneId, const glm::dvec3& positionMeters)
     {

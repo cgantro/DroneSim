@@ -61,7 +61,6 @@ private:
         const std::vector<simulation::DroneId>& droneIds,
         std::vector<std::optional<mission::FleetMissionReport>>& reports);
     void ApplyCompleteMissionProgress(
-        mission::CompleteFleetMissionState::Stage stage,
         const std::vector<std::optional<mission::FleetMissionReport>>& reports);
     [[nodiscard]] bool StartFormationTransit();
     void InitializeFleetLeadership();
