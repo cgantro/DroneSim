@@ -5,6 +5,7 @@
 #include "simulation_core/QuadrotorModel.h"
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/SimulationCore.h"
+#include "flight_planning/CollisionAvoidancePlanner.h"
 
 #include <cstdint>
 #include <optional>
@@ -66,15 +67,7 @@ struct DroneCommunicationOutage
     std::uint64_t heartbeatTimeoutTicks;
 };
 
-struct CollisionAvoidanceSettings
-{
-    /** @brief 이보다 가까워질 것으로 예측되면 회피를 시작한다. 단위는 미터다. */
-    double safetyDistanceMeters;
-    /** @brief 이 시간까지 두 기체의 상대 위치를 예측한다. 단위는 초다. */
-    double predictionHorizonSeconds;
-    /** @brief 충돌 지점 옆으로 잡을 회피 경로의 최소 이동 거리다. 단위는 미터다. */
-    double lateralOffsetMeters;
-};
+using CollisionAvoidanceSettings = dronesim::flight_planning::CollisionAvoidanceSettings;
 
 using EnergyModelSettings = BatteryModelParameters;
 

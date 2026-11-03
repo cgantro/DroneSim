@@ -102,16 +102,111 @@ struct ScenarioResult
         std::string droneName;
         /** @brief 점 임무는 한 점, 구역 임무는 왕복 경로의 순서 있는 지점 목록이다. */
         std::vector<glm::dvec3> waypointsMeters;
-        std::size_t currentWaypointIndex = 0;
         std::uint64_t startTick = 0;
         std::uint64_t deadlineTick = 0;
         double toleranceMeters = 0.0;
-        bool started = false;
-        bool failed = false;
-        std::optional<std::uint64_t> completedTick;
+
+        /** @brief 임무 진행 상태를 바깥에서 서로 모순되게 바꾸지 못하도록 감싼다. */
+        enum class Progress
+        {
+            Scheduled,
+            Active,
+            Completed,
+            FailedBeforeStart,
+            FailedAfterStart
+        };
+
+        /** @brief 임무가 시작된 적이 있는지 확인한다. */
+        [[nodiscard]] bool HasStarted() const noexcept
+        {
+            return progress_ == Progress::Active
+                || progress_ == Progress::Completed
+                || progress_ == Progress::FailedAfterStart;
+        }
+
+        /** @brief 현재 임무가 진행 중인지 확인한다. */
+        [[nodiscard]] bool IsActive() const noexcept
+        {
+            return progress_ == Progress::Active;
+        }
+
+        /** @brief 임무가 실패로 끝났는지 확인한다. */
+        [[nodiscard]] bool IsFailed() const noexcept
+        {
+            return progress_ == Progress::FailedBeforeStart
+                || progress_ == Progress::FailedAfterStart;
+        }
 
         /** @brief 완료 Tick이 기록됐는지 확인한다. */
-        [[nodiscard]] bool IsCompleted() const noexcept { return completedTick.has_value(); }
+        [[nodiscard]] bool IsCompleted() const noexcept
+        {
+            return progress_ == Progress::Completed;
+        }
+
+        /** @brief 현재 방문할 경유점을 반환한다. 임무 입력 검증에서 빈 경로를 거른다. */
+        [[nodiscard]] const glm::dvec3& CurrentWaypoint() const noexcept
+        {
+            return waypointsMeters[currentWaypointIndex_];
+        }
+
+        /** @brief 현재 경유점 번호를 0부터 반환한다. */
+        [[nodiscard]] std::size_t CurrentWaypointIndex() const noexcept
+        {
+            return currentWaypointIndex_;
+        }
+
+        /** @brief 화면·결과 파일에 기록할 완료 Tick을 반환한다. */
+        [[nodiscard]] std::optional<std::uint64_t> CompletedAtTick() const noexcept
+        {
+            return completedTick_;
+        }
+
+        /** @brief 예약 상태의 작업만 시작 상태로 바꾼다. */
+        [[nodiscard]] bool Start() noexcept
+        {
+            if (progress_ != Progress::Scheduled)
+                return false;
+            progress_ = Progress::Active;
+            return true;
+        }
+
+        /** @brief 아직 끝나지 않은 작업을 실패 상태로 바꾼다. */
+        void Fail() noexcept
+        {
+            if (progress_ == Progress::Scheduled)
+                progress_ = Progress::FailedBeforeStart;
+            else if (progress_ == Progress::Active)
+                progress_ = Progress::FailedAfterStart;
+        }
+
+        /** @brief 다음 경유점이 있으면 이동하고, 없으면 false를 반환한다. */
+        [[nodiscard]] bool AdvanceWaypoint() noexcept
+        {
+            if (currentWaypointIndex_ + 1U >= waypointsMeters.size())
+                return false;
+            ++currentWaypointIndex_;
+            return true;
+        }
+
+        /** @brief 진행 중인 작업을 완료하고 완료 Tick을 기록한다. */
+        void Complete(std::uint64_t tick) noexcept
+        {
+            if (progress_ != Progress::Active)
+                return;
+            progress_ = Progress::Completed;
+            completedTick_ = tick;
+        }
+
+        /** @brief 완료 작업은 모든 지점을 방문한 것으로 센다. */
+        [[nodiscard]] std::size_t VisitedWaypointCount() const noexcept
+        {
+            return IsCompleted() ? waypointsMeters.size() : currentWaypointIndex_;
+        }
+
+    private:
+        Progress progress_ = Progress::Scheduled;
+        std::size_t currentWaypointIndex_ = 0;
+        std::optional<std::uint64_t> completedTick_;
     };
     /** @brief 임무의 완료·실패·미확정 결과와 역할별 진행 상태다. */
     struct Mission
@@ -143,8 +238,7 @@ struct ScenarioResult
             for (const MissionTask& task : tasks)
             {
                 total += task.waypointsMeters.size();
-                visited += task.IsCompleted()
-                    ? task.waypointsMeters.size() : task.currentWaypointIndex;
+                visited += task.VisitedWaypointCount();
             }
             return total == 0 ? 0.0
                 : 100.0 * static_cast<double>(visited) / static_cast<double>(total);
@@ -157,10 +251,11 @@ struct ScenarioResult
             std::optional<std::uint64_t> latestTick;
             for (const MissionTask& task : tasks)
             {
-                if (!task.completedTick)
+                const auto completedTick = task.CompletedAtTick();
+                if (!completedTick)
                     return std::nullopt;
-                if (!latestTick || *task.completedTick > *latestTick)
-                    latestTick = task.completedTick;
+                if (!latestTick || *completedTick > *latestTick)
+                    latestTick = completedTick;
             }
             return latestTick;
         }

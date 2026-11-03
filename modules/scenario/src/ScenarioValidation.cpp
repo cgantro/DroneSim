@@ -130,30 +130,46 @@ void ValidateMultiDroneSettings(const ScenarioDefinition& definition)
             "minimum_drone_separation_meters는 여러 드론이 있는 시나리오에서만 설정할 수 있습니다.");
 }
 
-/** @brief 드론별 카메라·배터리·모터 초기값이 실제 모델 범위에 맞는지 확인한다. */
-void ValidateDroneValues(const ScenarioDefinition& definition)
+/** @brief 카메라 해상도와 세로 시야각이 렌더링 가능한 값인지 확인한다. */
+void ValidateCameraSettings(const CameraModel& camera)
 {
-    if (!definition.defaultCameraModel.IsValid())
+    if (!camera.IsValid())
         throw std::invalid_argument(
             "카메라 해상도는 양수이고 세로 시야각은 0도보다 크고 180도보다 작아야 합니다.");
+}
 
+/** @brief 드론별 배터리 용량과 시작 충전 비율의 범위를 확인한다. */
+void ValidateDroneBatterySettings(const ScenarioDrone& drone)
+{
+    if (drone.batteryCapacityWattHours
+        && *drone.batteryCapacityWattHours <= 0.0)
+        throw std::invalid_argument(
+            "battery_capacity_watt_hours는 양수여야 합니다.");
+    if (drone.initialBatteryPercent < 0.0
+        || drone.initialBatteryPercent > 100.0)
+        throw std::invalid_argument(
+            "initial_battery_percent는 0부터 100 사이여야 합니다.");
+}
+
+/** @brief 강체 물리에 넣을 초기 로터 속도가 음수가 아닌지 확인한다. */
+void ValidateInitialMotorSpeeds(const ScenarioDrone& drone)
+{
+    if (std::any_of(drone.initialState.motorSpeedsRadiansPerSecond.begin(),
+            drone.initialState.motorSpeedsRadiansPerSecond.end(),
+            [](double speed) { return speed < 0.0; }))
+        throw std::invalid_argument("초기 로터 속도는 0 이상이어야 합니다.");
+}
+
+/** @brief 카메라 기본값과 드론별 카메라·배터리·모터 입력을 확인한다. */
+void ValidateDroneValues(const ScenarioDefinition& definition)
+{
+    ValidateCameraSettings(definition.defaultCameraModel);
     for (const ScenarioDrone& drone : definition.drones)
     {
-        if (drone.cameraModel && !drone.cameraModel->IsValid())
-            throw std::invalid_argument(
-                "카메라 해상도는 양수이고 세로 시야각은 0도보다 크고 180도보다 작아야 합니다.");
-        if (drone.batteryCapacityWattHours
-            && *drone.batteryCapacityWattHours <= 0.0)
-            throw std::invalid_argument(
-                "battery_capacity_watt_hours는 양수여야 합니다.");
-        if (drone.initialBatteryPercent < 0.0
-            || drone.initialBatteryPercent > 100.0)
-            throw std::invalid_argument(
-                "initial_battery_percent는 0부터 100 사이여야 합니다.");
-        if (std::any_of(drone.initialState.motorSpeedsRadiansPerSecond.begin(),
-                drone.initialState.motorSpeedsRadiansPerSecond.end(),
-                [](double speed) { return speed < 0.0; }))
-            throw std::invalid_argument("초기 로터 속도는 0 이상이어야 합니다.");
+        if (drone.cameraModel)
+            ValidateCameraSettings(*drone.cameraModel);
+        ValidateDroneBatterySettings(drone);
+        ValidateInitialMotorSpeeds(drone);
     }
 }
 
@@ -161,17 +177,10 @@ void ValidateDroneValues(const ScenarioDefinition& definition)
 void ValidatePhysicsSettings(const ScenarioDefinition& definition)
 {
     const QuadrotorParameters& model = definition.quadrotorParameters;
-    const glm::dvec3& inertia = model.principalInertiaKilogramMetersSquared;
     if (definition.quadrotorParametersCustomized
-        && (model.massKilograms <= 0.0 || inertia.x <= 0.0 || inertia.y <= 0.0
-            || inertia.z <= 0.0
-            || model.thrustCoefficientNewtonsPerSpeedSquared <= 0.0
-            || model.momentToThrustRatio <= 0.0
-            || model.motorTimeConstantUpSeconds <= 0.0
-            || model.motorTimeConstantDownSeconds <= 0.0
-            || model.maximumMotorSpeedRadiansPerSecond <= 0.0))
+        && !model.HasValidPhysicalProperties())
         throw std::invalid_argument(
-            "기체 질량·관성·추력·토크·모터 시간·최대 속도는 모두 양수여야 합니다.");
+            "기체 크기·질량·관성·추력·토크·모터 응답·최대 속도를 확인해 주세요.");
 
     const QuadrotorControllerParameters& controller =
         definition.controllerParameters;

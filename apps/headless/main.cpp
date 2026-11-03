@@ -106,11 +106,11 @@ nlohmann::json ToJson(const dronesim::scenario::ScenarioResult& result)
                 {"drone", task.droneName},
                 {"target_position_meters", {target.x, target.y, target.z}},
                 {"waypoints_meters", std::move(waypoints)},
-                {"current_waypoint_index", task.currentWaypointIndex},
-                {"started", task.started},
+                {"current_waypoint_index", task.CurrentWaypointIndex()},
+                {"started", task.HasStarted()},
                 {"completed", task.IsCompleted()},
-                {"failed", task.failed},
-                {"completed_tick", task.completedTick}});
+                {"failed", task.IsFailed()},
+                {"completed_tick", task.CompletedAtTick()}});
         }
         mission = {{"name", result.mission->name},
             {"outcome", dronesim::scenario::ToString(result.mission->GetOutcome())},

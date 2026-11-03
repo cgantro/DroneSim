@@ -642,7 +642,7 @@ void Verify_ScenarioRunner_ContinuesTaskDuringHeartbeatLoss()
         result.mission->tasks.end(),
         [](const ScenarioResult::MissionTask& task) { return task.name == "sector-2"; });
     ASSERT_NE(assignedTask, result.mission->tasks.end());
-    EXPECT_FALSE(assignedTask->failed);
+    EXPECT_FALSE(assignedTask->IsFailed());
 
     ASSERT_FALSE(result.trajectory.empty());
     const ScenarioResult::TrajectorySample& lastSample = result.trajectory.back();
@@ -770,7 +770,7 @@ void Verify_ScenarioRunner_LeavesUnreachableWorkInconclusive()
     for (const ScenarioResult::MissionTask& task : result.mission->tasks)
     {
         EXPECT_FALSE(task.IsCompleted());
-        EXPECT_FALSE(task.failed);
+        EXPECT_FALSE(task.IsFailed());
         EXPECT_FALSE(task.droneName.empty());
     }
     ASSERT_EQ(result.drones.size(), 2U);
@@ -992,7 +992,7 @@ void Verify_ScenarioRunner_RunsAssignedWaypointsAndCollisionScenarios()
     EXPECT_EQ(energyResult.mission->GetOutcome(), ScenarioResult::Outcome::Failed);
     ASSERT_EQ(energyResult.mission->tasks.size(), 2U);
     EXPECT_EQ(energyResult.mission->tasks[0].droneName, "low-charge");
-    EXPECT_TRUE(energyResult.mission->tasks[0].failed);
+    EXPECT_TRUE(energyResult.mission->tasks[0].IsFailed());
     EXPECT_EQ(energyResult.mission->tasks[1].droneName, "reserve");
     EXPECT_TRUE(energyResult.mission->tasks[1].IsCompleted());
     ASSERT_EQ(energyResult.drones.size(), 2U);

@@ -123,7 +123,7 @@ ScenarioResult::Outcome ScenarioResult::Mission::GetOutcome() const noexcept
     bool allTasksCompleted = true;
     for (const MissionTask& task : tasks)
     {
-        if (task.failed)
+        if (task.IsFailed())
             return Outcome::Failed;
         if (!task.IsCompleted())
             allTasksCompleted = false;

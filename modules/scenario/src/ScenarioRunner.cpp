@@ -4,6 +4,8 @@
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/SimulationCore.h"
 #include "scenario/ScenarioDefinition.h"
+#include "flight_planning/CollisionAvoidancePlanner.h"
+#include "simulation_core/DroneModel.h"
 
 #include <glm/geometric.hpp>
 
@@ -41,6 +43,31 @@ struct DroneObservation
     std::uint64_t lastHeartbeatTick = 0;
     DroneState lastKnownState;
     std::optional<double> lastKnownBatteryPercent;
+
+    /** @brief 통신으로 받은 상태와 배터리 값을 관제소의 마지막 기록으로 저장한다. */
+    void RecordHeartbeat(std::uint64_t tick, const DroneState& state,
+        std::optional<double> batteryPercent) noexcept
+    {
+        status = DroneCommunicationStatus::Connected;
+        lastHeartbeatTick = tick;
+        lastKnownState = state;
+        lastKnownBatteryPercent = batteryPercent;
+    }
+
+    /** @brief 마지막 하트비트 이후 지난 Tick 수로 통신 상태를 판단한다. */
+    [[nodiscard]] DroneCommunicationStatus StatusAfterMissedHeartbeat(
+        std::uint64_t tick, std::uint64_t timeoutTicks) const noexcept
+    {
+        return tick - lastHeartbeatTick >= timeoutTicks
+            ? DroneCommunicationStatus::Unknown
+            : DroneCommunicationStatus::Stale;
+    }
+
+    /** @brief 관제소가 현재 시각에도 새 하트비트를 받는 중인지 알려준다. */
+    [[nodiscard]] bool IsConnected() const noexcept
+    {
+        return status == DroneCommunicationStatus::Connected;
+    }
 };
 
 struct ScenarioDroneRuntime
@@ -76,13 +103,6 @@ void RecordTrajectorySample(const ScenarioDefinition& definition,
 
 using DroneNameSet = std::unordered_set<std::string>;
 
-bool CanReceiveWaypoint(FlightMode mode) noexcept
-{
-    return mode == FlightMode::Hovering
-        || mode == FlightMode::Flying
-        || mode == FlightMode::FollowingWaypoint;
-}
-
 void UpdateEnergyPolicy(
     std::uint64_t tick,
     std::optional<ScenarioResult::Mission>& mission,
@@ -95,13 +115,13 @@ void UpdateEnergyPolicy(
     {
         const ScenarioDroneRuntime& drone = drones.at(droneName);
         const DroneId droneId = drone.id;
-        BatteryModel& energy = simulation.Battery(droneId);
+        const BatteryModel& energy = simulation.Battery(droneId);
         if (!energy.IsReturningForLowBattery())
         {
             if (!energy.ShouldReturnForLowBattery())
                 return;
 
-            energy.MarkReturningForLowBattery();
+            simulation.MarkReturningForLowBattery(droneId);
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + droneName + " 드론이 배터리 예비량에 도달해 출발 지점으로 돌아갑니다.");
 
@@ -109,9 +129,9 @@ void UpdateEnergyPolicy(
             {
                 for (ScenarioResult::MissionTask& task : mission->tasks)
                 {
-                    if (task.droneName != droneName || task.IsCompleted() || task.failed)
+                    if (task.droneName != droneName || task.IsCompleted() || task.IsFailed())
                         continue;
-                    task.failed = true;
+                    task.Fail();
             result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
                 + task.name + "' 임무는 미완료로 남습니다.");
                 }
@@ -119,7 +139,7 @@ void UpdateEnergyPolicy(
         }
 
         const DroneState& state = simulation.State(droneId);
-        if (!CanReceiveWaypoint(state.mode))
+        if (!DroneModel::CanAcceptInFlightCommands(state.mode))
             return;
 
         const glm::dvec3& returnPosition = drone.homePositionMeters;
@@ -145,13 +165,7 @@ void UpdateEnergyPolicy(
 
 bool IsConnected(const ScenarioDrones& drones, const std::string& droneName)
 {
-    return drones.at(droneName).observation.status
-        == DroneCommunicationStatus::Connected;
-}
-
-const glm::dvec3& CurrentWaypoint(const ScenarioResult::MissionTask& task)
-{
-    return task.waypointsMeters[task.currentWaypointIndex];
+    return drones.at(droneName).observation.IsConnected();
 }
 
 const DroneCommunicationOutage* FindActiveCommunicationOutage(
@@ -189,21 +203,16 @@ void UpdateDroneObservations(
                 result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                     + droneName + " 드론의 통신이 복구되어 새 상태를 받았습니다.");
             }
-            observation.status = DroneCommunicationStatus::Connected;
-            observation.lastHeartbeatTick = tick;
-            observation.lastKnownState = simulation.State(droneId);
-            observation.lastKnownBatteryPercent = simulation.HasBattery(droneId)
+            const std::optional<double> batteryPercent = simulation.HasBattery(droneId)
                 ? std::optional<double>{simulation.Battery(droneId).RemainingPercent()}
                 : std::nullopt;
+            observation.RecordHeartbeat(tick, simulation.State(droneId), batteryPercent);
             return;
         }
 
-        const std::uint64_t ticksSinceHeartbeat = tick - observation.lastHeartbeatTick;
-        const DroneCommunicationStatus newStatus =
-            ticksSinceHeartbeat >= outage->heartbeatTimeoutTicks
-                ? DroneCommunicationStatus::Unknown
-                : DroneCommunicationStatus::Stale;
-        if (observation.status == DroneCommunicationStatus::Connected)
+        const DroneCommunicationStatus newStatus = observation.StatusAfterMissedHeartbeat(
+            tick, outage->heartbeatTimeoutTicks);
+        if (observation.IsConnected())
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + droneName + " 드론의 하트비트가 끊겼습니다.");
@@ -357,7 +366,7 @@ void UpdateMissionCommands(
     DroneNameSet dronesWithPendingTask;
     for (ScenarioResult::MissionTask& task : mission->tasks)
     {
-        if (task.IsCompleted() || task.failed)
+        if (task.IsCompleted() || task.IsFailed())
             continue;
         if (!dronesWithPendingTask.insert(task.droneName).second)
             continue;
@@ -366,16 +375,16 @@ void UpdateMissionCommands(
 
         const DroneId droneId = drones.at(task.droneName).id;
         const FlightMode mode = simulation.State(droneId).mode;
-        if (!CanReceiveWaypoint(mode))
+        if (!DroneModel::CanAcceptInFlightCommands(mode))
         {
             // 이륙 중이면 정해 둔 기한까지 기다린 뒤 시작 가능 여부를 판정한다.
-            if (!task.started && mode == FlightMode::TakingOff
+            if (!task.HasStarted() && mode == FlightMode::TakingOff
                 && tick < task.deadlineTick)
                 continue;
 
-            task.failed = true;
+            task.Fail();
             dronesWithPendingTask.erase(task.droneName);
-            if (task.started)
+            if (task.HasStarted())
                 result.issues.push_back(task.droneName
                     + " 드론이 비행을 멈춰 임무를 이어 가지 못했습니다.");
             else if (tick >= task.deadlineTick)
@@ -386,9 +395,10 @@ void UpdateMissionCommands(
                     + " 드론이 비행 중이어서 임무를 시작하지 못했습니다.");
             continue;
         }
-        if (!task.started)
+        if (!task.HasStarted())
         {
-            task.started = true;
+            if (!task.Start())
+                continue;
             if (!mission->startedTick)
                 mission->startedTick = tick;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
@@ -396,11 +406,11 @@ void UpdateMissionCommands(
         }
 
         const DroneCommand moveCommand{
-            DroneCommand::Kind::SetWaypoint, CurrentWaypoint(task)};
+            DroneCommand::Kind::SetWaypoint, task.CurrentWaypoint()};
         const CommandResult moveResult = simulation.Apply(droneId, moveCommand);
         if (moveResult != CommandResult::Accepted)
         {
-            task.failed = true;
+            task.Fail();
             dronesWithPendingTask.erase(task.droneName);
             result.issues.push_back(task.droneName + " 드론에 임무 목표를 전달하지 못했습니다.");
         }
@@ -422,7 +432,7 @@ glm::dvec3 MissionVelocityIntent(
     const glm::dvec3 waypoint = includeAvoidanceTarget
         && avoidanceTarget != activeAvoidanceTargets.end()
         ? avoidanceTarget->second
-        : CurrentWaypoint(*task);
+        : task->CurrentWaypoint();
 
     glm::dvec3 targetVelocity = QuadrotorFlightController::WaypointVelocityTarget(
         state, waypoint, definition.controllerParameters);
@@ -430,55 +440,6 @@ glm::dvec3 MissionVelocityIntent(
     if (definition.windVelocity)
         targetVelocity += *definition.windVelocity;
     return targetVelocity;
-}
-
-struct PredictedApproach
-{
-    double distanceMeters;
-    double timeSeconds;
-};
-
-glm::dvec3 PositionAtPredictedTime(
-    const glm::dvec3& position,
-    const glm::dvec3& velocity,
-    double timeSeconds)
-{
-    return position + velocity * timeSeconds;
-}
-
-/** @brief 현재 목표 속도가 유지된다고 보고 일정 시간 안의 가장 가까운 거리를 구한다.
- * @details 경유점 도착 뒤 감속·정지는 계산하지 않는 간단한 충돌 위험 추정이다.
- */
-PredictedApproach PredictClosestApproach(
-    const glm::dvec3& firstPosition,
-    const glm::dvec3& firstVelocity,
-    const glm::dvec3& secondPosition,
-    const glm::dvec3& secondVelocity,
-    double predictionHorizonSeconds)
-{
-    const glm::dvec3 relativePosition = secondPosition - firstPosition;
-    const glm::dvec3 relativeVelocity = secondVelocity - firstVelocity;
-    const double relativeSpeedSquared = glm::dot(relativeVelocity, relativeVelocity);
-    const double time = relativeSpeedSquared > 1.0e-9
-        ? std::clamp(-glm::dot(relativePosition, relativeVelocity)
-            / relativeSpeedSquared, 0.0, predictionHorizonSeconds)
-        : 0.0;
-    return {glm::length(relativePosition + relativeVelocity * time), time};
-}
-
-glm::dvec3 PositionBeyondConflict(
-    const glm::dvec3& conflictPosition,
-    const glm::dvec3& currentPosition,
-    const glm::dvec3& velocityIntent,
-    double clearanceMeters)
-{
-    glm::dvec3 forward{velocityIntent.x, velocityIntent.y, 0.0};
-    if (glm::length(forward) < 1.0e-6)
-        forward = {conflictPosition.x - currentPosition.x,
-            conflictPosition.y - currentPosition.y, 0.0};
-    if (glm::length(forward) < 1.0e-6)
-        return conflictPosition;
-    return conflictPosition + glm::normalize(forward) * clearanceMeters;
 }
 
 /** @brief 드론이 맡아 진행 중인 첫 임무 작업을 찾는다. */
@@ -489,8 +450,7 @@ const ScenarioResult::MissionTask* FindActiveMissionTask(
     const auto task = std::find_if(mission.tasks.begin(), mission.tasks.end(),
         [droneName](const ScenarioResult::MissionTask& candidate)
         {
-            return candidate.droneName == droneName && candidate.started
-                && !candidate.IsCompleted() && !candidate.failed;
+            return candidate.droneName == droneName && candidate.IsActive();
         });
     return task == mission.tasks.end() ? nullptr : &*task;
 }
@@ -507,201 +467,92 @@ void UpdateCollisionAvoidance(
     if (!definition.collisionAvoidance || !mission)
         return;
 
-    const CollisionAvoidanceSettings& settings = *definition.collisionAvoidance;
-    std::unordered_map<std::string, glm::dvec3> avoidanceTargets;
-    DroneNameSet currentlyAvoiding;
-    std::vector<bool> droneConnected;
-    std::vector<const ScenarioResult::MissionTask*> activeTasks;
-    droneConnected.reserve(definition.drones.size());
-    activeTasks.reserve(definition.drones.size());
+    std::vector<flight_planning::DroneMotionIntent> motionIntents;
+    motionIntents.reserve(definition.drones.size());
     for (const ScenarioDrone& drone : definition.drones)
     {
         const bool connected = IsConnected(drones, drone.name);
-        droneConnected.push_back(connected);
+        DroneState state = connected
+            ? simulation.State(drones.at(drone.name).id)
+            : drones.at(drone.name).observation.lastKnownState;
+
+        // 통신이 끊긴 드론은 마지막 위치에 멈춰 있는 장애물처럼 다룬다.
+        if (!connected)
+            state.velocityMetersPerSecond = glm::dvec3{0.0};
+
         const ScenarioResult::MissionTask* task = connected
-            ? FindActiveMissionTask(*mission, drone.name) : nullptr;
-        if (task && !CanReceiveWaypoint(simulation.State(drones.at(drone.name).id).mode))
+            ? FindActiveMissionTask(*mission, drone.name)
+            : nullptr;
+        if (task != nullptr
+            && !DroneModel::CanAcceptInFlightCommands(state.mode))
             task = nullptr;
-        activeTasks.push_back(task);
+
+        motionIntents.push_back({
+            drone.name,
+            state.positionMeters,
+            MissionVelocityIntent(state, task, definition,
+                activeAvoidanceTargets, true),
+            MissionVelocityIntent(state, task, definition,
+                activeAvoidanceTargets, false),
+            connected,
+            task != nullptr});
     }
 
-    for (std::size_t firstIndex = 0; firstIndex < definition.drones.size(); ++firstIndex)
+    const flight_planning::CollisionAvoidancePlan plan =
+        flight_planning::PlanCollisionAvoidance(motionIntents,
+            *definition.collisionAvoidance, activeAvoidanceTargets);
+    if (plan.minimumPredictedSeparationMeters
+        && (!result.minimumPredictedDroneSeparationMeters
+            || *plan.minimumPredictedSeparationMeters
+                < *result.minimumPredictedDroneSeparationMeters))
     {
-        const std::string& firstName = definition.drones[firstIndex].name;
-        const bool firstConnected = droneConnected[firstIndex];
-        const ScenarioResult::MissionTask* firstTask = activeTasks[firstIndex];
-        const bool firstHasTask = firstTask != nullptr;
-        for (std::size_t secondIndex = firstIndex + 1;
-            secondIndex < definition.drones.size(); ++secondIndex)
-        {
-            const std::string& secondName = definition.drones[secondIndex].name;
-            const bool secondConnected = droneConnected[secondIndex];
-            const ScenarioResult::MissionTask* secondTask = activeTasks[secondIndex];
-            const bool secondHasTask = secondTask != nullptr;
-            const bool bothDronesHaveTasks = firstConnected && secondConnected
-                && firstHasTask && secondHasTask;
-            const std::string* yieldingDrone = nullptr;
-            if (firstConnected && secondConnected)
-            {
-                if (!firstHasTask && !secondHasTask)
-                    continue;
-                if (!bothDronesHaveTasks)
-                    yieldingDrone = firstHasTask ? &firstName : &secondName;
-            }
-            else if (firstConnected && firstHasTask)
-            {
-                // 통신이 끊긴 드론은 마지막으로 받은 위치와 속도를 장애물처럼 취급한다.
-                yieldingDrone = &firstName;
-            }
-            else if (secondConnected && secondHasTask)
-            {
-                yieldingDrone = &secondName;
-            }
-            else
-            {
-                continue;
-            }
-
-            const auto stateForAvoidance = [&](const std::string& droneName,
-                                                bool connected)
-            {
-                if (connected)
-                    return simulation.State(drones.at(droneName).id);
-                DroneState state = drones.at(droneName).observation.lastKnownState;
-                // 통신이 오래 끊긴 뒤에는 예전 속도로 현재 위치를 외삽할 수 없다.
-                // 마지막으로 확인한 위치를 정지 장애물로 보고 회피 경로를 계산한다.
-                state.velocityMetersPerSecond = glm::dvec3{0.0};
-                return state;
-            };
-            const DroneState firstState = stateForAvoidance(firstName, firstConnected);
-            const DroneState secondState = stateForAvoidance(secondName, secondConnected);
-
-            const glm::dvec3 relativePosition =
-                secondState.positionMeters - firstState.positionMeters;
-            const glm::dvec3 firstVelocityIntent = MissionVelocityIntent(
-                firstState, firstTask, definition,
-                activeAvoidanceTargets, true);
-            const glm::dvec3 secondVelocityIntent = MissionVelocityIntent(
-                secondState, secondTask, definition,
-                activeAvoidanceTargets, true);
-            const PredictedApproach intendedPath = PredictClosestApproach(
-                firstState.positionMeters, firstVelocityIntent,
-                secondState.positionMeters, secondVelocityIntent,
-                settings.predictionHorizonSeconds);
-            const glm::dvec3 threatVelocity =
-                secondVelocityIntent - firstVelocityIntent;
-            const double predictedDistance = intendedPath.distanceMeters;
-            const glm::dvec3 firstRouteVelocity = MissionVelocityIntent(
-                firstState, firstTask, definition,
-                activeAvoidanceTargets, false);
-            const glm::dvec3 secondRouteVelocity = MissionVelocityIntent(
-                secondState, secondTask, definition,
-                activeAvoidanceTargets, false);
-            const PredictedApproach routeContinuation = PredictClosestApproach(
-                firstState.positionMeters, firstRouteVelocity,
-                secondState.positionMeters, secondRouteVelocity,
-                settings.predictionHorizonSeconds);
-            const double routeContinuationDistance = routeContinuation.distanceMeters;
-            if (!result.minimumPredictedDroneSeparationMeters
-                || predictedDistance < *result.minimumPredictedDroneSeparationMeters)
-            {
-                result.minimumPredictedDroneSeparationMeters = predictedDistance;
-            }
-            const bool alreadyAvoiding = bothDronesHaveTasks
-                ? activeAvoidanceTargets.contains(firstName)
-                    || activeAvoidanceTargets.contains(secondName)
-                : activeAvoidanceTargets.contains(*yieldingDrone);
-            // 회피 목표에 도착했더라도 원래 임무 경로가 다시 교차하면 회피를 유지한다.
-            // 한쪽이 정지 장애물이면 안전거리까지만 확보해도 회피를 풀 수 있다.
-            const double releaseDistance = settings.safetyDistanceMeters
-                * (bothDronesHaveTasks ? 1.5 : 1.0);
-            const double entryDistance = settings.safetyDistanceMeters;
-            const double lateralClearance = settings.lateralOffsetMeters
-                + settings.safetyDistanceMeters;
-            const bool shouldContinueAvoiding = alreadyAvoiding
-                ? routeContinuationDistance <= releaseDistance
-                : predictedDistance <= entryDistance;
-            if (!shouldContinueAvoiding)
-                continue;
-
-            glm::dvec3 side(-threatVelocity.y, threatVelocity.x, 0.0);
-            if (glm::length(side) < 1e-6)
-                side = {-relativePosition.y, relativePosition.x, 0.0};
-            if (glm::length(side) < 1e-6)
-                side = {0.0, 1.0, 0.0};
-            side = glm::normalize(side);
-            const auto makeTarget = [&](const DroneState& state,
-                                        const glm::dvec3& velocity,
-                                        const glm::dvec3& offset)
-            {
-                const glm::dvec3 conflictPosition = PositionAtPredictedTime(
-                    state.positionMeters, velocity, intendedPath.timeSeconds);
-                return PositionBeyondConflict(conflictPosition,
-                    state.positionMeters, velocity, releaseDistance)
-                    + offset * lateralClearance;
-            };
-            if (bothDronesHaveTasks)
-            {
-                avoidanceTargets.try_emplace(firstName,
-                    makeTarget(firstState, firstVelocityIntent, side));
-                avoidanceTargets.try_emplace(secondName,
-                    makeTarget(secondState, secondVelocityIntent, -side));
-                currentlyAvoiding.insert(firstName);
-                currentlyAvoiding.insert(secondName);
-            }
-            else
-            {
-                const bool yieldingIsFirst = *yieldingDrone == firstName;
-                const DroneState& yieldingState = yieldingIsFirst
-                    ? firstState : secondState;
-                const glm::dvec3& yieldingVelocity = yieldingIsFirst
-                    ? firstVelocityIntent : secondVelocityIntent;
-                avoidanceTargets.try_emplace(*yieldingDrone,
-                    makeTarget(yieldingState, yieldingVelocity,
-                        yieldingIsFirst ? -side : side));
-                currentlyAvoiding.insert(*yieldingDrone);
-            }
-        }
+        result.minimumPredictedDroneSeparationMeters =
+            plan.minimumPredictedSeparationMeters;
     }
 
-    for (std::size_t droneIndex = 0; droneIndex < definition.drones.size(); ++droneIndex)
+    for (const ScenarioDrone& drone : definition.drones)
     {
-        const std::string& droneName = definition.drones[droneIndex].name;
-        if (!currentlyAvoiding.contains(droneName) || activeTasks[droneIndex] == nullptr)
+        if (!plan.activeDroneNames.contains(drone.name))
             continue;
 
-        // 충돌 지점을 지나서 비켜서도록 목표를 잡고, 위험이 끝날 때까지 유지한다.
-        const auto [avoidanceTarget, newlyAvoiding] =
-            activeAvoidanceTargets.try_emplace(
-                droneName, avoidanceTargets.at(droneName));
-        const CommandResult commandResult = simulation.Apply(drones.at(droneName).id,
-            {DroneCommand::Kind::SetWaypoint, avoidanceTarget->second});
+        const auto plannedTarget = plan.targetsByDrone.find(drone.name);
+        if (plannedTarget == plan.targetsByDrone.end())
+            continue;
+
+        // 처음 회피할 때만 목표를 저장한다. 다음 Tick에도 같은 목표를 유지해
+        // 매번 경로가 바뀌며 기체가 좌우로 흔들리는 현상을 막는다.
+        const auto [activeTarget, newlyAvoiding] =
+            activeAvoidanceTargets.try_emplace(drone.name, plannedTarget->second);
+        const CommandResult commandResult = simulation.Apply(drones.at(drone.name).id,
+            {DroneCommand::Kind::SetWaypoint, activeTarget->second});
         if (commandResult != CommandResult::Accepted)
         {
-            result.issues.push_back(droneName + " 드론에 충돌 회피 경로를 전달하지 못했습니다.");
+            result.issues.push_back(drone.name
+                + " 드론에 충돌 회피 경로를 전달하지 못했습니다.");
             continue;
         }
+
         if (newlyAvoiding)
         {
             ++result.collisionAvoidanceEvents;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + droneName + " 드론이 예상 충돌을 피해 옆 경로로 이동합니다.");
+                + drone.name + " 드론이 예상 충돌을 피해 옆 경로로 이동합니다.");
         }
     }
 
-    for (const auto& entry : activeAvoidanceTargets)
+    for (const auto& [droneName, target] : activeAvoidanceTargets)
     {
-        const std::string& droneName = entry.first;
-        if (!currentlyAvoiding.contains(droneName))
+        static_cast<void>(target);
+        if (!plan.activeDroneNames.contains(droneName))
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + droneName + " 드론이 위험 구간을 벗어나 조사 경로로 돌아갑니다.");
         }
     }
     std::erase_if(activeAvoidanceTargets,
-        [&currentlyAvoiding](const auto& entry)
+        [&plan](const auto& entry)
         {
-            return !currentlyAvoiding.contains(entry.first);
+            return !plan.activeDroneNames.contains(entry.first);
         });
 }
 
@@ -717,31 +568,32 @@ void UpdateMissionResults(
 
     for (ScenarioResult::MissionTask& task : mission->tasks)
     {
-        if (!task.started || task.IsCompleted() || task.failed
+        // 임무 단계 변경은 작업 객체가 맡아 시작·실패·완료 상태가 서로 겹치지 않게 한다.
+        if (!task.IsActive()
             || !IsConnected(drones, task.droneName))
             continue;
 
         const DroneId droneId = drones.at(task.droneName).id;
         const glm::dvec3 distance = simulation.State(droneId).positionMeters
-            - CurrentWaypoint(task);
+            - task.CurrentWaypoint();
         const bool reachedWaypoint = glm::length(distance) <= task.toleranceMeters;
-        if (reachedWaypoint && task.currentWaypointIndex + 1 < task.waypointsMeters.size())
+        // 도착한 지점 뒤에 경유점이 남아 있으면 다음 지점으로, 마지막이면 완료로 전환한다.
+        if (reachedWaypoint && task.AdvanceWaypoint())
         {
-            ++task.currentWaypointIndex;
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + task.droneName + " 드론이 '" + task.name + "' 경유점 "
-                + std::to_string(task.currentWaypointIndex + 1) + "/"
+                + std::to_string(task.CurrentWaypointIndex() + 1U) + "/"
                 + std::to_string(task.waypointsMeters.size()) + "에 도착했습니다.");
         }
         else if (reachedWaypoint)
         {
-            task.completedTick = tick;
+            task.Complete(tick);
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + task.droneName + " 드론이 '" + task.name + "' 임무를 마쳤습니다.");
         }
         else if (tick >= task.deadlineTick)
         {
-            task.failed = true;
+            task.Fail();
             result.issues.push_back(task.droneName
                 + " 드론이 임무 기한 안에 목표에 도달하지 못했습니다.");
         }
@@ -823,8 +675,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         drone.homePositionMeters = initialState.positionMeters;
         if (initialState.mode == FlightMode::Grounded)
             drone.homePositionMeters.z += DroneModel::takeoffHeightMeters;
-        drone.observation = DroneObservation{
-            DroneCommunicationStatus::Connected, 0, initialState};
+        drone.observation.RecordHeartbeat(0, initialState, std::nullopt);
         drone.previousPositionMeters = initialState.positionMeters;
     }
     if (definition.energyModel)
@@ -915,13 +766,13 @@ ScenarioResult RunScenario(std::string_view jsonText)
     for (auto& [droneName, drone] : drones)
     {
         DroneObservation& observation = drone.observation;
-        if (observation.status == DroneCommunicationStatus::Connected)
+        if (observation.IsConnected())
         {
-            observation.lastKnownState = simulation.State(drone.id);
-            observation.lastHeartbeatTick = tickCount;
-            if (simulation.HasBattery(drone.id))
-                observation.lastKnownBatteryPercent =
-                    simulation.Battery(drone.id).RemainingPercent();
+            const std::optional<double> batteryPercent = simulation.HasBattery(drone.id)
+                ? std::optional<double>{simulation.Battery(drone.id).RemainingPercent()}
+                : observation.lastKnownBatteryPercent;
+            observation.RecordHeartbeat(
+                tickCount, simulation.State(drone.id), batteryPercent);
         }
     }
     PopulateFinalSnapshot(definition, simulation, drones, result);
