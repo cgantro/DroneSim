@@ -1,6 +1,7 @@
 #include "gui/SimulatorView.h"
 
 #include "graphics/Camera.h"
+#include "graphics/CoordinateTransform.h"
 #include "graphics/MultisampleFramebuffer.h"
 #include "graphics/Renderer.h"
 #include "simulation_core/EoCameraModel.h"
@@ -22,18 +23,6 @@ constexpr double cameraRadiansPerPixel = 0.006;
 constexpr double minimumObserverPitchRadians = 0.14;
 constexpr double maximumObserverPitchRadians = 1.30;
 constexpr double observerVerticalFieldOfViewRadians = std::numbers::pi_v<double> / 4.0;
-
-glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
-{
-    return {static_cast<float>(positionMeters.x),
-        static_cast<float>(positionMeters.z), static_cast<float>(-positionMeters.y)};
-}
-
-glm::vec3 ToRenderDirection(const glm::dvec3& direction)
-{
-    return {static_cast<float>(direction.x),
-        static_cast<float>(direction.z), static_cast<float>(-direction.y)};
-}
 }
 
 SimulatorView::SimulatorView(graphics::Renderer& renderer, int width, int height,
@@ -188,7 +177,8 @@ void SimulatorView::UpdateObserverCamera(
 {
     const auto& state = observerDroneId == 0U
         ? simulation.State() : simulation.State(observerDroneId);
-    const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
+    const glm::vec3 dronePosition =
+        graphics::EnuPositionToRender(state.positionMeters);
     const double cameraYaw = state.yawRadians + std::numbers::pi_v<double>
         + observerOrbitYawRadians_;
     // 거리와 위아래 각도로 구면 위치를 만들고, ENU의 동·북·위 좌표에 더한다.
@@ -226,8 +216,8 @@ void SimulatorView::UpdateObserverCamera(
         }
     }
 
-    observerCamera_->SetPosition(ToRenderPosition(cameraPositionMeters));
-    observerCamera_->SetTarget(ToRenderPosition(targetPositionMeters)
+    observerCamera_->SetPosition(graphics::EnuPositionToRender(cameraPositionMeters));
+    observerCamera_->SetTarget(graphics::EnuPositionToRender(targetPositionMeters)
         + glm::vec3{0.0F, 0.04F, 0.0F});
     observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
     observerCamera_->SetFieldOfViewDegrees(45.0F);
@@ -237,10 +227,11 @@ void SimulatorView::UpdateEoCamera(const simulation::SimulationCore& simulation,
     simulation::DroneId droneId, graphics::Camera& camera, int width, int height)
 {
     const auto& cameraState = simulation.Camera(droneId);
-    const glm::vec3 cameraPosition = ToRenderPosition(cameraState.positionMeters);
-    const glm::vec3 viewDirection = ToRenderDirection(
+    const glm::vec3 cameraPosition =
+        graphics::EnuPositionToRender(cameraState.positionMeters);
+    const glm::vec3 viewDirection = graphics::EnuDirectionToRender(
         simulation::EoCameraModel::OpticalAxis(cameraState));
-    const glm::vec3 cameraUp = ToRenderDirection(
+    const glm::vec3 cameraUp = graphics::EnuDirectionToRender(
         simulation::EoCameraModel::UpAxis(cameraState));
     camera.SetPosition(cameraPosition);
     camera.SetTarget(cameraPosition + viewDirection);

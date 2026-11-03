@@ -17,6 +17,9 @@
 #include "FleetTelemetry.h"
 #include "scene/TrainingRangeRouteEnvironment.h"
 #include "TrainingRangeScene.h"
+#ifdef __EMSCRIPTEN__
+#include "WebCameraRig.h"
+#endif
 
 #include <glm/glm.hpp>
 
@@ -33,7 +36,6 @@
 
 namespace dronesim::graphics
 {
-class Camera;
 class Mesh;
 class GlbModel;
 class Renderer;
@@ -190,13 +192,6 @@ private:
      * @details 이륙·착륙 버튼은 눌린 순간 한 번 처리하고, 스틱 값은 비행 중 계속 갱신한다.
      */
     void RenderFrame();
-#ifdef __EMSCRIPTEN__
-    /** @brief 웹 화면 크기에 맞춰 관찰 카메라의 시야 비율을 갱신한다. */
-    void UpdateObserverCamera(int width, int height);
-    void UpdateEoCamera(int width, int height);
-    void UpdateEoCamera(dronesim::simulation::DroneId droneId,
-        dronesim::graphics::Camera& camera, int width, int height);
-#endif
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition, bool showMissionGuides,
         std::optional<dronesim::simulation::DroneId> hiddenDroneId = std::nullopt);
@@ -235,8 +230,7 @@ private:
     std::unique_ptr<dronesim::gui::SimulatorView> view_;
 #endif
 #ifdef __EMSCRIPTEN__
-    std::unique_ptr<dronesim::graphics::Camera> observerCamera_;
-    std::unique_ptr<dronesim::graphics::Camera> eoCamera_;
+    std::optional<WebCameraRig> webCameraRig_;
 #endif
     std::unique_ptr<dronesim::graphics::Mesh> cube_;
     std::unique_ptr<dronesim::scene::TrainingRangeScene> trainingRangeScene_;

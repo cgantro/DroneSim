@@ -7,10 +7,8 @@
 #define NOMINMAX
 #include <Windows.h>
 #endif
-#ifdef __EMSCRIPTEN__
-#include "graphics/Camera.h"
-#endif
 #include "graphics/GlbModel.h"
+#include "graphics/CoordinateTransform.h"
 #include "graphics/Mesh.h"
 #include "graphics/Renderer.h"
 #include "graphics/Texture2D.h"
@@ -121,37 +119,6 @@ constexpr std::size_t trainingFleetSize = 4U;
 constexpr dronesim::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
 constexpr double trainingRangeCameraTransitAltitudeMeters = 25.0;
-
-glm::vec3 ToRenderPosition(const glm::dvec3& positionMeters)
-{
-    // 모의는 Z축을 위로 쓰고 화면은 Y축을 위로 쓴다. Y축 방향은 화면의 -Z로 옮겨 오른손 좌표계를 유지한다.
-    return glm::vec3{
-        static_cast<float>(positionMeters.x), static_cast<float>(positionMeters.z),
-        static_cast<float>(-positionMeters.y)};
-}
-
-#ifdef __EMSCRIPTEN__
-glm::vec3 ToRenderDirection(const glm::dvec3& direction)
-{
-    return glm::vec3{
-        static_cast<float>(direction.x), static_cast<float>(direction.z),
-        static_cast<float>(-direction.y)};
-}
-#endif
-
-glm::quat ToRenderOrientation(const glm::dquat& orientation)
-{
-    constexpr float halfPi = 1.57079632679F;
-    const glm::quat simulationOrientation{
-        static_cast<float>(orientation.w),
-        static_cast<float>(orientation.x),
-        static_cast<float>(orientation.y),
-        static_cast<float>(orientation.z)};
-    const glm::quat simulationToRender = glm::angleAxis(
-        -halfPi, glm::vec3{1.0F, 0.0F, 0.0F});
-    return glm::normalize(
-        simulationToRender * simulationOrientation * glm::inverse(simulationToRender));
-}
 
 std::vector<glm::mat4> BuildDroneAssemblyTransforms(
     const dronesim::graphics::GlbModel& model,
@@ -327,13 +294,8 @@ void DroneSimApp::InitializeRendererAndCameras()
         framebufferHeight_, static_cast<float>(
             simulation_.Camera().model.verticalFieldOfViewDegrees));
 #else
-    observerCamera_ = std::make_unique<dronesim::graphics::Camera>(
-        glm::vec3{0.0F, 145.0F, 285.0F}, glm::vec3{0.0F, 12.0F, 0.0F}, 1.0F,
-        45.0F, 0.1F, 2000.0F);
-    eoCamera_ = std::make_unique<dronesim::graphics::Camera>(
-        glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F,
-        static_cast<float>(simulation_.Camera().model.verticalFieldOfViewDegrees),
-        0.05F, 200.0F);
+    webCameraRig_.emplace(
+        static_cast<float>(simulation_.Camera().model.verticalFieldOfViewDegrees));
 #endif
 }
 
@@ -598,15 +560,19 @@ void DroneSimApp::RenderFrame()
             / static_cast<int>(camera.model.imageWidthPixels));
     const int cameraBottom = (height - cameraHeight) / 2;
     const int cameraTop = height - cameraBottom - cameraHeight;
-    UpdateObserverCamera(observerWidth, height);
-    UpdateEoCamera(cameraWidth, cameraHeight);
+    webCameraRig_->UpdateObserver(simulation_, observerDroneId_,
+        trainingRangeScene_->BuildingObstacles(), observerWidth, height);
+    webCameraRig_->UpdateEo(simulation_, simulation_.PrimaryDroneId(),
+        cameraWidth, cameraHeight);
     renderer_->BeginFrame();
     renderer_->SetSceneViewport(0, 0, observerWidth, height);
-    DrawWorld(observerCamera_->GetViewMatrix(), observerCamera_->GetProjectionMatrix(),
-        observerCamera_->GetPosition(), true);
+    const auto& observerCamera = webCameraRig_->ObserverCamera();
+    DrawWorld(observerCamera.GetViewMatrix(), observerCamera.GetProjectionMatrix(),
+        observerCamera.GetPosition(), true);
     renderer_->SetSceneViewport(observerWidth, cameraBottom, cameraWidth, cameraHeight);
-    DrawWorld(eoCamera_->GetViewMatrix(), eoCamera_->GetProjectionMatrix(),
-        eoCamera_->GetPosition(), false, simulation_.PrimaryDroneId());
+    const auto& eoCamera = webCameraRig_->EoCamera();
+    DrawWorld(eoCamera.GetViewMatrix(), eoCamera.GetProjectionMatrix(),
+        eoCamera.GetPosition(), false, simulation_.PrimaryDroneId());
     renderer_->EndFrame();
     EM_ASM({
         if (window.copyDroneSimEoViewport) {
@@ -755,79 +721,6 @@ void DroneSimApp::RenderFrame()
 #endif
 }
 
-#ifdef __EMSCRIPTEN__
-void DroneSimApp::UpdateObserverCamera(int width, int height)
-{
-    const auto& state = observerDroneId_ == 0U
-        ? simulation_.State()
-        : simulation_.State(observerDroneId_);
-    const glm::vec3 dronePosition = ToRenderPosition(state.positionMeters);
-    const glm::vec3 up{0.0F, 1.0F, 0.0F};
-    const glm::dvec3 forwardMeters{
-        std::cos(state.yawRadians), std::sin(state.yawRadians), 0.0};
-    constexpr double followDistanceMeters = 12.0;
-    constexpr double followHeightMeters = 3.5;
-    glm::dvec3 observerPositionMeters = state.positionMeters
-        - forwardMeters * followDistanceMeters
-        + glm::dvec3{0.0, 0.0, followHeightMeters};
-    const auto isInsideBuilding = [this](const glm::dvec3& position)
-    {
-        const auto& buildings = trainingRangeScene_->BuildingObstacles();
-        return std::any_of(buildings.begin(), buildings.end(),
-            [&position](const dronesim::flight_planning::BuildingObstacle& building)
-            {
-                return dronesim::flight_planning::ContainsBuildingVolume(
-                    building, position);
-            });
-    };
-    // 건물 안에 걸리면 드론 쪽으로 당기지 않고, 시야가 열릴 때까지 뒤로 물러난다.
-    if (isInsideBuilding(observerPositionMeters))
-    {
-        for (double retreatMeters = 1.0; retreatMeters <= 24.0; retreatMeters += 1.0)
-        {
-            const glm::dvec3 candidate = observerPositionMeters
-                - forwardMeters * retreatMeters;
-            if (!isInsideBuilding(candidate))
-            {
-                observerPositionMeters = candidate;
-                break;
-            }
-        }
-    }
-    observerCamera_->SetPosition(ToRenderPosition(observerPositionMeters));
-    observerCamera_->SetTarget(dronePosition + up * 0.04F);
-    observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
-    observerCamera_->SetFieldOfViewDegrees(45.0F);
-}
-
-void DroneSimApp::UpdateEoCamera(int width, int height)
-{
-    UpdateEoCamera(simulation_.PrimaryDroneId(), *eoCamera_, width, height);
-}
-
-void DroneSimApp::UpdateEoCamera(
-    dronesim::simulation::DroneId droneId,
-    dronesim::graphics::Camera& renderCamera,
-    int width,
-    int height)
-{
-    const auto& cameraState = simulation_.Camera(droneId);
-    const glm::vec3 cameraPosition = ToRenderPosition(cameraState.positionMeters);
-    const glm::dvec3 opticalAxis =
-        dronesim::simulation::EoCameraModel::OpticalAxis(cameraState);
-    const glm::dvec3 cameraUpAxis =
-        dronesim::simulation::EoCameraModel::UpAxis(cameraState);
-    const glm::vec3 viewDirection = ToRenderDirection(opticalAxis);
-    const glm::vec3 cameraUp = ToRenderDirection(cameraUpAxis);
-    renderCamera.SetPosition(cameraPosition);
-    renderCamera.SetTarget(cameraPosition + viewDirection);
-    renderCamera.SetUp(cameraUp);
-    renderCamera.SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
-    renderCamera.SetFieldOfViewDegrees(
-        static_cast<float>(cameraState.model.verticalFieldOfViewDegrees));
-}
-#endif
-
 void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, bool showMissionGuides,
     std::optional<dronesim::simulation::DroneId> hiddenDroneId)
@@ -840,8 +733,8 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::dvec3& startMeters, const glm::dvec3& endMeters,
         const dronesim::graphics::Material& material)
     {
-        const glm::vec3 start = ToRenderPosition(startMeters);
-        const glm::vec3 end = ToRenderPosition(endMeters);
+        const glm::vec3 start = dronesim::graphics::EnuPositionToRender(startMeters);
+        const glm::vec3 end = dronesim::graphics::EnuPositionToRender(endMeters);
         const glm::vec3 direction = end - start;
         const float length = glm::length(direction);
         if (length < 0.1F)
@@ -884,7 +777,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
             drawRouteSegment(previous,
                 reconTargets_[mission.TargetIndex()].approachPositionMeters,
                 missionRouteMaterial_);
-            const glm::vec3 marker = ToRenderPosition(
+            const glm::vec3 marker = dronesim::graphics::EnuPositionToRender(
                 reconTargets_[mission.TargetIndex()].approachPositionMeters);
             DrawCube(glm::translate(glm::mat4{1.0F}, marker)
                 * glm::scale(glm::mat4{1.0F}, glm::vec3{0.65F}),
@@ -899,9 +792,10 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
             continue;
 
         const auto& drone = simulation_.State(id);
-        const glm::vec3 position = ToRenderPosition(drone.positionMeters);
+        const glm::vec3 position =
+            dronesim::graphics::EnuPositionToRender(drone.positionMeters);
         const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
-            glm::mat4_cast(ToRenderOrientation(drone.orientation));
+            glm::mat4_cast(dronesim::graphics::EnuOrientationToRender(drone.orientation));
         // 드론과 짐벌의 부모 관계·장착 위치가 GLB에 있으므로 기체 자세만 적용한다.
         droneAssemblyModel_->Draw(heading, *renderer_, *shader_, view, projection,
             cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true,

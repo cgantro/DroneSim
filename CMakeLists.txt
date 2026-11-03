@@ -281,6 +281,7 @@ if(DRONESIM_BUILD_GRAPHICS)
     apps/simulator/DroneSimAppLifecycle.cpp
     apps/simulator/DroneSimAppGamepad.cpp
     apps/simulator/DroneSimAppMission.cpp
+    apps/simulator/WebCameraRig.cpp
   )
   target_include_directories(dronesim_simulator_app PUBLIC
     apps/simulator/include
