@@ -26,9 +26,9 @@ void FleetDroneMissionExecutor::Advance()
     for (const DroneId droneId : communication_.DroneIds())
     {
         auto assignment = missionState_.FindAssignment(droneId);
-        if (assignment == missionState_.AssignmentsEnd())
+        if (assignment == nullptr)
             continue;
-        auto& assignmentState = assignment->second;
+        auto& assignmentState = *assignment;
         if (HandleLowBatteryReturn(droneId, assignmentState))
             continue;
 

@@ -485,7 +485,7 @@ bool FleetMissionController::CollectCompleteMissionReports(
     for (const auto droneId : droneIds)
     {
         const auto assignment = fleetMission_.FindAssignment(droneId);
-        if (assignment == fleetMission_.AssignmentsEnd())
+        if (assignment == nullptr)
         {
             if (stage == Stage::Returning)
             {
@@ -502,7 +502,7 @@ bool FleetMissionController::CollectCompleteMissionReports(
         }
 
         const auto report = fleetMission_.CurrentReport(
-            droneId, assignment->second, simulation_, stage);
+            droneId, *assignment, simulation_, stage);
         reports.push_back(report);
     }
 

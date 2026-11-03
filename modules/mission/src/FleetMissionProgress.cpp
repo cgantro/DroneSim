@@ -292,16 +292,18 @@ const glm::dvec3* FleetReconnaissanceState::CurrentWaypoint() const noexcept
     return &routeWaypointsMeters_[nextWaypoint_];
 }
 
-FleetMissionState::AssignmentIterator FleetMissionState::FindAssignment(
+FleetReconnaissanceState* FleetMissionState::FindAssignment(
     simulation::DroneId droneId) noexcept
 {
-    return assignments_.find(droneId);
+    const auto found = assignments_.find(droneId);
+    return found == assignments_.end() ? nullptr : &found->second;
 }
 
-FleetMissionState::ConstAssignmentIterator FleetMissionState::FindAssignment(
+const FleetReconnaissanceState* FleetMissionState::FindAssignment(
     simulation::DroneId droneId) const noexcept
 {
-    return assignments_.find(droneId);
+    const auto found = assignments_.find(droneId);
+    return found == assignments_.end() ? nullptr : &found->second;
 }
 
 void FleetMissionState::SetAssignment(
@@ -328,12 +330,12 @@ std::optional<PeerTelemetry> FleetMissionState::CurrentDroneObservation(
             .positionMeters = drone.positionMeters,
             .mode = drone.mode};
 
-        const auto assignment = assignments_.find(droneId);
-        if (assignment != assignments_.end())
+        const FleetReconnaissanceState* assignment = FindAssignment(droneId);
+        if (assignment != nullptr)
         {
-            observation.missionLeg = static_cast<std::uint8_t>(assignment->second.Leg());
-            observation.missionStatus = assignment->second.Status();
-            observation.assignmentVersion = assignment->second.AssignmentVersion();
+            observation.missionLeg = static_cast<std::uint8_t>(assignment->Leg());
+            observation.missionStatus = assignment->Status();
+            observation.assignmentVersion = assignment->AssignmentVersion();
         }
         return observation;
     }
@@ -511,16 +513,16 @@ bool FleetMissionState::AllDronesReadyToReturn(
 
     return std::all_of(droneIds.begin(), droneIds.end(), [this, &simulation](auto droneId)
     {
-        const auto assignment = assignments_.find(droneId);
-        if (assignment == assignments_.end())
+        const FleetReconnaissanceState* assignment = FindAssignment(droneId);
+        if (assignment == nullptr)
             return false;
 
-        const auto report = FreshReport(droneId, assignment->second, simulation);
+        const auto report = FreshReport(droneId, *assignment, simulation);
         if (!report || report->mode != simulation::FlightMode::Grounded)
             return false;
 
         const bool landedAfterLowBatteryReserve =
-            assignment->second.IsLowBatteryReturnComplete()
+            assignment->IsLowBatteryReturnComplete()
             && report->status == FleetDroneStatus::LowBatteryReturnComplete;
         if (landedAfterLowBatteryReserve)
             return true;

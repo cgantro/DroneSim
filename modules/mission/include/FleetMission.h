@@ -496,8 +496,6 @@ class FleetMissionState
 public:
     using AssignmentMap =
         std::unordered_map<simulation::DroneId, FleetReconnaissanceState>;
-    using AssignmentIterator = AssignmentMap::iterator;
-    using ConstAssignmentIterator = AssignmentMap::const_iterator;
 
 private:
     AssignmentMap assignments_;
@@ -515,19 +513,13 @@ public:
         return assignments_;
     }
 
-    /** @brief 지정한 드론의 배정을 수정할 수 있도록 찾는다. */
-    [[nodiscard]] AssignmentIterator FindAssignment(
+    /** @brief 지정한 드론의 배정을 수정할 수 있도록 찾는다. 없으면 nullptr을 돌려준다. */
+    [[nodiscard]] FleetReconnaissanceState* FindAssignment(
         simulation::DroneId droneId) noexcept;
 
-    /** @brief 지정한 드론의 배정을 읽기 전용으로 찾는다. */
-    [[nodiscard]] ConstAssignmentIterator FindAssignment(
+    /** @brief 지정한 드론의 배정을 읽기 전용으로 찾는다. 없으면 nullptr을 돌려준다. */
+    [[nodiscard]] const FleetReconnaissanceState* FindAssignment(
         simulation::DroneId droneId) const noexcept;
-
-    /** @brief 배정 목록의 끝을 반환해 찾기 결과와 비교할 수 있게 한다. */
-    [[nodiscard]] ConstAssignmentIterator AssignmentsEnd() const noexcept
-    {
-        return assignments_.end();
-    }
 
     /** @brief 지정한 드론의 배정을 참조로 가져온다. 배정이 없으면 표준 범위 오류가 난다. */
     [[nodiscard]] FleetReconnaissanceState& Assignment(simulation::DroneId droneId)

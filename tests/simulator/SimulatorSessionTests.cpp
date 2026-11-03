@@ -453,10 +453,10 @@ public:
                             - report->receivedAtTick << " Tick";
                 }
                 const auto mission = MissionState(app).FindAssignment(droneId);
-                if (mission != MissionState(app).AssignmentsEnd())
-                    failureContext << ", 목표 " << mission->second.TargetIndex()
+                if (mission != nullptr)
+                    failureContext << ", 목표 " << mission->TargetIndex()
                         << ", 상태 " << mission::FleetDroneStatusLabel(
-                            mission->second.Status());
+                            mission->Status());
             }
             const auto& metrics = NetworkSession(app).Metrics();
             failureContext << "; 통신 통계 전달 " << metrics.deliveredMessages
