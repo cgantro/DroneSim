@@ -5,6 +5,7 @@
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
 #include "graphics/GlbModel.h"
+#include "flight_planning/BuildingObstacle.h"
 
 #include <array>
 #include <cstddef>
@@ -65,6 +66,8 @@ public:
         const communication::DroneSocketTransport* socketTransport,
         const std::function<void(simulation::DroneId, bool)>&
             setFormationNodeRadioEnabled,
+        std::span<const flight_planning::BuildingObstacle> buildings,
+        const glm::dvec2& groundSizeMeters,
         std::span<const graphics::GlbPartBounds> glbParts,
         const std::function<std::uint32_t(int, int, bool)>& renderScene,
         const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
@@ -81,7 +84,7 @@ private:
     void CollectCompletedGpuTimings(HudRenderTimings* timings);
 
     bool initialized_ = false;
-    bool showGlbNodeColors_ = true;
+    bool showGlbNodeColors_ = false;
     int selectedFaultSource_ = 0;
     std::string layoutFile_;
     std::array<PendingGpuQuery, 4> backendGpuQueries_{};

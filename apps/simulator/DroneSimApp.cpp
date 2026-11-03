@@ -535,6 +535,8 @@ void DroneSimApp::RenderFrame()
                     formationNetwork_->SetNodeRadioEnabled(droneId, enabled);
                 }
             },
+            trainingRangeScene_->BuildingObstacles(),
+            trainingRangeScene_->GroundSizeMeters(),
             trainingRangeScene_->GlbParts(),
             [this](int width, int height, bool showGlbNodeColors)
             {
