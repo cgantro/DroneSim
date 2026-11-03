@@ -166,6 +166,8 @@ bool FleetMissionController::StartFleetReconnaissance(
     const auto observationSource = startsOnGround
         ? dronesim::mission::MissionStateSource::LocalSimulation
         : dronesim::mission::MissionStateSource::FreshTelemetry;
+    // 지상에서 시작하면 실제 ECS 상태를 읽고, 비행 중 재시작은 리더가 받은 최신 보고만 쓴다.
+    // 끊긴 통신의 오래된 위치로 새 정찰 경로를 만드는 일을 막는다.
     for (const DroneId droneId : droneIds)
     {
         const auto observation = fleetMission_.CurrentDroneObservation(
@@ -191,6 +193,7 @@ bool FleetMissionController::StartFleetReconnaissance(
     if (!assignments)
         return false;
 
+    // 경로가 준비되고 통신망이 열리기 전에는 이륙시키지 않는다.
     if (!fleetCommunication_.Prepare(startsOnGround))
         return false;
 
@@ -339,6 +342,7 @@ bool FleetMissionController::StartFleetRally()
     glm::dvec3 centerMeters{0.0};
     for (const DroneId droneId : droneIds)
         centerMeters += fleetMission_.CompleteMission().HomePositionMeters(droneId);
+    // 각자의 출발점으로 바로 흩어지지 않도록 출발 위치의 중심 위에서 다시 모인다.
     centerMeters /= static_cast<double>(droneIds.size());
     centerMeters.z += 12.0;
     const auto offsets = FormationOffsets(rallyDroneIds.size(), 3.0, 0.0);
@@ -565,6 +569,7 @@ bool FleetMissionController::StartFormationTransit()
 
     const glm::dvec2 stagingPosition =
         trainingScene_.FormationStagingPositionMeters();
+    // 대기 지점의 지면 높이와 최소 순항 고도 중 높은 값을 써서 지형에 박히지 않게 한다.
     const double stagingAltitude = std::max(
         missionEnvironment_.RouteEnvironment().GroundAltitudeMeters(stagingPosition) + 15.0,
         missionEnvironment_.MinimumTransitAltitudeMeters());
