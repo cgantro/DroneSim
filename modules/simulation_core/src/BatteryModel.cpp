@@ -6,20 +6,27 @@
 
 namespace dronesim::simulation
 {
+bool BatteryModelParameters::IsValid() const noexcept
+{
+    // 에너지는 양의 용량을 기준으로 계산한다. 전력은 0도 허용하고,
+    // 예비량은 전체 용량의 0~100% 사이여야 한다.
+    return std::isfinite(capacityWattHours)
+        && capacityWattHours > 0.0
+        && std::isfinite(hoverPowerWatts)
+        && hoverPowerWatts >= 0.0
+        && std::isfinite(flightPowerWatts)
+        && flightPowerWatts >= 0.0
+        && std::isfinite(reservePercent)
+        && reservePercent >= 0.0
+        && reservePercent <= 100.0;
+}
+
 /** @brief 배터리 설정과 시작 잔량으로 사용 가능 에너지를 초기화한다. */
 BatteryModel::BatteryModel(
     BatteryModelParameters parameters, double initialPercent)
     : parameters_(parameters)
 {
-    if (!std::isfinite(parameters_.capacityWattHours)
-        || parameters_.capacityWattHours <= 0.0
-        || !std::isfinite(parameters_.hoverPowerWatts)
-        || parameters_.hoverPowerWatts < 0.0
-        || !std::isfinite(parameters_.flightPowerWatts)
-        || parameters_.flightPowerWatts < 0.0
-        || !std::isfinite(parameters_.reservePercent)
-        || parameters_.reservePercent < 0.0
-        || parameters_.reservePercent > 100.0
+    if (!parameters_.IsValid()
         || !std::isfinite(initialPercent)
         || initialPercent < 0.0
         || initialPercent > 100.0)

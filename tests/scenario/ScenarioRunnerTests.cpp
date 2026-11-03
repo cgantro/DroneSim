@@ -1,4 +1,5 @@
 #include "scenario/ScenarioRunner.h"
+#include "simulation_core/BatteryModel.h"
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
@@ -1102,6 +1103,19 @@ TEST(ScenarioRunnerTests, CoreScenarios)
     )json";
     EXPECT_THROW(static_cast<void>(RunScenario(singleDroneExpectedState)),
         std::invalid_argument);
+}
+
+TEST(ScenarioRunnerTests, BatteryModelParametersRejectNonFiniteValues)
+{
+    BatteryModelParameters parameters{10.0, 40.0, 120.0, 20.0};
+    EXPECT_TRUE(parameters.IsValid());
+
+    parameters.capacityWattHours = std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(parameters.IsValid());
+    parameters = {10.0, 40.0, std::numeric_limits<double>::quiet_NaN(), 20.0};
+    EXPECT_FALSE(parameters.IsValid());
+    parameters = {10.0, 40.0, 120.0, 101.0};
+    EXPECT_FALSE(parameters.IsValid());
 }
 
 }

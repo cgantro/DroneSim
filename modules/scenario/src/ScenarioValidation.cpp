@@ -217,10 +217,12 @@ void ValidateEnergyModelValues(const ScenarioDefinition& definition)
         return;
 
     const EnergyModelSettings& settings = *definition.energyModel;
-    if (settings.capacityWattHours <= 0.0
+    // 배터리 모형의 공통 범위 검사는 파라미터가 맡고,
+    // 시나리오는 실제 소모와 귀환 판단에 필요한 더 엄격한 조건만 확인한다.
+    if (!settings.IsValid()
         || settings.hoverPowerWatts <= 0.0
         || settings.flightPowerWatts <= 0.0
-        || settings.reservePercent < 0.0 || settings.reservePercent >= 100.0)
+        || settings.reservePercent >= 100.0)
         throw std::invalid_argument(
             "배터리 용량과 소비 전력은 양수이고 reserve_percent는 0 이상 100 미만이어야 합니다.");
 }

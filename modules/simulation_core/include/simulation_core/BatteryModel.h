@@ -11,6 +11,9 @@ struct BatteryModelParameters
     double hoverPowerWatts = 0.0;
     double flightPowerWatts = 0.0;
     double reservePercent = 0.0;
+
+    /** @brief 용량·전력·예비량이 배터리 계산에 쓸 수 있는 범위인지 확인한다. */
+    [[nodiscard]] bool IsValid() const noexcept;
 };
 
 /**
