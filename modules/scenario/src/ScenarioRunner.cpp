@@ -755,6 +755,170 @@ void PopulateFinalSnapshot(
 
 }
 
+/**
+ * @brief 한 시나리오 실행에 필요한 모의 상태와 실행 순서를 소유한다.
+ * @details JSON 해석과 설정 검사는 이 객체를 만들기 전에 끝난다. 객체는 검증된
+ * 설정으로 기체를 준비하고, Tick마다 정해진 처리 순서를 실행한 뒤 결과를 만든다.
+ */
+class ScenarioExecution final
+{
+public:
+    explicit ScenarioExecution(ScenarioDefinition definition)
+        : definition_(std::move(definition)),
+          tickCount_(definition_.tickCount),
+          simulation_(definition_.quadrotorParameters,
+              definition_.controllerParameters)
+    {
+        if (definition_.windVelocity)
+            simulation_.SetWindVelocityMetersPerSecond(*definition_.windVelocity);
+
+        drones_ = CreateScenarioDrones(definition_, simulation_);
+        InitializeDroneRuntime();
+        InitializeResult();
+    }
+
+    /** @brief 남은 Tick을 실행하고 마지막 상태를 포함한 결과를 돌려준다. */
+    [[nodiscard]] ScenarioResult Run()
+    {
+        for (std::uint64_t tick = 0; tick < tickCount_; ++tick)
+            AdvanceOneTick(tick);
+
+        FinalizeResult();
+        return std::move(result_);
+    }
+
+private:
+    void InitializeDroneRuntime()
+    {
+        for (auto& [droneName, drone] : drones_)
+        {
+            const DroneState& initialState = simulation_.State(drone.id);
+            drone.homePositionMeters = initialState.positionMeters;
+            if (initialState.mode == FlightMode::Grounded)
+                drone.homePositionMeters.z += DroneModel::takeoffHeightMeters;
+            drone.observation.RecordHeartbeat(0U, initialState, std::nullopt);
+            drone.flightMetrics.Reset(initialState.positionMeters);
+        }
+
+        if (!definition_.energyModel)
+            return;
+
+        for (const ScenarioDrone& scenarioDrone : definition_.drones)
+        {
+            BatteryModelParameters parameters = *definition_.energyModel;
+            if (scenarioDrone.batteryCapacityWattHours)
+                parameters.capacityWattHours = *scenarioDrone.batteryCapacityWattHours;
+
+            ScenarioDroneRuntime& runtime = drones_.at(scenarioDrone.name);
+            simulation_.ConfigureBattery(runtime.id, parameters,
+                scenarioDrone.initialBatteryPercent);
+            runtime.observation.RecordHeartbeat(0U, simulation_.State(runtime.id),
+                simulation_.Battery(runtime.id).RemainingPercent());
+        }
+    }
+
+    void InitializeResult()
+    {
+        if (definition_.mission)
+            result_.mission = CreateMissionResult(std::move(*definition_.mission));
+
+        if (definition_.trajectorySampleEveryTicks)
+        {
+            const std::uint64_t interval = *definition_.trajectorySampleEveryTicks;
+            const std::uint64_t periodicSamples = tickCount_ / interval + 1U;
+            const std::uint64_t finalSampleNeeded = tickCount_ % interval != 0U;
+            result_.trajectory.reserve(static_cast<std::size_t>(
+                periodicSamples + finalSampleNeeded));
+        }
+
+        if (definition_.minimumDroneSeparationMeters)
+            dronePositionsMeters_.reserve(definition_.drones.size());
+
+        RecordMinimumDroneSeparation(
+            definition_, simulation_, drones_, dronePositionsMeters_, result_);
+        if (definition_.trajectorySampleEveryTicks)
+            RecordTrajectorySample(definition_, simulation_, drones_, 0U, result_);
+    }
+
+    void AdvanceOneTick(std::uint64_t tick)
+    {
+        // 관제 상태와 입력부터 갱신한다. 통신이 끊긴 동안에는 새 명령을 받지 않는다.
+        UpdateDroneObservations(tick, definition_, simulation_, drones_, result_);
+        ApplyScheduledCommands(tick, definition_.commands, simulation_, drones_,
+            nextCommand_, result_);
+
+        // 배터리 귀환, 임무 목표, 충돌 회피 순으로 물리 이동 전 명령을 정한다.
+        if (definition_.energyModel)
+        {
+            UpdateEnergyPolicy(tick, result_.mission,
+                simulation_, drones_, definition_, result_);
+        }
+        UpdateMissionCommands(tick, result_.mission,
+            simulation_, drones_, result_);
+        UpdateCollisionAvoidance(tick, definition_, result_.mission,
+            simulation_, drones_, activeAvoidanceTargets_, result_);
+
+        for (auto& [droneName, drone] : drones_)
+        {
+            static_cast<void>(droneName);
+            drone.flightMetrics.RecordTimeBeforePhysics(
+                simulation_.State(drone.id).mode);
+        }
+        simulation_.AdvanceOneTick();
+        for (auto& [droneName, drone] : drones_)
+        {
+            static_cast<void>(droneName);
+            drone.flightMetrics.RecordPositionAfterPhysics(
+                simulation_.State(drone.id).positionMeters);
+        }
+
+        // 물리 계산 뒤 실제 이동과 임무 진행을 기록하고, 요청한 간격에 맞춰 표본을 남긴다.
+        RecordMinimumDroneSeparation(
+            definition_, simulation_, drones_, dronePositionsMeters_, result_);
+        UpdateMissionResults(tick, result_.mission,
+            simulation_, drones_, result_);
+
+        const std::uint64_t completedTick = tick + 1U;
+        if (definition_.trajectorySampleEveryTicks)
+        {
+            const std::uint64_t interval = *definition_.trajectorySampleEveryTicks;
+            if (completedTick % interval == 0U || completedTick == tickCount_)
+            {
+                RecordTrajectorySample(
+                    definition_, simulation_, drones_, completedTick, result_);
+            }
+        }
+    }
+
+    void FinalizeResult()
+    {
+        for (auto& [droneName, drone] : drones_)
+        {
+            static_cast<void>(droneName);
+            DroneObservation& observation = drone.observation;
+            if (!observation.IsConnected())
+                continue;
+
+            const std::optional<double> batteryPercent = simulation_.HasBattery(drone.id)
+                ? std::optional<double>{simulation_.Battery(drone.id).RemainingPercent()}
+                : observation.LastKnownBatteryPercent();
+            observation.RecordHeartbeat(
+                tickCount_, simulation_.State(drone.id), batteryPercent);
+        }
+
+        PopulateFinalSnapshot(definition_, simulation_, drones_, result_);
+        detail::EvaluateExpectedResults(definition_, result_);
+    }
+
+    ScenarioDefinition definition_;
+    std::uint64_t tickCount_ = 0U;
+    SimulationCore simulation_;
+    ScenarioDrones drones_;
+    ScenarioResult result_;
+    std::size_t nextCommand_ = 0U;
+    std::unordered_map<std::string, glm::dvec3> activeAvoidanceTargets_;
+    std::vector<glm::dvec3> dronePositionsMeters_;
+};
 }
 
 ScenarioResult RunScenario(std::string_view jsonText)
@@ -763,115 +927,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
     // 시뮬레이션 객체를 만들거나 Tick을 시작하지 않는다.
     ScenarioDefinition definition = detail::ParseScenarioDefinition(jsonText);
     detail::ValidateScenarioDefinition(definition);
-    const std::uint64_t tickCount = definition.tickCount;
-    SimulationCore simulation{
-        definition.quadrotorParameters, definition.controllerParameters};
-    if (definition.windVelocity)
-        simulation.SetWindVelocityMetersPerSecond(*definition.windVelocity);
-
-    ScenarioDrones drones = CreateScenarioDrones(definition, simulation);
-    for (auto& [droneName, drone] : drones)
-    {
-        const DroneState& initialState = simulation.State(drone.id);
-        drone.homePositionMeters = initialState.positionMeters;
-        if (initialState.mode == FlightMode::Grounded)
-            drone.homePositionMeters.z += DroneModel::takeoffHeightMeters;
-        drone.observation.RecordHeartbeat(0, initialState, std::nullopt);
-        drone.flightMetrics.Reset(initialState.positionMeters);
-    }
-    if (definition.energyModel)
-    {
-        for (const ScenarioDrone& scenarioDrone : definition.drones)
-        {
-            BatteryModelParameters parameters = *definition.energyModel;
-            if (scenarioDrone.batteryCapacityWattHours)
-                parameters.capacityWattHours = *scenarioDrone.batteryCapacityWattHours;
-            ScenarioDroneRuntime& runtime = drones.at(scenarioDrone.name);
-            const DroneId droneId = runtime.id;
-            simulation.ConfigureBattery(
-                droneId, parameters, scenarioDrone.initialBatteryPercent);
-            runtime.observation.RecordHeartbeat(0U, simulation.State(droneId),
-                simulation.Battery(droneId).RemainingPercent());
-        }
-    }
-
-    ScenarioResult result;
-    if (definition.mission)
-        result.mission = CreateMissionResult(std::move(*definition.mission));
-    if (definition.trajectorySampleEveryTicks)
-    {
-        const std::uint64_t periodicSamples =
-            tickCount / *definition.trajectorySampleEveryTicks + 1;
-        const std::uint64_t sampleCount = periodicSamples
-            + (tickCount % *definition.trajectorySampleEveryTicks != 0 ? 1 : 0);
-        result.trajectory.reserve(static_cast<std::size_t>(sampleCount));
-    }
-    std::size_t nextCommand = 0;
-    std::unordered_map<std::string, glm::dvec3> activeAvoidanceTargets;
-    std::vector<glm::dvec3> dronePositionsMeters;
-    if (definition.minimumDroneSeparationMeters)
-        dronePositionsMeters.reserve(definition.drones.size());
-
-    RecordMinimumDroneSeparation(
-        definition, simulation, drones, dronePositionsMeters, result);
-    if (definition.trajectorySampleEveryTicks)
-        RecordTrajectorySample(definition, simulation, drones, 0, result);
-    for (std::uint64_t tick = 0; tick < tickCount; ++tick)
-    {
-        // 먼저 관제소의 연결 상태를 갱신하고, 통신이 살아 있는 드론에만
-        // 외부 명령을 전달한다. 드론은 통신이 끊겨도 이미 받은 경로를 계속 따른다.
-        UpdateDroneObservations(tick, definition, simulation, drones, result);
-        ApplyScheduledCommands(tick, definition.commands, simulation, drones,
-            nextCommand, result);
-
-        // 배터리 귀환과 임무 명령은 같은 Tick의 물리 이동 전에 적용한다.
-        if (definition.energyModel)
-        {
-            UpdateEnergyPolicy(tick, result.mission,
-                simulation, drones, definition, result);
-        }
-        UpdateMissionCommands(tick, result.mission, simulation, drones, result);
-        UpdateCollisionAvoidance(tick, definition, result.mission, simulation,
-            drones, activeAvoidanceTargets, result);
-        for (auto& [droneName, drone] : drones)
-            drone.flightMetrics.RecordTimeBeforePhysics(
-                simulation.State(drone.id).mode);
-        simulation.AdvanceOneTick();
-        for (auto& [droneName, drone] : drones)
-            drone.flightMetrics.RecordPositionAfterPhysics(
-                simulation.State(drone.id).positionMeters);
-
-        // 물리 상태를 한 Tick 진행한 뒤 실제 이동 거리, 최소 간격,
-        // 임무 도착 여부와 요청된 궤적 표본을 기록한다.
-        RecordMinimumDroneSeparation(
-            definition, simulation, drones, dronePositionsMeters, result);
-        UpdateMissionResults(tick, result.mission,
-            simulation, drones, result);
-        const std::uint64_t completedTick = tick + 1;
-        if (definition.trajectorySampleEveryTicks
-            && (completedTick % *definition.trajectorySampleEveryTicks == 0
-                || completedTick == tickCount))
-        {
-            RecordTrajectorySample(
-                definition, simulation, drones, completedTick, result);
-        }
-    }
-
-    for (auto& [droneName, drone] : drones)
-    {
-        DroneObservation& observation = drone.observation;
-        if (observation.IsConnected())
-        {
-            const std::optional<double> batteryPercent = simulation.HasBattery(drone.id)
-                ? std::optional<double>{simulation.Battery(drone.id).RemainingPercent()}
-                : observation.LastKnownBatteryPercent();
-            observation.RecordHeartbeat(
-                tickCount, simulation.State(drone.id), batteryPercent);
-        }
-    }
-    PopulateFinalSnapshot(definition, simulation, drones, result);
-    detail::EvaluateExpectedResults(definition, result);
-    return result;
+    return ScenarioExecution{std::move(definition)}.Run();
 }
 
 }
