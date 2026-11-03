@@ -2,6 +2,7 @@
 
 #include "FleetMissionCommunication.h"
 #include "FleetMissionEnvironment.h"
+#include "FleetFormationFlight.h"
 #include "TrainingRangeScene.h"
 #include "simulation_core/SimulationCore.h"
 
@@ -64,5 +65,6 @@ private:
     FleetMissionEnvironment missionEnvironment_;
     mission::FleetMissionState fleetMission_;
     FleetMissionCommunication fleetCommunication_;
+    FleetFormationFlight formationFlight_;
 };
 }

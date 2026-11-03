@@ -23,7 +23,8 @@ FleetMissionController::FleetMissionController(
     : simulation_(simulation),
       trainingScene_(trainingScene),
       missionEnvironment_(terrain, trainingScene),
-      fleetCommunication_(simulation_, trainingScene_, missionEnvironment_, fleetMission_)
+      fleetCommunication_(simulation_, trainingScene_, missionEnvironment_, fleetMission_),
+      formationFlight_(simulation_, fleetMission_, fleetCommunication_)
 {
 }
 
@@ -636,6 +637,23 @@ void FleetMissionController::FailCompleteFleetMission(const std::string& reason)
     dronesim::mission::LandActiveFleetDrones(simulation_, droneIds);
 }
 
+void FleetMissionController::AdvanceFormationTransit()
+{
+    const auto safetyFailure = formationFlight_.Advance();
+    if (!safetyFailure)
+        return;
+
+    const auto& droneIds = fleetCommunication_.DroneIds();
+    if (fleetMission_.CompleteMission().CurrentStage()
+        == mission::CompleteFleetMissionState::Stage::FormationTransit)
+    {
+        FailCompleteFleetMission(*safetyFailure);
+        return;
+    }
+
+    mission::LandActiveFleetDrones(simulation_, droneIds);
+}
+
 bool FleetMissionController::StartFormationTransit()
 {
     using namespace dronesim::simulation;
@@ -710,160 +728,6 @@ bool FleetMissionController::StartFormationTransit()
 
 
 
-void FleetMissionController::AdvanceFormationTransit()
-{
-    using namespace dronesim::simulation;
-    using namespace dronesim::flight_planning;
-    if (!fleetMission_.FormationTransit().IsActive())
-        return;
 
-    const std::vector<DroneId>& droneIds = fleetCommunication_.DroneIds();
-    if (droneIds.size() < 2U
-        || fleetMission_.FormationTransit().Route().leaderWaypointsMeters.empty())
-    {
-        fleetMission_.FormationTransit().Fail("편대 구성을 유지할 수 없어 임무를 멈췄습니다.");
-        return;
-    }
-
-    const DroneId leaderId = fleetMission_.LeaderId();
-    const DroneState& leader = simulation_.State(leaderId);
-    if (leader.mode == FlightMode::Grounded || leader.mode == FlightMode::TakingOff)
-        return;
-    if (leader.mode == FlightMode::Landing)
-    {
-        fleetMission_.FormationTransit().Fail("리더가 착륙해 편대 이동을 멈췄습니다.");
-        return;
-    }
-
-    constexpr std::uint64_t peerTelemetryRecoveryTimeoutTicks = 180U;
-    for (std::size_t index = 1U; index < droneIds.size(); ++index)
-    {
-        const auto& telemetry = fleetMission_.TelemetryAtLeader();
-        const auto reportAgeTicks = telemetry.AgeInTicks(
-            droneIds[index], simulation_.TickCount());
-        if (!reportAgeTicks)
-        {
-            fleetMission_.FormationTransit().Fail("통신 끊김 · 편대 안전 착륙");
-            if (fleetMission_.CompleteMission().CurrentStage()
-                == dronesim::mission::CompleteFleetMissionState::Stage::FormationTransit)
-            {
-                FailCompleteFleetMission(
-                    "추종 드론 상태 보고가 끊겨 편대를 안전 착륙시킵니다.");
-            }
-            else
-            {
-                dronesim::mission::LandActiveFleetDrones(simulation_, droneIds);
-            }
-            return;
-        }
-
-        if (telemetry.Fresh(droneIds[index], simulation_.TickCount()) != nullptr)
-            continue;
-
-        constexpr std::uint64_t recoveryWindowTicks =
-            dronesim::mission::FleetTelemetry::FreshnessTimeoutTicks
-            + peerTelemetryRecoveryTimeoutTicks;
-        if (*reportAgeTicks <= recoveryWindowTicks)
-        {
-            // 편대원 보고가 잠깐 끊기면 리더를 멈춰 연결 회복을 기다린다.
-            DroneCommand holdLeader;
-            holdLeader.kind = DroneCommand::Kind::SetWaypoint;
-            holdLeader.vector = leader.positionMeters;
-            static_cast<void>(simulation_.Apply(leaderId, holdLeader));
-            fleetMission_.FormationTransit().UpdateStatus(
-                "추종 드론 통신 회복 대기 · 편대 이동 일시 정지");
-            return;
-        }
-
-        fleetMission_.FormationTransit().Fail("통신 끊김 · 편대 안전 착륙");
-        if (fleetMission_.CompleteMission().CurrentStage()
-            == dronesim::mission::CompleteFleetMissionState::Stage::FormationTransit)
-        {
-            FailCompleteFleetMission(
-                "추종 드론과 통신이 복구되지 않아 편대를 안전 착륙시킵니다.");
-        }
-        else
-        {
-            dronesim::mission::LandActiveFleetDrones(simulation_, droneIds);
-        }
-        return;
-    }
-
-    const auto& formationRoute = fleetMission_.FormationTransit().Route();
-    const auto& route = formationRoute.leaderWaypointsMeters;
-    fleetMission_.FormationTransit().AdvanceWaypointIfReached(leader.positionMeters, 3.0);
-
-    const std::size_t nextIndex = fleetMission_.FormationTransit().WaypointIndex();
-    const auto targets = formationRoute.TargetsAtWaypoint(
-        nextIndex, droneIds.size(), leader.positionMeters, leader.yawRadians);
-
-    for (std::size_t index = 0; index < droneIds.size(); ++index)
-    {
-        const DroneId droneId = droneIds[index];
-        const auto* peerState = index == 0U
-            ? nullptr
-            : fleetMission_.TelemetryAtLeader().Latest(droneId);
-        if (index != 0U && peerState == nullptr)
-        {
-            fleetMission_.FormationTransit().Fail("추종 드론 상태 보고를 기다리는 중입니다.");
-            return;
-        }
-        const FlightMode mode = index == 0U ? leader.mode : peerState->state.mode;
-        if (mode == FlightMode::Grounded || mode == FlightMode::TakingOff)
-            continue;
-        if (mode == FlightMode::Landing)
-        {
-            fleetMission_.FormationTransit().Fail("추종 드론이 착륙해 편대 이동을 멈췄습니다.");
-            return;
-        }
-
-        const glm::dvec3 target = targets[index];
-        DroneCommand command;
-        command.kind = DroneCommand::Kind::SetWaypoint;
-        command.vector = target;
-        if (index == 0U)
-        {
-            if (simulation_.Apply(droneId, command) != CommandResult::Accepted)
-            {
-                fleetMission_.FormationTransit().Fail("리더 목표를 적용하지 못해 임무를 멈췄습니다.");
-                return;
-            }
-            continue;
-        }
-
-        if (!fleetCommunication_.SendFormationTarget(droneId, target))
-        {
-            fleetMission_.FormationTransit().Fail("추종 드론에게 편대 목표를 보내지 못했습니다.");
-            return;
-        }
-    }
-
-    const bool leaderArrived = fleetMission_.FormationTransit().WaypointIndex() + 1U == route.size()
-        && glm::distance(leader.positionMeters, route.back()) <= 3.0;
-    bool followersArrived = true;
-    for (std::size_t index = 1U; index < droneIds.size(); ++index)
-    {
-        const glm::dvec3& target = targets[index];
-        const auto* peer = fleetMission_.TelemetryAtLeader().Latest(droneIds[index]);
-        if (peer == nullptr)
-        {
-            followersArrived = false;
-            break;
-        }
-        if (glm::distance(peer->state.positionMeters, target) > 4.0)
-        {
-            followersArrived = false;
-            break;
-        }
-    }
-    if (leaderArrived && followersArrived)
-    {
-        fleetMission_.FormationTransit().Arrive("목적지 도착 · 편대 유지 중");
-        return;
-    }
-    fleetMission_.FormationTransit().UpdateStatus("이동 중 · 경유점 "
-        + std::to_string(fleetMission_.FormationTransit().WaypointIndex() + 1U)
-        + "/" + std::to_string(route.size()));
-}
 
 }
