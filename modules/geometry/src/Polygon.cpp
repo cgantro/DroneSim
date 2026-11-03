@@ -39,6 +39,8 @@ double SquaredDistanceToSegment(
 {
     const glm::dvec2 edge = end - start;
     const double edgeLengthSquared = glm::dot(edge, edge);
+    // 내적으로 점을 선분 방향에 투영한다. 비율을 0~1로 제한하면 선분 양 끝을 벗어나지 않는다.
+    // 길이가 0인 선분은 시작점 하나로 보고 투영 비율을 0으로 둔다.
     const double fraction = edgeLengthSquared > 0.0
         ? std::clamp(glm::dot(point - start, edge) / edgeLengthSquared, 0.0, 1.0)
         : 0.0;
@@ -54,6 +56,7 @@ double DistanceToPolygon(
     if (ContainsPointInPolygon(point, outline))
         return 0.0;
 
+    // 모든 변의 거리 제곱을 비교하고, 가장 가까운 변을 찾은 뒤 마지막에만 제곱근을 구한다.
     double nearestDistanceSquared = std::numeric_limits<double>::infinity();
     for (std::size_t index = 0; index < outline.size(); ++index)
     {
