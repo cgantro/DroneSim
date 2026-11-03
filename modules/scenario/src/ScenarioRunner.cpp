@@ -37,6 +37,13 @@ using detail::TickCommand;
 using detail::DroneCommunicationOutage;
 using DroneCommunicationStatus = ScenarioResult::Drone::CommunicationStatus;
 
+/** @brief 속도 예측에 현재 회피 목표와 원래 임무 경로 중 무엇을 쓸지 정한다. */
+enum class VelocityTargetSource
+{
+    ActiveAvoidanceTarget,
+    AssignedWaypoint
+};
+
 /** @brief 시나리오 관제소가 드론별로 보관하는 마지막 통신 상태다. */
 class DroneObservation final
 {
@@ -507,13 +514,15 @@ glm::dvec3 MissionVelocityIntent(
     const ScenarioResult::MissionTask* task,
     const ScenarioDefinition& definition,
     const std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
-    bool includeAvoidanceTarget)
+    VelocityTargetSource targetSource)
 {
     if (!task)
         return state.velocityMetersPerSecond;
 
     const auto avoidanceTarget = activeAvoidanceTargets.find(task->droneName);
-    const glm::dvec3 waypoint = includeAvoidanceTarget
+    const bool useActiveAvoidanceTarget =
+        targetSource == VelocityTargetSource::ActiveAvoidanceTarget;
+    const glm::dvec3 waypoint = useActiveAvoidanceTarget
         && avoidanceTarget != activeAvoidanceTargets.end()
         ? avoidanceTarget->second
         : task->CurrentWaypoint();
@@ -571,13 +580,17 @@ void UpdateCollisionAvoidance(
             && !DroneModel::CanAcceptInFlightCommands(state.mode))
             task = nullptr;
 
+        // 회피 여부를 판단할 때는 실제 진행 목표와 원래 임무 경로를 모두 예측한다.
+        // 원래 경로가 안전해지면 임시 회피 목표를 지우고 임무 경로로 돌아갈 수 있다.
         motionIntents.push_back({
             drone.name,
             state.positionMeters,
             MissionVelocityIntent(state, task, definition,
-                activeAvoidanceTargets, true),
+                activeAvoidanceTargets,
+                VelocityTargetSource::ActiveAvoidanceTarget),
             MissionVelocityIntent(state, task, definition,
-                activeAvoidanceTargets, false),
+                activeAvoidanceTargets,
+                VelocityTargetSource::AssignedWaypoint),
             connected,
             task != nullptr});
     }
