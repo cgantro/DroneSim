@@ -98,11 +98,12 @@ public:
         ASSERT_FALSE(app.trainingRangeScene_->BuildingObstacles().empty());
         const glm::dvec2 mapGroundSize =
             app.trainingRangeScene_->GroundSizeMeters();
-        EXPECT_NEAR(app.terrainGrid_.HalfWidthMeters() * 2.0,
+        const auto& terrain = app.trainingRangeScene_->Terrain();
+        EXPECT_NEAR(terrain.HalfWidthMeters() * 2.0,
             mapGroundSize.x, 0.02);
-        EXPECT_NEAR(app.terrainGrid_.HalfDepthMeters() * 2.0,
+        EXPECT_NEAR(terrain.HalfDepthMeters() * 2.0,
             mapGroundSize.y, 0.02);
-        const auto& missionEnvironment = MissionController(app).Environment();
+        const auto& missionEnvironment = app.missionController_->Environment();
         ASSERT_EQ(missionEnvironment.Targets().size(), 4U);
         double farthestTargetMeters = 0.0;
         double closestTargetSpacingMeters = std::numeric_limits<double>::infinity();
@@ -132,9 +133,9 @@ public:
             EXPECT_EQ(state.mode, simulation::FlightMode::Grounded);
             const glm::dvec2 groundPosition{
                 state.positionMeters.x, state.positionMeters.y};
-            EXPECT_TRUE(app.terrainGrid_.ContainsLocalPositionMeters(groundPosition));
+            EXPECT_TRUE(terrain.ContainsLocalPositionMeters(groundPosition));
             EXPECT_NEAR(state.positionMeters.z,
-                app.terrainGrid_.HeightAtLocalMeters(groundPosition)
+                terrain.HeightAtLocalMeters(groundPosition)
                     + simulation::QuadrotorFlightController::groundedModelOriginHeightMeters,
                 0.02);
             EXPECT_NEAR(state.positionMeters.z,
@@ -164,7 +165,7 @@ public:
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const glm::dvec2 openGround =
-            MissionController(app).Environment().StagingPositionMeters();
+            app.missionController_->Environment().StagingPositionMeters();
         const auto fallingDrone = app.simulation_.AddDrone(
             {openGround, 8.0}, 0.0, 0.0);
 
@@ -202,12 +203,13 @@ public:
     {
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
-        app.view_->UpdateObserverCamera(app.simulation_, app.observerDroneId_,
+        auto& sceneCamera = app.view_->SceneCamera();
+        sceneCamera.Update(app.simulation_, app.observerDroneId_,
             app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
 
         const auto distance = glm::distance(
-            app.view_->observerCamera_->GetPosition(),
-            app.view_->observerCamera_->GetTarget());
+            sceneCamera.ViewCamera().GetPosition(),
+            sceneCamera.ViewCamera().GetTarget());
         EXPECT_GT(distance, 5.0F);
     }
 
@@ -218,18 +220,19 @@ public:
         const auto droneIds = app.simulation_.DroneIds();
         ASSERT_EQ(droneIds.size(), 4U);
 
-        app.view_->UpdateObserverCamera(app.simulation_, app.observerDroneId_,
+        auto& sceneCamera = app.view_->SceneCamera();
+        sceneCamera.Update(app.simulation_, app.observerDroneId_,
             app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
-        const glm::vec3 primaryTarget = app.view_->observerCamera_->GetTarget();
+        const glm::vec3 primaryTarget = sceneCamera.ViewCamera().GetTarget();
 
         app.observerDroneId_ = droneIds[2U];
-        app.view_->UpdateObserverCamera(app.simulation_, app.observerDroneId_,
+        sceneCamera.Update(app.simulation_, app.observerDroneId_,
             app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
-        const glm::vec3 selectedTarget = app.view_->observerCamera_->GetTarget();
+        const glm::vec3 selectedTarget = sceneCamera.ViewCamera().GetTarget();
         EXPECT_NE(primaryTarget, selectedTarget);
         EXPECT_GT(glm::distance(
-            app.view_->observerCamera_->GetPosition(),
-            app.view_->observerCamera_->GetTarget()), 5.0F);
+            sceneCamera.ViewCamera().GetPosition(),
+            sceneCamera.ViewCamera().GetTarget()), 5.0F);
     }
 
     static void VerifyEveryDroneHasAnUdpSocket()
