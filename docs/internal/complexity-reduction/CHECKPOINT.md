@@ -907,3 +907,9 @@
 - `FleetMissionState`가 공개 필드로 두던 드론별 배정표, 리더 식별값, 상태 보고 기록과 순번을 비공개로 옮겼다. 앱은 배정을 등록·조회·비우고 보고 전송 시점을 기록하는 메서드를 사용한다.
 - 드론별 `FleetReconnaissanceState`의 세부 값은 아직 호출부에서 직접 바꿀 수 있어 캡슐화가 끝난 것은 아니다. 무리하게 모든 값을 한 번에 감추지 않고, 다음 정리 범위로 남긴다.
 - Release 통합 시험 빌드 성공, `SimulatorSessionTests` 5/5 통과, `git diff --check` 공백 오류 없음. 성능 변화는 측정하지 않았다.
+
+## 드론별 임무 구간과 경유점 진행 정리 — 2026-11-04
+
+- 앱이 편대원의 임무 구간을 바꾸고 경유점 번호를 직접 올리던 처리를 `FleetReconnaissanceState`의 `BeginLeg`, `BeginLowBatteryReturn`, `BeginWaypointCommand`, `AdvanceWaypointIfReached`로 옮겼다. 다음 경유점 조회도 상태 객체가 맡는다.
+- 앱은 물리 상태를 확인하고 비행 명령을 적용하는 역할을 유지한다. 정찰 상태는 임무 구간과 경유점 진행을 갱신한다. 상태 필드 전체의 공개 범위는 아직 정리 중이다.
+- Release 통합 시험 빌드 성공, `SimulatorSessionTests` 5/5 통과, `git diff --check` 공백 오류 없음. 성능 변화는 측정하지 않았다.

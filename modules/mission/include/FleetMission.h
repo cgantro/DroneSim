@@ -44,6 +44,22 @@ struct FleetReconnaissanceState
     /** @brief 현재 임무 구간이 완료 또는 실패 상태인지 확인한다. */
     [[nodiscard]] bool IsLegFinished() const noexcept;
 
+    /** @brief 새 정찰·집결·복귀 경로를 기다리도록 구간 진행 상태를 초기화한다. */
+    void BeginLeg(FleetMissionLeg nextLeg) noexcept;
+
+    /** @brief 배터리 부족으로 복귀를 시작했음을 임무 상태에 기록한다. */
+    void BeginLowBatteryReturn() noexcept;
+
+    /** @brief 첫 경유점을 조종기에 전달하고 현재 구간에 맞는 비행 상태를 정한다. */
+    void BeginWaypointCommand() noexcept;
+
+    /** @brief 현재 경유점에 도착했으면 다음 점으로 이동한다. */
+    [[nodiscard]] bool AdvanceWaypointIfReached(
+        const glm::dvec3& positionMeters, double toleranceMeters) noexcept;
+
+    /** @brief 아직 전달할 경유점이 있으면 그 위치를 돌려준다. */
+    [[nodiscard]] const glm::dvec3* CurrentWaypoint() const noexcept;
+
     /** @brief 정찰 중이거나 목표에 도착한 상태에서 저전력 복귀를 시작할 수 있는지 확인한다. */
     [[nodiscard]] bool CanBeginLowBatteryReturn() const noexcept;
 

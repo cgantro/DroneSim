@@ -600,6 +600,23 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     fleetState.Assignment(1).status = FleetDroneStatus::TargetReached;
     EXPECT_FALSE(fleetState.HasActiveReconnaissance());
 
+    mission::FleetReconnaissanceState routeProgress;
+    routeProgress.routeWaypointsMeters = {
+        {0.0, 0.0, 5.0}, {10.0, 0.0, 5.0}};
+    routeProgress.BeginLeg(FleetMissionLeg::Reconnaissance);
+    EXPECT_EQ(routeProgress.status, FleetDroneStatus::RoutePending);
+    routeProgress.BeginWaypointCommand();
+    EXPECT_EQ(routeProgress.status, FleetDroneStatus::Reconnaissance);
+    ASSERT_NE(routeProgress.CurrentWaypoint(), nullptr);
+    EXPECT_EQ(*routeProgress.CurrentWaypoint(), glm::dvec3(0.0, 0.0, 5.0));
+    EXPECT_TRUE(routeProgress.AdvanceWaypointIfReached({1.0, 0.0, 5.0}, 2.0));
+    EXPECT_EQ(*routeProgress.CurrentWaypoint(), glm::dvec3(10.0, 0.0, 5.0));
+    EXPECT_FALSE(routeProgress.AdvanceWaypointIfReached({1.0, 0.0, 5.0}, 2.0));
+    routeProgress.BeginLowBatteryReturn();
+    EXPECT_TRUE(routeProgress.lowBatteryReturn);
+    EXPECT_EQ(routeProgress.leg, FleetMissionLeg::Returning);
+    EXPECT_EQ(routeProgress.status, FleetDroneStatus::RoutePending);
+
     EXPECT_TRUE(mission::IsFleetMissionInProgress(
         FleetDroneStatus::Reconnaissance));
     EXPECT_EQ(mission::FleetDroneStatusLabel(

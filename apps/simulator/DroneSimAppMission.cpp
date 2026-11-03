@@ -264,8 +264,7 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
             && mission.status
                 == dronesim::mission::FleetDroneStatus::LowBatteryReturnComplete)
             continue;
-        mission.leg = dronesim::mission::FleetMissionLeg::Returning;
-        mission.status = dronesim::mission::FleetDroneStatus::RoutePending;
+        mission.BeginLeg(dronesim::mission::FleetMissionLeg::Returning);
         if (!SendFleetRouteAssignment(droneIds[index],
                 dronesim::mission::FleetMissionLeg::Returning, mission.targetIndex,
                 std::move(returnRoutes[index])))
@@ -361,8 +360,7 @@ bool DroneSimApp::StartFleetRally()
     {
         const DroneId droneId = rallyDroneIds[index];
         auto& mission = fleetMission_.Assignment(droneId);
-        mission.leg = dronesim::mission::FleetMissionLeg::Regrouping;
-        mission.status = dronesim::mission::FleetDroneStatus::RoutePending;
+        mission.BeginLeg(dronesim::mission::FleetMissionLeg::Regrouping);
         if (!SendFleetRouteAssignment(droneId,
                 dronesim::mission::FleetMissionLeg::Regrouping, mission.targetIndex,
                 std::move(rallyRoutes[index])))
@@ -407,7 +405,7 @@ void DroneSimApp::AdvanceFleetReconnaissance()
                         == dronesim::simulation::CommandResult::Accepted;
                 if (returnStarted)
                 {
-                    mission.lowBatteryReturn = true;
+                    mission.BeginLowBatteryReturn();
                     returnStarted = SendFleetRouteAssignment(droneId,
                         dronesim::mission::FleetMissionLeg::Returning, mission.targetIndex,
                         std::vector<glm::dvec3>(route->begin(), route->end()));
@@ -460,15 +458,7 @@ void DroneSimApp::AdvanceFleetReconnaissance()
 
         if (!mission.waypointCommanded)
         {
-            mission.waypointCommanded = true;
-            if (mission.leg == dronesim::mission::FleetMissionLeg::Returning)
-                mission.status = mission.lowBatteryReturn
-                    ? dronesim::mission::FleetDroneStatus::LowBatteryReturning
-                    : dronesim::mission::FleetDroneStatus::Returning;
-            else if (mission.leg == dronesim::mission::FleetMissionLeg::Regrouping)
-                mission.status = dronesim::mission::FleetDroneStatus::Regrouping;
-            else
-                mission.status = dronesim::mission::FleetDroneStatus::Reconnaissance;
+            mission.BeginWaypointCommand();
         }
         else if (mission.nextWaypoint >= mission.routeWaypointsMeters.size())
         {
@@ -490,19 +480,17 @@ void DroneSimApp::AdvanceFleetReconnaissance()
                 mission.status = dronesim::mission::FleetDroneStatus::RouteFailed;
             continue;
         }
-        else if (glm::length(mission.routeWaypointsMeters[mission.nextWaypoint]
-                - state.positionMeters) <= 2.0)
+        else if (mission.AdvanceWaypointIfReached(state.positionMeters, 2.0))
         {
-            ++mission.nextWaypoint;
             if (mission.nextWaypoint >= mission.routeWaypointsMeters.size())
                 continue;
         }
 
-        if (mission.nextWaypoint < mission.routeWaypointsMeters.size())
+        if (const auto* nextWaypoint = mission.CurrentWaypoint())
         {
             Command waypoint;
             waypoint.kind = Command::Kind::SetWaypoint;
-            waypoint.vector = mission.routeWaypointsMeters[mission.nextWaypoint];
+            waypoint.vector = *nextWaypoint;
             if (simulation_.Apply(droneId, waypoint)
                 != dronesim::simulation::CommandResult::Accepted)
                 mission.status = dronesim::mission::FleetDroneStatus::RouteFailed;

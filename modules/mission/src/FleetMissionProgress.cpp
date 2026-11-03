@@ -110,6 +110,63 @@ bool FleetReconnaissanceState::IsLegFinished() const noexcept
     return false;
 }
 
+void FleetReconnaissanceState::BeginLeg(FleetMissionLeg nextLeg) noexcept
+{
+    leg = nextLeg;
+    status = FleetDroneStatus::RoutePending;
+    nextWaypoint = 0U;
+    routeReceived = false;
+    waypointCommanded = false;
+}
+
+void FleetReconnaissanceState::BeginLowBatteryReturn() noexcept
+{
+    lowBatteryReturn = true;
+    BeginLeg(FleetMissionLeg::Returning);
+}
+
+void FleetReconnaissanceState::BeginWaypointCommand() noexcept
+{
+    waypointCommanded = true;
+    switch (leg)
+    {
+    case FleetMissionLeg::Returning:
+        status = lowBatteryReturn
+            ? FleetDroneStatus::LowBatteryReturning
+            : FleetDroneStatus::Returning;
+        break;
+    case FleetMissionLeg::Regrouping:
+        status = FleetDroneStatus::Regrouping;
+        break;
+    case FleetMissionLeg::Reconnaissance:
+        status = FleetDroneStatus::Reconnaissance;
+        break;
+    }
+}
+
+bool FleetReconnaissanceState::AdvanceWaypointIfReached(
+    const glm::dvec3& positionMeters,
+    double toleranceMeters) noexcept
+{
+    if (nextWaypoint >= routeWaypointsMeters.size())
+        return false;
+
+    const double distanceMeters = glm::length(
+        routeWaypointsMeters[nextWaypoint] - positionMeters);
+    if (distanceMeters > toleranceMeters)
+        return false;
+
+    ++nextWaypoint;
+    return true;
+}
+
+const glm::dvec3* FleetReconnaissanceState::CurrentWaypoint() const noexcept
+{
+    if (nextWaypoint >= routeWaypointsMeters.size())
+        return nullptr;
+    return &routeWaypointsMeters[nextWaypoint];
+}
+
 FleetMissionState::AssignmentIterator FleetMissionState::FindAssignment(
     simulation::DroneId droneId) noexcept
 {
