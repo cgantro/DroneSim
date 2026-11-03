@@ -329,6 +329,8 @@ void RecordMinimumDroneSeparation(
     if (!definition.minimumDroneSeparationMeters)
         return;
 
+    // 이 버퍼는 실행 중 재사용한다. clear()는 저장 공간을 유지하므로 매 Tick마다
+    // 드론 수만큼 메모리를 새로 할당하지 않는다.
     positionsMeters.clear();
     for (const ScenarioDrone& drone : definition.drones)
     {
@@ -336,6 +338,8 @@ void RecordMinimumDroneSeparation(
             simulation.State(drones.at(drone.name).id).positionMeters);
     }
 
+    // 거리 제곱끼리 비교하면 드론 쌍마다 제곱근을 계산할 필요가 없다.
+    // 이전 최솟값도 제곱해 같은 단위로 비교하고, 새 최솟값이 생긴 경우에만 마지막에 제곱근을 구한다.
     std::optional<double> minimumDistanceSquaredMeters;
     if (result.minimumDroneSeparationMeters)
     {
