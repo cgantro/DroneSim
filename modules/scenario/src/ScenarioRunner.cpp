@@ -152,12 +152,11 @@ private:
 class ScenarioDroneRuntime final
 {
 public:
-    explicit ScenarioDroneRuntime(DroneId id) noexcept : id_(id) {}
-
-    /** @brief 초기 상태를 기준으로 귀환 위치와 통신·비행 기록을 준비한다. */
-    void Initialize(const DroneState& initialState) noexcept
+    /** @brief 완성된 드론 상태로 실행 정보를 초기화해 유효한 객체를 만든다. */
+    ScenarioDroneRuntime(DroneId id, const DroneState& initialState) noexcept
+        : id_(id),
+          homePositionMeters_(initialState.positionMeters)
     {
-        homePositionMeters_ = initialState.positionMeters;
         if (initialState.mode == FlightMode::Grounded)
             homePositionMeters_.z += DroneModel::takeoffHeightMeters;
 
@@ -418,9 +417,10 @@ ScenarioDrones CreateScenarioDrones(
         }
         simulation.SetCameraModel(
             id, drone.cameraModel.value_or(definition.defaultCameraModel));
-        drones.emplace(drone.name, ScenarioDroneRuntime{id});
         if (!definition.usesExistingPrimaryDrone && drone.hasExtendedInitialState)
             simulation.SetInitialState(id, drone.initialState);
+        drones.emplace(drone.name,
+            ScenarioDroneRuntime{id, simulation.State(id)});
     }
 
     if (!definition.usesExistingPrimaryDrone && !simulation.RemoveDrone(defaultDrone))
@@ -846,7 +846,7 @@ public:
             simulation_.SetWindVelocityMetersPerSecond(*definition_.windVelocity);
 
         drones_ = CreateScenarioDrones(definition_, simulation_);
-        InitializeDroneRuntime();
+        ConfigureDroneBatteries();
         InitializeResult();
     }
 
@@ -861,14 +861,8 @@ public:
     }
 
 private:
-    void InitializeDroneRuntime()
+    void ConfigureDroneBatteries()
     {
-        for (auto& [droneName, drone] : drones_)
-        {
-            const DroneState& initialState = simulation_.State(drone.Id());
-            drone.Initialize(initialState);
-        }
-
         if (!definition_.energyModel)
             return;
 
