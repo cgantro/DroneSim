@@ -99,6 +99,7 @@ JPH::Vec3 ToJoltVector(const glm::dvec3 &enu) {
 }
 
 JPH::Vec3 ToJoltHalfExtents(const glm::dvec3 &enuHalfExtents) {
+  // 반길이는 방향 부호가 필요 없으므로 ENU의 위·북 축 순서만 Jolt에 맞춘다.
   return {ToJoltPositiveFloat(enuHalfExtents.x),
           ToJoltPositiveFloat(enuHalfExtents.z),
           ToJoltPositiveFloat(enuHalfExtents.y)};
@@ -117,6 +118,7 @@ const glm::dquat &ProjectToJoltRotation() {
 
 JPH::Quat ToJoltRotation(const glm::dquat &enu) {
   const glm::dquat normalized = glm::normalize(enu);
+  // 좌표축 회전 C 아래에서 자세를 바꿀 때는 C q C⁻¹로 기저를 변환한다.
   const glm::dquat converted = ProjectToJoltRotation() * normalized *
                                glm::conjugate(ProjectToJoltRotation());
   return {ToJoltFloat(converted.x), ToJoltFloat(converted.y),
@@ -126,6 +128,7 @@ JPH::Quat ToJoltRotation(const glm::dquat &enu) {
 glm::dquat ToProjectRotation(JPH::QuatArg jolt) {
   const glm::dquat converted{jolt.GetW(), jolt.GetX(), jolt.GetY(),
                              jolt.GetZ()};
+  // 위 변환을 되돌리기 위해 같은 식에 역방향 축 회전을 적용한다.
   return glm::normalize(glm::conjugate(ProjectToJoltRotation()) * converted *
                         ProjectToJoltRotation());
 }
@@ -264,6 +267,7 @@ struct JoltPhysicsWorld::Impl {
       const double stepSeconds = DroneModel::fixedStepSeconds;
       const glm::dvec3 relativeAirflowBody = glm::inverse(orientation)
           * (linearVelocityMetersPerSecond - windVelocityMetersPerSecond);
+      // 항력은 땅 기준 속도가 아니라 바람을 뺀 공기 상대 속도로 계산한다.
       const glm::dvec3 dragForceBody =
           CalculateQuadrotorDragForceBody(parameters, relativeAirflowBody);
       bodyInterface.AddForce(
