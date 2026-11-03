@@ -100,42 +100,32 @@ bool DroneSimApp::StartFleetReconnaissance(
     if (takeOffDrones)
         InitializeFleetLeadership();
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
-    const DroneId leaderId = fleetMission_.LeaderId();
     if (droneIds.empty() || reconTargets_.empty()
         || (takeOffDrones && CompleteFleetMissionIsActive()))
         return false;
 
     std::vector<dronesim::mission::FleetReconnaissanceStart> starts;
     starts.reserve(droneIds.size());
+    const auto observationSource = takeOffDrones
+        ? dronesim::mission::MissionStateSource::LocalSimulation
+        : dronesim::mission::MissionStateSource::FreshTelemetry;
     for (const DroneId droneId : droneIds)
     {
-        const DroneState* localState = nullptr;
-        const dronesim::mission::ReceivedPeerTelemetry* peerReport = nullptr;
-        if (!takeOffDrones && droneId != leaderId)
-        {
-            peerReport = fleetMission_.TelemetryAtLeader().Fresh(
-                droneId, simulation_.TickCount());
-            if (peerReport == nullptr)
-                return false;
-        }
-        else
-        {
-            localState = &simulation_.State(droneId);
-        }
+        const auto observation = fleetMission_.CurrentDroneObservation(
+            droneId, simulation_, observationSource);
+        if (!observation)
+            return false;
 
-        const FlightMode mode = localState != nullptr
-            ? localState->mode : peerReport->state.mode;
+        const FlightMode mode = observation->mode;
         const bool ready = takeOffDrones
             ? mode == FlightMode::Grounded
             : DroneModel::CanAcceptInFlightCommands(mode);
         if (!ready)
             return false;
 
-        const glm::dvec3& startPosition = localState != nullptr
-            ? localState->positionMeters : peerReport->state.positionMeters;
         const auto home = homePositions.find(droneId);
-        starts.push_back({droneId, startPosition,
-            home != homePositions.end() ? home->second : startPosition});
+        starts.push_back({droneId, observation->positionMeters,
+            home != homePositions.end() ? home->second : observation->positionMeters});
     }
 
     const dronesim::mission::FleetMissionPlanner planner{
@@ -206,36 +196,26 @@ bool DroneSimApp::StartFleetReturn(bool takeOffDrones)
     // 경로와 대상 드론을 한 항목으로 묶어, 배정 순서가 달라져도 서로 어긋나지 않게 한다.
     std::vector<PlannedFleetRoute> returnPlans;
     returnPlans.reserve(droneIds.size());
+    const auto observationSource = takeOffDrones
+        ? dronesim::mission::MissionStateSource::LocalSimulation
+        : dronesim::mission::MissionStateSource::FreshTelemetry;
     for (const auto droneId : droneIds)
     {
         const auto& mission = fleetMission_.Assignment(droneId);
         if (mission.IsLowBatteryReturnComplete())
             continue;
 
-        glm::dvec3 currentPosition{0.0};
-        FlightMode mode = FlightMode::Grounded;
-        if (takeOffDrones || droneId == leaderId)
-        {
-            const auto& state = simulation_.State(droneId);
-            currentPosition = state.positionMeters;
-            mode = state.mode;
-        }
-        else
-        {
-            const auto* report = fleetMission_.TelemetryAtLeader().Fresh(
-                droneId, simulation_.TickCount());
-            if (report == nullptr)
-                return false;
-            currentPosition = report->state.positionMeters;
-            mode = report->state.mode;
-        }
+        const auto observation = fleetMission_.CurrentDroneObservation(
+            droneId, simulation_, observationSource);
+        if (!observation)
+            return false;
         const bool ready = takeOffDrones
-            ? mode == FlightMode::Grounded
-            : DroneModel::CanAcceptInFlightCommands(mode);
+            ? observation->mode == FlightMode::Grounded
+            : DroneModel::CanAcceptInFlightCommands(observation->mode);
         if (!ready || mission.Leg() == dronesim::mission::FleetMissionLeg::Returning)
             return false;
         const auto route = planner.PlanReturnRoute(
-            currentPosition, mission.StartPositionMeters());
+            observation->positionMeters, mission.StartPositionMeters());
         if (!route)
             return false;
         returnPlans.push_back({droneId, std::move(*route)});
@@ -315,32 +295,21 @@ bool DroneSimApp::StartFleetRally()
     for (std::size_t index = 0; index < rallyDroneIds.size(); ++index)
     {
         const DroneId droneId = rallyDroneIds[index];
-        glm::dvec3 currentPosition{0.0};
-        FlightMode mode = FlightMode::Grounded;
-        if (droneId == leaderId)
-        {
-            const DroneState& state = simulation_.State(droneId);
-            currentPosition = state.positionMeters;
-            mode = state.mode;
-        }
-        else
-        {
-            const auto* report = fleetMission_.TelemetryAtLeader().Fresh(
-                droneId, simulation_.TickCount());
-            if (report == nullptr
-                || report->state.missionStatus
+        const auto observation = fleetMission_.CurrentDroneObservation(
+            droneId, simulation_,
+            dronesim::mission::MissionStateSource::FreshTelemetry);
+        if (!observation
+            || (droneId != leaderId
+                && observation->missionStatus
                     != dronesim::mission::FleetDroneStatus::TargetReached)
-                return false;
-            currentPosition = report->state.positionMeters;
-            mode = report->state.mode;
-        }
-        if (mode != FlightMode::Grounded)
+            || observation->mode != FlightMode::Grounded)
             return false;
         const glm::dvec3 rallyTarget{
             centerMeters.x + offsets[index].x,
             centerMeters.y + offsets[index].y,
             centerMeters.z};
-        const auto route = planner.PlanTransitRoute(currentPosition, rallyTarget);
+        const auto route = planner.PlanTransitRoute(
+            observation->positionMeters, rallyTarget);
         if (!route)
             return false;
         rallyPlans.push_back({droneId, std::move(*route)});

@@ -316,6 +316,35 @@ void FleetMissionState::ResetTelemetry()
     telemetryAtLeader_.Clear();
 }
 
+std::optional<PeerTelemetry> FleetMissionState::CurrentDroneObservation(
+    simulation::DroneId droneId,
+    const simulation::SimulationCore& simulation,
+    MissionStateSource source) const
+{
+    if (source == MissionStateSource::LocalSimulation || droneId == leaderId_)
+    {
+        const simulation::DroneState& drone = simulation.State(droneId);
+        PeerTelemetry observation{
+            .positionMeters = drone.positionMeters,
+            .mode = drone.mode};
+
+        const auto assignment = assignments_.find(droneId);
+        if (assignment != assignments_.end())
+        {
+            observation.missionLeg = static_cast<std::uint8_t>(assignment->second.Leg());
+            observation.missionStatus = assignment->second.Status();
+            observation.assignmentVersion = assignment->second.AssignmentVersion();
+        }
+        return observation;
+    }
+
+    const ReceivedPeerTelemetry* report = telemetryAtLeader_.Fresh(
+        droneId, simulation.TickCount());
+    return report == nullptr
+        ? std::nullopt
+        : std::optional<PeerTelemetry>{report->state};
+}
+
 bool FleetMissionState::HasActiveReconnaissance() const noexcept
 {
     for (const auto& [droneId, reconnaissance] : assignments_)
@@ -421,23 +450,20 @@ std::optional<FleetMissionReport> FleetMissionState::FreshReport(
     const FleetReconnaissanceState& assignment,
     const simulation::SimulationCore& simulation) const
 {
+    const auto observation = CurrentDroneObservation(
+        droneId, simulation, MissionStateSource::FreshTelemetry);
+    if (!observation)
+        return std::nullopt;
+
     if (droneId == leaderId_)
     {
         return FleetMissionReport{
-            simulation.State(droneId).mode,
-            assignment.Leg(),
-            assignment.Status()};
+            observation->mode, assignment.Leg(), assignment.Status()};
     }
-
-    const ReceivedPeerTelemetry* telemetry = telemetryAtLeader_.Fresh(
-        droneId, simulation.TickCount());
-    if (telemetry == nullptr)
-        return std::nullopt;
-
     return FleetMissionReport{
-        telemetry->state.mode,
-        static_cast<FleetMissionLeg>(telemetry->state.missionLeg),
-        telemetry->state.missionStatus};
+        observation->mode,
+        static_cast<FleetMissionLeg>(observation->missionLeg),
+        observation->missionStatus};
 }
 
 std::optional<FleetMissionReport> FleetMissionState::CurrentReport(

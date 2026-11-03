@@ -20,6 +20,13 @@
 
 namespace dronesim::mission
 {
+/** @brief 임무 계획에서 드론 상태를 읽을 위치다. */
+enum class MissionStateSource
+{
+    LocalSimulation,
+    FreshTelemetry
+};
+
 /** @brief 경로 명령의 전송 확인과 재전송 상태를 관리한다. */
 class FleetRouteDeliveryState
 {
@@ -548,6 +555,16 @@ public:
 
     /** @brief 새 임무를 위해 텔레메트리 순번과 수신·전송 기록을 초기화한다. */
     void ResetTelemetry();
+
+    /**
+     * @brief 임무 계획에 쓸 드론 상태를 권위 있는 위치에서 가져온다.
+     * @details 리더나 로컬 상태를 요청한 드론은 시뮬레이션에서 읽고, 나머지는
+     * 정해 둔 시간 안에 리더에게 도착한 텔레메트리만 반환한다.
+     */
+    [[nodiscard]] std::optional<PeerTelemetry> CurrentDroneObservation(
+        simulation::DroneId droneId,
+        const simulation::SimulationCore& simulation,
+        MissionStateSource source) const;
 
     /** @brief 편대 이동과 전체 임무 진행 객체를 읽고 갱신한다. */
     [[nodiscard]] FormationTransitState& FormationTransit() noexcept
