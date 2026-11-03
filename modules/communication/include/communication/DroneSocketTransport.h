@@ -1,6 +1,7 @@
 #pragma once
 
 #include "communication/DroneSocket.h"
+#include "communication/NetworkTypes.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -12,8 +13,6 @@
 
 namespace dronesim::communication
 {
-using NetworkNodeId = std::uint64_t;
-
 /** @brief 소켓 전송 계층이 데이터그램에 담아 주고받는 메시지다. */
 struct SocketPacket
 {

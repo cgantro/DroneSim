@@ -1,6 +1,6 @@
 #pragma once
 
-#include "communication/DroneSocketTransport.h"
+#include "communication/NetworkTypes.h"
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -15,6 +15,8 @@
 
 namespace dronesim::communication
 {
+class DroneSocketTransport;
+
 /** @brief 통신망에 등록할 드론의 위치다. */
 struct NetworkNodeSnapshot
 {

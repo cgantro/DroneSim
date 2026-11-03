@@ -1,4 +1,5 @@
 #include "communication/VirtualMeshNetwork.h"
+#include "communication/DroneSocketTransport.h"
 
 #include <gtest/gtest.h>
 
