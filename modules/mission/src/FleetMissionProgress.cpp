@@ -296,6 +296,7 @@ FleetReconnaissanceState* FleetMissionState::FindAssignment(
     simulation::DroneId droneId) noexcept
 {
     const auto found = assignments_.find(droneId);
+    // 반복자는 이 함수 안에서만 쓰고, 호출부에는 배정 값이나 없음만 전달한다.
     return found == assignments_.end() ? nullptr : &found->second;
 }
 
@@ -303,6 +304,7 @@ const FleetReconnaissanceState* FleetMissionState::FindAssignment(
     simulation::DroneId droneId) const noexcept
 {
     const auto found = assignments_.find(droneId);
+    // 읽기 전용 호출도 같은 검색 규칙을 사용하고 수정 권한만 제한한다.
     return found == assignments_.end() ? nullptr : &found->second;
 }
 

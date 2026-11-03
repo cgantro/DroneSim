@@ -490,7 +490,10 @@ public:
     }
 };
 
-/** @brief 편대 임무의 드론 배정과 통신 상태를 소유한다. */
+/**
+ * @brief 편대 임무에 필요한 드론별 배정과 진행 상태를 소유한다.
+ * @details 드론별 임무 배정, 리더가 받은 통신 상태, 편대 이동과 전체 임무 단계를 보관한다.
+ */
 class FleetMissionState
 {
 public:
@@ -513,11 +516,17 @@ public:
         return assignments_;
     }
 
-    /** @brief 지정한 드론의 배정을 수정할 수 있도록 찾는다. 없으면 nullptr을 돌려준다. */
+    /**
+     * @brief 지정한 드론의 배정을 수정할 수 있도록 찾는다. 없으면 nullptr을 돌려준다.
+     * @details 반환 포인터는 배정을 지우거나 전체 배정을 초기화하기 전까지만 사용한다.
+     */
     [[nodiscard]] FleetReconnaissanceState* FindAssignment(
         simulation::DroneId droneId) noexcept;
 
-    /** @brief 지정한 드론의 배정을 읽기 전용으로 찾는다. 없으면 nullptr을 돌려준다. */
+    /**
+     * @brief 지정한 드론의 배정을 읽기 전용으로 찾는다. 없으면 nullptr을 돌려준다.
+     * @details 반환 포인터는 배정을 지우거나 전체 배정을 초기화하기 전까지만 사용한다.
+     */
     [[nodiscard]] const FleetReconnaissanceState* FindAssignment(
         simulation::DroneId droneId) const noexcept;
 
