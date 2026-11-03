@@ -1,6 +1,7 @@
 #include "simulation_core/JoltPhysicsWorld.h"
 #include "simulation_core/CollisionGeometry.h"
 #include "simulation_core/QuadrotorModel.h"
+#include "geometry/Polygon.h"
 #include "terrain/TerrainGrid.h"
 
 #include <Jolt/Jolt.h>
@@ -196,79 +197,6 @@ MakeQuadrotorShape(const QuadrotorParameters &parameters) {
   return shapeResult.Get();
 }
 
-double SignedArea(const std::vector<glm::dvec2> &outline) {
-  double twiceArea = 0.0;
-  for (std::size_t index = 0; index < outline.size(); ++index) {
-    const auto &first = outline[index];
-    const auto &second = outline[(index + 1) % outline.size()];
-    twiceArea += first.x * second.y - second.x * first.y;
-  }
-  return twiceArea * 0.5;
-}
-
-double Cross2D(const glm::dvec2 &first, const glm::dvec2 &second,
-               const glm::dvec2 &third) {
-  const glm::dvec2 a = second - first;
-  const glm::dvec2 b = third - first;
-  return a.x * b.y - a.y * b.x;
-}
-
-bool PointInTriangle(const glm::dvec2 &point, const glm::dvec2 &first,
-                     const glm::dvec2 &second, const glm::dvec2 &third,
-                     double winding) {
-  constexpr double epsilon = 1.0e-10;
-  return winding * Cross2D(first, second, point) >= -epsilon &&
-         winding * Cross2D(second, third, point) >= -epsilon &&
-         winding * Cross2D(third, first, point) >= -epsilon;
-}
-
-std::vector<std::array<std::size_t, 3>>
-TriangulateOutline(const std::vector<glm::dvec2> &outline) {
-  std::vector<std::size_t> remaining(outline.size());
-  for (std::size_t index = 0; index < remaining.size(); ++index)
-    remaining[index] = index;
-
-  const double winding = SignedArea(outline) > 0.0 ? 1.0 : -1.0;
-  std::vector<std::array<std::size_t, 3>> triangles;
-  triangles.reserve(outline.size() - 2);
-  while (remaining.size() > 3) {
-    bool clippedEar = false;
-    for (std::size_t index = 0; index < remaining.size(); ++index) {
-      const std::size_t previous =
-          remaining[(index + remaining.size() - 1) % remaining.size()];
-      const std::size_t current = remaining[index];
-      const std::size_t next = remaining[(index + 1) % remaining.size()];
-      if (winding *
-              Cross2D(outline[previous], outline[current], outline[next]) <=
-          1.0e-10)
-        continue;
-
-      bool containsVertex = false;
-      for (const std::size_t candidate : remaining) {
-        if (candidate == previous || candidate == current || candidate == next)
-          continue;
-        if (PointInTriangle(outline[candidate], outline[previous],
-                            outline[current], outline[next], winding)) {
-          containsVertex = true;
-          break;
-        }
-      }
-      if (containsVertex)
-        continue;
-
-      triangles.push_back({previous, current, next});
-      remaining.erase(remaining.begin() + static_cast<std::ptrdiff_t>(index));
-      clippedEar = true;
-      break;
-    }
-    if (!clippedEar)
-      throw std::invalid_argument(
-          "건물 외곽선을 삼각형으로 나누지 못했습니다.");
-  }
-  triangles.push_back({remaining[0], remaining[1], remaining[2]});
-  return triangles;
-}
-
 JPH::Vec3 ToJoltPrismVertex(const glm::dvec2 &point, double elevationMeters) {
   return ToJoltVector({point.x, point.y, elevationMeters});
 }
@@ -276,8 +204,8 @@ JPH::Vec3 ToJoltPrismVertex(const glm::dvec2 &point, double elevationMeters) {
 JPH::TriangleList MakePrismTriangles(const std::vector<glm::dvec2> &outline,
                                      double bottomMeters, double topMeters) {
   JPH::TriangleList triangles;
-  const auto caps = TriangulateOutline(outline);
-  const bool counterClockwise = SignedArea(outline) > 0.0;
+  const auto caps = geometry::TriangulateSimplePolygon(outline);
+  const bool counterClockwise = geometry::SignedArea(outline) > 0.0;
   for (const auto &cap : caps) {
     const auto [a, b, c] = cap;
     const JPH::Vec3 bottomA = ToJoltPrismVertex(outline[a], bottomMeters);

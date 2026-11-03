@@ -1,11 +1,25 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <span>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
 namespace dronesim::geometry
 {
+/** @brief 다각형의 부호 있는 넓이를 구한다. 반시계 방향 꼭짓점이면 양수다. */
+[[nodiscard]] double SignedArea(std::span<const glm::dvec2> outline) noexcept;
+
+/**
+ * @brief 구멍이 없는 단순 다각형을 삼각형 꼭짓점 번호로 나눈다.
+ * @details 귀를 하나씩 잘라내는 방식이다. 꼭짓점 순서는 입력 순서로 유지하며,
+ * 자기 교차 다각형이나 면적이 0인 다각형은 지원하지 않는다.
+ */
+[[nodiscard]] std::vector<std::array<std::size_t, 3>> TriangulateSimplePolygon(
+    std::span<const glm::dvec2> outline);
+
 /**
  * @brief 점이 다각형 내부에 있는지 홀짝 교차법으로 판정한다.
  * @details 광선을 다각형 변과 교차시켜 교차 횟수가 홀수면 내부로 본다.
