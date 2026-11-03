@@ -179,6 +179,14 @@ void RecordTrajectorySample(const ScenarioDefinition& definition,
 
 using DroneNameSet = std::unordered_set<std::string>;
 
+/** @brief 모든 실행 기록에 같은 형식으로 Tick 번호를 붙인다. */
+void RecordTickEvent(
+    ScenarioResult& result, std::uint64_t tick, std::string message)
+{
+    result.eventLog.push_back(
+        "tick " + std::to_string(tick) + ": " + std::move(message));
+}
+
 void FailTasksForLowBatteryReturn(
     std::uint64_t tick,
     std::string_view droneName,
@@ -195,8 +203,8 @@ void FailTasksForLowBatteryReturn(
             continue;
 
         task.Fail();
-        result.eventLog.push_back("tick " + std::to_string(tick) + ": '"
-            + task.name + "' 임무는 미완료로 남습니다.");
+        RecordTickEvent(result, tick,
+            "'" + task.name + "' 임무는 미완료로 남습니다.");
     }
 }
 
@@ -216,8 +224,8 @@ void UpdateEnergyPolicy(
             simulation.TryBeginLowBatteryReturn(droneId);
         if (beganLowBatteryReturn)
         {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + droneName + " 드론이 배터리 예비량에 도달해 출발 지점으로 돌아갑니다.");
+            RecordTickEvent(result, tick,
+                droneName + " 드론이 배터리 예비량에 도달해 출발 지점으로 돌아갑니다.");
             FailTasksForLowBatteryReturn(tick, droneName, mission, result);
         }
         else if (!simulation.Battery(droneId).IsReturningForLowBattery())
@@ -290,8 +298,8 @@ void UpdateDroneObservations(
             // 장애 중에도 비행 계산은 계속되지만 관측값은 이 마지막 보고에 머문다.
             if (observation.Status() != DroneCommunicationStatus::Connected)
             {
-                result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                    + droneName + " 드론의 통신이 복구되어 새 상태를 받았습니다.");
+                RecordTickEvent(result, tick,
+                    droneName + " 드론의 통신이 복구되어 새 상태를 받았습니다.");
             }
             const std::optional<double> batteryPercent = simulation.HasBattery(droneId)
                 ? std::optional<double>{simulation.Battery(droneId).RemainingPercent()}
@@ -307,14 +315,14 @@ void UpdateDroneObservations(
         // 상태를 Stale로 바꾸기 전에 연결 중이었는지 확인해 첫 끊김만 기록한다.
         if (previousStatus == DroneCommunicationStatus::Connected)
         {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + droneName + " 드론의 하트비트가 끊겼습니다.");
+            RecordTickEvent(result, tick,
+                droneName + " 드론의 하트비트가 끊겼습니다.");
         }
         if (newStatus == DroneCommunicationStatus::Unknown
             && previousStatus != DroneCommunicationStatus::Unknown)
         {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + droneName + " 드론의 상태를 확인할 수 없어 임무 정보를 미확정으로 바꿨습니다.");
+            RecordTickEvent(result, tick,
+                droneName + " 드론의 상태를 확인할 수 없어 임무 정보를 미확정으로 바꿨습니다.");
         }
     };
 
@@ -433,8 +441,7 @@ void ApplyScheduledCommands(
         const TickCommand& command = commands[nextCommand++];
         if (!IsConnected(drones, command.droneName))
         {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + command.droneName
+            RecordTickEvent(result, tick, command.droneName
                 + " 드론에 명령을 전달하지 못했습니다. 마지막 위치는 이전 보고값입니다.");
             continue;
         }
@@ -497,8 +504,8 @@ void UpdateMissionCommands(
                 continue;
             if (!mission->startedTick)
                 mission->startedTick = tick;
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + task.droneName + " 드론이 '" + task.name + "' 임무를 시작했습니다.");
+            RecordTickEvent(result, tick,
+                task.droneName + " 드론이 '" + task.name + "' 임무를 시작했습니다.");
         }
 
         const DroneCommand moveCommand{
@@ -637,8 +644,8 @@ void UpdateCollisionAvoidance(
         if (newlyAvoiding)
         {
             ++result.collisionAvoidanceEvents;
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + drone.name + " 드론이 예상 충돌을 피해 옆 경로로 이동합니다.");
+            RecordTickEvent(result, tick,
+                drone.name + " 드론이 예상 충돌을 피해 옆 경로로 이동합니다.");
         }
     }
 
@@ -647,8 +654,8 @@ void UpdateCollisionAvoidance(
         static_cast<void>(target);
         if (!plan.activeDroneNames.contains(droneName))
         {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + droneName + " 드론이 위험 구간을 벗어나 조사 경로로 돌아갑니다.");
+            RecordTickEvent(result, tick,
+                droneName + " 드론이 위험 구간을 벗어나 조사 경로로 돌아갑니다.");
         }
     }
     std::erase_if(activeAvoidanceTargets,
@@ -682,16 +689,16 @@ void UpdateMissionResults(
         // 도착한 지점 뒤에 경유점이 남아 있으면 다음 지점으로, 마지막이면 완료로 전환한다.
         if (reachedWaypoint && task.AdvanceWaypoint())
         {
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + task.droneName + " 드론이 '" + task.name + "' 경유점 "
+            RecordTickEvent(result, tick,
+                task.droneName + " 드론이 '" + task.name + "' 경유점 "
                 + std::to_string(task.CurrentWaypointIndex() + 1U) + "/"
                 + std::to_string(task.waypointsMeters.size()) + "에 도착했습니다.");
         }
         else if (reachedWaypoint)
         {
             task.Complete(tick);
-            result.eventLog.push_back("tick " + std::to_string(tick) + ": "
-                + task.droneName + " 드론이 '" + task.name + "' 임무를 마쳤습니다.");
+            RecordTickEvent(result, tick,
+                task.droneName + " 드론이 '" + task.name + "' 임무를 마쳤습니다.");
         }
         else if (tick >= task.deadlineTick)
         {
