@@ -27,6 +27,18 @@ glm::dvec3 ClampLength(const glm::dvec3& value, double maximumLength) noexcept
     return value * (maximumLength / length);
 }
 
+FlightMode ModeAfterVelocityCommand(
+    const glm::dvec3& targetVelocityMetersPerSecond,
+    const glm::dvec3& currentVelocityMetersPerSecond) noexcept
+{
+    // 목표 속도가 0이어도 기체가 움직이는 중이면 Flying으로 두어 감속을 계속한다.
+    const bool targetIsStopped = glm::length(targetVelocityMetersPerSecond) == 0.0;
+    const bool droneHasStopped = glm::length(currentVelocityMetersPerSecond) < 0.05;
+    return targetIsStopped && droneHasStopped
+        ? FlightMode::Hovering
+        : FlightMode::Flying;
+}
+
 struct FlightModeName
 {
     std::string_view name;
@@ -99,11 +111,9 @@ CommandResult DroneModel::Apply(
         }
         control.targetVelocityMetersPerSecond = ClampLength(
             command.vector, maximumSpeedMetersPerSecond);
-        // 정지 명령은 바로 호버링으로, 이동 명령은 속도가 생길 때까지 비행 상태로 둔다.
-        state.mode = glm::length(control.targetVelocityMetersPerSecond) == 0.0
-                && glm::length(state.velocityMetersPerSecond) < 0.05
-            ? FlightMode::Hovering
-            : FlightMode::Flying;
+        state.mode = ModeAfterVelocityCommand(
+            control.targetVelocityMetersPerSecond,
+            state.velocityMetersPerSecond);
         return CommandResult::Accepted;
 
     case DroneCommand::Kind::SetWaypoint:
@@ -167,9 +177,9 @@ CommandResult DroneModel::Apply(
             return CommandResult::InvalidFlightMode;
         }
         control.targetVelocityMetersPerSecond = glm::dvec3{0.0};
-        state.mode = glm::length(state.velocityMetersPerSecond) < 0.05
-            ? FlightMode::Hovering
-            : FlightMode::Flying;
+        state.mode = ModeAfterVelocityCommand(
+            control.targetVelocityMetersPerSecond,
+            state.velocityMetersPerSecond);
         control.commandedYawRateRadiansPerSecond = 0.0;
         return CommandResult::Accepted;
     }
