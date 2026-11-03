@@ -1,7 +1,149 @@
-#include "FleetMissionProgress.h"
+#include "FleetMission.h"
+
+#include <algorithm>
+
+#include <glm/geometric.hpp>
 
 namespace dronesim::mission
 {
+void FormationTransitState::SetRoute(flight_planning::FormationRoutePlan route)
+{
+    // 새 구간은 이전 구간과 다른 메시지 흐름이므로 진행 번호와 전송 기록을 함께 비운다.
+    route_ = std::move(route);
+    waypointIndex_ = 0U;
+    nextMessageSequence_ = 1U;
+    sentFollowerTargets_.clear();
+    lastTargetSentAtTick_.clear();
+    lastAppliedSequence_.clear();
+    lastNetworkNodeUpdateTick_.reset();
+}
+
+void FormationTransitState::AdvanceWaypointIfReached(
+    const glm::dvec3& positionMeters,
+    double toleranceMeters)
+{
+    const auto& waypoints = route_.leaderWaypointsMeters;
+    if (waypoints.empty())
+        return;
+
+    waypointIndex_ = std::min(waypointIndex_, waypoints.size() - 1U);
+    const bool reachedCurrentWaypoint =
+        glm::distance(positionMeters, waypoints[waypointIndex_]) <= toleranceMeters;
+    if (reachedCurrentWaypoint && waypointIndex_ + 1U < waypoints.size())
+        ++waypointIndex_;
+}
+
+bool FormationTransitState::IsNewAppliedSequence(
+    simulation::DroneId droneId,
+    std::uint32_t sequence) const noexcept
+{
+    const auto previous = lastAppliedSequence_.find(droneId);
+    return previous == lastAppliedSequence_.end() || sequence > previous->second;
+}
+
+void FormationTransitState::RecordAppliedSequence(
+    simulation::DroneId droneId,
+    std::uint32_t sequence)
+{
+    lastAppliedSequence_[droneId] = sequence;
+}
+
+bool FormationTransitState::ShouldSendFollowerTarget(
+    simulation::DroneId droneId,
+    const glm::dvec3& targetMeters,
+    std::uint64_t currentTick,
+    double changeThresholdMeters,
+    std::uint64_t refreshIntervalTicks) const noexcept
+{
+    // 목표가 충분히 바뀌면 즉시 보내고, 그대로라면 일정 Tick마다 현재 목표를 다시 알린다.
+    const auto previousTarget = sentFollowerTargets_.find(droneId);
+    if (previousTarget == sentFollowerTargets_.end()
+        || glm::distance(previousTarget->second, targetMeters) >= changeThresholdMeters)
+        return true;
+
+    const auto lastSent = lastTargetSentAtTick_.find(droneId);
+    return lastSent == lastTargetSentAtTick_.end()
+        || (currentTick >= lastSent->second
+            && currentTick - lastSent->second >= refreshIntervalTicks);
+}
+
+void FormationTransitState::RecordFollowerTargetSent(
+    simulation::DroneId droneId,
+    const glm::dvec3& targetMeters,
+    std::uint64_t currentTick)
+{
+    sentFollowerTargets_[droneId] = targetMeters;
+    lastTargetSentAtTick_[droneId] = currentTick;
+}
+
+bool FormationTransitState::ShouldRefreshNetworkNodes(
+    std::uint64_t currentTick,
+    std::uint64_t refreshIntervalTicks) const noexcept
+{
+    // 모의 Tick이 초기화되면 이전 시각과 비교할 수 없으므로 새 기준 시각이 올 때까지 기다린다.
+    return !lastNetworkNodeUpdateTick_
+        || (currentTick >= *lastNetworkNodeUpdateTick_
+            && currentTick - *lastNetworkNodeUpdateTick_ >= refreshIntervalTicks);
+}
+
+void FormationTransitState::RecordNetworkNodesUpdated(std::uint64_t currentTick) noexcept
+{
+    lastNetworkNodeUpdateTick_ = currentTick;
+}
+
+bool FleetReconnaissanceState::IsLegFinished() const noexcept
+{
+    switch (leg)
+    {
+    case FleetMissionLeg::Reconnaissance:
+        return status == FleetDroneStatus::TargetReached
+            || status == FleetDroneStatus::RouteFailed
+            || status == FleetDroneStatus::OutsideTargetLanding;
+    case FleetMissionLeg::Regrouping:
+        return status == FleetDroneStatus::RegroupComplete
+            || status == FleetDroneStatus::RegroupFailed;
+    case FleetMissionLeg::Returning:
+        return status == FleetDroneStatus::ReturnComplete
+            || status == FleetDroneStatus::ReturnFailed
+            || status == FleetDroneStatus::LowBatteryReturnComplete;
+    }
+    return false;
+}
+
+bool FleetReconnaissanceState::CanBeginLowBatteryReturn() const noexcept
+{
+    return leg == FleetMissionLeg::Reconnaissance
+        && (IsFleetMissionInProgress(status)
+            || status == FleetDroneStatus::TargetReached);
+}
+
+FleetDroneStatus FleetReconnaissanceState::StatusAfterLanding(
+    const glm::dvec3& positionMeters,
+    const glm::dvec3& destinationMeters) const noexcept
+{
+    if (leg == FleetMissionLeg::Regrouping)
+        return FleetDroneStatus::RegroupFailed;
+
+    // 착륙 판정은 수평 오차만 본다. 고도는 착륙 중 지면 영향으로 변할 수 있다.
+    const glm::dvec2 horizontalError{
+        positionMeters.x - destinationMeters.x,
+        positionMeters.y - destinationMeters.y};
+    const bool reachedDestination = glm::length(horizontalError) <= 5.0;
+
+    if (leg == FleetMissionLeg::Returning)
+    {
+        if (!reachedDestination)
+            return FleetDroneStatus::ReturnFailed;
+        return lowBatteryReturn
+            ? FleetDroneStatus::LowBatteryReturnComplete
+            : FleetDroneStatus::ReturnComplete;
+    }
+
+    return reachedDestination
+        ? FleetDroneStatus::TargetReached
+        : FleetDroneStatus::OutsideTargetLanding;
+}
+
 /** @brief 내부 임무 상태를 HUD에서 읽을 수 있는 한국어 문구로 바꾼다. */
 std::string_view FleetDroneStatusLabel(FleetDroneStatus status) noexcept
 {
@@ -57,11 +199,99 @@ bool IsFleetMissionInProgress(FleetDroneStatus status) noexcept
     }
 }
 
+std::optional<FleetMissionReport> FleetMissionState::FreshReport(
+    simulation::DroneId droneId,
+    const FleetReconnaissanceState& assignment,
+    const simulation::SimulationCore& simulation) const
+{
+    if (droneId == leaderId)
+    {
+        return FleetMissionReport{
+            simulation.State(droneId).mode,
+            assignment.leg,
+            assignment.status};
+    }
+
+    const ReceivedPeerTelemetry* telemetry = telemetryAtLeader.Fresh(
+        droneId, simulation.TickCount());
+    if (telemetry == nullptr)
+        return std::nullopt;
+
+    return FleetMissionReport{
+        telemetry->state.mode,
+        static_cast<FleetMissionLeg>(telemetry->state.missionLeg),
+        telemetry->state.missionStatus};
+}
+
+std::optional<FleetMissionReport> FleetMissionState::CurrentReport(
+    simulation::DroneId droneId,
+    const FleetReconnaissanceState& assignment,
+    const simulation::SimulationCore& simulation,
+    CompleteFleetMissionState::Stage currentStage) const
+{
+    if (const auto report = FreshReport(droneId, assignment, simulation))
+        return report;
+
+    if (droneId == leaderId)
+        return std::nullopt;
+
+    const ReceivedPeerTelemetry* cached = telemetryAtLeader.Latest(droneId);
+    if (cached == nullptr
+        || cached->state.assignmentVersion != assignment.assignmentVersion
+        || cached->state.mode != simulation::FlightMode::Grounded)
+        return std::nullopt;
+
+    // 통신이 끊겨도 이 임무에서 이미 착륙을 마친 기록은 최종 결과로 쓸 수 있다.
+    const bool returnedAfterBatteryReserve = assignment.lowBatteryReturn
+        && cached->state.missionLeg
+            == static_cast<std::uint8_t>(FleetMissionLeg::Returning)
+        && cached->state.missionStatus == FleetDroneStatus::LowBatteryReturnComplete;
+    const bool returnedToBase = currentStage == CompleteFleetMissionState::Stage::Returning
+        && cached->state.missionLeg
+            == static_cast<std::uint8_t>(FleetMissionLeg::Returning)
+        && cached->state.missionStatus == FleetDroneStatus::ReturnComplete;
+    if (!returnedAfterBatteryReserve && !returnedToBase)
+        return std::nullopt;
+
+    return FleetMissionReport{
+        cached->state.mode,
+        static_cast<FleetMissionLeg>(cached->state.missionLeg),
+        cached->state.missionStatus};
+}
+
+bool FleetMissionState::AllDronesReadyToReturn(
+    std::span<const simulation::DroneId> droneIds,
+    const simulation::SimulationCore& simulation) const
+{
+    if (droneIds.empty())
+        return false;
+
+    return std::all_of(droneIds.begin(), droneIds.end(), [this, &simulation](auto droneId)
+    {
+        const auto assignment = reconnaissanceByDrone.find(droneId);
+        if (assignment == reconnaissanceByDrone.end())
+            return false;
+
+        const auto report = FreshReport(droneId, assignment->second, simulation);
+        if (!report || report->mode != simulation::FlightMode::Grounded)
+            return false;
+
+        const bool landedAfterLowBatteryReserve = assignment->second.lowBatteryReturn
+            && report->status == FleetDroneStatus::LowBatteryReturnComplete;
+        if (landedAfterLowBatteryReserve)
+            return true;
+
+        return report->leg == FleetMissionLeg::Reconnaissance
+            && !IsFleetMissionInProgress(report->status);
+    });
+}
+
 FleetMissionProgressDecision EvaluateFleetMissionProgress(
     FleetMissionLeg leg,
     std::span<const std::optional<FleetMissionReport>> reports) noexcept
 {
-    // 각 드론의 최신 보고가 모일 때까지 기다린 뒤 현재 임무 단계의 완료 조건을 검사한다.
+    // 임무 단계는 편대원 전원의 보고로 판정한다. 한 대라도 보고가 없으면
+    // 아직 실패나 완료를 확정할 정보가 없으므로 다음 Tick까지 기다린다.
     if (reports.empty())
         return {FleetMissionProgress::Waiting, {}};
 
@@ -75,6 +305,8 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
             && report->mode == simulation::FlightMode::Grounded;
         if (returnedForLowBattery)
         {
+            // 예비 배터리에 도달해 먼저 착륙한 기체는 정찰을 마친 것으로
+            // 볼 수 없다. 복귀 단계에서는 이미 안전하게 착륙한 것으로 인정한다.
             if (leg == FleetMissionLeg::Reconnaissance)
                 return {FleetMissionProgress::Failed,
                     "배터리 예비량에 도달해 정찰을 중단했습니다."};
@@ -82,12 +314,15 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
                 continue;
         }
 
+        // 이전 구간의 늦은 보고가 새 구간 완료로 오인되지 않게 구간도 맞춘다.
         if (report->leg != leg)
             return {FleetMissionProgress::Waiting, {}};
 
         switch (leg)
         {
         case FleetMissionLeg::Reconnaissance:
+            // 도착 상태만으로는 충분하지 않다. 목표 지점에서 착륙 상태까지
+            // 확인해야 해당 기체의 정찰 구간이 끝난 것으로 친다.
             if (report->status == FleetDroneStatus::RouteFailed
                 || report->status == FleetDroneStatus::OutsideTargetLanding)
                 return {FleetMissionProgress::Failed,
@@ -97,6 +332,7 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
                 return {FleetMissionProgress::Waiting, {}};
             break;
         case FleetMissionLeg::Regrouping:
+            // 집결 구간은 모든 드론이 집결 완료를 보고해야 다음 구간으로 간다.
             if (report->status == FleetDroneStatus::RegroupFailed)
                 return {FleetMissionProgress::Failed,
                     "모든 기체가 집결하지 못해 임무를 중단했습니다."};
@@ -104,6 +340,7 @@ FleetMissionProgressDecision EvaluateFleetMissionProgress(
                 return {FleetMissionProgress::Waiting, {}};
             break;
         case FleetMissionLeg::Returning:
+            // 복귀 완료는 기지 도착뿐 아니라 착륙 상태까지 포함한다.
             if (report->status == FleetDroneStatus::ReturnFailed)
                 return {FleetMissionProgress::Failed,
                     "복귀에 실패한 드론이 있습니다."};

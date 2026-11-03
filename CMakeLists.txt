@@ -113,6 +113,9 @@ target_include_directories(dronesim_manual_control PUBLIC modules/manual_control
 target_link_libraries(dronesim_manual_control PUBLIC dronesim_simulation_core)
 
 add_library(dronesim_mission STATIC
+  modules/mission/src/FleetMissionActions.cpp
+  modules/mission/src/FleetMissionMessages.cpp
+  modules/mission/src/FleetMissionPlanner.cpp
   modules/mission/src/FleetMissionProgress.cpp
   modules/mission/src/FleetTelemetry.cpp
 )

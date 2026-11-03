@@ -19,6 +19,7 @@
 #include "simulation_core/QuadrotorFlightController.h"
 #include "simulation_core/ScopedDuration.h"
 #include "flight_planning/BuildingObstacle.h"
+#include "flight_planning/FormationPlanner.h"
 #include "terrain/TerrainGrid.h"
 #include <glm/geometric.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -61,8 +62,61 @@ void SetStartupDetail(std::string_view message)
 #endif
 }
 
+#ifndef __EMSCRIPTEN__
+/** @brief 통신 모듈의 현재 결과를 HUD가 읽을 수 있는 값으로 복사한다. */
+dronesim::gui::FleetNetworkStatus MakeFleetNetworkStatus(
+    const dronesim::simulation::SimulationCore& simulation,
+    const dronesim::communication::VirtualMeshNetwork& network,
+    const dronesim::communication::DroneSocketTransport& socketTransport,
+    dronesim::simulation::DroneId leaderId)
+{
+    dronesim::gui::FleetNetworkStatus status;
+    const auto& metrics = network.Metrics();
+    status.deliveredMessages = metrics.deliveredMessages;
+    status.droppedMessages = metrics.droppedMessages;
+
+    for (const auto droneId : simulation.DroneIds())
+    {
+        const auto port = socketTransport.PortFor(droneId);
+        const bool isLeader = droneId == leaderId;
+        status.drones.push_back({droneId, port, isLeader,
+            network.IsNodeRadioEnabled(droneId),
+            isLeader || network.HasDirectLink(droneId, leaderId)});
+    }
+
+    const auto events = network.Events();
+    const std::size_t firstVisibleEvent = events.size() > 4U
+        ? events.size() - 4U
+        : 0U;
+    for (std::size_t index = firstVisibleEvent; index < events.size(); ++index)
+    {
+        const auto& event = events[index];
+        auto kind = dronesim::gui::FleetNetworkStatus::EventKind::PacketDropped;
+        switch (event.kind)
+        {
+        case dronesim::communication::MeshEventKind::NodeRadioDisabled:
+            kind = dronesim::gui::FleetNetworkStatus::EventKind::RadioDisabled;
+            break;
+        case dronesim::communication::MeshEventKind::NodeRadioRestored:
+            kind = dronesim::gui::FleetNetworkStatus::EventKind::RadioRestored;
+            break;
+        case dronesim::communication::MeshEventKind::MessageDelivered:
+            kind = dronesim::gui::FleetNetworkStatus::EventKind::MessageDelivered;
+            break;
+        case dronesim::communication::MeshEventKind::PacketDropped:
+            kind = dronesim::gui::FleetNetworkStatus::EventKind::PacketDropped;
+            break;
+        }
+        status.recentEvents.push_back({event.tick, kind,
+            event.source, event.destination});
+    }
+    return status;
+}
+#endif
+
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
+constexpr std::size_t trainingFleetSize = 4U;
 // 전력값은 임무 흐름을 시험하기 위한 가정이며 실제 X500 배터리 사양이 아니다.
 constexpr dronesim::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
@@ -97,6 +151,55 @@ glm::quat ToRenderOrientation(const glm::dquat& orientation)
         -halfPi, glm::vec3{1.0F, 0.0F, 0.0F});
     return glm::normalize(
         simulationToRender * simulationOrientation * glm::inverse(simulationToRender));
+}
+
+std::vector<glm::mat4> BuildDroneAssemblyTransforms(
+    const dronesim::graphics::GlbModel& model,
+    const dronesim::simulation::CameraGimbalAngles& angles)
+{
+    const auto parts = model.PartBounds();
+    std::vector<glm::mat4> transforms;
+    transforms.reserve(parts.size());
+    for (const auto& part : parts)
+        transforms.push_back(part.nodeTransform);
+
+    const auto findPart = [parts](std::string_view name)
+    {
+        for (std::size_t index = 0; index < parts.size(); ++index)
+        {
+            if (parts[index].nodeName == name)
+                return index;
+        }
+        throw std::logic_error("기체 카메라 모델에 짐벌 부품이 없습니다.");
+    };
+    const std::size_t yawArm = findPart("PX4 CGO3 yaw_arm");
+    const std::size_t rollArm = findPart("PX4 CGO3 roll_arm");
+    const std::size_t camera = findPart("PX4 CGO3 camera");
+    const auto pivotOf = [&parts](std::size_t index)
+    {
+        return glm::vec3(parts[index].nodeTransform[3]);
+    };
+    const auto aroundPivot = [](const glm::vec3& pivot, const glm::vec3& axis,
+                                double degrees)
+    {
+        const glm::mat4 toPivot = glm::translate(glm::mat4(1.0F), pivot);
+        const glm::mat4 fromPivot = glm::translate(glm::mat4(1.0F), -pivot);
+        const glm::quat rotation = glm::angleAxis(
+            glm::radians(static_cast<float>(degrees)), axis);
+        return toPivot * glm::mat4_cast(rotation) * fromPivot;
+    };
+
+    // GLB에 저장된 각 부품의 원점을 짐벌 축점으로 사용해 부모 관절 회전을 누적한다.
+    const glm::mat4 yawRotation = aroundPivot(
+        pivotOf(yawArm), {0.0F, -1.0F, 0.0F}, angles.yawDegrees);
+    const glm::mat4 rollRotation = aroundPivot(
+        pivotOf(rollArm), {-1.0F, 0.0F, 0.0F}, angles.rollDegrees);
+    const glm::mat4 pitchRotation = aroundPivot(
+        pivotOf(camera), {0.0F, 0.0F, 1.0F}, angles.pitchUpDegrees);
+    transforms[yawArm] = yawRotation * transforms[yawArm];
+    transforms[rollArm] = yawRotation * rollRotation * transforms[rollArm];
+    transforms[camera] = yawRotation * rollRotation * pitchRotation * transforms[camera];
+    return transforms;
 }
 }
 
@@ -140,7 +243,7 @@ bool DroneSimApp::StopWebFleetMission()
 {
     externalControl_ = true;
     if (!CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()
-        && !formationTransit_.IsActive())
+        && !fleetMission_.formationTransit.IsActive())
         return false;
     FailCompleteFleetMission("화면에서 전체 임무를 중단했습니다.");
     return true;
@@ -255,10 +358,8 @@ void DroneSimApp::LoadScene()
 void DroneSimApp::LoadSceneModels()
 {
     cube_ = dronesim::graphics::Mesh::CreateCube(1.0F);
-    droneModel_ = dronesim::graphics::GlbModel::Load(
-        "models/drones/x500/visual.glb");
-    droneGimbalModel_ = dronesim::graphics::GlbModel::Load(
-        "models/drones/x500/cgo3-gimbal.glb");
+    droneAssemblyModel_ = dronesim::graphics::GlbModel::Load(
+        "models/drones/x500/x500_CAM.glb");
     droneSurfaceTexture_ = dronesim::graphics::Texture2D::LoadFromFile(
         "models/drones/x500/carbon-weave.ppm");
 }
@@ -280,6 +381,10 @@ void DroneSimApp::LoadTerrain()
     terrainGrid_.heightOffsetsMeters.assign(
         static_cast<std::size_t>(sampleCount) * sampleCount, 0.0F);
     simulation_.SetTerrain(terrainGrid_);
+
+    // 건물 외곽선은 여러 경로에서 쓰므로 매번 다시 변환하지 않고 한 번 준비한다.
+    routeEnvironment_ = std::make_unique<dronesim::scene::TrainingRangeRouteEnvironment>(
+        terrainGrid_, trainingRangeScene_->BuildingObstacles());
 }
 void DroneSimApp::LoadMapFeatures()
 {
@@ -325,10 +430,11 @@ void DroneSimApp::InitializeStartingState()
     }
     else
     {
-        for (const glm::dvec2 offset : std::array<glm::dvec2, 3>{
-                 glm::dvec2{-2.0, 0.0}, glm::dvec2{2.0, 0.0}, glm::dvec2{0.0, -2.0}})
+        const auto formationOffsets = dronesim::flight_planning::FormationOffsets(
+            trainingFleetSize, 1.5, initialYawRadians);
+        for (std::size_t index = 1U; index < trainingFleetSize; ++index)
         {
-            const glm::dvec2 position = demoDroneStartMeters + offset;
+            const glm::dvec2 position = demoDroneStartMeters + formationOffsets[index];
             const double groundMeters = terrainGrid_.HeightAtLocalMeters(position);
             const auto droneId = simulation_.AddDrone(
                 {position, groundMeters
@@ -379,7 +485,7 @@ void DroneSimApp::AdvanceSimulationTick()
     AdvanceCompleteFleetMission();
     if (demoMode_ && !externalControl_ && CompleteFleetMissionCanStart())
         static_cast<void>(StartCompleteFleetMission());
-    const bool missionActive = formationTransit_.IsActive()
+    const bool missionActive = fleetMission_.formationTransit.IsActive()
         || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
     if (!missionActive && missionControlOwnsInput_)
     {
@@ -413,7 +519,7 @@ void DroneSimApp::AdvanceAmbientWind()
 void DroneSimApp::AdvanceManualControlTick()
 {
     if (missionControlOwnsInput_ || CompleteFleetMissionIsActive()
-        || FleetReconnaissanceIsActive() || formationTransit_.IsActive())
+        || FleetReconnaissanceIsActive() || fleetMission_.formationTransit.IsActive())
     {
         simulation_.AdvanceOneTick();
         return;
@@ -512,8 +618,14 @@ void DroneSimApp::RenderFrame()
     {
         const bool fleetReturnCanStart = FleetReturnCanStart();
         const bool completeFleetMissionCanStart = CompleteFleetMissionCanStart();
-        const bool formationNetworkActive = formationTransit_.IsActive()
+        const bool formationNetworkActive = fleetMission_.formationTransit.IsActive()
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
+        std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
+        if (formationNetwork_ && formationNetworkActive)
+        {
+            networkStatus = MakeFleetNetworkStatus(simulation_,
+                *formationNetwork_, droneSocketTransport_, fleetMission_.leaderId);
+        }
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
@@ -539,21 +651,22 @@ void DroneSimApp::RenderFrame()
             miniMapRoutes.push_back({droneId, currentPosition,
                 std::move(remainingWaypoints)});
         }
-        const auto& formationRoute = fleetMission_.formationTransit.route;
+        const auto& formationRoute = fleetMission_.formationTransit.Route();
         if (fleetMission_.formationTransit.IsActive()
-            && fleetMission_.formationTransit.waypointIndex
+            && fleetMission_.formationTransit.WaypointIndex()
                 < formationRoute.leaderWaypointsMeters.size())
         {
             const auto& currentPosition = simulation_.State(
                 fleetMission_.leaderId).positionMeters;
             std::vector<glm::dvec3> remainingWaypoints(
                 formationRoute.leaderWaypointsMeters.begin()
-                    + static_cast<std::ptrdiff_t>(fleetMission_.formationTransit.waypointIndex),
+                    + static_cast<std::ptrdiff_t>(fleetMission_.formationTransit.WaypointIndex()),
                 formationRoute.leaderWaypointsMeters.end());
             miniMapRoutes.push_back({fleetMission_.leaderId,
                 currentPosition, std::move(remainingWaypoints)});
         }
-        hud_->Render(simulation_, observerDroneId_, gamepadController_.IsConnected(),
+        hud_->Render(simulation_, observerDroneId_, *view_,
+            gamepadController_.IsConnected(),
             fleetReturnCanStart,
             [this] { static_cast<void>(StartFleetReturn()); },
             CompleteFleetMissionStatus(), completeFleetMissionCanStart,
@@ -561,8 +674,7 @@ void DroneSimApp::RenderFrame()
             {
                 static_cast<void>(StartCompleteFleetMission());
             },
-            formationNetwork_.get(),
-            &droneSocketTransport_,
+            networkStatus ? &*networkStatus : nullptr,
             [this, formationNetworkActive](dronesim::simulation::DroneId droneId,
                 bool enabled)
             {
@@ -601,6 +713,11 @@ void DroneSimApp::RenderFrame()
                     },
                     benchmarkMode_ ? &benchmarkSession_.CurrentFrame()
                         .cameraSceneRenderMicroseconds : nullptr);
+            },
+            [this](dronesim::simulation::DroneId droneId,
+                const dronesim::simulation::CameraGimbalAngles& angles)
+            {
+                simulation_.SetCameraGimbalAngles(droneId, angles);
             },
             benchmarkMode_ ? &hudTimings : nullptr);
         auto& frame = benchmarkSession_.CurrentFrame();
@@ -739,7 +856,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
 
     if (showMissionGuides)
     {
-        for (const auto& [droneId, mission] : fleetReconnaissance_)
+        for (const auto& [droneId, mission] : fleetMission_.reconnaissanceByDrone)
         {
             const auto missionStatus = mission.status;
             if (missionStatus != dronesim::mission::FleetDroneStatus::TakeoffReady
@@ -773,11 +890,11 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3 position = ToRenderPosition(drone.positionMeters);
         const glm::mat4 heading = glm::translate(glm::mat4{1.0F}, position) *
             glm::mat4_cast(ToRenderOrientation(drone.orientation));
-        droneModel_->Draw(heading, *renderer_, *shader_, view, projection,
-            cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true);
-        // GLB에 기체 기준 장착 위치와 화면용 Y축 변환이 이미 들어 있어 기체 자세만 적용한다.
-        droneGimbalModel_->Draw(heading, *renderer_, *shader_, view, projection,
-            cameraPosition);
+        // 드론과 짐벌의 부모 관계·장착 위치가 GLB에 있으므로 기체 자세만 적용한다.
+        droneAssemblyModel_->Draw(heading, *renderer_, *shader_, view, projection,
+            cameraPosition, &droneMaterial_, droneSurfaceTexture_.get(), true,
+            BuildDroneAssemblyTransforms(
+                *droneAssemblyModel_, simulation_.Camera(id).gimbalAngles));
 
     }
 }
