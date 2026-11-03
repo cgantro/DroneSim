@@ -233,7 +233,53 @@ public:
         const glm::dvec3& destinationMeters) const noexcept;
 };
 
-/** @brief 편대가 목표 지점으로 이동할 때 필요한 진행 자료다. */
+/** @brief 편대 가상 통신의 메시지 순번과 주기별 전송 기록을 관리한다. */
+class FormationNetworkState final
+{
+private:
+    std::uint32_t nextMessageSequence_ = 1;
+    std::map<simulation::DroneId, glm::dvec3> sentFollowerTargets_;
+    std::map<simulation::DroneId, std::uint64_t> lastTargetSentAtTick_;
+    std::map<simulation::DroneId, std::uint32_t> lastAppliedSequence_;
+    std::optional<std::uint64_t> lastNetworkNodeUpdateTick_;
+
+public:
+    /** @brief 새 편대 임무에 맞춰 순번과 이전 임무의 전송 기록을 비운다. */
+    void Reset() noexcept;
+
+    /** @brief 다음 편대 목표 메시지에 쓸 순번을 돌려주고 1 증가시킨다. */
+    [[nodiscard]] std::uint32_t TakeNextMessageSequence() noexcept
+    {
+        return nextMessageSequence_++;
+    }
+
+    /** @brief 드론에 이미 적용한 순번보다 새 메시지 순번이 큰지 확인한다. */
+    [[nodiscard]] bool IsNewAppliedSequence(
+        simulation::DroneId droneId, std::uint32_t sequence) const noexcept;
+    /** @brief 드론에 적용한 마지막 메시지 순번을 기록한다. */
+    void RecordAppliedSequence(simulation::DroneId droneId, std::uint32_t sequence);
+
+    /** @brief 목표가 달라졌거나 정기 갱신 시점이면 편대원에게 다시 보낼지 알려준다. */
+    [[nodiscard]] bool ShouldSendFollowerTarget(
+        simulation::DroneId droneId,
+        const glm::dvec3& targetMeters,
+        std::uint64_t currentTick,
+        double changeThresholdMeters,
+        std::uint64_t refreshIntervalTicks) const noexcept;
+    /** @brief 전송한 편대원 목표와 Tick을 기록한다. */
+    void RecordFollowerTargetSent(
+        simulation::DroneId droneId,
+        const glm::dvec3& targetMeters,
+        std::uint64_t currentTick);
+
+    /** @brief 통신 링크 위치를 다시 계산할 시점인지 확인한다. */
+    [[nodiscard]] bool ShouldRefreshNetworkNodes(
+        std::uint64_t currentTick, std::uint64_t refreshIntervalTicks) const noexcept;
+    /** @brief 통신 링크 위치를 갱신한 Tick을 기록한다. */
+    void RecordNetworkNodesUpdated(std::uint64_t currentTick) noexcept;
+};
+
+/** @brief 편대가 목표 지점으로 이동할 때 필요한 경로 진행 자료다. */
 struct FormationTransitState
 {
     enum class Phase
@@ -249,11 +295,6 @@ private:
     std::string status_ = "대기";
     flight_planning::FormationRoutePlan route_;
     std::size_t waypointIndex_ = 0;
-    std::uint32_t nextMessageSequence_ = 1;
-    std::map<simulation::DroneId, glm::dvec3> sentFollowerTargets_;
-    std::map<simulation::DroneId, std::uint64_t> lastTargetSentAtTick_;
-    std::map<simulation::DroneId, std::uint32_t> lastAppliedSequence_;
-    std::optional<std::uint64_t> lastNetworkNodeUpdateTick_;
 
 public:
     /** @brief 편대 이동이 현재 어느 단계인지 반환한다. */
@@ -268,7 +309,7 @@ public:
         return phase_ == Phase::InProgress;
     }
 
-    /** @brief 편대 경로를 교체하고 이전 경로의 진행·통신 기록을 초기화한다. */
+    /** @brief 편대 경로를 교체하고 현재 경유점을 처음으로 되돌린다. */
     void SetRoute(flight_planning::FormationRoutePlan route);
 
     /** @brief 편대 경로를 읽기 전용으로 돌려준다. */
@@ -282,40 +323,6 @@ public:
 
     /** @brief 리더가 현재 경유점에 도착했으면 다음 점으로 이동한다. */
     void AdvanceWaypointIfReached(const glm::dvec3& positionMeters, double toleranceMeters);
-
-    /** @brief 다음 편대 목표 메시지에 쓸 순번을 돌려주고 1 증가시킨다. */
-    [[nodiscard]] std::uint32_t TakeNextMessageSequence() noexcept
-    {
-        return nextMessageSequence_++;
-    }
-
-    /** @brief 드론에 이미 적용한 순번보다 새 메시지 순번이 큰지 확인한다. */
-    [[nodiscard]] bool IsNewAppliedSequence(
-        simulation::DroneId droneId, std::uint32_t sequence) const noexcept;
-
-    /** @brief 드론에 적용한 마지막 메시지 순번을 기록한다. */
-    void RecordAppliedSequence(simulation::DroneId droneId, std::uint32_t sequence);
-
-    /** @brief 편대원 목표가 달라졌거나 정기 갱신 시점인지 확인한다. */
-    [[nodiscard]] bool ShouldSendFollowerTarget(
-        simulation::DroneId droneId,
-        const glm::dvec3& targetMeters,
-        std::uint64_t currentTick,
-        double changeThresholdMeters,
-        std::uint64_t refreshIntervalTicks) const noexcept;
-
-    /** @brief 전송에 성공한 편대원 목표와 Tick을 기억한다. */
-    void RecordFollowerTargetSent(
-        simulation::DroneId droneId,
-        const glm::dvec3& targetMeters,
-        std::uint64_t currentTick);
-
-    /** @brief 링크 위치를 다시 계산할 시점인지 확인한다. */
-    [[nodiscard]] bool ShouldRefreshNetworkNodes(
-        std::uint64_t currentTick, std::uint64_t refreshIntervalTicks) const noexcept;
-
-    /** @brief 링크 위치를 갱신한 Tick을 기록한다. */
-    void RecordNetworkNodesUpdated(std::uint64_t currentTick) noexcept;
 
     /** @brief 새 편대 이동을 시작하고 출발 안내를 저장한다. */
     void Start(std::string status)
@@ -474,6 +481,7 @@ private:
     std::uint64_t nextAssignmentVersion_ = 1;
     FleetTelemetry telemetryAtLeader_;
     FormationTransitState formationTransit_;
+    FormationNetworkState formationNetwork_;
     CompleteFleetMissionState completeMission_;
 
 public:
@@ -550,6 +558,18 @@ public:
     {
         return formationTransit_;
     }
+    /** @brief 편대 통신 순번과 전송 주기를 읽고 갱신한다. */
+    [[nodiscard]] FormationNetworkState& FormationNetwork() noexcept
+    {
+        return formationNetwork_;
+    }
+    [[nodiscard]] const FormationNetworkState& FormationNetwork() const noexcept
+    {
+        return formationNetwork_;
+    }
+    /** @brief 새 편대 이동을 시작하며 경로와 통신 기록을 함께 초기화한다. */
+    void BeginFormationTransit(
+        flight_planning::FormationRoutePlan route, std::string status);
     [[nodiscard]] CompleteFleetMissionState& CompleteMission() noexcept
     {
         return completeMission_;

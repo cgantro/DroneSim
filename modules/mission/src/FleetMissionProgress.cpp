@@ -84,9 +84,13 @@ void FleetRouteDeliveryState::RecordRetry(std::uint64_t currentTick) noexcept
 
 void FormationTransitState::SetRoute(flight_planning::FormationRoutePlan route)
 {
-    // 새 구간은 이전 구간과 다른 메시지 흐름이므로 진행 번호와 전송 기록을 함께 비운다.
+    // 새 경로는 이전 경로의 경유점 진행을 이어받지 않는다.
     route_ = std::move(route);
     waypointIndex_ = 0U;
+}
+
+void FormationNetworkState::Reset() noexcept
+{
     nextMessageSequence_ = 1U;
     sentFollowerTargets_.clear();
     lastTargetSentAtTick_.clear();
@@ -109,7 +113,7 @@ void FormationTransitState::AdvanceWaypointIfReached(
         ++waypointIndex_;
 }
 
-bool FormationTransitState::IsNewAppliedSequence(
+bool FormationNetworkState::IsNewAppliedSequence(
     simulation::DroneId droneId,
     std::uint32_t sequence) const noexcept
 {
@@ -117,14 +121,14 @@ bool FormationTransitState::IsNewAppliedSequence(
     return previous == lastAppliedSequence_.end() || sequence > previous->second;
 }
 
-void FormationTransitState::RecordAppliedSequence(
+void FormationNetworkState::RecordAppliedSequence(
     simulation::DroneId droneId,
     std::uint32_t sequence)
 {
     lastAppliedSequence_[droneId] = sequence;
 }
 
-bool FormationTransitState::ShouldSendFollowerTarget(
+bool FormationNetworkState::ShouldSendFollowerTarget(
     simulation::DroneId droneId,
     const glm::dvec3& targetMeters,
     std::uint64_t currentTick,
@@ -143,7 +147,7 @@ bool FormationTransitState::ShouldSendFollowerTarget(
             refreshIntervalTicks);
 }
 
-void FormationTransitState::RecordFollowerTargetSent(
+void FormationNetworkState::RecordFollowerTargetSent(
     simulation::DroneId droneId,
     const glm::dvec3& targetMeters,
     std::uint64_t currentTick)
@@ -152,7 +156,7 @@ void FormationTransitState::RecordFollowerTargetSent(
     lastTargetSentAtTick_[droneId] = currentTick;
 }
 
-bool FormationTransitState::ShouldRefreshNetworkNodes(
+bool FormationNetworkState::ShouldRefreshNetworkNodes(
     std::uint64_t currentTick,
     std::uint64_t refreshIntervalTicks) const noexcept
 {
@@ -162,9 +166,17 @@ bool FormationTransitState::ShouldRefreshNetworkNodes(
             currentTick, *lastNetworkNodeUpdateTick_, refreshIntervalTicks);
 }
 
-void FormationTransitState::RecordNetworkNodesUpdated(std::uint64_t currentTick) noexcept
+void FormationNetworkState::RecordNetworkNodesUpdated(std::uint64_t currentTick) noexcept
 {
     lastNetworkNodeUpdateTick_ = currentTick;
+}
+
+void FleetMissionState::BeginFormationTransit(
+    flight_planning::FormationRoutePlan route, std::string status)
+{
+    formationNetwork_.Reset();
+    formationTransit_.SetRoute(std::move(route));
+    formationTransit_.Start(std::move(status));
 }
 
 bool FleetReconnaissanceState::IsLegFinished() const noexcept

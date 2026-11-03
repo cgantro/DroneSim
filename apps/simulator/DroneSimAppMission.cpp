@@ -653,9 +653,8 @@ bool DroneSimApp::StartFormationTransit()
         return false;
     }
 
-    fleetMission_.FormationTransit().SetRoute(*route);
-    fleetMission_.FormationTransit().Start("출발 준비 · V자 대형 · "
-        + reconTargets_.back().displayName);
+    fleetMission_.BeginFormationTransit(*route,
+        "출발 준비 · V자 대형 · " + reconTargets_.back().displayName);
     externalControl_ = true;
     missionControlOwnsInput_ = true;
     pendingControllerAction_.reset();
@@ -705,7 +704,7 @@ bool DroneSimApp::PrepareFleetNetwork(bool reset)
         nodes.push_back({droneId, simulation_.State(droneId).positionMeters});
     }
     formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
-    fleetMission_.FormationTransit().RecordNetworkNodesUpdated(simulation_.TickCount());
+    fleetMission_.FormationNetwork().RecordNetworkNodesUpdated(simulation_.TickCount());
     return !nodes.empty();
 }
 
@@ -847,7 +846,7 @@ void DroneSimApp::RefreshFleetNetworkNodes(std::uint64_t currentTick)
     constexpr std::uint64_t networkPositionRefreshTicks = 6U;
     // 링크 판정은 매 6 Tick마다 갱신한다. 60Hz 기준 0.1초마다 실제 드론 위치를 반영한다.
     const bool refreshNetworkPositions =
-        fleetMission_.FormationTransit().ShouldRefreshNetworkNodes(
+        fleetMission_.FormationNetwork().ShouldRefreshNetworkNodes(
             currentTick, networkPositionRefreshTicks);
     if (refreshNetworkPositions)
     {
@@ -860,7 +859,7 @@ void DroneSimApp::RefreshFleetNetworkNodes(std::uint64_t currentTick)
             nodes.push_back({droneId, drone.positionMeters});
         }
         formationNetwork_->UpdateNodes(nodes, formationRadioObstacles_);
-        fleetMission_.FormationTransit().RecordNetworkNodesUpdated(currentTick);
+        fleetMission_.FormationNetwork().RecordNetworkNodesUpdated(currentTick);
     }
 
 }
@@ -908,7 +907,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
             const auto waypoint = dronesim::mission::DecodeWaypoint(message.payload);
             if (!waypoint)
                 continue;
-            if (!fleetMission_.FormationTransit().IsNewAppliedSequence(
+            if (!fleetMission_.FormationNetwork().IsNewAppliedSequence(
                     message.destination, message.sequence))
                 continue;
 
@@ -921,7 +920,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
                 fleetMission_.FormationTransit().Fail("통신으로 받은 편대 목표를 적용하지 못했습니다.");
                 return;
             }
-            fleetMission_.FormationTransit().RecordAppliedSequence(
+            fleetMission_.FormationNetwork().RecordAppliedSequence(
                 message.destination, message.sequence);
             continue;
         }
@@ -1177,19 +1176,19 @@ void DroneSimApp::AdvanceFormationTransit()
         }
 
         constexpr std::uint64_t targetRefreshTicks = 6U;
-        if (fleetMission_.FormationTransit().ShouldSendFollowerTarget(
+        if (fleetMission_.FormationNetwork().ShouldSendFollowerTarget(
                 droneId, target, simulation_.TickCount(), 0.75, targetRefreshTicks))
         {
             const auto messageId = formationNetwork_->Send(
                 leaderId, droneId,
-                fleetMission_.FormationTransit().TakeNextMessageSequence(), "formation_waypoint",
+                fleetMission_.FormationNetwork().TakeNextMessageSequence(), "formation_waypoint",
                 dronesim::mission::EncodeWaypoint(target));
             if (!messageId)
             {
                 fleetMission_.FormationTransit().Fail("추종 드론에게 편대 목표를 보내지 못했습니다.");
                 return;
             }
-            fleetMission_.FormationTransit().RecordFollowerTargetSent(
+            fleetMission_.FormationNetwork().RecordFollowerTargetSent(
                 droneId, target, simulation_.TickCount());
         }
     }
