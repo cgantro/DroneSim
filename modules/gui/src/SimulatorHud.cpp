@@ -1,5 +1,6 @@
 #include "gui/SimulatorHud.h"
 #include "gui/SimulatorView.h"
+#include "gui/ObserverCameraController.h"
 #include "gui/GuiText.h"
 
 #include <imgui.h>
@@ -40,6 +41,7 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
     SimulatorView& sceneView,
     const std::function<std::uint32_t(int, int)>& renderScene)
 {
+    auto& observerCamera = sceneView.SceneCamera();
     if (ImGui::Begin("장면##SceneViewV5"))
     {
         const auto droneIds = simulation.DroneIds();
@@ -67,26 +69,26 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
         ImGui::TextDisabled("왼쪽 끌기 회전 · 가운데 끌기 이동 · 휠 확대");
         ImGui::SameLine();
         if (ImGui::SmallButton("-"))
-            sceneView.ZoomObserverCamera(-1.0);
+            observerCamera.Zoom(-1.0);
         ImGui::SameLine();
         if (ImGui::SmallButton("+"))
-            sceneView.ZoomObserverCamera(1.0);
+            observerCamera.Zoom(1.0);
         ImGui::SameLine();
         if (ImGui::SmallButton("시점 초기화"))
-            sceneView.ResetObserverCamera();
+            observerCamera.Reset();
 
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)
             && !ImGui::GetIO().WantTextInput)
         {
             if (ImGui::IsKeyPressed(ImGuiKey_Equal)
                 || ImGui::IsKeyPressed(ImGuiKey_KeypadAdd))
-                sceneView.ZoomObserverCamera(1.0);
+                observerCamera.Zoom(1.0);
             if (ImGui::IsKeyPressed(ImGuiKey_Minus)
                 || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract))
-                sceneView.ZoomObserverCamera(-1.0);
+                observerCamera.Zoom(-1.0);
             if (ImGui::IsKeyPressed(ImGuiKey_0)
                 || ImGui::IsKeyPressed(ImGuiKey_Keypad0))
-                sceneView.ResetObserverCamera();
+                observerCamera.Reset();
         }
 
         const ImVec2 available = ImGui::GetContentRegionAvail();
@@ -97,12 +99,12 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
         const bool pointerOverScene = ImGui::IsWindowHovered()
             && ImGui::IsMouseHoveringRect(imageMinimum, imageMaximum);
         if (pointerOverScene && io.MouseWheel != 0.0F)
-            sceneView.ZoomObserverCamera(static_cast<double>(io.MouseWheel));
+            observerCamera.Zoom(static_cast<double>(io.MouseWheel));
         if (pointerOverScene && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
-            sceneView.RotateObserverCamera(io.MouseDelta.x, io.MouseDelta.y);
+            observerCamera.Rotate(io.MouseDelta.x, io.MouseDelta.y);
         if (pointerOverScene && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
         {
-            sceneView.PanObserverCamera(
+            observerCamera.Pan(
                 io.MouseDelta.x, io.MouseDelta.y, available.y);
         }
 

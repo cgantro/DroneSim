@@ -1,6 +1,7 @@
 #pragma once
 
 #include "flight_planning/BuildingObstacle.h"
+#include "gui/ObserverCameraController.h"
 #include "simulation_core/SimulationCore.h"
 
 #include <functional>
@@ -53,18 +54,8 @@ public:
         const DrawWorld& drawWorld,
         double* renderMicroseconds);
 
-    /** @brief 드론 주위를 도는 장면 카메라의 거리를 조절한다. 한 단계는 휠 한 칸이며 양수는 가까워진다. */
-    void ZoomObserverCamera(double wheelSteps) noexcept;
-
-    /** @brief 장면 카메라를 마우스 이동량에 따라 드론 둘레로 돌린다. */
-    void RotateObserverCamera(double deltaX, double deltaY) noexcept;
-
-    /** @brief 화면 기준 오른쪽·위쪽으로 장면 카메라와 바라보는 점을 함께 옮긴다. 이동량은 화면 픽셀이다. */
-    void PanObserverCamera(
-        double deltaX, double deltaY, double viewportHeightPixels) noexcept;
-
-    /** @brief 장면 카메라의 거리·방향·이동량을 처음 시점으로 되돌린다. */
-    void ResetObserverCamera() noexcept;
+    /** @brief 장면 패널에서 조작하는 관찰 카메라 제어기를 돌려준다. */
+    [[nodiscard]] ObserverCameraController& SceneCamera() noexcept;
 
 private:
     friend class simulator::DroneSimAppTestAccess;
@@ -76,10 +67,6 @@ private:
         std::optional<std::uint64_t> lastRenderedTick;
     };
 
-    void UpdateObserverCamera(const simulation::SimulationCore& simulation,
-        simulation::DroneId observerDroneId,
-        const std::vector<flight_planning::BuildingObstacle>& buildings,
-        int width, int height);
     static void UpdateEoCamera(const simulation::SimulationCore& simulation,
         simulation::DroneId droneId, graphics::Camera& camera,
         int width, int height);
@@ -89,11 +76,7 @@ private:
         const DrawWorld& drawWorld);
 
     graphics::Renderer& renderer_;
-    std::unique_ptr<graphics::Camera> observerCamera_;
-    double observerDistanceMeters_ = 12.5;
-    double observerOrbitYawRadians_ = 0.0;
-    double observerOrbitPitchRadians_ = 0.0;
-    glm::dvec3 observerTargetOffsetMeters_{0.0};
+    ObserverCameraController sceneCamera_;
     std::unique_ptr<graphics::Camera> primaryCamera_;
     std::unique_ptr<graphics::MultisampleFramebuffer> sceneTarget_;
     std::unique_ptr<graphics::MultisampleFramebuffer> primaryCameraTarget_;

@@ -7,32 +7,12 @@
 #include "simulation_core/EoCameraModel.h"
 #include "simulation_core/ScopedDuration.h"
 
-#include <algorithm>
-#include <cmath>
-#include <numbers>
-
 namespace dronesim::gui
 {
-namespace
-{
-constexpr double initialObserverDistanceMeters = 12.5;
-constexpr double minimumObserverDistanceMeters = 2.5;
-constexpr double maximumObserverDistanceMeters = 100.0;
-constexpr double observerZoomStep = 1.18;
-constexpr double cameraRadiansPerPixel = 0.006;
-constexpr double minimumObserverPitchRadians = 0.14;
-constexpr double maximumObserverPitchRadians = 1.30;
-constexpr double observerVerticalFieldOfViewRadians = std::numbers::pi_v<double> / 4.0;
-}
-
 SimulatorView::SimulatorView(graphics::Renderer& renderer, int width, int height,
     float cameraFieldOfViewDegrees)
     : renderer_(renderer),
-      observerCamera_(std::make_unique<graphics::Camera>(
-          glm::vec3{0.0F, 145.0F, 285.0F}, glm::vec3{0.0F, 12.0F, 0.0F},
-          1.0F, 45.0F, 0.1F, 2000.0F)),
-      observerDistanceMeters_(initialObserverDistanceMeters),
-      observerOrbitPitchRadians_(std::atan2(3.5, 12.0)),
+      sceneCamera_(width, height),
       primaryCamera_(std::make_unique<graphics::Camera>(
           glm::vec3{0.0F}, glm::vec3{1.0F, 0.0F, 0.0F}, 1.0F,
           cameraFieldOfViewDegrees, 0.05F, 200.0F)),
@@ -44,62 +24,9 @@ SimulatorView::SimulatorView(graphics::Renderer& renderer, int width, int height
 
 SimulatorView::~SimulatorView() = default;
 
-void SimulatorView::ZoomObserverCamera(double wheelSteps) noexcept
+ObserverCameraController& SimulatorView::SceneCamera() noexcept
 {
-    if (!std::isfinite(wheelSteps) || wheelSteps == 0.0)
-        return;
-
-    observerDistanceMeters_ = std::clamp(
-        observerDistanceMeters_ * std::pow(observerZoomStep, -wheelSteps),
-        minimumObserverDistanceMeters, maximumObserverDistanceMeters);
-}
-
-void SimulatorView::RotateObserverCamera(double deltaX, double deltaY) noexcept
-{
-    if (!std::isfinite(deltaX) || !std::isfinite(deltaY))
-        return;
-
-    // ImGui 이동량은 화면 픽셀이다. 픽셀마다 일정한 각도로 바꿔 드론을 중심으로 시점을 돈다.
-    observerOrbitYawRadians_ = std::remainder(
-        observerOrbitYawRadians_ + deltaX * cameraRadiansPerPixel,
-        2.0 * std::numbers::pi_v<double>);
-    // 위를 지나 카메라가 뒤집히거나 정확히 위를 바라볼 때 생기는 방향 계산 불안정을 막는다.
-    observerOrbitPitchRadians_ = std::clamp(
-        observerOrbitPitchRadians_ - deltaY * cameraRadiansPerPixel,
-        minimumObserverPitchRadians, maximumObserverPitchRadians);
-}
-
-void SimulatorView::PanObserverCamera(
-    double deltaX, double deltaY, double viewportHeightPixels) noexcept
-{
-    if (!std::isfinite(deltaX) || !std::isfinite(deltaY)
-        || !std::isfinite(viewportHeightPixels) || viewportHeightPixels <= 0.0)
-        return;
-
-    const double cameraYaw = observerOrbitYawRadians_ + std::numbers::pi_v<double>;
-    const double sinYaw = std::sin(cameraYaw);
-    const double cosYaw = std::cos(cameraYaw);
-    const double sinPitch = std::sin(observerOrbitPitchRadians_);
-    const double cosPitch = std::cos(observerOrbitPitchRadians_);
-    const glm::dvec3 screenRight{-sinYaw, cosYaw, 0.0};
-    const glm::dvec3 screenUp{
-        -sinPitch * cosYaw, -sinPitch * sinYaw, cosPitch};
-    // 세로 시야각에서 화면 높이에 대응하는 실제 길이(2·거리·tan(FOV/2))를 구한다.
-    const double metersPerPixel = 2.0 * observerDistanceMeters_
-        * std::tan(observerVerticalFieldOfViewRadians * 0.5)
-        / viewportHeightPixels;
-
-    // 드래그한 화면이 커서와 함께 움직이도록 관찰 중심은 반대 방향으로 옮긴다.
-    observerTargetOffsetMeters_ += screenRight * (-deltaX * metersPerPixel)
-        + screenUp * (deltaY * metersPerPixel);
-}
-
-void SimulatorView::ResetObserverCamera() noexcept
-{
-    observerDistanceMeters_ = initialObserverDistanceMeters;
-    observerOrbitYawRadians_ = 0.0;
-    observerOrbitPitchRadians_ = std::atan2(3.5, 12.0);
-    observerTargetOffsetMeters_ = glm::dvec3{0.0};
+    return sceneCamera_;
 }
 
 std::uint32_t SimulatorView::RenderScenePanel(
@@ -112,8 +39,8 @@ std::uint32_t SimulatorView::RenderScenePanel(
 {
     simulation::ScopedDuration measure(renderMicroseconds);
     sceneTarget_->Resize(width, height);
-    UpdateObserverCamera(simulation, observerDroneId, buildings, width, height);
-    DrawToTarget(*sceneTarget_, *observerCamera_, true, std::nullopt, drawWorld);
+    sceneCamera_.Update(simulation, observerDroneId, buildings, width, height);
+    DrawToTarget(*sceneTarget_, sceneCamera_.ViewCamera(), true, std::nullopt, drawWorld);
     return sceneTarget_->GetTextureId();
 }
 
@@ -167,60 +94,6 @@ std::uint32_t SimulatorView::RenderCameraPanel(
         lastPrimaryCameraTick_ = cameraState.lastFrameTick;
     }
     return primaryCameraTarget_->GetTextureId();
-}
-
-void SimulatorView::UpdateObserverCamera(
-    const simulation::SimulationCore& simulation,
-    simulation::DroneId observerDroneId,
-    const std::vector<flight_planning::BuildingObstacle>& buildings,
-    int width, int height)
-{
-    const auto& state = observerDroneId == 0U
-        ? simulation.State() : simulation.State(observerDroneId);
-    const glm::vec3 dronePosition =
-        graphics::EnuPositionToRender(state.positionMeters);
-    const double cameraYaw = state.yawRadians + std::numbers::pi_v<double>
-        + observerOrbitYawRadians_;
-    // 거리와 위아래 각도로 구면 위치를 만들고, ENU의 동·북·위 좌표에 더한다.
-    const double horizontalDistanceMeters = observerDistanceMeters_
-        * std::cos(observerOrbitPitchRadians_);
-    const glm::dvec3 targetPositionMeters = state.positionMeters
-        + observerTargetOffsetMeters_;
-    glm::dvec3 cameraPositionMeters = targetPositionMeters
-        + glm::dvec3{
-            horizontalDistanceMeters * std::cos(cameraYaw),
-            horizontalDistanceMeters * std::sin(cameraYaw),
-            observerDistanceMeters_ * std::sin(observerOrbitPitchRadians_)};
-
-    const auto isInsideBuilding = [&buildings](const glm::dvec3& position)
-    {
-        return std::any_of(buildings.begin(), buildings.end(),
-            [&position](const flight_planning::BuildingObstacle& building)
-            {
-                return flight_planning::ContainsBuildingVolume(building, position);
-            });
-    };
-    if (isInsideBuilding(cameraPositionMeters))
-    {
-        const glm::dvec3 awayFromTarget = glm::normalize(
-            cameraPositionMeters - targetPositionMeters);
-        for (double retreatMeters = 1.0; retreatMeters <= 24.0; retreatMeters += 1.0)
-        {
-            const glm::dvec3 candidate = cameraPositionMeters
-                + awayFromTarget * retreatMeters;
-            if (!isInsideBuilding(candidate))
-            {
-                cameraPositionMeters = candidate;
-                break;
-            }
-        }
-    }
-
-    observerCamera_->SetPosition(graphics::EnuPositionToRender(cameraPositionMeters));
-    observerCamera_->SetTarget(graphics::EnuPositionToRender(targetPositionMeters)
-        + glm::vec3{0.0F, 0.04F, 0.0F});
-    observerCamera_->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
-    observerCamera_->SetFieldOfViewDegrees(45.0F);
 }
 
 void SimulatorView::UpdateEoCamera(const simulation::SimulationCore& simulation,
