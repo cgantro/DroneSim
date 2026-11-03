@@ -37,37 +37,65 @@ using detail::TickCommand;
 using detail::DroneCommunicationOutage;
 using DroneCommunicationStatus = ScenarioResult::Drone::CommunicationStatus;
 
-struct DroneObservation
+/** @brief 시나리오 관제소가 드론별로 보관하는 마지막 통신 상태다. */
+class DroneObservation final
 {
-    DroneCommunicationStatus status = DroneCommunicationStatus::Connected;
-    std::uint64_t lastHeartbeatTick = 0;
-    DroneState lastKnownState;
-    std::optional<double> lastKnownBatteryPercent;
-
+public:
     /** @brief 통신으로 받은 상태와 배터리 값을 관제소의 마지막 기록으로 저장한다. */
     void RecordHeartbeat(std::uint64_t tick, const DroneState& state,
         std::optional<double> batteryPercent) noexcept
     {
-        status = DroneCommunicationStatus::Connected;
-        lastHeartbeatTick = tick;
-        lastKnownState = state;
-        lastKnownBatteryPercent = batteryPercent;
+        status_ = DroneCommunicationStatus::Connected;
+        lastHeartbeatTick_ = tick;
+        lastKnownState_ = state;
+        lastKnownBatteryPercent_ = batteryPercent;
     }
 
-    /** @brief 마지막 하트비트 이후 지난 Tick 수로 통신 상태를 판단한다. */
-    [[nodiscard]] DroneCommunicationStatus StatusAfterMissedHeartbeat(
-        std::uint64_t tick, std::uint64_t timeoutTicks) const noexcept
+    /** @brief 놓친 하트비트의 경과 시간으로 연결 상태를 갱신한다. */
+    [[nodiscard]] DroneCommunicationStatus RecordMissedHeartbeat(
+        std::uint64_t tick, std::uint64_t timeoutTicks) noexcept
     {
-        return tick - lastHeartbeatTick >= timeoutTicks
+        status_ = tick - lastHeartbeatTick_ >= timeoutTicks
             ? DroneCommunicationStatus::Unknown
             : DroneCommunicationStatus::Stale;
+        return status_;
+    }
+
+    /** @brief 마지막 하트비트 이후 받은 상태가 있는지 알려준다. */
+    [[nodiscard]] DroneCommunicationStatus Status() const noexcept
+    {
+        return status_;
+    }
+
+    /** @brief 마지막으로 통신이 연결됐을 때 저장한 기체 상태를 돌려준다. */
+    [[nodiscard]] const DroneState& LastKnownState() const noexcept
+    {
+        return lastKnownState_;
+    }
+
+    /** @brief 마지막 하트비트를 받은 시뮬레이션 Tick을 돌려준다. */
+    [[nodiscard]] std::uint64_t LastHeartbeatTick() const noexcept
+    {
+        return lastHeartbeatTick_;
+    }
+
+    /** @brief 마지막으로 보고된 배터리 잔량을 돌려준다. */
+    [[nodiscard]] std::optional<double> LastKnownBatteryPercent() const noexcept
+    {
+        return lastKnownBatteryPercent_;
     }
 
     /** @brief 관제소가 현재 시각에도 새 하트비트를 받는 중인지 알려준다. */
     [[nodiscard]] bool IsConnected() const noexcept
     {
-        return status == DroneCommunicationStatus::Connected;
+        return status_ == DroneCommunicationStatus::Connected;
     }
+
+private:
+    DroneCommunicationStatus status_ = DroneCommunicationStatus::Connected;
+    std::uint64_t lastHeartbeatTick_ = 0;
+    DroneState lastKnownState_;
+    std::optional<double> lastKnownBatteryPercent_;
 };
 
 struct ScenarioDroneRuntime
@@ -209,7 +237,7 @@ void UpdateDroneObservations(
             tick, droneName, definition.communicationOutages);
         if (outage == nullptr)
         {
-            if (observation.status != DroneCommunicationStatus::Connected)
+            if (observation.Status() != DroneCommunicationStatus::Connected)
             {
                 result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                     + droneName + " 드론의 통신이 복구되어 새 상태를 받았습니다.");
@@ -221,7 +249,8 @@ void UpdateDroneObservations(
             return;
         }
 
-        const DroneCommunicationStatus newStatus = observation.StatusAfterMissedHeartbeat(
+        const DroneCommunicationStatus previousStatus = observation.Status();
+        const DroneCommunicationStatus newStatus = observation.RecordMissedHeartbeat(
             tick, outage->heartbeatTimeoutTicks);
         if (observation.IsConnected())
         {
@@ -229,12 +258,11 @@ void UpdateDroneObservations(
                 + droneName + " 드론의 하트비트가 끊겼습니다.");
         }
         if (newStatus == DroneCommunicationStatus::Unknown
-            && observation.status != DroneCommunicationStatus::Unknown)
+            && previousStatus != DroneCommunicationStatus::Unknown)
         {
             result.eventLog.push_back("tick " + std::to_string(tick) + ": "
                 + droneName + " 드론의 상태를 확인할 수 없어 임무 정보를 미확정으로 바꿨습니다.");
         }
-        observation.status = newStatus;
     };
 
     // 이벤트 로그 순서도 시나리오 입력 순서에 맞춰 매번 같게 만든다.
@@ -485,7 +513,7 @@ void UpdateCollisionAvoidance(
         const bool connected = IsConnected(drones, drone.name);
         DroneState state = connected
             ? simulation.State(drones.at(drone.name).id)
-            : drones.at(drone.name).observation.lastKnownState;
+            : drones.at(drone.name).observation.LastKnownState();
 
         // 통신이 끊긴 드론은 마지막 위치에 멈춰 있는 장애물처럼 다룬다.
         if (!connected)
@@ -642,12 +670,12 @@ void PopulateFinalSnapshot(
         const ScenarioDroneRuntime& runtime = drones.at(droneName);
         const DroneObservation& observation = runtime.observation;
         ScenarioResult::Drone drone{
-            droneName, observation.lastKnownState,
-            observation.status, observation.lastHeartbeatTick};
+            droneName, observation.LastKnownState(),
+            observation.Status(), observation.LastHeartbeatTick()};
         drone.finalCamera = simulation.Camera(runtime.id);
         drone.flightDistanceMeters = runtime.flightDistanceMeters;
         drone.flightTimeSeconds = runtime.flightTimeSeconds;
-        drone.reportedBatteryPercent = observation.lastKnownBatteryPercent;
+        drone.reportedBatteryPercent = observation.LastKnownBatteryPercent();
         if (simulation.HasBattery(runtime.id))
         {
             const BatteryModel& battery = simulation.Battery(runtime.id);
@@ -700,8 +728,8 @@ ScenarioResult RunScenario(std::string_view jsonText)
             const DroneId droneId = runtime.id;
             simulation.ConfigureBattery(
                 droneId, parameters, scenarioDrone.initialBatteryPercent);
-            runtime.observation.lastKnownBatteryPercent =
-                simulation.Battery(droneId).RemainingPercent();
+            runtime.observation.RecordHeartbeat(0U, simulation.State(droneId),
+                simulation.Battery(droneId).RemainingPercent());
         }
     }
 
@@ -781,7 +809,7 @@ ScenarioResult RunScenario(std::string_view jsonText)
         {
             const std::optional<double> batteryPercent = simulation.HasBattery(drone.id)
                 ? std::optional<double>{simulation.Battery(drone.id).RemainingPercent()}
-                : observation.lastKnownBatteryPercent;
+                : observation.LastKnownBatteryPercent();
             observation.RecordHeartbeat(
                 tickCount, simulation.State(drone.id), batteryPercent);
         }
