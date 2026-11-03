@@ -41,7 +41,11 @@ struct JoltRigidBodyDefinition {
   double restitution = 0.0;
 };
 
-/** @brief 강체의 위치·자세와 ENU 기준 속도다. */
+/**
+ * @brief 강체의 위치·자세와 움직임을 한 시점에 보관한다.
+ * @details 위치와 선속도는 월드 ENU 기준, 각속도는 기체 FLU 축 기준이다. 위치 단위는 미터,
+ * 선속도는 미터/초, 각속도는 라디안/초다.
+ */
 struct JoltRigidBodyState {
   glm::dvec3 positionMeters{0.0};
   glm::dquat orientation{1.0, 0.0, 0.0, 0.0};

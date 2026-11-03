@@ -661,6 +661,8 @@ void JoltPhysicsWorld::SetState(JoltRigidBodyHandle handle,
       JPH::EActivation::Activate);
   bodyInterface.SetLinearVelocity(
       body.id, ToJoltVector(state.linearVelocityMetersPerSecond));
+  // 공개 상태는 각속도를 기체 축(FLU)으로 받는다. Jolt는 월드 축 값이 필요하므로
+  // 자세 회전을 곱해 바꾼다. 읽어올 때는 반대 회전으로 같은 변환을 되돌린다.
   const glm::dvec3 angularVelocityWorld =
       orientation * state.angularVelocityRadiansPerSecond;
   bodyInterface.SetAngularVelocity(body.id, ToJoltVector(angularVelocityWorld));
@@ -716,6 +718,7 @@ JoltRigidBodyState JoltPhysicsWorld::State(JoltRigidBodyHandle handle) const {
   impl_->physicsSystem.GetBodyInterface().GetLinearAndAngularVelocity(
       body.id, linearVelocity, angularVelocity);
   const glm::dquat projectOrientation = ToProjectRotation(orientation);
+  // 위치·선속도는 월드 좌표로 반환하지만, 각속도는 DroneState와 맞춰 기체 축으로 돌린다.
   return {ToProjectVector(position), projectOrientation,
           ToProjectVector(linearVelocity),
           glm::inverse(projectOrientation) * ToProjectVector(angularVelocity)};
