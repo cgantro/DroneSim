@@ -83,6 +83,7 @@ target_link_libraries(dronesim_scenario
 )
 
 add_library(dronesim_communication STATIC
+  modules/communication/src/DroneSocket.cpp
   modules/communication/src/DroneSocketTransport.cpp
   modules/communication/src/VirtualMeshNetwork.cpp
 )

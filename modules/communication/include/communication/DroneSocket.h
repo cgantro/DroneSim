@@ -47,6 +47,10 @@ public:
     [[nodiscard]] std::optional<ReceivedDatagram> Receive();
 
 private:
+    /** @brief 모든 플랫폼에서 공통으로 적용할 목적지 포트와 데이터그램 크기를 검사한다. */
+    static void ValidateDatagram(
+        SocketPort destinationPort, std::string_view payload);
+
     class Impl;
     std::unique_ptr<Impl> impl_;
 };

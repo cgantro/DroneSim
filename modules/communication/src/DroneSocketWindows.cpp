@@ -105,9 +105,7 @@ SocketPort DroneSocket::LocalPort() const noexcept
 
 void DroneSocket::SendTo(SocketPort destinationPort, std::string_view payload) const
 {
-    if (destinationPort == 0U || payload.empty()
-        || payload.size() > maximumDatagramPayloadBytes)
-        throw std::invalid_argument("드론 UDP 메시지의 포트나 크기를 확인해 주세요.");
+    ValidateDatagram(destinationPort, payload);
 
     sockaddr_in destination{};
     destination.sin_family = AF_INET;

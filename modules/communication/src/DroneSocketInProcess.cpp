@@ -69,9 +69,7 @@ SocketPort DroneSocket::LocalPort() const noexcept
 
 void DroneSocket::SendTo(SocketPort destinationPort, std::string_view payload) const
 {
-    if (destinationPort == 0U || payload.empty()
-        || payload.size() > maximumDatagramPayloadBytes)
-        throw std::invalid_argument("드론 통신 메시지의 포트나 크기를 확인해 주세요.");
+    ValidateDatagram(destinationPort, payload);
     auto& queues = Bus().queues;
     const auto destination = queues.find(destinationPort);
     // UDP와 마찬가지로 상대가 없으면 보낼 곳이 없어 메시지를 버린다.
