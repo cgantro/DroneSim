@@ -15,6 +15,28 @@ struct PlannedFleetRoute
     dronesim::simulation::DroneId droneId = 0;
     std::vector<glm::dvec3> waypointsMeters;
 };
+
+/** @brief 경로를 만들 때 사용할 수 있는 최신 드론 상태를 가져온다.
+ * @details 지상 시작은 로컬 상태에서 착륙한 기체만 받고, 비행 중 시작은
+ *          통신으로 받은 상태 중 비행 명령을 받을 수 있는 상태만 허용한다.
+ */
+[[nodiscard]] std::optional<mission::PeerTelemetry> ReadyRouteObservation(
+    const mission::FleetMissionState& fleetMission,
+    const simulation::SimulationCore& simulationCore,
+    simulation::DroneId droneId,
+    mission::MissionStateSource observationSource,
+    bool startsOnGround)
+{
+    const auto observation = fleetMission.CurrentDroneObservation(
+        droneId, simulationCore, observationSource);
+    if (!observation)
+        return std::nullopt;
+
+    const bool canStart = startsOnGround
+        ? observation->mode == simulation::FlightMode::Grounded
+        : simulation::DroneModel::CanAcceptInFlightCommands(observation->mode);
+    return canStart ? observation : std::nullopt;
+}
 }
 
 FleetMissionController::FleetMissionController(
@@ -170,16 +192,9 @@ bool FleetMissionController::StartFleetReconnaissance(
     // 끊긴 통신의 오래된 위치로 새 정찰 경로를 만드는 일을 막는다.
     for (const DroneId droneId : droneIds)
     {
-        const auto observation = fleetMission_.CurrentDroneObservation(
-            droneId, simulation_, observationSource);
+        const auto observation = ReadyRouteObservation(
+            fleetMission_, simulation_, droneId, observationSource, startsOnGround);
         if (!observation)
-            return false;
-
-        const FlightMode mode = observation->mode;
-        const bool ready = startsOnGround
-            ? mode == FlightMode::Grounded
-            : DroneModel::CanAcceptInFlightCommands(mode);
-        if (!ready)
             return false;
 
         const auto home = homePositions.find(droneId);
@@ -264,14 +279,10 @@ bool FleetMissionController::StartFleetReturn(
         if (mission.IsLowBatteryReturnComplete())
             continue;
 
-        const auto observation = fleetMission_.CurrentDroneObservation(
-            droneId, simulation_, observationSource);
-        if (!observation)
-            return false;
-        const bool ready = startsOnGround
-            ? observation->mode == FlightMode::Grounded
-            : DroneModel::CanAcceptInFlightCommands(observation->mode);
-        if (!ready || mission.Leg() == dronesim::mission::FleetMissionLeg::Returning)
+        const auto observation = ReadyRouteObservation(
+            fleetMission_, simulation_, droneId, observationSource, startsOnGround);
+        if (!observation
+            || mission.Leg() == dronesim::mission::FleetMissionLeg::Returning)
             return false;
         const auto route = planner.PlanReturnRoute(
             observation->positionMeters, mission.StartPositionMeters());
