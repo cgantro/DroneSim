@@ -1,5 +1,5 @@
 #include "simulation_core/JoltPhysicsWorld.h"
-#include "simulation_core/CollisionGeometry.h"
+#include "simulation_core/CollisionValidation.h"
 #include "simulation_core/DroneModel.h"
 #include "geometry/VectorMath.h"
 #include "simulation_core/QuadrotorModel.h"
