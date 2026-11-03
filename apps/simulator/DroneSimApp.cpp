@@ -863,17 +863,17 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
                 && missionStatus != dronesim::mission::FleetDroneStatus::Reconnaissance
                 && missionStatus != dronesim::mission::FleetDroneStatus::Landing)
                 continue;
-            glm::dvec3 previous = mission.startPositionMeters;
+            glm::dvec3 previous = mission.StartPositionMeters();
             for (const glm::dvec3& waypoint : mission.RouteWaypoints())
             {
                 drawRouteSegment(previous, waypoint, missionRouteMaterial_);
                 previous = waypoint;
             }
             drawRouteSegment(previous,
-                reconTargets_[mission.targetIndex].approachPositionMeters,
+                reconTargets_[mission.TargetIndex()].approachPositionMeters,
                 missionRouteMaterial_);
             const glm::vec3 marker = ToRenderPosition(
-                reconTargets_[mission.targetIndex].approachPositionMeters);
+                reconTargets_[mission.TargetIndex()].approachPositionMeters);
             DrawCube(glm::translate(glm::mat4{1.0F}, marker)
                 * glm::scale(glm::mat4{1.0F}, glm::vec3{0.65F}),
                 cameraPosition, missionRouteMaterial_, view, projection);

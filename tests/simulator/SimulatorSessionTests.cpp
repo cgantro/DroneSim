@@ -353,16 +353,16 @@ public:
             for (const auto& [droneId, mission] : app.fleetMission_.Assignments())
             {
                 auto& lastVersion = lastAssignmentVersions[droneId];
-                if (mission.assignmentVersion == lastVersion)
+                if (mission.AssignmentVersion() == lastVersion)
                     continue;
                 assignmentHistory.push_back("Tick "
                     + std::to_string(app.simulation_.TickCount()) + ": 드론 "
                     + std::to_string(droneId) + " 목표 "
-                    + std::to_string(mission.targetIndex) + " 버전 "
-                    + std::to_string(mission.assignmentVersion) + " 상태 "
+                    + std::to_string(mission.TargetIndex()) + " 버전 "
+                    + std::to_string(mission.AssignmentVersion()) + " 상태 "
                     + std::string(mission::FleetDroneStatusLabel(
                         mission.Status())));
-                lastVersion = mission.assignmentVersion;
+                lastVersion = mission.AssignmentVersion();
             }
             sawReconnaissance = sawReconnaissance
                 || app.fleetMission_.CompleteMission().CurrentStage() == Stage::Reconnaissance;
@@ -407,7 +407,7 @@ public:
                 }
                 const auto mission = app.fleetMission_.FindAssignment(droneId);
                 if (mission != app.fleetMission_.AssignmentsEnd())
-                    failureContext << ", 목표 " << mission->second.targetIndex
+                    failureContext << ", 목표 " << mission->second.TargetIndex()
                         << ", 상태 " << mission::FleetDroneStatusLabel(
                             mission->second.Status());
             }
@@ -475,7 +475,7 @@ public:
         ASSERT_TRUE(app.StartFleetReconnaissance());
         const auto lowBatteryDroneId = app.fleetDroneIds_.at(1U);
         const std::size_t unfinishedTargetIndex =
-            app.fleetMission_.Assignment(lowBatteryDroneId).targetIndex;
+            app.fleetMission_.Assignment(lowBatteryDroneId).TargetIndex();
         app.simulation_.ConfigureBattery(lowBatteryDroneId,
             {10.0, 40.0, 120.0, 99.9});
 
@@ -497,12 +497,12 @@ public:
         EXPECT_EQ(mission.Status(),
             mission::FleetDroneStatus::LowBatteryReturnComplete);
         EXPECT_LE(glm::distance(app.simulation_.State(lowBatteryDroneId).positionMeters,
-            mission.startPositionMeters), 5.0);
+            mission.StartPositionMeters()), 5.0);
         const bool targetWasReassigned = std::any_of(app.fleetDroneIds_.begin(),
             app.fleetDroneIds_.end(), [&app, lowBatteryDroneId, unfinishedTargetIndex](auto id)
             {
                 return id != lowBatteryDroneId
-                    && app.fleetMission_.Assignment(id).targetIndex
+                    && app.fleetMission_.Assignment(id).TargetIndex()
                         == unfinishedTargetIndex;
             });
         EXPECT_FALSE(targetWasReassigned);

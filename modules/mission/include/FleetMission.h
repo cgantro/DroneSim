@@ -86,7 +86,7 @@ public:
 };
 
 /** @brief 드론 한 대에 배정된 정찰·집결·복귀 경로와 진행 상태다. */
-struct FleetReconnaissanceState
+class FleetReconnaissanceState final
 {
 private:
     std::vector<glm::dvec3> routeWaypointsMeters_;
@@ -97,12 +97,48 @@ private:
     FleetMissionLeg leg_ = FleetMissionLeg::Reconnaissance;
     FleetDroneStatus status_ = FleetDroneStatus::Other;
     FleetRouteDeliveryState routeDelivery_;
+    std::size_t targetIndex_ = 0;
+    glm::dvec3 startPositionMeters_{0.0};
+    std::uint64_t assignmentVersion_ = 0;
 
 public:
-    std::size_t targetIndex = 0;
-    glm::dvec3 startPositionMeters{0.0};
-    std::uint64_t assignmentVersion = 0;
-    std::uint64_t assignmentLeaseExpiresAtTick = 0;
+    /** @brief 드론에 배정된 정찰 목표 번호를 돌려준다. */
+    [[nodiscard]] std::size_t TargetIndex() const noexcept { return targetIndex_; }
+
+    /** @brief 임무 종료 후 돌아갈 출발 위치를 미터 단위로 돌려준다. */
+    [[nodiscard]] const glm::dvec3& StartPositionMeters() const noexcept
+    {
+        return startPositionMeters_;
+    }
+
+    /** @brief 마지막으로 받은 임무 배정 버전을 돌려준다. */
+    [[nodiscard]] std::uint64_t AssignmentVersion() const noexcept
+    {
+        return assignmentVersion_;
+    }
+
+    /** @brief 새 배정에서 정찰 목표와 복귀할 출발 위치를 함께 기록한다. */
+    void SetInitialAssignment(
+        std::size_t targetIndex, const glm::dvec3& startPositionMeters) noexcept
+    {
+        targetIndex_ = targetIndex;
+        startPositionMeters_ = startPositionMeters;
+    }
+
+    /** @brief 통신으로 보낸 임무 배정의 버전을 기록한다. */
+    void SetAssignmentVersion(std::uint64_t assignmentVersion) noexcept
+    {
+        assignmentVersion_ = assignmentVersion;
+    }
+
+    /** @brief 새 경로가 적용될 때 목표와 배정 버전을 함께 갱신한다. */
+    void ApplyAssignment(
+        std::size_t targetIndex,
+        std::uint64_t assignmentVersion) noexcept
+    {
+        targetIndex_ = targetIndex;
+        SetAssignmentVersion(assignmentVersion);
+    }
 
     /** @brief 현재 구간의 진행 상태를 읽는다. */
     [[nodiscard]] FleetDroneStatus Status() const noexcept { return status_; }

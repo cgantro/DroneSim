@@ -464,7 +464,7 @@ std::optional<FleetMissionReport> FleetMissionState::CurrentReport(
 
     const ReceivedPeerTelemetry* cached = telemetryAtLeader_.Latest(droneId);
     if (cached == nullptr
-        || cached->state.assignmentVersion != assignment.assignmentVersion
+        || cached->state.assignmentVersion != assignment.AssignmentVersion()
         || cached->state.mode != simulation::FlightMode::Grounded)
         return std::nullopt;
 
