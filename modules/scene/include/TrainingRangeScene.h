@@ -6,7 +6,6 @@
 
 #include <filesystem>
 #include <memory>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -40,12 +39,8 @@ public:
     void Draw(dronesim::graphics::Renderer& renderer,
         dronesim::graphics::Shader& shader,
         const glm::mat4& view, const glm::mat4& projection,
-        const glm::vec3& cameraPosition,
-        bool showGlbNodeColors = false) const;
+        const glm::vec3& cameraPosition) const;
 
-    /** @brief 장면 GLB의 메시 이름과 확인용 색을 돌려준다. */
-    [[nodiscard]] std::span<const dronesim::graphics::GlbPartBounds>
-    GlbParts() const noexcept;
     [[nodiscard]] const std::vector<dronesim::flight_planning::BuildingObstacle>&
     BuildingObstacles() const noexcept;
     [[nodiscard]] const std::vector<ReconPoint>& ReconPoints() const noexcept;

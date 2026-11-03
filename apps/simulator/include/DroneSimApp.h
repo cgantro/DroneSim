@@ -187,8 +187,7 @@ private:
 #endif
     void DrawWorld(const glm::mat4& view, const glm::mat4& projection,
         const glm::vec3& cameraPosition, bool showMissionGuides,
-        std::optional<dronesim::simulation::DroneId> hiddenDroneId = std::nullopt,
-        bool showGlbNodeColors = false);
+        std::optional<dronesim::simulation::DroneId> hiddenDroneId = std::nullopt);
     void DrawCube(const glm::mat4& transform, const glm::vec3& cameraPosition,
         const dronesim::graphics::Material& material,
         const glm::mat4& view, const glm::mat4& projection);

@@ -247,20 +247,11 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
 
 void TrainingRangeScene::Draw(dronesim::graphics::Renderer& renderer,
     dronesim::graphics::Shader& shader, const glm::mat4& view,
-    const glm::mat4& projection, const glm::vec3& cameraPosition,
-    bool showGlbNodeColors) const
+    const glm::mat4& projection, const glm::vec3& cameraPosition) const
 {
     if (cityModel_)
         cityModel_->Draw(mapTransform_, renderer, shader,
-            view, projection, cameraPosition, nullptr, nullptr, false,
-            showGlbNodeColors);
-}
-
-std::span<const dronesim::graphics::GlbPartBounds>
-TrainingRangeScene::GlbParts() const noexcept
-{
-    return cityModel_ ? cityModel_->PartBounds()
-                      : std::span<const dronesim::graphics::GlbPartBounds>{};
+            view, projection, cameraPosition);
 }
 
 const std::vector<dronesim::flight_planning::BuildingObstacle>&

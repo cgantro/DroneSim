@@ -31,7 +31,7 @@ class SimulatorView final
 {
 public:
     using DrawWorld = std::function<void(const glm::mat4&, const glm::mat4&,
-        const glm::vec3&, bool, std::optional<simulation::DroneId>, bool)>;
+        const glm::vec3&, bool, std::optional<simulation::DroneId>)>;
 
     SimulatorView(graphics::Renderer& renderer, int width, int height,
         float cameraFieldOfViewDegrees);
@@ -42,7 +42,7 @@ public:
         const simulation::SimulationCore& simulation,
         simulation::DroneId observerDroneId,
         const std::vector<flight_planning::BuildingObstacle>& buildings,
-        int width, int height, bool showGlbNodeColors,
+        int width, int height,
         const DrawWorld& drawWorld,
         double* renderMicroseconds);
 
@@ -73,7 +73,6 @@ private:
     void DrawToTarget(graphics::MultisampleFramebuffer& target,
         const graphics::Camera& camera, bool showMissionGuides,
         std::optional<simulation::DroneId> hiddenDroneId,
-        bool showGlbNodeColors,
         const DrawWorld& drawWorld);
 
     graphics::Renderer& renderer_;
