@@ -1,43 +1,16 @@
 #include "gui/SimulatorHud.h"
 #include "gui/SimulatorView.h"
-#include "graphics/GlApi.h"
 
-#include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_opengl3.h>
-#include "simulation_core/QuadrotorModel.h"
 
 #include <algorithm>
-#include <cmath>
-#include <cstdlib>
-#include <filesystem>
-#include <stdexcept>
 #include <string>
-#include <chrono>
-#include <vector>
 
 namespace dronesim::gui
 {
 namespace
 {
-void LoadWindowsKoreanFont()
-{
-    const char* windowsDirectory = std::getenv("WINDIR");
-    if (windowsDirectory == nullptr)
-        return;
-
-    const std::filesystem::path fontPath =
-        std::filesystem::path(windowsDirectory) / "Fonts" / "malgun.ttf";
-    if (!std::filesystem::exists(fontPath))
-        return;
-
-    const std::string fontPathText = fontPath.string();
-    ImGui::GetIO().Fonts->AddFontFromFileTTF(
-        fontPathText.c_str(), 18.0F, nullptr, ImGui::GetIO().Fonts->GetGlyphRangesKorean());
-}
-
 std::string DroneName(simulation::DroneId id)
 {
     return "드론 " + std::to_string(id);
@@ -292,92 +265,8 @@ void DrawFlightStatusPanel(
 }
 
 SimulatorHud::SimulatorHud(GLFWwindow* window)
+    : frameBackend_(window)
 {
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    LoadWindowsKoreanFont();
-
-    if (const char* localAppData = std::getenv("LOCALAPPDATA"))
-    {
-        std::error_code error;
-        const auto settingsDirectory = std::filesystem::path(localAppData) / "DroneSim";
-        std::filesystem::create_directories(settingsDirectory, error);
-        if (!error)
-        {
-            layoutFile_ = (settingsDirectory / "imgui.ini").string();
-            ImGui::GetIO().IniFilename = layoutFile_.c_str();
-        }
-    }
-    ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-#ifndef __EMSCRIPTEN__
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-#endif
-
-    if (!ImGui_ImplGlfw_InitForOpenGL(window, true))
-    {
-        ImGui::DestroyContext();
-        throw std::runtime_error("시뮬레이터 HUD 입력을 준비하지 못했습니다.");
-    }
-    if (!ImGui_ImplOpenGL3_Init("#version 330"))
-    {
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
-        throw std::runtime_error("시뮬레이터 HUD 화면을 준비하지 못했습니다.");
-    }
-    initialized_ = true;
-}
-
-SimulatorHud::~SimulatorHud()
-{
-    if (!initialized_)
-        return;
-
-#ifndef __EMSCRIPTEN__
-    for (const PendingGpuQuery& query : backendGpuQueries_)
-    {
-        if (query.query != 0)
-            glDeleteQueries(1, &query.query);
-    }
-#endif
-    if (!layoutFile_.empty())
-        ImGui::SaveIniSettingsToDisk(layoutFile_.c_str());
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-}
-
-void SimulatorHud::CollectCompletedGpuTimings(HudRenderTimings* timings)
-{
-#ifndef __EMSCRIPTEN__
-    if (timings == nullptr || !timings->collectGpuTimings || !GLAD_GL_VERSION_3_3)
-        return;
-
-    for (PendingGpuQuery& query : backendGpuQueries_)
-    {
-        if (!query.pending)
-            continue;
-
-        GLint available = GL_FALSE;
-        glGetQueryObjectiv(query.query, GL_QUERY_RESULT_AVAILABLE, &available);
-        if (available != GL_TRUE)
-            continue;
-
-        GLuint64 durationNanoseconds = 0;
-        glGetQueryObjectui64v(query.query, GL_QUERY_RESULT, &durationNanoseconds);
-        const std::size_t resultIndex = timings->completedGpuFrameCount++;
-        if (resultIndex < timings->completedGpuFrames.size())
-        {
-            timings->completedGpuFrames[resultIndex] = HudGpuTiming{
-                query.frameIndex,
-                static_cast<double>(durationNanoseconds) / 1000.0};
-        }
-        query.pending = false;
-    }
-#else
-    static_cast<void>(timings);
-#endif
 }
 
 void SimulatorHud::Render(const SimulatorHudFrame& frame)
@@ -402,16 +291,7 @@ void SimulatorHud::Render(const SimulatorHudFrame& frame)
     const auto& setCameraGimbalAngles = frame.setCameraGimbalAngles;
     HudRenderTimings* timings = frame.timings;
 
-    CollectCompletedGpuTimings(timings);
-
-    // 패널을 만드는 동안 장면·카메라 그리기 콜백도 실행되므로 순수 UI 시간은 아니다.
-    const auto interfaceBuildStart = timings != nullptr
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
+    frameBackend_.BeginFrame(timings);
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
     DrawScenePanel(simulation, observerDroneId, sceneView, renderScene);
@@ -424,72 +304,6 @@ void SimulatorHud::Render(const SimulatorHudFrame& frame)
         fleetNetworkStatus, networkFaultPanel_,
         setFormationNodeRadioEnabled);
 
-    if (timings != nullptr)
-    {
-        timings->interfaceBuildMicroseconds = std::chrono::duration<double, std::micro>(
-            std::chrono::steady_clock::now() - interfaceBuildStart).count();
-    }
-    const auto frameFinalizeStart = timings != nullptr
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    ImGui::Render();
-    if (timings != nullptr)
-    {
-        timings->frameFinalizeMicroseconds = std::chrono::duration<double, std::micro>(
-            std::chrono::steady_clock::now() - frameFinalizeStart).count();
-    }
-    const auto backendDrawStart = timings != nullptr
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    ImDrawData* drawData = ImGui::GetDrawData();
-    if (timings != nullptr)
-    {
-        timings->drawListCount = static_cast<std::size_t>(drawData->CmdListsCount);
-        timings->vertexCount = static_cast<std::size_t>(drawData->TotalVtxCount);
-        timings->indexCount = static_cast<std::size_t>(drawData->TotalIdxCount);
-        for (const ImDrawList* list : drawData->CmdLists)
-            timings->drawCommandCount += static_cast<std::size_t>(list->CmdBuffer.Size);
-    }
-#ifndef __EMSCRIPTEN__
-    PendingGpuQuery* gpuQuery = nullptr;
-    if (timings != nullptr && timings->collectGpuTimings && GLAD_GL_VERSION_3_3)
-    {
-        for (PendingGpuQuery& query : backendGpuQueries_)
-        {
-            if (query.pending)
-                continue;
-            if (query.query == 0)
-                glGenQueries(1, &query.query);
-            gpuQuery = &query;
-            glBeginQuery(GL_TIME_ELAPSED, gpuQuery->query);
-            break;
-        }
-    }
-#endif
-    ImGui_ImplOpenGL3_RenderDrawData(drawData);
-#ifndef __EMSCRIPTEN__
-    if (gpuQuery != nullptr)
-    {
-        glEndQuery(GL_TIME_ELAPSED);
-        gpuQuery->frameIndex = timings->frameIndex;
-        gpuQuery->pending = true;
-    }
-#endif
-    if (timings != nullptr)
-    {
-        timings->backendDrawMicroseconds = std::chrono::duration<double, std::micro>(
-            std::chrono::steady_clock::now() - backendDrawStart).count();
-    }
-
-#ifndef __EMSCRIPTEN__
-    // 화면 밖으로 분리한 ImGui 창을 각각의 네이티브 창에 그린 뒤 주 창 context로 돌아온다.
-    if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
-    {
-        GLFWwindow* mainContext = glfwGetCurrentContext();
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-        glfwMakeContextCurrent(mainContext);
-    }
-#endif
+    frameBackend_.Draw(timings);
 }
 }

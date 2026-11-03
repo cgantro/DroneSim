@@ -5,11 +5,9 @@
 #include "flight_planning/BuildingObstacle.h"
 #include "gui/MiniMapPanel.h"
 #include "gui/NetworkFaultPanel.h"
+#include "gui/ImGuiFrameBackend.h"
 
-#include <array>
-#include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <functional>
 #include <span>
 #include <string>
@@ -19,29 +17,6 @@ struct GLFWwindow;
 namespace dronesim::gui
 {
 class SimulatorView;
-
-/** @brief 화면 성능 측정에 사용할 GPU 구간 결과다. */
-struct HudGpuTiming
-{
-    std::uint64_t frameIndex = 0;
-    double executionMicroseconds = 0.0;
-};
-
-/** @brief ImGui 프레임을 만들고 그리는 CPU 구간이다. */
-struct HudRenderTimings
-{
-    double interfaceBuildMicroseconds = 0.0;
-    double frameFinalizeMicroseconds = 0.0;
-    double backendDrawMicroseconds = 0.0;
-    std::size_t drawListCount = 0;
-    std::size_t drawCommandCount = 0;
-    std::size_t vertexCount = 0;
-    std::size_t indexCount = 0;
-    bool collectGpuTimings = false;
-    std::uint64_t frameIndex = 0;
-    std::array<HudGpuTiming, 4> completedGpuFrames{};
-    std::size_t completedGpuFrameCount = 0;
-};
 
 using ScenePanelRenderer = std::function<std::uint32_t(int, int)>;
 using CameraPanelRenderer = std::function<std::uint32_t(simulation::DroneId)>;
@@ -72,12 +47,12 @@ struct SimulatorHudFrame
     HudRenderTimings* timings = nullptr;
 };
 
-/** @brief 비행 상태와 편대 요약을 3D 화면 위에 표시한다. */
+/** @brief 화면 패널을 한 프레임으로 조립해 표시한다. */
 class SimulatorHud
 {
 public:
     explicit SimulatorHud(GLFWwindow* window);
-    ~SimulatorHud();
+    ~SimulatorHud() = default;
 
     SimulatorHud(const SimulatorHud&) = delete;
     SimulatorHud& operator=(const SimulatorHud&) = delete;
@@ -85,19 +60,8 @@ public:
     void Render(const SimulatorHudFrame& frame);
 
 private:
-    struct PendingGpuQuery
-    {
-        std::uint32_t query = 0;
-        std::uint64_t frameIndex = 0;
-        bool pending = false;
-    };
-
-    void CollectCompletedGpuTimings(HudRenderTimings* timings);
-
-    bool initialized_ = false;
-    std::string layoutFile_;
+    ImGuiFrameBackend frameBackend_;
     MiniMapPanel miniMapPanel_;
     NetworkFaultPanel networkFaultPanel_;
-    std::array<PendingGpuQuery, 4> backendGpuQueries_{};
 };
 }
