@@ -1,4 +1,5 @@
 #include "flight_planning/RoutePlanner.h"
+#include "geometry/Polygon.h"
 
 #include <algorithm>
 #include <array>
@@ -35,35 +36,25 @@ struct Cell
     std::size_t column = 0;
 };
 
-bool ContainsPointInRing(
-    const std::vector<glm::dvec2>& outline, const glm::dvec2& point)
-{
-    bool inside = false;
-    for (std::size_t index = 0, previous = outline.size() - 1U;
-         index < outline.size(); previous = index++)
-    {
-        const glm::dvec2& first = outline[index];
-        const glm::dvec2& second = outline[previous];
-        const bool crosses = (first.y > point.y) != (second.y > point.y);
-        if (crosses && point.x < (second.x - first.x) * (point.y - first.y)
-                / (second.y - first.y) + first.x)
-            inside = !inside;
-    }
-    return inside;
-}
-
-double DistanceToSegmentSquared(
+bool IsInsideObstacleClearance(
     const glm::dvec2& point,
-    const glm::dvec2& start,
-    const glm::dvec2& end)
+    const RouteObstacle& obstacle,
+    double clearanceSquared)
 {
-    const glm::dvec2 edge = end - start;
-    const double lengthSquared = glm::dot(edge, edge);
-    const double fraction = lengthSquared > 0.0
-        ? std::clamp(glm::dot(point - start, edge) / lengthSquared, 0.0, 1.0)
-        : 0.0;
-    const glm::dvec2 difference = point - (start + edge * fraction);
-    return glm::dot(difference, difference);
+    // 건물 안이거나 외곽선에서 안전거리보다 가까운 점은 비행 경로에서 제외한다.
+    const auto& outline = obstacle.footprintMeters;
+    if (outline.size() < 3U)
+        return false;
+    if (geometry::ContainsPointInPolygon(point, outline))
+        return true;
+
+    for (std::size_t index = 0; index < outline.size(); ++index)
+    {
+        if (geometry::SquaredDistanceToSegment(point, outline[index],
+                outline[(index + 1U) % outline.size()]) < clearanceSquared)
+            return true;
+    }
+    return false;
 }
 
 bool IsBlocked(
@@ -71,21 +62,11 @@ bool IsBlocked(
     std::span<const RouteObstacle> obstacles,
     double clearanceSquared)
 {
-    for (const RouteObstacle& obstacle : obstacles)
-    {
-        const auto& outline = obstacle.footprintMeters;
-        if (outline.size() < 3U)
-            continue;
-        if (ContainsPointInRing(outline, point))
-            return true;
-        for (std::size_t index = 0; index < outline.size(); ++index)
+    return std::any_of(obstacles.begin(), obstacles.end(),
+        [&](const RouteObstacle& obstacle)
         {
-            if (DistanceToSegmentSquared(point, outline[index],
-                    outline[(index + 1U) % outline.size()]) < clearanceSquared)
-                return true;
-        }
-    }
-    return false;
+            return IsInsideObstacleClearance(point, obstacle, clearanceSquared);
+        });
 }
 
 bool IsBlockedAtAltitude(
@@ -94,24 +75,14 @@ bool IsBlockedAtAltitude(
     std::span<const RouteObstacle> obstacles,
     double clearanceSquared)
 {
-    for (const RouteObstacle& obstacle : obstacles)
-    {
-        const auto& outline = obstacle.footprintMeters;
-        if (outline.size() < 3U)
-            continue;
-        bool horizontallyBlocked = ContainsPointInRing(outline, point);
-        for (std::size_t index = 0; !horizontallyBlocked && index < outline.size(); ++index)
+    return std::any_of(obstacles.begin(), obstacles.end(),
+        [&](const RouteObstacle& obstacle)
         {
-            horizontallyBlocked = DistanceToSegmentSquared(point, outline[index],
-                outline[(index + 1U) % outline.size()]) < clearanceSquared;
-        }
-        if (!horizontallyBlocked)
-            continue;
-
-        if (altitudeMeters < obstacle.topAltitudeMeters + minimumGroundClearanceMeters)
-            return true;
-    }
-    return false;
+            // 수평 외곽과 안전거리는 두 검사에서 같은 기준을 쓰고, 여기서는 높이만 추가로 본다.
+            return IsInsideObstacleClearance(point, obstacle, clearanceSquared)
+                && altitudeMeters
+                    < obstacle.topAltitudeMeters + minimumGroundClearanceMeters;
+        });
 }
 
 bool SegmentIsClear(
@@ -123,6 +94,7 @@ bool SegmentIsClear(
     const double length = glm::length(end - start);
     const std::size_t sampleCount = std::max<std::size_t>(1U,
         static_cast<std::size_t>(std::ceil(length)));
+    // 선분을 약 1m 간격으로 확인해 장애물 외곽을 통과하는 단순화 경로를 거른다.
     for (std::size_t index = 0; index <= sampleCount; ++index)
     {
         const double fraction = static_cast<double>(index)
@@ -238,7 +210,7 @@ std::optional<std::vector<Cell>> FindGridPath(
 
             previous[nextIndex] = currentIndex;
             distance[nextIndex] = candidateDistance;
-            // 장애물이 없는 공간에서 목표까지 갈 때의 하한인 직선거리를 h로 쓴다.
+            // 직선거리는 실제 이동 비용을 넘지 않는 하한이므로 A*가 최적 경로를 보장한다.
             const double heuristic = glm::length(
                 Position(grid, next) - Position(grid, goal));
             pending.emplace(candidateDistance + heuristic, nextIndex);
@@ -283,6 +255,7 @@ std::vector<glm::dvec2> SimplifyPath(
     while (current + 1U < anchors.size())
     {
         std::size_t next = current + 1U;
+        bool foundClearShortcut = false;
         for (std::size_t candidate = anchors.size() - 1U;
              candidate > current + 1U; --candidate)
         {
@@ -290,10 +263,14 @@ std::vector<glm::dvec2> SimplifyPath(
                     obstacles, clearanceSquared))
             {
                 next = candidate;
+                foundClearShortcut = true;
                 break;
             }
         }
-        if (!SegmentIsClear(anchors[current], anchors[next],
+        // 먼 후보를 찾지 못했을 때만 다음 인접 지점을 검사한다.
+        // 찾은 먼 후보는 위에서 이미 장애물과의 거리를 확인했다.
+        if (!foundClearShortcut
+            && !SegmentIsClear(anchors[current], anchors[next],
                 obstacles, clearanceSquared))
             return {};
         simplified.push_back(anchors[next]);

@@ -43,13 +43,22 @@ add_library(dronesim_terrain STATIC
 target_include_directories(dronesim_terrain PUBLIC modules/terrain/include)
 target_link_libraries(dronesim_terrain PUBLIC glm::glm)
 
+add_library(dronesim_geometry STATIC
+  modules/geometry/src/Polygon.cpp
+)
+target_include_directories(dronesim_geometry PUBLIC modules/geometry/include)
+target_link_libraries(dronesim_geometry PUBLIC glm::glm)
+
 add_library(dronesim_flight_planning STATIC
   modules/flight_planning/src/BuildingObstacle.cpp
   modules/flight_planning/src/FormationPlanner.cpp
   modules/flight_planning/src/RoutePlanner.cpp
 )
 target_include_directories(dronesim_flight_planning PUBLIC modules/flight_planning/include)
-target_link_libraries(dronesim_flight_planning PUBLIC glm::glm)
+target_link_libraries(dronesim_flight_planning
+  PUBLIC glm::glm
+  PRIVATE dronesim_geometry
+)
 
 add_library(dronesim_simulation_core STATIC
   modules/simulation_core/src/BatteryModel.cpp
@@ -68,7 +77,7 @@ target_link_libraries(dronesim_simulation_core PRIVATE Jolt::Jolt)
 target_include_directories(dronesim_simulation_core PUBLIC modules/simulation_core/include)
 target_link_libraries(dronesim_simulation_core
   PUBLIC glm::glm dronesim_terrain
-  PRIVATE flecs::flecs_static
+  PRIVATE flecs::flecs_static dronesim_geometry
 )
 
 add_library(dronesim_scenario STATIC
@@ -91,7 +100,7 @@ add_library(dronesim_communication STATIC
 target_include_directories(dronesim_communication PUBLIC modules/communication/include)
 target_link_libraries(dronesim_communication
   PUBLIC dronesim_simulation_core
-  PRIVATE nlohmann_json::nlohmann_json
+  PRIVATE nlohmann_json::nlohmann_json dronesim_geometry
 )
 if(EMSCRIPTEN)
   target_sources(dronesim_communication PRIVATE
@@ -259,6 +268,7 @@ if(DRONESIM_BUILD_GRAPHICS)
     dronesim_simulation_core
     dronesim_flight_planning
     dronesim_terrain
+    PRIVATE dronesim_geometry
   )
 
   add_library(dronesim_simulator_app STATIC

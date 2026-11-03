@@ -1,4 +1,5 @@
 #include "simulation_core/CollisionGeometry.h"
+#include "geometry/Polygon.h"
 
 #include <algorithm>
 #include <cmath>
@@ -161,6 +162,9 @@ bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept
 {
     if (outlineMeters.size() < 3U)
         return false;
+
+    // 신발끈 공식의 두 배 넓이를 구한다. 꼭짓점이 한 직선에만 놓인 외곽선은
+    // 면적이 0이므로 접촉 면으로 쓸 수 없다.
     double twiceArea = 0.0;
     for (std::size_t i = 0; i < outlineMeters.size(); ++i)
     {
@@ -174,7 +178,7 @@ bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept
 }
 
 bool IsValidObstacleBox(
-    const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters) noexcept
+    const glm::dvec3& centerMeters, const glm::dvec3& halfExtentsMeters) noexcept
 {
     return std::isfinite(centerMeters.x) && std::isfinite(centerMeters.y)
         && std::isfinite(centerMeters.z)
@@ -207,7 +211,7 @@ std::optional<FootprintProjection> ProjectToFootprint(
     std::span<const glm::dvec2> outlineMeters,
     const glm::dvec2& centerMeters)
 {
-    bool inside = false;
+    const bool inside = geometry::ContainsPointInPolygon(centerMeters, outlineMeters);
     double twiceArea = 0.0;
     double nearestDistanceSquared = std::numeric_limits<double>::infinity();
     glm::dvec2 nearestPoint{0.0};
@@ -227,20 +231,13 @@ std::optional<FootprintProjection> ProjectToFootprint(
         const glm::dvec2 edge = second - first;
         const double edgeLengthSquared = glm::dot(edge, edge);
 
-        const glm::dvec2& previous = outlineMeters[
-            (index + outlineMeters.size() - 1U) % outlineMeters.size()];
-        if ((first.y > centerMeters.y) != (previous.y > centerMeters.y)
-            && centerMeters.x < (previous.x - first.x)
-                * (centerMeters.y - first.y) / (previous.y - first.y) + first.x)
-        {
-            inside = !inside;
-        }
-
         if (edgeLengthSquared <= 1.0e-12)
             continue;
 
         const double fraction = std::clamp(
             glm::dot(centerMeters - first, edge) / edgeLengthSquared, 0.0, 1.0);
+        // 선분 위에 중심을 가장 가깝게 내린다. fraction을 0~1로 제한해
+        // 꼭짓점 바깥으로 투영되는 경우에는 선분의 끝점을 사용한다.
         const glm::dvec2 point = first + edge * fraction;
         const glm::dvec2 offset = centerMeters - point;
         const double distanceSquared = glm::dot(offset, offset);
@@ -279,6 +276,8 @@ std::optional<FootprintContact> FindFootprintContact(
     if (!projection)
         return std::nullopt;
 
+    // 드론은 수평면에서 원으로 단순화한다. 중심이 건물 안이면 경계까지 거리와
+    // 반지름을 더해야 빠져나오고, 밖이면 반지름에서 경계까지 거리를 뺀다.
     const double penetrationMeters = projection->inside
         ? horizontalRadiusMeters + projection->distanceMeters
         : horizontalRadiusMeters - projection->distanceMeters;
@@ -309,6 +308,8 @@ std::optional<PrismContact> FindPrismContact(
     if (verticalOverlap <= 0.0)
         return std::nullopt;
 
+    // 위·아래로 빠져나갈 거리 중 짧은 쪽을 고른다. 기체 중심이 프리즘 높이
+    // 구간 밖에 있으면 실제로 겹친 높이만큼만 이동하면 된다.
     const double distanceToMoveDown = bodyTop - bottomMeters;
     const double distanceToMoveUp = topMeters - bodyBottom;
     const bool moveUp = distanceToMoveUp < distanceToMoveDown;
@@ -329,6 +330,7 @@ std::optional<PrismContact> FindPrismContact(
         return std::nullopt;
 
     PrismContact result;
+    // 수평과 수직 겹침 중 적은 쪽으로 밀어내면 가장 작은 이동으로 접촉을 푼다.
     if (verticalPenetration < horizontalPenetration)
     {
         result.normal = {0.0, 0.0, moveUp ? 1.0 : -1.0};
@@ -372,7 +374,9 @@ std::optional<BoxContact> FindBoxContact(
         }
     }
 
-    // 상자의 면 6개와 서로 다른 상자의 모서리 방향 최대 9개를 모두 검사한다.
+    // 분리축 정리(SAT)는 두 상자를 어떤 축에 투영해 구간이 겹치는지 확인한다.
+    // 회전 상자에서는 각 상자의 면 법선 3개씩과 두 모서리 방향의 외적 9개가
+    // 필요한 후보 축이다. 하나라도 구간이 갈라지면 상자는 닿지 않는다.
     std::array<glm::dvec3, 15> candidateAxes{};
     std::size_t axisCount = 0;
     for (const glm::dvec3& axis : firstBox.axes)

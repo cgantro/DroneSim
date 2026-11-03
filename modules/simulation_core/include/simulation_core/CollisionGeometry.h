@@ -86,7 +86,7 @@ bool IsValidFootprint(std::span<const glm::dvec2> outlineMeters) noexcept;
 
 /** @brief 고정 상자의 위치와 양의 반 크기가 유효한지 확인한다. */
 bool IsValidObstacleBox(
-    const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters) noexcept;
+    const glm::dvec3& centerMeters, const glm::dvec3& halfExtentsMeters) noexcept;
 
 /** @brief 외곽선과 바닥·꼭대기 높이가 유효한 건물 프리즘인지 확인한다. */
 bool IsValidPrism(std::span<const glm::dvec2> outlineMeters,

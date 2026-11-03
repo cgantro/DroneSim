@@ -1,5 +1,6 @@
 #include "communication/VirtualMeshNetwork.h"
 #include "communication/DroneSocketTransport.h"
+#include "geometry/Polygon.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,21 +22,11 @@ double Cross(const glm::dvec2& first, const glm::dvec2& second)
     return first.x * second.y - first.y * second.x;
 }
 
-bool PointInside(const glm::dvec2& point,
-    const std::vector<glm::dvec2>& polygon)
+bool IsFinitePosition(const glm::dvec3& positionMeters) noexcept
 {
-    bool inside = false;
-    for (std::size_t index = 0, previous = polygon.size() - 1U;
-         index < polygon.size(); previous = index++)
-    {
-        const auto& first = polygon[index];
-        const auto& second = polygon[previous];
-        const bool crosses = (first.y > point.y) != (second.y > point.y);
-        if (crosses && point.x < (second.x - first.x)
-                * (point.y - first.y) / (second.y - first.y) + first.x)
-            inside = !inside;
-    }
-    return inside;
+    return std::isfinite(positionMeters.x)
+        && std::isfinite(positionMeters.y)
+        && std::isfinite(positionMeters.z);
 }
 
 std::optional<double> SegmentIntersectionParameter(
@@ -73,9 +64,7 @@ void VirtualMeshNetwork::UpdateNodes(
     std::map<NetworkNodeId, NetworkNodeSnapshot> updated;
     for (const NetworkNodeSnapshot& node : nodes)
     {
-        if (!std::isfinite(node.positionMeters.x)
-            || !std::isfinite(node.positionMeters.y)
-            || !std::isfinite(node.positionMeters.z))
+        if (!IsFinitePosition(node.positionMeters))
             throw std::invalid_argument("통신 노드 위치는 유한한 좌표여야 합니다.");
         if (!updated.emplace(node.id, node).second)
             throw std::invalid_argument("통신 노드 ID가 중복되었습니다.");
@@ -305,11 +294,8 @@ bool VirtualMeshNetwork::LinkAvailableAt(NetworkNodeId sender,
 {
     if (radioDisabledNodes_.contains(sender) || radioDisabledNodes_.contains(receiver))
         return false;
-    if (!std::isfinite(senderPositionMeters.x) || !std::isfinite(senderPositionMeters.y)
-        || !std::isfinite(senderPositionMeters.z)
-        || !std::isfinite(receiverPositionMeters.x)
-        || !std::isfinite(receiverPositionMeters.y)
-        || !std::isfinite(receiverPositionMeters.z)
+    if (!IsFinitePosition(senderPositionMeters)
+        || !IsFinitePosition(receiverPositionMeters)
         || glm::distance(senderPositionMeters, receiverPositionMeters)
             > settings_.maximumLinkRangeMeters)
         return false;
@@ -345,22 +331,29 @@ bool VirtualMeshNetwork::HasLineOfSight(
                 return std::abs(first - second) <= geometryTolerance;
             }), crossings.end());
 
-        for (std::size_t index = 1; index < crossings.size(); ++index)
-        {
-            const double parameter = std::midpoint(crossings[index - 1U], crossings[index]);
-            const glm::dvec2 point = glm::mix(horizontalStart, horizontalEnd, parameter);
-            const double altitude = std::lerp(start.z, end.z, parameter);
-            if (PointInside(point, obstacle.footprintMeters)
-                && altitude >= obstacle.bottomMeters && altitude <= obstacle.topMeters)
-                return false;
-        }
-        for (const double parameter : crossings)
+        const auto isBlockedAt = [&](double parameter)
         {
             const glm::dvec2 point = glm::mix(horizontalStart, horizontalEnd, parameter);
             const double altitude = std::lerp(start.z, end.z, parameter);
-            if (PointInside(point, obstacle.footprintMeters)
-                && altitude >= obstacle.bottomMeters && altitude <= obstacle.topMeters)
+            return geometry::ContainsPointInPolygon(point, obstacle.footprintMeters)
+                && altitude >= obstacle.bottomMeters
+                && altitude <= obstacle.topMeters;
+        };
+
+        // 경계 교차점과 두 교차점 사이의 한 점을 확인하면,
+        // 선분이 건물 안을 통과하거나 경계에 닿는 경우를 모두 잡는다.
+        for (std::size_t index = 0; index < crossings.size(); ++index)
+        {
+            if (isBlockedAt(crossings[index]))
                 return false;
+
+            if (index + 1U < crossings.size())
+            {
+                const double midpoint = std::midpoint(
+                    crossings[index], crossings[index + 1U]);
+                if (isBlockedAt(midpoint))
+                    return false;
+            }
         }
     }
     return true;

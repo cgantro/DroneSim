@@ -2,6 +2,7 @@
 
 #include "graphics/Renderer.h"
 #include "graphics/Shader.h"
+#include "geometry/Polygon.h"
 
 #include <algorithm>
 #include <array>
@@ -56,39 +57,17 @@ std::vector<glm::dvec2> MakeFootprintHull(std::vector<glm::dvec2> points)
     return hull;
 }
 
-double DistanceToSegment(const glm::dvec2& point,
-    const glm::dvec2& start, const glm::dvec2& end)
-{
-    const glm::dvec2 edge = end - start;
-    const double edgeLengthSquared = glm::dot(edge, edge);
-    const double fraction = edgeLengthSquared > 0.0
-        ? std::clamp(glm::dot(point - start, edge) / edgeLengthSquared, 0.0, 1.0)
-        : 0.0;
-    return glm::length(point - (start + fraction * edge));
-}
-
 double DistanceToStructures(const glm::dvec2& point,
     const std::vector<dronesim::flight_planning::BuildingObstacle>& buildings)
 {
     double nearest = std::numeric_limits<double>::infinity();
     for (const auto& building : buildings)
     {
-        const auto& outline = building.outlineMeters;
-        bool inside = false;
-        for (std::size_t index = 0, previous = outline.size() - 1U;
-            index < outline.size(); previous = index++)
-        {
-            const auto& first = outline[index];
-            const auto& second = outline[previous];
-            if ((first.y > point.y) != (second.y > point.y)
-                && point.x < (second.x - first.x) * (point.y - first.y)
-                    / (second.y - first.y) + first.x)
-                inside = !inside;
-            nearest = std::min(nearest, DistanceToSegment(
-                point, first, second));
-        }
-        if (inside)
+        const double distance = geometry::DistanceToPolygon(
+            point, building.outlineMeters);
+        if (distance == 0.0)
             return 0.0;
+        nearest = std::min(nearest, distance);
     }
     return nearest;
 }
