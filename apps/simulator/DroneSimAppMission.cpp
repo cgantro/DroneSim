@@ -154,7 +154,7 @@ bool DroneSimApp::StartFleetReconnaissance(
         auto& mission = assignment.mission;
         const dronesim::mission::FleetMissionLeg leg = mission.leg;
         const std::size_t targetIndex = mission.targetIndex;
-        std::vector<glm::dvec3> route = std::move(mission.routeWaypointsMeters);
+        std::vector<glm::dvec3> route = mission.TakeRouteForDelivery();
         mission.status = dronesim::mission::FleetDroneStatus::RoutePending;
         fleetMission_.SetAssignment(droneId, std::move(mission));
         if (!SendFleetRouteAssignment(
@@ -423,7 +423,7 @@ void DroneSimApp::AdvanceFleetReconnaissance()
         if (mission.IsLegFinished())
             continue;
 
-        if (!mission.routeReceived)
+        if (!mission.HasReceivedRoute())
         {
             if (simulation_.TickCount() >= mission.routeSentAtTick
                     + routeDeliveryTimeoutTicks)
@@ -456,11 +456,11 @@ void DroneSimApp::AdvanceFleetReconnaissance()
         if (state.mode == FlightMode::TakingOff || state.mode == FlightMode::Landing)
             continue;
 
-        if (!mission.waypointCommanded)
+        if (!mission.HasCommandedWaypoint())
         {
             mission.BeginWaypointCommand();
         }
-        else if (mission.nextWaypoint >= mission.routeWaypointsMeters.size())
+        else if (!mission.HasRemainingWaypoints())
         {
             if (mission.leg == dronesim::mission::FleetMissionLeg::Regrouping)
             {
@@ -482,7 +482,7 @@ void DroneSimApp::AdvanceFleetReconnaissance()
         }
         else if (mission.AdvanceWaypointIfReached(state.positionMeters, 2.0))
         {
-            if (mission.nextWaypoint >= mission.routeWaypointsMeters.size())
+            if (!mission.HasRemainingWaypoints())
                 continue;
         }
 
@@ -782,10 +782,7 @@ bool DroneSimApp::SendFleetRouteAssignment(
     mission->second.routeSentAtTick = simulation_.TickCount();
     mission->second.lastRouteTransmissionTick = simulation_.TickCount();
     mission->second.routeTransmissionCount = 1U;
-    mission->second.routeReceived = false;
-    mission->second.routeWaypointsMeters.clear();
-    mission->second.nextWaypoint = 0U;
-    mission->second.waypointCommanded = false;
+    mission->second.WaitForRoute();
     mission->second.status = dronesim::mission::FleetDroneStatus::RoutePending;
     return true;
 }
@@ -809,10 +806,7 @@ void DroneSimApp::ApplyFleetRouteAssignment(
     mission->second.assignmentVersion = assignmentVersion;
     mission->second.assignmentLeaseExpiresAtTick = assignmentLeaseExpiresAtTick;
     mission->second.routeSentAtTick = simulation_.TickCount();
-    mission->second.routeWaypointsMeters = std::move(routeWaypointsMeters);
-    mission->second.nextWaypoint = 0U;
-    mission->second.routeReceived = true;
-    mission->second.waypointCommanded = false;
+    mission->second.ReceiveRoute(std::move(routeWaypointsMeters));
 
     auto mode = simulation_.State(droneId).mode;
     if (leg == dronesim::mission::FleetMissionLeg::Reconnaissance

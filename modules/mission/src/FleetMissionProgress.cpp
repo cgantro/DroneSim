@@ -114,9 +114,46 @@ void FleetReconnaissanceState::BeginLeg(FleetMissionLeg nextLeg) noexcept
 {
     leg = nextLeg;
     status = FleetDroneStatus::RoutePending;
-    nextWaypoint = 0U;
-    routeReceived = false;
-    waypointCommanded = false;
+    routeWaypointsMeters_.clear();
+    nextWaypoint_ = 0U;
+    routeReceived_ = false;
+    waypointCommanded_ = false;
+}
+
+void FleetReconnaissanceState::SetPlannedRoute(
+    std::vector<glm::dvec3> routeWaypointsMeters)
+{
+    routeWaypointsMeters_ = std::move(routeWaypointsMeters);
+    nextWaypoint_ = 0U;
+    routeReceived_ = false;
+    waypointCommanded_ = false;
+}
+
+std::vector<glm::dvec3> FleetReconnaissanceState::TakeRouteForDelivery()
+{
+    std::vector<glm::dvec3> route = std::move(routeWaypointsMeters_);
+    routeWaypointsMeters_.clear();
+    nextWaypoint_ = 0U;
+    routeReceived_ = false;
+    waypointCommanded_ = false;
+    return route;
+}
+
+void FleetReconnaissanceState::ReceiveRoute(
+    std::vector<glm::dvec3> routeWaypointsMeters)
+{
+    routeWaypointsMeters_ = std::move(routeWaypointsMeters);
+    nextWaypoint_ = 0U;
+    routeReceived_ = true;
+    waypointCommanded_ = false;
+}
+
+void FleetReconnaissanceState::WaitForRoute() noexcept
+{
+    routeWaypointsMeters_.clear();
+    nextWaypoint_ = 0U;
+    routeReceived_ = false;
+    waypointCommanded_ = false;
 }
 
 void FleetReconnaissanceState::BeginLowBatteryReturn() noexcept
@@ -127,7 +164,7 @@ void FleetReconnaissanceState::BeginLowBatteryReturn() noexcept
 
 void FleetReconnaissanceState::BeginWaypointCommand() noexcept
 {
-    waypointCommanded = true;
+    waypointCommanded_ = true;
     switch (leg)
     {
     case FleetMissionLeg::Returning:
@@ -148,23 +185,23 @@ bool FleetReconnaissanceState::AdvanceWaypointIfReached(
     const glm::dvec3& positionMeters,
     double toleranceMeters) noexcept
 {
-    if (nextWaypoint >= routeWaypointsMeters.size())
+    if (nextWaypoint_ >= routeWaypointsMeters_.size())
         return false;
 
     const double distanceMeters = glm::length(
-        routeWaypointsMeters[nextWaypoint] - positionMeters);
+        routeWaypointsMeters_[nextWaypoint_] - positionMeters);
     if (distanceMeters > toleranceMeters)
         return false;
 
-    ++nextWaypoint;
+    ++nextWaypoint_;
     return true;
 }
 
 const glm::dvec3* FleetReconnaissanceState::CurrentWaypoint() const noexcept
 {
-    if (nextWaypoint >= routeWaypointsMeters.size())
+    if (nextWaypoint_ >= routeWaypointsMeters_.size())
         return nullptr;
-    return &routeWaypointsMeters[nextWaypoint];
+    return &routeWaypointsMeters_[nextWaypoint_];
 }
 
 FleetMissionState::AssignmentIterator FleetMissionState::FindAssignment(

@@ -23,9 +23,15 @@ namespace dronesim::mission
 /** @brief 드론 한 대에 배정된 정찰·집결·복귀 경로와 진행 상태다. */
 struct FleetReconnaissanceState
 {
+private:
+    std::vector<glm::dvec3> routeWaypointsMeters_;
+    std::size_t nextWaypoint_ = 0U;
+    bool routeReceived_ = false;
+    bool waypointCommanded_ = false;
+
+public:
     std::size_t targetIndex = 0;
     glm::dvec3 startPositionMeters{0.0};
-    std::vector<glm::dvec3> routeWaypointsMeters;
     std::string pendingRoutePayload;
     std::uint32_t routeSequence = 0;
     std::uint32_t pendingRouteSequence = 0;
@@ -34,18 +40,48 @@ struct FleetReconnaissanceState
     std::uint32_t routeTransmissionCount = 0;
     std::uint64_t routeSentAtTick = 0;
     std::uint64_t lastRouteTransmissionTick = 0;
-    std::size_t nextWaypoint = 0;
     FleetDroneStatus status = FleetDroneStatus::Other;
-    bool routeReceived = false;
-    bool waypointCommanded = false;
     bool lowBatteryReturn = false;
     FleetMissionLeg leg = FleetMissionLeg::Reconnaissance;
 
+    /** @brief 경로 계획 결과를 저장하고 진행 번호를 첫 경유점으로 맞춘다. */
+    void SetPlannedRoute(std::vector<glm::dvec3> routeWaypointsMeters);
+
+    /** @brief 통신으로 전달할 경로를 꺼내고 보관 중인 경로를 비운다. */
+    [[nodiscard]] std::vector<glm::dvec3> TakeRouteForDelivery();
+
+    /** @brief 새 구간의 경로 수신·진행 상태를 초기화한다. */
+    void BeginLeg(FleetMissionLeg nextLeg) noexcept;
+
+    /** @brief 드론에 실제 적용된 경로와 목표 상태를 기록한다. */
+    void ReceiveRoute(std::vector<glm::dvec3> routeWaypointsMeters);
+
+    /** @brief 경로가 통신으로 도착할 때까지 이전 경로를 숨긴다. */
+    void WaitForRoute() noexcept;
+
+    /** @brief 계획·수신된 경로를 읽기 전용으로 제공한다. */
+    [[nodiscard]] const std::vector<glm::dvec3>& RouteWaypoints() const noexcept
+    {
+        return routeWaypointsMeters_;
+    }
+
+    /** @brief 현재 다음 경유점 번호를 돌려준다. */
+    [[nodiscard]] std::size_t WaypointIndex() const noexcept { return nextWaypoint_; }
+
+    /** @brief 통신으로 현재 구간의 경로를 받았는지 확인한다. */
+    [[nodiscard]] bool HasReceivedRoute() const noexcept { return routeReceived_; }
+
+    /** @brief 비행 조종기에 현재 구간의 첫 경유점을 전달했는지 확인한다. */
+    [[nodiscard]] bool HasCommandedWaypoint() const noexcept { return waypointCommanded_; }
+
+    /** @brief 아직 전달할 경유점이 남아 있는지 확인한다. */
+    [[nodiscard]] bool HasRemainingWaypoints() const noexcept
+    {
+        return nextWaypoint_ < routeWaypointsMeters_.size();
+    }
+
     /** @brief 현재 임무 구간이 완료 또는 실패 상태인지 확인한다. */
     [[nodiscard]] bool IsLegFinished() const noexcept;
-
-    /** @brief 새 정찰·집결·복귀 경로를 기다리도록 구간 진행 상태를 초기화한다. */
-    void BeginLeg(FleetMissionLeg nextLeg) noexcept;
 
     /** @brief 배터리 부족으로 복귀를 시작했음을 임무 상태에 기록한다. */
     void BeginLowBatteryReturn() noexcept;

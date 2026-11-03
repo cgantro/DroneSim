@@ -137,7 +137,7 @@ public:
         ASSERT_TRUE(app.StartFleetReconnaissance());
 
         // 경로 탐색 결과는 출발점을 제외하므로 첫 항목도 임무에 필요하다.
-        EXPECT_EQ(app.fleetMission_.Assignment(droneId).routeWaypointsMeters,
+        EXPECT_EQ(app.fleetMission_.Assignment(droneId).RouteWaypoints(),
             *expectedRoute);
     }
 
@@ -601,12 +601,13 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_FALSE(fleetState.HasActiveReconnaissance());
 
     mission::FleetReconnaissanceState routeProgress;
-    routeProgress.routeWaypointsMeters = {
-        {0.0, 0.0, 5.0}, {10.0, 0.0, 5.0}};
     routeProgress.BeginLeg(FleetMissionLeg::Reconnaissance);
+    routeProgress.ReceiveRoute({{0.0, 0.0, 5.0}, {10.0, 0.0, 5.0}});
     EXPECT_EQ(routeProgress.status, FleetDroneStatus::RoutePending);
+    EXPECT_TRUE(routeProgress.HasReceivedRoute());
     routeProgress.BeginWaypointCommand();
     EXPECT_EQ(routeProgress.status, FleetDroneStatus::Reconnaissance);
+    EXPECT_TRUE(routeProgress.HasCommandedWaypoint());
     ASSERT_NE(routeProgress.CurrentWaypoint(), nullptr);
     EXPECT_EQ(*routeProgress.CurrentWaypoint(), glm::dvec3(0.0, 0.0, 5.0));
     EXPECT_TRUE(routeProgress.AdvanceWaypointIfReached({1.0, 0.0, 5.0}, 2.0));
@@ -616,6 +617,7 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_TRUE(routeProgress.lowBatteryReturn);
     EXPECT_EQ(routeProgress.leg, FleetMissionLeg::Returning);
     EXPECT_EQ(routeProgress.status, FleetDroneStatus::RoutePending);
+    EXPECT_FALSE(routeProgress.HasReceivedRoute());
 
     EXPECT_TRUE(mission::IsFleetMissionInProgress(
         FleetDroneStatus::Reconnaissance));

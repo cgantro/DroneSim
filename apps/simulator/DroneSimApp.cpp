@@ -641,13 +641,13 @@ void DroneSimApp::RenderFrame()
         for (const auto& [droneId, mission] : fleetMission_.Assignments())
         {
             if (!dronesim::mission::IsFleetMissionInProgress(mission.status)
-                || mission.nextWaypoint >= mission.routeWaypointsMeters.size())
+                || !mission.HasRemainingWaypoints())
                 continue;
             const auto& currentPosition = simulation_.State(droneId).positionMeters;
             std::vector<glm::dvec3> remainingWaypoints(
-                mission.routeWaypointsMeters.begin()
-                    + static_cast<std::ptrdiff_t>(mission.nextWaypoint),
-                mission.routeWaypointsMeters.end());
+                mission.RouteWaypoints().begin()
+                    + static_cast<std::ptrdiff_t>(mission.WaypointIndex()),
+                mission.RouteWaypoints().end());
             miniMapRoutes.push_back({droneId, currentPosition,
                 std::move(remainingWaypoints)});
         }
@@ -864,7 +864,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
                 && missionStatus != dronesim::mission::FleetDroneStatus::Landing)
                 continue;
             glm::dvec3 previous = mission.startPositionMeters;
-            for (const glm::dvec3& waypoint : mission.routeWaypointsMeters)
+            for (const glm::dvec3& waypoint : mission.RouteWaypoints())
             {
                 drawRouteSegment(previous, waypoint, missionRouteMaterial_);
                 previous = waypoint;
