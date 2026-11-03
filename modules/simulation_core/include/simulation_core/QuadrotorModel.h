@@ -46,6 +46,9 @@ struct QuadrotorParameters
     double motorTimeConstantDownSeconds = 0.025;
     double maximumMotorSpeedRadiansPerSecond = 1000.0;
 
+    /** @brief 비행·공기력 계산에 필요한 기체 제원이 유효한지 확인한다. */
+    [[nodiscard]] bool HasValidPhysicalProperties() const noexcept;
+
     /** @brief PX4가 공개한 X500 Gazebo 모델의 중심 기체와 모터 설정값을 반환한다. */
     [[nodiscard]] static QuadrotorParameters X500Gazebo();
 
@@ -56,5 +59,31 @@ struct QuadrotorParameters
      */
     [[nodiscard]] static QuadrotorParameters X500MotorTableEstimate();
 };
+
+/**
+ * @brief 기체 좌표계의 상대 바람 속도에서 공기 저항력을 계산한다.
+ * @details 표준 공기 밀도 1.225kg/m³와 항력 계수 1.0을 쓰는 간단한 축별 모델이다.
+ * 각 축의 투영 면적과 속도의 제곱으로 저항을 구하며, 결과 단위는 뉴턴이다.
+ */
+[[nodiscard]] glm::dvec3 CalculateQuadrotorDragForceBody(
+    const QuadrotorParameters& parameters,
+    const glm::dvec3& relativeAirflowMetersPerSecond) noexcept;
+
+/** @brief 고정 시간 동안 모터의 현재 회전수를 목표 회전수 쪽으로 갱신한다. */
+[[nodiscard]] std::array<double, QuadrotorParameters::rotorCount> AdvanceMotorSpeeds(
+    const QuadrotorParameters& parameters,
+    const std::array<double, QuadrotorParameters::rotorCount>& currentSpeeds,
+    const std::array<double, QuadrotorParameters::rotorCount>& targetSpeeds,
+    double stepSeconds) noexcept;
+
+/** @brief 로터 회전수로 각 로터의 추력을 계산한다. */
+[[nodiscard]] std::array<double, QuadrotorParameters::rotorCount> CalculateRotorThrusts(
+    const QuadrotorParameters& parameters,
+    const std::array<double, QuadrotorParameters::rotorCount>& motorSpeeds) noexcept;
+
+/** @brief 회전 방향과 추력에 따른 기체 Z축 반작용 토크를 계산한다. */
+[[nodiscard]] double CalculateRotorReactionTorqueBodyZ(
+    const QuadrotorParameters& parameters,
+    const std::array<double, QuadrotorParameters::rotorCount>& rotorThrusts) noexcept;
 
 }

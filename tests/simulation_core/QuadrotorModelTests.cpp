@@ -115,10 +115,54 @@ void Verify_X500GazeboParameters_KeepAggregatedMassInertiaAndRotorLayout()
     }
 }
 
+void Verify_AerodynamicDragOpposesAirflowOnEachBodyAxis()
+{
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    const glm::dvec3 drag = CalculateQuadrotorDragForceBody(
+        parameters, {2.0, -3.0, 4.0});
+
+    EXPECT_NEAR(drag.x, -0.01078, 1.0e-12);
+    EXPECT_NEAR(drag.y, 0.03969, 1.0e-12);
+    EXPECT_NEAR(drag.z, -0.19404, 1.0e-12);
+}
+
+void Verify_MotorLagThrustAndReactionTorqueUseTheVehicleModel()
+{
+    const QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    const auto speeds = AdvanceMotorSpeeds(
+        parameters, {0.0, 1000.0, 0.0, 0.0},
+        {1000.0, 0.0, 0.0, 0.0}, 0.0125);
+    EXPECT_NEAR(speeds[0], 1000.0 * (1.0 - std::exp(-1.0)), 1.0e-10);
+    EXPECT_NEAR(speeds[1], 1000.0 * std::exp(-0.5), 1.0e-10);
+
+    const auto thrusts = CalculateRotorThrusts(parameters, {100.0, 200.0, 300.0, 400.0});
+    for (std::size_t rotor = 0; rotor < thrusts.size(); ++rotor)
+    {
+        const double speed = 100.0 * static_cast<double>(rotor + 1);
+        EXPECT_NEAR(thrusts[rotor],
+            parameters.thrustCoefficientNewtonsPerSpeedSquared * speed * speed,
+            1.0e-12);
+    }
+    EXPECT_NEAR(CalculateRotorReactionTorqueBodyZ(
+        parameters, {1.0, 2.0, 3.0, 4.0}), 0.064, 1.0e-12);
+}
+
+void Verify_PhysicalPropertyValidationIsSharedByModelAndPhysicsBackend()
+{
+    QuadrotorParameters parameters = QuadrotorParameters::X500Gazebo();
+    EXPECT_TRUE(parameters.HasValidPhysicalProperties());
+
+    parameters.bodySizeMeters.z = 0.0;
+    EXPECT_FALSE(parameters.HasValidPhysicalProperties());
+}
+
 TEST(QuadrotorModelTests, CoreScenarios)
 {
     EXPECT_NO_FATAL_FAILURE(Verify_QuadrotorParameters_MotorTableEstimateMatchesManufacturerReference());
     EXPECT_NO_FATAL_FAILURE(Verify_X500GazeboParameters_KeepAggregatedMassInertiaAndRotorLayout());
+    EXPECT_NO_FATAL_FAILURE(Verify_AerodynamicDragOpposesAirflowOnEachBodyAxis());
+    EXPECT_NO_FATAL_FAILURE(Verify_MotorLagThrustAndReactionTorqueUseTheVehicleModel());
+    EXPECT_NO_FATAL_FAILURE(Verify_PhysicalPropertyValidationIsSharedByModelAndPhysicsBackend());
 }
 
 }
