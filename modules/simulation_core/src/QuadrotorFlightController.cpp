@@ -93,7 +93,8 @@ glm::dvec3 AttitudeTorque(
 
 /**
  * @brief 네 로터로 목표 수직 힘과 세 축 토크를 나눈다.
- * @details 각 단계에서 절댓값이 가장 큰 계수를 기준으로 행을 바꿔 연립식을 푼다.
+ * @details 각 로터의 추력을 미지수로 두고, 수직 힘·롤·피치·요 토크 식을 연립해 푼다.
+ * 행을 바꿀 때는 현재 열에서 절댓값이 가장 큰 계수를 골라 계산 오차를 줄인다.
  */
 std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
     const DesiredWrench& desiredWrench,
@@ -105,9 +106,11 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
     for (std::size_t rotor = 0; rotor < rotorCount; ++rotor)
     {
         const glm::dvec3& position = parameters.rotors[rotor].positionMeters;
+        // 첫째 행은 네 추력의 합, 다음 두 행은 로터의 팔 길이로 만드는 롤·피치 토크다.
         equation[0][rotor] = 1.0;
         equation[1][rotor] = position.y;
         equation[2][rotor] = -position.x;
+        // 회전 방향이 반대인 로터는 기체에 전달하는 요 반작용 토크 부호도 반대다.
         equation[3][rotor] = -DirectionSign(parameters.rotors[rotor].rotation)
             * parameters.momentToThrustRatio;
     }
@@ -118,6 +121,8 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
 
     for (std::size_t column = 0; column < rotorCount; ++column)
     {
+        // 부분 피벗팅으로 작은 수로 나누는 일을 피한다. 피벗이 0에 가까우면
+        // 현재 로터 배치로 네 축의 요구량을 독립적으로 맞출 수 없다.
         std::size_t pivot = column;
         for (std::size_t row = column + 1; row < rotorCount; ++row)
         {
@@ -132,6 +137,7 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
         for (std::size_t entry = column; entry <= rotorCount; ++entry)
             equation[column][entry] /= divisor;
 
+        // 피벗 행을 1로 만든 다음 다른 행에서 해당 열을 없애면 해가 마지막 열에 남는다.
         for (std::size_t row = 0; row < rotorCount; ++row)
         {
             if (row == column)
@@ -144,7 +150,10 @@ std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
 
     std::array<double, rotorCount> thrusts{};
     for (std::size_t rotor = 0; rotor < rotorCount; ++rotor)
+    {
+        // 로터는 아래 방향 힘을 만들 수 없으므로 음수 요구량은 0으로 제한한다.
         thrusts[rotor] = std::max(0.0, equation[rotor][rotorCount]);
+    }
     return thrusts;
 }
 }
@@ -229,6 +238,7 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
         desiredWorldThrust, control.desiredYawRadians);
     const glm::dvec3 torqueBody = AttitudeTorque(
         state, parameters, desiredOrientation, controller);
+    // 목표 자세의 기체 Z축을 추력 방향에 맞췄으므로, 기체 좌표계에서는 수직 성분만 필요하다.
     const glm::dvec3 forceBody{0.0, 0.0, glm::length(desiredWorldThrust)};
     const DesiredWrench desiredWrench{forceBody, torqueBody};
     const auto rotorThrusts = SolveRotorThrusts(desiredWrench, parameters);
@@ -236,6 +246,7 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
     std::array<double, QuadrotorParameters::rotorCount> motorTargets{};
     for (std::size_t rotor = 0; rotor < motorTargets.size(); ++rotor)
     {
+        // 추력식 T = k_f·ω²을 회전수로 풀고, 모터의 최대 회전수를 넘지 않게 한다.
         motorTargets[rotor] = std::min(
             std::sqrt(rotorThrusts[rotor] / parameters.thrustCoefficientNewtonsPerSpeedSquared),
             parameters.maximumMotorSpeedRadiansPerSecond);
