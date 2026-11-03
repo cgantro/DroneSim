@@ -247,6 +247,50 @@ struct JoltPhysicsWorld::Impl {
     std::array<double, QuadrotorParameters::rotorCount> targetSpeeds{};
     std::array<double, QuadrotorParameters::rotorCount> motorSpeeds{};
     bool hasStepped = false;
+
+    /**
+     * @brief 한 고정 Tick만큼 모터를 움직이고 기체에 항력·로터 힘·반작용 토크를 가한다.
+     * @details 바람과 선속도는 ENU 월드 기준으로 받고, 기체 축에서 정의된 항력은
+     *          기체 자세로 월드에 돌려 Jolt에 전달한다.
+     */
+    void AdvanceAndApplyForces(
+        JPH::BodyInterface& bodyInterface,
+        JPH::BodyID bodyId,
+        const glm::dvec3& positionMeters,
+        const glm::dquat& orientation,
+        const glm::dvec3& linearVelocityMetersPerSecond,
+        const glm::dvec3& windVelocityMetersPerSecond)
+    {
+      const double stepSeconds = DroneModel::fixedStepSeconds;
+      const glm::dvec3 relativeAirflowBody = glm::inverse(orientation)
+          * (linearVelocityMetersPerSecond - windVelocityMetersPerSecond);
+      const glm::dvec3 dragForceBody =
+          CalculateQuadrotorDragForceBody(parameters, relativeAirflowBody);
+      bodyInterface.AddForce(
+          bodyId, ToJoltVector(orientation * dragForceBody));
+
+      motorSpeeds = AdvanceMotorSpeeds(
+          parameters, motorSpeeds, targetSpeeds, stepSeconds);
+      const auto rotorThrusts = CalculateRotorThrusts(parameters, motorSpeeds);
+      for (std::size_t rotor = 0; rotor < motorSpeeds.size(); ++rotor) {
+        const double thrust = rotorThrusts[rotor];
+        const glm::dvec3 forceWorld =
+            orientation * glm::dvec3{0.0, 0.0, thrust};
+        // 힘을 회전축 중심이 아닌 로터 장착점에 가해 팔 길이에 따른 회전도 만든다.
+        const glm::dvec3 rotorPositionMeters =
+            positionMeters + orientation * parameters.rotors[rotor].positionMeters;
+        bodyInterface.AddForce(bodyId, ToJoltVector(forceWorld),
+            ToJoltVector(rotorPositionMeters));
+      }
+
+      // 프로펠러가 공기를 돌리는 방향과 반대쪽으로 기체에 요 반작용 토크를 가한다.
+      const double reactionTorqueBodyZ =
+          CalculateRotorReactionTorqueBodyZ(parameters, rotorThrusts);
+      const glm::dvec3 reactionTorqueWorld = orientation
+          * glm::dvec3{0.0, 0.0, reactionTorqueBodyZ};
+      bodyInterface.AddTorque(bodyId, ToJoltVector(reactionTorqueWorld));
+      hasStepped = true;
+    }
   };
 
   struct BodyRecord {
@@ -640,48 +684,16 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds) {
       continue;
 
     auto &actuation = *body.quadrotor;
-    const QuadrotorParameters &parameters = actuation.parameters;
     JPH::RVec3 bodyPosition;
     JPH::Quat bodyRotation;
     bodyInterface.GetPositionAndRotation(body.id, bodyPosition, bodyRotation);
     const glm::dvec3 position = ToProjectVector(bodyPosition);
     const glm::dquat orientation = ToProjectRotation(bodyRotation);
-    // 모터 응답 시간과 Jolt 적분 간격은 SimulationCore의 고정 Tick을 함께 쓴다.
-    const double seconds = DroneModel::fixedStepSeconds;
     const JPH::Vec3 joltLinearVelocity =
         bodyInterface.GetLinearVelocity(body.id);
     const glm::dvec3 linearVelocity = ToProjectVector(joltLinearVelocity);
-    // 바람은 월드 좌표, 기체 항력 계수와 투영 면적은 기체 축 기준이다.
-    // 먼저 바람을 뺀 상대 속도를 구한 뒤 역회전해 기체 좌표로 옮긴다.
-    const glm::dvec3 relativeAirflowBody =
-        glm::inverse(orientation) *
-        (linearVelocity - impl_->windVelocityMetersPerSecond);
-    const glm::dvec3 dragForceBody =
-        CalculateQuadrotorDragForceBody(parameters, relativeAirflowBody);
-    bodyInterface.AddForce(body.id, ToJoltVector(orientation * dragForceBody));
-    actuation.motorSpeeds = AdvanceMotorSpeeds(
-        parameters, actuation.motorSpeeds, actuation.targetSpeeds, seconds);
-    const auto rotorThrusts =
-        CalculateRotorThrusts(parameters, actuation.motorSpeeds);
-
-    for (std::size_t rotor = 0; rotor < actuation.motorSpeeds.size(); ++rotor) {
-      const double thrust = rotorThrusts[rotor];
-      const glm::dvec3 force = orientation * glm::dvec3{0.0, 0.0, thrust};
-      // 추력은 로터 장착점에 가한다. 중심에서 벗어난 힘의 모멘트 팔이
-      // Jolt에서 자동으로 롤·피치 회전 효과를 만든다.
-      const glm::dvec3 rotorPosition =
-          position + orientation * parameters.rotors[rotor].positionMeters;
-      bodyInterface.AddForce(body.id, ToJoltVector(force),
-                             ToJoltVector(rotorPosition));
-    }
-
-    // 프로펠러가 공기를 돌리는 토크와 반대 방향으로 기체가 반작용을 받는다.
-    const double reactionTorqueBody =
-        CalculateRotorReactionTorqueBodyZ(parameters, rotorThrusts);
-    const glm::dvec3 reactionTorque =
-        orientation * glm::dvec3{0.0, 0.0, reactionTorqueBody};
-    bodyInterface.AddTorque(body.id, ToJoltVector(reactionTorque));
-    actuation.hasStepped = true;
+    actuation.AdvanceAndApplyForces(bodyInterface, body.id, position,
+        orientation, linearVelocity, impl_->windVelocityMetersPerSecond);
   }
   // 네 로터 힘을 모두 등록한 뒤 고정 간격 한 번만 적분해 기체 상태를 함께 갱신한다.
   impl_->physicsSystem.Update(
