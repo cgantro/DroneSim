@@ -23,7 +23,7 @@ struct PlannedFleetRoute
 bool DroneSimApp::FleetIsReadyForMission() const
 {
     if (CompleteFleetMissionIsActive() || fleetMission_.FormationTransit().IsActive()
-        || reconTargets_.empty() || FleetReconnaissanceIsActive())
+        || missionEnvironment_->Targets().empty() || FleetReconnaissanceIsActive())
         return false;
 
     const auto droneIds = simulation_.DroneIds();
@@ -104,7 +104,7 @@ bool DroneSimApp::StartFleetReconnaissance(
     if (startsOnGround)
         InitializeFleetLeadership();
     const std::vector<DroneId>& droneIds = fleetDroneIds_;
-    if (droneIds.empty() || reconTargets_.empty()
+    if (droneIds.empty() || missionEnvironment_->Targets().empty()
         || (startsOnGround && CompleteFleetMissionIsActive()))
         return false;
 
@@ -133,9 +133,10 @@ bool DroneSimApp::StartFleetReconnaissance(
     }
 
     const dronesim::mission::FleetMissionPlanner planner{
-        *routeEnvironment_, cameraTransitAltitudeMeters_};
+        missionEnvironment_->RouteEnvironment(),
+        missionEnvironment_->MinimumTransitAltitudeMeters()};
     auto assignments = planner.PlanReconnaissance(
-        starts, reconTargets_, startMode);
+        starts, missionEnvironment_->Targets(), startMode);
     if (!assignments)
         return false;
 
@@ -200,7 +201,8 @@ bool DroneSimApp::StartFleetReturn(
     if (droneIds.empty() || leaderId == 0U)
         return false;
     const dronesim::mission::FleetMissionPlanner planner{
-        *routeEnvironment_, cameraTransitAltitudeMeters_};
+        missionEnvironment_->RouteEnvironment(),
+        missionEnvironment_->MinimumTransitAltitudeMeters()};
     // 경로와 대상 드론을 한 항목으로 묶어, 배정 순서가 달라져도 서로 어긋나지 않게 한다.
     std::vector<PlannedFleetRoute> returnPlans;
     returnPlans.reserve(droneIds.size());
@@ -270,7 +272,8 @@ bool DroneSimApp::StartFleetRally()
             }))
         return false;
     const dronesim::mission::FleetMissionPlanner planner{
-        *routeEnvironment_, cameraTransitAltitudeMeters_};
+        missionEnvironment_->RouteEnvironment(),
+        missionEnvironment_->MinimumTransitAltitudeMeters()};
     const DroneId leaderId = fleetMission_.LeaderId();
     std::vector<DroneId> rallyDroneIds;
     rallyDroneIds.reserve(droneIds.size());
@@ -349,7 +352,8 @@ void DroneSimApp::AdvanceFleetReconnaissance()
     using FlightMode = dronesim::simulation::FlightMode;
     constexpr std::uint64_t routeDeliveryTimeoutTicks = 600U;
     const dronesim::mission::FleetMissionPlanner planner{
-        *routeEnvironment_, cameraTransitAltitudeMeters_};
+        missionEnvironment_->RouteEnvironment(),
+        missionEnvironment_->MinimumTransitAltitudeMeters()};
 
     for (const DroneId droneId : fleetDroneIds_)
     {
@@ -416,7 +420,7 @@ void DroneSimApp::AdvanceFleetReconnaissance()
             }
             const glm::dvec3& destination = mission.Leg() == dronesim::mission::FleetMissionLeg::Returning
                 ? mission.StartPositionMeters()
-                : reconTargets_[mission.TargetIndex()].approachPositionMeters;
+                : missionEnvironment_->Targets()[mission.TargetIndex()].approachPositionMeters;
             mission.UpdateStatus(mission.StatusAfterLanding(
                 state.positionMeters, destination));
             continue;
@@ -592,7 +596,8 @@ bool DroneSimApp::StartFormationTransit()
     using namespace dronesim::simulation;
     using namespace dronesim::flight_planning;
 
-    if (fleetMission_.FormationTransit().IsActive() || reconTargets_.empty())
+    if (fleetMission_.FormationTransit().IsActive()
+        || missionEnvironment_->Targets().empty())
         return false;
 
     InitializeFleetLeadership();
@@ -611,12 +616,13 @@ bool DroneSimApp::StartFormationTransit()
         trainingRangeScene_->FormationStagingPositionMeters();
     const double stagingAltitude = std::max(
         terrainGrid_.HeightAtLocalMeters(stagingPosition) + 15.0,
-        cameraTransitAltitudeMeters_);
+        missionEnvironment_->MinimumTransitAltitudeMeters());
     const glm::dvec3 destination{stagingPosition, stagingAltitude};
-    const auto route = flight_planning::PlanFormationRoute(*routeEnvironment_,
+    const auto route = flight_planning::PlanFormationRoute(
+        missionEnvironment_->RouteEnvironment(),
         simulation_.State(droneIds.front()).positionMeters,
         destination, droneIds.size(), 1.5, 0.75, 1.0,
-        cameraTransitAltitudeMeters_);
+        missionEnvironment_->MinimumTransitAltitudeMeters());
     if (!route)
     {
         fleetMission_.FormationTransit().Fail("목적지까지 편대 경로를 찾지 못했습니다.");
@@ -636,7 +642,8 @@ bool DroneSimApp::StartFormationTransit()
     }
 
     fleetMission_.BeginFormationTransit(*route,
-        "출발 준비 · V자 대형 · " + reconTargets_.back().displayName);
+        "출발 준비 · V자 대형 · "
+            + missionEnvironment_->Targets().back().displayName);
     externalControl_ = true;
     missionControlOwnsInput_ = true;
     pendingControllerAction_.reset();
@@ -703,8 +710,8 @@ bool DroneSimApp::SendFleetRouteAssignment(
     std::size_t targetIndex,
     std::vector<glm::dvec3> routeWaypointsMeters)
 {
-    if (!formationNetwork_ || reconTargets_.empty()
-        || targetIndex >= reconTargets_.size())
+    const auto& targets = missionEnvironment_->Targets();
+    if (!formationNetwork_ || targets.empty() || targetIndex >= targets.size())
         return false;
 
     auto mission = fleetMission_.FindAssignment(droneId);
@@ -917,7 +924,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
         auto mission = fleetMission_.FindAssignment(message.destination);
         const auto route = dronesim::mission::DecodeFleetRoute(message.payload);
         if (mission == fleetMission_.AssignmentsEnd() || !route
-            || route->targetIndex >= reconTargets_.size())
+            || route->targetIndex >= missionEnvironment_->Targets().size())
         {
             if (mission != fleetMission_.AssignmentsEnd())
                 mission->second.UpdateStatus(dronesim::mission::FleetDroneStatus::RouteFailed);

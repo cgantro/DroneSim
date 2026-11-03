@@ -118,7 +118,6 @@ constexpr std::size_t trainingFleetSize = 4U;
 // 전력값은 임무 흐름을 시험하기 위한 가정이며 실제 X500 배터리 사양이 아니다.
 constexpr dronesim::simulation::BatteryModelParameters trainingBatteryModel{
     100.0, 40.0, 120.0, 25.0};
-constexpr double trainingRangeCameraTransitAltitudeMeters = 25.0;
 
 std::vector<glm::mat4> BuildDroneAssemblyTransforms(
     const dronesim::graphics::GlbModel& model,
@@ -259,7 +258,6 @@ bool DroneSimApp::InitializeGraphicsStep()
     case 3:
         EM_ASM({ window.setSimulatorStartupStatus("지도 바닥과 물리 지면을 맞추고 있습니다."); });
         LoadTerrain();
-        LoadReconTargets();
         return false;
     case 4:
         EM_ASM({ window.setSimulatorStartupStatus("비행 시작 위치를 준비하고 있습니다."); });
@@ -313,7 +311,6 @@ void DroneSimApp::LoadScene()
     LoadSceneModels();
     LoadMapFeatures();
     LoadTerrain();
-    LoadReconTargets();
     InitializeStartingState();
 }
 
@@ -344,38 +341,25 @@ void DroneSimApp::LoadTerrain()
         static_cast<std::size_t>(sampleCount) * sampleCount, 0.0F);
     simulation_.SetTerrain(terrainGrid_);
 
-    // 건물 외곽선은 여러 경로에서 쓰므로 매번 다시 변환하지 않고 한 번 준비한다.
-    routeEnvironment_ = std::make_unique<dronesim::scene::TrainingRangeRouteEnvironment>(
-        terrainGrid_, trainingRangeScene_->BuildingObstacles());
+    missionEnvironment_.emplace(terrainGrid_, *trainingRangeScene_);
 }
 void DroneSimApp::LoadMapFeatures()
 {
     SetStartupDetail("도시 지도와 충돌 모양을 준비하고 있습니다.");
     trainingRangeScene_ = std::make_unique<dronesim::scene::TrainingRangeScene>();
     trainingRangeScene_->Load({}, simulation_);
-    cameraTransitAltitudeMeters_ = trainingRangeCameraTransitAltitudeMeters;
-}
-
-void DroneSimApp::LoadReconTargets()
-{
-    reconTargets_.clear();
-
-    for (const auto& point : trainingRangeScene_->ReconPoints())
-    {
-        const double groundMeters = terrainGrid_.HeightAtLocalMeters(point.positionMeters);
-        reconTargets_.push_back({point.id, {point.positionMeters, groundMeters + 25.0}});
-    }
 }
 void DroneSimApp::InitializeStartingState()
 {
-    if (reconTargets_.empty())
+    const auto& targets = missionEnvironment_->Targets();
+    if (targets.empty())
         throw std::runtime_error("훈련장 정찰 지점을 준비하지 못했습니다.");
     const glm::dvec2 demoDroneStartMeters =
         trainingRangeScene_->FormationStagingPositionMeters();
     const double startElevation = terrainGrid_.HeightAtLocalMeters(demoDroneStartMeters);
     const glm::dvec2 toFirstTarget = glm::dvec2{
-        reconTargets_.front().approachPositionMeters.x,
-        reconTargets_.front().approachPositionMeters.y} - demoDroneStartMeters;
+        targets.front().approachPositionMeters.x,
+        targets.front().approachPositionMeters.y} - demoDroneStartMeters;
     const double initialYawRadians = std::atan2(toFirstTarget.y, toFirstTarget.x);
     simulation_.SetInitialPose({demoDroneStartMeters.x, demoDroneStartMeters.y,
         startElevation +
@@ -725,6 +709,7 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& cameraPosition, bool showMissionGuides,
     std::optional<dronesim::simulation::DroneId> hiddenDroneId)
 {
+    const auto& targets = missionEnvironment_->Targets();
     renderer_->SetAnimationTimeSeconds(static_cast<float>(simulation_.SimulationTimeSeconds()));
     if (trainingRangeScene_)
         trainingRangeScene_->Draw(*renderer_, *shader_, view, projection, cameraPosition);
@@ -775,10 +760,10 @@ void DroneSimApp::DrawWorld(const glm::mat4& view, const glm::mat4& projection,
                 previous = waypoint;
             }
             drawRouteSegment(previous,
-                reconTargets_[mission.TargetIndex()].approachPositionMeters,
+                targets[mission.TargetIndex()].approachPositionMeters,
                 missionRouteMaterial_);
             const glm::vec3 marker = dronesim::graphics::EnuPositionToRender(
-                reconTargets_[mission.TargetIndex()].approachPositionMeters);
+                targets[mission.TargetIndex()].approachPositionMeters);
             DrawCube(glm::translate(glm::mat4{1.0F}, marker)
                 * glm::scale(glm::mat4{1.0F}, glm::vec3{0.65F}),
                 cameraPosition, missionRouteMaterial_, view, projection);

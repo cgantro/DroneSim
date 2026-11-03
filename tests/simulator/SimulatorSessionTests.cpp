@@ -124,14 +124,13 @@ public:
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         const auto droneId = app.simulation_.PrimaryDroneId();
-        const scene::TrainingRangeRouteEnvironment environment(
-            app.terrainGrid_, app.trainingRangeScene_->BuildingObstacles());
         const auto expectedRoute = flight_planning::RoutePlanner{}.Plan(
-            environment,
+            app.missionEnvironment_->RouteEnvironment(),
             app.simulation_.State(droneId).positionMeters,
-            app.reconTargets_.front().approachPositionMeters,
+            app.missionEnvironment_->Targets().front().approachPositionMeters,
             {.obstacleClearanceMeters = 3.0,
-             .minimumTransitAltitudeMeters = app.cameraTransitAltitudeMeters_});
+             .minimumTransitAltitudeMeters =
+                app.missionEnvironment_->MinimumTransitAltitudeMeters()});
         ASSERT_TRUE(expectedRoute);
         ASSERT_FALSE(expectedRoute->empty());
         ASSERT_TRUE(app.StartFleetReconnaissance());

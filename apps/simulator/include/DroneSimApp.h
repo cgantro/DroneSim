@@ -14,8 +14,8 @@
 #include "FleetMissionProgress.h"
 #include "FleetMission.h"
 #include "FleetMissionPlanner.h"
+#include "FleetMissionEnvironment.h"
 #include "FleetTelemetry.h"
-#include "scene/TrainingRangeRouteEnvironment.h"
 #include "TrainingRangeScene.h"
 #ifdef __EMSCRIPTEN__
 #include "WebCameraRig.h"
@@ -120,7 +120,6 @@ private:
     void LoadSceneModels();
     void LoadTerrain();
     void LoadMapFeatures();
-    void LoadReconTargets();
     void InitializeStartingState();
     void ConfigureTrainingBattery(dronesim::simulation::DroneId droneId);
     /** @brief 실제 프레임 시간을 누적해 고정 간격의 모의 Tick으로 바꾼다. */
@@ -202,9 +201,6 @@ private:
     bool smokeTest_ = false;
     dronesim::simulation::FixedTickAccumulator fixedTickAccumulator_;
     bool demoMode_ = false;
-    std::vector<dronesim::mission::FleetReconnaissanceTarget> reconTargets_;
-    /** @brief 정찰 중 카메라 시야가 나무 수관에 가리지 않도록 확보한 통과 고도다. */
-    double cameraTransitAltitudeMeters_ = 0.0;
     bool externalControl_ = false;
     bool missionControlOwnsInput_ = false;
     dronesim::manual_control::GamepadController gamepadController_;
@@ -244,8 +240,7 @@ private:
     std::unique_ptr<communication::VirtualMeshNetwork> formationNetwork_;
     std::vector<communication::RadioObstacle> formationRadioObstacles_;
     dronesim::terrain::TerrainGrid terrainGrid_;
-    /** @brief 훈련장 지도와 지형을 경로 탐색 형식으로 한 번 변환해 재사용한다. */
-    std::unique_ptr<dronesim::scene::TrainingRangeRouteEnvironment> routeEnvironment_;
+    std::optional<FleetMissionEnvironment> missionEnvironment_;
     std::unique_ptr<dronesim::graphics::Shader> shader_;
     dronesim::graphics::Material droneMaterial_{
         glm::vec4{1.0F}, 0.16F, 0.40F};
