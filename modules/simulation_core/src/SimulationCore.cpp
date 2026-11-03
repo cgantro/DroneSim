@@ -270,13 +270,8 @@ struct SimulationCore::EcsStorage
 
         DroneState& state = drone->get_mut<DroneState>();
         DroneControlState& control = drone->get_mut<DroneControlState>();
-        const CommandResult result = DroneModel::Apply(state, control, command);
-        if (result == CommandResult::Accepted)
-        {
-            // 명령으로 초기 속도가 바뀌면 ECS 상태를 강체에도 바로 반영한다.
-            CopyPhysicsState(state, drone->get<PhysicsBody>().handle);
-        }
-        return result;
+        // 명령은 비행 모드나 제어 목표만 바꾸므로 현재 강체 상태를 다시 읽을 필요가 없다.
+        return DroneModel::Apply(state, control, command);
     }
 
     void SetInitialPose(const glm::dvec3& positionMeters, double yawRadians)
@@ -323,6 +318,171 @@ struct SimulationCore::EcsStorage
         normalized.mode = state.mode;
         drone.set<DroneState>(normalized);
         SynchronizeCameraPose(drone);
+    }
+
+    DroneId PrimaryDroneId() const noexcept
+    {
+        return droneRegistry.PrimaryId();
+    }
+
+    std::size_t DroneCount() const noexcept
+    {
+        return droneRegistry.Size();
+    }
+
+    std::vector<DroneId> DroneIds() const
+    {
+        return droneRegistry.Ids();
+    }
+
+    void ConfigureBattery(
+        DroneId id, BatteryModelParameters parameters, double initialPercent)
+    {
+        droneRegistry.Find(id).set<BatteryModel>(
+            BatteryModel{parameters, initialPercent});
+    }
+
+    bool HasBattery(DroneId id) const noexcept
+    {
+        const flecs::entity* drone = std::as_const(droneRegistry).TryFind(id);
+        return drone != nullptr && drone->has<BatteryModel>();
+    }
+
+    const BatteryModel& Battery(DroneId id) const
+    {
+        const flecs::entity& drone = droneRegistry.Find(id);
+        if (!drone.has<BatteryModel>())
+            throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
+        return drone.get<BatteryModel>();
+    }
+
+    bool TryBeginLowBatteryReturn(DroneId id)
+    {
+        flecs::entity& drone = droneRegistry.Find(id);
+        if (!drone.has<BatteryModel>())
+            throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
+        return drone.get_mut<BatteryModel>().TryBeginLowBatteryReturn();
+    }
+
+    const DroneState& State(DroneId id) const
+    {
+        return droneRegistry.Find(id).get<DroneState>();
+    }
+
+    const CameraState& Camera(DroneId id) const
+    {
+        return droneRegistry.Find(id).get<CameraState>();
+    }
+
+    void SetCameraModel(DroneId id, const CameraModel& model)
+    {
+        if (!model.IsValid())
+            throw std::invalid_argument("카메라 해상도는 양수이고 시야각은 0도보다 크고 180도보다 작아야 합니다.");
+        droneRegistry.Find(id).get_mut<CameraState>().model = model;
+    }
+
+    void SetCameraGimbalAngles(DroneId id, const CameraGimbalAngles& angles)
+    {
+        if (!angles.IsValid())
+            throw std::invalid_argument("카메라 짐벌 각도는 유한한 값이어야 합니다.");
+
+        flecs::entity& drone = droneRegistry.Find(id);
+        CameraState& camera = drone.get_mut<CameraState>();
+        camera.gimbalAngles = angles;
+        SynchronizeCameraPose(drone);
+    }
+
+    void SetCameraEnabled(DroneId id, bool enabled)
+    {
+        EoCameraModel::SetEnabled(
+            droneRegistry.Find(id).get_mut<CameraState>(), enabled);
+    }
+
+    void SetCameraFault(DroneId id, bool faulted)
+    {
+        CameraState& camera = droneRegistry.Find(id).get_mut<CameraState>();
+        if (faulted)
+            EoCameraModel::InjectFault(camera);
+        else
+            EoCameraModel::Recover(camera);
+    }
+
+    void AdvanceOneTick()
+    {
+        lastPhysicsStepDurationMicroseconds = 0.0;
+        // 제어 시스템을 먼저 실행해 이번 Tick의 모터 목표를 만든다.
+        world.progress(DroneModel::fixedStepSeconds);
+        AdvancePhysicsWorld();
+        // 배터리는 물리 갱신 뒤의 비행 상태를 기준으로 소모량을 계산한다.
+        world.each([](BatteryModel& battery, const DroneState& state)
+        {
+            battery.Advance(state.mode);
+        });
+        ++tickCount;
+        SynchronizeCameraPoses();
+    }
+
+    void Reset()
+    {
+        world.each([this](flecs::entity drone, DroneState& state,
+            DroneControlState&, CameraState& camera)
+        {
+            ResetDrone(drone);
+            EoCameraModel::Reset(camera);
+            SynchronizeCameraPose(camera, state);
+            if (drone.has<BatteryModel>())
+                drone.get_mut<BatteryModel>().Reset();
+        });
+        tickCount = 0;
+    }
+
+    void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
+    {
+        if (!geometry::IsFinite(velocity))
+            throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
+        physics.SetWindVelocityMetersPerSecond(velocity);
+    }
+
+    void SetPhysicsStepTimingEnabled(bool enabled) noexcept
+    {
+        measurePhysicsStepDuration = enabled;
+        lastPhysicsStepDurationMicroseconds = 0.0;
+    }
+
+    double LastPhysicsStepDurationMicroseconds() const noexcept
+    {
+        return lastPhysicsStepDurationMicroseconds;
+    }
+
+    void AddStaticObstacleBox(
+        const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
+    {
+        static_cast<void>(physics.AddStaticBox(
+            centerMeters, glm::dvec3{halfExtentsMeters}));
+    }
+
+    void AddStaticObstacleMesh(
+        std::span<const glm::dvec3> verticesMeters,
+        std::span<const std::uint32_t> triangleIndices)
+    {
+        physics.AddStaticTriangleMesh(verticesMeters, triangleIndices);
+    }
+
+    void AddStaticObstaclePrism(
+        const std::vector<glm::dvec2>& outlineMeters,
+        double bottomMeters, double topMeters)
+    {
+        physics.AddStaticPrism(outlineMeters, bottomMeters, topMeters);
+    }
+
+    std::uint64_t TickCount() const noexcept
+    {
+        return tickCount;
+    }
+
+    double SimulationTimeSeconds() const noexcept
+    {
+        return static_cast<double>(tickCount) * DroneModel::fixedStepSeconds;
     }
 
     void SynchronizeCameraPose(
@@ -487,7 +647,7 @@ SimulationCore::~SimulationCore() = default;
 
 CommandResult SimulationCore::Apply(const DroneCommand& command) noexcept
 {
-    return Apply(ecs_->droneRegistry.PrimaryId(), command);
+    return Apply(ecs_->PrimaryDroneId(), command);
 }
 
 CommandResult SimulationCore::Apply(DroneId droneId, const DroneCommand& command) noexcept
@@ -526,47 +686,38 @@ bool SimulationCore::RemoveDrone(DroneId droneId)
 
 DroneId SimulationCore::PrimaryDroneId() const noexcept
 {
-    return ecs_->droneRegistry.PrimaryId();
+    return ecs_->PrimaryDroneId();
 }
 
 std::size_t SimulationCore::DroneCount() const noexcept
 {
-    return ecs_->droneRegistry.Size();
+    return ecs_->DroneCount();
 }
 
 std::vector<DroneId> SimulationCore::DroneIds() const
 {
-    return ecs_->droneRegistry.Ids();
+    return ecs_->DroneIds();
 }
 
 void SimulationCore::ConfigureBattery(
     DroneId droneId, BatteryModelParameters parameters, double initialPercent)
 {
-    ecs_->droneRegistry.Find(droneId).set<BatteryModel>(
-        BatteryModel{parameters, initialPercent});
+    ecs_->ConfigureBattery(droneId, parameters, initialPercent);
 }
 
 bool SimulationCore::HasBattery(DroneId droneId) const noexcept
 {
-    const flecs::entity* drone =
-        std::as_const(ecs_->droneRegistry).TryFind(droneId);
-    return drone != nullptr && drone->has<BatteryModel>();
+    return ecs_->HasBattery(droneId);
 }
 
 const BatteryModel& SimulationCore::Battery(DroneId droneId) const
 {
-    const flecs::entity& drone = ecs_->droneRegistry.Find(droneId);
-    if (!drone.has<BatteryModel>())
-        throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
-    return drone.get<BatteryModel>();
+    return ecs_->Battery(droneId);
 }
 
 bool SimulationCore::TryBeginLowBatteryReturn(DroneId droneId)
 {
-    flecs::entity& drone = ecs_->droneRegistry.Find(droneId);
-    if (!drone.has<BatteryModel>())
-        throw std::out_of_range("드론 배터리가 설정되지 않았습니다.");
-    return drone.get_mut<BatteryModel>().TryBeginLowBatteryReturn();
+    return ecs_->TryBeginLowBatteryReturn(droneId);
 }
 
 void SimulationCore::AdvanceOneTick()
@@ -575,18 +726,7 @@ void SimulationCore::AdvanceOneTick()
     {
         return;
     }
-    ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
-    // Flecs에서 제어 목표를 모터 명령으로 바꾸고, 이어서 Jolt가 기체를 움직인다.
-    ecs_->world.progress(DroneModel::fixedStepSeconds);
-    ecs_->AdvancePhysicsWorld();
-    // 배터리 컴포넌트가 붙은 드론만 골라, 물리 계산 뒤의 비행 상태로 잔량을 갱신한다.
-    ecs_->world.each(
-        [](BatteryModel& battery, const DroneState& state)
-        {
-            battery.Advance(state.mode);
-        });
-    ++ecs_->tickCount;
-    ecs_->SynchronizeCameraPoses();
+    ecs_->AdvanceOneTick();
 }
 
 void SimulationCore::Pause() noexcept
@@ -601,112 +741,84 @@ void SimulationCore::Resume() noexcept
 
 void SimulationCore::Reset()
 {
-    ecs_->world.each(
-        [this](flecs::entity drone, DroneState& state,
-            DroneControlState&, CameraState& camera)
-        {
-            ecs_->ResetDrone(drone);
-            EoCameraModel::Reset(camera);
-            ecs_->SynchronizeCameraPose(camera, state);
-            if (drone.has<BatteryModel>())
-                drone.get_mut<BatteryModel>().Reset();
-        });
-    ecs_->tickCount = 0;
+    ecs_->Reset();
     paused_ = false;
 }
 
 const DroneState& SimulationCore::State() const noexcept
 {
-    return State(ecs_->droneRegistry.PrimaryId());
+    return State(ecs_->PrimaryDroneId());
 }
 
 const DroneState& SimulationCore::State(DroneId droneId) const
 {
-    return ecs_->droneRegistry.Find(droneId).get<DroneState>();
+    return ecs_->State(droneId);
 }
 
 const CameraState& SimulationCore::Camera() const noexcept
 {
-    return Camera(ecs_->droneRegistry.PrimaryId());
+    return Camera(ecs_->PrimaryDroneId());
 }
 
 const CameraState& SimulationCore::Camera(DroneId droneId) const
 {
-    return ecs_->droneRegistry.Find(droneId).get<CameraState>();
+    return ecs_->Camera(droneId);
 }
 
 void SimulationCore::SetCameraModel(DroneId droneId, const CameraModel& model)
 {
-    if (!model.IsValid())
-        throw std::invalid_argument("카메라 해상도는 양수이고 시야각은 0도보다 크고 180도보다 작아야 합니다.");
-    ecs_->droneRegistry.Find(droneId).get_mut<CameraState>().model = model;
+    ecs_->SetCameraModel(droneId, model);
 }
 
 void SimulationCore::SetCameraGimbalAngles(
     DroneId droneId, const CameraGimbalAngles& angles)
 {
-    if (!angles.IsValid())
-        throw std::invalid_argument("카메라 짐벌 각도는 유한한 값이어야 합니다.");
-
-    flecs::entity& drone = ecs_->droneRegistry.Find(droneId);
-    CameraState& camera = drone.get_mut<CameraState>();
-    camera.gimbalAngles = angles;
-    EoCameraModel::UpdatePose(camera, drone.get<DroneState>());
+    ecs_->SetCameraGimbalAngles(droneId, angles);
 }
 
 void SimulationCore::SetCameraEnabled(DroneId droneId, bool enabled)
 {
-    EoCameraModel::SetEnabled(
-        ecs_->droneRegistry.Find(droneId).get_mut<CameraState>(), enabled);
+    ecs_->SetCameraEnabled(droneId, enabled);
 }
 
 void SimulationCore::SetCameraFault(DroneId droneId, bool faulted)
 {
-    CameraState& camera = ecs_->droneRegistry.Find(droneId).get_mut<CameraState>();
-    if (faulted)
-        EoCameraModel::InjectFault(camera);
-    else
-        EoCameraModel::Recover(camera);
+    ecs_->SetCameraFault(droneId, faulted);
 }
 
 void SimulationCore::SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
 {
-    if (!geometry::IsFinite(velocity))
-        throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
-    ecs_->physics.SetWindVelocityMetersPerSecond(velocity);
+    ecs_->SetWindVelocityMetersPerSecond(velocity);
 }
 
 void SimulationCore::SetPhysicsStepTimingEnabled(bool enabled) noexcept
 {
-    ecs_->measurePhysicsStepDuration = enabled;
-    ecs_->lastPhysicsStepDurationMicroseconds = 0.0;
+    ecs_->SetPhysicsStepTimingEnabled(enabled);
 }
 
 double SimulationCore::LastPhysicsStepDurationMicroseconds() const noexcept
 {
-    return ecs_->lastPhysicsStepDurationMicroseconds;
+    return ecs_->LastPhysicsStepDurationMicroseconds();
 }
 
 void SimulationCore::AddStaticObstacleBox(
     const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
 {
-    static_cast<void>(ecs_->physics.AddStaticBox(
-        centerMeters, glm::dvec3{halfExtentsMeters}));
+    ecs_->AddStaticObstacleBox(centerMeters, halfExtentsMeters);
 }
 
 void SimulationCore::AddStaticObstacleMesh(
     std::span<const glm::dvec3> verticesMeters,
     std::span<const std::uint32_t> triangleIndices)
 {
-    ecs_->physics.AddStaticTriangleMesh(verticesMeters, triangleIndices);
+    ecs_->AddStaticObstacleMesh(verticesMeters, triangleIndices);
 }
 
 void SimulationCore::AddStaticObstaclePrism(
     const std::vector<glm::dvec2>& outlineMeters,
     double bottomMeters, double topMeters)
 {
-    ecs_->physics.AddStaticPrism(
-        outlineMeters, bottomMeters, topMeters);
+    ecs_->AddStaticObstaclePrism(outlineMeters, bottomMeters, topMeters);
 }
 
 void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
@@ -716,12 +828,12 @@ void SimulationCore::SetTerrain(terrain::TerrainGrid terrain)
 
 std::uint64_t SimulationCore::TickCount() const noexcept
 {
-    return ecs_->tickCount;
+    return ecs_->TickCount();
 }
 
 double SimulationCore::SimulationTimeSeconds() const noexcept
 {
-    return static_cast<double>(ecs_->tickCount) * DroneModel::fixedStepSeconds;
+    return ecs_->SimulationTimeSeconds();
 }
 
 }

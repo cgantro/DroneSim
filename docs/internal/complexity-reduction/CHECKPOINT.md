@@ -965,5 +965,5 @@
 
 ## ECS·물리 상태 변경을 내부 저장소에 모음 — 2026-11-04
 
-- `SimulationCore` 공개 함수가 직접 만지던 Flecs 엔티티 조회, 제어 컴포넌트 변경, Jolt 강체 동기화를 `EcsStorage` 안으로 옮겼다. 명령 적용과 시작 자세·상태 설정이 한 내부 경계에서 ECS와 물리를 함께 갱신한다.
-- 공개 함수는 일시정지 확인과 내부 저장소 호출을 맡는다. Release 앱 빌드 성공, `git diff --check` 통과. 시험은 실행하지 않았다.
+- `SimulationCore` 공개 함수에서 Flecs 엔티티 조회, 제어·카메라·배터리 컴포넌트 변경, Tick 진행, 지형·충돌 형상 등록과 Jolt 호출을 `EcsStorage` 안으로 옮겼다. 공개 API는 일시정지 같은 실행 제어를 맡고, 내부 저장소는 ECS와 물리를 함께 갱신한다.
+- `DroneModel::Apply`는 모드와 제어 목표만 바꾸므로, 명령마다 물리 상태를 다시 읽던 중복 동기화를 제거했다. DroneSim Release 앱 빌드 성공, `git diff --check` 통과. 시험은 실행하지 않았다.
