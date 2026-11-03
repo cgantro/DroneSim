@@ -61,7 +61,7 @@ const char* MeshEventLabel(communication::MeshEventKind kind)
 
 void CreateDefaultDockspace(ImGuiViewport* viewport)
 {
-    const ImGuiID dockspaceId = ImGui::GetID("DroneSimDockspaceV3");
+    const ImGuiID dockspaceId = ImGui::GetID("DroneSimDockspaceV4");
     if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
     {
         ImGui::DockBuilderAddNode(dockspaceId,
@@ -73,12 +73,18 @@ void CreateDefaultDockspace(ImGuiViewport* viewport)
             dockspaceId, ImGuiDir_Right, 0.30F, &sideNode, &sceneNode);
 
         ImGuiID cameraNode = 0;
+        ImGuiID lowerNode = 0;
+        ImGui::DockBuilderSplitNode(
+            sideNode, ImGuiDir_Down, 0.34F, &cameraNode, &lowerNode);
+
+        ImGuiID mapNode = 0;
         ImGuiID statusNode = 0;
         ImGui::DockBuilderSplitNode(
-            sideNode, ImGuiDir_Down, 0.52F, &cameraNode, &statusNode);
+            lowerNode, ImGuiDir_Down, 0.46F, &mapNode, &statusNode);
 
-        ImGui::DockBuilderDockWindow("장면##SceneViewV3", sceneNode);
-        ImGui::DockBuilderDockWindow("카메라##CameraViewV3", cameraNode);
+        ImGui::DockBuilderDockWindow("장면##SceneViewV4", sceneNode);
+        ImGui::DockBuilderDockWindow("카메라##CameraViewV4", cameraNode);
+        ImGui::DockBuilderDockWindow("미니맵##MiniMapV1", mapNode);
         ImGui::DockBuilderDockWindow("DroneSim | 비행 상태##FlightStatusV3", statusNode);
         ImGui::DockBuilderFinish(dockspaceId);
     }
@@ -115,32 +121,29 @@ void DrawBuildingMiniMap(
     if (buildings.empty() && routes.empty())
         return;
 
-    const float mapWidth = std::min(360.0F, (sceneMaximum.x - sceneMinimum.x) * 0.43F);
-    const float mapHeight = std::min(260.0F, (sceneMaximum.y - sceneMinimum.y) * 0.46F);
-    if (mapWidth < 170.0F || mapHeight < 130.0F)
+    const float panelWidth = sceneMaximum.x - sceneMinimum.x;
+    const float panelHeight = sceneMaximum.y - sceneMinimum.y;
+    if (panelWidth < 140.0F || panelHeight < 100.0F)
         return;
 
-    const ImVec2 mapMinimum{sceneMaximum.x - mapWidth - 12.0F,
-        sceneMaximum.y - mapHeight - 12.0F};
-    const ImVec2 mapMaximum{mapMinimum.x + mapWidth, mapMinimum.y + mapHeight};
+    const ImVec2 mapMinimum = sceneMinimum;
+    const ImVec2 mapMaximum = sceneMaximum;
     drawList->AddRectFilled(mapMinimum, mapMaximum,
-        IM_COL32(14, 20, 25, 232), 7.0F);
+        IM_COL32(14, 20, 25, 255));
     drawList->AddRect(mapMinimum, mapMaximum,
-        IM_COL32(210, 220, 225, 190), 7.0F, 0, 1.0F);
+        IM_COL32(210, 220, 225, 190), 0.0F, 0, 1.0F);
     drawList->AddText({mapMinimum.x + 10.0F, mapMinimum.y + 7.0F},
-        IM_COL32(245, 245, 245, 255), "2D 지도 · 구조물 높이와 비행 경로");
+        IM_COL32(245, 245, 245, 255), "평면 지도 · 구조물 높이와 경로");
     drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.76F,
         {mapMinimum.x + 10.0F, mapMinimum.y + 25.0F},
         IM_COL32(185, 200, 205, 255),
         "A*: 5m 격자 → 장애물 회피 → 직선 구간 축약 (격자선 25m)");
 
-    constexpr float headerHeight = 46.0F;
-    constexpr float footerHeight = 28.0F;
-    constexpr float sidePadding = 14.0F;
-    const ImVec2 drawingMinimum{mapMinimum.x + sidePadding,
-        mapMinimum.y + headerHeight};
-    const ImVec2 drawingMaximum{mapMaximum.x - sidePadding,
-        mapMaximum.y - footerHeight};
+    constexpr float headerHeight = 44.0F;
+    constexpr float footerHeight = 25.0F;
+    constexpr float sidePadding = 12.0F;
+    const ImVec2 drawingMinimum{mapMinimum.x + sidePadding, mapMinimum.y + headerHeight};
+    const ImVec2 drawingMaximum{mapMaximum.x - sidePadding, mapMaximum.y - footerHeight};
     const ImVec2 drawingSize{drawingMaximum.x - drawingMinimum.x,
         drawingMaximum.y - drawingMinimum.y};
     const double halfEast = std::max(groundSizeMeters.x * 0.5, 1.0);
@@ -314,12 +317,9 @@ void DrawBuildingMiniMap(
 
 void DrawScenePanel(const simulation::SimulationCore& simulation,
     simulation::DroneId& observerDroneId,
-    std::span<const flight_planning::BuildingObstacle> buildings,
-    std::span<const MiniMapRoute> routes,
-    const glm::dvec2& groundSizeMeters,
     const std::function<std::uint32_t(int, int)>& renderScene)
 {
-    if (ImGui::Begin("장면##SceneViewV3"))
+    if (ImGui::Begin("장면##SceneViewV4"))
     {
         const auto droneIds = simulation.DroneIds();
         if (!droneIds.empty())
@@ -350,8 +350,22 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
             static_cast<int>(imageSize.x), static_cast<int>(imageSize.y));
         ImGui::Image(static_cast<ImTextureID>(texture), imageSize,
             ImVec2{0.0F, 1.0F}, ImVec2{1.0F, 0.0F});
+    }
+    ImGui::End();
+}
+
+void DrawMiniMapPanel(
+    std::span<const flight_planning::BuildingObstacle> buildings,
+    std::span<const MiniMapRoute> routes,
+    const glm::dvec2& groundSizeMeters)
+{
+    if (ImGui::Begin("미니맵##MiniMapV1"))
+    {
+        const ImVec2 minimum = ImGui::GetCursorScreenPos();
+        const ImVec2 available = ImGui::GetContentRegionAvail();
+        const ImVec2 maximum{minimum.x + available.x, minimum.y + available.y};
         DrawBuildingMiniMap(buildings, routes, groundSizeMeters,
-            ImGui::GetWindowDrawList(), ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+            ImGui::GetWindowDrawList(), minimum, maximum);
     }
     ImGui::End();
 }
@@ -361,7 +375,7 @@ void DrawCameraPanel(
     simulation::DroneId& observerDroneId,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera)
 {
-    if (ImGui::Begin("카메라##CameraViewV3"))
+    if (ImGui::Begin("카메라##CameraViewV4"))
     {
         ImGui::TextDisabled("드론 이름을 누르면 장면 시점이 바뀝니다.");
         const ImVec2 available = ImGui::GetContentRegionAvail();
@@ -659,8 +673,8 @@ void SimulatorHud::Render(const simulation::SimulationCore& simulation,
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
-    DrawScenePanel(simulation, observerDroneId, buildings, routes, groundSizeMeters,
-        renderScene);
+    DrawScenePanel(simulation, observerDroneId, renderScene);
+    DrawMiniMapPanel(buildings, routes, groundSizeMeters);
     DrawCameraPanel(simulation, observerDroneId, renderCamera);
     DrawFlightStatusPanel(simulation, gamepadConnected,
         fleetReturnCanStart, startFleetReturn,
