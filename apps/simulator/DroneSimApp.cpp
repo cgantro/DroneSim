@@ -1,6 +1,6 @@
 #include "DroneSimApp.h"
 #include "FleetMissionController.h"
-#include "SimulatorMiniMapSnapshot.h"
+#include "SimulatorHudSnapshot.h"
 #include "SimulatorWorldRenderer.h"
 #include "TrainingRangeScene.h"
 #include "gui/SimulatorHud.h"
@@ -31,6 +31,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -61,7 +62,7 @@ void SetStartupDetail(std::string_view message)
 #ifndef __EMSCRIPTEN__
 /** @brief 통신 모듈의 현재 결과를 HUD가 읽을 수 있는 값으로 복사한다. */
 dronesim::gui::FleetNetworkStatus MakeFleetNetworkStatus(
-    const dronesim::simulation::SimulationCore& simulation,
+    std::span<const dronesim::gui::DroneStatusView> drones,
     const FleetNetworkSession& network,
     dronesim::simulation::DroneId leaderId)
 {
@@ -70,13 +71,14 @@ dronesim::gui::FleetNetworkStatus MakeFleetNetworkStatus(
     status.deliveredMessages = metrics.deliveredMessages;
     status.droppedMessages = metrics.droppedMessages;
 
-    for (const auto droneId : simulation.DroneIds())
+    status.drones.reserve(drones.size());
+    for (const auto& drone : drones)
     {
-        const auto port = network.PortFor(droneId);
-        const bool isLeader = droneId == leaderId;
-        status.drones.push_back({droneId, port, isLeader,
-            network.IsRadioEnabled(droneId),
-            isLeader || network.HasDirectLink(droneId, leaderId)});
+        const auto port = network.PortFor(drone.droneId);
+        const bool isLeader = drone.droneId == leaderId;
+        status.drones.push_back({drone.droneId, port, isLeader,
+            network.IsRadioEnabled(drone.droneId),
+            isLeader || network.HasDirectLink(drone.droneId, leaderId)});
     }
 
     const auto events = network.Events();
@@ -451,17 +453,18 @@ void DroneSimApp::RenderDesktopFrame()
         const bool completeFleetMissionCanStart =
             missionController_->CompleteFleetMissionCanStart();
         const bool showMissionNetworkStatus = missionController_->HasActiveMission();
+        const auto hudSnapshot = dronesim::simulator::SimulatorHudSnapshot::Capture(
+            simulation_, missionController_->State());
         std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
         if (missionController_->NetworkSession().IsReady() && showMissionNetworkStatus)
         {
             networkStatus = MakeFleetNetworkStatus(
-                simulation_, missionController_->NetworkSession(), missionController_->State().LeaderId());
+                hudSnapshot.drones, missionController_->NetworkSession(),
+                missionController_->State().LeaderId());
         }
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
         hudTimings.frameIndex = static_cast<std::uint64_t>(renderedFrames_ + 1U);
-        const auto miniMapSnapshot = dronesim::simulator::SimulatorMiniMapSnapshot::Capture(
-            simulation_, missionController_->State());
         const dronesim::gui::SimulatorView::DrawWorld drawPanelWorld =
             [this](const glm::mat4& view, const glm::mat4& projection,
                 const glm::vec3& cameraPosition, bool showMissionGuides,
@@ -487,8 +490,8 @@ void DroneSimApp::RenderDesktopFrame()
                 }},
             .miniMap = {
                 .buildings = trainingRangeScene_->BuildingObstacles(),
-                .drones = miniMapSnapshot.drones,
-                .routes = miniMapSnapshot.routes,
+                .drones = hudSnapshot.drones,
+                .routes = hudSnapshot.routes,
                 .groundSizeMeters = trainingRangeScene_->GroundSizeMeters()},
             .camera = {
                 .simulation = simulation_,
@@ -508,7 +511,10 @@ void DroneSimApp::RenderDesktopFrame()
                     simulation_.SetCameraGimbalAngles(droneId, angles);
                 }},
             .operations = {
-                .simulation = simulation_,
+                .drones = hudSnapshot.drones,
+                .primaryDroneId = hudSnapshot.primaryDroneId,
+                .simulationTimeSeconds = hudSnapshot.simulationTimeSeconds,
+                .tickCount = hudSnapshot.tickCount,
                 .gamepadConnected = gamepadController_.IsConnected(),
                 .fleetReturnCanStart = fleetReturnCanStart,
                 .startFleetReturn = [this]

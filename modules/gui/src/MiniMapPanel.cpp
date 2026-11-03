@@ -34,7 +34,7 @@ ImU32 RouteColor(std::size_t index)
 
 void DrawBuildingMiniMap(
     std::span<const flight_planning::BuildingObstacle> buildings,
-    std::span<const MiniMapDrone> drones,
+    std::span<const DroneStatusView> drones,
     std::span<const MiniMapRoute> routes,
     const glm::dvec2& groundSizeMeters,
     double& zoom,
@@ -244,7 +244,7 @@ void DrawBuildingMiniMap(
     }
 
     // 각 드론은 방향을 가진 삼각형으로 표시하고, 경로선과 같은 색을 사용한다.
-    for (const MiniMapDrone& drone : drones)
+    for (const DroneStatusView& drone : drones)
     {
         const ImVec2 position = project({drone.positionMeters.x, drone.positionMeters.y});
         const double screenHeading = -drone.yawRadians;
@@ -300,7 +300,7 @@ void DrawBuildingMiniMap(
 
 void DrawMiniMapPanel(
     std::span<const flight_planning::BuildingObstacle> buildings,
-    std::span<const MiniMapDrone> drones,
+    std::span<const DroneStatusView> drones,
     std::span<const MiniMapRoute> routes,
     const glm::dvec2& groundSizeMeters,
     double& zoom,

@@ -1,21 +1,13 @@
 #pragma once
 
+#include "gui/DroneStatusView.h"
 #include "flight_planning/BuildingObstacle.h"
-#include "simulation_core/SimulationCore.h"
 
 #include <span>
 #include <vector>
 
 namespace dronesim::gui
 {
-/** @brief 미니맵에 표시할 드론 한 대의 현재 위치와 방향이다. */
-struct MiniMapDrone
-{
-    simulation::DroneId droneId = 0;
-    glm::dvec3 positionMeters{0.0};
-    double yawRadians = 0.0;
-};
-
 /** @brief 미니맵에 표시할 드론 한 대의 계획 경로다. */
 struct MiniMapRoute
 {
@@ -28,7 +20,7 @@ struct MiniMapRoute
 struct MiniMapPanelFrame
 {
     std::span<const flight_planning::BuildingObstacle> buildings;
-    std::span<const MiniMapDrone> drones;
+    std::span<const DroneStatusView> drones;
     std::span<const MiniMapRoute> routes;
     glm::dvec2 groundSizeMeters{0.0};
 };
