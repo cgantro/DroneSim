@@ -564,6 +564,8 @@ void Verify_FleetRouteMessagesRoundTripAndRejectInvalidValues()
     EXPECT_EQ(decoded->waypointsMeters, waypoints);
     EXPECT_FALSE(mission::DecodeFleetRoute("99 0 1 0 0").has_value());
     EXPECT_FALSE(mission::DecodeFleetRoute(payload + " trailing").has_value());
+    EXPECT_FALSE(mission::DecodeFleetRoute(
+        "0 0 1 0 18446744073709551615").has_value());
     EXPECT_FALSE(mission::DecodeWaypoint("1 2 nan").has_value());
 
     const std::vector<glm::dvec3> leaseRoute{{10.0, 0.0, 0.0}};

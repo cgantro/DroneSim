@@ -46,9 +46,8 @@ std::string EncodeFleetRoute(
     std::span<const glm::dvec3> waypointsMeters)
 {
     std::ostringstream payload;
+    // 만료 시각도 보내 수신 드론이 리더와 같은 모의 시간 기준으로 임무를 판단하게 한다.
     payload << static_cast<unsigned int>(leg) << ' '
-
-        // 만료 시각도 함께 보내면 수신 드론은 리더의 모의 시간 기준으로 임무 유효성을 판단한다.
         << targetIndex << ' ' << assignmentVersion << ' '
         << assignmentLeaseExpiresAtTick << ' ' << waypointsMeters.size();
     for (const glm::dvec3& waypointMeters : waypointsMeters)
@@ -71,7 +70,8 @@ std::optional<FleetRouteMessage> DecodeFleetRoute(const std::string& payload)
         return std::nullopt;
 
     route.leg = static_cast<FleetMissionLeg>(legValue);
-    route.waypointsMeters.reserve(waypointCount);
+    // 경유점 개수는 받은 문자열에 적혀 있으므로, 미리 큰 메모리를 예약하지 않는다.
+    // 입력 좌표가 부족하면 아래 읽기에서 곧바로 실패해 잘못된 메시지를 거른다.
     for (std::size_t index = 0; index < waypointCount; ++index)
     {
         glm::dvec3 waypointMeters{0.0};
