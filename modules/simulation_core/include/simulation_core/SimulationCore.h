@@ -133,14 +133,8 @@ public:
     /** @brief 지정한 드론 카메라의 짐벌 방향을 바꾸고 즉시 화면 자세에 반영한다. */
     void SetCameraGimbalAngles(DroneId droneId, const CameraGimbalAngles& angles);
 
-    /** @brief 카메라를 켜거나 끈다. 고장 상태는 복구 명령으로만 해제된다. */
-    void SetCameraEnabled(bool enabled) noexcept;
-
     /** @brief 지정한 드론의 카메라를 켜거나 끈다. */
     void SetCameraEnabled(DroneId droneId, bool enabled);
-
-    /** @brief 카메라 장애를 주입하거나 해제한다. */
-    void SetCameraFault(bool faulted) noexcept;
 
     /** @brief 지정한 드론의 카메라 장애를 주입하거나 해제한다. */
     void SetCameraFault(DroneId droneId, bool faulted);

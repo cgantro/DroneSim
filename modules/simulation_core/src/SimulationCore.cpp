@@ -388,15 +388,17 @@ std::size_t FixedTickAccumulator::Consume(double elapsedSeconds) noexcept
     if (std::isnan(elapsedSeconds) || elapsedSeconds <= 0.0)
         return 0;
 
+    // 화면이 오래 멈춘 뒤에도 최대 100ms만 따라잡아, 밀린 Tick이 계속 쌓이지 않게 한다.
     accumulatedSeconds_ += std::min(elapsedSeconds, maximumFrameSeconds);
 
-    std::size_t tickCount = 0;
+    // 남은 시간은 버리지 않고 보관해, 다음 화면 프레임과 함께 고정 간격에 맞춘다.
+    std::size_t ticksToRun = 0;
     while (accumulatedSeconds_ >= fixedStepSeconds)
     {
         accumulatedSeconds_ -= fixedStepSeconds;
-        ++tickCount;
+        ++ticksToRun;
     }
-    return tickCount;
+    return ticksToRun;
 }
 
 SimulationCore::SimulationCore()
@@ -636,20 +638,10 @@ void SimulationCore::SetCameraGimbalAngles(
     EoCameraModel::UpdatePose(camera, drone.get<DroneState>());
 }
 
-void SimulationCore::SetCameraEnabled(bool enabled) noexcept
-{
-    SetCameraEnabled(ecs_->droneRegistry.PrimaryId(), enabled);
-}
-
 void SimulationCore::SetCameraEnabled(DroneId droneId, bool enabled)
 {
     EoCameraModel::SetEnabled(
         ecs_->droneRegistry.Find(droneId).get_mut<CameraState>(), enabled);
-}
-
-void SimulationCore::SetCameraFault(bool faulted) noexcept
-{
-    SetCameraFault(ecs_->droneRegistry.PrimaryId(), faulted);
 }
 
 void SimulationCore::SetCameraFault(DroneId droneId, bool faulted)
