@@ -64,8 +64,7 @@ void SetStartupDetail(std::string_view message)
 /** @brief 통신 모듈의 현재 결과를 HUD가 읽을 수 있는 값으로 복사한다. */
 dronesim::gui::FleetNetworkStatus MakeFleetNetworkStatus(
     const dronesim::simulation::SimulationCore& simulation,
-    const dronesim::communication::VirtualMeshNetwork& network,
-    const dronesim::communication::DroneSocketTransport& socketTransport,
+    const FleetNetworkSession& network,
     dronesim::simulation::DroneId leaderId)
 {
     dronesim::gui::FleetNetworkStatus status;
@@ -75,10 +74,10 @@ dronesim::gui::FleetNetworkStatus MakeFleetNetworkStatus(
 
     for (const auto droneId : simulation.DroneIds())
     {
-        const auto port = socketTransport.PortFor(droneId);
+        const auto port = network.PortFor(droneId);
         const bool isLeader = droneId == leaderId;
         status.drones.push_back({droneId, port, isLeader,
-            network.IsNodeRadioEnabled(droneId),
+            network.IsRadioEnabled(droneId),
             isLeader || network.HasDirectLink(droneId, leaderId)});
     }
 
@@ -571,11 +570,10 @@ void DroneSimApp::RenderFrame()
         const bool formationNetworkActive = fleetMission_.FormationTransit().IsActive()
             || CompleteFleetMissionIsActive() || FleetReconnaissanceIsActive();
         std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
-        if (const auto* network = fleetNetworkSession_.VirtualNetwork();
-            network != nullptr && formationNetworkActive)
+        if (fleetNetworkSession_.IsReady() && formationNetworkActive)
         {
-            networkStatus = MakeFleetNetworkStatus(simulation_,
-                *network, fleetNetworkSession_.SocketTransport(), fleetMission_.LeaderId());
+            networkStatus = MakeFleetNetworkStatus(
+                simulation_, fleetNetworkSession_, fleetMission_.LeaderId());
         }
         dronesim::gui::HudRenderTimings hudTimings;
         hudTimings.collectGpuTimings = visibleBenchmarkMode_;
@@ -678,9 +676,8 @@ void DroneSimApp::RenderFrame()
                 .setRadioEnabled = [this, formationNetworkActive](
                     dronesim::simulation::DroneId droneId, bool enabled)
                 {
-                    if (auto* network = fleetNetworkSession_.VirtualNetwork();
-                        network != nullptr && formationNetworkActive)
-                        network->SetNodeRadioEnabled(droneId, enabled);
+                    if (formationNetworkActive)
+                        fleetNetworkSession_.SetRadioEnabled(droneId, enabled);
                 }},
             .timings = benchmarkMode_ ? &hudTimings : nullptr};
         hud_->Render(hudFrame);

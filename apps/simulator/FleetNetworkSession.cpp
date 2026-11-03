@@ -1,6 +1,7 @@
 #include "FleetNetworkSession.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace dronesim::simulator
 {
@@ -31,19 +32,65 @@ bool FleetNetworkSession::IsReady() const noexcept
     return link_ != nullptr;
 }
 
-communication::VirtualMeshNetwork* FleetNetworkSession::VirtualNetwork() noexcept
+std::optional<std::uint64_t> FleetNetworkSession::Send(
+    communication::NetworkNodeId source,
+    communication::NetworkNodeId destination,
+    std::uint32_t sequence, std::string kind, std::string payload)
 {
-    return link_.get();
+    if (!link_)
+        return std::nullopt;
+    return link_->Send(source, destination, sequence,
+        std::move(kind), std::move(payload));
 }
 
-const communication::VirtualMeshNetwork* FleetNetworkSession::VirtualNetwork() const noexcept
+std::span<const communication::DeliveredMeshMessage>
+FleetNetworkSession::DeliveredMessages() const noexcept
 {
-    return link_.get();
+    return link_ ? link_->DeliveredMessages()
+                 : std::span<const communication::DeliveredMeshMessage>{};
 }
 
-const communication::DroneSocketTransport& FleetNetworkSession::SocketTransport() const noexcept
+void FleetNetworkSession::Advance(std::uint64_t tick)
 {
-    return transport_;
+    if (link_)
+        link_->Advance(tick);
+}
+
+void FleetNetworkSession::SetRadioEnabled(
+    communication::NetworkNodeId node, bool enabled)
+{
+    if (link_)
+        link_->SetNodeRadioEnabled(node, enabled);
+}
+
+bool FleetNetworkSession::IsRadioEnabled(
+    communication::NetworkNodeId node) const noexcept
+{
+    return link_ && link_->IsNodeRadioEnabled(node);
+}
+
+bool FleetNetworkSession::HasDirectLink(
+    communication::NetworkNodeId first,
+    communication::NetworkNodeId second) const noexcept
+{
+    return link_ && link_->HasDirectLink(first, second);
+}
+
+const communication::VirtualMeshMetrics& FleetNetworkSession::Metrics() const noexcept
+{
+    static const communication::VirtualMeshMetrics emptyMetrics{};
+    return link_ ? link_->Metrics() : emptyMetrics;
+}
+
+std::span<const communication::MeshEvent> FleetNetworkSession::Events() const noexcept
+{
+    return link_ ? link_->Events() : std::span<const communication::MeshEvent>{};
+}
+
+std::optional<communication::SocketPort> FleetNetworkSession::PortFor(
+    communication::NetworkNodeId node) const noexcept
+{
+    return transport_.PortFor(node);
 }
 
 void FleetNetworkSession::SetBuildingObstacles(

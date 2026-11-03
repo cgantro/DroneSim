@@ -182,7 +182,7 @@ public:
         std::vector<communication::SocketPort> ports;
         for (const auto droneId : app.simulation_.DroneIds())
         {
-            const auto port = app.fleetNetworkSession_.SocketTransport().PortFor(droneId);
+            const auto port = app.fleetNetworkSession_.PortFor(droneId);
             ASSERT_TRUE(port.has_value());
             EXPECT_NE(*port, 0U);
             ports.push_back(*port);
@@ -400,10 +400,10 @@ public:
                         << ", 상태 " << mission::FleetDroneStatusLabel(
                             mission->second.Status());
             }
-            const auto& metrics = app.fleetNetworkSession_.VirtualNetwork()->Metrics();
+            const auto& metrics = app.fleetNetworkSession_.Metrics();
             failureContext << "; 통신 통계 전달 " << metrics.deliveredMessages
                 << ", 폐기 " << metrics.droppedMessages;
-            const auto events = app.fleetNetworkSession_.VirtualNetwork()->Events();
+            const auto events = app.fleetNetworkSession_.Events();
             const std::size_t firstEvent = events.size() > 12U
                 ? events.size() - 12U : 0U;
             for (std::size_t index = firstEvent; index < events.size(); ++index)

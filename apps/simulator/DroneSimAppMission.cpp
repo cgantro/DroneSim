@@ -695,8 +695,8 @@ bool DroneSimApp::SendFleetRouteAssignment(
     std::vector<glm::dvec3> routeWaypointsMeters)
 {
     const auto& targets = missionEnvironment_->Targets();
-    auto* network = fleetNetworkSession_.VirtualNetwork();
-    if (network == nullptr || targets.empty() || targetIndex >= targets.size())
+    if (!fleetNetworkSession_.IsReady()
+        || targets.empty() || targetIndex >= targets.size())
         return false;
 
     auto mission = fleetMission_.FindAssignment(droneId);
@@ -729,7 +729,7 @@ bool DroneSimApp::SendFleetRouteAssignment(
         return true;
     }
 
-    const auto messageId = network->Send(
+    const auto messageId = fleetNetworkSession_.Send(
         fleetMission_.LeaderId(), droneId,
         sequence, "fleet_route", payload);
     if (!messageId)
@@ -798,15 +798,14 @@ void DroneSimApp::ApplyFleetRouteAssignment(
 
 void DroneSimApp::AdvanceFleetNetwork()
 {
-    auto* network = fleetNetworkSession_.VirtualNetwork();
-    if (network == nullptr || (!fleetMission_.FormationTransit().IsActive()
+    if (!fleetNetworkSession_.IsReady() || (!fleetMission_.FormationTransit().IsActive()
         && !CompleteFleetMissionIsActive() && !FleetReconnaissanceIsActive()))
         return;
 
     const std::uint64_t currentTick = simulation_.TickCount();
     RefreshFleetNetworkNodes(currentTick);
     // 먼저 지연 시간이 지난 패킷을 꺼내 처리한 뒤, 새 상태와 경로를 전송한다.
-    network->Advance(currentTick);
+    fleetNetworkSession_.Advance(currentTick);
     ProcessDeliveredFleetMessages(currentTick);
     SendFleetTelemetry(currentTick);
     RetryPendingFleetRoutes(currentTick);
@@ -845,7 +844,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
     using dronesim::simulation::DroneId;
     const DroneId leaderId = fleetMission_.LeaderId();
 
-    for (const auto& delivered : fleetNetworkSession_.VirtualNetwork()->DeliveredMessages())
+    for (const auto& delivered : fleetNetworkSession_.DeliveredMessages())
     {
         const auto& message = delivered.message;
         if (message.kind == "drone_telemetry"
@@ -930,7 +929,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
         if (message.sequence == mission->second.RouteDelivery().AppliedSequence())
         {
             // 같은 경로가 다시 오면 비행 상태를 초기화하지 않고 확인 응답만 다시 보낸다.
-            static_cast<void>(fleetNetworkSession_.VirtualNetwork()->Send(
+            static_cast<void>(fleetNetworkSession_.Send(
                 message.destination, leaderId,
                 message.sequence, "fleet_route_ack", {}));
             continue;
@@ -943,7 +942,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
             route->leg, route->targetIndex,
             route->waypointsMeters, message.sequence, route->assignmentVersion,
             route->assignmentLeaseExpiresAtTick);
-        static_cast<void>(fleetNetworkSession_.VirtualNetwork()->Send(
+        static_cast<void>(fleetNetworkSession_.Send(
             message.destination, leaderId,
             message.sequence, "fleet_route_ack", {}));
     }
@@ -975,7 +974,7 @@ void DroneSimApp::SendFleetTelemetry(std::uint64_t currentTick)
         const std::uint64_t assignmentVersion = mission == fleetMission_.AssignmentsEnd()
             ? 0U : mission->second.AssignmentVersion();
         const auto& state = simulation_.State(droneId);
-        static_cast<void>(fleetNetworkSession_.VirtualNetwork()->Send(
+        static_cast<void>(fleetNetworkSession_.Send(
             droneId, leaderId,
             fleetMission_.TelemetryAtLeader().TakeNextSequence(), "drone_telemetry",
             dronesim::mission::EncodePeerTelemetry(state.positionMeters, state.mode,
@@ -1004,7 +1003,7 @@ void DroneSimApp::RetryPendingFleetRoutes(std::uint64_t currentTick)
                 currentTick, routeRetryIntervalTicks, maximumRouteTransmissions))
             continue;
 
-        if (fleetNetworkSession_.VirtualNetwork()->Send(leaderId, droneId,
+        if (fleetNetworkSession_.Send(leaderId, droneId,
                 mission.RouteDelivery().PendingSequence(), "fleet_route",
                 mission.RouteDelivery().PendingPayload()))
             mission.RouteDelivery().RecordRetry(currentTick);
@@ -1136,7 +1135,7 @@ void DroneSimApp::AdvanceFormationTransit()
         if (fleetMission_.FormationNetwork().ShouldSendFollowerTarget(
                 droneId, target, simulation_.TickCount(), 0.75, targetRefreshTicks))
         {
-            const auto messageId = fleetNetworkSession_.VirtualNetwork()->Send(
+            const auto messageId = fleetNetworkSession_.Send(
                 leaderId, droneId,
                 fleetMission_.FormationNetwork().TakeNextMessageSequence(), "formation_waypoint",
                 dronesim::mission::EncodeWaypoint(target));
