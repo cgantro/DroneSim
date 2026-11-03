@@ -255,6 +255,66 @@ std::vector<ExpectedDrone> ReadExpectedDrones(const Json& value)
     return drones;
 }
 
+/** @brief JSON에서 읽은 비행 시작 상태와 전체 상태 지정 여부를 함께 보관한다. */
+struct ParsedInitialDroneState
+{
+    DroneState state;
+    bool hasExtendedState = false;
+};
+
+/**
+ * @brief 드론의 시작 위치·방향과 선택된 속도·자세·로터 상태를 읽는다.
+ * @details 추가 상태가 하나라도 주어졌는지 함께 기록한다. 실행기는 이 표시를 보고
+ * 기본 초기값을 유지할지, JSON의 전체 강체 상태를 적용할지 결정한다.
+ */
+ParsedInitialDroneState ReadInitialDroneState(const Json& item)
+{
+    const auto yaw = item.find("initial_yaw_radians");
+    const double yawRadians = yaw == item.end()
+        ? 0.0 : ReadFiniteNumber(*yaw, "initial_yaw_radians");
+    const auto velocity = item.find("initial_velocity_meters_per_second");
+    const auto orientation = item.find("initial_orientation_quaternion_wxyz");
+    const auto angularVelocity = item.find(
+        "initial_angular_velocity_radians_per_second");
+    const auto motorSpeeds = item.find("initial_motor_speeds_radians_per_second");
+    const auto mode = item.find("initial_mode");
+
+    ParsedInitialDroneState initial;
+    initial.hasExtendedState = velocity != item.end()
+        || orientation != item.end() || angularVelocity != item.end()
+        || motorSpeeds != item.end() || mode != item.end();
+    initial.state.positionMeters = ReadVector(
+        Required(item, "initial_position_meters"), "initial_position_meters");
+    initial.state.yawRadians = yawRadians;
+    initial.state.orientation = orientation == item.end()
+        ? glm::angleAxis(yawRadians, glm::dvec3{0.0, 0.0, 1.0})
+        : ReadOrientationQuaternion(*orientation);
+
+    if (velocity != item.end())
+        initial.state.velocityMetersPerSecond = ReadVector(
+            *velocity, "initial_velocity_meters_per_second");
+    if (angularVelocity != item.end())
+        initial.state.angularVelocityRadiansPerSecond = ReadVector(
+            *angularVelocity, "initial_angular_velocity_radians_per_second");
+    if (motorSpeeds != item.end())
+    {
+        if (!motorSpeeds->is_array()
+            || motorSpeeds->size() != initial.state.motorSpeedsRadiansPerSecond.size())
+            throw std::invalid_argument(
+                "initial_motor_speeds_radians_per_second에는 로터별 값 4개가 필요합니다.");
+        for (std::size_t index = 0;
+             index < initial.state.motorSpeedsRadiansPerSecond.size(); ++index)
+        {
+            initial.state.motorSpeedsRadiansPerSecond[index] = ReadFiniteNumber(
+                (*motorSpeeds)[index], "initial_motor_speeds_radians_per_second");
+        }
+    }
+    if (mode != item.end())
+        initial.state.mode = ReadFlightMode(*mode);
+
+    return initial;
+}
+
 std::vector<ScenarioDrone> ReadDrones(const Json& document)
 {
     const auto found = document.find("drones");
@@ -271,50 +331,7 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         if (!item.is_object())
             throw std::invalid_argument("각 드론은 JSON 객체여야 합니다.");
         std::string name = ReadUniqueDroneName(item, names, "드론");
-        const auto yaw = item.find("initial_yaw_radians");
-        const double initialYawRadians = yaw == item.end()
-            ? 0.0
-            : ReadFiniteNumber(*yaw, "initial_yaw_radians");
-        const auto velocity = item.find("initial_velocity_meters_per_second");
-        const auto orientation = item.find("initial_orientation_quaternion_wxyz");
-        const auto angularVelocity = item.find(
-            "initial_angular_velocity_radians_per_second");
-        const auto motorSpeeds = item.find(
-            "initial_motor_speeds_radians_per_second");
-        const auto mode = item.find("initial_mode");
-        // 기본 위치·방향만 지정한 경우와 속도·자세·모터까지 직접 지정한
-        // 경우를 구분해, 전체 초기 상태가 있을 때만 물리 상태로 덮어쓴다.
-        const bool hasExtendedInitialState = velocity != item.end()
-            || orientation != item.end() || angularVelocity != item.end()
-            || motorSpeeds != item.end() || mode != item.end();
-        DroneState initialState;
-        initialState.positionMeters = ReadVector(
-            Required(item, "initial_position_meters"), "initial_position_meters");
-        initialState.yawRadians = initialYawRadians;
-        initialState.orientation = orientation == item.end()
-            ? glm::angleAxis(initialYawRadians, glm::dvec3{0.0, 0.0, 1.0})
-            : ReadOrientationQuaternion(*orientation);
-        if (velocity != item.end())
-            initialState.velocityMetersPerSecond = ReadVector(
-                *velocity, "initial_velocity_meters_per_second");
-        if (angularVelocity != item.end())
-            initialState.angularVelocityRadiansPerSecond = ReadVector(
-                *angularVelocity, "initial_angular_velocity_radians_per_second");
-        if (motorSpeeds != item.end())
-        {
-            if (!motorSpeeds->is_array()
-                || motorSpeeds->size() != initialState.motorSpeedsRadiansPerSecond.size())
-                throw std::invalid_argument(
-                    "initial_motor_speeds_radians_per_second에는 로터별 값 4개가 필요합니다.");
-            for (std::size_t index = 0;
-                 index < initialState.motorSpeedsRadiansPerSecond.size(); ++index)
-            {
-                initialState.motorSpeedsRadiansPerSecond[index] = ReadFiniteNumber(
-                    (*motorSpeeds)[index], "initial_motor_speeds_radians_per_second");
-            }
-        }
-        if (mode != item.end())
-            initialState.mode = ReadFlightMode(*mode);
+        const ParsedInitialDroneState initial = ReadInitialDroneState(item);
         std::optional<double> batteryCapacity;
         const auto capacity = item.find("battery_capacity_watt_hours");
         if (capacity != item.end())
@@ -328,7 +345,7 @@ std::vector<ScenarioDrone> ReadDrones(const Json& document)
         std::optional<CameraModel> cameraModel;
         if (const auto camera = item.find("camera_model"); camera != item.end())
             cameraModel = ReadCameraModel(*camera);
-        drones.push_back({std::move(name), initialState, hasExtendedInitialState,
+        drones.push_back({std::move(name), initial.state, initial.hasExtendedState,
             batteryCapacity, initialBatteryPercent, cameraModel});
     }
     return drones;
