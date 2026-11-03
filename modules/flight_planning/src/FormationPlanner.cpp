@@ -84,6 +84,35 @@ double FormationRoutePlan::HeadingAtWaypoint(
         : fallbackHeadingRadians;
 }
 
+std::vector<glm::dvec3> FormationRoutePlan::TargetsAtWaypoint(
+    std::size_t waypointIndex,
+    std::size_t droneCount,
+    const glm::dvec3& leaderPositionMeters,
+    double leaderYawRadians) const
+{
+    if (droneCount == 0U || waypointIndex >= leaderWaypointsMeters.size())
+        return {};
+
+    const double headingRadians = HeadingAtWaypoint(
+        waypointIndex, leaderYawRadians);
+    const auto offsets = FormationOffsets(
+        droneCount, spacingMeters, headingRadians);
+
+    std::vector<glm::dvec3> targets;
+    targets.reserve(droneCount);
+    targets.push_back(leaderWaypointsMeters[waypointIndex]);
+
+    // 리더는 다음 경유점으로 향하고, 편대원은 현재 리더 위치를 기준으로 자리를 잡는다.
+    for (std::size_t index = 1U; index < droneCount; ++index)
+    {
+        glm::dvec3 target = leaderPositionMeters;
+        target.x += offsets[index].x;
+        target.y += offsets[index].y;
+        targets.push_back(target);
+    }
+    return targets;
+}
+
 std::vector<glm::dvec2> FormationOffsets(
     std::size_t droneCount, double spacingMeters, double headingRadians)
 {

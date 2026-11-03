@@ -22,6 +22,11 @@ struct FormationRoutePlan
     /** @brief 지정한 경유점에서의 진행 방향을 구한다. 경로가 멈췄으면 현재 방향을 쓴다. */
     [[nodiscard]] double HeadingAtWaypoint(
         std::size_t waypointIndex, double fallbackHeadingRadians) const noexcept;
+
+    /** @brief 리더의 경로 목표와 편대원들의 현재 위치 기준 목표를 계산한다. */
+    [[nodiscard]] std::vector<glm::dvec3> TargetsAtWaypoint(
+        std::size_t waypointIndex, std::size_t droneCount,
+        const glm::dvec3& leaderPositionMeters, double leaderYawRadians) const;
 };
 
 /**

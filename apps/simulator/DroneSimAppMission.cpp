@@ -1119,10 +1119,8 @@ void DroneSimApp::AdvanceFormationTransit()
     fleetMission_.FormationTransit().AdvanceWaypointIfReached(leader.positionMeters, 3.0);
 
     const std::size_t nextIndex = fleetMission_.FormationTransit().WaypointIndex();
-    const double heading = formationRoute.HeadingAtWaypoint(
-        nextIndex, leader.yawRadians);
-    const auto offsets = FormationOffsets(
-        droneIds.size(), formationRoute.spacingMeters, heading);
+    const auto targets = formationRoute.TargetsAtWaypoint(
+        nextIndex, droneIds.size(), leader.positionMeters, leader.yawRadians);
 
     for (std::size_t index = 0; index < droneIds.size(); ++index)
     {
@@ -1144,14 +1142,7 @@ void DroneSimApp::AdvanceFormationTransit()
             return;
         }
 
-        glm::dvec3 target = leader.positionMeters;
-        if (index == 0U)
-            target = route[nextIndex];
-        else
-        {
-            target.x += offsets[index].x;
-            target.y += offsets[index].y;
-        }
+        const glm::dvec3 target = targets[index];
         DroneCommand command;
         command.kind = DroneCommand::Kind::SetWaypoint;
         command.vector = target;
@@ -1188,8 +1179,7 @@ void DroneSimApp::AdvanceFormationTransit()
     bool followersArrived = true;
     for (std::size_t index = 1U; index < droneIds.size(); ++index)
     {
-        const glm::dvec3 target{leader.positionMeters.x + offsets[index].x,
-            leader.positionMeters.y + offsets[index].y, leader.positionMeters.z};
+        const glm::dvec3& target = targets[index];
         const auto* peer = fleetMission_.TelemetryAtLeader().Latest(droneIds[index]);
         if (peer == nullptr)
         {
