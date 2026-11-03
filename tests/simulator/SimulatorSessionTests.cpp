@@ -619,6 +619,24 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_EQ(routeProgress.Status(), FleetDroneStatus::RoutePending);
     EXPECT_FALSE(routeProgress.HasReceivedRoute());
 
+    mission::FleetRouteDeliveryState routeDelivery;
+    EXPECT_EQ(routeDelivery.NextSequence(), 1U);
+    routeDelivery.Queue(1U, "경로 내용", 10U);
+    EXPECT_TRUE(routeDelivery.HasPendingTransmission());
+    EXPECT_EQ(routeDelivery.PendingPayload(), "경로 내용");
+    EXPECT_FALSE(routeDelivery.Acknowledge(1U));
+    routeDelivery.RecordApplied(1U, 10U);
+    EXPECT_TRUE(routeDelivery.Acknowledge(1U));
+    EXPECT_FALSE(routeDelivery.HasPendingTransmission());
+
+    routeDelivery.Queue(2U, "다음 경로", 20U);
+    EXPECT_EQ(routeDelivery.NextSequence(), 3U);
+    EXPECT_FALSE(routeDelivery.CanRetry(24U, 5U, 3U));
+    EXPECT_TRUE(routeDelivery.CanRetry(25U, 5U, 3U));
+    routeDelivery.RecordRetry(25U);
+    EXPECT_FALSE(routeDelivery.CanRetry(29U, 5U, 3U));
+    EXPECT_TRUE(routeDelivery.CanRetry(30U, 5U, 3U));
+
     EXPECT_TRUE(mission::IsFleetMissionInProgress(
         FleetDroneStatus::Reconnaissance));
     EXPECT_EQ(mission::FleetDroneStatusLabel(

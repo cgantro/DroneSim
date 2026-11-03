@@ -7,6 +7,67 @@
 
 namespace dronesim::mission
 {
+std::uint32_t FleetRouteDeliveryState::NextSequence() const noexcept
+{
+    // 새 명령은 이미 적용된 경로와 아직 확인을 기다리는 경로보다 앞선 번호를 쓴다.
+    return std::max(appliedSequence_, pendingSequence_) + 1U;
+}
+
+void FleetRouteDeliveryState::Queue(
+    std::uint32_t sequence,
+    std::string payload,
+    std::uint64_t currentTick)
+{
+    pendingSequence_ = sequence;
+    pendingPayload_ = std::move(payload);
+    transmissionCount_ = 1U;
+    sentAtTick_ = currentTick;
+    lastTransmissionTick_ = currentTick;
+}
+
+void FleetRouteDeliveryState::RecordApplied(
+    std::uint32_t sequence,
+    std::uint64_t currentTick) noexcept
+{
+    appliedSequence_ = sequence;
+    sentAtTick_ = currentTick;
+}
+
+bool FleetRouteDeliveryState::Acknowledge(std::uint32_t sequence) noexcept
+{
+    // 예전 경로나 아직 적용되지 않은 경로의 응답으로 현재 재전송 대기를 지우지 않는다.
+    if (pendingSequence_ != sequence || appliedSequence_ != sequence)
+        return false;
+
+    ClearPending();
+    return true;
+}
+
+void FleetRouteDeliveryState::ClearPending() noexcept
+{
+    pendingSequence_ = 0U;
+    pendingPayload_.clear();
+    transmissionCount_ = 0U;
+}
+
+bool FleetRouteDeliveryState::CanRetry(
+    std::uint64_t currentTick,
+    std::uint64_t retryIntervalTicks,
+    std::uint32_t maximumTransmissions) const noexcept
+{
+    // 모의 시간이 초기화됐거나 Tick이 아직 간격만큼 흐르지 않았다면 재전송하지 않는다.
+    return HasPendingTransmission()
+        && transmissionCount_ < maximumTransmissions
+        && currentTick >= lastTransmissionTick_
+        && currentTick - lastTransmissionTick_ >= retryIntervalTicks;
+}
+
+void FleetRouteDeliveryState::RecordRetry(std::uint64_t currentTick) noexcept
+{
+    lastTransmissionTick_ = currentTick;
+    ++transmissionCount_;
+}
+
 void FormationTransitState::SetRoute(flight_planning::FormationRoutePlan route)
 {
     // 새 구간은 이전 구간과 다른 메시지 흐름이므로 진행 번호와 전송 기록을 함께 비운다.

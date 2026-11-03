@@ -426,7 +426,7 @@ void DroneSimApp::AdvanceFleetReconnaissance()
 
         if (!mission.HasReceivedRoute())
         {
-            if (simulation_.TickCount() >= mission.routeSentAtTick
+            if (simulation_.TickCount() >= mission.RouteDelivery().SentAtTick()
                     + routeDeliveryTimeoutTicks)
                 mission.UpdateStatus(dronesim::mission::FleetDroneStatus::RouteFailed);
             continue;
@@ -756,8 +756,7 @@ bool DroneSimApp::SendFleetRouteAssignment(
         leaseExpiresAtTick = dronesim::mission::EstimateMissionLeaseExpiry(
             simulation_.TickCount(), startPositionMeters, routeWaypointsMeters);
     }
-    const std::uint32_t sequence = std::max(mission->second.routeSequence,
-        mission->second.pendingRouteSequence) + 1U;
+    const std::uint32_t sequence = mission->second.RouteDelivery().NextSequence();
     const std::string payload = dronesim::mission::EncodeFleetRoute(
         leg, targetIndex, assignmentVersion, leaseExpiresAtTick, routeWaypointsMeters);
     if (droneId == fleetMission_.LeaderId())
@@ -765,8 +764,7 @@ bool DroneSimApp::SendFleetRouteAssignment(
         ApplyFleetRouteAssignment(droneId, leg, targetIndex,
             std::move(routeWaypointsMeters), sequence, assignmentVersion,
             leaseExpiresAtTick);
-        mission->second.pendingRouteSequence = 0U;
-        mission->second.pendingRoutePayload.clear();
+        mission->second.RouteDelivery().ClearPending();
         return true;
     }
 
@@ -776,13 +774,10 @@ bool DroneSimApp::SendFleetRouteAssignment(
     if (!messageId)
         return false;
 
-    mission->second.pendingRouteSequence = sequence;
     mission->second.assignmentVersion = assignmentVersion;
     mission->second.assignmentLeaseExpiresAtTick = leaseExpiresAtTick;
-    mission->second.pendingRoutePayload = payload;
-    mission->second.routeSentAtTick = simulation_.TickCount();
-    mission->second.lastRouteTransmissionTick = simulation_.TickCount();
-    mission->second.routeTransmissionCount = 1U;
+    mission->second.RouteDelivery().Queue(
+        sequence, payload, simulation_.TickCount());
     mission->second.WaitForRoute();
     mission->second.UpdateStatus(dronesim::mission::FleetDroneStatus::RoutePending);
     return true;
@@ -803,10 +798,9 @@ void DroneSimApp::ApplyFleetRouteAssignment(
 
     mission->second.BeginLeg(leg);
     mission->second.targetIndex = targetIndex;
-    mission->second.routeSequence = sequence;
+    mission->second.RouteDelivery().RecordApplied(sequence, simulation_.TickCount());
     mission->second.assignmentVersion = assignmentVersion;
     mission->second.assignmentLeaseExpiresAtTick = assignmentLeaseExpiresAtTick;
-    mission->second.routeSentAtTick = simulation_.TickCount();
     mission->second.ReceiveRoute(std::move(routeWaypointsMeters));
 
     auto mode = simulation_.State(droneId).mode;
@@ -912,14 +906,9 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
             && message.destination == leaderId)
         {
             const auto mission = fleetMission_.FindAssignment(message.source);
-            if (mission != fleetMission_.AssignmentsEnd()
-                && mission->second.pendingRouteSequence == message.sequence
-                && mission->second.routeSequence == message.sequence)
-            {
-                mission->second.pendingRouteSequence = 0U;
-                mission->second.pendingRoutePayload.clear();
-                mission->second.routeTransmissionCount = 0U;
-            }
+            if (mission != fleetMission_.AssignmentsEnd())
+                static_cast<void>(mission->second.RouteDelivery().Acknowledge(
+                    message.sequence));
             continue;
         }
 
@@ -978,7 +967,7 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
             continue;
         }
 
-        if (message.sequence == mission->second.routeSequence)
+        if (message.sequence == mission->second.RouteDelivery().AppliedSequence())
         {
             // 같은 경로가 다시 오면 비행 상태를 초기화하지 않고 확인 응답만 다시 보낸다.
             static_cast<void>(formationNetwork_->Send(
@@ -986,8 +975,8 @@ void DroneSimApp::ProcessDeliveredFleetMessages(std::uint64_t currentTick)
                 message.sequence, "fleet_route_ack", {}));
             continue;
         }
-        if (message.sequence != mission->second.pendingRouteSequence
-            || message.sequence < mission->second.routeSequence)
+        if (message.sequence != mission->second.RouteDelivery().PendingSequence()
+            || message.sequence < mission->second.RouteDelivery().AppliedSequence())
             continue;
 
         ApplyFleetRouteAssignment(message.destination,
@@ -1051,18 +1040,14 @@ void DroneSimApp::RetryPendingFleetRoutes(std::uint64_t currentTick)
             continue;
         auto& mission = assignment->second;
         if (droneId == leaderId
-            || mission.pendingRouteSequence == 0U
-            || mission.routeTransmissionCount >= maximumRouteTransmissions
-            || currentTick < mission.lastRouteTransmissionTick + routeRetryIntervalTicks)
+            || !mission.RouteDelivery().CanRetry(
+                currentTick, routeRetryIntervalTicks, maximumRouteTransmissions))
             continue;
 
         if (formationNetwork_->Send(leaderId, droneId,
-                mission.pendingRouteSequence, "fleet_route",
-                mission.pendingRoutePayload))
-        {
-            mission.lastRouteTransmissionTick = currentTick;
-            ++mission.routeTransmissionCount;
-        }
+                mission.RouteDelivery().PendingSequence(), "fleet_route",
+                mission.RouteDelivery().PendingPayload()))
+            mission.RouteDelivery().RecordRetry(currentTick);
     }
 }
 

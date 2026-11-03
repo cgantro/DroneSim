@@ -20,6 +20,71 @@
 
 namespace dronesim::mission
 {
+/** @brief 경로 명령의 전송 확인과 재전송 상태를 관리한다. */
+class FleetRouteDeliveryState
+{
+private:
+    std::string pendingPayload_;
+    std::uint32_t appliedSequence_ = 0U;
+    std::uint32_t pendingSequence_ = 0U;
+    std::uint32_t transmissionCount_ = 0U;
+    std::uint64_t sentAtTick_ = 0U;
+    std::uint64_t lastTransmissionTick_ = 0U;
+
+public:
+    /** @brief 현재·대기 순번보다 큰 다음 경로 순번을 계산한다. */
+    [[nodiscard]] std::uint32_t NextSequence() const noexcept;
+
+    /** @brief 현재 드론에 적용된 경로 순번을 돌려준다. */
+    [[nodiscard]] std::uint32_t AppliedSequence() const noexcept
+    {
+        return appliedSequence_;
+    }
+
+    /** @brief 확인 응답을 기다리는 경로 순번을 돌려준다. */
+    [[nodiscard]] std::uint32_t PendingSequence() const noexcept
+    {
+        return pendingSequence_;
+    }
+
+    /** @brief 재전송할 메시지가 있는지 확인한다. */
+    [[nodiscard]] bool HasPendingTransmission() const noexcept
+    {
+        return pendingSequence_ != 0U;
+    }
+
+    /** @brief 재전송할 경로 내용을 읽기 전용으로 돌려준다. */
+    [[nodiscard]] const std::string& PendingPayload() const noexcept
+    {
+        return pendingPayload_;
+    }
+
+    /** @brief 처음 경로를 보낸 Tick을 돌려준다. */
+    [[nodiscard]] std::uint64_t SentAtTick() const noexcept { return sentAtTick_; }
+
+    /** @brief 새 전송을 기록하고 확인 대기 상태로 바꾼다. */
+    void Queue(
+        std::uint32_t sequence, std::string payload, std::uint64_t currentTick);
+
+    /** @brief 드론에 적용된 순번과 경로 적용 시각을 기록한다. */
+    void RecordApplied(std::uint32_t sequence, std::uint64_t currentTick) noexcept;
+
+    /** @brief 현재 경로를 확인한 응답이면 대기 메시지를 비운다. */
+    [[nodiscard]] bool Acknowledge(std::uint32_t sequence) noexcept;
+
+    /** @brief 새 직접 경로 적용 전에 이전 전송 대기를 지운다. */
+    void ClearPending() noexcept;
+
+    /** @brief 재전송 횟수와 간격을 만족해 다시 보낼 수 있는지 확인한다. */
+    [[nodiscard]] bool CanRetry(
+        std::uint64_t currentTick,
+        std::uint64_t retryIntervalTicks,
+        std::uint32_t maximumTransmissions) const noexcept;
+
+    /** @brief 전송에 성공한 재시도 시각과 횟수를 기록한다. */
+    void RecordRetry(std::uint64_t currentTick) noexcept;
+};
+
 /** @brief 드론 한 대에 배정된 정찰·집결·복귀 경로와 진행 상태다. */
 struct FleetReconnaissanceState
 {
@@ -31,18 +96,13 @@ private:
     bool lowBatteryReturn_ = false;
     FleetMissionLeg leg_ = FleetMissionLeg::Reconnaissance;
     FleetDroneStatus status_ = FleetDroneStatus::Other;
+    FleetRouteDeliveryState routeDelivery_;
 
 public:
     std::size_t targetIndex = 0;
     glm::dvec3 startPositionMeters{0.0};
-    std::string pendingRoutePayload;
-    std::uint32_t routeSequence = 0;
-    std::uint32_t pendingRouteSequence = 0;
     std::uint64_t assignmentVersion = 0;
     std::uint64_t assignmentLeaseExpiresAtTick = 0;
-    std::uint32_t routeTransmissionCount = 0;
-    std::uint64_t routeSentAtTick = 0;
-    std::uint64_t lastRouteTransmissionTick = 0;
 
     /** @brief 현재 구간의 진행 상태를 읽는다. */
     [[nodiscard]] FleetDroneStatus Status() const noexcept { return status_; }
@@ -57,6 +117,16 @@ public:
     [[nodiscard]] bool IsLowBatteryReturn() const noexcept
     {
         return lowBatteryReturn_;
+    }
+
+    /** @brief 경로 메시지의 확인·재전송을 맡는 전송 상태를 제공한다. */
+    [[nodiscard]] FleetRouteDeliveryState& RouteDelivery() noexcept
+    {
+        return routeDelivery_;
+    }
+    [[nodiscard]] const FleetRouteDeliveryState& RouteDelivery() const noexcept
+    {
+        return routeDelivery_;
     }
 
     /** @brief 경로 계획 결과를 저장하고 진행 번호를 첫 경유점으로 맞춘다. */
