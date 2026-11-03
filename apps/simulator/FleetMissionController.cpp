@@ -151,6 +151,13 @@ bool FleetMissionController::FleetReconnaissanceIsActive() const
     return fleetMission_.HasActiveReconnaissance();
 }
 
+bool FleetMissionController::HasActiveMission() const
+{
+    return CompleteFleetMissionIsActive()
+        || FleetReconnaissanceIsActive()
+        || fleetMission_.FormationTransit().IsActive();
+}
+
 bool FleetMissionController::StartCompleteFleetMission()
 {
     if (!CompleteFleetMissionCanStart())

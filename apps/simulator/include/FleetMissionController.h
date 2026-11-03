@@ -31,6 +31,8 @@ public:
     [[nodiscard]] bool FleetReconnaissanceIsActive() const;
     [[nodiscard]] bool CompleteFleetMissionCanStart() const;
     [[nodiscard]] bool CompleteFleetMissionIsActive() const;
+    /** @brief 편대 이동을 포함해 현재 진행 중인 임무가 있는지 알려준다. */
+    [[nodiscard]] bool HasActiveMission() const;
     [[nodiscard]] bool StartCompleteFleetMission();
     [[nodiscard]] std::string CompleteFleetMissionStatus() const;
     [[nodiscard]] bool StartFleetReconnaissance();

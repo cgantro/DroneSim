@@ -140,8 +140,7 @@ void DroneSimApp::QueueWebFlightCommand(
     dronesim::simulation::DroneCommand::Kind kind)
 {
     externalControl_ = true;
-    if (missionController_->CompleteFleetMissionIsActive()
-        || missionController_->FleetReconnaissanceIsActive())
+    if (missionController_->HasActiveMission())
         return;
     manualControlSession_.QueueFlightAction(
         dronesim::simulation::DroneCommand{kind});
@@ -156,9 +155,7 @@ bool DroneSimApp::StartWebFleetMission()
 bool DroneSimApp::StopWebFleetMission()
 {
     externalControl_ = true;
-    if (!missionController_->CompleteFleetMissionIsActive()
-        && !missionController_->FleetReconnaissanceIsActive()
-        && !missionController_->State().FormationTransit().IsActive())
+    if (!missionController_->HasActiveMission())
         return false;
     missionController_->Abort("화면에서 전체 임무를 중단했습니다.");
     return true;
@@ -168,8 +165,7 @@ void DroneSimApp::SetWebPilotAxes(
     const dronesim::manual_control::GamepadAxes& axes)
 {
     externalControl_ = true;
-    if (missionController_->CompleteFleetMissionIsActive()
-        || missionController_->FleetReconnaissanceIsActive())
+    if (missionController_->HasActiveMission())
     {
         manualControlSession_.ClearPendingPilotCommand();
         return;
@@ -370,9 +366,7 @@ void DroneSimApp::AdvanceSimulationTick()
     if (demoMode_ && !externalControl_
         && missionController_->CompleteFleetMissionCanStart())
         static_cast<void>(StartCompleteFleetMission());
-    const bool missionActive = missionController_->State().FormationTransit().IsActive()
-        || missionController_->CompleteFleetMissionIsActive()
-        || missionController_->FleetReconnaissanceIsActive();
+    const bool missionActive = missionController_->HasActiveMission();
     if (!missionActive && missionControlOwnsInput_)
     {
         missionControlOwnsInput_ = false;
@@ -381,9 +375,7 @@ void DroneSimApp::AdvanceSimulationTick()
             : "DroneSim | 드론 관찰 · EO 영상");
     }
     const bool manualInputBlocked = missionControlOwnsInput_
-        || missionController_->CompleteFleetMissionIsActive()
-        || missionController_->FleetReconnaissanceIsActive()
-        || missionController_->State().FormationTransit().IsActive();
+        || missionController_->HasActiveMission();
     manualControlSession_.AdvanceTick(simulation_, manualInputBlocked);
 }
 
@@ -456,9 +448,7 @@ void DroneSimApp::RenderDesktopFrame()
         const bool fleetReturnCanStart = missionController_->FleetReturnCanStart();
         const bool completeFleetMissionCanStart =
             missionController_->CompleteFleetMissionCanStart();
-        const bool formationNetworkActive = missionController_->State().FormationTransit().IsActive()
-            || missionController_->CompleteFleetMissionIsActive()
-            || missionController_->FleetReconnaissanceIsActive();
+        const bool formationNetworkActive = missionController_->HasActiveMission();
         std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
         if (missionController_->NetworkSession().IsReady() && formationNetworkActive)
         {
