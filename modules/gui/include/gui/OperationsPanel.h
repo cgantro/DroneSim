@@ -13,12 +13,12 @@ struct OperationsPanelFrame
     const simulation::SimulationCore& simulation;
     bool gamepadConnected = false;
     bool fleetReturnCanStart = false;
-    const std::function<void()>& startFleetReturn;
-    const std::string& completeFleetMissionStatus;
+    std::function<void()> startFleetReturn;
+    std::string completeFleetMissionStatus;
     bool completeFleetMissionCanStart = false;
-    const std::function<void()>& startCompleteFleetMission;
+    std::function<void()> startCompleteFleetMission;
     const FleetNetworkStatus* fleetNetworkStatus = nullptr;
-    const NetworkFaultPanel::SetRadioEnabled& setRadioEnabled;
+    NetworkFaultPanel::SetRadioEnabled setRadioEnabled;
 };
 
 /** @brief 비행 상태, 편대 목록, 임무 명령을 운용 패널에 표시한다. */

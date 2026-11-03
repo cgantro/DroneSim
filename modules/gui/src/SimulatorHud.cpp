@@ -214,44 +214,16 @@ SimulatorHud::SimulatorHud(GLFWwindow* window)
 
 void SimulatorHud::Render(const SimulatorHudFrame& frame)
 {
-    const simulation::SimulationCore& simulation = frame.simulation;
-    simulation::DroneId& observerDroneId = frame.observerDroneId;
-    SimulatorView& sceneView = frame.sceneView;
-    const bool gamepadConnected = frame.gamepadConnected;
-    const bool fleetReturnCanStart = frame.fleetReturnCanStart;
-    const auto& startFleetReturn = frame.startFleetReturn;
-    const auto& completeFleetMissionStatus = frame.completeFleetMissionStatus;
-    const bool completeFleetMissionCanStart = frame.completeFleetMissionCanStart;
-    const auto& startCompleteFleetMission = frame.startCompleteFleetMission;
-    const FleetNetworkStatus* fleetNetworkStatus = frame.fleetNetworkStatus;
-    const auto& setFormationNodeRadioEnabled = frame.setFormationNodeRadioEnabled;
-    const auto buildings = frame.buildings;
-    const auto drones = frame.drones;
-    const auto routes = frame.routes;
-    const glm::dvec2& groundSizeMeters = frame.groundSizeMeters;
-    const auto& renderScene = frame.renderScene;
-    const auto& renderCamera = frame.renderCamera;
-    const auto& setCameraGimbalAngles = frame.setCameraGimbalAngles;
-    HudRenderTimings* timings = frame.timings;
-
-    frameBackend_.BeginFrame(timings);
+    frameBackend_.BeginFrame(frame.timings);
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
-    DrawScenePanel(simulation, observerDroneId, sceneView, renderScene);
-    miniMapPanel_.Render(buildings, drones, routes, groundSizeMeters);
-    DrawCameraPanel(simulation, observerDroneId, renderCamera, setCameraGimbalAngles);
-    const OperationsPanelFrame operationsFrame{
-        .simulation = simulation,
-        .gamepadConnected = gamepadConnected,
-        .fleetReturnCanStart = fleetReturnCanStart,
-        .startFleetReturn = startFleetReturn,
-        .completeFleetMissionStatus = completeFleetMissionStatus,
-        .completeFleetMissionCanStart = completeFleetMissionCanStart,
-        .startCompleteFleetMission = startCompleteFleetMission,
-        .fleetNetworkStatus = fleetNetworkStatus,
-        .setRadioEnabled = setFormationNodeRadioEnabled};
-    operationsPanel_.Render(operationsFrame);
+    DrawScenePanel(frame.scene.simulation, frame.scene.observerDroneId,
+        frame.scene.view, frame.scene.render);
+    miniMapPanel_.Render(frame.miniMap);
+    DrawCameraPanel(frame.camera.simulation, frame.camera.observerDroneId,
+        frame.camera.render, frame.camera.setGimbalAngles);
+    operationsPanel_.Render(frame.operations);
 
-    frameBackend_.Draw(timings);
+    frameBackend_.Draw(frame.timings);
 }
 }

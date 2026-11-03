@@ -2,15 +2,12 @@
 
 #include "simulation_core/SimulationCore.h"
 #include "simulation_core/EoCameraModel.h"
-#include "flight_planning/BuildingObstacle.h"
 #include "gui/MiniMapPanel.h"
 #include "gui/ImGuiFrameBackend.h"
 #include "gui/OperationsPanel.h"
 
 #include <cstdint>
 #include <functional>
-#include <span>
-#include <string>
 
 struct GLFWwindow;
 
@@ -23,27 +20,31 @@ using CameraPanelRenderer = std::function<std::uint32_t(simulation::DroneId)>;
 using CameraGimbalSetter = std::function<void(
     simulation::DroneId, const simulation::CameraGimbalAngles&)>;
 
-/** @brief 한 프레임의 HUD 표시 자료와 사용자가 실행할 동작을 모은다. */
-struct SimulatorHudFrame
+/** @brief 장면 패널이 사용할 시점과 렌더링 함수다. */
+struct ScenePanelFrame
 {
     const simulation::SimulationCore& simulation;
     simulation::DroneId& observerDroneId;
-    SimulatorView& sceneView;
-    bool gamepadConnected = false;
-    bool fleetReturnCanStart = false;
-    std::function<void()> startFleetReturn;
-    std::string completeFleetMissionStatus;
-    bool completeFleetMissionCanStart = false;
-    std::function<void()> startCompleteFleetMission;
-    const FleetNetworkStatus* fleetNetworkStatus = nullptr;
-    std::function<void(simulation::DroneId, bool)> setFormationNodeRadioEnabled;
-    std::span<const flight_planning::BuildingObstacle> buildings;
-    std::span<const MiniMapDrone> drones;
-    std::span<const MiniMapRoute> routes;
-    glm::dvec2 groundSizeMeters{0.0};
-    ScenePanelRenderer renderScene;
-    CameraPanelRenderer renderCamera;
-    CameraGimbalSetter setCameraGimbalAngles;
+    SimulatorView& view;
+    ScenePanelRenderer render;
+};
+
+/** @brief 카메라 패널이 사용할 시점, 영상 생성, 짐벌 조작이다. */
+struct CameraPanelFrame
+{
+    const simulation::SimulationCore& simulation;
+    simulation::DroneId& observerDroneId;
+    CameraPanelRenderer render;
+    CameraGimbalSetter setGimbalAngles;
+};
+
+/** @brief 화면 패널별 자료를 묶어 HUD에 전달한다. */
+struct SimulatorHudFrame
+{
+    ScenePanelFrame scene;
+    MiniMapPanelFrame miniMap;
+    CameraPanelFrame camera;
+    OperationsPanelFrame operations;
     HudRenderTimings* timings = nullptr;
 };
 

@@ -24,15 +24,20 @@ struct MiniMapRoute
     std::vector<glm::dvec3> waypointsMeters;
 };
 
+/** @brief 한 프레임에 미니맵이 그릴 구조물·드론·경로 자료다. */
+struct MiniMapPanelFrame
+{
+    std::span<const flight_planning::BuildingObstacle> buildings;
+    std::span<const MiniMapDrone> drones;
+    std::span<const MiniMapRoute> routes;
+    glm::dvec2 groundSizeMeters{0.0};
+};
+
 /** @brief 건물 높이, 드론 위치, 경로를 평면 지도에 그린다. */
 class MiniMapPanel
 {
 public:
-    void Render(
-        std::span<const flight_planning::BuildingObstacle> buildings,
-        std::span<const MiniMapDrone> drones,
-        std::span<const MiniMapRoute> routes,
-        const glm::dvec2& groundSizeMeters);
+    void Render(const MiniMapPanelFrame& frame);
 
 private:
     double zoom_ = 1.0;

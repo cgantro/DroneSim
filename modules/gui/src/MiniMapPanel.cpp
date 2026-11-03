@@ -328,13 +328,9 @@ void DrawMiniMapPanel(
 
 }
 
-void MiniMapPanel::Render(
-    std::span<const flight_planning::BuildingObstacle> buildings,
-    std::span<const MiniMapDrone> drones,
-    std::span<const MiniMapRoute> routes,
-    const glm::dvec2& groundSizeMeters)
+void MiniMapPanel::Render(const MiniMapPanelFrame& frame)
 {
-    DrawMiniMapPanel(buildings, drones, routes, groundSizeMeters,
-        zoom_, centerMeters_);
+    DrawMiniMapPanel(frame.buildings, frame.drones, frame.routes,
+        frame.groundSizeMeters, zoom_, centerMeters_);
 }
 }
