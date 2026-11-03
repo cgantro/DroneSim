@@ -8,6 +8,7 @@
 #include "simulation_core/SimulationCore.h"
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,14 @@ private:
     [[nodiscard]] bool FleetIsReadyForMission() const;
     [[nodiscard]] bool FleetReconnaissanceCanStart() const;
     void AdvanceCompleteFleetMission();
+    void AdvanceAfterFormationTransit();
+    [[nodiscard]] bool CollectCompleteMissionReports(
+        mission::CompleteFleetMissionState::Stage stage,
+        const std::vector<simulation::DroneId>& droneIds,
+        std::vector<std::optional<mission::FleetMissionReport>>& reports);
+    void ApplyCompleteMissionProgress(
+        mission::CompleteFleetMissionState::Stage stage,
+        const std::vector<std::optional<mission::FleetMissionReport>>& reports);
     [[nodiscard]] bool StartFormationTransit();
     void InitializeFleetLeadership();
     [[nodiscard]] bool StartFleetRally();

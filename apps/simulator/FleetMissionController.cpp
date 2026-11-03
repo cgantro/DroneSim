@@ -4,6 +4,7 @@
 #include "simulation_core/DroneModel.h"
 #include <glm/geometric.hpp>
 #include <algorithm>
+#include <optional>
 
 namespace dronesim::simulator
 {
@@ -390,12 +391,9 @@ bool FleetMissionController::StartFleetRally()
     return true;
 }
 
-
-
 void FleetMissionController::AdvanceCompleteFleetMission()
 {
     using Stage = dronesim::mission::CompleteFleetMissionState::Stage;
-    using DroneId = dronesim::simulation::DroneId;
     const Stage currentStage = fleetMission_.CompleteMission().CurrentStage();
     switch (currentStage)
     {
@@ -404,22 +402,7 @@ void FleetMissionController::AdvanceCompleteFleetMission()
     case Stage::Failed:
         return;
     case Stage::FormationTransit:
-        if (fleetMission_.FormationTransit().IsActive())
-            return;
-        if (fleetMission_.FormationTransit().CurrentPhase()
-            != dronesim::mission::FormationTransitState::Phase::Arrived)
-        {
-            FailCompleteFleetMission("M01 편대 이동이 끝나지 않아 전체 임무를 중단했습니다.");
-            return;
-        }
-        if (!StartFleetReconnaissance(
-                dronesim::mission::FleetMissionStartMode::ContinueInFlight,
-                fleetMission_.CompleteMission().HomePositions()))
-        {
-            FailCompleteFleetMission("M02 정찰 경로를 만들지 못해 기체를 착륙시킵니다.");
-            return;
-        }
-        fleetMission_.CompleteMission().SetStage(Stage::Reconnaissance);
+        AdvanceAfterFormationTransit();
         return;
     case Stage::Reconnaissance:
     case Stage::Regrouping:
@@ -427,35 +410,83 @@ void FleetMissionController::AdvanceCompleteFleetMission()
         break;
     }
 
-    const std::vector<DroneId>& droneIds = fleetCommunication_.DroneIds();
+    const std::vector<simulation::DroneId>& droneIds = fleetCommunication_.DroneIds();
     if (droneIds.empty())
         return;
+
+    // 단계 완료 여부는 모든 기체 보고를 모은 뒤 한 번에 판정한다.
     std::vector<std::optional<dronesim::mission::FleetMissionReport>> reports;
+    if (!CollectCompleteMissionReports(currentStage, droneIds, reports))
+        return;
+
+    ApplyCompleteMissionProgress(currentStage, reports);
+}
+
+void FleetMissionController::AdvanceAfterFormationTransit()
+{
+    using Phase = dronesim::mission::FormationTransitState::Phase;
+    using Stage = dronesim::mission::CompleteFleetMissionState::Stage;
+
+    // 편대 이동이 아직 진행 중이면 다음 Tick에서 다시 확인한다.
+    if (fleetMission_.FormationTransit().IsActive())
+        return;
+    if (fleetMission_.FormationTransit().CurrentPhase() != Phase::Arrived)
+    {
+        FailCompleteFleetMission("M01 편대 이동이 끝나지 않아 전체 임무를 중단했습니다.");
+        return;
+    }
+    if (!StartFleetReconnaissance(
+            dronesim::mission::FleetMissionStartMode::ContinueInFlight,
+            fleetMission_.CompleteMission().HomePositions()))
+    {
+        FailCompleteFleetMission("M02 정찰 경로를 만들지 못해 기체를 착륙시킵니다.");
+        return;
+    }
+    fleetMission_.CompleteMission().SetStage(Stage::Reconnaissance);
+}
+
+bool FleetMissionController::CollectCompleteMissionReports(
+    mission::CompleteFleetMissionState::Stage stage,
+    const std::vector<simulation::DroneId>& droneIds,
+    std::vector<std::optional<mission::FleetMissionReport>>& reports)
+{
+    using Stage = mission::CompleteFleetMissionState::Stage;
+    reports.clear();
     reports.reserve(droneIds.size());
+    // 진행 판정은 드론별 상태를 빠짐없이 확인한 뒤에만 내린다.
     for (const auto droneId : droneIds)
     {
         const auto assignment = fleetMission_.FindAssignment(droneId);
         if (assignment == fleetMission_.AssignmentsEnd())
         {
-            if (currentStage == Stage::Returning)
+            if (stage == Stage::Returning)
             {
                 fleetMission_.CompleteMission().Fail("복귀에 실패한 드론이 있습니다.");
             }
             else
             {
-                const std::string reason = currentStage == Stage::Reconnaissance
+                const std::string reason = stage == Stage::Reconnaissance
                     ? "드론별 정찰 상태를 찾지 못해 임무를 중단했습니다."
                     : "모든 기체가 집결하지 못해 임무를 중단했습니다.";
                 FailCompleteFleetMission(reason);
             }
-            return;
+            return false;
         }
 
         const auto report = fleetMission_.CurrentReport(
-            droneId, assignment->second, simulation_, currentStage);
+            droneId, assignment->second, simulation_, stage);
         reports.push_back(report);
     }
 
+    return true;
+}
+
+void FleetMissionController::ApplyCompleteMissionProgress(
+    mission::CompleteFleetMissionState::Stage currentStage,
+    const std::vector<std::optional<mission::FleetMissionReport>>& reports)
+{
+    using Stage = mission::CompleteFleetMissionState::Stage;
+    // 진행 규칙은 임무 모듈에 맡기고, 이 클래스는 결과에 따른 다음 동작을 고른다.
     dronesim::mission::FleetMissionLeg missionLeg;
     switch (currentStage)
     {
