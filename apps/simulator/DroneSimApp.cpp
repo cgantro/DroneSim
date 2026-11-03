@@ -295,7 +295,11 @@ void DroneSimApp::LoadMapFeatures()
 {
     SetStartupDetail("도시 지도와 충돌 모양을 준비하고 있습니다.");
     trainingRangeScene_ = std::make_unique<dronesim::scene::TrainingRangeScene>();
-    trainingRangeScene_->Load({}, simulation_);
+    trainingRangeScene_->Load({});
+    const auto& collisionMesh = trainingRangeScene_->CollisionMesh();
+    // 장면 모듈은 충돌 자료만 준비하고, 실행 앱이 이를 물리 월드에 연결한다.
+    simulation_.AddStaticObstacleMesh(
+        collisionMesh.verticesMeters, collisionMesh.triangleIndices);
 }
 void DroneSimApp::InitializeStartingState()
 {

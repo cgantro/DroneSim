@@ -49,13 +49,13 @@ std::vector<glm::dvec2> MakeFootprintHull(std::vector<glm::dvec2> points)
 
 }
 
-void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
-    dronesim::simulation::SimulationCore& simulation)
+void TrainingRangeScene::Load(const std::filesystem::path& assetRoot)
 {
     const float worldScale = static_cast<float>(mapScale);
     cityModel_ = dronesim::graphics::GlbModel::Load(
         (assetRoot / "maps/ruined_city.glb").string());
     buildingObstacles_.clear();
+    collisionMesh_ = {};
 
     const auto& partBounds = cityModel_->PartBounds();
     const auto collisionParts = cityModel_->CollisionParts();
@@ -97,15 +97,14 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
         static_cast<double>(groundBounds.maximum.x - groundBounds.minimum.x) * mapScale,
         static_cast<double>(groundBounds.maximum.z - groundBounds.minimum.z) * mapScale};
 
-    std::vector<glm::dvec3> collisionVertices;
-    std::vector<std::uint32_t> collisionIndices;
     for (std::size_t index = 0; index < partBounds.size(); ++index)
     {
         if (index == groundSurfacePart)
             continue; // 바닥판은 같은 크기로 만든 높이 지형이 충돌을 맡는다.
 
         const auto& part = collisionParts[index];
-        const std::uint32_t firstVertex = static_cast<std::uint32_t>(collisionVertices.size());
+        const std::uint32_t firstVertex = static_cast<std::uint32_t>(
+            collisionMesh_.verticesMeters.size());
         std::vector<glm::dvec2> footprintPoints;
         footprintPoints.reserve(part.vertices.size());
         double highestPointMeters = 0.0;
@@ -117,13 +116,14 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
                 (scenePosition.x + mapOffset_.x) * mapScale,
                 -(scenePosition.z + mapOffset_.z) * mapScale,
                 (scenePosition.y + mapOffset_.y) * mapScale};
-            collisionVertices.push_back(positionMeters);
+            collisionMesh_.verticesMeters.push_back(positionMeters);
             footprintPoints.emplace_back(positionMeters.x, positionMeters.y);
             highestPointMeters = std::max(highestPointMeters, positionMeters.z);
         }
-        collisionIndices.reserve(collisionIndices.size() + part.triangleIndices.size());
+        collisionMesh_.triangleIndices.reserve(
+            collisionMesh_.triangleIndices.size() + part.triangleIndices.size());
         for (const std::uint32_t vertexIndex : part.triangleIndices)
-            collisionIndices.push_back(firstVertex + vertexIndex);
+            collisionMesh_.triangleIndices.push_back(firstVertex + vertexIndex);
 
         dronesim::flight_planning::BuildingObstacle obstacle;
         obstacle.name = partBounds[index].nodeName.empty()
@@ -135,9 +135,6 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot,
         if (obstacle.outlineMeters.size() >= 3U && obstacle.heightMeters > 0.0)
             buildingObstacles_.push_back(std::move(obstacle));
     }
-
-    // 렌더 메시의 실제 삼각형을 충돌에 사용해 빈 공간을 상자로 막지 않는다.
-    simulation.AddStaticObstacleMesh(collisionVertices, collisionIndices);
 
 }
 
@@ -154,6 +151,12 @@ const std::vector<dronesim::flight_planning::BuildingObstacle>&
 TrainingRangeScene::BuildingObstacles() const noexcept
 {
     return buildingObstacles_;
+}
+
+const TrainingRangeScene::BuildingCollisionMesh&
+TrainingRangeScene::CollisionMesh() const noexcept
+{
+    return collisionMesh_;
 }
 
 glm::dvec2 TrainingRangeScene::GroundSizeMeters() const noexcept

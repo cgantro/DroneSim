@@ -276,7 +276,6 @@ if(DRONESIM_BUILD_GRAPHICS)
   target_include_directories(dronesim_scene PUBLIC modules/scene/include)
   target_link_libraries(dronesim_scene PUBLIC
     dronesim_graphics
-    dronesim_simulation_core
     dronesim_flight_planning
     dronesim_terrain
     PRIVATE dronesim_geometry
