@@ -16,6 +16,7 @@ namespace
 constexpr double gravityMetersPerSecondSquared = 9.81;
 constexpr double maximumAccelerationMetersPerSecondSquared = 4.0;
 constexpr double maximumTorqueNewtonMeters = 0.5;
+constexpr double waypointApproachTimeSeconds = 0.2;
 
 struct DesiredWrench
 {
@@ -86,8 +87,10 @@ glm::dvec3 AccelerationForFlightMode(
 /** @brief 로터 추력 방향을 기체 위쪽 축에 맞추고 yaw 방향을 유지한다. */
 glm::dquat DesiredOrientation(const glm::dvec3& worldThrust, double yawRadians)
 {
+    // 로터 추력은 기체 Z축을 따라 작용하므로, 먼저 그 축을 필요한 추력 방향에 맞춘다.
     glm::dvec3 bodyZ = glm::normalize(worldThrust);
     const glm::dvec3 heading{std::cos(yawRadians), std::sin(yawRadians), 0.0};
+    // 헤딩을 추력축과 수직인 평면에 투영해, 기울어진 자세에서도 요청한 요 방향을 최대한 유지한다.
     glm::dvec3 bodyX = heading - bodyZ * glm::dot(heading, bodyZ);
     if (glm::length(bodyX) < 1.0e-8)
         bodyX = glm::dvec3{1.0, 0.0, 0.0} - bodyZ * bodyZ.x;
@@ -105,6 +108,7 @@ glm::dvec3 AttitudeTorque(
 {
     const glm::dquat currentOrientation = glm::normalize(state.orientation);
     glm::dquat error = glm::normalize(glm::inverse(currentOrientation) * desiredOrientation);
+    // q와 -q는 같은 자세를 나타낸다. 실수부를 양수로 맞춰 회전각이 더 작은 쪽을 고른다.
     if (error.w < 0.0)
         error = -error;
 
@@ -203,10 +207,12 @@ glm::dvec3 QuadrotorFlightController::PositionTargetVelocity(
     if (distance <= 1.0e-9)
         return glm::dvec3{0.0};
 
-    // 경유점 가까이에서는 제동 거리와 위치 이득에 맞춰 목표 속도를 낮춘다.
+    // v² = 2ad에서 구한 정지 가능 속도다. 남은 거리에서 최대 가속도로 감속할 수 있게 제한한다.
     const double brakingSpeed = std::sqrt(
         2.0 * maximumAccelerationMetersPerSecondSquared * distance);
-    const double approachSpeed = controller.positionGain * 0.2 * distance;
+    // 위치 이득에 0.2초를 곱해 가까운 구간의 목표 속도를 낮춘다.
+    const double approachSpeed =
+        controller.positionGain * waypointApproachTimeSeconds * distance;
     const double targetSpeed = std::min(
         maximumWaypointSpeedMetersPerSecond,
         std::min(brakingSpeed, approachSpeed));
@@ -236,6 +242,7 @@ std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::M
     desiredAcceleration = geometry::ClampMagnitude(
         desiredAcceleration, maximumAccelerationMetersPerSecondSquared);
     const glm::dvec3 gravity{0.0, 0.0, gravityMetersPerSecondSquared};
+    // F = m(a + g): 원하는 가속도에 중력 상쇄분을 더해 모터가 만들어야 할 힘을 구한다.
     glm::dvec3 desiredWorldThrust = parameters.massKilograms * (desiredAcceleration + gravity);
     desiredWorldThrust.z = std::max(0.0, desiredWorldThrust.z);
 
