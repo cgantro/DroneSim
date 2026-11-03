@@ -7,6 +7,23 @@
 
 namespace dronesim::mission
 {
+namespace
+{
+/**
+ * @brief 시작 Tick 이후 지정한 간격이 흘렀는지 확인한다.
+ * @details 시뮬레이션을 초기화하면 현재 Tick이 과거 기록보다 작아질 수 있다.
+ * 이때 부호 없는 정수를 먼저 빼면 큰 값으로 넘치므로, 순서를 확인한 뒤 차이를 구한다.
+ */
+bool HasTickIntervalElapsed(
+    std::uint64_t currentTick,
+    std::uint64_t previousTick,
+    std::uint64_t intervalTicks) noexcept
+{
+    return currentTick >= previousTick
+        && currentTick - previousTick >= intervalTicks;
+}
+}
+
 std::uint32_t FleetRouteDeliveryState::NextSequence() const noexcept
 {
     // 새 명령은 이미 적용된 경로와 아직 확인을 기다리는 경로보다 앞선 번호를 쓴다.
@@ -58,8 +75,8 @@ bool FleetRouteDeliveryState::CanRetry(
     // 모의 시간이 초기화됐거나 Tick이 아직 간격만큼 흐르지 않았다면 재전송하지 않는다.
     return HasPendingTransmission()
         && transmissionCount_ < maximumTransmissions
-        && currentTick >= lastTransmissionTick_
-        && currentTick - lastTransmissionTick_ >= retryIntervalTicks;
+        && HasTickIntervalElapsed(
+            currentTick, lastTransmissionTick_, retryIntervalTicks);
 }
 
 void FleetRouteDeliveryState::RecordRetry(std::uint64_t currentTick) noexcept
@@ -125,8 +142,8 @@ bool FormationTransitState::ShouldSendFollowerTarget(
 
     const auto lastSent = lastTargetSentAtTick_.find(droneId);
     return lastSent == lastTargetSentAtTick_.end()
-        || (currentTick >= lastSent->second
-            && currentTick - lastSent->second >= refreshIntervalTicks);
+        || HasTickIntervalElapsed(currentTick, lastSent->second,
+            refreshIntervalTicks);
 }
 
 void FormationTransitState::RecordFollowerTargetSent(
@@ -144,8 +161,8 @@ bool FormationTransitState::ShouldRefreshNetworkNodes(
 {
     // 모의 Tick이 초기화되면 이전 시각과 비교할 수 없으므로 새 기준 시각이 올 때까지 기다린다.
     return !lastNetworkNodeUpdateTick_
-        || (currentTick >= *lastNetworkNodeUpdateTick_
-            && currentTick - *lastNetworkNodeUpdateTick_ >= refreshIntervalTicks);
+        || HasTickIntervalElapsed(
+            currentTick, *lastNetworkNodeUpdateTick_, refreshIntervalTicks);
 }
 
 void FormationTransitState::RecordNetworkNodesUpdated(std::uint64_t currentTick) noexcept
@@ -292,8 +309,7 @@ bool FleetMissionState::ShouldSendTelemetry(
 {
     const auto lastSent = lastTelemetrySentAtTick_.find(droneId);
     return lastSent == lastTelemetrySentAtTick_.end()
-        || (currentTick >= lastSent->second
-            && currentTick - lastSent->second >= intervalTicks);
+        || HasTickIntervalElapsed(currentTick, lastSent->second, intervalTicks);
 }
 
 void FleetMissionState::RecordTelemetryAttempt(

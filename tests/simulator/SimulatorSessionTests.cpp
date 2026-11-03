@@ -636,6 +636,8 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
     EXPECT_FALSE(routeDelivery.CanRetry(24U, 5U, 3U));
     EXPECT_TRUE(routeDelivery.CanRetry(25U, 5U, 3U));
     routeDelivery.RecordRetry(25U);
+    // 시뮬레이션을 초기화해 Tick이 과거 기록보다 작아져도 바로 재전송하지 않는다.
+    EXPECT_FALSE(routeDelivery.CanRetry(3U, 5U, 3U));
     EXPECT_FALSE(routeDelivery.CanRetry(29U, 5U, 3U));
     EXPECT_TRUE(routeDelivery.CanRetry(30U, 5U, 3U));
 
