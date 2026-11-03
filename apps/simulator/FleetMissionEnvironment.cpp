@@ -5,7 +5,8 @@ namespace dronesim::simulator
 FleetMissionEnvironment::FleetMissionEnvironment(
     const terrain::TerrainGrid& terrain,
     const scene::TrainingRangeScene& trainingScene)
-    : routeEnvironment_(terrain, trainingScene.BuildingObstacles())
+    : routeEnvironment_(terrain, trainingScene.BuildingObstacles()),
+      planner_(routeEnvironment_, minimumTransitAltitudeMeters)
 {
     // 경로와 정찰 지점이 같은 장면 자료를 기준으로 삼도록 한 번에 준비한다.
     const auto& reconPoints = trainingScene.ReconPoints();
@@ -22,6 +23,11 @@ FleetMissionEnvironment::FleetMissionEnvironment(
 const scene::TrainingRangeRouteEnvironment& FleetMissionEnvironment::RouteEnvironment() const noexcept
 {
     return routeEnvironment_;
+}
+
+const mission::FleetMissionPlanner& FleetMissionEnvironment::Planner() const noexcept
+{
+    return planner_;
 }
 
 const std::vector<mission::FleetReconnaissanceTarget>&

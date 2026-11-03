@@ -2,6 +2,7 @@
 
 #include "FleetMissionCommunication.h"
 #include "FleetMissionEnvironment.h"
+#include "FleetDroneMissionExecutor.h"
 #include "FleetFormationFlight.h"
 #include "TrainingRangeScene.h"
 #include "simulation_core/SimulationCore.h"
@@ -52,7 +53,6 @@ private:
     [[nodiscard]] bool FleetIsReadyForMission() const;
     [[nodiscard]] bool FleetReconnaissanceCanStart() const;
     void AdvanceCompleteFleetMission();
-    void AdvanceFleetReconnaissance();
     [[nodiscard]] bool StartFormationTransit();
     void InitializeFleetLeadership();
     [[nodiscard]] bool StartFleetRally();
@@ -66,5 +66,6 @@ private:
     mission::FleetMissionState fleetMission_;
     FleetMissionCommunication fleetCommunication_;
     FleetFormationFlight formationFlight_;
+    FleetDroneMissionExecutor droneMissionExecutor_;
 };
 }

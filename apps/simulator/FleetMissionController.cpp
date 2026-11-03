@@ -24,7 +24,8 @@ FleetMissionController::FleetMissionController(
       trainingScene_(trainingScene),
       missionEnvironment_(terrain, trainingScene),
       fleetCommunication_(simulation_, trainingScene_, missionEnvironment_, fleetMission_),
-      formationFlight_(simulation_, fleetMission_, fleetCommunication_)
+      formationFlight_(simulation_, fleetMission_, fleetCommunication_),
+      droneMissionExecutor_(simulation_, missionEnvironment_, fleetMission_, fleetCommunication_)
 {
 }
 
@@ -32,7 +33,7 @@ void FleetMissionController::AdvanceTick()
 {
     // 먼저 통신으로 도착한 경로와 상태를 반영해야 같은 Tick의 비행 단계가 새 목표를 사용한다.
     fleetCommunication_.AdvanceTick();
-    AdvanceFleetReconnaissance();
+    droneMissionExecutor_.Advance();
     AdvanceFormationTransit();
     // 개별 단계가 갱신된 뒤 전체 임무가 다음 단계로 넘어갈지 판단한다.
     AdvanceCompleteFleetMission();
@@ -184,9 +185,7 @@ bool FleetMissionController::StartFleetReconnaissance(
             home != homePositions.end() ? home->second : observation->positionMeters});
     }
 
-    const dronesim::mission::FleetMissionPlanner planner{
-        missionEnvironment_.RouteEnvironment(),
-        missionEnvironment_.MinimumTransitAltitudeMeters()};
+    const auto& planner = missionEnvironment_.Planner();
     auto assignments = planner.PlanReconnaissance(
         starts, missionEnvironment_.Targets(), startMode);
     if (!assignments)
@@ -249,9 +248,7 @@ bool FleetMissionController::StartFleetReturn(
     const DroneId leaderId = fleetMission_.LeaderId();
     if (droneIds.empty() || leaderId == 0U)
         return false;
-    const dronesim::mission::FleetMissionPlanner planner{
-        missionEnvironment_.RouteEnvironment(),
-        missionEnvironment_.MinimumTransitAltitudeMeters()};
+    const auto& planner = missionEnvironment_.Planner();
     // 경로와 대상 드론을 한 항목으로 묶어, 배정 순서가 달라져도 서로 어긋나지 않게 한다.
     std::vector<PlannedFleetRoute> returnPlans;
     returnPlans.reserve(droneIds.size());
@@ -317,9 +314,7 @@ bool FleetMissionController::StartFleetRally()
                 return !fleetMission_.CompleteMission().HasHomePosition(droneId);
             }))
         return false;
-    const dronesim::mission::FleetMissionPlanner planner{
-        missionEnvironment_.RouteEnvironment(),
-        missionEnvironment_.MinimumTransitAltitudeMeters()};
+    const auto& planner = missionEnvironment_.Planner();
     const DroneId leaderId = fleetMission_.LeaderId();
     std::vector<DroneId> rallyDroneIds;
     rallyDroneIds.reserve(droneIds.size());
@@ -391,130 +386,7 @@ bool FleetMissionController::StartFleetRally()
     return true;
 }
 
-void FleetMissionController::AdvanceFleetReconnaissance()
-{
-    using DroneId = dronesim::simulation::DroneId;
-    using Command = dronesim::simulation::DroneCommand;
-    using FlightMode = dronesim::simulation::FlightMode;
-    constexpr std::uint64_t routeDeliveryTimeoutTicks = 600U;
-    const dronesim::mission::FleetMissionPlanner planner{
-        missionEnvironment_.RouteEnvironment(),
-        missionEnvironment_.MinimumTransitAltitudeMeters()};
 
-    for (const DroneId droneId : fleetCommunication_.DroneIds())
-    {
-        auto assignment = fleetMission_.FindAssignment(droneId);
-        if (assignment == fleetMission_.AssignmentsEnd())
-            continue;
-        auto& mission = assignment->second;
-        if (mission.CanBeginLowBatteryReturn() && simulation_.HasBattery(droneId))
-        {
-            if (simulation_.TryBeginLowBatteryReturn(droneId))
-            {
-                const auto route = planner.PlanReturnRoute(
-                    simulation_.State(droneId).positionMeters,
-                    mission.StartPositionMeters());
-                bool returnStarted = route.has_value();
-                if (returnStarted
-                    && simulation_.State(droneId).mode == FlightMode::Grounded)
-                    returnStarted = simulation_.Apply(droneId,
-                        {Command::Kind::TakeOff})
-                        == dronesim::simulation::CommandResult::Accepted;
-                if (returnStarted)
-                {
-                    mission.BeginLowBatteryReturn();
-                    returnStarted = fleetCommunication_.SendRouteAssignment(droneId,
-                        dronesim::mission::FleetMissionLeg::Returning, mission.TargetIndex(),
-                        std::vector<glm::dvec3>(route->begin(), route->end()));
-                }
-                if (!returnStarted)
-                {
-                    mission.UpdateStatus(
-                        dronesim::mission::FleetDroneStatus::BatteryReturnRouteFailed);
-                    static_cast<void>(dronesim::mission::TryLandDrone(
-                        simulation_, droneId));
-                }
-                continue;
-            }
-        }
-
-        if (mission.IsLegFinished())
-            continue;
-
-        if (!mission.HasReceivedRoute())
-        {
-            if (simulation_.TickCount() >= mission.RouteDelivery().SentAtTick()
-                    + routeDeliveryTimeoutTicks)
-                mission.UpdateStatus(dronesim::mission::FleetDroneStatus::RouteFailed);
-            continue;
-        }
-
-        const auto& state = simulation_.State(droneId);
-        if (state.mode == FlightMode::Grounded)
-        {
-            const auto groundedStatus = mission.Status();
-            if (groundedStatus == dronesim::mission::FleetDroneStatus::TakeoffReady
-                || groundedStatus == dronesim::mission::FleetDroneStatus::ReturnPreparing
-                || groundedStatus == dronesim::mission::FleetDroneStatus::RegroupPreparing)
-                continue;
-
-            if (mission.Leg() == dronesim::mission::FleetMissionLeg::Regrouping)
-            {
-                mission.UpdateStatus(mission.StatusAfterLanding(
-                    state.positionMeters, state.positionMeters));
-                continue;
-            }
-            const glm::dvec3& destination = mission.Leg() == dronesim::mission::FleetMissionLeg::Returning
-                ? mission.StartPositionMeters()
-                : missionEnvironment_.Targets()[mission.TargetIndex()].approachPositionMeters;
-            mission.UpdateStatus(mission.StatusAfterLanding(
-                state.positionMeters, destination));
-            continue;
-        }
-        if (state.mode == FlightMode::TakingOff || state.mode == FlightMode::Landing)
-            continue;
-
-        if (!mission.HasCommandedWaypoint())
-        {
-            mission.BeginWaypointCommand();
-        }
-        else if (!mission.HasRemainingWaypoints())
-        {
-            if (mission.Leg() == dronesim::mission::FleetMissionLeg::Regrouping)
-            {
-                mission.UpdateStatus(dronesim::mission::FleetDroneStatus::RegroupComplete);
-                continue;
-            }
-            if (dronesim::mission::TryLandDrone(simulation_, droneId))
-            {
-                if (mission.Leg() == dronesim::mission::FleetMissionLeg::Returning)
-                    mission.UpdateStatus(mission.IsLowBatteryReturn()
-                        ? dronesim::mission::FleetDroneStatus::LowBatteryLanding
-                        : dronesim::mission::FleetDroneStatus::ReturnLanding);
-                else
-                    mission.UpdateStatus(dronesim::mission::FleetDroneStatus::Landing);
-            }
-            else
-                mission.UpdateStatus(dronesim::mission::FleetDroneStatus::RouteFailed);
-            continue;
-        }
-        else if (mission.AdvanceWaypointIfReached(state.positionMeters, 2.0))
-        {
-            if (!mission.HasRemainingWaypoints())
-                continue;
-        }
-
-        if (const auto* nextWaypoint = mission.CurrentWaypoint())
-        {
-            Command waypoint;
-            waypoint.kind = Command::Kind::SetWaypoint;
-            waypoint.vector = *nextWaypoint;
-            if (simulation_.Apply(droneId, waypoint)
-                != dronesim::simulation::CommandResult::Accepted)
-                mission.UpdateStatus(dronesim::mission::FleetDroneStatus::RouteFailed);
-        }
-    }
-}
 
 void FleetMissionController::AdvanceCompleteFleetMission()
 {

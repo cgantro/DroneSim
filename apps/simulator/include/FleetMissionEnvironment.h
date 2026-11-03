@@ -18,6 +18,8 @@ public:
 
     [[nodiscard]] const scene::TrainingRangeRouteEnvironment&
     RouteEnvironment() const noexcept;
+    /** @brief 이 장면의 장애물과 고도 기준으로 경로를 계산하는 계획기를 돌려준다. */
+    [[nodiscard]] const mission::FleetMissionPlanner& Planner() const noexcept;
     [[nodiscard]] const std::vector<mission::FleetReconnaissanceTarget>&
     Targets() const noexcept;
     [[nodiscard]] double MinimumTransitAltitudeMeters() const noexcept;
@@ -29,6 +31,7 @@ private:
     static constexpr double targetApproachHeightMeters = 25.0;
 
     scene::TrainingRangeRouteEnvironment routeEnvironment_;
+    mission::FleetMissionPlanner planner_;
     std::vector<mission::FleetReconnaissanceTarget> targets_;
 };
 }
