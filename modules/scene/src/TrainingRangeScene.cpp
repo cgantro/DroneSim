@@ -16,8 +16,15 @@ namespace dronesim::scene
 {
 namespace
 {
+/**
+ * @brief 점들을 감싸는 볼록 외곽선을 Andrew의 단조 사슬 방식으로 계산한다.
+ * @details 모든 GLB 정점을 장애물 경계로 쓰면 내부 점까지 경로 장애물로 오인할 수 있다.
+ *          바닥 윤곽의 바깥선만 남겨 경로 탐색에 전달한다. 오목한 건물은 실제보다 넓게
+ *          막을 수 있지만, 경로 계산은 그만큼 보수적으로 된다.
+ */
 std::vector<glm::dvec2> MakeFootprintHull(std::vector<glm::dvec2> points)
 {
+    // x, y 순으로 정렬해 아래쪽 사슬과 위쪽 사슬을 같은 순서로 훑는다.
     std::sort(points.begin(), points.end(), [](const auto& left, const auto& right)
     {
         return left.x == right.x ? left.y < right.y : left.x < right.x;
@@ -30,15 +37,18 @@ std::vector<glm::dvec2> MakeFootprintHull(std::vector<glm::dvec2> points)
     hull.reserve(points.size() * 2U);
     for (const glm::dvec2& point : points)
     {
+        // 외적이 0 이하인 점은 오른쪽 회전이거나 일직선이므로 외곽선에서 뺀다.
         while (hull.size() >= 2U
             && geometry::Cross2D(hull[hull.size() - 2U], hull.back(), point) <= 0.0)
             hull.pop_back();
         hull.push_back(point);
     }
-    const std::size_t lowerSize = hull.size();
+    const std::size_t lowerHullSize = hull.size();
+
+    // 역순으로 훑어 위쪽 사슬을 만든 뒤, 아래쪽 끝점이 중복되지 않게 뺀다.
     for (auto point = points.rbegin() + 1; point != points.rend(); ++point)
     {
-        while (hull.size() > lowerSize
+        while (hull.size() > lowerHullSize
             && geometry::Cross2D(hull[hull.size() - 2U], hull.back(), *point) <= 0.0)
             hull.pop_back();
         hull.push_back(*point);
@@ -124,6 +134,7 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot)
         {
             const glm::vec3 scenePosition = glm::vec3(
                 part.nodeTransform * glm::vec4(vertex, 1.0F));
+            // GLB의 Y-up 좌표를 시뮬레이터 ENU(X=동, Y=북, Z=상)로 바꾼다.
             const glm::dvec3 positionMeters{
                 (scenePosition.x + mapOffset_.x) * mapScale,
                 -(scenePosition.z + mapOffset_.z) * mapScale,
@@ -143,6 +154,7 @@ void TrainingRangeScene::Load(const std::filesystem::path& assetRoot)
             : partBounds[index].nodeName;
         obstacle.heightMeters = highestPointMeters;
         obstacle.outlineMeters = MakeFootprintHull(std::move(footprintPoints));
+        // 바닥판을 원점 높이 z=0에 맞췄으므로 장애물 외곽도 같은 높이에서 시작한다.
         obstacle.groundElevationsMeters.assign(obstacle.outlineMeters.size(), 0.0);
         if (obstacle.outlineMeters.size() >= 3U && obstacle.heightMeters > 0.0)
             buildingObstacles_.push_back(std::move(obstacle));
