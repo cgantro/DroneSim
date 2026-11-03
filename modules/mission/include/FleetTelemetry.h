@@ -29,8 +29,8 @@ struct ReceivedPeerTelemetry
     std::uint32_t sequence = 0;
 };
 
-/** @brief 드론별 마지막 상태를 보관하고 일정 시간 지난 보고를 구분한다. */
-class FleetTelemetryStore final
+/** @brief 드론별 수신 상태와 텔레메트리 전송 순서를 관리한다. */
+class FleetTelemetry final
 {
 public:
     /** @brief 이 시간보다 오래된 상태는 편대 제어에서 끊긴 보고로 본다. */
@@ -56,11 +56,28 @@ public:
         simulation::DroneId droneId,
         std::uint64_t currentTick) const noexcept;
 
-    /** @brief 임무를 새로 시작할 때 이전 임무에서 받은 상태를 비운다. */
+    /** @brief 드론 상태를 보낼 시각이 되었는지 확인한다. */
+    [[nodiscard]] bool ShouldSend(
+        simulation::DroneId droneId,
+        std::uint64_t currentTick,
+        std::uint64_t intervalTicks) const noexcept;
+
+    /** @brief 성공 여부와 관계없이 드론별 전송 시도 시각을 기록한다. */
+    void RecordSendAttempt(simulation::DroneId droneId, std::uint64_t currentTick);
+
+    /** @brief 다음 텔레메트리 메시지에 사용할 순번을 받고 하나 올린다. */
+    [[nodiscard]] std::uint32_t TakeNextSequence() noexcept
+    {
+        return nextSequence_++;
+    }
+
+    /** @brief 새 임무를 시작할 때 수신 상태와 전송 기록을 함께 비운다. */
     void Clear() noexcept;
 
 private:
     std::map<simulation::DroneId, ReceivedPeerTelemetry> latestByDrone_;
+    std::map<simulation::DroneId, std::uint64_t> lastSendAttemptByDrone_;
+    std::uint32_t nextSequence_ = 1U;
 };
 
 [[nodiscard]] std::string EncodePeerTelemetry(

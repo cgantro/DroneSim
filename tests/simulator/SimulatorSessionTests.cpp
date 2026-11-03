@@ -528,7 +528,7 @@ void Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues()
     EXPECT_EQ(telemetry->assignmentVersion, 17U);
     EXPECT_FALSE(mission::DecodePeerTelemetry(payload + " 2400").has_value());
 
-    mission::FleetTelemetryStore receivedStates;
+    mission::FleetTelemetry receivedStates;
     EXPECT_TRUE(receivedStates.Record(4U, *telemetry, 100U, 8U));
     EXPECT_FALSE(receivedStates.Record(4U, *telemetry, 101U, 7U));
     const auto reportAgeTicks = receivedStates.AgeInTicks(4U, 130U);
@@ -543,7 +543,7 @@ void Verify_PeerTelemetryPreservesStateAndRejectsInvalidValues()
     EXPECT_EQ(receivedStates.Fresh(4U, 131U), nullptr);
     EXPECT_NE(receivedStates.Latest(4U), nullptr);
 
-    mission::FleetTelemetryStore nearTickLimit;
+    mission::FleetTelemetry nearTickLimit;
     const auto highestTick = std::numeric_limits<std::uint64_t>::max();
     EXPECT_TRUE(nearTickLimit.Record(4U, *telemetry, highestTick - 10U, 1U));
     const auto ageNearTickLimit = nearTickLimit.AgeInTicks(4U, highestTick);
@@ -794,4 +794,26 @@ TEST(SimulatorSessionTests, CompleteMissionRequiresFourDrones)
 TEST(SimulatorSessionTests, FallingDroneLandsOnLoadedMapFloor)
 {
     simulator::DroneSimAppTestAccess::VerifyFallingDroneLandsOnLoadedMapFloor();
+}
+
+TEST(SimulatorSessionTests, FleetTelemetryOwnsSendingScheduleAndSequence)
+{
+    mission::FleetTelemetry telemetry;
+    constexpr simulation::DroneId droneId = 7U;
+
+    EXPECT_TRUE(telemetry.ShouldSend(droneId, 100U, 10U));
+    telemetry.RecordSendAttempt(droneId, 100U);
+    EXPECT_FALSE(telemetry.ShouldSend(droneId, 109U, 10U));
+    EXPECT_TRUE(telemetry.ShouldSend(droneId, 110U, 10U));
+
+    // 시뮬레이션 시간을 되돌린 직후에는 이전 시각을 기준으로 재전송을 재촉하지 않는다.
+    EXPECT_FALSE(telemetry.ShouldSend(droneId, 5U, 10U));
+    EXPECT_EQ(telemetry.TakeNextSequence(), 1U);
+    EXPECT_EQ(telemetry.TakeNextSequence(), 2U);
+
+    EXPECT_TRUE(telemetry.Record(droneId, mission::PeerTelemetry{}, 5U, 1U));
+    telemetry.Clear();
+    EXPECT_EQ(telemetry.Latest(droneId), nullptr);
+    EXPECT_TRUE(telemetry.ShouldSend(droneId, 5U, 10U));
+    EXPECT_EQ(telemetry.TakeNextSequence(), 1U);
 }

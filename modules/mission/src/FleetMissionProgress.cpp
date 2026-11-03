@@ -299,28 +299,9 @@ void FleetMissionState::SetAssignment(
     assignments_.insert_or_assign(droneId, std::move(assignment));
 }
 
-bool FleetMissionState::ShouldSendTelemetry(
-    simulation::DroneId droneId,
-    std::uint64_t currentTick,
-    std::uint64_t intervalTicks) const noexcept
-{
-    const auto lastSent = lastTelemetrySentAtTick_.find(droneId);
-    return lastSent == lastTelemetrySentAtTick_.end()
-        || HasTickIntervalElapsed(currentTick, lastSent->second, intervalTicks);
-}
-
-void FleetMissionState::RecordTelemetryAttempt(
-    simulation::DroneId droneId,
-    std::uint64_t currentTick)
-{
-    lastTelemetrySentAtTick_[droneId] = currentTick;
-}
-
 void FleetMissionState::ResetTelemetry()
 {
     telemetryAtLeader_.Clear();
-    nextTelemetrySequence_ = 1U;
-    lastTelemetrySentAtTick_.clear();
 }
 
 bool FleetMissionState::HasActiveReconnaissance() const noexcept

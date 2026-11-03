@@ -472,9 +472,7 @@ private:
     AssignmentMap assignments_;
     simulation::DroneId leaderId_ = 0;
     std::uint64_t nextAssignmentVersion_ = 1;
-    FleetTelemetryStore telemetryAtLeader_;
-    std::uint32_t nextTelemetrySequence_ = 1;
-    std::map<simulation::DroneId, std::uint64_t> lastTelemetrySentAtTick_;
+    FleetTelemetry telemetryAtLeader_;
     FormationTransitState formationTransit_;
     CompleteFleetMissionState completeMission_;
 
@@ -531,11 +529,11 @@ public:
     }
 
     /** @brief 편대장이 받은 원격 드론 상태 기록에 접근한다. */
-    [[nodiscard]] FleetTelemetryStore& TelemetryAtLeader() noexcept
+    [[nodiscard]] FleetTelemetry& TelemetryAtLeader() noexcept
     {
         return telemetryAtLeader_;
     }
-    [[nodiscard]] const FleetTelemetryStore& TelemetryAtLeader() const noexcept
+    [[nodiscard]] const FleetTelemetry& TelemetryAtLeader() const noexcept
     {
         return telemetryAtLeader_;
     }
@@ -543,7 +541,7 @@ public:
     /** @brief 다음 텔레메트리 메시지 순번을 받고 번호를 하나 올린다. */
     [[nodiscard]] std::uint32_t TakeNextTelemetrySequence() noexcept
     {
-        return nextTelemetrySequence_++;
+        return telemetryAtLeader_.TakeNextSequence();
     }
 
     /** @brief 새 임무를 위해 텔레메트리 순번과 수신·전송 기록을 초기화한다. */
@@ -553,11 +551,17 @@ public:
     [[nodiscard]] bool ShouldSendTelemetry(
         simulation::DroneId droneId,
         std::uint64_t currentTick,
-        std::uint64_t intervalTicks) const noexcept;
+        std::uint64_t intervalTicks) const noexcept
+    {
+        return telemetryAtLeader_.ShouldSend(droneId, currentTick, intervalTicks);
+    }
 
     /** @brief 성공 여부와 관계없이 메시지 전달 시도 시각을 기록한다. */
     void RecordTelemetryAttempt(
-        simulation::DroneId droneId, std::uint64_t currentTick);
+        simulation::DroneId droneId, std::uint64_t currentTick)
+    {
+        telemetryAtLeader_.RecordSendAttempt(droneId, currentTick);
+    }
 
     /** @brief 편대 이동과 전체 임무 진행 객체를 읽고 갱신한다. */
     [[nodiscard]] FormationTransitState& FormationTransit() noexcept

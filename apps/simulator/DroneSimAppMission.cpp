@@ -1087,7 +1087,7 @@ void DroneSimApp::AdvanceFormationTransit()
             continue;
 
         constexpr std::uint64_t recoveryWindowTicks =
-            dronesim::mission::FleetTelemetryStore::FreshnessTimeoutTicks
+            dronesim::mission::FleetTelemetry::FreshnessTimeoutTicks
             + peerTelemetryRecoveryTimeoutTicks;
         if (*reportAgeTicks <= recoveryWindowTicks)
         {

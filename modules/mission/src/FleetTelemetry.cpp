@@ -19,7 +19,7 @@ std::uint64_t CalculateTelemetryAgeInTicks(const ReceivedPeerTelemetry& telemetr
 }
 }
 
-bool FleetTelemetryStore::Record(simulation::DroneId droneId,
+bool FleetTelemetry::Record(simulation::DroneId droneId,
     const PeerTelemetry& state,
     std::uint64_t receivedAtTick,
     std::uint32_t sequence)
@@ -32,14 +32,14 @@ bool FleetTelemetryStore::Record(simulation::DroneId droneId,
     return true;
 }
 
-const ReceivedPeerTelemetry* FleetTelemetryStore::Latest(
+const ReceivedPeerTelemetry* FleetTelemetry::Latest(
     simulation::DroneId droneId) const noexcept
 {
     const auto found = latestByDrone_.find(droneId);
     return found == latestByDrone_.end() ? nullptr : &found->second;
 }
 
-std::optional<std::uint64_t> FleetTelemetryStore::AgeInTicks(
+std::optional<std::uint64_t> FleetTelemetry::AgeInTicks(
     simulation::DroneId droneId,
     std::uint64_t currentTick) const noexcept
 {
@@ -50,7 +50,7 @@ std::optional<std::uint64_t> FleetTelemetryStore::AgeInTicks(
     return CalculateTelemetryAgeInTicks(*latest, currentTick);
 }
 
-const ReceivedPeerTelemetry* FleetTelemetryStore::Fresh(
+const ReceivedPeerTelemetry* FleetTelemetry::Fresh(
     simulation::DroneId droneId,
     std::uint64_t currentTick) const noexcept
 {
@@ -62,9 +62,32 @@ const ReceivedPeerTelemetry* FleetTelemetryStore::Fresh(
     return latest;
 }
 
-void FleetTelemetryStore::Clear() noexcept
+void FleetTelemetry::Clear() noexcept
 {
     latestByDrone_.clear();
+    lastSendAttemptByDrone_.clear();
+    nextSequence_ = 1U;
+}
+
+bool FleetTelemetry::ShouldSend(
+    simulation::DroneId droneId,
+    std::uint64_t currentTick,
+    std::uint64_t intervalTicks) const noexcept
+{
+    const auto lastAttempt = lastSendAttemptByDrone_.find(droneId);
+    if (lastAttempt == lastSendAttemptByDrone_.end())
+        return true;
+
+    // 모의 Tick이 초기화되면 과거 시각과 비교할 수 없으므로 새 기준 시각을 기다린다.
+    return currentTick >= lastAttempt->second
+        && currentTick - lastAttempt->second >= intervalTicks;
+}
+
+void FleetTelemetry::RecordSendAttempt(
+    simulation::DroneId droneId,
+    std::uint64_t currentTick)
+{
+    lastSendAttemptByDrone_[droneId] = currentTick;
 }
 
 std::string EncodePeerTelemetry(
