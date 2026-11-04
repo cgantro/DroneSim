@@ -96,12 +96,20 @@ public:
     /** @brief 한 노드의 송수신을 끊거나 복구한다. */
     void SetNodeRadioEnabled(NetworkNodeId node, bool enabled);
     [[nodiscard]] bool IsNodeRadioEnabled(NetworkNodeId node) const noexcept;
-    /** @brief 직접 연결이 가능한 메시지를 보내고 메시지 ID를 돌려준다. */
+    /**
+     * @brief 직접 연결이 가능한 메시지를 실제 전송 계층으로 보내고 ID를 돌려준다.
+     * @details UDP 송신은 바로 요청하지만, 수신된 메시지는 최소 다음 모의 Tick부터
+     *          전달한다. 노드·링크·메시지 형식이 맞지 않거나 데이터그램 크기를 넘으면 빈 값을 돌려준다.
+     */
     [[nodiscard]] std::optional<std::uint64_t> Send(
         NetworkNodeId source, NetworkNodeId destination,
         std::uint32_t sequence, std::string kind, std::string payload);
 
-    /** @brief 모의 시간을 진행하고 도착한 메시지를 처리한다. */
+    /**
+     * @brief 모의 시간을 진행하고 도착한 메시지를 처리한다.
+     * @details UDP 수신 여부와 별개로 실제 전달 시점은 모의 Tick으로 정한다.
+     *          전달 직전에 링크를 다시 확인해, 이동이나 장애 주입으로 끊긴 메시지를 버린다.
+     */
     void Advance(std::uint64_t tick);
 
     [[nodiscard]] std::span<const DeliveredMeshMessage> DeliveredMessages() const noexcept;
@@ -146,7 +154,9 @@ private:
     std::map<NetworkNodeId, NetworkNodeSnapshot> nodes_;
     std::vector<RadioObstacle> obstacles_;
     std::set<NetworkNodeId> radioDisabledNodes_;
+    /** @brief 전송은 요청했지만 UDP 수신함에서 아직 확인하지 못한 메시지다. */
     std::map<std::uint64_t, PendingMessage> pendingMessages_;
+    /** @brief UDP로 받았고 가상 전달 Tick이 될 때까지 기다리는 메시지다. */
     std::vector<ReceivedMessage> receivedMessages_;
     std::vector<DeliveredMeshMessage> deliveredMessages_;
     std::vector<MeshEvent> events_;

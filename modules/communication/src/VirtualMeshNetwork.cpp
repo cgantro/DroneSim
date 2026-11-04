@@ -129,6 +129,7 @@ std::optional<std::uint64_t> VirtualMeshNetwork::Send(
         .kind = std::move(kind),
         .payload = std::move(payload)};
     const std::uint64_t id = message.id;
+    // 실제 UDP는 바로 보내지만, 모의에서는 다음 Tick보다 일찍 도착하지 않게 한다.
     const std::uint64_t maximumTick = std::numeric_limits<std::uint64_t>::max();
     const std::uint64_t dueTick = currentTick_ == maximumTick
         ? maximumTick : currentTick_ + 1U;
@@ -150,6 +151,7 @@ void VirtualMeshNetwork::Advance(std::uint64_t tick)
         throw std::invalid_argument("가상 통신망 시간은 뒤로 갈 수 없습니다.");
     currentTick_ = tick;
     deliveredMessages_.clear();
+    // 먼저 새 UDP 수신을 반영한 뒤, 가상 도착 시각이 된 메시지만 임무 계층에 공개한다.
     ReceiveMessages();
 
     std::vector<ReceivedMessage> waiting;
@@ -176,6 +178,7 @@ void VirtualMeshNetwork::Advance(std::uint64_t tick)
     }
     receivedMessages_ = std::move(waiting);
 
+    // 가상 도착 예정 Tick 뒤 5 Tick이 지나도 UDP 수신이 없으면 전달 실패로 기록한다.
     std::erase_if(pendingMessages_, [this](const auto& entry)
     {
         const PendingMessage& pending = entry.second;
