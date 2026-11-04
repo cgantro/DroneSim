@@ -392,39 +392,6 @@ FleetDroneStatus FleetReconnaissanceState::StatusAfterLanding(
         : FleetDroneStatus::OutsideTargetLanding;
 }
 
-/** @brief 내부 임무 상태를 HUD에서 읽을 수 있는 한국어 문구로 바꾼다. */
-std::string_view FleetDroneStatusLabel(FleetDroneStatus status) noexcept
-{
-    switch (status)
-    {
-    case FleetDroneStatus::RoutePending: return "경로 전달 대기";
-    case FleetDroneStatus::TakeoffReady: return "출발 준비";
-    case FleetDroneStatus::Reconnaissance: return "정찰 이동 중";
-    case FleetDroneStatus::RegroupPreparing: return "재집결 준비";
-    case FleetDroneStatus::Regrouping: return "집결 이동 중";
-    case FleetDroneStatus::ReturnPreparing: return "복귀 준비";
-    case FleetDroneStatus::Returning: return "복귀 중";
-    case FleetDroneStatus::LowBatteryReturning: return "저전력 복귀 중";
-    case FleetDroneStatus::LowBatteryLanding: return "저전력 착륙 중";
-    case FleetDroneStatus::Landing: return "착륙 중";
-    case FleetDroneStatus::ReturnLanding: return "복귀 착륙 중";
-    case FleetDroneStatus::TargetReached: return "정찰 위치 도착";
-    case FleetDroneStatus::RegroupComplete: return "재집결 완료";
-    case FleetDroneStatus::ReturnComplete: return "복귀 완료";
-    case FleetDroneStatus::LowBatteryReturnComplete: return "저전력 복귀 완료";
-    case FleetDroneStatus::RouteFailed: return "경로 오류";
-    case FleetDroneStatus::OutsideTargetLanding: return "목표 외 착륙";
-    case FleetDroneStatus::BatteryReturnRouteFailed:
-        return "배터리 부족 · 복귀 경로 오류";
-    case FleetDroneStatus::AssignmentExpiredLanding:
-        return "임무 권한 만료 · 안전 착륙";
-    case FleetDroneStatus::RegroupFailed: return "집결 실패";
-    case FleetDroneStatus::ReturnFailed: return "복귀 실패";
-    case FleetDroneStatus::Other: return {};
-    }
-    return {};
-}
-
 /** @brief 드론 상태가 아직 임무 수행 중인지 판정한다. */
 bool IsFleetMissionInProgress(FleetDroneStatus status) noexcept
 {

@@ -420,8 +420,7 @@ public:
                     + std::to_string(droneId) + " 목표 "
                     + std::to_string(mission.TargetIndex()) + " 버전 "
                     + std::to_string(mission.AssignmentVersion()) + " 상태 "
-                    + std::string(mission::FleetDroneStatusLabel(
-                        mission.Status())));
+                    + std::to_string(static_cast<unsigned>(mission.Status())));
                 lastVersion = mission.AssignmentVersion();
             });
             sawReconnaissance = sawReconnaissance
@@ -468,8 +467,7 @@ public:
                 const auto mission = MissionState(app).FindAssignment(droneId);
                 if (mission != nullptr)
                     failureContext << ", 목표 " << mission->TargetIndex()
-                        << ", 상태 " << mission::FleetDroneStatusLabel(
-                            mission->Status());
+                        << ", 상태 " << static_cast<unsigned>(mission->Status());
             }
             const auto& metrics = NetworkSession(app).Metrics();
             failureContext << "; 통신 통계 전달 " << metrics.deliveredMessages
@@ -727,8 +725,6 @@ void Verify_FleetMissionProgressWaitsForEveryCurrentReport()
 
     EXPECT_TRUE(mission::IsFleetMissionInProgress(
         FleetDroneStatus::Reconnaissance));
-    EXPECT_EQ(mission::FleetDroneStatusLabel(
-        FleetDroneStatus::TargetReached), "정찰 위치 도착");
     EXPECT_FALSE(mission::IsFleetMissionInProgress(
         FleetDroneStatus::TargetReached));
 
