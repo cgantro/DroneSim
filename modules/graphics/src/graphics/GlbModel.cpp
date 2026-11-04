@@ -70,6 +70,7 @@ glm::mat4 ReadNodeTransform(const Json& node)
             const float value = values.at(index).get<float>();
             if (!std::isfinite(value))
                 throw std::runtime_error("GLB 노드 변환 행렬에 유한하지 않은 값이 있습니다.");
+            // glTF와 GLM 모두 열 우선 배열을 사용하므로 열 번호, 행 번호 순서로 넣는다.
             result[index / 4U][index % 4U] = value;
         }
         return result;
@@ -78,7 +79,7 @@ glm::mat4 ReadNodeTransform(const Json& node)
     const glm::vec3 translation = ReadVec3(node, "translation", glm::vec3(0.0F));
     const glm::vec3 scale = ReadVec3(node, "scale", glm::vec3(1.0F));
     const glm::quat rotation = ReadNodeRotation(node);
-    // GLM에 정규화한 쿼터니언의 회전 행렬 변환을 맡긴다.
+    // 열 벡터에 크기, 회전, 이동을 차례로 적용하므로 행렬은 T × R × S 순서다.
     glm::mat4 result = glm::translate(glm::mat4(1.0F), translation);
     result *= glm::mat4_cast(rotation);
     return glm::scale(result, scale);
