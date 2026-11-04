@@ -59,58 +59,6 @@ void SetStartupDetail(std::string_view message)
 #endif
 }
 
-#ifndef __EMSCRIPTEN__
-/** @brief 통신 모듈의 현재 결과를 HUD가 읽을 수 있는 값으로 복사한다. */
-dronesim::gui::FleetNetworkStatus MakeFleetNetworkStatus(
-    std::span<const dronesim::gui::DroneStatusView> drones,
-    const FleetNetworkSession& network,
-    dronesim::simulation::DroneId leaderId)
-{
-    dronesim::gui::FleetNetworkStatus status;
-    const auto& metrics = network.Metrics();
-    status.deliveredMessages = metrics.deliveredMessages;
-    status.droppedMessages = metrics.droppedMessages;
-
-    status.drones.reserve(drones.size());
-    for (const auto& drone : drones)
-    {
-        const auto port = network.PortFor(drone.droneId);
-        const bool isLeader = drone.droneId == leaderId;
-        status.drones.push_back({drone.droneId, port, isLeader,
-            network.IsRadioEnabled(drone.droneId),
-            isLeader || network.HasDirectLink(drone.droneId, leaderId)});
-    }
-
-    const auto events = network.Events();
-    const std::size_t firstVisibleEvent = events.size() > 4U
-        ? events.size() - 4U
-        : 0U;
-    for (std::size_t index = firstVisibleEvent; index < events.size(); ++index)
-    {
-        const auto& event = events[index];
-        auto kind = dronesim::gui::FleetNetworkStatus::EventKind::PacketDropped;
-        switch (event.kind)
-        {
-        case dronesim::communication::MeshEventKind::NodeRadioDisabled:
-            kind = dronesim::gui::FleetNetworkStatus::EventKind::RadioDisabled;
-            break;
-        case dronesim::communication::MeshEventKind::NodeRadioRestored:
-            kind = dronesim::gui::FleetNetworkStatus::EventKind::RadioRestored;
-            break;
-        case dronesim::communication::MeshEventKind::MessageDelivered:
-            kind = dronesim::gui::FleetNetworkStatus::EventKind::MessageDelivered;
-            break;
-        case dronesim::communication::MeshEventKind::PacketDropped:
-            kind = dronesim::gui::FleetNetworkStatus::EventKind::PacketDropped;
-            break;
-        }
-        status.recentEvents.push_back({event.tick, kind,
-            event.source, event.destination});
-    }
-    return status;
-}
-#endif
-
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
 constexpr std::size_t trainingFleetSize = 4U;
@@ -445,7 +393,7 @@ void DroneSimApp::RenderDesktopFrame()
         std::optional<dronesim::gui::FleetNetworkStatus> networkStatus;
         if (missionController_->NetworkSession().IsReady() && showMissionNetworkStatus)
         {
-            networkStatus = MakeFleetNetworkStatus(
+            networkStatus = dronesim::simulator::SimulatorHudSnapshot::CaptureNetworkStatus(
                 hudSnapshot.drones, missionController_->NetworkSession(),
                 missionController_->State().LeaderId());
         }

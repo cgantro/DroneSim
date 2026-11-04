@@ -1,5 +1,6 @@
 #include "SimulatorHudSnapshot.h"
 
+#include "FleetNetworkSession.h"
 #include "FleetMissionProgress.h"
 
 #include <algorithm>
@@ -72,5 +73,53 @@ SimulatorHudSnapshot SimulatorHudSnapshot::Capture(
     }
 
     return snapshot;
+}
+
+gui::FleetNetworkStatus SimulatorHudSnapshot::CaptureNetworkStatus(
+    std::span<const gui::DroneStatusView> drones,
+    const FleetNetworkSession& network,
+    simulation::DroneId leaderId)
+{
+    gui::FleetNetworkStatus status;
+    const auto& metrics = network.Metrics();
+    status.deliveredMessages = metrics.deliveredMessages;
+    status.droppedMessages = metrics.droppedMessages;
+
+    status.drones.reserve(drones.size());
+    for (const gui::DroneStatusView& drone : drones)
+    {
+        const bool isLeader = drone.droneId == leaderId;
+        status.drones.push_back({drone.droneId, network.PortFor(drone.droneId),
+            isLeader, network.IsRadioEnabled(drone.droneId),
+            isLeader || network.HasDirectLink(drone.droneId, leaderId)});
+    }
+
+    const auto events = network.Events();
+    const std::size_t firstVisibleEvent = events.size() > 4U
+        ? events.size() - 4U
+        : 0U;
+    for (std::size_t index = firstVisibleEvent; index < events.size(); ++index)
+    {
+        const communication::MeshEvent& event = events[index];
+        auto kind = gui::FleetNetworkStatus::EventKind::PacketDropped;
+        switch (event.kind)
+        {
+        case communication::MeshEventKind::NodeRadioDisabled:
+            kind = gui::FleetNetworkStatus::EventKind::RadioDisabled;
+            break;
+        case communication::MeshEventKind::NodeRadioRestored:
+            kind = gui::FleetNetworkStatus::EventKind::RadioRestored;
+            break;
+        case communication::MeshEventKind::MessageDelivered:
+            kind = gui::FleetNetworkStatus::EventKind::MessageDelivered;
+            break;
+        case communication::MeshEventKind::PacketDropped:
+            kind = gui::FleetNetworkStatus::EventKind::PacketDropped;
+            break;
+        }
+        status.recentEvents.push_back({event.tick, kind,
+            event.source, event.destination});
+    }
+    return status;
 }
 }
