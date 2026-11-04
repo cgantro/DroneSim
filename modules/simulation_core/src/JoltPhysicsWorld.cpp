@@ -401,6 +401,22 @@ struct JoltPhysicsWorld::Impl
             throw std::out_of_range("물리 월드에서 강체를 찾을 수 없습니다.");
         return found->second;
     }
+
+    QuadrotorActuation &GetQuadrotorActuation(JoltRigidBodyHandle handle)
+    {
+        BodyRecord &body = GetBody(handle);
+        if (!body.quadrotor)
+            throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
+        return *body.quadrotor;
+    }
+
+    const QuadrotorActuation &GetQuadrotorActuation(JoltRigidBodyHandle handle) const
+    {
+        const BodyRecord &body = GetBody(handle);
+        if (!body.quadrotor)
+            throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
+        return *body.quadrotor;
+    }
 };
 
 JoltPhysicsWorld::JoltPhysicsWorld() : impl_(std::make_unique<Impl>())
@@ -594,15 +610,13 @@ JoltRigidBodyHandle JoltPhysicsWorld::CreateQuadrotor(const JoltRigidBodyDefinit
 void JoltPhysicsWorld::SetMotorTargets(JoltRigidBodyHandle handle,
                                        const std::array<double, 4> &speedRadiansPerSecond)
 {
-    auto &body = impl_->GetBody(handle);
-    if (!body.quadrotor)
-        throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
-    const double maximumSpeed = body.quadrotor->parameters.maximumMotorSpeedRadiansPerSecond;
+    auto &actuation = impl_->GetQuadrotorActuation(handle);
+    const double maximumSpeed = actuation.parameters.maximumMotorSpeedRadiansPerSecond;
     for (std::size_t rotor = 0; rotor < speedRadiansPerSecond.size(); ++rotor)
     {
         if (!std::isfinite(speedRadiansPerSecond[rotor]))
             throw std::invalid_argument("로터 목표 속도는 유한한 값이어야 합니다.");
-        body.quadrotor->targetSpeeds[rotor] =
+        actuation.targetSpeeds[rotor] =
             std::clamp(speedRadiansPerSecond[rotor], 0.0, maximumSpeed);
     }
 }
@@ -610,37 +624,30 @@ void JoltPhysicsWorld::SetMotorTargets(JoltRigidBodyHandle handle,
 void JoltPhysicsWorld::SetInitialMotorSpeeds(JoltRigidBodyHandle handle,
                                              const std::array<double, 4> &speedRadiansPerSecond)
 {
-    auto &body = impl_->GetBody(handle);
-    if (!body.quadrotor)
-        throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
-    if (body.quadrotor->hasStepped)
+    auto &actuation = impl_->GetQuadrotorActuation(handle);
+    if (actuation.hasStepped)
         throw std::logic_error("초기 로터 속도는 첫 물리 단계 전에만 설정할 수 있습니다.");
 
-    const double maximumSpeed = body.quadrotor->parameters.maximumMotorSpeedRadiansPerSecond;
+    const double maximumSpeed = actuation.parameters.maximumMotorSpeedRadiansPerSecond;
     for (double speed : speedRadiansPerSecond)
     {
         if (!std::isfinite(speed) || speed < 0.0 || speed > maximumSpeed)
             throw std::invalid_argument("초기 로터 속도를 허용 범위 안에서 지정해 주세요.");
     }
-    body.quadrotor->motorSpeeds = speedRadiansPerSecond;
-    body.quadrotor->targetSpeeds = speedRadiansPerSecond;
+    actuation.motorSpeeds = speedRadiansPerSecond;
+    actuation.targetSpeeds = speedRadiansPerSecond;
 }
 
 std::array<double, 4>
 JoltPhysicsWorld::MotorSpeedsRadiansPerSecond(JoltRigidBodyHandle handle) const
 {
-    auto &body = impl_->GetBody(handle);
-    if (!body.quadrotor)
-        throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
-    return body.quadrotor->motorSpeeds;
+    return impl_->GetQuadrotorActuation(handle).motorSpeeds;
 }
 
 std::array<double, 4> JoltPhysicsWorld::MotorThrustsNewtons(JoltRigidBodyHandle handle) const
 {
-    const auto &body = impl_->GetBody(handle);
-    if (!body.quadrotor)
-        throw std::logic_error("로터 입력을 받는 드론 강체가 아닙니다.");
-    return CalculateRotorThrusts(body.quadrotor->parameters, body.quadrotor->motorSpeeds);
+    const auto &actuation = impl_->GetQuadrotorActuation(handle);
+    return CalculateRotorThrusts(actuation.parameters, actuation.motorSpeeds);
 }
 
 void JoltPhysicsWorld::ApplyForce(JoltRigidBodyHandle handle, const glm::dvec3 &forceNewtons)
