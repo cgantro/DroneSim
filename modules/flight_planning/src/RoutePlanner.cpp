@@ -127,6 +127,7 @@ Cell NearestCell(const Grid& grid, const glm::dvec2& position)
 Grid CreateRouteGrid(const glm::dvec4& bounds)
 {
     Grid grid;
+    // 간격을 넘지 않도록 칸 수를 올림한다. 따라서 실제 X·Y 간격은 서로 다를 수 있다.
     grid.columns = static_cast<std::size_t>(std::ceil(
         (bounds.z - bounds.x) / routeCellSizeMeters)) + 1U;
     grid.rows = static_cast<std::size_t>(std::ceil(
@@ -167,8 +168,9 @@ std::optional<std::vector<Cell>> FindGridPath(
     std::priority_queue<Candidate, std::vector<Candidate>, std::greater<>> pending;
     const std::size_t startIndex = Index(grid, start);
     const std::size_t goalIndex = Index(grid, goal);
+    const glm::dvec2 goalPosition = Position(grid, goal);
     distance[startIndex] = 0.0;
-    pending.emplace(0.0, startIndex);
+    pending.emplace(glm::length(Position(grid, start) - goalPosition), startIndex);
 
     constexpr std::array<std::pair<int, int>, 8> neighbors{{
         {-1, -1}, {-1, 0}, {-1, 1}, {0, -1},
@@ -186,6 +188,7 @@ std::optional<std::vector<Cell>> FindGridPath(
 
         const Cell current{
             currentIndex / grid.columns, currentIndex % grid.columns};
+        const glm::dvec2 currentPosition = Position(grid, current);
         for (const auto [rowOffset, columnOffset] : neighbors)
         {
             const auto row = static_cast<std::ptrdiff_t>(current.row) + rowOffset;
@@ -210,10 +213,8 @@ std::optional<std::vector<Cell>> FindGridPath(
             }
 
             const std::size_t nextIndex = Index(grid, next);
-            // 직선 이동은 한 칸, 대각선 이동은 한 칸의 대각선 길이만큼 비용을 더한다.
-            const double stepCost = rowOffset != 0 && columnOffset != 0
-                ? routeCellSizeMeters * std::sqrt(2.0)
-                : routeCellSizeMeters;
+            // 지도 크기에 따라 격자 간격이 달라지므로, 실제 두 칸 중심 사이 거리를 쓴다.
+            const double stepCost = glm::length(nextPosition - currentPosition);
             const double candidateDistance = distance[currentIndex] + stepCost;
             if (candidateDistance >= distance[nextIndex])
                 continue;
@@ -221,8 +222,7 @@ std::optional<std::vector<Cell>> FindGridPath(
             previous[nextIndex] = currentIndex;
             distance[nextIndex] = candidateDistance;
             // 직선거리는 실제 이동 비용을 넘지 않는 하한이므로 A*가 최적 경로를 보장한다.
-            const double heuristic = glm::length(
-                Position(grid, next) - Position(grid, goal));
+            const double heuristic = glm::length(nextPosition - goalPosition);
             pending.emplace(candidateDistance + heuristic, nextIndex);
         }
     }
