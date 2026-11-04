@@ -54,14 +54,13 @@ void SimulatorWorldRenderer::DrawMissionGuides(
     std::span<const mission::FleetReconnaissanceTarget> targets,
     const DroneSceneRenderContext& context) const
 {
-    for (const auto& [droneId, assignment] : mission.Assignments())
-    {
+    mission.ForEachAssignment([&](const auto droneId, const auto& assignment) {
         static_cast<void>(droneId);
         const auto status = assignment.Status();
         if (status != mission::FleetDroneStatus::TakeoffReady
             && status != mission::FleetDroneStatus::Reconnaissance
             && status != mission::FleetDroneStatus::Landing)
-            continue;
+            return;
 
         glm::dvec3 previousPosition = assignment.StartPositionMeters();
         for (const glm::dvec3& waypoint : assignment.RouteWaypoints())
@@ -77,7 +76,7 @@ void SimulatorWorldRenderer::DrawMissionGuides(
         DrawCube(glm::translate(glm::mat4{1.0F}, marker)
             * glm::scale(glm::mat4{1.0F}, glm::vec3{0.65F}),
             missionRouteMaterial_, context);
-    }
+    });
 }
 
 void SimulatorWorldRenderer::DrawDrones(

@@ -496,11 +496,10 @@ public:
  */
 class FleetMissionState
 {
-public:
+private:
     using AssignmentMap =
         std::unordered_map<simulation::DroneId, FleetReconnaissanceState>;
 
-private:
     AssignmentMap assignments_;
     simulation::DroneId leaderId_ = 0;
     std::uint64_t nextAssignmentVersion_ = 1;
@@ -510,10 +509,12 @@ private:
     CompleteFleetMissionState completeMission_;
 
 public:
-    /** @brief 편대원 배정을 읽기 전용으로 순회한다. */
-    [[nodiscard]] const AssignmentMap& Assignments() const noexcept
+    /** @brief 드론별 임무 배정을 읽기 전용으로 하나씩 전달한다. */
+    template <class Visitor>
+    void ForEachAssignment(Visitor&& visitor) const
     {
-        return assignments_;
+        for (const auto& [droneId, assignment] : assignments_)
+            visitor(droneId, assignment);
     }
 
     /**

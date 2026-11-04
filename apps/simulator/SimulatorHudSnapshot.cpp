@@ -44,11 +44,10 @@ SimulatorHudSnapshot SimulatorHudSnapshot::Capture(
             droneId, state.mode, state.positionMeters, state.yawRadians});
     }
 
-    for (const auto& [droneId, assignment] : mission.Assignments())
-    {
+    mission.ForEachAssignment([&](const auto droneId, const auto& assignment) {
         if (!mission::IsFleetMissionInProgress(assignment.Status())
             || !assignment.HasRemainingWaypoints())
-            continue;
+            return;
 
         const auto& route = assignment.RouteWaypoints();
         const auto firstRemaining = route.begin()
@@ -57,7 +56,7 @@ SimulatorHudSnapshot SimulatorHudSnapshot::Capture(
         snapshot.routes.push_back({droneId,
             FindDroneStatus(snapshot.drones, droneId).positionMeters,
             std::move(remainingWaypoints)});
-    }
+    });
 
     const auto& formation = mission.FormationTransit();
     const auto& formationRoute = formation.Route().leaderWaypointsMeters;

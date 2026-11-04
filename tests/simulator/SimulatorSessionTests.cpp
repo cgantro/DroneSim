@@ -410,11 +410,11 @@ public:
                     + std::to_string(MissionState(app).LeaderId()));
                 previousLeaderId = MissionState(app).LeaderId();
             }
-            for (const auto& [droneId, mission] : MissionState(app).Assignments())
-            {
+            MissionState(app).ForEachAssignment([&](
+                const auto droneId, const auto& mission) {
                 auto& lastVersion = lastAssignmentVersions[droneId];
                 if (mission.AssignmentVersion() == lastVersion)
-                    continue;
+                    return;
                 assignmentHistory.push_back("Tick "
                     + std::to_string(app.simulation_.TickCount()) + ": 드론 "
                     + std::to_string(droneId) + " 목표 "
@@ -423,7 +423,7 @@ public:
                     + std::string(mission::FleetDroneStatusLabel(
                         mission.Status())));
                 lastVersion = mission.AssignmentVersion();
-            }
+            });
             sawReconnaissance = sawReconnaissance
                 || MissionState(app).CompleteMission().CurrentStage() == Stage::Reconnaissance;
             sawRegrouping = sawRegrouping
