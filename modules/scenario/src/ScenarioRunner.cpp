@@ -110,14 +110,23 @@ public:
         flightTimeSeconds_ = 0.0;
     }
 
-    /** @brief 물리 계산 직전의 비행 상태를 기준으로 한 Tick 시간을 더한다. */
+    /**
+     * @brief 물리 계산 직전의 비행 상태를 기준으로 한 Tick 시간을 더한다.
+     * @details 지상에서 이륙하거나 착륙하는 Tick은 물리 계산 전 상태가
+     *          Grounded인지에 따라 분류한다. 따라서 비행시간은 고정 60Hz
+     *          상태 표본으로 셈한 값이며, 한 Tick 안의 부분 시간은 따로 추정하지 않는다.
+     */
     void RecordTimeBeforePhysics(FlightMode mode) noexcept
     {
         if (mode != FlightMode::Grounded)
             flightTimeSeconds_ += DroneModel::fixedStepSeconds;
     }
 
-    /** @brief 물리 계산이 끝난 위치까지의 직선 이동 거리를 누적한다. */
+    /**
+     * @brief 물리 계산이 끝난 위치까지의 직선 이동 거리를 누적한다.
+     * @details 매 Tick의 시작·끝 위치 사이 거리를 더해 경로 길이를 근사한다.
+     *          Tick 안에서 곡선으로 움직인 실제 길이와는 차이가 날 수 있다.
+     */
     void RecordPositionAfterPhysics(const glm::dvec3& positionMeters) noexcept
     {
         flightDistanceMeters_ += glm::distance(
