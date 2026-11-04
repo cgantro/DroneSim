@@ -430,10 +430,11 @@ void UpdateMissionCommands(
             continue;
         if (!dronesWithPendingTask.insert(task.droneName).second)
             continue;
-        if (tick < task.startTick || !drones.at(task.droneName).Observation().IsConnected())
+        const ScenarioDroneRuntime& runtime = drones.at(task.droneName);
+        if (tick < task.startTick || !runtime.Observation().IsConnected())
             continue;
 
-        const DroneId droneId = drones.at(task.droneName).Id();
+        const DroneId droneId = runtime.Id();
         const FlightMode mode = simulation.State(droneId).mode;
         if (!DroneModel::CanAcceptInFlightCommands(mode))
         {
@@ -565,10 +566,11 @@ void ScenarioCollisionAvoidance::Advance(
     motionIntents.reserve(definition.drones.size());
     for (const ScenarioDrone& drone : definition.drones)
     {
-        const bool connected = drones.at(drone.name).Observation().IsConnected();
+        const ScenarioDroneRuntime& runtime = drones.at(drone.name);
+        const bool connected = runtime.Observation().IsConnected();
         DroneState state = connected
-            ? simulation.State(drones.at(drone.name).Id())
-            : drones.at(drone.name).Observation().LastKnownState();
+            ? simulation.State(runtime.Id())
+            : runtime.Observation().LastKnownState();
 
         // 통신이 끊긴 드론은 마지막 위치에 멈춰 있는 장애물처럼 다룬다.
         if (!connected)
@@ -619,7 +621,8 @@ void ScenarioCollisionAvoidance::Advance(
         // 매번 경로가 바뀌며 기체가 좌우로 흔들리는 현상을 막는다.
         const auto [activeTarget, newlyAvoiding] =
             activeTargetsByDrone_.try_emplace(drone.name, plannedTarget->second);
-        const CommandResult commandResult = simulation.Apply(drones.at(drone.name).Id(),
+        const DroneId droneId = drones.at(drone.name).Id();
+        const CommandResult commandResult = simulation.Apply(droneId,
             {DroneCommand::Kind::SetWaypoint, activeTarget->second});
         if (commandResult != CommandResult::Accepted)
         {
@@ -664,10 +667,11 @@ void UpdateMissionResults(
 
     for (ScenarioResult::MissionTask& task : mission->tasks)
     {
-        if (!drones.at(task.droneName).Observation().IsConnected())
+        const ScenarioDroneRuntime& runtime = drones.at(task.droneName);
+        if (!runtime.Observation().IsConnected())
             continue;
 
-        const DroneId droneId = drones.at(task.droneName).Id();
+        const DroneId droneId = runtime.Id();
         const auto update = task.UpdateProgress(
             simulation.State(droneId).positionMeters, tick);
         switch (update)
