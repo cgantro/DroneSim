@@ -16,17 +16,22 @@ struct PlannedFleetRoute
     std::vector<glm::dvec3> waypointsMeters;
 };
 
-/** @brief 경로를 만들 때 사용할 수 있는 최신 드론 상태를 가져온다.
- * @details 지상 시작은 로컬 상태에서 착륙한 기체만 받고, 비행 중 시작은
- *          통신으로 받은 상태 중 비행 명령을 받을 수 있는 상태만 허용한다.
+/**
+ * @brief 시작 방식에 맞는 상태 출처에서 경로 계획에 쓸 드론 정보를 가져온다.
+ * @details 지상 시작은 로컬 시뮬레이션의 착륙 상태를 확인한다. 비행 중 시작은
+ *          리더가 받은 최신 텔레메트리만 사용해 오래된 위치로 경로를 만들지 않는다.
  */
 [[nodiscard]] std::optional<mission::PeerTelemetry> ReadyRouteObservation(
     const mission::FleetMissionState& fleetMission,
     const simulation::SimulationCore& simulationCore,
     simulation::DroneId droneId,
-    mission::MissionStateSource observationSource,
-    bool startsOnGround)
+    mission::FleetMissionStartMode startMode)
 {
+    const bool startsOnGround = startMode
+        == mission::FleetMissionStartMode::TakeOffFromGround;
+    const mission::MissionStateSource observationSource = startsOnGround
+        ? mission::MissionStateSource::LocalSimulation
+        : mission::MissionStateSource::FreshTelemetry;
     const auto observation = fleetMission.CurrentDroneObservation(
         droneId, simulationCore, observationSource);
     if (!observation)
@@ -210,15 +215,10 @@ bool FleetMissionController::StartFleetReconnaissance(
 
     std::vector<dronesim::mission::FleetReconnaissanceStart> starts;
     starts.reserve(droneIds.size());
-    const auto observationSource = startsOnGround
-        ? dronesim::mission::MissionStateSource::LocalSimulation
-        : dronesim::mission::MissionStateSource::FreshTelemetry;
-    // 지상에서 시작하면 실제 ECS 상태를 읽고, 비행 중 재시작은 리더가 받은 최신 보고만 쓴다.
-    // 끊긴 통신의 오래된 위치로 새 정찰 경로를 만드는 일을 막는다.
     for (const DroneId droneId : droneIds)
     {
         const auto observation = ReadyRouteObservation(
-            fleetMission_, simulation_, droneId, observationSource, startsOnGround);
+            fleetMission_, simulation_, droneId, startMode);
         if (!observation)
             return false;
 
@@ -295,9 +295,6 @@ bool FleetMissionController::StartFleetReturn(
     // 경로와 대상 드론을 한 항목으로 묶어, 배정 순서가 달라져도 서로 어긋나지 않게 한다.
     std::vector<PlannedFleetRoute> returnPlans;
     returnPlans.reserve(droneIds.size());
-    const auto observationSource = startsOnGround
-        ? dronesim::mission::MissionStateSource::LocalSimulation
-        : dronesim::mission::MissionStateSource::FreshTelemetry;
     for (const auto droneId : droneIds)
     {
         const auto& mission = fleetMission_.Assignment(droneId);
@@ -305,7 +302,7 @@ bool FleetMissionController::StartFleetReturn(
             continue;
 
         const auto observation = ReadyRouteObservation(
-            fleetMission_, simulation_, droneId, observationSource, startsOnGround);
+            fleetMission_, simulation_, droneId, startMode);
         if (!observation
             || mission.Leg() == dronesim::mission::FleetMissionLeg::Returning)
             return false;
