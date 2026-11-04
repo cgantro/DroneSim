@@ -272,19 +272,18 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
             bounds.nodeTransform = nodeTransform;
             if (primitives.size() > 1U)
                 bounds.nodeName += " · 메시 " + std::to_string(primitiveIndex + 1U);
-            for (const Vertex& vertex : vertices)
-            {
-                const glm::vec3 position = glm::vec3(
-                    nodeTransform * glm::vec4(vertex.position, 1.0F));
-                bounds.minimum = glm::min(bounds.minimum, position);
-                bounds.maximum = glm::max(bounds.maximum, position);
-            }
-            model->partBounds_.push_back(bounds);
-
             GlbCollisionPart collisionPart;
             collisionPart.vertices.reserve(vertices.size());
             for (const Vertex& vertex : vertices)
+            {
+                const glm::vec3 transformedPosition = glm::vec3(
+                    nodeTransform * glm::vec4(vertex.position, 1.0F));
+                bounds.minimum = glm::min(bounds.minimum, transformedPosition);
+                bounds.maximum = glm::max(bounds.maximum, transformedPosition);
                 collisionPart.vertices.push_back(vertex.position);
+            }
+            model->partBounds_.push_back(bounds);
+
             collisionPart.triangleIndices = indices;
             collisionPart.nodeTransform = nodeTransform;
             model->collisionParts_.push_back(std::move(collisionPart));
