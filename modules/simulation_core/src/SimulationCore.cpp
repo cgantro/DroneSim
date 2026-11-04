@@ -139,6 +139,7 @@ bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
  */
 struct SimulationCore::EcsStorage
 {
+    /** @brief Reset 때 되돌릴 시작 위치와 방향을 엔티티에 보관한다. */
     struct InitialPose
     {
         glm::dvec3 positionMeters{0.0};
@@ -146,6 +147,7 @@ struct SimulationCore::EcsStorage
         double groundElevationMeters = 0.0;
     };
 
+    /** @brief Flecs 드론 엔티티와 Jolt 강체를 연결하는 컴포넌트다. */
     struct PhysicsBody
     {
         JoltRigidBodyHandle handle;
@@ -246,10 +248,14 @@ struct SimulationCore::EcsStorage
 
         try
         {
+            // 비행 상태와 제어 목표는 Flecs가 보관하고, 시작 자세는 Reset 기준으로 남긴다.
+            // 카메라 상태도 같은 엔티티에 두어 드론 삭제 시 함께 정리되게 한다.
             drone.set<DroneState>(initialState)
                 .set<DroneControlState>(initialControl)
                 .set<InitialPose>(initialPose)
                 .set<CameraState>({});
+
+            // 강체는 별도 물리 월드에서 만들고, 생성이 성공한 뒤에만 엔티티와 연결한다.
             JoltRigidBodyDefinition definition;
             definition.positionMeters = positionMeters;
             definition.orientation = initialState.orientation;
