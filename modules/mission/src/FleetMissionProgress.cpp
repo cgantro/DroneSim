@@ -203,6 +203,11 @@ void FleetReconnaissanceState::BeginLeg(FleetMissionLeg nextLeg) noexcept
     leg_ = nextLeg;
     status_ = FleetDroneStatus::RoutePending;
     routeWaypointsMeters_.clear();
+    ResetRouteProgress();
+}
+
+void FleetReconnaissanceState::ResetRouteProgress() noexcept
+{
     nextWaypoint_ = 0U;
     routeReceived_ = false;
     waypointCommanded_ = false;
@@ -212,18 +217,14 @@ void FleetReconnaissanceState::SetPlannedRoute(
     std::vector<glm::dvec3> routeWaypointsMeters)
 {
     routeWaypointsMeters_ = std::move(routeWaypointsMeters);
-    nextWaypoint_ = 0U;
-    routeReceived_ = false;
-    waypointCommanded_ = false;
+    ResetRouteProgress();
 }
 
 std::vector<glm::dvec3> FleetReconnaissanceState::TakeRouteForDelivery()
 {
     std::vector<glm::dvec3> route = std::move(routeWaypointsMeters_);
     routeWaypointsMeters_.clear();
-    nextWaypoint_ = 0U;
-    routeReceived_ = false;
-    waypointCommanded_ = false;
+    ResetRouteProgress();
     return route;
 }
 
@@ -231,17 +232,14 @@ void FleetReconnaissanceState::ReceiveRoute(
     std::vector<glm::dvec3> routeWaypointsMeters)
 {
     routeWaypointsMeters_ = std::move(routeWaypointsMeters);
-    nextWaypoint_ = 0U;
+    ResetRouteProgress();
     routeReceived_ = true;
-    waypointCommanded_ = false;
 }
 
 void FleetReconnaissanceState::WaitForRoute() noexcept
 {
     routeWaypointsMeters_.clear();
-    nextWaypoint_ = 0U;
-    routeReceived_ = false;
-    waypointCommanded_ = false;
+    ResetRouteProgress();
 }
 
 void FleetReconnaissanceState::BeginLowBatteryReturn() noexcept

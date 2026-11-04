@@ -108,6 +108,9 @@ private:
     glm::dvec3 startPositionMeters_{0.0};
     std::uint64_t assignmentVersion_ = 0;
 
+    /** @brief 경로를 교체할 때 이전 경유점 진행과 수신 상태를 함께 초기화한다. */
+    void ResetRouteProgress() noexcept;
+
 public:
     /** @brief 드론에 배정된 정찰 목표 번호를 돌려준다. */
     [[nodiscard]] std::size_t TargetIndex() const noexcept { return targetIndex_; }
