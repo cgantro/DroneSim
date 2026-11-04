@@ -212,6 +212,12 @@ struct SimulationCore::EcsStorage
             });
     }
 
+    /**
+     * @brief 카메라 프레임 생성을 Flecs의 고정 Tick 갱신 단계에 연결한다.
+     * @details 여기서는 아직 tickCount를 올리기 전이므로, 이번에 진행할 Tick 번호인
+     *          tickCount + 1을 전달한다. 그래야 카메라 프레임 번호와 물리 상태가 같은
+     *          시뮬레이션 시점을 가리킨다.
+     */
     void RegisterCameraSystem()
     {
         world.system<CameraState>("AdvanceCamera")
