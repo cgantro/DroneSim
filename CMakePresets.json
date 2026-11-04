@@ -9,7 +9,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "DRONESIM_BUILD_GRAPHICS": "ON",
-        "BUILD_TESTING": "OFF"
+        "BUILD_TESTING": "ON"
       }
     },
     {
