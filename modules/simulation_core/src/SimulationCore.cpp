@@ -9,6 +9,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <map>
@@ -129,6 +130,164 @@ bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
 {
     return geometry::IsFinite(positionMeters) && std::isfinite(yawRadians);
 }
+
+/** @brief Flecs 엔티티가 대응되는 Jolt 강체를 찾는 데 쓰는 컴포넌트다. */
+struct PhysicsBody
+{
+    JoltRigidBodyHandle handle;
+};
+
+/**
+ * @brief Flecs 드론 상태와 Jolt 물리 월드를 연결한다.
+ * @details Jolt는 실제 강체 계산을 맡고, 이 연결부는 강체 생성·제거와 상태 복사를 맡는다.
+ *          ECS 월드보다 먼저 생성해 Flecs 콜백이 정리될 때까지 물리 월드가 살아 있게 한다.
+ */
+class PhysicsEcsBridge final
+{
+public:
+    PhysicsEcsBridge()
+    {
+        // 실제 지형을 아직 읽지 못한 시작 구간에도 드론이 떨어지지 않도록 임시 바닥을 둔다.
+        defaultGround_ = world_.AddStaticBox(
+            {0.0, 0.0, -0.5}, {10000.0, 10000.0, 0.5});
+    }
+
+    [[nodiscard]] JoltRigidBodyHandle CreateDrone(
+        const JoltRigidBodyDefinition& definition,
+        const QuadrotorParameters& parameters)
+    {
+        return world_.CreateQuadrotor(definition, parameters);
+    }
+
+    [[nodiscard]] bool DestroyBody(JoltRigidBodyHandle body)
+    {
+        return world_.DestroyBody(body);
+    }
+
+    void SetMotorTargets(
+        JoltRigidBodyHandle body,
+        const std::array<double, 4>& speedsRadiansPerSecond)
+    {
+        world_.SetMotorTargets(body, speedsRadiansPerSecond);
+    }
+
+    /** @brief Jolt 상태를 ECS 컴포넌트로 복사하고 비행 모드를 다시 판정한다. */
+    void SynchronizeDrone(
+        DroneState& state, DroneControlState& control, JoltRigidBodyHandle body) const
+    {
+        CopyPhysicsState(state, body);
+        DroneModel::UpdateFlightModeAfterPhysics(
+            state, control,
+            QuadrotorFlightController::groundedModelOriginHeightMeters);
+    }
+
+    /** @brief 한 고정 Tick만큼 Jolt를 진행하고 모든 드론 상태를 ECS에 반영한다. */
+    void Advance(flecs::world& entities)
+    {
+        lastStepDurationMicroseconds_ = 0.0;
+        world_.StepFixed(measureStepDuration_ ? &lastStepDurationMicroseconds_ : nullptr);
+        // Jolt가 이동을 끝낸 다음 복사해야 같은 Tick의 상태가 ECS와 물리 월드에 맞춰진다.
+        entities.each([this](DroneState& state, DroneControlState& control,
+                             const PhysicsBody& body)
+        {
+            SynchronizeDrone(state, control, body.handle);
+        });
+    }
+
+    /** @brief 시작 상태를 현재 강체에 적용하고, 엔진이 정규화한 상태를 ECS에 돌려준다. */
+    void SetInitialState(
+        flecs::entity drone, const JoltRigidBodyState& state,
+        const std::array<double, 4>& motorSpeedsRadiansPerSecond)
+    {
+        const JoltRigidBodyHandle body = drone.get<PhysicsBody>().handle;
+        world_.SetState(body, state);
+        world_.SetInitialMotorSpeeds(body, motorSpeedsRadiansPerSecond);
+        CopyPhysicsState(drone.get_mut<DroneState>(), body);
+    }
+
+    void CopyStateToEcs(DroneState& target, JoltRigidBodyHandle body) const
+    {
+        CopyPhysicsState(target, body);
+    }
+
+    /** @brief Reset된 ECS 위치와 방향을 물리 강체에 다시 적용한다. */
+    void ResetBody(flecs::entity drone)
+    {
+        const DroneState& state = drone.get<DroneState>();
+        JoltRigidBodyState initialState;
+        initialState.positionMeters = state.positionMeters;
+        initialState.orientation = state.orientation;
+        const JoltRigidBodyHandle body = drone.get<PhysicsBody>().handle;
+        world_.SetState(body, initialState);
+        CopyPhysicsState(drone.get_mut<DroneState>(), body);
+    }
+
+    void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
+    {
+        world_.SetWindVelocityMetersPerSecond(velocity);
+    }
+
+    void SetTimingEnabled(bool enabled) noexcept
+    {
+        measureStepDuration_ = enabled;
+        lastStepDurationMicroseconds_ = 0.0;
+    }
+
+    [[nodiscard]] double LastStepDurationMicroseconds() const noexcept
+    {
+        return lastStepDurationMicroseconds_;
+    }
+
+    void AddStaticObstacleBox(
+        const glm::dvec3& centerMeters, const glm::dvec3& halfExtentsMeters)
+    {
+        static_cast<void>(world_.AddStaticBox(centerMeters, halfExtentsMeters));
+    }
+
+    void AddStaticObstacleMesh(
+        std::span<const glm::dvec3> verticesMeters,
+        std::span<const std::uint32_t> triangleIndices)
+    {
+        world_.AddStaticTriangleMesh(verticesMeters, triangleIndices);
+    }
+
+    void AddStaticObstaclePrism(
+        const std::vector<glm::dvec2>& outlineMeters,
+        double bottomMeters, double topMeters)
+    {
+        world_.AddStaticPrism(outlineMeters, bottomMeters, topMeters);
+    }
+
+    void SetTerrain(const terrain::TerrainGrid& terrain)
+    {
+        // 새 지형 생성이 성공한 뒤에만 임시 바닥을 없애 드론이 빈 공간에 남지 않게 한다.
+        world_.SetTerrain(terrain);
+        if (defaultGround_)
+        {
+            static_cast<void>(world_.DestroyBody(*defaultGround_));
+            defaultGround_.reset();
+        }
+    }
+
+private:
+    void CopyPhysicsState(DroneState& target, JoltRigidBodyHandle body) const
+    {
+        // 비행 위치와 자세는 Jolt 결과를 기준으로 하며, 로터 회전수도 함께 복사한다.
+        const JoltRigidBodyState source = world_.State(body);
+        target.positionMeters = source.positionMeters;
+        target.velocityMetersPerSecond = source.linearVelocityMetersPerSecond;
+        target.orientation = source.orientation;
+        target.angularVelocityRadiansPerSecond = source.angularVelocityRadiansPerSecond;
+        target.motorSpeedsRadiansPerSecond = world_.MotorSpeedsRadiansPerSecond(body);
+        target.yawRadians = DroneModel::YawRadians(target);
+    }
+
+    // 이 멤버는 world보다 먼저 생성되어야 한다. Flecs의 시스템 콜백이 물리를 참조하기 때문이다.
+    JoltPhysicsWorld world_;
+    std::optional<JoltRigidBodyHandle> defaultGround_;
+    bool measureStepDuration_ = false;
+    double lastStepDurationMicroseconds_ = 0.0;
+};
 }
 
 /**
@@ -147,21 +306,12 @@ struct SimulationCore::EcsStorage
         double groundElevationMeters = 0.0;
     };
 
-    /** @brief Flecs 드론 엔티티와 Jolt 강체를 연결하는 컴포넌트다. */
-    struct PhysicsBody
-    {
-        JoltRigidBodyHandle handle;
-    };
-
     QuadrotorControllerParameters controllerParameters;
     QuadrotorParameters quadrotorParameters;
-    /** @brief 월드의 콜백이 물리를 사용하므로 Flecs 월드보다 나중에 정리한다. */
-    JoltPhysicsWorld physics;
-    std::optional<JoltRigidBodyHandle> defaultGround;
+    /** @brief Flecs 월드보다 먼저 만들어져야 콜백에서 쓰는 물리가 끝까지 살아 있다. */
+    PhysicsEcsBridge physics;
     flecs::world world;
     DroneRegistry droneRegistry;
-    bool measurePhysicsStepDuration = false;
-    double lastPhysicsStepDurationMicroseconds = 0.0;
     std::uint64_t tickCount = 0;
 
     static void ApplyInitialPose(
@@ -182,10 +332,6 @@ struct SimulationCore::EcsStorage
         : controllerParameters(selectedControllerParameters)
         , quadrotorParameters(std::move(selectedQuadrotorParameters))
     {
-        // 지형을 불러오기 전에도 드론이 떨어지지 않도록 임시 평면을 둔다.
-        // 바닥 윗면은 z=0이며, 실제 지형 등록이 끝나면 이 평면을 제거한다.
-        defaultGround = physics.AddStaticBox(
-            {0.0, 0.0, -0.5}, {10000.0, 10000.0, 0.5});
         static_cast<void>(CreateDrone(glm::dvec3{
             0.0, 0.0, QuadrotorFlightController::groundedModelOriginHeightMeters}, 0.0));
         RegisterMotorTargetSystem();
@@ -259,9 +405,9 @@ struct SimulationCore::EcsStorage
             JoltRigidBodyDefinition definition;
             definition.positionMeters = positionMeters;
             definition.orientation = initialState.orientation;
-            createdBody = physics.CreateQuadrotor(definition, quadrotorParameters);
+            createdBody = physics.CreateDrone(definition, quadrotorParameters);
             drone.set<PhysicsBody>({*createdBody});
-            CopyPhysicsState(drone.get_mut<DroneState>(), *createdBody);
+            physics.CopyStateToEcs(drone.get_mut<DroneState>(), *createdBody);
             // 카메라는 물리 엔진이 확정한 기체 위치와 방향을 기준으로 붙인다.
             SynchronizeCameraPose(drone);
 
@@ -327,10 +473,9 @@ struct SimulationCore::EcsStorage
             normalized.orientation,
             normalized.velocityMetersPerSecond,
             normalized.angularVelocityRadiansPerSecond};
-        physics.SetState(body, rigidBodyState);
-        physics.SetInitialMotorSpeeds(body,
-            normalized.motorSpeedsRadiansPerSecond);
-        CopyPhysicsState(normalized, body);
+        physics.SetInitialState(
+            drone, rigidBodyState, normalized.motorSpeedsRadiansPerSecond);
+        normalized = drone.get<DroneState>();
         normalized.mode = state.mode;
         drone.set<DroneState>(normalized);
         SynchronizeCameraPose(drone);
@@ -423,10 +568,9 @@ struct SimulationCore::EcsStorage
 
     void AdvanceOneTick()
     {
-        lastPhysicsStepDurationMicroseconds = 0.0;
         // Flecs OnUpdate에서 모터 목표와 카메라 프레임을 갱신한 뒤 Jolt가 기체를 한 단계 움직인다.
         world.progress(DroneModel::fixedStepSeconds);
-        AdvancePhysicsWorld();
+        physics.Advance(world);
         // 배터리는 새 비행 상태를 기준으로 소모량을 계산하고, 카메라 자세도 새 기체 위치에 맞춘다.
         world.each([](BatteryModel& battery, const DroneState& state)
         {
@@ -457,34 +601,33 @@ struct SimulationCore::EcsStorage
 
     void SetPhysicsStepTimingEnabled(bool enabled) noexcept
     {
-        measurePhysicsStepDuration = enabled;
-        lastPhysicsStepDurationMicroseconds = 0.0;
+        physics.SetTimingEnabled(enabled);
     }
 
     double LastPhysicsStepDurationMicroseconds() const noexcept
     {
-        return lastPhysicsStepDurationMicroseconds;
+        return physics.LastStepDurationMicroseconds();
     }
 
     void AddStaticObstacleBox(
         const glm::dvec3& centerMeters, const glm::vec3& halfExtentsMeters)
     {
-        static_cast<void>(physics.AddStaticBox(
-            centerMeters, glm::dvec3{halfExtentsMeters}));
+        physics.AddStaticObstacleBox(
+            centerMeters, glm::dvec3{halfExtentsMeters});
     }
 
     void AddStaticObstacleMesh(
         std::span<const glm::dvec3> verticesMeters,
         std::span<const std::uint32_t> triangleIndices)
     {
-        physics.AddStaticTriangleMesh(verticesMeters, triangleIndices);
+        physics.AddStaticObstacleMesh(verticesMeters, triangleIndices);
     }
 
     void AddStaticObstaclePrism(
         const std::vector<glm::dvec2>& outlineMeters,
         double bottomMeters, double topMeters)
     {
-        physics.AddStaticPrism(outlineMeters, bottomMeters, topMeters);
+        physics.AddStaticObstaclePrism(outlineMeters, bottomMeters, topMeters);
     }
 
     std::uint64_t TickCount() const noexcept
@@ -533,17 +676,6 @@ struct SimulationCore::EcsStorage
         return true;
     }
 
-    void ResetPhysicsBody(flecs::entity& drone)
-    {
-        const DroneState& droneState = drone.get<DroneState>();
-        JoltRigidBodyState initialState;
-        initialState.positionMeters = droneState.positionMeters;
-        initialState.orientation = droneState.orientation;
-        const JoltRigidBodyHandle body = drone.get<PhysicsBody>().handle;
-        physics.SetState(body, initialState);
-        CopyPhysicsState(drone.get_mut<DroneState>(), body);
-    }
-
     void ResetDrone(flecs::entity& drone)
     {
         const InitialPose& initialPose = drone.get<InitialPose>();
@@ -551,7 +683,7 @@ struct SimulationCore::EcsStorage
             drone.get_mut<DroneState>(),
             drone.get_mut<DroneControlState>(),
             initialPose);
-        ResetPhysicsBody(drone);
+        physics.ResetBody(drone);
     }
 
     void UpdateMotorTargets(
@@ -569,52 +701,10 @@ struct SimulationCore::EcsStorage
         physics.SetMotorTargets(body, targetSpeeds);
     }
 
-    void SynchronizeRigidBody(
-        DroneState& state,
-        DroneControlState& control,
-        JoltRigidBodyHandle body)
-    {
-        CopyPhysicsState(state, body);
-        DroneModel::UpdateFlightModeAfterPhysics(state, control,
-            QuadrotorFlightController::groundedModelOriginHeightMeters);
-    }
-
-    void CopyPhysicsState(DroneState& target, JoltRigidBodyHandle body) const
-    {
-        // 비행 위치와 자세의 기준은 물리 엔진이다. 모터 시험에서 기록한 실제 회전수도 함께 복사한다.
-        const JoltRigidBodyState source = physics.State(body);
-        target.positionMeters = source.positionMeters;
-        target.velocityMetersPerSecond = source.linearVelocityMetersPerSecond;
-        target.orientation = source.orientation;
-        target.angularVelocityRadiansPerSecond = source.angularVelocityRadiansPerSecond;
-        target.motorSpeedsRadiansPerSecond = physics.MotorSpeedsRadiansPerSecond(body);
-        target.yawRadians = DroneModel::YawRadians(target);
-    }
-
-    void AdvancePhysicsWorld()
-    {
-        // 물리 엔진이 한 고정 간격만큼 이동시킨 뒤, ECS 상태를 새 위치에 맞춘다.
-        physics.StepFixed(
-            measurePhysicsStepDuration ? &lastPhysicsStepDurationMicroseconds : nullptr);
-
-        // 물리 객체가 연결된 상태·제어 컴포넌트만 Flecs 쿼리로 다시 동기화한다.
-        world.each([this](DroneState& state,
-            DroneControlState& control, const PhysicsBody& body)
-        {
-            SynchronizeRigidBody(
-                state, control, body.handle);
-        });
-    }
-
     void SetTerrain(const terrain::TerrainGrid& terrain)
     {
         // 지형 생성이 실패하면 기존 임시 바닥을 유지해 드론이 추락하지 않게 한다.
         physics.SetTerrain(terrain);
-        if (defaultGround)
-        {
-            static_cast<void>(physics.DestroyBody(*defaultGround));
-            defaultGround.reset();
-        }
     }
 
 private:
