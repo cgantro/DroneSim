@@ -147,6 +147,7 @@ glm::dquat ToProjectRotation(JPH::QuatArg jolt)
 class BroadPhaseLayers final : public JPH::BroadPhaseLayerInterface
 {
 public:
+    // Jolt 물체 층 0은 고정물, 1은 움직이는 물체다. 아래 필터가 이 번호를 다시 사용한다.
     BroadPhaseLayers() : layers_{JPH::BroadPhaseLayer(0), JPH::BroadPhaseLayer(1)}
     {
     }
@@ -198,6 +199,7 @@ JPH::RefConst<JPH::Shape> MakeBoxShape(const glm::dvec3 &halfExtentsMeters)
 JPH::RefConst<JPH::Shape> MakeQuadrotorShape(const QuadrotorParameters &parameters)
 {
     JPH::StaticCompoundShapeSettings compound;
+    // 여러 상자를 기체 중심 기준 위치에 붙여 본체와 다리의 충돌 모양을 하나의 강체로 묶는다.
     for (const QuadrotorCollisionBox &box : parameters.collisionBoxes)
     {
         if (!collision::IsValidObstacleBox(box.positionMeters, glm::dvec3{box.halfExtentsMeters}) ||
@@ -593,7 +595,7 @@ JoltRigidBodyHandle JoltPhysicsWorld::CreateQuadrotor(const JoltRigidBodyDefinit
                                        movingLayer);
     settings.mOverrideMassProperties = JPH::EOverrideMassProperties::MassAndInertiaProvided;
     settings.mMassPropertiesOverride.mMass = ToJoltPositiveFloat(parameters.massKilograms);
-    // Jolt 축은 (동, 위, 남쪽 반대)이므로 ENU의 북·위 관성 순서를 바꾼다.
+    // 주 관성값은 기체 중심축의 회전 저항이다. Jolt 축 순서에 맞춰 북·위 항목을 바꿔 넣는다.
     settings.mMassPropertiesOverride.mInertia = JPH::Mat44::sScale(
         JPH::Vec3(ToJoltPositiveFloat(parameters.principalInertiaKilogramMetersSquared.x),
                   ToJoltPositiveFloat(parameters.principalInertiaKilogramMetersSquared.z),
@@ -706,6 +708,7 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds)
         *stepDurationMicroseconds = 0.0;
 
     JPH::BodyInterface &bodyInterface = impl_->physicsSystem.GetBodyInterface();
+    // 적분 전 상태에서 바람·모터 힘을 계산해야 이번 Tick의 위치와 자세에 맞는 힘이 적용된다.
     for (auto &[handle, body] : impl_->bodies)
     {
         static_cast<void>(handle);
