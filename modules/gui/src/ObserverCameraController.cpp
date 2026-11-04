@@ -37,8 +37,12 @@ void ObserverCameraController::Update(
 {
     const auto& state = observerDroneId == 0U
         ? simulation.State() : simulation.State(observerDroneId);
+    // ENU에서 드론의 yaw는 동쪽 축을 기준으로 한 수평 방향이다.
+    // 드론 뒤쪽을 기본 시점으로 삼고 사용자가 돌린 각도를 더한다.
     const double cameraYaw = state.yawRadians + std::numbers::pi_v<double>
         + orbitYawRadians_;
+    // 카메라와 목표점 사이 거리를 수평 성분과 위쪽 성분으로 나눠
+    // 구면 좌표처럼 드론 주위를 도는 카메라 위치를 계산한다.
     const double horizontalDistanceMeters = distanceMeters_
         * std::cos(orbitPitchRadians_);
     const glm::dvec3 targetPositionMeters = state.positionMeters
@@ -51,6 +55,8 @@ void ObserverCameraController::Update(
 
     if (flight_planning::ContainsAnyBuildingVolume(buildings, cameraPositionMeters))
     {
+        // 카메라가 건물 안에 들어가면 목표점에서 바깥으로 이어지는 직선 위에서
+        // 1m씩 물러난다. 매 프레임 복잡한 경로 탐색을 하지 않도록 최대 24m만 확인한다.
         const glm::dvec3 awayFromTarget = glm::normalize(
             cameraPositionMeters - targetPositionMeters);
         for (double retreatMeters = 1.0; retreatMeters <= 24.0; retreatMeters += 1.0)
