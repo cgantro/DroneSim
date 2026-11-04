@@ -38,6 +38,24 @@ glm::vec3 ReadVec3(const Json& values, const char* name,
     return result;
 }
 
+glm::quat ReadNodeRotation(const Json& node)
+{
+    if (!node.contains("rotation"))
+        return glm::quat(1.0F, 0.0F, 0.0F, 0.0F);
+
+    const Json& values = node.at("rotation");
+    if (!values.is_array() || values.size() != 4U)
+        throw std::runtime_error("GLB 노드 회전 값이 올바르지 않습니다.");
+
+    // glTF 배열은 x,y,z,w 순서지만 GLM 생성자는 w,x,y,z 순서로 받는다.
+    glm::quat rotation(values.at(3).get<float>(), values.at(0).get<float>(),
+        values.at(1).get<float>(), values.at(2).get<float>());
+    const float length = glm::length(rotation);
+    if (!std::isfinite(length) || length < 1.0e-6F)
+        throw std::runtime_error("GLB 노드 회전 값이 올바르지 않습니다.");
+    return glm::normalize(rotation);
+}
+
 glm::mat4 ReadNodeTransform(const Json& node)
 {
     // GLB는 행렬 하나 또는 이동·회전·크기 값을 저장한다. 둘 중 실제로 있는 형식을 읽는다.
@@ -59,22 +77,7 @@ glm::mat4 ReadNodeTransform(const Json& node)
 
     const glm::vec3 translation = ReadVec3(node, "translation", glm::vec3(0.0F));
     const glm::vec3 scale = ReadVec3(node, "scale", glm::vec3(1.0F));
-    glm::quat rotation(1.0F, 0.0F, 0.0F, 0.0F);
-    if (node.contains("rotation"))
-    {
-        const Json& values = node.at("rotation");
-        if (!values.is_array() || values.size() != 4U)
-            throw std::runtime_error("GLB 노드 회전 값이 올바르지 않습니다.");
-        const float x = values.at(0).get<float>();
-        const float y = values.at(1).get<float>();
-        const float z = values.at(2).get<float>();
-        const float w = values.at(3).get<float>();
-        rotation = glm::quat(w, x, y, z);
-        const float length = glm::length(rotation);
-        if (!std::isfinite(length) || length < 1.0e-6F)
-            throw std::runtime_error("GLB 노드 회전 값이 올바르지 않습니다.");
-        rotation = glm::normalize(rotation);
-    }
+    const glm::quat rotation = ReadNodeRotation(node);
     // glTF 회전 순서와 쿼터니언 값(x,y,z,w)을 GLM 행렬로 옮긴다.
     glm::mat4 result = glm::translate(glm::mat4(1.0F), translation);
     const float x = rotation.x;
