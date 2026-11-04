@@ -69,6 +69,15 @@ std::optional<FlightMode> TryParseFlightMode(std::string_view name) noexcept
     return std::nullopt;
 }
 
+bool DroneCommand::HasValidRotorThrustRatios() const noexcept
+{
+    return std::all_of(rotorThrustRatios.begin(), rotorThrustRatios.end(),
+        [](double ratio)
+        {
+            return std::isfinite(ratio) && ratio >= 0.0 && ratio <= 1.0;
+        });
+}
+
 CommandResult DroneModel::Apply(
     DroneState& state, DroneControlState& control, const DroneCommand& command) noexcept
 {
@@ -156,8 +165,7 @@ CommandResult DroneModel::Apply(
         return CommandResult::Accepted;
 
     case DroneCommand::Kind::SetRotorThrusts:
-        if (!std::all_of(command.rotorThrustRatios.begin(), command.rotorThrustRatios.end(),
-            [](double ratio) { return std::isfinite(ratio) && ratio >= 0.0 && ratio <= 1.0; }))
+        if (!command.HasValidRotorThrustRatios())
         {
             return CommandResult::InvalidValue;
         }

@@ -43,16 +43,11 @@ void ValidateCommands(const ScenarioDefinition& definition,
         // 정렬되지 않은 명령은 실행 중 빠뜨릴 수 있으므로 거부한다.
         if (hasPreviousTick && command.tick < previousTick)
             throw std::invalid_argument("명령은 tick 순서대로 작성해야 합니다.");
-        // 파서는 값의 모양과 숫자 형식만 읽고, 로터 추력 비율의 허용 범위는 여기서 판단한다.
-        if (command.command.kind == DroneCommand::Kind::SetRotorThrusts)
-        {
-            for (const double thrustRatio : command.command.rotorThrustRatios)
-            {
-                if (thrustRatio < 0.0 || thrustRatio > 1.0)
-                    throw std::invalid_argument(
-                        "normalized_thrust 값은 0부터 1 사이여야 합니다.");
-            }
-        }
+        // 같은 유효성 규칙을 실시간 명령 처리와 공유해 범위 판단이 어긋나지 않게 한다.
+        if (command.command.kind == DroneCommand::Kind::SetRotorThrusts
+            && !command.command.HasValidRotorThrustRatios())
+            throw std::invalid_argument(
+                "normalized_thrust 값은 유한한 0부터 1 사이여야 합니다.");
         previousTick = command.tick;
         hasPreviousTick = true;
     }

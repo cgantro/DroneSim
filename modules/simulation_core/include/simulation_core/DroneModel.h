@@ -82,6 +82,9 @@ struct DroneCommand
     std::array<double, 4> rotorThrustRatios{};
     /** @brief 경유점 이동 방향과 다른 방향을 바라봐야 할 때 지정한다. */
     std::optional<double> targetYawRadians;
+
+    /** @brief 네 로터의 추력 비율이 모두 유한한 0~1 값인지 확인한다. */
+    [[nodiscard]] bool HasValidRotorThrustRatios() const noexcept;
 };
 
 /** @brief 드론이 명령을 받았는지와 거부 이유를 나타낸다. */
