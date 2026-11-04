@@ -436,8 +436,6 @@ struct SimulationCore::EcsStorage
 
     void SetWindVelocityMetersPerSecond(const glm::dvec3& velocity)
     {
-        if (!geometry::IsFinite(velocity))
-            throw std::invalid_argument("바람 속도는 유한한 값이어야 합니다.");
         physics.SetWindVelocityMetersPerSecond(velocity);
     }
 
