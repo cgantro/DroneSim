@@ -78,23 +78,9 @@ glm::mat4 ReadNodeTransform(const Json& node)
     const glm::vec3 translation = ReadVec3(node, "translation", glm::vec3(0.0F));
     const glm::vec3 scale = ReadVec3(node, "scale", glm::vec3(1.0F));
     const glm::quat rotation = ReadNodeRotation(node);
-    // glTF 회전 순서와 쿼터니언 값(x,y,z,w)을 GLM 행렬로 옮긴다.
+    // GLM에 정규화한 쿼터니언의 회전 행렬 변환을 맡긴다.
     glm::mat4 result = glm::translate(glm::mat4(1.0F), translation);
-    const float x = rotation.x;
-    const float y = rotation.y;
-    const float z = rotation.z;
-    const float w = rotation.w;
-    glm::mat4 rotationMatrix(1.0F);
-    rotationMatrix[0][0] = 1.0F - 2.0F * (y * y + z * z);
-    rotationMatrix[0][1] = 2.0F * (x * y + z * w);
-    rotationMatrix[0][2] = 2.0F * (x * z - y * w);
-    rotationMatrix[1][0] = 2.0F * (x * y - z * w);
-    rotationMatrix[1][1] = 1.0F - 2.0F * (x * x + z * z);
-    rotationMatrix[1][2] = 2.0F * (y * z + x * w);
-    rotationMatrix[2][0] = 2.0F * (x * z + y * w);
-    rotationMatrix[2][1] = 2.0F * (y * z - x * w);
-    rotationMatrix[2][2] = 1.0F - 2.0F * (x * x + y * y);
-    result *= rotationMatrix;
+    result *= glm::mat4_cast(rotation);
     return glm::scale(result, scale);
 }
 
