@@ -274,6 +274,21 @@ JPH::TriangleList MakePrismTriangles(const std::vector<glm::dvec2> &outline, dou
 
 struct JoltPhysicsWorld::Impl
 {
+    struct ForceAtPosition
+    {
+        /** @brief 장착점에 전달할 힘 [N] */
+        glm::dvec3 forceNewtons{0.0};
+        /** @brief ENU 월드 좌표의 힘 적용 위치 [m] */
+        glm::dvec3 positionMeters{0.0};
+    };
+
+    struct QuadrotorForces
+    {
+        glm::dvec3 dragForceWorldNewtons{0.0};
+        std::array<ForceAtPosition, QuadrotorParameters::rotorCount> rotorForces;
+        glm::dvec3 reactionTorqueWorldNewtonMeters{0.0};
+    };
+
     struct QuadrotorActuation
     {
         QuadrotorParameters parameters;
@@ -282,14 +297,15 @@ struct JoltPhysicsWorld::Impl
         bool hasStepped = false;
 
         /**
-         * @brief 한 고정 Tick만큼 모터를 움직이고 기체에 항력·로터 힘·반작용 토크를 가한다.
+         * @brief 한 고정 Tick만큼 모터를 움직이고 기체에 작용할 힘과 토크를 계산한다.
          * @details 바람과 선속도는 ENU 월드 기준으로 받고, 기체 축에서 정의된 항력은
-         *          기체 자세로 월드에 돌려 Jolt에 전달한다.
+         *          기체 자세로 월드 좌표로 바꾼다. 여기서는 물리 엔진을 호출하지 않고
+         *          계산 결과만 돌려줘서 기체 모델과 Jolt API의 책임을 나눈다.
          */
-        void AdvanceAndApplyForces(JPH::BodyInterface &bodyInterface, JPH::BodyID bodyId,
-                                   const glm::dvec3 &positionMeters, const glm::dquat &orientation,
-                                   const glm::dvec3 &linearVelocityMetersPerSecond,
-                                   const glm::dvec3 &windVelocityMetersPerSecond)
+        [[nodiscard]] QuadrotorForces AdvanceAndCalculateForces(
+            const glm::dvec3 &positionMeters, const glm::dquat &orientation,
+            const glm::dvec3 &linearVelocityMetersPerSecond,
+            const glm::dvec3 &windVelocityMetersPerSecond)
         {
             const double stepSeconds = DroneModel::fixedStepSeconds;
             const glm::dvec3 relativeAirflowBody =
@@ -298,7 +314,8 @@ struct JoltPhysicsWorld::Impl
             // 항력은 땅 기준 속도가 아니라 바람을 뺀 공기 상대 속도로 계산한다.
             const glm::dvec3 dragForceBody =
                 CalculateQuadrotorDragForceBody(parameters, relativeAirflowBody);
-            bodyInterface.AddForce(bodyId, ToJoltVector(orientation * dragForceBody));
+            QuadrotorForces forces;
+            forces.dragForceWorldNewtons = orientation * dragForceBody;
 
             motorSpeeds = AdvanceMotorSpeeds(parameters, motorSpeeds, targetSpeeds, stepSeconds);
             const auto rotorThrusts = CalculateRotorThrusts(parameters, motorSpeeds);
@@ -309,17 +326,16 @@ struct JoltPhysicsWorld::Impl
                 // 힘을 회전축 중심이 아닌 로터 장착점에 가해 팔 길이에 따른 회전도 만든다.
                 const glm::dvec3 rotorPositionMeters =
                     positionMeters + orientation * parameters.rotors[rotor].positionMeters;
-                bodyInterface.AddForce(bodyId, ToJoltVector(forceWorld),
-                                       ToJoltVector(rotorPositionMeters));
+                forces.rotorForces[rotor] = {forceWorld, rotorPositionMeters};
             }
 
             // 프로펠러가 공기를 돌리는 방향과 반대쪽으로 기체에 요 반작용 토크를 가한다.
             const double reactionTorqueBodyZ =
                 CalculateRotorReactionTorqueBodyZ(parameters, rotorThrusts);
-            const glm::dvec3 reactionTorqueWorld =
+            forces.reactionTorqueWorldNewtonMeters =
                 orientation * glm::dvec3{0.0, 0.0, reactionTorqueBodyZ};
-            bodyInterface.AddTorque(bodyId, ToJoltVector(reactionTorqueWorld));
             hasStepped = true;
+            return forces;
         }
     };
 
@@ -341,6 +357,20 @@ struct JoltPhysicsWorld::Impl
     std::optional<JoltRigidBodyHandle> terrainBody;
     glm::dvec3 windVelocityMetersPerSecond{0.0};
     std::uint32_t nextHandle = 1;
+
+    /** @brief 로터 모델이 계산한 힘과 토크를 Jolt 강체에 적용한다. */
+    void ApplyForces(JPH::BodyInterface &bodyInterface, JPH::BodyID bodyId,
+                     const QuadrotorForces &forces)
+    {
+        bodyInterface.AddForce(bodyId, ToJoltVector(forces.dragForceWorldNewtons));
+        for (const ForceAtPosition &rotorForce : forces.rotorForces)
+        {
+            bodyInterface.AddForce(bodyId, ToJoltVector(rotorForce.forceNewtons),
+                                   ToJoltVector(rotorForce.positionMeters));
+        }
+        bodyInterface.AddTorque(
+            bodyId, ToJoltVector(forces.reactionTorqueWorldNewtonMeters));
+    }
 
     Impl() : runtime(EnsureJoltRuntime())
     {
@@ -723,8 +753,10 @@ void JoltPhysicsWorld::StepFixed(double *stepDurationMicroseconds)
         const glm::dquat orientation = ToProjectRotation(bodyRotation);
         const JPH::Vec3 joltLinearVelocity = bodyInterface.GetLinearVelocity(body.id);
         const glm::dvec3 linearVelocity = ToProjectVector(joltLinearVelocity);
-        actuation.AdvanceAndApplyForces(bodyInterface, body.id, position, orientation,
-                                        linearVelocity, impl_->windVelocityMetersPerSecond);
+        const Impl::QuadrotorForces forces = actuation.AdvanceAndCalculateForces(
+            position, orientation, linearVelocity,
+            impl_->windVelocityMetersPerSecond);
+        impl_->ApplyForces(bodyInterface, body.id, forces);
     }
     // 네 로터 힘을 모두 등록한 뒤 고정 간격 한 번만 적분해 기체 상태를 함께 갱신한다.
     impl_->physicsSystem.Update(static_cast<float>(DroneModel::fixedStepSeconds), 1,
