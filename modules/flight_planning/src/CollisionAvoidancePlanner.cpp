@@ -165,22 +165,28 @@ CollisionAvoidancePlan PlanCollisionAvoidance(
                     + lateralDirection * lateralClearanceMeters;
             };
 
+            const auto addYieldTarget = [&](const DroneMotionIntent& drone,
+                                            const glm::dvec3& lateralDirection)
+            {
+                plan.targetsByDrone.try_emplace(
+                    drone.name, makeTarget(drone, lateralDirection));
+                plan.activeDroneNames.insert(drone.name);
+            };
+
+            // 목표를 추가할 때 대상 등록과 활성 상태 기록을 항상 함께 처리한다.
             if (bothHaveTasks)
             {
-                plan.targetsByDrone.try_emplace(first.name, makeTarget(first, side));
-                plan.targetsByDrone.try_emplace(second.name, makeTarget(second, -side));
-                plan.activeDroneNames.insert(first.name);
-                plan.activeDroneNames.insert(second.name);
+                // 둘 다 임무 중이면 같은 쪽으로 몰리지 않도록 서로 반대 방향으로 비킨다.
+                addYieldTarget(first, side);
+                addYieldTarget(second, -side);
             }
             else if (yieldingDrone == &first)
             {
-                plan.targetsByDrone.try_emplace(first.name, makeTarget(first, -side));
-                plan.activeDroneNames.insert(first.name);
+                addYieldTarget(first, -side);
             }
             else
             {
-                plan.targetsByDrone.try_emplace(second.name, makeTarget(second, side));
-                plan.activeDroneNames.insert(second.name);
+                addYieldTarget(second, side);
             }
         }
     }
