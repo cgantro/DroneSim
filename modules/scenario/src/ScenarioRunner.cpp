@@ -762,6 +762,76 @@ void PopulateFinalSnapshot(
 }
 
 /**
+ * @brief 시나리오 진행 중의 측정값과 최종 결과 자료를 기록한다.
+ * @details Tick 실행 순서는 ScenarioExecution이 조정하고, 이 객체는 궤적 표본,
+ *          드론 간 최소 거리, 최종 상태 스냅샷처럼 결과로 남길 자료를 맡는다.
+ */
+class ScenarioResultRecorder final
+{
+public:
+    ScenarioResultRecorder(
+        const ScenarioDefinition& definition, ScenarioResult& result) noexcept
+        : definition_(definition), result_(result)
+    {
+    }
+
+    /** @brief 결과 저장 공간을 준비하고 시작 시점의 측정값을 기록한다. */
+    void Initialize(
+        const SimulationCore& simulation, const ScenarioDrones& drones)
+    {
+        if (definition_.trajectorySampleEveryTicks)
+        {
+            const std::uint64_t interval = *definition_.trajectorySampleEveryTicks;
+            const std::uint64_t periodicSamples = definition_.tickCount / interval + 1U;
+            const std::uint64_t finalSampleNeeded = definition_.tickCount % interval != 0U;
+            result_.trajectory.reserve(static_cast<std::size_t>(
+                periodicSamples + finalSampleNeeded));
+        }
+
+        if (definition_.minimumDroneSeparationMeters)
+            dronePositionsMeters_.reserve(definition_.drones.size());
+
+        RecordMinimumDroneSeparation(
+            definition_, simulation, drones, dronePositionsMeters_, result_);
+        if (definition_.trajectorySampleEveryTicks)
+            RecordTrajectorySample(definition_, simulation, drones, 0U, result_);
+    }
+
+    /** @brief 완료한 Tick의 간격 측정과 요청된 궤적 표본을 기록한다. */
+    void RecordCompletedTick(
+        std::uint64_t completedTick,
+        const SimulationCore& simulation,
+        const ScenarioDrones& drones)
+    {
+        RecordMinimumDroneSeparation(
+            definition_, simulation, drones, dronePositionsMeters_, result_);
+
+        if (!definition_.trajectorySampleEveryTicks)
+            return;
+
+        const std::uint64_t interval = *definition_.trajectorySampleEveryTicks;
+        if (completedTick % interval == 0U
+            || completedTick == definition_.tickCount)
+        {
+            RecordTrajectorySample(
+                definition_, simulation, drones, completedTick, result_);
+        }
+    }
+
+    /** @brief 마지막 통신 상태와 누적 비행 자료를 결과에 옮긴다. */
+    void Finalize(
+        const SimulationCore& simulation, const ScenarioDrones& drones)
+    {
+        PopulateFinalSnapshot(definition_, simulation, drones, result_);
+    }
+
+private:
+    const ScenarioDefinition& definition_;
+    ScenarioResult& result_;
+    std::vector<glm::dvec3> dronePositionsMeters_;
+};
+
+/**
  * @brief 한 시나리오 실행에 필요한 모의 상태와 실행 순서를 소유한다.
  * @details JSON 해석과 설정 검사는 이 객체를 만들기 전에 끝난다. 객체는 검증된
  * 설정으로 기체를 준비하고, Tick마다 정해진 처리 순서를 실행한 뒤 결과를 만든다.
@@ -772,7 +842,8 @@ public:
     explicit ScenarioExecution(ScenarioDefinition definition)
         : definition_(std::move(definition)),
           simulation_(definition_.quadrotorParameters,
-              definition_.controllerParameters)
+              definition_.controllerParameters),
+          resultRecorder_(definition_, result_)
     {
         if (definition_.windVelocity)
             simulation_.SetWindVelocityMetersPerSecond(*definition_.windVelocity);
@@ -816,23 +887,7 @@ private:
     {
         if (definition_.mission)
             result_.mission = CreateMissionResult(std::move(*definition_.mission));
-
-        if (definition_.trajectorySampleEveryTicks)
-        {
-            const std::uint64_t interval = *definition_.trajectorySampleEveryTicks;
-            const std::uint64_t periodicSamples = definition_.tickCount / interval + 1U;
-            const std::uint64_t finalSampleNeeded = definition_.tickCount % interval != 0U;
-            result_.trajectory.reserve(static_cast<std::size_t>(
-                periodicSamples + finalSampleNeeded));
-        }
-
-        if (definition_.minimumDroneSeparationMeters)
-            dronePositionsMeters_.reserve(definition_.drones.size());
-
-        RecordMinimumDroneSeparation(
-            definition_, simulation_, drones_, dronePositionsMeters_, result_);
-        if (definition_.trajectorySampleEveryTicks)
-            RecordTrajectorySample(definition_, simulation_, drones_, 0U, result_);
+        resultRecorder_.Initialize(simulation_, drones_);
     }
 
     /** @brief 배터리 귀환을 시작한 드론의 미완료 정찰 작업을 실패로 남긴다. */
@@ -935,22 +990,10 @@ private:
         }
 
         // 물리 계산 뒤 실제 이동과 임무 진행을 기록하고, 요청한 간격에 맞춰 표본을 남긴다.
-        RecordMinimumDroneSeparation(
-            definition_, simulation_, drones_, dronePositionsMeters_, result_);
         UpdateMissionResults(tick, result_.mission,
             simulation_, drones_, result_);
 
-        const std::uint64_t completedTick = tick + 1U;
-        if (definition_.trajectorySampleEveryTicks)
-        {
-            const std::uint64_t interval = *definition_.trajectorySampleEveryTicks;
-            if (completedTick % interval == 0U
-                || completedTick == definition_.tickCount)
-            {
-                RecordTrajectorySample(
-                    definition_, simulation_, drones_, completedTick, result_);
-            }
-        }
+        resultRecorder_.RecordCompletedTick(tick + 1U, simulation_, drones_);
     }
 
     void FinalizeResult()
@@ -968,7 +1011,7 @@ private:
                 definition_.tickCount, simulation_.State(drone.Id()), batteryPercent);
         }
 
-        PopulateFinalSnapshot(definition_, simulation_, drones_, result_);
+        resultRecorder_.Finalize(simulation_, drones_);
         detail::EvaluateExpectedResults(definition_, result_);
     }
 
@@ -976,9 +1019,9 @@ private:
     SimulationCore simulation_;
     ScenarioDrones drones_;
     ScenarioResult result_;
+    ScenarioResultRecorder resultRecorder_;
     std::size_t nextCommand_ = 0U;
     std::unordered_map<std::string, glm::dvec3> activeAvoidanceTargets_;
-    std::vector<glm::dvec3> dronePositionsMeters_;
 };
 }
 
