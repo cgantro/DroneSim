@@ -70,6 +70,11 @@ public:
         app.missionController_->AdvanceFormationTransit();
     }
 
+    static void InitializeFleetLeadership(DroneSimApp& app)
+    {
+        app.missionController_->InitializeFleetLeadership();
+    }
+
     static void AdvanceCompleteMission(DroneSimApp& app)
     {
         app.missionController_->AdvanceCompleteFleetMission();
@@ -164,15 +169,18 @@ public:
     {
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
-        const glm::dvec2 openGround =
-            app.missionController_->Environment().StagingPositionMeters();
-        const auto fallingDrone = app.simulation_.AddDrone(
-            {openGround, 8.0}, 0.0, 0.0);
+        simulation::SimulationCore floorSimulation;
+        floorSimulation.SetTerrain(app.trainingRangeScene_->Terrain());
+        const auto fallingDrone = floorSimulation.AddDrone({0.0, 0.0, 8.0});
+        simulation::DroneCommand stopMotors;
+        stopMotors.kind = simulation::DroneCommand::Kind::SetRotorThrusts;
+        EXPECT_EQ(floorSimulation.Apply(fallingDrone, stopMotors),
+            simulation::CommandResult::Accepted);
 
         for (int tick = 0; tick < 180; ++tick)
-            app.simulation_.AdvanceOneTick();
+            floorSimulation.AdvanceOneTick();
 
-        const auto& landed = app.simulation_.State(fallingDrone);
+        const auto& landed = floorSimulation.State(fallingDrone);
         EXPECT_GT(landed.positionMeters.z, 0.2);
         EXPECT_LT(landed.positionMeters.z, 0.8);
         EXPECT_LT(std::abs(landed.velocityMetersPerSecond.z), 0.5);
@@ -256,6 +264,7 @@ public:
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(PrepareNetwork(app, true));
+        InitializeFleetLeadership(app);
 
         const auto droneIds = FleetDroneIds(app);
         ASSERT_EQ(droneIds.size(), 4U);
@@ -296,6 +305,7 @@ public:
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         ASSERT_TRUE(PrepareNetwork(app, true));
+        InitializeFleetLeadership(app);
 
         for (const auto droneId : FleetDroneIds(app))
         {
