@@ -141,7 +141,7 @@ private:
     double flightTimeSeconds_ = 0.0;
 };
 
-/** @brief 한 드론의 시나리오 실행 중 상태와 누적값을 함께 관리한다. */
+/** @brief 시나리오 안에서 한 드론의 실행 상태, 관측값과 측정값을 묶는다. */
 class ScenarioDroneRuntime final
 {
 public:
@@ -151,6 +151,7 @@ public:
           homePositionMeters_(initialState.positionMeters)
     {
         if (initialState.mode == FlightMode::Grounded)
+            // 지면 기준 시작점은 이륙 뒤 임무가 이어질 위치를 홈 지점으로 삼는다.
             homePositionMeters_.z += DroneModel::takeoffHeightMeters;
 
         observation_.RecordHeartbeat(0U, initialState, std::nullopt);
@@ -162,52 +163,13 @@ public:
     {
         return homePositionMeters_;
     }
-    [[nodiscard]] DroneCommunicationStatus CommunicationStatus() const noexcept
+    [[nodiscard]] DroneObservation& Observation() noexcept { return observation_; }
+    [[nodiscard]] const DroneObservation& Observation() const noexcept
     {
-        return observation_.Status();
+        return observation_;
     }
-    [[nodiscard]] bool IsConnected() const noexcept
-    {
-        return observation_.IsConnected();
-    }
-    [[nodiscard]] const DroneState& LastKnownState() const noexcept
-    {
-        return observation_.LastKnownState();
-    }
-    [[nodiscard]] std::uint64_t LastHeartbeatTick() const noexcept
-    {
-        return observation_.LastHeartbeatTick();
-    }
-    [[nodiscard]] std::optional<double> LastKnownBatteryPercent() const noexcept
-    {
-        return observation_.LastKnownBatteryPercent();
-    }
-    [[nodiscard]] DroneCommunicationStatus RecordMissedHeartbeat(
-        std::uint64_t tick, std::uint64_t timeoutTicks) noexcept
-    {
-        return observation_.RecordMissedHeartbeat(tick, timeoutTicks);
-    }
-    void RecordHeartbeat(std::uint64_t tick, const DroneState& state,
-        std::optional<double> batteryPercent) noexcept
-    {
-        observation_.RecordHeartbeat(tick, state, batteryPercent);
-    }
-    void RecordTimeBeforePhysics(FlightMode mode) noexcept
-    {
-        flightMetrics_.RecordTimeBeforePhysics(mode);
-    }
-    void RecordPositionAfterPhysics(const glm::dvec3& positionMeters) noexcept
-    {
-        flightMetrics_.RecordPositionAfterPhysics(positionMeters);
-    }
-    [[nodiscard]] double FlightDistanceMeters() const noexcept
-    {
-        return flightMetrics_.DistanceMeters();
-    }
-    [[nodiscard]] double FlightTimeSeconds() const noexcept
-    {
-        return flightMetrics_.TimeSeconds();
-    }
+    [[nodiscard]] FlightMetrics& Metrics() noexcept { return flightMetrics_; }
+    [[nodiscard]] const FlightMetrics& Metrics() const noexcept { return flightMetrics_; }
 
 private:
     DroneId id_{};
@@ -279,7 +241,7 @@ void UpdateDroneObservations(
         {
             // 연결 중에는 실제 모의 상태를 관제 측 관측값으로 갱신한다.
             // 장애 중에도 비행 계산은 계속되지만 관측값은 이 마지막 보고에 머문다.
-            if (drone.CommunicationStatus() != DroneCommunicationStatus::Connected)
+            if (drone.Observation().Status() != DroneCommunicationStatus::Connected)
             {
                 RecordTickEvent(result, tick,
                     droneName + " 드론의 통신이 복구되어 새 상태를 받았습니다.");
@@ -287,13 +249,13 @@ void UpdateDroneObservations(
             const std::optional<double> batteryPercent = simulation.HasBattery(droneId)
                 ? std::optional<double>{simulation.Battery(droneId).RemainingPercent()}
                 : std::nullopt;
-            drone.RecordHeartbeat(tick, simulation.State(droneId), batteryPercent);
+            drone.Observation().RecordHeartbeat(tick, simulation.State(droneId), batteryPercent);
             return;
         }
 
-        const DroneCommunicationStatus previousStatus = drone.CommunicationStatus();
+        const DroneCommunicationStatus previousStatus = drone.Observation().Status();
         // 짧은 누락은 Stale, 설정한 제한 시간을 넘긴 누락은 Unknown으로 표시한다.
-        const DroneCommunicationStatus newStatus = drone.RecordMissedHeartbeat(
+        const DroneCommunicationStatus newStatus = drone.Observation().RecordMissedHeartbeat(
             tick, outage->heartbeatTimeoutTicks);
         // 상태를 Stale로 바꾸기 전에 연결 중이었는지 확인해 첫 끊김만 기록한다.
         if (previousStatus == DroneCommunicationStatus::Connected)
@@ -428,7 +390,7 @@ void ApplyScheduledCommands(
     while (nextCommand < commands.size() && commands[nextCommand].tick == tick)
     {
         const TickCommand& command = commands[nextCommand++];
-        if (!drones.at(command.droneName).IsConnected())
+        if (!drones.at(command.droneName).Observation().IsConnected())
         {
             RecordTickEvent(result, tick, command.droneName
                 + " 드론에 명령을 전달하지 못했습니다. 마지막 위치는 이전 보고값입니다.");
@@ -468,7 +430,7 @@ void UpdateMissionCommands(
             continue;
         if (!dronesWithPendingTask.insert(task.droneName).second)
             continue;
-        if (tick < task.startTick || !drones.at(task.droneName).IsConnected())
+        if (tick < task.startTick || !drones.at(task.droneName).Observation().IsConnected())
             continue;
 
         const DroneId droneId = drones.at(task.droneName).Id();
@@ -603,10 +565,10 @@ void ScenarioCollisionAvoidance::Advance(
     motionIntents.reserve(definition.drones.size());
     for (const ScenarioDrone& drone : definition.drones)
     {
-        const bool connected = drones.at(drone.name).IsConnected();
+        const bool connected = drones.at(drone.name).Observation().IsConnected();
         DroneState state = connected
             ? simulation.State(drones.at(drone.name).Id())
-            : drones.at(drone.name).LastKnownState();
+            : drones.at(drone.name).Observation().LastKnownState();
 
         // 통신이 끊긴 드론은 마지막 위치에 멈춰 있는 장애물처럼 다룬다.
         if (!connected)
@@ -702,7 +664,7 @@ void UpdateMissionResults(
 
     for (ScenarioResult::MissionTask& task : mission->tasks)
     {
-        if (!drones.at(task.droneName).IsConnected())
+        if (!drones.at(task.droneName).Observation().IsConnected())
             continue;
 
         const DroneId droneId = drones.at(task.droneName).Id();
@@ -761,12 +723,12 @@ void PopulateFinalSnapshot(
     {
         const ScenarioDroneRuntime& runtime = drones.at(droneName);
         ScenarioResult::Drone drone{
-            droneName, runtime.LastKnownState(),
-            runtime.CommunicationStatus(), runtime.LastHeartbeatTick()};
+            droneName, runtime.Observation().LastKnownState(),
+            runtime.Observation().Status(), runtime.Observation().LastHeartbeatTick()};
         drone.finalCamera = simulation.Camera(runtime.Id());
-        drone.flightDistanceMeters = runtime.FlightDistanceMeters();
-        drone.flightTimeSeconds = runtime.FlightTimeSeconds();
-        drone.reportedBatteryPercent = runtime.LastKnownBatteryPercent();
+        drone.flightDistanceMeters = runtime.Metrics().DistanceMeters();
+        drone.flightTimeSeconds = runtime.Metrics().TimeSeconds();
+        drone.reportedBatteryPercent = runtime.Observation().LastKnownBatteryPercent();
         if (simulation.HasBattery(runtime.Id()))
         {
             const BatteryModel& battery = simulation.Battery(runtime.Id());
@@ -901,7 +863,7 @@ private:
             ScenarioDroneRuntime& runtime = drones_.at(scenarioDrone.name);
             simulation_.ConfigureBattery(runtime.Id(), parameters,
                 scenarioDrone.initialBatteryPercent);
-            runtime.RecordHeartbeat(0U, simulation_.State(runtime.Id()),
+            runtime.Observation().RecordHeartbeat(0U, simulation_.State(runtime.Id()),
                 simulation_.Battery(runtime.Id()).RemainingPercent());
         }
     }
@@ -1001,14 +963,14 @@ private:
         for (auto& [droneName, drone] : drones_)
         {
             static_cast<void>(droneName);
-            drone.RecordTimeBeforePhysics(
+            drone.Metrics().RecordTimeBeforePhysics(
                 simulation_.State(drone.Id()).mode);
         }
         simulation_.AdvanceOneTick();
         for (auto& [droneName, drone] : drones_)
         {
             static_cast<void>(droneName);
-            drone.RecordPositionAfterPhysics(
+            drone.Metrics().RecordPositionAfterPhysics(
                 simulation_.State(drone.Id()).positionMeters);
         }
 
@@ -1024,13 +986,13 @@ private:
         for (auto& [droneName, drone] : drones_)
         {
             static_cast<void>(droneName);
-            if (!drone.IsConnected())
+            if (!drone.Observation().IsConnected())
                 continue;
 
             const std::optional<double> batteryPercent = simulation_.HasBattery(drone.Id())
                 ? std::optional<double>{simulation_.Battery(drone.Id()).RemainingPercent()}
-                : drone.LastKnownBatteryPercent();
-            drone.RecordHeartbeat(
+                : drone.Observation().LastKnownBatteryPercent();
+            drone.Observation().RecordHeartbeat(
                 definition_.tickCount, simulation_.State(drone.Id()), batteryPercent);
         }
 
