@@ -386,6 +386,17 @@ struct JoltPhysicsWorld::Impl
         return {handle};
     }
 
+    /** @brief 이미 만든 형상을 지정 위치의 고정 충돌체로 월드에 등록한다. */
+    JoltRigidBodyHandle AddStaticShape(
+        const JPH::RefConst<JPH::Shape> &shape,
+        const glm::dvec3 &positionMeters)
+    {
+        const JPH::BodyCreationSettings settings(
+            shape.GetPtr(), ToJoltVector(positionMeters), JPH::Quat::sIdentity(),
+            JPH::EMotionType::Static, nonMovingLayer);
+        return AddBody(settings, JPH::EActivation::DontActivate, true);
+    }
+
     BodyRecord &GetBody(JoltRigidBodyHandle handle)
     {
         const auto found = bodies.find(handle.value);
@@ -432,10 +443,7 @@ JoltRigidBodyHandle JoltPhysicsWorld::AddStaticBox(const glm::dvec3 &centerMeter
         throw std::invalid_argument("고정 상자의 위치와 크기를 확인해 주세요.");
 
     const auto shape = MakeBoxShape(halfExtentsMeters);
-    const JPH::BodyCreationSettings settings(shape.GetPtr(), ToJoltVector(centerMeters),
-                                             JPH::Quat::sIdentity(), JPH::EMotionType::Static,
-                                             nonMovingLayer);
-    return impl_->AddBody(settings, JPH::EActivation::DontActivate, true);
+    return impl_->AddStaticShape(shape, centerMeters);
 }
 
 void JoltPhysicsWorld::AddStaticTriangleMesh(std::span<const glm::dvec3> verticesMeters,
@@ -476,10 +484,7 @@ void JoltPhysicsWorld::AddStaticTriangleMesh(std::span<const glm::dvec3> vertice
     if (shapeResult.HasError())
         throw std::runtime_error(shapeResult.GetError().c_str());
     const JPH::RefConst<JPH::Shape> shape = shapeResult.Get();
-    const JPH::BodyCreationSettings settings(shape.GetPtr(), JPH::RVec3::sZero(),
-                                             JPH::Quat::sIdentity(), JPH::EMotionType::Static,
-                                             nonMovingLayer);
-    static_cast<void>(impl_->AddBody(settings, JPH::EActivation::DontActivate, true));
+    static_cast<void>(impl_->AddStaticShape(shape, glm::dvec3{0.0}));
 }
 
 void JoltPhysicsWorld::SetTerrain(const dronesim::terrain::TerrainGrid &terrain)
@@ -510,11 +515,8 @@ void JoltPhysicsWorld::SetTerrain(const dronesim::terrain::TerrainGrid &terrain)
     if (shapeResult.HasError())
         throw std::runtime_error(shapeResult.GetError().c_str());
     const JPH::RefConst<JPH::Shape> shape = shapeResult.Get();
-    const JPH::BodyCreationSettings settings(shape.GetPtr(), JPH::RVec3::sZero(),
-                                             JPH::Quat::sIdentity(), JPH::EMotionType::Static,
-                                             nonMovingLayer);
     const JoltRigidBodyHandle newTerrain =
-        impl_->AddBody(settings, JPH::EActivation::DontActivate, true);
+        impl_->AddStaticShape(shape, glm::dvec3{0.0});
     if (impl_->terrainBody)
         static_cast<void>(DestroyBody(*impl_->terrainBody));
     impl_->terrainBody = newTerrain;
@@ -532,10 +534,7 @@ void JoltPhysicsWorld::AddStaticPrism(const std::vector<glm::dvec2> &outlineMete
     if (shapeResult.HasError())
         throw std::runtime_error(shapeResult.GetError().c_str());
     const JPH::RefConst<JPH::Shape> shape = shapeResult.Get();
-    const JPH::BodyCreationSettings settings(shape.GetPtr(), JPH::RVec3::sZero(),
-                                             JPH::Quat::sIdentity(), JPH::EMotionType::Static,
-                                             nonMovingLayer);
-    static_cast<void>(impl_->AddBody(settings, JPH::EActivation::DontActivate, true));
+    static_cast<void>(impl_->AddStaticShape(shape, glm::dvec3{0.0}));
 }
 
 void JoltPhysicsWorld::SetWindVelocityMetersPerSecond(const glm::dvec3 &velocity)
