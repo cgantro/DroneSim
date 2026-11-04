@@ -37,13 +37,6 @@ using detail::TickCommand;
 using detail::DroneCommunicationOutage;
 using DroneCommunicationStatus = ScenarioResult::Drone::CommunicationStatus;
 
-/** @brief 속도 예측에 현재 회피 목표와 원래 임무 경로 중 무엇을 쓸지 정한다. */
-enum class VelocityTargetSource
-{
-    ActiveAvoidanceTarget,
-    AssignedWaypoint
-};
-
 /** @brief 시나리오 관제소가 드론별로 보관하는 마지막 통신 상태다. */
 class DroneObservation final
 {
@@ -522,8 +515,43 @@ void UpdateMissionCommands(
     }
 }
 
-/** @brief 현재 임무 경유점을 향하는 목표 속도를 계산한다. */
-glm::dvec3 MissionVelocityIntent(
+/**
+ * @brief 시나리오에서 충돌 회피 입력을 만들고 드론에 적용한다.
+ * @details 임무 목표와 원래 경로의 이동 의도를 계산해 공용 회피 계획기에 넘긴다.
+ *          한 번 고른 회피 목표는 위험이 끝날 때까지 유지한다.
+ */
+class ScenarioCollisionAvoidance final
+{
+public:
+    void Advance(
+        std::uint64_t tick,
+        const ScenarioDefinition& definition,
+        const std::optional<ScenarioResult::Mission>& mission,
+        SimulationCore& simulation,
+        const ScenarioDrones& drones,
+        ScenarioResult& result);
+
+private:
+    enum class VelocityTargetSource
+    {
+        ActiveAvoidanceTarget,
+        AssignedWaypoint
+    };
+
+    [[nodiscard]] static glm::dvec3 MissionVelocityIntent(
+        const DroneState& state,
+        const ScenarioResult::MissionTask* task,
+        const ScenarioDefinition& definition,
+        const std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
+        VelocityTargetSource targetSource);
+
+    [[nodiscard]] static const ScenarioResult::MissionTask* FindActiveMissionTask(
+        const ScenarioResult::Mission& mission, std::string_view droneName);
+
+    std::unordered_map<std::string, glm::dvec3> activeTargetsByDrone_;
+};
+
+glm::dvec3 ScenarioCollisionAvoidance::MissionVelocityIntent(
     const DroneState& state,
     const ScenarioResult::MissionTask* task,
     const ScenarioDefinition& definition,
@@ -549,10 +577,8 @@ glm::dvec3 MissionVelocityIntent(
     return targetVelocity;
 }
 
-/** @brief 드론이 맡아 진행 중인 첫 임무 작업을 찾는다. */
-const ScenarioResult::MissionTask* FindActiveMissionTask(
-    const ScenarioResult::Mission& mission,
-    std::string_view droneName)
+const ScenarioResult::MissionTask* ScenarioCollisionAvoidance::FindActiveMissionTask(
+    const ScenarioResult::Mission& mission, std::string_view droneName)
 {
     const auto task = std::find_if(mission.tasks.begin(), mission.tasks.end(),
         [droneName](const ScenarioResult::MissionTask& candidate)
@@ -562,13 +588,12 @@ const ScenarioResult::MissionTask* FindActiveMissionTask(
     return task == mission.tasks.end() ? nullptr : &*task;
 }
 
-void UpdateCollisionAvoidance(
+void ScenarioCollisionAvoidance::Advance(
     std::uint64_t tick,
     const ScenarioDefinition& definition,
-    std::optional<ScenarioResult::Mission>& mission,
+    const std::optional<ScenarioResult::Mission>& mission,
     SimulationCore& simulation,
     const ScenarioDrones& drones,
-    std::unordered_map<std::string, glm::dvec3>& activeAvoidanceTargets,
     ScenarioResult& result)
 {
     if (!definition.collisionAvoidance || !mission)
@@ -600,18 +625,16 @@ void UpdateCollisionAvoidance(
             drone.name,
             state.positionMeters,
             MissionVelocityIntent(state, task, definition,
-                activeAvoidanceTargets,
-                VelocityTargetSource::ActiveAvoidanceTarget),
+                activeTargetsByDrone_, VelocityTargetSource::ActiveAvoidanceTarget),
             MissionVelocityIntent(state, task, definition,
-                activeAvoidanceTargets,
-                VelocityTargetSource::AssignedWaypoint),
+                activeTargetsByDrone_, VelocityTargetSource::AssignedWaypoint),
             connected,
             task != nullptr});
     }
 
     const flight_planning::CollisionAvoidancePlan plan =
         flight_planning::PlanCollisionAvoidance(motionIntents,
-            *definition.collisionAvoidance, activeAvoidanceTargets);
+            *definition.collisionAvoidance, activeTargetsByDrone_);
     if (plan.minimumPredictedSeparationMeters
         && (!result.minimumPredictedDroneSeparationMeters
             || *plan.minimumPredictedSeparationMeters
@@ -633,7 +656,7 @@ void UpdateCollisionAvoidance(
         // 처음 회피할 때만 목표를 저장한다. 다음 Tick에도 같은 목표를 유지해
         // 매번 경로가 바뀌며 기체가 좌우로 흔들리는 현상을 막는다.
         const auto [activeTarget, newlyAvoiding] =
-            activeAvoidanceTargets.try_emplace(drone.name, plannedTarget->second);
+            activeTargetsByDrone_.try_emplace(drone.name, plannedTarget->second);
         const CommandResult commandResult = simulation.Apply(drones.at(drone.name).Id(),
             {DroneCommand::Kind::SetWaypoint, activeTarget->second});
         if (commandResult != CommandResult::Accepted)
@@ -651,7 +674,7 @@ void UpdateCollisionAvoidance(
         }
     }
 
-    for (const auto& [droneName, target] : activeAvoidanceTargets)
+    for (const auto& [droneName, target] : activeTargetsByDrone_)
     {
         static_cast<void>(target);
         if (!plan.activeDroneNames.contains(droneName))
@@ -660,7 +683,7 @@ void UpdateCollisionAvoidance(
                 droneName + " 드론이 위험 구간을 벗어나 조사 경로로 돌아갑니다.");
         }
     }
-    std::erase_if(activeAvoidanceTargets,
+    std::erase_if(activeTargetsByDrone_,
         [&plan](const auto& entry)
         {
             return !plan.activeDroneNames.contains(entry.first);
@@ -972,8 +995,8 @@ private:
             UpdateEnergyPolicy(tick);
         UpdateMissionCommands(tick, result_.mission,
             simulation_, drones_, result_);
-        UpdateCollisionAvoidance(tick, definition_, result_.mission,
-            simulation_, drones_, activeAvoidanceTargets_, result_);
+        collisionAvoidance_.Advance(tick, definition_, result_.mission,
+            simulation_, drones_, result_);
 
         for (auto& [droneName, drone] : drones_)
         {
@@ -1020,8 +1043,8 @@ private:
     ScenarioDrones drones_;
     ScenarioResult result_;
     ScenarioResultRecorder resultRecorder_;
+    ScenarioCollisionAvoidance collisionAvoidance_;
     std::size_t nextCommand_ = 0U;
-    std::unordered_map<std::string, glm::dvec3> activeAvoidanceTargets_;
 };
 }
 
