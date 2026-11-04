@@ -12,7 +12,6 @@
 
 #include <cmath>
 #include <filesystem>
-#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -211,38 +210,79 @@ struct GlbModel::Part
     bool hasMaterial = false;
 };
 
-GlbModel::~GlbModel() = default;
-
-std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
+/**
+ * @brief GLB 파일을 읽어 그리기·경계·충돌 자료를 GlbModel에 채운다.
+ * @details 파일 해석 중에만 필요한 JSON, 바이너리, 노드 순회 상태를 맡는다.
+ */
+struct GlbModel::Loader
 {
-    // GLB 씬의 루트부터 자식 노드를 따라가며 메시, 재질, 충돌 자료를 만든다.
-    glb_detail::Document source = glb_detail::ReadDocument(path);
-    const std::filesystem::path modelDirectory = std::filesystem::path{path}.parent_path();
-    const Json& document = source.json;
-    const Json& nodes = document.at("nodes");
-    const Json& meshes = document.at("meshes");
-    const Json& scenes = document.at("scenes");
-    if (!nodes.is_array() || nodes.empty() || !meshes.is_array() || meshes.empty()
-        || !scenes.is_array() || scenes.empty())
-        throw std::runtime_error("GLB 장면에 노드·메시·씬이 필요합니다.");
+    Loader(GlbModel& targetModel, glb_detail::Document documentSource,
+        std::filesystem::path directory)
+        : model(targetModel), source(std::move(documentSource)), document(source.json),
+          nodes(document.at("nodes")), meshes(document.at("meshes")),
+          modelDirectory(std::move(directory)), recursionPath(nodes.size(), false)
+    {
+    }
 
-    const std::size_t sceneIndex = document.value("scene", std::size_t{0});
-    const Json& roots = scenes.at(sceneIndex).at("nodes");
-    auto model = std::unique_ptr<GlbModel>(new GlbModel());
-    std::vector<bool> recursionPath(nodes.size(), false);
-    const auto addPrimitive = [&](const Json& node, const glm::mat4& nodeTransform,
-                                  std::size_t nodeIndex)
+    void Load()
+    {
+        const Json& scenes = document.at("scenes");
+        if (!nodes.is_array() || nodes.empty() || !meshes.is_array() || meshes.empty()
+            || !scenes.is_array() || scenes.empty())
+            throw std::runtime_error("GLB 장면에 노드·메시·씬이 필요합니다.");
+
+        const std::size_t sceneIndex = document.value("scene", std::size_t{0});
+        const Json& roots = scenes.at(sceneIndex).at("nodes");
+        for (const Json& root : roots)
+            VisitNode(root.get<std::size_t>(), glm::mat4(1.0F));
+
+        if (model.parts_.empty())
+            throw std::runtime_error("GLB 씬에 그릴 삼각형 메시가 없습니다.");
+    }
+
+private:
+    struct CollisionData
+    {
+        GlbPartBounds bounds;
+        GlbCollisionPart part;
+    };
+
+    void VisitNode(std::size_t nodeIndex, const glm::mat4& parentTransform)
+    {
+        if (nodeIndex >= nodes.size())
+            throw std::runtime_error("GLB 씬이 존재하지 않는 노드를 가리킵니다.");
+        if (recursionPath[nodeIndex])
+            throw std::runtime_error("GLB 노드 연결에 순환 참조가 있습니다.");
+
+        // 자식에게 부모 변환을 누적해 전달한다. 경로 표식은 현재 재귀 경로의 순환만 찾는다.
+        recursionPath[nodeIndex] = true;
+        const Json& node = nodes.at(nodeIndex);
+        const glm::mat4 worldTransform = parentTransform * ReadNodeTransform(node);
+        if (node.contains("mesh"))
+            AddNodePrimitives(node, worldTransform, nodeIndex);
+        if (node.contains("children"))
+        {
+            for (const Json& child : node.at("children"))
+                VisitNode(child.get<std::size_t>(), worldTransform);
+        }
+        recursionPath[nodeIndex] = false;
+    }
+
+    void AddNodePrimitives(const Json& node, const glm::mat4& nodeTransform,
+        std::size_t nodeIndex)
     {
         const std::size_t meshIndex = node.at("mesh").get<std::size_t>();
         const Json& primitives = meshes.at(meshIndex).at("primitives");
-        std::string nodeName = node.value("name",
+        const std::string nodeName = node.value("name",
             "이름 없는 노드 " + std::to_string(nodeIndex + 1U));
+
         for (std::size_t primitiveIndex = 0;
             primitiveIndex < primitives.size(); ++primitiveIndex)
         {
             const Json& primitive = primitives.at(primitiveIndex);
             if (primitive.value("mode", 4U) != 4U)
                 throw std::runtime_error("GLB는 삼각형 메시만 지원합니다.");
+
             std::vector<Vertex> vertices = glb_detail::ReadVertices(
                 document, primitive, source.binary);
             std::vector<std::uint32_t> indices = glb_detail::ReadTriangleIndices(
@@ -251,76 +291,83 @@ std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
                 throw std::runtime_error("GLB 삼각형 번호 수가 올바르지 않습니다.");
             BuildNormalsIfMissing(vertices, indices, primitive);
 
-            // 경계는 월드 변환까지 반영해 두고, 충돌 정점은 로컬 좌표와 변환을 함께 보관한다.
-            GlbPartBounds bounds{
-                glm::vec3(std::numeric_limits<float>::max()),
-                glm::vec3(std::numeric_limits<float>::lowest())};
-            bounds.nodeName = nodeName;
-            bounds.nodeTransform = nodeTransform;
-            if (primitives.size() > 1U)
-                bounds.nodeName += " · 메시 " + std::to_string(primitiveIndex + 1U);
-            GlbCollisionPart collisionPart;
-            collisionPart.vertices.reserve(vertices.size());
-            for (const Vertex& vertex : vertices)
-            {
-                const glm::vec3 transformedPosition = glm::vec3(
-                    nodeTransform * glm::vec4(vertex.position, 1.0F));
-                bounds.minimum = glm::min(bounds.minimum, transformedPosition);
-                bounds.maximum = glm::max(bounds.maximum, transformedPosition);
-                collisionPart.vertices.push_back(vertex.position);
-            }
-            model->partBounds_.push_back(bounds);
-
-            collisionPart.triangleIndices = indices;
-            collisionPart.nodeTransform = nodeTransform;
-            model->collisionParts_.push_back(std::move(collisionPart));
-
-            auto part = std::make_unique<Part>();
-            part->mesh = std::make_unique<Mesh>(vertices.data(),
-                static_cast<std::uint32_t>(vertices.size()), indices.data(),
-                static_cast<std::uint32_t>(indices.size()));
-            part->nodeTransform = nodeTransform;
-            if (primitive.contains("material"))
-            {
-                const Json& material = document.at("materials").at(
-                    primitive.at("material").get<std::size_t>());
-                const Json pbr = material.value("pbrMetallicRoughness", Json::object());
-                part->material = Material(ReadBaseColorFactor(pbr),
-                    ReadFactor(pbr, "metallicFactor", 1.0F),
-                    ReadFactor(pbr, "roughnessFactor", 1.0F));
-                part->texture = LoadBaseColorTexture(document, pbr, source.binary,
-                    primitive.at("attributes").contains("TEXCOORD_0"), modelDirectory);
-                part->hasMaterial = true;
-            }
-            model->parts_.push_back(std::move(part));
+            CollisionData collision = BuildCollisionData(nodeName, nodeTransform,
+                primitives.size(), primitiveIndex, vertices);
+            model.partBounds_.push_back(std::move(collision.bounds));
+            collision.part.triangleIndices = indices;
+            model.collisionParts_.push_back(std::move(collision.part));
+            model.parts_.push_back(BuildRenderPart(primitive, nodeTransform,
+                vertices, indices));
         }
-    };
+    }
 
-    // 부모 변환을 자식에게 누적해 계층형 모델의 위치·방향·크기를 보존한다.
-    std::function<void(std::size_t, const glm::mat4&)> visitNode;
-    visitNode = [&](std::size_t nodeIndex, const glm::mat4& parentTransform)
+    [[nodiscard]] CollisionData BuildCollisionData(const std::string& nodeName,
+        const glm::mat4& nodeTransform, std::size_t primitiveCount,
+        std::size_t primitiveIndex, const std::vector<Vertex>& vertices) const
     {
-        if (nodeIndex >= nodes.size())
-            throw std::runtime_error("GLB 씬이 존재하지 않는 노드를 가리킵니다.");
-        if (recursionPath[nodeIndex])
-            throw std::runtime_error("GLB 노드 연결에 순환 참조가 있습니다.");
-        recursionPath[nodeIndex] = true;
-        const Json& node = nodes.at(nodeIndex);
-        const glm::mat4 worldTransform = parentTransform * ReadNodeTransform(node);
-        if (node.contains("mesh"))
-            addPrimitive(node, worldTransform, nodeIndex);
-        if (node.contains("children"))
-        {
-            for (const Json& child : node.at("children"))
-                visitNode(child.get<std::size_t>(), worldTransform);
-        }
-        recursionPath[nodeIndex] = false;
-    };
+        CollisionData result{
+            {glm::vec3(std::numeric_limits<float>::max()),
+                glm::vec3(std::numeric_limits<float>::lowest())},
+            {}};
+        result.bounds.nodeName = nodeName;
+        result.bounds.nodeTransform = nodeTransform;
+        if (primitiveCount > 1U)
+            result.bounds.nodeName += " · 메시 " + std::to_string(primitiveIndex + 1U);
 
-    for (const Json& root : roots)
-        visitNode(root.get<std::size_t>(), glm::mat4(1.0F));
-    if (model->parts_.empty())
-        throw std::runtime_error("GLB 씬에 그릴 삼각형 메시가 없습니다.");
+        // 화면 경계는 변환된 좌표로 계산하고, 충돌 정점은 변환 행렬과 함께 로컬 좌표로 보관한다.
+        result.part.vertices.reserve(vertices.size());
+        for (const Vertex& vertex : vertices)
+        {
+            const glm::vec3 worldPosition = glm::vec3(
+                nodeTransform * glm::vec4(vertex.position, 1.0F));
+            result.bounds.minimum = glm::min(result.bounds.minimum, worldPosition);
+            result.bounds.maximum = glm::max(result.bounds.maximum, worldPosition);
+            result.part.vertices.push_back(vertex.position);
+        }
+        result.part.nodeTransform = nodeTransform;
+        return result;
+    }
+
+    [[nodiscard]] std::unique_ptr<Part> BuildRenderPart(const Json& primitive,
+        const glm::mat4& nodeTransform, const std::vector<Vertex>& vertices,
+        const std::vector<std::uint32_t>& indices) const
+    {
+        auto part = std::make_unique<Part>();
+        part->mesh = std::make_unique<Mesh>(vertices.data(),
+            static_cast<std::uint32_t>(vertices.size()), indices.data(),
+            static_cast<std::uint32_t>(indices.size()));
+        part->nodeTransform = nodeTransform;
+        if (primitive.contains("material"))
+        {
+            const Json& material = document.at("materials").at(
+                primitive.at("material").get<std::size_t>());
+            const Json pbr = material.value("pbrMetallicRoughness", Json::object());
+            part->material = Material(ReadBaseColorFactor(pbr),
+                ReadFactor(pbr, "metallicFactor", 1.0F),
+                ReadFactor(pbr, "roughnessFactor", 1.0F));
+            part->texture = LoadBaseColorTexture(document, pbr, source.binary,
+                primitive.at("attributes").contains("TEXCOORD_0"), modelDirectory);
+            part->hasMaterial = true;
+        }
+        return part;
+    }
+
+    GlbModel& model;
+    glb_detail::Document source;
+    const Json& document;
+    const Json& nodes;
+    const Json& meshes;
+    std::filesystem::path modelDirectory;
+    std::vector<bool> recursionPath;
+};
+
+GlbModel::~GlbModel() = default;
+
+std::unique_ptr<GlbModel> GlbModel::Load(const std::string& path)
+{
+    auto model = std::unique_ptr<GlbModel>(new GlbModel());
+    Loader(*model, glb_detail::ReadDocument(path),
+        std::filesystem::path{path}.parent_path()).Load();
     return model;
 }
 

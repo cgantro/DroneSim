@@ -77,6 +77,7 @@ public:
 
 private:
     GlbModel() = default;
+    struct Loader;
     struct Part;
     std::vector<std::unique_ptr<Part>> parts_;
     std::vector<GlbPartBounds> partBounds_;
