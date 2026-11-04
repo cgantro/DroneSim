@@ -29,7 +29,11 @@ double DirectionSign(RotorRotation direction)
     return direction == RotorRotation::CounterClockwise ? 1.0 : -1.0;
 }
 
-/** @brief 위치 오차로 목표점에 다가가고 현재 속도로 지나침을 줄인다. */
+/**
+ * @brief 위치 오차를 목표 속도로 바꾼 뒤 속도 오차에서 가속도를 구한다.
+ * @details 위치 제어가 만든 목표 속도와 현재 속도의 차이에 속도 이득 [1/s]을
+ *          곱한다. 따라서 반환값은 월드 좌표계의 가속도 [m/s²]다.
+ */
 glm::dvec3 PositionControlAcceleration(
     const DroneState& state,
     const glm::dvec3& targetPosition,
@@ -42,7 +46,11 @@ glm::dvec3 PositionControlAcceleration(
         * (targetVelocity - state.velocityMetersPerSecond);
 }
 
-/** @brief 현재 비행 모드에 맞는 위치 또는 속도 목표에서 가속도를 계산한다. */
+/**
+ * @brief 현재 비행 모드의 위치 또는 속도 목표를 월드 가속도로 바꾼다.
+ * @details 이륙·착륙·경유점 이동은 위치 제어를 쓰고, 호버링·수동 비행은
+ *          직접 지정된 목표 속도를 따른다. 지상 상태에서는 가속도를 요구하지 않는다.
+ */
 glm::dvec3 AccelerationForFlightMode(
     const DroneState& state,
     const DroneControlState& control,
@@ -99,7 +107,12 @@ glm::dquat DesiredOrientation(const glm::dvec3& worldThrust, double yawRadians)
     return glm::normalize(glm::quat_cast(glm::dmat3{bodyX, bodyY, bodyZ}));
 }
 
-/** @brief 가장 짧은 자세 오차와 각속도로 기체 축 기준 토크를 계산한다. */
+/**
+ * @brief 자세 오차와 각속도로 기체 축 기준 토크를 계산한다.
+ * @details 현재 자세의 역회전을 목표 자세에 곱해 현재 기체 좌표계의 오차 회전을
+ *          구한다. 쿼터니언의 벡터부를 축·각도로 바꾼 뒤 PD 제어로 각가속도를 만들고,
+ *          주관성 모멘트를 곱해 토크 [N·m]로 변환한다.
+ */
 glm::dvec3 AttitudeTorque(
     const DroneState& state,
     const QuadrotorParameters& parameters,
@@ -133,7 +146,8 @@ glm::dvec3 AttitudeTorque(
 /**
  * @brief 네 로터로 목표 수직 힘과 세 축 토크를 나눈다.
  * @details 각 로터의 추력을 미지수로 두고, 수직 힘·롤·피치·요 토크 식을 연립해 푼다.
- * 행을 바꿀 때는 현재 열에서 절댓값이 가장 큰 계수를 골라 계산 오차를 줄인다.
+ * 로터 위치와 회전 방향이 각 토크 식의 계수가 된다. 행을 바꿀 때는 현재 열에서
+ * 절댓값이 가장 큰 계수를 골라 계산 오차를 줄인다.
  */
 std::array<double, QuadrotorParameters::rotorCount> SolveRotorThrusts(
     const DesiredWrench& desiredWrench,
@@ -203,20 +217,23 @@ glm::dvec3 QuadrotorFlightController::PositionTargetVelocity(
     const QuadrotorControllerParameters& controller)
 {
     const glm::dvec3 offset = targetPosition - state.positionMeters;
-    const double distance = glm::length(offset);
-    if (distance <= 1.0e-9)
+    const double distanceMeters = glm::length(offset);
+    if (distanceMeters <= 1.0e-9)
         return glm::dvec3{0.0};
 
-    // v² = 2ad에서 구한 정지 가능 속도다. 남은 거리에서 최대 가속도로 감속할 수 있게 제한한다.
-    const double brakingSpeed = std::sqrt(
-        2.0 * maximumAccelerationMetersPerSecondSquared * distance);
-    // 위치 이득에 0.2초를 곱해 가까운 구간의 목표 속도를 낮춘다.
-    const double approachSpeed =
-        controller.positionGain * waypointApproachTimeSeconds * distance;
-    const double targetSpeed = std::min(
+    // v² = 2ad에서 남은 거리 안에 멈출 수 있는 최대 속도를 구한다.
+    const double speedAllowedByBrakingMetersPerSecond = std::sqrt(
+        2.0 * maximumAccelerationMetersPerSecondSquared * distanceMeters);
+    // 위치 이득과 접근 시간을 곱해 목표점 가까이에서 속도를 부드럽게 낮춘다.
+    const double speedAllowedByApproachMetersPerSecond =
+        controller.positionGain * waypointApproachTimeSeconds * distanceMeters;
+    const double speedAllowedByControlMetersPerSecond = std::min(
+        speedAllowedByBrakingMetersPerSecond,
+        speedAllowedByApproachMetersPerSecond);
+    const double targetSpeedMetersPerSecond = std::min(
         maximumWaypointSpeedMetersPerSecond,
-        std::min(brakingSpeed, approachSpeed));
-    return offset * (targetSpeed / distance);
+        speedAllowedByControlMetersPerSecond);
+    return offset * (targetSpeedMetersPerSecond / distanceMeters);
 }
 
 std::array<double, QuadrotorParameters::rotorCount> QuadrotorFlightController::MotorTargets(
