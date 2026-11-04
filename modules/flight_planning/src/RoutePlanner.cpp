@@ -244,6 +244,12 @@ std::optional<std::vector<Cell>> FindGridPath(
     return path;
 }
 
+/**
+ * @brief A* 격자 경로의 중간점을 장애물 없는 직선 구간으로 합친다.
+ * @details 현재 점에서 가장 멀리 볼 수 있는 다음 점을 골라 경유점 수를 줄인다.
+ *          직선 안전성은 약 1m 간격 표본으로 확인하므로 그보다 작은 틈이나 장애물은
+ *          이 검사에서 놓칠 수 있다. 단순화 결과가 전역 최단 경로라는 보장은 없다.
+ */
 std::vector<glm::dvec2> SimplifyPath(
     const std::vector<Cell>& gridPath,
     const Grid& grid,
@@ -264,6 +270,7 @@ std::vector<glm::dvec2> SimplifyPath(
     std::size_t current = 0;
     while (current + 1U < anchors.size())
     {
+        // 끝점부터 거꾸로 검사하므로, 직선으로 연결할 수 있는 가장 먼 점을 먼저 찾는다.
         std::size_t next = current + 1U;
         bool foundClearShortcut = false;
         for (std::size_t candidate = anchors.size() - 1U;
