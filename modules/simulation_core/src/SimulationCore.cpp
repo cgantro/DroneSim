@@ -39,9 +39,7 @@ public:
     /** @brief 완성된 엔티티를 등록하고, 첫 드론을 기본 대상으로 지정한다. */
     void Register(DroneId id, flecs::entity drone)
     {
-        const auto [entry, inserted] = drones_.emplace(id, drone);
-        static_cast<void>(entry);
-        if (!inserted)
+        if (!drones_.emplace(id, drone).second)
             throw std::logic_error("이미 등록된 드론 식별값입니다.");
         if (primaryId_ == 0)
             primaryId_ = id;
@@ -133,6 +131,12 @@ bool HasFinitePose(const glm::dvec3& positionMeters, double yawRadians) noexcept
 }
 }
 
+/**
+ * @brief SimulationCore가 감춘 ECS 저장소와 물리·Tick 연결부다.
+ * @details 드론 상태는 Flecs 컴포넌트가 보관하고, DroneRegistry는 외부 ID를 엔티티에 연결한다.
+ *          PhysicsBody 컴포넌트는 각 엔티티와 Jolt 강체를 연결한다. 이 구조체는 드론 수명과
+ *          두 월드 사이의 상태 동기화를 조정한다. 렌더링과 사용자 입력은 이 내부 구현에 들어오지 않는다.
+ */
 struct SimulationCore::EcsStorage
 {
     struct InitialPose
@@ -408,10 +412,10 @@ struct SimulationCore::EcsStorage
     void AdvanceOneTick()
     {
         lastPhysicsStepDurationMicroseconds = 0.0;
-        // 제어 시스템을 먼저 실행해 이번 Tick의 모터 목표를 만든다.
+        // Flecs OnUpdate에서 모터 목표와 카메라 프레임을 갱신한 뒤 Jolt가 기체를 한 단계 움직인다.
         world.progress(DroneModel::fixedStepSeconds);
         AdvancePhysicsWorld();
-        // 배터리는 물리 갱신 뒤의 비행 상태를 기준으로 소모량을 계산한다.
+        // 배터리는 새 비행 상태를 기준으로 소모량을 계산하고, 카메라 자세도 새 기체 위치에 맞춘다.
         world.each([](BatteryModel& battery, const DroneState& state)
         {
             battery.Advance(state.mode);
