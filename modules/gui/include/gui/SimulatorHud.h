@@ -24,7 +24,6 @@ using CameraGimbalSetter = std::function<void(
 struct ScenePanelFrame
 {
     const simulation::SimulationCore& simulation;
-    simulation::DroneId& observerDroneId;
     SimulatorView& view;
     ScenePanelRenderer render;
 };
@@ -33,7 +32,6 @@ struct ScenePanelFrame
 struct CameraPanelFrame
 {
     const simulation::SimulationCore& simulation;
-    simulation::DroneId& observerDroneId;
     CameraPanelRenderer render;
     CameraGimbalSetter setGimbalAngles;
 };

@@ -40,7 +40,6 @@ public:
     /** @brief 관찰 패널 크기에 맞춰 카메라를 갱신하고 장면 텍스처를 돌려준다. */
     [[nodiscard]] std::uint32_t RenderScenePanel(
         const simulation::SimulationCore& simulation,
-        simulation::DroneId observerDroneId,
         const std::vector<flight_planning::BuildingObstacle>& buildings,
         int width, int height,
         const DrawWorld& drawWorld,
@@ -55,6 +54,11 @@ public:
 
     /** @brief 장면 패널에서 조작하는 관찰 카메라 제어기를 돌려준다. */
     [[nodiscard]] ObserverCameraController& SceneCamera() noexcept;
+
+    /** @brief 장면·카메라 패널이 함께 사용할 드론을 반환한다. 0은 주 드론을 뜻한다. */
+    [[nodiscard]] simulation::DroneId ObserverDroneId() const noexcept;
+    /** @brief 장면과 카메라 패널의 선택 드론을 함께 바꾼다. */
+    void SetObserverDroneId(simulation::DroneId droneId) noexcept;
 
 private:
     friend class simulator::DroneSimAppTestAccess;
@@ -76,6 +80,7 @@ private:
 
     graphics::Renderer& renderer_;
     ObserverCameraController sceneCamera_;
+    simulation::DroneId observerDroneId_ = 0;
     std::unique_ptr<graphics::MultisampleFramebuffer> sceneTarget_;
     std::unordered_map<simulation::DroneId, CameraView> cameraViews_;
 };

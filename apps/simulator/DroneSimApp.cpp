@@ -411,7 +411,7 @@ void DroneSimApp::RenderWebFrame()
             / static_cast<int>(camera.model.imageWidthPixels));
     const int cameraBottom = (height - cameraHeight) / 2;
     const int cameraTop = height - cameraBottom - cameraHeight;
-    webCameraRig_->UpdateObserver(simulation_, observerDroneId_,
+    webCameraRig_->UpdateObserver(simulation_, simulation_.PrimaryDroneId(),
         trainingRangeScene_->BuildingObstacles(), observerWidth, height);
     webCameraRig_->UpdateEo(simulation_, simulation_.PrimaryDroneId(),
         cameraWidth, cameraHeight);
@@ -465,11 +465,10 @@ void DroneSimApp::RenderDesktopFrame()
         const dronesim::gui::SimulatorHudFrame hudFrame{
             .scene = {
                 .simulation = simulation_,
-                .observerDroneId = observerDroneId_,
                 .view = *view_,
                 .render = [this, drawPanelWorld](int width, int height)
                 {
-                    return view_->RenderScenePanel(simulation_, observerDroneId_,
+                    return view_->RenderScenePanel(simulation_,
                         trainingRangeScene_->BuildingObstacles(), width, height,
                         drawPanelWorld,
                         benchmarkMode_ ? &benchmarkSession_.CurrentFrame()
@@ -482,7 +481,6 @@ void DroneSimApp::RenderDesktopFrame()
                 .groundSizeMeters = trainingRangeScene_->GroundSizeMeters()},
             .camera = {
                 .simulation = simulation_,
-                .observerDroneId = observerDroneId_,
                 .render = [this, drawPanelWorld](
                     dronesim::simulation::DroneId droneId)
                 {

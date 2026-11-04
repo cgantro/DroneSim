@@ -179,8 +179,6 @@ private:
 #endif
     std::unique_ptr<dronesim::scene::TrainingRangeScene> trainingRangeScene_;
     std::unique_ptr<SimulatorWorldRenderer> worldRenderer_;
-    /** @brief 3D 관찰 시점이 따라갈 드론 식별값이다. 0이면 주 드론을 따른다. */
-    dronesim::simulation::DroneId observerDroneId_ = 0;
     std::unique_ptr<dronesim::graphics::Shader> shader_;
     dronesim::simulation::WindField windField_;
     dronesim::simulation::SimulationCore simulation_{};

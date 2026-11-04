@@ -37,11 +37,11 @@ void CreateDefaultDockspace(ImGuiViewport* viewport)
 }
 
 void DrawScenePanel(const simulation::SimulationCore& simulation,
-    simulation::DroneId& observerDroneId,
     SimulatorView& sceneView,
     const std::function<std::uint32_t(int, int)>& renderScene)
 {
     auto& observerCamera = sceneView.SceneCamera();
+    simulation::DroneId observerDroneId = sceneView.ObserverDroneId();
     if (ImGui::Begin("장면##SceneViewV5"))
     {
         const auto droneIds = simulation.DroneIds();
@@ -49,6 +49,7 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
         {
             if (observerDroneId == 0U)
                 observerDroneId = simulation.PrimaryDroneId();
+            sceneView.SetObserverDroneId(observerDroneId);
 
             const std::string selectedName = DroneLabel(observerDroneId);
             if (ImGui::BeginCombo("장면 시점 드론", selectedName.c_str()))
@@ -58,7 +59,10 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
                     const std::string name = DroneLabel(droneId);
                     const bool selected = droneId == observerDroneId;
                     if (ImGui::Selectable(name.c_str(), selected))
+                    {
                         observerDroneId = droneId;
+                        sceneView.SetObserverDroneId(droneId);
+                    }
                     if (selected)
                         ImGui::SetItemDefaultFocus();
                 }
@@ -120,11 +124,12 @@ void DrawScenePanel(const simulation::SimulationCore& simulation,
 
 void DrawCameraPanel(
     const simulation::SimulationCore& simulation,
-    simulation::DroneId& observerDroneId,
+    SimulatorView& sceneView,
     const std::function<std::uint32_t(simulation::DroneId)>& renderCamera,
     const std::function<void(simulation::DroneId,
         const simulation::CameraGimbalAngles&)>& setCameraGimbalAngles)
 {
+    simulation::DroneId observerDroneId = sceneView.ObserverDroneId();
     if (ImGui::Begin("카메라##CameraViewV5"))
     {
         const auto droneIds = simulation.DroneIds();
@@ -136,7 +141,10 @@ void DrawCameraPanel(
         {
             if (std::find(droneIds.begin(), droneIds.end(), observerDroneId)
                 == droneIds.end())
+            {
                 observerDroneId = simulation.PrimaryDroneId();
+                sceneView.SetObserverDroneId(observerDroneId);
+            }
 
             const std::string selectedLabel = DroneLabel(observerDroneId);
             if (ImGui::BeginCombo("선택한 드론", selectedLabel.c_str()))
@@ -146,7 +154,10 @@ void DrawCameraPanel(
                     const std::string label = DroneLabel(droneId);
                     const bool selected = droneId == observerDroneId;
                     if (ImGui::Selectable(label.c_str(), selected))
+                    {
                         observerDroneId = droneId;
+                        sceneView.SetObserverDroneId(droneId);
+                    }
                     if (selected)
                         ImGui::SetItemDefaultFocus();
                 }
@@ -219,10 +230,10 @@ void SimulatorHud::Render(const SimulatorHudFrame& frame)
     frameBackend_.BeginFrame(frame.timings);
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     CreateDefaultDockspace(viewport);
-    DrawScenePanel(frame.scene.simulation, frame.scene.observerDroneId,
+    DrawScenePanel(frame.scene.simulation,
         frame.scene.view, frame.scene.render);
     miniMapPanel_.Render(frame.miniMap);
-    DrawCameraPanel(frame.camera.simulation, frame.camera.observerDroneId,
+    DrawCameraPanel(frame.camera.simulation, frame.scene.view,
         frame.camera.render, frame.camera.setGimbalAngles);
     operationsPanel_.Render(frame.operations);
 

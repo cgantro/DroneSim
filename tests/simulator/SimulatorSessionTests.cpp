@@ -212,7 +212,7 @@ public:
         DroneSimApp app({.smokeTest = true});
         app.InitializeGraphics();
         auto& sceneCamera = app.view_->SceneCamera();
-        sceneCamera.Update(app.simulation_, app.observerDroneId_,
+        sceneCamera.Update(app.simulation_, app.view_->ObserverDroneId(),
             app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
 
         const auto distance = glm::distance(
@@ -229,12 +229,12 @@ public:
         ASSERT_EQ(droneIds.size(), 4U);
 
         auto& sceneCamera = app.view_->SceneCamera();
-        sceneCamera.Update(app.simulation_, app.observerDroneId_,
+        sceneCamera.Update(app.simulation_, app.view_->ObserverDroneId(),
             app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
         const glm::vec3 primaryTarget = sceneCamera.ViewCamera().GetTarget();
 
-        app.observerDroneId_ = droneIds[2U];
-        sceneCamera.Update(app.simulation_, app.observerDroneId_,
+        app.view_->SetObserverDroneId(droneIds[2U]);
+        sceneCamera.Update(app.simulation_, app.view_->ObserverDroneId(),
             app.trainingRangeScene_->BuildingObstacles(), 1280, 720);
         const glm::vec3 selectedTarget = sceneCamera.ViewCamera().GetTarget();
         EXPECT_NE(primaryTarget, selectedTarget);

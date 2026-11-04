@@ -23,9 +23,18 @@ ObserverCameraController& SimulatorView::SceneCamera() noexcept
     return sceneCamera_;
 }
 
+simulation::DroneId SimulatorView::ObserverDroneId() const noexcept
+{
+    return observerDroneId_;
+}
+
+void SimulatorView::SetObserverDroneId(simulation::DroneId droneId) noexcept
+{
+    observerDroneId_ = droneId;
+}
+
 std::uint32_t SimulatorView::RenderScenePanel(
     const simulation::SimulationCore& simulation,
-    simulation::DroneId observerDroneId,
     const std::vector<flight_planning::BuildingObstacle>& buildings,
     int width, int height,
     const DrawWorld& drawWorld,
@@ -33,7 +42,7 @@ std::uint32_t SimulatorView::RenderScenePanel(
 {
     simulation::ScopedDuration measure(renderMicroseconds);
     sceneTarget_->Resize(width, height);
-    sceneCamera_.Update(simulation, observerDroneId, buildings, width, height);
+    sceneCamera_.Update(simulation, observerDroneId_, buildings, width, height);
     DrawToTarget(*sceneTarget_, sceneCamera_.ViewCamera(), true, std::nullopt, drawWorld);
     return sceneTarget_->GetTextureId();
 }
