@@ -419,6 +419,11 @@ void RecordMinimumDroneSeparation(
         result.minimumDroneSeparationMeters = std::sqrt(*minimumDistanceSquaredMeters);
 }
 
+/**
+ * @brief 지정 Tick에 예약된 외부 명령을 연결된 드론에 적용한다.
+ * @details 명령은 시나리오에 적힌 순서로 처리한다. 통신이 끊긴 드론에는
+ *          명령을 전달하지 않고, 제어기가 거부한 명령은 실행 문제로 기록한다.
+ */
 void ApplyScheduledCommands(
     std::uint64_t tick,
     const std::vector<TickCommand>& commands,
@@ -446,6 +451,12 @@ void ApplyScheduledCommands(
     }
 }
 
+/**
+ * @brief 시작 시각이 된 임무 작업의 현재 경유점을 드론에 전달한다.
+ * @details 작업 목록 순서를 유지하며 드론마다 한 Tick에 하나의 작업만 처리한다.
+ *          이륙 중인 드론은 시작 기한까지 기다리고, 기한이 지나거나 비행을 멈춘
+ *          드론의 작업은 실패로 끝낸다. 통신이 끊긴 동안에는 작업을 진행하지 않는다.
+ */
 void UpdateMissionCommands(
     std::uint64_t tick,
     std::optional<ScenarioResult::Mission>& mission,
